@@ -177,7 +177,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   }, [showCarousel, isPaused, notices.length]);
 
   return (
-    <div className="teacher-notice-board flex h-full min-h-[260px] min-w-0 flex-col md:min-h-0">
+    <div className="teacher-notice-board ws-surface flex h-full min-h-[260px] min-w-0 flex-col md:min-h-0">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>

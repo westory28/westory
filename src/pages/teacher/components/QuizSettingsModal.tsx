@@ -73,12 +73,12 @@ const QUESTION_ORDER_OPTIONS: Array<{
 ];
 const createDefaultFormState = (): QuizSettingsFormState => ({
   active: false,
-  questionCount: 10,
-  questionOrder: "random",
-  timeLimitMinutes: 10,
+  questionCount: 20,
+  questionOrder: "unit",
+  timeLimitMinutes: 15,
   allowRetake: true,
-  cooldown: 0,
-  hintLimit: 2,
+  cooldown: 5,
+  hintLimit: 3,
   visibleClassIds: [],
 });
 const createEmptyVisibilityGroup = (): AssessmentVisibilityGroup => ({
@@ -145,6 +145,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     Record<string, unknown>
   >({});
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [hasStoredSettings, setHasStoredSettings] = useState(false);
   const [definitionState, setDefinitionState] = useState<{
     id: string;
     revision: number;
@@ -375,6 +376,10 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     const legacyActive =
       legacyStatusMap[key] === true ||
       (useLegacyRound && legacyStatusMap[legacyKey] === true);
+    const defaults = createDefaultFormState();
+    setHasStoredSettings(
+      Boolean(definitionState.settings || stored || legacyActive),
+    );
     const raw = definitionState.settings ??
       stored ?? {
         active: legacyActive,
@@ -383,11 +388,18 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           ? {
               visibleClassIds: [],
               visibilityVersion: 2,
+              ...(!isMockExam
+                ? {
+                    questionCount: defaults.questionCount,
+                    questionOrder: defaults.questionOrder,
+                    allowRetake: defaults.allowRetake,
+                    cooldown: defaults.cooldown,
+                    hintLimit: defaults.hintLimit,
+                  }
+                : {}),
               timeLimit: isMockExam
                 ? 2400
-                : category === "formative"
-                  ? 1200
-                  : 600,
+                : Number(defaults.timeLimitMinutes) * 60,
             }
           : {}),
         ...(isMockExam
@@ -484,21 +496,24 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         payload,
         definitionState!.revision,
       );
+      const published = saved.status === "PUBLISHED";
+      const savedPayload = { ...payload, active: published };
       setDefinitionState({
         id: definitionId,
         revision: Number(saved.revision),
-        settings: payload,
+        settings: savedPayload,
       });
-      setSavedFingerprint(formFingerprint(settings));
+      setSavedFingerprint(formFingerprint({ ...settings, active: published }));
       // Round changes use the returned local state without fetching all settings again.
-      setAssessmentSettingsMap((prev) => ({ ...prev, [key]: payload }));
+      setAssessmentSettingsMap((prev) => ({ ...prev, [key]: savedPayload }));
       showToast({
         tone: "success",
         title: "평가 설정 저장",
-        message: settings.active
-          ? `${normalizedSelectedClassIds.length}개 학급에 공개했습니다.`
-          : "학생 비공개로 저장했습니다.",
+        message: published
+          ? `선택한 ${normalizedSelectedClassIds.length}개 학급의 학생에게 공개하고 응시 설정을 저장했습니다.`
+          : "모든 학생에게 비공개로 저장했습니다. 선택한 학급은 유지됩니다.",
       });
+      onClose();
     } catch (error) {
       console.error("Failed to save assessment settings:", error);
       showToast({
@@ -758,27 +773,41 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       기존 평가 규칙이 적용됩니다.
                     </InfoHelp>
                   </div>
-                  <div className="quiz-settings-visibility">
+                  <div
+                    className="quiz-settings-visibility"
+                    role="radiogroup"
+                    aria-label="학생 공개"
+                    aria-describedby="quiz-settings-visibility-summary"
+                  >
                     <label className="quiz-settings-switch">
                       <input
-                        type="checkbox"
+                        type="radio"
+                        name="quiz-settings-visibility"
                         checked={settings.active}
-                        aria-label="학생 공개"
                         disabled={!canEdit || busy}
-                        onChange={(event) =>
-                          updateSettings({ active: event.target.checked })
-                        }
+                        onChange={() => updateSettings({ active: true })}
                       />
-                      <span>
-                        {settings.active
-                          ? "선택 학급에 공개"
-                          : "모든 학생에게 비공개"}
-                      </span>
+                      <span>선택 학급 학생에게 공개</span>
                     </label>
-                    <span className="quiz-settings-summary">
-                      공개 대상 {normalizedSelectedClassIds.length}개 학급
-                    </span>
+                    <label className="quiz-settings-switch">
+                      <input
+                        type="radio"
+                        name="quiz-settings-visibility"
+                        checked={!settings.active}
+                        disabled={!canEdit || busy}
+                        onChange={() => updateSettings({ active: false })}
+                      />
+                      <span>모든 학생에게 비공개</span>
+                    </label>
                   </div>
+                  <p
+                    id="quiz-settings-visibility-summary"
+                    className="quiz-settings-summary"
+                  >
+                    {settings.active
+                      ? `저장하면 선택한 ${normalizedSelectedClassIds.length}개 학급의 학생이 응시할 수 있습니다.`
+                      : "저장하면 모든 학생에게 평가가 비공개됩니다. 학급 선택은 유지됩니다."}
+                  </p>
                   <div className="quiz-settings-section-heading quiz-settings-target-heading">
                     <h4>공개 대상 학급</h4>
                     <InfoHelp label="응시 초기화 도움말">
@@ -909,65 +938,69 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 <div className="quiz-settings-columns">
                   <section className="quiz-settings-section">
                     <h3>출제·제한 시간</h3>
-                    <div className="quiz-settings-fields">
+                    <div className="quiz-settings-option">
                       {renderNumberField(
                         "questionCount",
                         "출제 문항 수",
                         1,
                         200,
                       )}
+                    </div>
+                    <div className="quiz-settings-option">
                       {renderNumberField(
                         "timeLimitMinutes",
                         "제한 시간 (분)",
                         1,
                         360,
                       )}
+                      <div
+                        className="quiz-settings-presets"
+                        aria-label="제한 시간 빠른 선택"
+                      >
+                        {[5, 10, 15, 20, 45].map((minutes) => (
+                          <button
+                            key={minutes}
+                            type="button"
+                            className="quiz-authoring-button"
+                            disabled={!canEdit || busy}
+                            aria-pressed={settings.timeLimitMinutes === minutes}
+                            onClick={() =>
+                              updateSettings({ timeLimitMinutes: minutes })
+                            }
+                          >
+                            {minutes}분
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div
-                      className="quiz-settings-presets"
-                      aria-label="제한 시간 빠른 선택"
-                    >
-                      {[5, 10, 20, 45].map((minutes) => (
-                        <button
-                          key={minutes}
-                          type="button"
-                          className="quiz-authoring-button"
+                    <div className="quiz-settings-option">
+                      <label className="quiz-settings-field">
+                        <span>문항 출제 순서</span>
+                        <select
+                          value={settings.questionOrder}
                           disabled={!canEdit || busy}
-                          aria-pressed={settings.timeLimitMinutes === minutes}
-                          onClick={() =>
-                            updateSettings({ timeLimitMinutes: minutes })
+                          onChange={(event) =>
+                            updateSettings({
+                              questionOrder: event.target
+                                .value as AssessmentQuestionOrder,
+                            })
                           }
                         >
-                          {minutes}분
-                        </button>
-                      ))}
+                          {QUESTION_ORDER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {isMockExam && option.value === "unit"
+                                ? "단원 균형 랜덤"
+                                : option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
-                    <label className="quiz-settings-field">
-                      <span>문항 출제 순서</span>
-                      <select
-                        value={settings.questionOrder}
-                        disabled={!canEdit || busy}
-                        onChange={(event) =>
-                          updateSettings({
-                            questionOrder: event.target
-                              .value as AssessmentQuestionOrder,
-                          })
-                        }
-                      >
-                        {QUESTION_ORDER_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {isMockExam && option.value === "unit"
-                              ? "단원 균형 랜덤"
-                              : option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                   </section>
                   <section className="quiz-settings-section">
                     <h3>{isMockExam ? "재응시" : "힌트·재응시"}</h3>
                     {!isMockExam && (
-                      <>
+                      <div className="quiz-settings-option">
                         <label className="quiz-settings-switch">
                           <input
                             type="checkbox"
@@ -975,7 +1008,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             disabled={!canEdit || busy}
                             onChange={(event) =>
                               updateSettings({
-                                hintLimit: event.target.checked ? 1 : 0,
+                                hintLimit: event.target.checked ? 3 : 0,
                               })
                             }
                           />
@@ -988,6 +1021,10 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           200,
                           !hintsEnabled,
                         )}
+                      </div>
+                    )}
+                    <div className="quiz-settings-option">
+                      {!isMockExam && (
                         <label className="quiz-settings-switch">
                           <input
                             type="checkbox"
@@ -996,31 +1033,28 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             onChange={(event) =>
                               updateSettings({
                                 allowRetake: event.target.checked,
-                                cooldown: event.target.checked
-                                  ? settings.cooldown
-                                  : 0,
                               })
                             }
                           />
                           <span>재응시 허용</span>
                         </label>
-                      </>
-                    )}
-                    {isMockExam && (
-                      <p className="quiz-settings-summary">
-                        {isRetakableMockExam
-                          ? "추가 회차 · 재응시 허용"
-                          : "기본 회차 · 1회만 응시 가능"}
-                      </p>
-                    )}
-                    {(!isMockExam || isRetakableMockExam) &&
-                      renderNumberField(
-                        "cooldown",
-                        "재응시 대기 시간 (분)",
-                        0,
-                        43200,
-                        !settings.allowRetake,
                       )}
+                      {isMockExam && (
+                        <p className="quiz-settings-summary">
+                          {isRetakableMockExam
+                            ? "추가 회차 · 재응시 허용"
+                            : "기본 회차 · 1회만 응시 가능"}
+                        </p>
+                      )}
+                      {(!isMockExam || isRetakableMockExam) &&
+                        renderNumberField(
+                          "cooldown",
+                          "재응시 대기 시간 (분)",
+                          0,
+                          43200,
+                          !settings.allowRetake,
+                        )}
+                    </div>
                   </section>
                 </div>
               </>
@@ -1064,10 +1098,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     ? "응시를 초기화하는 중…"
                     : dirty
                       ? "저장하지 않은 변경 사항"
-                      : settingsLoaded
-                        ? settings.active
-                          ? `저장된 공개 대상 · ${normalizedSelectedClassIds.length}개 학급`
-                          : "저장된 상태 · 학생 비공개"
+                      : ready
+                        ? !hasStoredSettings
+                          ? "아직 저장하지 않은 기본 설정"
+                          : settings.active
+                            ? `저장된 공개 대상 · ${normalizedSelectedClassIds.length}개 학급`
+                            : "저장된 상태 · 학생 비공개"
                         : ""}
               </p>
               {canEdit && (
@@ -1081,7 +1117,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     !settingsLoaded ||
                     !ready ||
                     hasValidationError ||
-                    !dirty
+                    (!dirty && hasStoredSettings)
                   }
                 >
                   {saving ? "저장 중…" : "설정 저장"}
