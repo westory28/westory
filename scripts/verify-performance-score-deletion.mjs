@@ -13,6 +13,7 @@ import {
   getDocs,
   query,
   setDoc,
+  Timestamp,
   where,
   writeBatch,
 } from "firebase/firestore";
@@ -88,6 +89,7 @@ const adminRosterId = "delete-admin-target";
 const otherRosterId = "keep-other-assessment";
 const archiveRosterId = "keep-previous-semester";
 const fixtures = new Map();
+const authTime = Math.floor(Date.now() / 1000) - 10;
 
 for (const actor of Object.values(actors)) {
   fixtures.set(`users/${actor.uid}`, {
@@ -98,6 +100,19 @@ for (const actor of Object.values(actors)) {
       actor.role === "staff"
         ? ["student_list_read", "quiz_read", "quiz_manage"]
         : [],
+  });
+  // Current rules require an application session even for teachers/admins.
+  // Without it the initial single-document read fails before this regression
+  // can distinguish the old collection-group denial from the fixed list rule.
+  fixtures.set(`application_sessions/${actor.uid}/sessions/${authTime}`, {
+    schemaVersion: 2,
+    authTime,
+    status: "active",
+    authorityGeneration: "w1r2-2026-08-09",
+    protocolVersion: 2,
+    sessionRevision: "a".repeat(64),
+    authorityModeAtOpen: "ENFORCE",
+    generalExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
   });
 }
 fixtures.set(`users/${staleUid}`, {
@@ -161,7 +176,12 @@ const seed = (env) =>
     );
   });
 const actorDatabase = (env, actor) =>
-  env.authenticatedContext(actor.uid, { email: actor.email }).firestore();
+  env
+    .authenticatedContext(actor.uid, {
+      email: actor.email,
+      auth_time: authTime,
+    })
+    .firestore();
 const rosterQuery = (db, rosterId) =>
   query(
     collectionGroup(db, "performance_scores"),

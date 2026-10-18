@@ -72,7 +72,11 @@ const targets = [
   "matchRowsToStudents",
   "repairRosterRowsWithStudentProfiles",
   "buildActiveStudentRoster",
+  "normalizePerformanceScoreRoster",
+  "buildRecordFromRosterRow",
+  "buildStudentScoreDocumentPayload",
   "buildScoreListRecordsFromRosterRows",
+  "hasEnteredPerformanceScore",
   "saveScoreListEdits",
   "applyPerformanceScoreConfirmation",
   "getAcademicStatusLabel",
@@ -155,6 +159,135 @@ const roster = {
   totalMaxScore: 20,
   rows,
 };
+
+// Exercise the actual roster-to-student projection with old documents that
+// predate enteredScoreCount. An earned zero and an unentered zero differ.
+const legacyRow = mkRow("legacy-score", "4", "구형검증학생");
+delete legacyRow.enteredScoreCount;
+const scorePresenceCases = [
+  { label: "legacy numeric item", row: legacyRow, count: 1, total: 15 },
+  {
+    label: "legacy earned zero item",
+    row: {
+      ...legacyRow,
+      items: [{ name: "평가", maxScore: 20, score: 0 }],
+      totalScore: 0,
+    },
+    count: 1,
+    total: 0,
+  },
+  {
+    label: "legacy numeric total only",
+    row: { ...legacyRow, items: [] },
+    count: 1,
+    total: 15,
+  },
+  {
+    label: "legacy earned zero total only",
+    row: { ...legacyRow, items: [], totalScore: 0 },
+    count: 1,
+    total: 0,
+  },
+  {
+    label: "explicit unregistered zero",
+    row: {
+      ...legacyRow,
+      enteredScoreCount: 0,
+      items: [],
+      totalScore: 0,
+    },
+    count: 0,
+    total: null,
+  },
+  {
+    label: "explicit unregistered count overrides stale item values",
+    row: { ...legacyRow, enteredScoreCount: 0 },
+    count: 0,
+    total: null,
+  },
+  {
+    label: "legacy unentered item",
+    row: {
+      ...legacyRow,
+      items: [{ name: "평가", maxScore: 20, score: 0, scoreEntered: false }],
+      totalScore: 0,
+    },
+    count: 0,
+    total: null,
+  },
+  ...[null, "", "   "].map((score) => ({
+    label: `legacy blank item score ${JSON.stringify(score)}`,
+    row: {
+      ...legacyRow,
+      items: [{ name: "평가", maxScore: 20, score }],
+      totalScore: 0,
+    },
+    count: 0,
+    total: null,
+  })),
+  {
+    label: "legacy mixed entered and unentered items",
+    row: {
+      ...legacyRow,
+      items: [
+        { name: "등록평가", maxScore: 10, score: 7 },
+        { name: "미등록평가", maxScore: 10, score: 0, scoreEntered: false },
+      ],
+      totalScore: 7,
+    },
+    count: 1,
+    total: 7,
+  },
+];
+for (const test of scorePresenceCases) {
+  const sourceBefore = JSON.stringify(test.row);
+  const normalized = subject.normalizePerformanceScoreRoster(roster.id, {
+    ...roster,
+    academicYear: "2026",
+    semester: "1",
+    rows: [test.row],
+  });
+  const source = normalized.rows[0];
+  assert.equal(
+    Object.hasOwn(source, "enteredScoreCount"),
+    Object.hasOwn(test.row, "enteredScoreCount"),
+    `${test.label}: normalization preserves legacy field presence`,
+  );
+  const record = subject.buildRecordFromRosterRow(normalized, source);
+  assert.equal(record.enteredScoreCount, test.count, test.label);
+  assert.equal(
+    subject.hasEnteredPerformanceScore(record),
+    test.count > 0,
+    `${test.label}: teacher projection agrees with student score presence`,
+  );
+  assert.equal(JSON.stringify(record.items), JSON.stringify(test.row.items));
+  const payload = subject.buildStudentScoreDocumentPayload(
+    normalized,
+    source,
+    { seconds: 123, nanoseconds: 456 },
+    { year: "2026", semester: "1" },
+  );
+  if (test.count > 0) {
+    assert.ok(payload, `${test.label}: a student document can be recovered`);
+    assert.equal(record.totalScore, test.total, test.label);
+    assert.equal(payload.totalScore, test.total, test.label);
+    assert.equal(payload.enteredScoreCount, test.count, test.label);
+    assert.equal(subject.hasEnteredPerformanceScore(payload), true, test.label);
+    assert.equal(payload.uid, test.row.uid);
+    assert.equal(payload.rosterId, normalized.id);
+    assert.equal(payload.academicYear, "2026");
+    assert.equal(payload.semester, "1");
+    assert.equal(JSON.stringify(payload.items), JSON.stringify(test.row.items));
+  } else {
+    assert.ok(Number.isNaN(record.totalScore), test.label);
+    assert.equal(payload, null, `${test.label}: no entered score is invented`);
+  }
+  assert.equal(JSON.stringify(test.row), sourceBefore, test.label);
+}
+console.log(
+  "PASS legacy score projection: numeric and earned-zero scores survive missing enteredScoreCount; explicit zero remains unregistered, unentered item flags and student/semester identity are preserved.",
+);
+
 const before = JSON.stringify(roster);
 const view = subject.buildActiveStudentRoster(roster, active);
 assert.deepEqual(

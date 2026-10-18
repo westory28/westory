@@ -2807,7 +2807,16 @@ const buildNormalCurvePath = (
 
 const getRosterRowEnteredScoreCount = (row: PerformanceScoreRosterRow) => {
   const enteredScoreCount = getFiniteNumber(row.enteredScoreCount);
-  return enteredScoreCount === null ? 0 : Math.max(0, enteredScoreCount);
+  if (row.enteredScoreCount !== undefined)
+    return enteredScoreCount === null ? 0 : Math.max(0, enteredScoreCount);
+  // Older rows predate the count field. Use the student's entered-score
+  // contract so real zero scores survive roster reads and document recovery.
+  if (!hasEnteredPerformanceScore(row)) return 0;
+  return (
+    (row.items || []).filter((item) =>
+      hasEnteredPerformanceScore({ items: [item] }),
+    ).length || 1
+  );
 };
 
 const getEnteredItemScoreCount = (items: PerformanceScoreRecord["items"]) =>
@@ -2844,13 +2853,7 @@ const getScoreRecordFallbackTotalScore = (
 
 const rosterRowHasScore = (row: PerformanceScoreRosterRow) => {
   if (isTransferredRosterRow(row)) return true;
-  if (getRosterRowEnteredScoreCount(row) > 0) return true;
-  const itemScores = Array.isArray(row.items) ? row.items : [];
-  if (itemScores.some((item) => getEnteredItemScore(item) !== null)) {
-    return true;
-  }
-  const totalScore = getFiniteNumber(row.totalScore);
-  return totalScore !== null && totalScore > 0;
+  return getRosterRowEnteredScoreCount(row) > 0;
 };
 
 const isManualRosterRow = (row?: PerformanceScoreRosterRow | null) =>
@@ -3675,6 +3678,9 @@ const getClassSheetPrintInfoText = (params: {
   }${CLASS_SHEET_PRINT_INFO_TRAILING_SPACES}`;
 
 const loadClassSheetPrintClientInfo = async () => {
+  // Opening a server session is a write and is intentionally blocked in the
+  // archive. Missing print metadata must not prevent exporting archived scores.
+  if (isSemesterArchive) return { clientIp: "확인 불가" };
   const result = await callStudentDataService<
     Record<string, never>,
     { maskedIp: string }

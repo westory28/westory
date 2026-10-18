@@ -317,6 +317,7 @@ const css = (
     [
       "assets/css/style.css",
       "src/assets/index.css",
+      "src/components/common/InfoHelp.css",
       "src/pages/teacher/components/performance-score-list.css",
     ].map((name) => fs.readFile(root + "/" + name, "utf8")),
   )
@@ -1730,9 +1731,14 @@ try {
     exact: true,
   });
   await maximumHelp.click();
-  await maximaPreview.getByRole("tooltip").waitFor();
+  const maximumTooltipId = await maximumHelp.getAttribute("aria-controls");
+  assert.ok(maximumTooltipId, "Maximum help must identify its tooltip");
+  const maximumTooltip = maximaPage.locator(
+    `[id=${JSON.stringify(maximumTooltipId)}][role="tooltip"]`,
+  );
+  await maximumTooltip.waitFor();
   await maximaPage.keyboard.press("Escape");
-  await maximaPreview.getByRole("tooltip").waitFor({ state: "hidden" });
+  await maximumTooltip.waitFor({ state: "hidden" });
   assert.equal(await maximaPreview.isVisible(), true);
   const maxLabel = detailedCriteria[0] + " 배점";
   await maximaPreview.getByLabel("평가명", { exact: true }).fill("");
