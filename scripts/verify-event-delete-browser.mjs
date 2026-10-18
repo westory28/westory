@@ -60,11 +60,21 @@ createRoot(document.getElementById('root')).render(<Fixture/>);`,
 });
 const js = bundle.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css = bundle.outputFiles.find((file) => file.path.endsWith(".css")).text;
-const tailwind = await fs.readFile(
+const tailwindPath =
   process.env.PORTAL_DESIGN_TAILWIND_PATH ||
-    path.join(os.tmpdir(), "westory-qa-tailwind.js"),
-  "utf8",
-);
+  path.join(os.tmpdir(), "westory-qa-tailwind.js");
+let tailwind;
+try {
+  tailwind = await fs.readFile(tailwindPath, "utf8");
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
+  const response = await fetch("https://cdn.tailwindcss.com", {
+    signal: AbortSignal.timeout(30000),
+  });
+  assert(response.ok);
+  tailwind = await response.text();
+  await fs.writeFile(tailwindPath, tailwind, "utf8");
+}
 const html =
   '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script type="module" src="/fixture.js"></script></html>';
 const server = http.createServer((request, response) => {
