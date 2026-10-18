@@ -95,6 +95,7 @@ import {
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
   toolbar?: ReactNode;
+  showTerrain?: boolean;
   initialSubject?: AtlasSubject;
   navigation?: ReactNode;
   onSubjectChange?: (subject: AtlasSubject) => void;
@@ -468,6 +469,7 @@ function placeLabelLayout(
 export default function HistoryAtlas({
   dataset,
   toolbar,
+  showTerrain = true,
   initialSubject = "korea",
   navigation,
   onSubjectChange,
@@ -759,6 +761,7 @@ export default function HistoryAtlas({
     };
   }, [subject, countryGeometry, projection]);
   const terrainPaths = useMemo(() => {
+    if (!showTerrain) return [];
     const path = geoPath(projection).digits(2);
     return (
       terrainGeometry?.features.map((feature) => ({
@@ -766,7 +769,7 @@ export default function HistoryAtlas({
         path: path(feature) || "",
       })) || []
     );
-  }, [terrainGeometry, projection]);
+  }, [terrainGeometry, projection, showTerrain]);
   const traditionalPaths = useMemo(() => {
     const path = geoPath(projection).digits(2);
     return (
@@ -914,7 +917,7 @@ export default function HistoryAtlas({
         region: feature.properties.regionId || "",
         kind: "region",
       })),
-      ...[...(terrainGeometry?.features || [])]
+      ...[...(showTerrain ? terrainGeometry?.features || [] : [])]
         .sort((a, b) => {
           const ranks = {
             mountain: 0,
@@ -974,6 +977,7 @@ export default function HistoryAtlas({
   }, [
     traditionalRegions,
     terrainGeometry,
+    showTerrain,
     projection,
     transform,
     mapWidth,
@@ -2746,7 +2750,7 @@ export default function HistoryAtlas({
                 </div>
               )}
             <AtlasCompass />
-            {terrainError && (
+            {showTerrain && terrainError && (
               <div className="history-atlas__country-error" role="alert">
                 지형을 불러오지 못했습니다.
                 <button

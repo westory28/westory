@@ -82,7 +82,8 @@ export const ATLAS_SUBJECT_LABELS: Record<AtlasSubject, string> = {
 };
 
 export const ATLAS_SUBJECT_BOUNDS: Record<AtlasSubject, AtlasUnit["bounds"]> = {
-  korea: [118, 31, 134, 44],
+  // Fit the peninsula, Jeju and Dokdo; wider unit views retain their own bounds.
+  korea: [124, 33, 132, 43.1],
   world: [-180, -55, 180, 75],
 };
 

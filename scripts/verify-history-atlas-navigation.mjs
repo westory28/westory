@@ -61,6 +61,47 @@ const { atlasAreaCameraBounds, findAtlasRegionArea } = load(
 );
 const read = (file) =>
   JSON.parse(readFileSync(`src/data/atlas/${file}`, "utf8"));
+// Default Korea framing includes the entire peninsula, Jeju and Dokdo at every
+// supported aspect ratio, while using substantially more of the map than before.
+const koreanLand = read("countries-world.json").countries.features.find(
+  (feature) => feature.properties.id === "KOR",
+);
+for (const [width, height] of [
+  [286, 480],
+  [342, 480],
+  [718, 480],
+  [920, 480],
+  [1200, 640],
+]) {
+  const projection = createAtlasProjection(
+    "korea",
+    ATLAS_SUBJECT_BOUNDS.korea,
+    width,
+    height,
+  );
+  const [[left, top], [right, bottom]] = geography
+    .geoPath(projection)
+    .bounds(koreanLand);
+  assert(
+    left >= 24 && right <= width - 24 && top >= 32 && bottom <= height - 32,
+    `${width}/${height}: the entire Korean peninsula and islands have margins`,
+  );
+  assert(
+    Math.max((right - left) / (width - 64), (bottom - top) / (height - 80)) >=
+      0.8,
+    `${width}/${height}: Korea fills the limiting dimension of the map`,
+  );
+  const previous = createAtlasProjection(
+    "korea",
+    [118, 31, 134, 44],
+    width,
+    height,
+  );
+  assert(
+    projection.scale() > previous.scale() * 1.25,
+    `${width}/${height}: default Korea view is visibly closer`,
+  );
+}
 const supplement = read("rivers-supplement.json");
 const rivers = {
   type: "FeatureCollection",

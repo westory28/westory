@@ -90,8 +90,24 @@ const browser = await playwright.chromium.launch({
 });
 const checks = [];
 let activePage;
+const terrainPixelCount = () => {
+  const canvas = document.querySelector(".history-globe canvas");
+  if (!canvas) return 0;
+  const pixels = canvas
+    .getContext("2d")
+    .getImageData(0, 0, canvas.width, canvas.height).data;
+  let count = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const rgb = `${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`;
+    if (
+      ["203,216,202", "222,215,200", "237,213,165", "230,237,223"].includes(rgb)
+    )
+      count++;
+  }
+  return count;
+};
 try {
-  for (const width of [390, 768, 1280, 1366, 1440]) {
+  for (const width of [320, 390, 768, 1280, 1366, 1440]) {
     const page = await browser.newPage({
       viewport: { width, height: width === 1366 ? 768 : 900 },
     });
@@ -122,6 +138,41 @@ try {
         ),
         `${view}/${width} overflow`,
       );
+      const terrainToggle = page.getByRole("checkbox", {
+        name: "지형",
+        exact: true,
+      });
+      assert(
+        await terrainToggle.isChecked(),
+        `${view}/${width}: terrain defaults on`,
+      );
+      const target = await terrainToggle.locator("..").boundingBox();
+      assert(
+        target.width >= 44 && target.height >= 44,
+        "Terrain toggle has a touch target",
+      );
+      if (view === "globe") {
+        await page.waitForFunction(terrainPixelCount);
+        await terrainToggle.uncheck();
+        await page.waitForFunction(`(${terrainPixelCount.toString()})() === 0`);
+      } else {
+        await terrainToggle.uncheck();
+        assert.equal(
+          await page.locator("[data-terrain-id], [data-terrain-label]").count(),
+          0,
+        );
+        if (view === "korea")
+          assert(
+            (await page.locator("[data-traditional-region]").count()) >= 9,
+          );
+      }
+      await terrainToggle.press("Space");
+      assert(await terrainToggle.isChecked(), "Keyboard restores terrain");
+      if (view === "globe") await page.waitForFunction(terrainPixelCount);
+      else
+        await page
+          .locator('[data-terrain-id="korea-taebaek"]')
+          .waitFor({ state: "attached" });
       if (view === "korea") {
         assert((await page.locator("[data-traditional-region]").count()) >= 9);
         await page
@@ -265,6 +316,18 @@ try {
     .waitFor({ state: "attached" });
   await retry.getByRole("alert").waitFor({ state: "hidden" });
   checks.push({ retry: true, passed: true });
+  await retry.getByRole("checkbox", { name: "지형", exact: true }).uncheck();
+  for (const name of ["세계사", "지구본", "한국사"]) {
+    await retry.getByRole("button", { name, exact: true }).click();
+    assert.equal(
+      await retry
+        .getByRole("checkbox", { name: "지형", exact: true })
+        .isChecked(),
+      false,
+      `${name}: terrain preference survives view switching`,
+    );
+  }
+  checks.push({ terrainPreferenceAcrossViews: true, passed: true });
   await retry.close();
   await fs.writeFile(
     path.join(out, "report.json"),

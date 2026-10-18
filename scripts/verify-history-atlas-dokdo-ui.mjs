@@ -311,6 +311,7 @@ for (const width of [286, 356, 640, 920]) {
     geography: null,
     geographyLabels: [],
     terrain: null,
+    showTerrain: true,
     terrainLayers: [],
     mountainTexture: null,
     desertTexture: null,

@@ -42,9 +42,13 @@
   border: 0;
   background: transparent;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   margin-bottom: 8px;
+}
+.history-globe__toolbar {
+  margin-left: auto;
 }
 .history-globe__header .ws-info-help__button {
   justify-content: flex-start;

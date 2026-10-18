@@ -1,4 +1,4 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import type { AtlasDataset, AtlasSubject } from "../../lib/historyAtlas";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
@@ -20,6 +20,7 @@ const VIEWS: { id: MapView; label: string }[] = [
 export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showTerrain, setShowTerrain] = useState(true);
   const requestedView = searchParams.get("view");
   const view: MapView =
     requestedView === "world" || requestedView === "globe"
@@ -41,6 +42,16 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
     next.delete("subject");
     setSearchParams(next, { state: null });
   };
+  const terrainControl = (
+    <label className="atlas-terrain-toggle">
+      <input
+        type="checkbox"
+        checked={showTerrain}
+        onChange={(event) => setShowTerrain(event.target.checked)}
+      />
+      <span>지형</span>
+    </label>
+  );
   const navigation = (
     <div
       className="history-atlas__subjects"
@@ -72,6 +83,8 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
       >
         <HistoryGlobe
           dataset={dataset}
+          showTerrain={showTerrain}
+          toolbar={terrainControl}
           initialSubject={
             searchParams.get("subject") === "korea"
               ? "korea"
@@ -89,6 +102,8 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
     <HistoryAtlas
       key={atlasKey}
       dataset={dataset}
+      showTerrain={showTerrain}
+      toolbar={terrainControl}
       initialSubject={view}
       navigation={navigation}
       onSubjectChange={(subject) => {

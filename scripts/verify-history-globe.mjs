@@ -349,8 +349,18 @@ const Atlas = () => null;
 const Globe = () => null;
 let lazyRegistrations = 0;
 const wrapperExports = {};
+let terrainPreference = true;
 const dependencies = {
-  react: { ...React, default: React },
+  react: {
+    ...React,
+    default: React,
+    useState: () => [
+      terrainPreference,
+      (value) => {
+        terrainPreference = value;
+      },
+    ],
+  },
   "react-router-dom": {
     useLocation: () => location,
     useSearchParams: () => [
@@ -419,13 +429,29 @@ let rendered = renderMaps();
 assert.equal(lazyRegistrations, 1);
 assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
 assert.equal(rendered.props.initialSubject, "korea");
+assert.equal(rendered.props.showTerrain, true);
+rendered.props.toolbar.props.children[0].props.onChange({
+  target: { checked: false },
+});
+rendered = renderMaps();
+assert.equal(rendered.props.showTerrain, false);
 assert.equal(rendered.props.onOpenOriginals, undefined);
 press(rendered, "세계사");
 rendered = renderMaps();
 assert.equal(rendered.props.initialSubject, "world");
+assert.equal(
+  rendered.props.showTerrain,
+  false,
+  "Flat view changes preserve terrain preference",
+);
 const worldKey = rendered.key;
 press(rendered, "지구본");
 rendered = renderMaps();
+assert.equal(
+  contentOf(rendered).props.showTerrain,
+  false,
+  "The globe shares the same terrain preference",
+);
 assert.equal(
   rendered.type,
   React.Suspense,

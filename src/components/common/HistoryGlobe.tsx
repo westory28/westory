@@ -230,12 +230,16 @@ interface HistoryGlobeProps {
   dataset: AtlasDataset;
   initialSubject?: GlobeSubject;
   navigation?: ReactNode;
+  toolbar?: ReactNode;
+  showTerrain?: boolean;
 }
 
 export default function HistoryGlobe({
   dataset,
   initialSubject = "all",
   navigation,
+  toolbar,
+  showTerrain = true,
 }: HistoryGlobeProps) {
   const id = useId();
   const rootRef = useRef<HTMLElement>(null);
@@ -473,25 +477,29 @@ export default function HistoryGlobe({
     [selected?.place, selectedRiver, selectedArea],
   );
   const geographyLabels = useMemo(() => {
-    const features: GlobeGeography["labels"] = (terrain?.features || []).map(
-      (feature) => ({
-        name: feature.properties.name,
-        kind: feature.properties.kind === "desert" ? "desert" : "terrain",
-        coordinates: feature.properties.coordinates,
-        minZoom: feature.properties.minZoom / 1.7,
-      }),
-    );
+    const features: GlobeGeography["labels"] = (
+      showTerrain ? terrain?.features || [] : []
+    ).map((feature) => ({
+      name: feature.properties.name,
+      kind: feature.properties.kind === "desert" ? "desert" : "terrain",
+      coordinates: feature.properties.coordinates,
+      minZoom: feature.properties.minZoom / 1.7,
+    }));
     const names = new Set(
       features.map((feature) => normalizeAtlasSearch(feature.name)),
     );
     return [
       ...features,
       ...(geography?.labels || []).filter(
-        (label) => !names.has(normalizeAtlasSearch(label.name)),
+        (label) =>
+          (showTerrain ||
+            (label.kind !== "desert" && label.kind !== "terrain")) &&
+          !names.has(normalizeAtlasSearch(label.name)),
       ),
     ];
-  }, [terrain, geography]);
+  }, [terrain, geography, showTerrain]);
   const terrainLayers = useMemo(() => {
+    if (!showTerrain) return [];
     const layers = new Map<AtlasTerrainKind, MultiPolygon>();
     for (const feature of terrain?.features || []) {
       const kind = feature.properties.kind;
@@ -507,7 +515,7 @@ export default function HistoryGlobe({
       layers.set(kind, layer);
     }
     return [...layers].map(([kind, geometry]) => ({ kind, geometry }));
-  }, [terrain]);
+  }, [terrain, showTerrain]);
 
   const cancelDraw = useCallback(() => {
     if (raf.current !== null) cancelAnimationFrame(raf.current);
@@ -806,7 +814,7 @@ export default function HistoryGlobe({
         path(land);
         context.clip();
       }
-      if (geography && !terrain) {
+      if (showTerrain && geography && !terrain) {
         context.beginPath();
         path(geography.deserts);
         context.fillStyle = color("--atlas-terrain-desert");
@@ -1373,6 +1381,7 @@ export default function HistoryGlobe({
     geographyLabels,
     terrain,
     terrainLayers,
+    showTerrain,
     countries,
     selectedCountry,
     selectedPlaceCountry,
@@ -1909,6 +1918,7 @@ export default function HistoryGlobe({
             },
           ]}
         />
+        {toolbar && <div className="history-globe__toolbar">{toolbar}</div>}
       </header>
       {navigation}
       <div className="history-globe__filters">
