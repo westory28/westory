@@ -399,6 +399,22 @@ service cloud.firestore {
       return canUseWestory() && targetUid == request.auth.uid;
     }
 
+    function hasLegacyPointOrderReaderPermission(profile) {
+      let permissions = profile.get('staffPermissions', []);
+      return profile.get('teacherPortalEnabled', false) == true
+        && permissions is list
+        && permissions.hasAny(['point_read', 'point_manage']);
+    }
+
+    function canReadLegacyPointOrder(data) {
+      // Preserve the existing own-student / point-reader authorization while
+      // evaluating the session and maintenance fence only once per query.
+      return canUseWestory()
+        && (request.auth.token.email == "westoria28@gmail.com"
+          || hasLegacyPointOrderReaderPermission(userProfile())
+          || data.get('uid', '') == request.auth.uid);
+    }
+
     function canManagePerformanceScores() {
       return isAdmin() || isTeacherRole();
     }
@@ -1258,7 +1274,7 @@ service cloud.firestore {
       }
 
       match /point_orders/{orderId} {
-        allow read: if canReadOwnPointResource(resource.data.uid) || canReadPointData();
+        allow read: if canReadLegacyPointOrder(resource.data);
         allow create, update, delete: if false;
       }
 

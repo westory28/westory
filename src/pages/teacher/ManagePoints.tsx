@@ -703,12 +703,11 @@ const ManagePoints: React.FC = () => {
         isSemesterArchive &&
         ["products", "requests"].includes(searchParams.get("tab") || "")
       ) {
-        const [archiveProducts, archiveOrders] = await Promise.all([
-          readArchivedShopProducts(),
-          readArchivedShopOrders(),
-        ]);
-        setProducts(archiveProducts);
-        setOrders(archiveOrders);
+        if (searchParams.get("tab") === "products") {
+          setProducts(await readArchivedShopProducts());
+        } else {
+          setOrders(await readArchivedShopOrders());
+        }
         return;
       }
       const [

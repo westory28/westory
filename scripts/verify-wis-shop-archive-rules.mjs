@@ -161,6 +161,37 @@ try {
       doc(db, "application_sessions", "admin", "sessions", String(authTime)),
       session,
     );
+    // An ordinary student profile intentionally has no staff permission fields.
+    await setDoc(doc(db, "users/ordinary-student"), {
+      role: "student",
+      registrationApprovalStatus: "APPROVED",
+    });
+    await setDoc(
+      doc(
+        db,
+        "application_sessions/ordinary-student/sessions",
+        String(authTime),
+      ),
+      session,
+    );
+    for (const semester of ["1", "2"]) {
+      const scopePath = `years/2026/semesters/${semester}`;
+      await setDoc(doc(db, `${scopePath}/point_products/product`), {
+        name: "검증 상품",
+        stock: 1,
+      });
+      await setDoc(doc(db, `${scopePath}/point_orders/with-uid`), {
+        uid: "ordinary-student",
+        productName: "검증 상품",
+      });
+      await setDoc(doc(db, `${scopePath}/point_orders/peer`), {
+        uid: "another-student",
+        productName: "검증 상품",
+      });
+      await setDoc(doc(db, `${scopePath}/point_orders/without-uid`), {
+        productName: "검증 상품",
+      });
+    }
     for (const name of collections) {
       for (const [id, scope] of [
         ["old-a", "2026-1"],
@@ -214,6 +245,15 @@ try {
   });
 
   for (const name of collections) {
+    await check(
+      `${name}: empty past semester query is authorized before legacy fallback`,
+      async () => {
+        const result = await assertSucceeds(
+          getDocs(archiveQuery(admin, name, "2024-1")),
+        );
+        assert.equal(result.empty, true);
+      },
+    );
     await check(
       `${name}: point_read teacher sees only the selected past semester`,
       async () => {
@@ -354,6 +394,154 @@ try {
     );
   }
 
+  await privileged(async (db) => {
+    await setDoc(doc(db, "site_settings/student_maintenance"), {
+      enabled: false,
+      blockedRoles: ["student"],
+      bypassUids: ["synthetic-bypass"],
+      title: "점검",
+      message: "잠시 점검 중입니다.",
+      startedAt: null,
+      updatedAt: Timestamp.now(),
+      updatedBy: "admin",
+      revision: 9,
+    });
+    for (const uid of ["admin", "teacher"])
+      await updateDoc(
+        doc(db, "application_sessions", uid, "sessions", String(authTime)),
+        {
+          authorityModeAtOpen: "OBSERVE_ONLY",
+          generalExpiresAt: Timestamp.fromMillis(Date.now() - 86400000),
+        },
+      );
+  });
+  await check(
+    "production-shaped OBSERVE_ONLY sessions allow empty canonical archive queries",
+    async () => {
+      for (const db of [admin, teacher])
+        for (const name of collections) {
+          const rows = await assertSucceeds(
+            getDocs(archiveQuery(db, name, "2024-1")),
+          );
+          assert.equal(rows.empty, true);
+        }
+    },
+  );
+  await check(
+    "legacy products and orders list with missing uid is readable by authorized operators",
+    async () => {
+      for (const db of [admin, teacher]) {
+        await assertSucceeds(
+          getDocs(
+            query(
+              collection(db, "years/2026/semesters/1/point_products"),
+              orderBy(documentId()),
+              limit(200),
+            ),
+          ),
+        );
+        const rows = await assertSucceeds(
+          getDocs(
+            query(
+              collection(db, "years/2026/semesters/1/point_orders"),
+              orderBy(documentId()),
+              limit(200),
+            ),
+          ),
+        );
+        assert.equal(rows.size, 3);
+      }
+    },
+  );
+  for (const semester of ["1", "2"]) {
+    const path = `years/2026/semesters/${semester}/point_orders`;
+    const legacyQuery = (db) =>
+      query(collection(db, path), orderBy(documentId()), limit(200));
+    await check(
+      `legacy semester ${semester}: ordinary student reads only own orders`,
+      async () => {
+        const student = client("ordinary-student");
+        await assertSucceeds(getDoc(doc(student, path, "with-uid")));
+        const own = await assertSucceeds(
+          getDocs(
+            query(
+              collection(student, path),
+              where("uid", "==", "ordinary-student"),
+              limit(200),
+            ),
+          ),
+        );
+        assert.deepEqual(
+          own.docs.map((item) => item.id),
+          ["with-uid"],
+        );
+        await assertFails(getDoc(doc(student, path, "peer")));
+        await assertFails(getDoc(doc(student, path, "without-uid")));
+        await assertFails(getDocs(legacyQuery(student)));
+        await assertFails(
+          getDocs(
+            query(
+              collection(student, path),
+              where("uid", "==", "another-student"),
+              limit(200),
+            ),
+          ),
+        );
+      },
+    );
+    await check(
+      `legacy semester ${semester}: existing staff and student helper permissions remain valid`,
+      async () => {
+        for (const uid of ["teacher", "manager", "staff", "student"]) {
+          const rows = await assertSucceeds(getDocs(legacyQuery(client(uid))));
+          assert.equal(rows.size, 3);
+          await assertSucceeds(getDoc(doc(client(uid), path, "without-uid")));
+        }
+      },
+    );
+    await check(
+      `legacy semester ${semester}: permission, portal and session fences remain enforced`,
+      async () => {
+        for (const uid of [
+          "teacher-no-permission",
+          "teacher-no-portal",
+          "no-session",
+          "admin-no-session",
+          "revoked",
+          "expired",
+          "pending",
+        ]) {
+          await assertFails(getDocs(legacyQuery(client(uid))));
+          await assertFails(getDoc(doc(client(uid), path, "with-uid")));
+        }
+        await assertFails(
+          getDocs(legacyQuery(env.unauthenticatedContext().firestore())),
+        );
+        await assertFails(
+          getDocs(
+            legacyQuery(client("outsider", { email: "outsider@example.com" })),
+          ),
+        );
+        await assertFails(
+          getDocs(legacyQuery(client("teacher", { auth_time: authTime + 1 }))),
+        );
+      },
+    );
+    await check(
+      `legacy semester ${semester}: all direct writes remain denied`,
+      async () => {
+        for (const db of [admin, teacher, client("ordinary-student")]) {
+          await assertFails(
+            setDoc(doc(db, path, "new"), { uid: "ordinary-student" }),
+          );
+          await assertFails(
+            updateDoc(doc(db, path, "with-uid"), { status: "fulfilled" }),
+          );
+          await assertFails(deleteDoc(doc(db, path, "with-uid")));
+        }
+      },
+    );
+  }
   for (const value of [
     null,
     {},
@@ -430,6 +618,19 @@ try {
         await assertSucceeds(getDocs(archiveQuery(teacher, name)));
         await assertSucceeds(getDocs(archiveQuery(client("manager"), name)));
         await assertSucceeds(getDocs(archiveQuery(admin, name)));
+      }
+      for (const db of [teacher, client("manager"), admin]) {
+        for (const semester of ["1", "2"]) {
+          await assertSucceeds(
+            getDocs(
+              query(
+                collection(db, `years/2026/semesters/${semester}/point_orders`),
+                orderBy(documentId()),
+                limit(200),
+              ),
+            ),
+          );
+        }
       }
     },
   );
