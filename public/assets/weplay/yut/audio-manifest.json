@@ -1,0 +1,19 @@
+{
+  "title": "Moonlit Courtyard / 달빛 뜰",
+  "composer": "Original procedural composition created for Westory Weplay",
+  "generator": "scripts/generate-yut-audio.py",
+  "seed": 20261018,
+  "sampleRate": 32000,
+  "channels": 2,
+  "sampleBits": 16,
+  "durationSeconds": 68.5714375,
+  "bytes": 8777188,
+  "peak": 0.770013,
+  "rms": 0.083902,
+  "clippedSamples": 0,
+  "seamDelta": [
+    0.000339,
+    0.000141
+  ],
+  "sha256": "69bdba776c7a7ef207675bef2248a2ddcc9c6b547511662ad5a6a3e9823b5153"
+}

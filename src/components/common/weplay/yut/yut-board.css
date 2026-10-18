@@ -1,0 +1,190 @@
+.yut-isometric-board-wrap {
+  width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  padding-top: max(12px, calc(58px - 7.63%));
+  isolation: isolate;
+}
+.yut-isometric-board.yut-board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 7;
+  border: 0;
+  background: transparent;
+  color: #c5ac76;
+  overflow: visible;
+}
+.yut-isometric-surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.yut-board-corner-glyph {
+  font:
+    600 20px "Noto Serif KR",
+    serif;
+}
+.yut-board-step-number {
+  font:
+    500 11px "Pretendard",
+    "Noto Sans KR",
+    sans-serif;
+  opacity: 0.7;
+}
+.yut-board-finish-mark text {
+  font:
+    500 12px "Pretendard",
+    "Noto Sans KR",
+    sans-serif;
+  letter-spacing: 2px;
+}
+.yut-board-center-overlay {
+  position: absolute;
+  z-index: 2;
+  width: 48%;
+  height: 44%;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.yut-board-center-overlay:has(.yut-throw-3d) {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+.yut-isometric-board .yut-isometric-piece {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: 52px;
+  height: 66px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #f7ecd3;
+  background: transparent;
+  opacity: 1 !important;
+  transform: translate(-50%, -88%);
+  transition:
+    left 320ms ease,
+    top 320ms ease,
+    filter 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.yut-isometric-piece .yut-isometric-pawn {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 3px 3px #19231b40);
+}
+.yut-isometric-pawn text {
+  font:
+    700 17px "Noto Serif KR",
+    serif;
+}
+.yut-isometric-board .yut-isometric-piece > .yut-isometric-piece-count {
+  position: absolute;
+  bottom: 7px;
+  right: -1px;
+  min-width: 18px;
+  padding: 2px 3px;
+  border: 1px solid #d9c391;
+  border-radius: 9px;
+  color: #fff3d8;
+  background: #2b403d;
+  font:
+    700 11px/1 "Pretendard",
+    "Noto Sans KR",
+    sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+.yut-isometric-board .yut-isometric-piece.is-selected:not(:disabled) {
+  filter: drop-shadow(0 0 5px #fff1b2) drop-shadow(0 0 2px #6a9d8c);
+}
+.yut-isometric-board .yut-isometric-piece:not(:disabled):hover {
+  filter: drop-shadow(0 0 6px #fff4ca);
+}
+.yut-isometric-board .yut-isometric-destination {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 48px;
+  height: 48px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 2px solid #fff4c9;
+  border-radius: 50%;
+  color: #fffbed;
+  background: #215d50;
+  box-shadow:
+    0 0 0 4px #ebd79670,
+    0 3px 10px #152e2740;
+  transform: translate(-50%, -50%);
+  animation: yut-destination-breathe 1.8s ease-in-out infinite;
+}
+.yut-isometric-destination .yut-isometric-destination-symbol {
+  font:
+    700 20px/18px "Pretendard",
+    sans-serif;
+}
+.yut-isometric-destination .yut-isometric-destination-label {
+  font:
+    700 11px/15px "Pretendard",
+    "Noto Sans KR",
+    sans-serif;
+}
+.yut-isometric-board .yut-isometric-destination:hover {
+  background: #143f37;
+  box-shadow:
+    0 0 0 5px #f8e5ac99,
+    0 4px 16px #152e2740;
+}
+.yut-isometric-board
+  :is(.yut-isometric-piece, .yut-isometric-destination):focus-visible {
+  outline: 3px solid #fff8da;
+  outline-offset: 4px;
+  filter: drop-shadow(0 0 3px #1b5148);
+}
+@keyframes yut-destination-breathe {
+  50% {
+    box-shadow:
+      0 0 0 7px #ebd79635,
+      0 3px 14px #152e2750;
+  }
+}
+@media (max-width: 480px) {
+  .yut-isometric-board .yut-isometric-piece {
+    width: 44px;
+    height: 54px;
+  }
+  .yut-isometric-board .yut-isometric-destination {
+    width: 44px;
+    height: 44px;
+  }
+  .yut-board-step-number {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-isometric-board .yut-isometric-piece {
+    transition: none;
+  }
+  .yut-isometric-board .yut-isometric-destination {
+    animation: none;
+  }
+}

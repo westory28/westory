@@ -25,14 +25,18 @@ export default function WeplayGameCatalog({
               to={`/${portal}/weplay?game=${game.id}`}
             >
               <img
-                src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                src={`${import.meta.env.BASE_URL}assets/weplay/${game.id === "joseon-yut" ? "yut/catalog.svg" : "naval/lobby-turtle-ship.webp"}`}
                 alt=""
                 width={1200}
                 height={900}
               />
               <div className="weplay-game-card-body">
-                <h2>{gameTitle}</h2>
-                <span className="weplay-game-card-kind">역사 · 타자 · 1인</span>
+                <h2>{game.id === "history-rain" ? gameTitle : game.name}</h2>
+                <span className="weplay-game-card-kind">
+                  {game.id === "joseon-yut"
+                    ? "전통 · 전략 · 2~4인"
+                    : "역사 · 타자 · 1인"}
+                </span>
                 <span className="weplay-game-card-action">
                   {portal === "teacher" ? "게임 관리" : "게임 선택"}
                   <span aria-hidden="true">→</span>

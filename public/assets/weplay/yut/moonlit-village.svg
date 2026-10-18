@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#14241d"/><stop offset=".55" stop-color="#354c3b"/><stop offset="1" stop-color="#7c8060"/></linearGradient>
+ <radialGradient id="moon"><stop stop-color="#f1e2b6" stop-opacity=".14"/><stop offset=".45" stop-color="#c9d0ab" stop-opacity=".08"/><stop offset="1" stop-color="#c9d0ab" stop-opacity="0"/></radialGradient>
+ <linearGradient id="hill" x2="0" y2="1"><stop stop-color="#263f35"/><stop offset="1" stop-color="#213b31"/></linearGradient>
+ <linearGradient id="water" x2="0" y2="1"><stop stop-color="#4a6450"/><stop offset="1" stop-color="#1c332c"/></linearGradient>
+ <linearGradient id="roof" x2=".2" y2="1"><stop stop-color="#657464"/><stop offset=".35" stop-color="#304a3e"/><stop offset="1" stop-color="#1f3129"/></linearGradient>
+ <linearGradient id="stone" x2="0" y2="1"><stop stop-color="#7d806b"/><stop offset="1" stop-color="#384a3b"/></linearGradient>
+ <linearGradient id="wood" x2="1"><stop stop-color="#493e2d"/><stop offset=".5" stop-color="#64523b"/><stop offset="1" stop-color="#352e22"/></linearGradient>
+ <linearGradient id="mist"><stop stop-color="#a6b39b" stop-opacity="0"/><stop offset=".5" stop-color="#a6b39b" stop-opacity=".18"/><stop offset="1" stop-color="#a6b39b" stop-opacity="0"/></linearGradient>
+ <radialGradient id="lamp"><stop stop-color="#e7c582" stop-opacity=".32"/><stop offset="1" stop-color="#e7c582" stop-opacity="0"/></radialGradient>
+ <pattern id="tiles" width="16" height="28" patternUnits="userSpaceOnUse"><path d="M0 1Q8 6 16 1M8 5v22" fill="none" stroke="#90a18b" stroke-opacity=".16" stroke-width="1"/></pattern>
+ <g id="lantern"><path d="M-12-9h24l-3 26H-9Z" fill="#c39956"/><path d="M-7-6H7v20H-7Z" fill="#e9cc87"/><path d="M-14-12h28l-4 5h-20ZM-9 15H9l3 4h-24Z" fill="#534630"/><path d="M0-12v-14M0 18v8" stroke="#ac8b53" stroke-width="2"/></g>
+</defs>
+<path fill="url(#sky)" d="M0 0h1440v900H0z"/>
+<circle cx="867" cy="173" r="230" fill="url(#moon)"/><circle cx="867" cy="173" r="46" fill="#d2d4af"/><path d="M844 135c-14 23-15 51 4 75-22-8-33-37-23-57 5-9 11-15 19-18" fill="#c1c7a6"/>
+<g fill="#d9ddc0" opacity=".5"><circle cx="650" cy="82" r="1"/><circle cx="1108" cy="139" r="1"/><circle cx="350" cy="117" r="1.4"/><circle cx="1000" cy="62" r="1"/><circle cx="521" cy="202" r=".8"/></g>
+<path d="M0 384c79-20 116-88 170-82 51 6 104 88 148 68 51-23 69-131 124-147 59-18 106 106 154 112 48 6 72-61 112-70 48-11 88 97 131 91 45-5 102-138 159-129 65 10 83 98 128 106 66 11 99-73 140-55 57 25 70 99 174 104v194H0Z" fill="#5b715c" opacity=".46"/>
+<path d="M0 440c96-31 115-107 180-88s75 69 126 46c74-34 92-131 156-120 40 7 49 90 104 95 75 6 94-52 148-37 52 15 81 87 123 71 75-28 101-129 159-105 50 21 66 79 108 76 71-5 104-70 151-51 68 27 76 86 185 101v176H0Z" fill="url(#hill)"/>
+<path d="M0 486c128-25 176 8 265-15 136-37 215-3 317-12 112-10 179 22 306-10 166-42 303 43 552-3v454H0Z" fill="#243d31"/>
+<path d="M0 567c250-48 348-22 537-37 215-16 277 43 478 16 177-23 258-3 425 22v332H0Z" fill="url(#water)"/>
+<g fill="none" stroke="#afbd99" stroke-opacity=".12"><path d="M512 606q164-9 331 1M694 646q133-7 232 0M501 725q100-6 208 0M927 585q104-7 224 0M990 788q178-11 333 0M755 841q93-6 167 0"/></g>
+<path d="M0 600c90-51 156-58 254-50 105 9 149 71 249 87l116 263H0Z" fill="#273a2c"/>
+<path d="M0 750c109-72 264-76 352-52 76 21 88 91 153 130l92 72H0Z" fill="#1b3026"/>
+<!-- Original waterside pavilion with gently upturned tiled roof. -->
+<path d="M103 572h344l53 43H63Z" fill="#777e66"/><path d="M63 615h437v22H63Z" fill="#354537"/><path d="M83 637h394l20 18H63ZM103 655h354l20 18H83Z" fill="url(#stone)"/>
+<path d="M128 388h21v190h-21ZM385 388h21v190h-21ZM244 416h17v162h-17Z" fill="url(#wood)"/>
+<path d="M151 424h230v142H151Z" fill="#1b2821"/>
+<path d="M162 440h70v102h-70ZM278 440h89v102h-89Z" fill="#b5995c" opacity=".54"/>
+<g fill="none" stroke="#4c4a32" stroke-width="3"><path d="M175 440v102m14-102v102m15-102v102m15-102v102M162 465h70m-70 28h70m-70 28h70M292 440v102m15-102v102m15-102v102m15-102v102m15-102v102M278 465h89m-89 28h89m-89 28h89"/></g>
+<path d="M110 406h318v22H110Z" fill="#4b4732"/><path d="M114 406h310v4H114Z" fill="#a29663" opacity=".5"/>
+<path d="M59 395c92-15 144-50 209-101 57 51 121 86 209 101-47 18-124 20-209 14-89 6-157 4-209-14Z" fill="url(#roof)"/>
+<path d="M59 395c92-15 144-50 209-101 57 51 121 86 209 101-47 18-124 20-209 14-89 6-157 4-209-14Z" fill="url(#tiles)"/>
+<path d="M58 391c52 10 134 11 210 5 82 6 157 4 210-5" fill="none" stroke="#81917b" stroke-width="4"/>
+<path d="M55 389q8 17 24 20c63 10 122 10 189 5 76 5 136 5 189-5q16-4 24-20" fill="none" stroke="#23392e" stroke-width="7"/>
+<path d="M240 295q29 7 57-1" fill="none" stroke="#82907a" stroke-width="5"/>
+<path d="M109 564h319v12H109ZM106 548h328v6H106Z" fill="#6d6445"/>
+<g stroke="#5c5941" stroke-width="6"><path d="M116 532v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44"/></g>
+<circle cx="139" cy="462" r="64" fill="url(#lamp)"/><use href="#lantern" x="139" y="460"/><circle cx="395" cy="462" r="64" fill="url(#lamp)"/><use href="#lantern" x="395" y="460"/>
+<!-- Pine silhouette, formed from sweeping branches and needle masses. -->
+<path d="M40 688c19-104 22-178 9-269-7-47-10-114 3-157 8-23 18-41 21-58 2-10 8-7 9 2 3 23-11 53-13 78-6 73 12 134 9 203-2 69-9 133-18 205Z" fill="#18291f"/>
+<path d="M67 380c38-25 54-44 87-54m-90 99C34 403 8 387-26 384m91-94c30-25 53-44 78-53" fill="none" stroke="#1b2c22" stroke-width="11" stroke-linecap="round"/>
+<path d="M72 215c22-17 55-18 75-7 16-7 39 0 47 11 21-2 35 7 40 16-16 8-40 11-61 5-26 11-52 8-73 1-24 6-45 0-57-8 6-9 17-16 29-18ZM114 313c28-15 66-13 87 1 18-2 37 7 47 20-27 12-58 8-78 3-25 11-56 10-86-1 8-10 18-18 30-23ZM0 359c29-13 55-9 71 5 17-3 40 7 47 17-21 9-43 7-59 2-24 9-44 10-71 2Z" fill="#203d2d"/>
+<path d="M78 215c23-9 48-6 67 1m-27 101c25-8 46-6 66 0M8 364c18-5 37-2 49 5" fill="none" stroke="#4a6546" stroke-width="2" opacity=".55"/>
+<g fill="url(#mist)"><ellipse cx="772" cy="445" rx="520" ry="30"/><ellipse cx="696" cy="524" rx="600" ry="22"/><ellipse cx="983" cy="685" rx="420" ry="18"/></g>
+<path d="M0 868c114-17 163-8 227-30 58-20 93 17 149 13 53-4 74-10 132 17l78 32H0ZM1240 900c21-43 41-66 75-61 27-28 57-28 76-9l49 1v69Z" fill="#13261c"/>
+</svg>
