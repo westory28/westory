@@ -3396,6 +3396,38 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
+@container wis-ranking (max-width: 280px) {
+  .wis-ranking-list {
+    margin-inline: -8px;
+  }
+
+  .wis-ranking-row {
+    grid-template-columns: 20px minmax(96px, 1fr) max-content minmax(0, max-content);
+  }
+
+  .wis-ranking-place .wis-ranking-rank-medal {
+    width: 20px;
+    height: 20px;
+  }
+
+  .wis-ranking-profile {
+    flex-basis: 12px;
+    width: 12px;
+    height: 12px;
+    font-size: 12px;
+  }
+
+  .wis-ranking-score {
+    font-size: 14px;
+  }
+
+  .wis-ranking-score .wis-icon {
+    flex-basis: 12px;
+    width: 12px;
+    height: 12px;
+  }
+}
+
 @media (min-width: 768px) and (max-width: 1280px) and (max-height: 900px) {
   .dashboard-container.teacher-dashboard-container {
     padding-top: 1rem;
