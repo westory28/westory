@@ -1208,7 +1208,14 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .yut-game *:not(.yut-throw-3d, .yut-throw-3d *, .yut-frame-sprite, .yut-drawn-frame),
+  .yut-game
+    *:not(
+      .yut-throw-3d,
+      .yut-throw-3d *,
+      .yut-frame-sprite,
+      .yut-drawn-frame,
+      .yut-entry-scene-frame
+    ),
   .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::before,
   .yut-game *:not(.yut-throw-3d, .yut-throw-3d *)::after {
     animation: none !important;

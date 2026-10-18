@@ -856,6 +856,10 @@ async function verifyFullscreenControls(page, label) {
   await page.waitForFunction(() => document.fullscreenElement === null);
 }
 async function verifyEntryPolish() {
+  if (process.env.YUT_ENTRY_QA_PHASE === "entry-scene") {
+    await verifyEntryArtwork();
+    return;
+  }
   if (process.env.YUT_ENTRY_QA_PHASE === "art") {
     await verifyEntryArtwork();
     await verifyIdleOffsets();
@@ -988,19 +992,21 @@ async function verifyEntryPolish() {
   await verifyIdleOffsets();
 }
 async function verifyEntryArtwork() {
-  for (const [label, reduced, query] of [
-    ["normal", "no-preference", ""],
-    ["reduce", "reduce", ""],
-    ["save-data", "no-preference", "&save-data"],
+  for (const [label, reduced, query, width, height] of [
+    ["normal", "no-preference", "", 1280, 800],
+    ["reduce", "reduce", "", 1280, 800],
+    ["save-data", "no-preference", "&save-data", 1280, 800],
+    ["tablet", "no-preference", "", 768, 600],
+    ["landscape", "reduce", "", 844, 390],
   ]) {
-    const page = await open("scenario=entry" + query, reduced, 1280, 800),
+    const page = await open("scenario=entry" + query, reduced, width, height),
       scene = page.locator(".yut-entry-scene");
     await scene.waitFor();
     assert.match(
       await scene.locator("img").first().getAttribute("src"),
       /catalog-toss\.webp$/,
     );
-    if (label === "normal") {
+    if (label !== "save-data") {
       await page.waitForFunction(
         () =>
           document.querySelector(".yut-entry-scene")?.dataset.sceneReady ===
@@ -1014,16 +1020,35 @@ async function verifyEntryArtwork() {
       const frames = await scene.evaluate((node) => {
         const animated = Array.from(node.querySelectorAll("img")).slice(1),
           animations = animated.flatMap((frame) => frame.getAnimations());
-        animations.forEach((animation) => animation.pause());
-        const samples = [0, 2100, 5400, 10100, 13400, 18100].map((time) => {
-          animations.forEach((animation) => (animation.currentTime = time));
-          return animated.map((frame) =>
-            Number(getComputedStyle(frame).opacity),
+        const times = animations.map((animation) => animation.currentTime),
+          durations = animations.map((animation) =>
+            Number(animation.effect.getTiming().duration),
           );
-        });
-        animations.forEach((animation) => animation.play());
-        return { samples, sources: animated.map((frame) => frame.src) };
+        const samples = [0, 0.2625, 0.675, 1.2625, 1.675, 2.2625].map(
+          (progress) => {
+            animations.forEach(
+              (animation, index) =>
+                (animation.currentTime = durations[index] * progress),
+            );
+            return animated.map((frame) =>
+              Number(getComputedStyle(frame).opacity),
+            );
+          },
+        );
+        animations.forEach(
+          (animation, index) => (animation.currentTime = times[index]),
+        );
+        return {
+          samples,
+          durations,
+          sources: animated.map((frame) => frame.src),
+        };
       });
+      assert.ok(
+        frames.durations.every(
+          (duration) => duration === (reduced === "reduce" ? 12000 : 8000),
+        ),
+      );
       assert.deepEqual(frames.samples, [
         [0, 0],
         [1, 0],
@@ -1049,7 +1074,51 @@ async function verifyEntryArtwork() {
               ),
           ),
       );
+      await assertEntryAnimationState(scene, "paused");
       await hidePage(page, false);
+      await assertEntryAnimationState(scene, "running");
+      const toggle = page.locator(".yut-entry-motion-toggle");
+      await toggle.waitFor();
+      assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+      const accessibleName =
+        (await toggle.getAttribute("aria-label")) || (await toggle.innerText());
+      assert.ok(accessibleName.trim().length > 0);
+      assert.equal(
+        await page
+          .getByRole("button", { name: accessibleName, exact: true })
+          .count(),
+        1,
+        "Motion control is exposed to assistive technology",
+      );
+      const geometry = await toggle.evaluate((node) => {
+        const box = node.getBoundingClientRect(),
+          hit = document.elementFromPoint(
+            box.x + box.width / 2,
+            box.y + box.height / 2,
+          );
+        return {
+          box: box.toJSON(),
+          reachable: hit === node || node.contains(hit),
+        };
+      });
+      assert.ok(
+        geometry.reachable &&
+          geometry.box.width >= 44 &&
+          geometry.box.height >= 44,
+        "Motion toggle stays reachable with a usable target",
+      );
+      await toggle.press("Enter");
+      assert.equal(await toggle.getAttribute("aria-pressed"), "true");
+      await assertEntryAnimationState(scene, "paused");
+      await hidePage(page, true);
+      await hidePage(page, false);
+      await assertEntryAnimationState(scene, "paused");
+      await page.screenshot({
+        path: path.join(evidence, "art-paused-" + label + ".png"),
+      });
+      await toggle.press("Enter");
+      assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+      await assertEntryAnimationState(scene, "running");
       await scene.evaluate(
         (node) => (node.style.transform = "translateX(-10000px)"),
       );
@@ -1070,12 +1139,14 @@ async function verifyEntryArtwork() {
               ),
           ),
       );
+      await assertEntryAnimationState(scene, "paused");
       await scene.evaluate((node) => (node.style.transform = ""));
       await page.waitForFunction(
         () =>
           document.querySelector(".yut-entry-scene")?.dataset.sceneVisible ===
           "true",
       );
+      await assertEntryAnimationState(scene, "running");
       await page.waitForTimeout(400);
       assert.equal(
         page.qaAssetRequests.filter((url) =>
@@ -1084,7 +1155,7 @@ async function verifyEntryArtwork() {
         before.length,
         "Repeated whole-art frames do not request images again",
       );
-      report.paths.entryArtwork = frames;
+      report.paths["entryArtwork-" + label] = { ...frames, toggle: geometry };
     } else {
       await page.waitForTimeout(400);
       assert.equal(await scene.locator("img").count(), 1);
@@ -1092,7 +1163,12 @@ async function verifyEntryArtwork() {
         page.qaAssetRequests.filter((url) => /entry-toss-[bc]\.webp/.test(url))
           .length,
         0,
-        "Reduced motion/save-data skips animated-art downloads",
+        "Save-data skips animated-art downloads",
+      );
+      assert.equal(
+        await page.locator(".yut-entry-motion-toggle").count(),
+        0,
+        "Save-data still does not expose an ineffective motion control",
       );
     }
     await page.screenshot({
@@ -1100,9 +1176,46 @@ async function verifyEntryArtwork() {
     });
     await page.close();
   }
-  report.checks.push(
-    "Whole-scene entry frames loop through distinct images without repeated requests; hidden/offscreen pauses, and reduced motion/save-data avoid extra image downloads",
+  const portrait = await open("scenario=entry", "reduce", 390, 844);
+  await portrait.locator(".yut-orientation-gate").waitFor();
+  assert.equal(
+    await portrait.locator(".yut-entry-motion-toggle").count(),
+    0,
+    "Portrait rotation guide does not leave an offscreen entry control focusable",
   );
+  await portrait.screenshot({ path: path.join(evidence, "art-portrait.png") });
+  await portrait.close();
+  report.checks.push(
+    "Normal/reduced entry uses three whole images loaded once with 8s/12s loops; keyboard pause/resume preserves manual choice through visibility changes; hidden/offscreen stops actual animation time; motion controls fit desktop/tablet/mobile and save-data retains the single still",
+  );
+}
+async function assertEntryAnimationState(scene, state) {
+  await scene.page().waitForFunction(
+    ({ selector, state }) => {
+      const nodes = Array.from(document.querySelectorAll(selector)),
+        animations = nodes.flatMap((node) => node.getAnimations());
+      return (
+        animations.length === 2 &&
+        animations.every((animation) => animation.playState === state)
+      );
+    },
+    { selector: ".yut-entry-scene-frame--1,.yut-entry-scene-frame--2", state },
+  );
+  if (state === "paused") {
+    const read = () =>
+      scene.evaluate((node) =>
+        Array.from(node.querySelectorAll("img"))
+          .flatMap((image) => image.getAnimations())
+          .map((animation) => animation.currentTime),
+      );
+    const before = await read();
+    await scene.page().waitForTimeout(100);
+    assert.deepEqual(
+      await read(),
+      before,
+      "Paused scene holds actual animation time",
+    );
+  }
 }
 async function verifyIdleOffsets() {
   for (const scenario of ["waiting-four", "two-home"]) {

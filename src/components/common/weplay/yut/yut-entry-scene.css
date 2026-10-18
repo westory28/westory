@@ -63,19 +63,37 @@
   }
 }
 .yut-game[data-motion-paused="true"] .yut-entry-scene-frame,
-.yut-entry-scene[data-scene-visible="false"] .yut-entry-scene-frame {
+.yut-entry-scene[data-scene-visible="false"] .yut-entry-scene-frame,
+.yut-entry-scene[data-scene-paused="true"] .yut-entry-scene-frame {
   animation-play-state: paused !important;
 }
+.yut-game .yut-entry-motion-toggle {
+  position: absolute;
+  z-index: 2;
+  right: calc(max(280px, 30%) + 52px);
+  bottom: 16px;
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid #c8a36b;
+  border-radius: 12px;
+  background: #241b13ed;
+  color: #fff2d2;
+}
 @media (prefers-reduced-motion: reduce) {
-  .yut-entry-scene-frame--1,
-  .yut-entry-scene-frame--2 {
-    display: none;
-    animation: none !important;
+  .yut-game .yut-entry-scene-frame--1,
+  .yut-game .yut-entry-scene-frame--2 {
+    animation-duration: 12s !important;
+    animation-iteration-count: infinite !important;
+    animation-timing-function: steps(1, end) !important;
   }
 }
 @media (orientation: landscape) and (max-height: 560px) {
   .yut-game .yut-entry-scene {
     right: calc(max(280px, 34%) + 20px);
+  }
+  .yut-game .yut-entry-motion-toggle {
+    right: calc(max(280px, 34%) + 32px);
+    bottom: 12px;
   }
 }
 @media (max-width: 820px) {
