@@ -47,6 +47,24 @@
   min-width: 0;
 }
 
+@media (min-width: 768px) {
+  .score-list-compact {
+    overflow-x: auto;
+  }
+
+  .score-list-compact th:nth-child(-n + 4),
+  .score-list-compact td:nth-child(-n + 4):not([colspan]) {
+    min-width: 80px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .score-list-compact th:nth-child(4),
+  .score-list-compact td:nth-child(4):not([colspan]) {
+    min-width: 128px;
+  }
+}
+
 @media (max-width: 767px) {
   .score-list-compact table,
   .score-list-compact thead,

@@ -607,8 +607,12 @@ const StudentList: React.FC = () => {
                 읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
               </div>
             )}
-            <div className="student-list-toolbar flex-wrap">
-              <div className="w-full md:w-auto">
+            <div
+              className="student-list-toolbar"
+              role="group"
+              aria-label="학생 명단 필터 및 검색"
+            >
+              <div className="student-list-toolbar__enrollment">
                 <select
                   aria-label="학적 상태 필터"
                   value={enrollmentFilter}
@@ -666,6 +670,36 @@ const StudentList: React.FC = () => {
                   aria-hidden="true"
                 ></i>
               </button>
+              {searchOpen && (
+                <form
+                  id="student-list-search"
+                  role="search"
+                  className="student-list-search"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    applyFilters();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Escape" || event.nativeEvent.isComposing)
+                      return;
+                    setSearchOpen(false);
+                    setSearchQuery("");
+                    searchButtonRef.current?.focus();
+                  }}
+                >
+                  <input
+                    lang="ko"
+                    inputMode="text"
+                    ref={searchInputRef}
+                    type="search"
+                    aria-label="이름 또는 이메일 검색"
+                    placeholder="이름 또는 이메일 검색"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </form>
+              )}
               <button
                 ref={searchButtonRef}
                 type="button"
@@ -682,36 +716,6 @@ const StudentList: React.FC = () => {
                 <i className="fas fa-search" aria-hidden="true"></i>
               </button>
             </div>
-            {searchOpen && (
-              <form
-                id="student-list-search"
-                role="search"
-                className="student-list-search"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  applyFilters();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Escape" || event.nativeEvent.isComposing)
-                    return;
-                  setSearchOpen(false);
-                  setSearchQuery("");
-                  searchButtonRef.current?.focus();
-                }}
-              >
-                <input
-                  lang="ko"
-                  inputMode="text"
-                  ref={searchInputRef}
-                  type="search"
-                  aria-label="이름 또는 이메일 검색"
-                  placeholder="이름 또는 이메일 검색"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
-              </form>
-            )}
           </div>
 
           {loadError && (
@@ -739,11 +743,19 @@ const StudentList: React.FC = () => {
             </p>
           )}
 
-          <div className="flex-1 overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
+          <div
+            className="student-list-scroll flex-1 overflow-x-auto rounded-xl border border-gray-200 bg-white"
+            role="region"
+            aria-label="학생 명단 표"
+            tabIndex={0}
+          >
+            <table className="student-list-table text-center text-sm">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
-                  <th className="w-10 p-4 text-center">
+                  <th
+                    scope="col"
+                    className="student-list-column--selection p-4 text-center"
+                  >
                     <input
                       type="checkbox"
                       aria-label="현재 명단 전체 선택"
@@ -767,13 +779,39 @@ const StudentList: React.FC = () => {
                       className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
                     />
                   </th>
-                  <th className="w-16 p-4 text-center">학년</th>
-                  <th className="w-16 p-4 text-center">반</th>
-                  <th className="w-16 p-4 text-center">번호</th>
-                  <th className="w-32 p-4">이름</th>
-                  <th className="p-4">학적 상태</th>
-                  <th className="hidden w-64 p-4 lg:table-cell">이메일</th>
-                  <th className="w-64 p-4 text-center">관리</th>
+                  <th
+                    scope="col"
+                    className="student-list-column--grade p-4 text-center"
+                  >
+                    학년
+                  </th>
+                  <th
+                    scope="col"
+                    className="student-list-column--class p-4 text-center"
+                  >
+                    반
+                  </th>
+                  <th
+                    scope="col"
+                    className="student-list-column--number p-4 text-center"
+                  >
+                    번호
+                  </th>
+                  <th scope="col" className="student-list-column--name p-4">
+                    이름
+                  </th>
+                  <th scope="col" className="student-list-column--status p-4">
+                    학적 상태
+                  </th>
+                  <th scope="col" className="student-list-column--email p-4">
+                    이메일
+                  </th>
+                  <th
+                    scope="col"
+                    className="student-list-column--actions p-4 text-center"
+                  >
+                    관리
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -816,7 +854,7 @@ const StudentList: React.FC = () => {
                       <td className="p-4 text-center font-bold text-gray-600">
                         {student.number}
                       </td>
-                      <td className="whitespace-nowrap p-4">
+                      <td className="p-4">
                         <button
                           onClick={() => {
                             setSelectedStudent(student);
@@ -824,11 +862,13 @@ const StudentList: React.FC = () => {
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                          className="w-full text-center font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
-                          <span className="flex items-center">
-                            <span>{student.name || "(이름 없음)"}</span>
-                            <i className="fas fa-folder-open ml-2 text-xs text-gray-300 group-hover:text-blue-400"></i>
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="min-w-0">
+                              {student.name || "(이름 없음)"}
+                            </span>
+                            <i className="fas fa-folder-open shrink-0 text-xs text-gray-300 group-hover:text-blue-400"></i>
                           </span>
                           {!student.name && (
                             <span className="mt-1 font-mono text-xs font-normal text-gray-500 group-hover:text-blue-500">
@@ -837,7 +877,7 @@ const StudentList: React.FC = () => {
                           )}
                         </button>
                       </td>
-                      <td className="p-4 text-sm text-gray-600">
+                      <td className="student-list-column--status p-4 text-sm text-gray-600">
                         <span className="whitespace-nowrap font-bold">
                           {isStudentRegistrationPending(student)
                             ? "등록 대기"
@@ -851,11 +891,11 @@ const StudentList: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">
+                      <td className="student-list-column--email p-4 font-mono text-xs text-gray-500">
                         {student.email}
                       </td>
-                      <td className="p-4 text-center">
-                        <div className="flex flex-wrap justify-center gap-1">
+                      <td className="student-list-column--actions p-4 text-center">
+                        <div className="flex flex-wrap justify-center gap-2">
                           {!readOnly &&
                             (isStudentRegistrationPending(student) ? (
                               <button

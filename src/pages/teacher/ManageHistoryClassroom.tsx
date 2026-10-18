@@ -5227,7 +5227,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       </div>
                     </div>
                     <div className="mt-3 max-h-[min(58vh,34rem)] min-h-0 flex-1 space-y-1.5 overflow-auto pr-1 [-webkit-overflow-scrolling:touch]">
-                      <div className="sticky top-0 z-10 grid min-w-[48rem] grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_7.5rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[50rem] grid-cols-[4rem_4rem_minmax(7rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_10rem] items-center gap-3 border-x border-b border-x-transparent border-b-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div>학급</div>
                         <div className="text-center">번호</div>
                         <div>학생</div>
@@ -5245,13 +5245,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={request.id}
-                            className={`min-w-[48rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[50rem] rounded-xl border bg-white px-3 py-2 transition ${
                               isHighlighted
                                 ? "border-blue-300 bg-blue-50 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[3.5rem_3rem_minmax(6rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_7.5rem] items-center gap-2">
+                            <div className="grid grid-cols-[4rem_4rem_minmax(7rem,1fr)_minmax(8rem,1.2fr)_6rem_4.5rem_10rem] items-center gap-3">
                               <div className="truncate text-xs font-bold text-slate-500">
                                 {request.grade && request.className
                                   ? `${request.grade}-${request.className}`
@@ -5289,7 +5289,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   )}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-2">
                                 {isPending ? (
                                   <>
                                     <HistoryActionButton
@@ -5428,7 +5428,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         }
                       }}
                     >
-                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[3rem_3rem_3.5rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                      <div className="sticky top-0 z-10 grid min-w-[52rem] grid-cols-[4rem_4rem_4rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-3 border-x border-b border-x-transparent border-b-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div className="text-center">학년</div>
                         <div className="text-center">반</div>
                         <div className="text-center">번호</div>
@@ -5446,13 +5446,13 @@ const ManageHistoryClassroom: React.FC = () => {
                         return (
                           <div
                             key={row.key}
-                            className={`min-w-[42rem] rounded-xl border bg-white px-3 py-2 transition ${
+                            className={`min-w-[52rem] rounded-xl border bg-white px-3 py-2 transition ${
                               expanded
                                 ? "border-blue-200 ring-2 ring-blue-50"
                                 : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
                             }`}
                           >
-                            <div className="grid grid-cols-[3rem_3rem_3.5rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-2">
+                            <div className="grid grid-cols-[4rem_4rem_4rem_minmax(9rem,1fr)_4.5rem_5.5rem_4.5rem_3.5rem] items-center gap-3">
                               <button
                                 type="button"
                                 onClick={() =>
