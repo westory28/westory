@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  getWeplayIntroAudioState,
+  subscribeWeplayIntroAudio,
+} from "./weplayIntroAudio";
 import {
   isWeplayAudioMuted,
   onWeplayAudioMutedChange,
@@ -14,6 +24,10 @@ export default function useWeplayMusic(
   const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const intro = useSyncExternalStore(
+    subscribeWeplayIntroAudio,
+    getWeplayIntroAudioState,
+  );
   const audio = useRef<HTMLAudioElement | null>(null);
   const wanted = useRef(false);
   const muteRef = useRef(muted);
@@ -26,7 +40,8 @@ export default function useWeplayMusic(
       !alive.current ||
       !wanted.current ||
       muteRef.current ||
-      document.hidden
+      document.hidden ||
+      getWeplayIntroAudioState().active
     )
       return;
     const player = (audio.current ||= new Audio(source));
@@ -52,6 +67,7 @@ export default function useWeplayMusic(
           !alive.current ||
           muteRef.current ||
           document.hidden ||
+          getWeplayIntroAudioState().active ||
           audiblePlayer !== player ||
           audio.current !== player
         )
@@ -77,13 +93,15 @@ export default function useWeplayMusic(
     play();
   }, [play]);
   const toggle = () => {
-    const nextMuted = started && !muted && !failed;
+    const nextMuted = intro.active
+      ? intro.audible && !muted
+      : started && !muted && !failed;
     muteRef.current = nextMuted;
     setMuted(nextMuted);
     setFailed(false);
     setWeplayAudioMuted(nextMuted);
     if (nextMuted) audio.current?.pause();
-    else start();
+    else if (!intro.active) start();
   };
   useEffect(() => {
     alive.current = true;
@@ -112,8 +130,15 @@ export default function useWeplayMusic(
     };
   }, [play]);
   useEffect(() => {
-    if (active) play();
+    if (active && !intro.active) play();
     else audio.current?.pause();
-  }, [active, play]);
-  return { start, toggle, enabled: started && !muted && !failed, failed };
+  }, [active, intro.active, play]);
+  return {
+    start,
+    toggle,
+    enabled: intro.active
+      ? intro.audible && !muted
+      : started && !muted && !failed,
+    failed: intro.active ? false : failed,
+  };
 }

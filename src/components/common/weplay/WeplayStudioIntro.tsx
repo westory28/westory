@@ -6,6 +6,7 @@ import {
   type GeoPermissibleObjects,
 } from "d3-geo";
 import land from "../../../data/atlas/land-globe.json";
+import { createWeplayIntroAudio } from "./weplayIntroAudio";
 import "./weplay-studio-intro.css";
 
 const DURATION = 3600;
@@ -21,6 +22,7 @@ export default function WeplayStudioIntro({
   onComplete: () => void;
 }) {
   const root = useRef<HTMLElement>(null);
+  const sound = useRef<ReturnType<typeof createWeplayIntroAudio> | null>(null);
   const callback = useRef(onComplete);
   callback.current = onComplete;
   const completed = useRef(false);
@@ -28,6 +30,7 @@ export default function WeplayStudioIntro({
   const finish = useCallback(() => {
     if (completed.current) return;
     completed.current = true;
+    sound.current?.dispose();
     // Only restore focus when the disappearing skip control actually held it.
     const main = root.current?.closest("main");
     const restoreFocus = root.current?.contains(document.activeElement);
@@ -45,6 +48,8 @@ export default function WeplayStudioIntro({
   useEffect(() => {
     const element = root.current;
     if (!element) return;
+    const audio = createWeplayIntroAudio();
+    sound.current = audio;
     const globe = element.querySelector<SVGGElement>("[data-intro-globe]")!;
     const grid = element.querySelector<SVGPathElement>("[data-intro-grid]")!;
     const coast = element.querySelector<SVGPathElement>("[data-intro-land]")!;
@@ -67,7 +72,7 @@ export default function WeplayStudioIntro({
     let elapsed = 0;
     let last: number | null = null;
     let frame = 0;
-    let visible = true;
+    let visible = typeof IntersectionObserver === "undefined";
     const draw = (time: number) => {
       const enter = smooth(time / 500);
       const change = smooth((time - 1500) / 600);
@@ -96,12 +101,14 @@ export default function WeplayStudioIntro({
       if (last !== null) elapsed += now - last;
       last = now;
       draw(Math.min(elapsed, DURATION));
+      audio.sync(elapsed, visible);
       if (elapsed >= DURATION) finish();
       else frame = requestAnimationFrame(tick);
     };
     const sync = () => {
       cancelAnimationFrame(frame);
       last = null;
+      audio.sync(elapsed, visible && !document.hidden);
       if (!document.hidden && visible && !completed.current)
         frame = requestAnimationFrame(tick);
     };
@@ -118,6 +125,8 @@ export default function WeplayStudioIntro({
     sync();
     return () => {
       cancelAnimationFrame(frame);
+      audio.dispose();
+      if (sound.current === audio) sound.current = null;
       observer?.disconnect();
       document.removeEventListener("visibilitychange", sync);
     };

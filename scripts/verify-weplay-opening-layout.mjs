@@ -18,9 +18,15 @@ const { chromium } = require(
     ),
 );
 const core = require("../functions/weplayCore.js");
+const audioOnly = process.argv.includes("--audio-only");
 const evidence = path.resolve(
   process.env.WEPLAY_QA_EVIDENCE_DIR ||
-    path.join(root, "output/weplay-opening-layout-20261018"),
+    path.join(
+      root,
+      audioOnly
+        ? "output/weplay-intro-sound-20261018"
+        : "output/weplay-opening-layout-20261018",
+    ),
 );
 await fs.mkdir(evidence, { recursive: true });
 const source = (relative) =>
@@ -112,7 +118,8 @@ import {AppDialogProvider} from ${source("src/components/common/AppDialogProvide
 import ${source("src/assets/index.css")};
 import {qa} from 'qa-service';
 function Fixture(){const location=useLocation();qa.navigate=useNavigate();return <MainLayout>{location.pathname==='/teacher/weplay'?<ManageWeplay/>:location.pathname==='/student/weplay'?<Weplay/>:<h1>다른 화면</h1>}</MainLayout>}
-createRoot(document.getElementById('root')).render(<HashRouter><AppToastProvider><AppDialogProvider><Fixture/></AppDialogProvider></AppToastProvider></HashRouter>);`,
+const app=<HashRouter><AppToastProvider><AppDialogProvider><Fixture/></AppDialogProvider></AppToastProvider></HashRouter>;
+createRoot(document.getElementById('root')).render(new URLSearchParams(location.search).has('strict')?<React.StrictMode>{app}</React.StrictMode>:app);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -133,7 +140,9 @@ createRoot(document.getElementById('root')).render(<HashRouter><AppToastProvider
   },
   assetNames: "qa-fonts/[name]-[hash]",
   define: {
-    "process.env.NODE_ENV": '"production"',
+    "process.env.NODE_ENV": JSON.stringify(
+      audioOnly ? "development" : "production",
+    ),
     "import.meta.env.BASE_URL": '"/"',
   },
   plugins: [
@@ -238,6 +247,9 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
   headless: true,
+  args: audioOnly
+    ? ["--autoplay-policy=document-user-activation-required"]
+    : [],
 });
 const errors = [],
   externalRequests = [],
@@ -246,6 +258,269 @@ const errors = [],
   geometry = [],
   diagnostics = [];
 let failure;
+async function openAudio(route, extra = "") {
+  const page = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  page.setDefaultTimeout(5000);
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") diagnostics.push(message.text());
+  });
+  await page.route("**/*", (request) => {
+    if (request.request().url().startsWith(origin)) return request.continue();
+    externalRequests.push(request.request().url());
+    return request.abort();
+  });
+  await page.addInitScript(() => {
+    const qa = (window.audioQa = { contexts: [], voices: [], players: [] });
+    const NativeContext = window.AudioContext;
+    window.AudioContext = class extends NativeContext {
+      constructor(...args) {
+        super(...args);
+        qa.contexts.push(this);
+      }
+      createBufferSource() {
+        const source = super.createBufferSource(),
+          record = {
+            context: this,
+            source,
+            starts: [],
+            stops: [],
+            ended: false,
+          };
+        qa.voices.push(record);
+        const start = source.start.bind(source),
+          stop = source.stop.bind(source);
+        source.start = (...args) => {
+          record.starts.push(args);
+          return start(...args);
+        };
+        source.stop = (...args) => {
+          record.stops.push(args);
+          return stop(...args);
+        };
+        source.addEventListener("ended", () => {
+          record.ended = true;
+        });
+        return source;
+      }
+    };
+    const NativeAudio = window.Audio;
+    window.Audio = function (...args) {
+      const player = new NativeAudio(...args);
+      qa.players.push(player);
+      return player;
+    };
+    window.Audio.prototype = NativeAudio.prototype;
+    Object.setPrototypeOf(window.Audio, NativeAudio);
+  });
+  await page.goto(
+    `${origin}/?${route.startsWith("/teacher") ? "teacher&" : ""}${extra}#${route}`,
+  );
+  await page.locator(".teacher-layout,.student-layout").waitFor();
+  return page;
+}
+const audioState = (page) =>
+  page.evaluate(() => ({
+    states: window.audioQa.contexts.map((context) => context.state),
+    voices: window.audioQa.voices.map((voice) => ({
+      offset: voice.starts[0]?.[1],
+      stopped: voice.stops.length > 0,
+      ended: voice.ended,
+    })),
+    players: window.audioQa.players.map((player) => ({
+      paused: player.paused,
+      src: player.src,
+    })),
+  }));
+async function verifyAudioBrowser() {
+  for (const [route, entry] of [
+    ["/student/weplay", "catalog"],
+    ["/teacher/weplay?game=history-rain", "preview"],
+  ]) {
+    const page = await openAudio(route);
+    if (entry === "catalog")
+      await page.locator('a.weplay-game-card[href*="history-rain"]').click();
+    else
+      await page.getByRole("button", { name: "체험하기", exact: true }).click();
+    await page.waitForFunction(() =>
+      window.audioQa.voices.some((voice) => voice.starts.length > 0),
+    );
+    let state = await audioState(page);
+    assert.equal(
+      state.states.length,
+      1,
+      "Entry click's prepared context must be reused",
+    );
+    assert.equal(state.states[0], "running");
+    assert(state.voices[0].offset < 0.5, JSON.stringify(state));
+    await page.getByRole("button", { name: "소리 끄기", exact: true }).click();
+    await page.waitForFunction(() =>
+      window.audioQa.voices.every((voice) => voice.stops.length > 0),
+    );
+    await page.waitForTimeout(150);
+    await page.getByRole("button", { name: "소리 켜기", exact: true }).click();
+    await page.waitForFunction(() => window.audioQa.voices.length >= 2);
+    state = await audioState(page);
+    assert(state.voices.at(-1).offset > state.voices[0].offset + 0.1);
+    await capture(page, "audio-" + entry + "-audible");
+    await page.getByRole("button", { name: /건너뛰기/ }).click();
+    await page.waitForFunction(() =>
+      window.audioQa.contexts.every((context) => context.state === "closed"),
+    );
+    assert.equal(
+      (await audioState(page)).players.length,
+      0,
+      "Opening sound must not opt the user into background music",
+    );
+    await page.close();
+  }
+  checks.push(
+    "Real AudioContext: student catalogue and teacher preview clicks reuse their unlocked context; mute/unmute resumes at the current offset; skip closes it and does not start previously-off BGM.",
+  );
+  for (const gesture of ["pointer", "space"]) {
+    const page = await openAudio("/student/weplay?game=history-rain");
+    await page.locator(".weplay-studio-intro").waitFor();
+    await page.waitForTimeout(350);
+    const initial = await audioState(page);
+    assert(
+      initial.states.every((state) => state === "suspended"),
+      JSON.stringify(initial),
+    );
+    assert.equal(initial.voices.length, 0, "Blocked direct entry stays silent");
+    const sound = page.getByRole("button", { name: "소리 켜기", exact: true });
+    if (gesture === "pointer") {
+      const box = await sound.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(150);
+      assert.equal(
+        (await audioState(page)).voices.length,
+        0,
+        "Pointer hold must not preempt the enable click",
+      );
+      await page.mouse.up();
+    } else {
+      await sound.focus();
+      await page.keyboard.down("Space");
+      await page.waitForTimeout(150);
+      assert.equal(
+        (await audioState(page)).voices.length,
+        0,
+        "Space hold must not preempt the enable click",
+      );
+      await page.keyboard.up("Space");
+    }
+    await page.waitForFunction(() =>
+      window.audioQa.voices.some((voice) => voice.starts.length),
+    );
+    const state = await audioState(page);
+    assert(
+      state.voices[0].offset > 0.35 && state.voices[0].offset < 2.5,
+      JSON.stringify(state),
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "소리 끄기", exact: true })
+        .count(),
+      1,
+    );
+    await page.getByRole("button", { name: /건너뛰기/ }).click();
+    await page.waitForFunction(() =>
+      window.audioQa.contexts.every((context) => context.state === "closed"),
+    );
+    await page.close();
+  }
+  checks.push(
+    "Autoplay-blocked direct entry stays silent; 150ms pointer and Space holds on Enable Sound remain silent until click/release, then start at the current visual offset without toggling back to mute.",
+  );
+  const visibility = await openAudio("/student/weplay");
+  await visibility.locator('a.weplay-game-card[href*="history-rain"]').click();
+  await visibility.waitForFunction(() => window.audioQa.voices.length === 1);
+  await visibility.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await visibility.waitForFunction(
+    () => window.audioQa.voices[0].stops.length > 0,
+  );
+  await visibility.waitForTimeout(100);
+  await visibility.evaluate(() => {
+    delete document.hidden;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await visibility.waitForFunction(() => window.audioQa.voices.length === 2);
+  await visibility.evaluate(() => {
+    document.body.style.paddingBottom = "1800px";
+    window.scrollTo(0, 1800);
+  });
+  await visibility.waitForFunction(
+    () => window.audioQa.voices[1].stops.length > 0,
+  );
+  await visibility.waitForTimeout(100);
+  await visibility.evaluate(() => window.scrollTo(0, 0));
+  await visibility.waitForFunction(() => window.audioQa.voices.length === 3);
+  await visibility
+    .getByRole("link", { name: "전체 게임", exact: true })
+    .click();
+  await visibility.waitForFunction(() =>
+    window.audioQa.contexts.every((context) => context.state === "closed"),
+  );
+  await visibility.close();
+  checks.push(
+    "Real sources stop on simulated document visibility loss and actual IntersectionObserver offscreen scrolling, resume with the visual clock, and close on route unmount.",
+  );
+  const bgm = await openAudio("/teacher/weplay?game=history-rain");
+  await bgm.getByRole("button", { name: "소리 켜기", exact: true }).click();
+  await bgm.waitForFunction(() =>
+    window.audioQa.players.some((player) => !player.paused),
+  );
+  await bgm.getByRole("button", { name: "체험하기", exact: true }).click();
+  await bgm.waitForFunction(() =>
+    window.audioQa.voices.some((voice) => voice.starts.length),
+  );
+  assert((await audioState(bgm)).players.every((player) => player.paused));
+  await bgm.getByRole("button", { name: /건너뛰기/ }).click();
+  await bgm.waitForFunction(() =>
+    window.audioQa.players.some((player) => !player.paused),
+  );
+  assert.equal((await audioState(bgm)).players.length, 1);
+  await bgm.close();
+  checks.push(
+    "An already-enabled BGM pauses under the sonic logo and resumes through the same audio element after completion; previously-off BGM remains off.",
+  );
+  const strict = await openAudio("/student/weplay", "strict");
+  await strict.locator('a.weplay-game-card[href*="history-rain"]').click();
+  await strict.waitForFunction(() =>
+    window.audioQa.voices.some((voice) => voice.starts.length),
+  );
+  await strict.getByRole("link", { name: "전체 게임", exact: true }).click();
+  await strict.locator('a.weplay-game-card[href*="history-rain"]').click();
+  await strict.waitForTimeout(120);
+  const active = await strict.evaluate(
+    () =>
+      window.audioQa.voices.filter(
+        (voice) => voice.starts.length && !voice.stops.length && !voice.ended,
+      ).length,
+  );
+  assert.equal(
+    active,
+    1,
+    "Development StrictMode and rapid remount leave exactly one source playing",
+  );
+  await strict.getByRole("button", { name: /건너뛰기/ }).click();
+  await strict.waitForFunction(() =>
+    window.audioQa.contexts.every((context) => context.state === "closed"),
+  );
+  await strict.close();
+  checks.push(
+    "Real React development StrictMode setup/cleanup and rapid route remount keep one active source and close every retired context.",
+  );
+}
 async function open(
   route,
   width = 1280,
@@ -351,7 +626,7 @@ async function introSample(page) {
     };
   });
 }
-try {
+async function verifyOpeningLayout() {
   for (const width of [390, 768, 1280, 1366, 1440, 1920]) {
     const page = await open("/teacher/weplay?game=history-rain", width);
     await page
@@ -516,7 +791,9 @@ try {
         );
         assert.equal(await page.locator(".weplay-page .yut-game").count(), 0);
         assert((await page.locator(".yut-game").boundingBox()).width <= 1360);
-        const music = page.getByRole("button", { name: /음악 켜기|음악 끄기/ });
+        const music = page.getByRole("button", {
+          name: /음악 켜기|음악 끄기/,
+        });
         assert.equal(
           await music.evaluate((element) =>
             element.previousElementSibling?.getAttribute("aria-label"),
@@ -627,6 +904,10 @@ try {
   checks.push(
     "Merged Yut under the real portal layout retains the game-specific wrapper and 1360px bound; portrait 390/768 gates entry, and landscape rotation restores the lobby without duplicate reads/writes or page overflow.",
   );
+}
+try {
+  if (audioOnly) await verifyAudioBrowser();
+  else await verifyOpeningLayout();
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);
 } catch (error) {
@@ -646,7 +927,10 @@ try {
   }
 } finally {
   await fs.writeFile(
-    path.join(evidence, "opening-layout-results.json"),
+    path.join(
+      evidence,
+      audioOnly ? "audio-browser-results.json" : "opening-layout-results.json",
+    ),
     JSON.stringify(
       {
         status: failure ? "failed" : "passed",

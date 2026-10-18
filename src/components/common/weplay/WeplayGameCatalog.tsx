@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { WEPLAY_GAMES } from "../../../lib/weplay";
+import { prepareWeplayIntroAudio } from "./weplayIntroAudio";
 import "./weplay-catalog.css";
 
 export default function WeplayGameCatalog({
@@ -23,6 +24,16 @@ export default function WeplayGameCatalog({
             <Link
               className="weplay-game-card"
               to={`/${portal}/weplay?game=${game.id}`}
+              onClick={(event) => {
+                if (
+                  !event.ctrlKey &&
+                  !event.metaKey &&
+                  !event.shiftKey &&
+                  !event.altKey &&
+                  (portal === "student" || game.id === "joseon-yut")
+                )
+                  prepareWeplayIntroAudio();
+              }}
             >
               {game.id === "joseon-yut" ? (
                 <div className="weplay-yut-cover" aria-hidden="true">

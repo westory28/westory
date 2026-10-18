@@ -1,4 +1,5 @@
 .weplay-studio-intro {
+  --intro-stage-height: clamp(520px, 76dvh, 640px);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -6,7 +7,7 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: clamp(440px, 64dvh, 560px);
+  height: var(--intro-stage-height);
   padding: 24px 24px 80px;
   overflow: hidden;
   border: 1px solid var(--ws-border, #e5e7eb);
@@ -16,7 +17,7 @@
   font-family: "Noto Sans KR", sans-serif;
 }
 .weplay-studio-intro__composition { display: grid; justify-items: center; width: 100%; }
-.weplay-studio-intro__art { width: min(288px, 100%); height: auto; opacity: var(--intro-art-opacity, 0); }
+.weplay-studio-intro__art { width: min(384px, 100%, calc(var(--intro-stage-height) - 208px)); height: auto; opacity: var(--intro-art-opacity, 0); }
 .weplay-studio-intro__ocean { fill: var(--ws-primary-soft, #eff6ff); stroke: var(--ws-primary, #2563eb); stroke-opacity: .16; }
 .weplay-studio-intro__land { fill: var(--ws-surface, #fff); stroke: var(--ws-primary, #2563eb); stroke-opacity: .35; stroke-width: .8; }
 .weplay-studio-intro__grid { stroke: var(--ws-primary, #2563eb); stroke-opacity: .15; stroke-width: .8; }
@@ -25,7 +26,7 @@
 .weplay-studio-intro__controller { stroke: var(--ws-primary, #2563eb); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
 .weplay-studio-intro__controller path { stroke-dasharray: 1; }
 .weplay-studio-intro__controller circle { fill: var(--ws-accent, #f59e0b); stroke: none; }
-.weplay-studio-intro__wordmarks { display: grid; text-align: center; font-size: clamp(40px, 5vw, 64px); font-weight: 800; letter-spacing: -.025em; line-height: 1.25; }
+.weplay-studio-intro__wordmarks { display: grid; text-align: center; font-size: clamp(48px, 6.5vw, 84px); font-weight: 800; letter-spacing: -.025em; line-height: 1.25; }
 .weplay-studio-intro__wordmarks > div { grid-area: 1 / 1; opacity: 0; }
 .weplay-studio-intro__wordmarks span + span { color: var(--ws-accent, #f59e0b); }
 .weplay-studio-intro .weplay-studio-intro__skip {
