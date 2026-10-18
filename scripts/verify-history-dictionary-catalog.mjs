@@ -29,6 +29,9 @@ const {
   getHistoryDictionaryCatalogSource,
 } = load("src/lib/historyDictionaryCatalog.ts");
 const terms = getHistoryDictionaryCatalog();
+const { getHistoryDictionaryFacet } = load(
+  "src/lib/historyDictionaryThemes.ts",
+);
 assert.equal(
   new Set(terms.map((term) => term.id)).size,
   terms.length,
@@ -44,6 +47,10 @@ assert(
 );
 
 for (const term of terms) {
+  assert(term.facetIds?.length, `${term.id}: missing theme classification`);
+  assert.equal(new Set(term.facetIds).size, term.facetIds.length);
+  for (const id of term.facetIds)
+    assert(getHistoryDictionaryFacet(id), `${term.id}: unknown theme ${id}`);
   assert(term.id.startsWith("catalog-"), `${term.word}: unstable ID namespace`);
   assert(
     term.word.trim() && term.definition.trim(),

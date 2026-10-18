@@ -18,6 +18,11 @@ import type { HistoryDictionaryCatalogTerm } from "../../lib/historyDictionaryCa
 import HistoryDictionaryCatalogBrowser, {
   HistoryDictionaryAttribution,
 } from "./HistoryDictionaryCatalogBrowser";
+import HistoryDictionaryInitialFilter from "./HistoryDictionaryInitialFilter";
+import {
+  getHistoryDictionaryInitialCounts,
+  matchesHistoryDictionaryInitial,
+} from "../../lib/historyDictionaryInitials";
 
 export default function StudentHistoryDictionaryWorkspace() {
   const { currentUser, config, configReady } = useAuth();
@@ -27,6 +32,7 @@ export default function StudentHistoryDictionaryWorkspace() {
   const [wordsError, setWordsError] = useState("");
   const [retry, setRetry] = useState(0);
   const [search, setSearch] = useState("");
+  const [initial, setInitial] = useState("");
   const [word, setWord] = useState("");
   const [definition, setDefinition] = useState("");
   const [reference, setReference] =
@@ -57,24 +63,30 @@ export default function StudentHistoryDictionaryWorkspace() {
   const selectedWord =
     words.find((item) => item.normalizedWord === normalizedWord) || null;
   const requested = selectedWord?.status === "requested";
+  const initialCounts = useMemo(
+    () => getHistoryDictionaryInitialCounts(words.map((item) => item.word)),
+    [words],
+  );
   const visibleWords = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase("ko-KR");
     return words
       .filter(
         (item) =>
-          !needle ||
-          `${item.word} ${item.definition || ""}`
-            .toLocaleLowerCase("ko-KR")
-            .includes(needle),
+          matchesHistoryDictionaryInitial(item.word, initial) &&
+          (!needle ||
+            `${item.word} ${item.definition || ""}`
+              .toLocaleLowerCase("ko-KR")
+              .includes(needle)),
       )
       .sort((a, b) => a.word.localeCompare(b.word, "ko-KR"));
-  }, [search, words]);
+  }, [initial, search, words]);
 
   useEffect(() => {
     // A new object also invalidates work from an earlier visit to this account
     // and semester, including a rapid account switch back to the same UID.
     scopeRef.current = { key: scopeKey };
     setWords([]);
+    setInitial("");
     setWord("");
     setDefinition("");
     setReference(null);
@@ -324,7 +336,10 @@ export default function StudentHistoryDictionaryWorkspace() {
       </div>
       {view === "notebook" && (
         <div className="history-dictionary-notebook">
-          <section aria-label="저장한 단어">
+          <section
+            className="history-dictionary-initial-region"
+            aria-label="저장한 단어"
+          >
             <div className="history-dictionary-row">
               <h2>
                 내 단어장{" "}
@@ -341,61 +356,73 @@ export default function StudentHistoryDictionaryWorkspace() {
                 새 단어
               </button>
             </div>
-            <label
-              className="history-dictionary-field"
-              htmlFor={`${id}-notebook-search`}
-            >
-              <span className="sr-only">내 단어 검색</span>
-              <input
-                id={`${id}-notebook-search`}
-                type="search"
-                value={search}
-                placeholder="내 단어 검색"
-                onChange={(event) => setSearch(event.target.value)}
+            <div className="history-dictionary-initial-layout">
+              <HistoryDictionaryInitialFilter
+                value={initial}
+                onChange={setInitial}
+                counts={initialCounts}
+                label="내 단어장 첫 글자"
               />
-            </label>
-            {wordsError && (
-              <div className="history-dictionary-error" role="alert">
-                <p>내 단어장을 불러오지 못했습니다. {wordsError}</p>
-                <button
-                  className="history-dictionary-button"
-                  type="button"
-                  onClick={() => setRetry((value) => value + 1)}
+              <div className="history-dictionary-initial-content">
+                <label
+                  className="history-dictionary-field"
+                  htmlFor={`${id}-notebook-search`}
                 >
-                  다시 불러오기
-                </button>
+                  <span className="sr-only">내 단어 검색</span>
+                  <input
+                    id={`${id}-notebook-search`}
+                    type="search"
+                    value={search}
+                    placeholder="내 단어 검색"
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </label>
+                {wordsError && (
+                  <div className="history-dictionary-error" role="alert">
+                    <p>내 단어장을 불러오지 못했습니다. {wordsError}</p>
+                    <button
+                      className="history-dictionary-button"
+                      type="button"
+                      onClick={() => setRetry((value) => value + 1)}
+                    >
+                      다시 불러오기
+                    </button>
+                  </div>
+                )}
+                {wordsLoading ? (
+                  <p className="history-dictionary-empty" role="status">
+                    내 단어장을 불러오는 중입니다.
+                  </p>
+                ) : !wordsError && !visibleWords.length ? (
+                  <p className="history-dictionary-empty">
+                    {search || initial
+                      ? "검색 결과가 없습니다."
+                      : "아직 저장한 단어가 없습니다."}
+                  </p>
+                ) : null}
+                <div className="history-dictionary-word-list">
+                  {visibleWords.map((item) => (
+                    <button
+                      key={item.id}
+                      className="history-dictionary-word"
+                      type="button"
+                      aria-pressed={item.normalizedWord === normalizedWord}
+                      disabled={Boolean(busy)}
+                      onClick={() =>
+                        replaceDraft(item.word, item.definition || "")
+                      }
+                    >
+                      <span className="history-dictionary-row">
+                        <strong>{item.word}</strong>
+                        <span className="history-dictionary-count">
+                          {item.status === "requested" ? "요청 중" : "저장됨"}
+                        </span>
+                      </span>
+                      {item.definition && <p>{item.definition}</p>}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-            {wordsLoading ? (
-              <p className="history-dictionary-empty" role="status">
-                내 단어장을 불러오는 중입니다.
-              </p>
-            ) : !wordsError && !visibleWords.length ? (
-              <p className="history-dictionary-empty">
-                {search
-                  ? "검색 결과가 없습니다."
-                  : "아직 저장한 단어가 없습니다."}
-              </p>
-            ) : null}
-            <div className="history-dictionary-word-list">
-              {visibleWords.map((item) => (
-                <button
-                  key={item.id}
-                  className="history-dictionary-word"
-                  type="button"
-                  aria-pressed={item.normalizedWord === normalizedWord}
-                  disabled={Boolean(busy)}
-                  onClick={() => replaceDraft(item.word, item.definition || "")}
-                >
-                  <span className="history-dictionary-row">
-                    <strong>{item.word}</strong>
-                    <span className="history-dictionary-count">
-                      {item.status === "requested" ? "요청 중" : "저장됨"}
-                    </span>
-                  </span>
-                  {item.definition && <p>{item.definition}</p>}
-                </button>
-              ))}
             </div>
           </section>
           <section

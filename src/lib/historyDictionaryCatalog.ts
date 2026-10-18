@@ -1,5 +1,10 @@
 import { historyDictionaryCoreRows } from "../data/historyDictionaryCore";
 import {
+  historyDictionaryCoreClassification,
+  historyDictionaryPlaceClassification,
+  historyDictionaryFacetSets,
+} from "../data/historyDictionaryClassification";
+import {
   historyDictionaryPlaceRows,
   historyDictionaryPlaceSources,
 } from "../data/historyDictionaryPlaces";
@@ -21,6 +26,8 @@ export interface HistoryDictionaryCatalogTerm {
   definition: string;
   aliases: string[];
   tags: string[];
+  /** Reviewed themes including ancestors; source worksheet tags are not periods. */
+  facetIds: string[];
   kind: "history" | "place";
   attributions: HistoryDictionaryAttribution[];
   atlasPlaceId?: string;
@@ -61,6 +68,10 @@ export const getHistoryDictionaryCatalog =
           definition,
           aliases,
           tags,
+          facetIds:
+            historyDictionaryFacetSets[
+              historyDictionaryCoreClassification[word]
+            ],
           kind: "history",
           attributions: [
             {
@@ -84,6 +95,10 @@ export const getHistoryDictionaryCatalog =
           definition,
           aliases,
           tags,
+          facetIds:
+            historyDictionaryFacetSets[
+              historyDictionaryPlaceClassification[placeId]
+            ],
           kind: "place",
           atlasPlaceId: placeId,
           attributions: attributionIds.map(

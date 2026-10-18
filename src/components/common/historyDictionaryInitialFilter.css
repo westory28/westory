@@ -1,0 +1,96 @@
+.history-dictionary-initial-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+.history-dictionary-initial-content {
+  min-width: 0;
+}
+.history-dictionary-initial-filter {
+  min-width: 0;
+  max-height: min(480px, 65dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  scrollbar-width: thin;
+}
+.history-dictionary-initial-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 4px;
+}
+.history-dictionary-initial-button {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ws-text, #1f2937);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.history-dictionary-initial-button:hover:not(:disabled) {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.history-dictionary-initial-button[aria-pressed="true"] {
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
+}
+.history-dictionary-initial-button:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.history-dictionary-initial-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.history-dictionary-initial-group {
+  display: contents;
+}
+.history-dictionary-initial-group-button {
+  gap: 8px;
+  min-width: 64px;
+}
+.history-dictionary-initial-expanded {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  flex: 0 0 100%;
+  gap: 4px;
+  padding: 4px 0 8px;
+}
+.history-dictionary-initial-expanded[hidden] {
+  display: none;
+}
+@container dictionary-initial-region (min-width: 640px) {
+  .history-dictionary-initial-layout {
+    grid-template-columns: 104px minmax(0, 1fr);
+  }
+  .history-dictionary-initial-filter {
+    max-height: min(640px, 75dvh);
+  }
+  .history-dictionary-initial-items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(44px, 1fr));
+  }
+  .history-dictionary-initial-all,
+  .history-dictionary-initial-group-button,
+  .history-dictionary-initial-expanded {
+    grid-column: 1 / -1;
+  }
+  .history-dictionary-initial-expanded {
+    grid-template-columns: repeat(2, minmax(44px, 1fr));
+  }
+}
+.history-dictionary-initial-region {
+  container: dictionary-initial-region / inline-size;
+}
