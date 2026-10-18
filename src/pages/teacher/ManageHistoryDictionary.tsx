@@ -571,31 +571,42 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleDownloadExcelTemplate = async () => {
-    const { default: writeXlsxFile } = await import("write-excel-file/browser");
-    await writeXlsxFile(
-      [
-        EXCEL_TEMPLATE_HEADERS.map((value) => ({
-          value,
-          fontWeight: "bold",
-        })),
+    try {
+      const { default: writeXlsxFile } =
+        await import("write-excel-file/browser");
+      await writeXlsxFile(
         [
-          "임진왜란",
-          "조선 선조 때 일본이 조선을 침략하며 시작된 전쟁입니다.",
-          "조선 전기 / 임진왜란",
-          "전쟁, 조선, 일본",
-        ].map((value) => ({ value })),
-        [
-          "실학",
-          "조선 후기 현실 문제를 해결하기 위해 등장한 학문 경향입니다.",
-          "조선 후기 사회 변화",
-          "조선 후기, 개혁",
-        ].map((value) => ({ value })),
-      ],
-      {
-        columns: [{ width: 18 }, { width: 54 }, { width: 26 }, { width: 32 }],
-        sheet: "역사 사전 업로드",
-      },
-    ).toFile("westory_history_dictionary_template.xlsx");
+          EXCEL_TEMPLATE_HEADERS.map((value) => ({
+            value,
+            fontWeight: "bold",
+          })),
+          [
+            "임진왜란",
+            "조선 선조 때 일본이 조선을 침략하며 시작된 전쟁입니다.",
+            "조선 전기 / 임진왜란",
+            "전쟁, 조선, 일본",
+          ].map((value) => ({ value })),
+          [
+            "실학",
+            "조선 후기 현실 문제를 해결하기 위해 등장한 학문 경향입니다.",
+            "조선 후기 사회 변화",
+            "조선 후기, 개혁",
+          ].map((value) => ({ value })),
+        ],
+        {
+          columns: [{ width: 18 }, { width: 54 }, { width: 26 }, { width: 32 }],
+          sheet: "역사 사전 업로드",
+        },
+      ).toFile("westory_history_dictionary_template.xlsx");
+      showToast({ tone: "success", title: "다운로드를 시작했습니다." });
+    } catch (error) {
+      console.error("Failed to download history dictionary template:", error);
+      showToast({
+        tone: "error",
+        title: "양식 파일을 다운로드하지 못했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
+    }
   };
 
   const parseUploadTags = (value: unknown) =>

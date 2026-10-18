@@ -5,10 +5,7 @@ import {
   isArchiveUnavailableRoute,
 } from "../common/SemesterArchiveBoundary";
 import React, { useEffect } from "react";
-import {
-  inferToastFromAlertMessage,
-  useAppToast,
-} from "../common/AppToastProvider";
+import { useAppToast } from "../common/AppToastProvider";
 import Header from "../common/Header";
 import {
   PortalFallbackFooter,
@@ -290,21 +287,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     studentAccessReady,
     studentRouteAccess.allowed,
   ]);
-
-  useEffect(() => {
-    if (!portalAllowed || typeof window === "undefined") return undefined;
-
-    const originalAlert = window.alert.bind(window);
-    window.alert = (message?: unknown) => {
-      const nextToast = inferToastFromAlertMessage(message);
-      if (!nextToast) return;
-      showToast(nextToast);
-    };
-
-    return () => {
-      window.alert = originalAlert;
-    };
-  }, [portalAllowed, showToast]);
 
   useEffect(() => {
     setStudentEnhancementsReady(false);

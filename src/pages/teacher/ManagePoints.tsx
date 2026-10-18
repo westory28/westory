@@ -315,16 +315,10 @@ const ManagePoints: React.FC = () => {
   const [savedPolicy, setSavedPolicy] = useState<PointPolicy>(EMPTY_POLICY);
   const [policyDraft, setPolicyDraft] = useState<PointPolicy>(EMPTY_POLICY);
   const [policyDirty, setPolicyDirty] = useState(false);
-  const [policyFeedbackMessage, setPolicyFeedbackMessage] = useState("");
-  const [policyFeedbackTone, setPolicyFeedbackTone] =
-    useState<PolicyFeedbackTone | null>(null);
   const [rankThemeDraft, setRankThemeDraft] = useState<RankThemeDraft>(() =>
     createRankThemeDraft(EMPTY_POLICY.rankPolicy),
   );
   const [rankThemeDirty, setRankThemeDirty] = useState(false);
-  const [rankThemeFeedbackMessage, setRankThemeFeedbackMessage] = useState("");
-  const [rankThemeFeedbackTone, setRankThemeFeedbackTone] =
-    useState<PolicyFeedbackTone | null>(null);
   const [rankSettingsDraft, setRankSettingsDraft] = useState<RankSettingsDraft>(
     () => createRankSettingsDraft(EMPTY_POLICY.rankPolicy),
   );
@@ -387,7 +381,6 @@ const ManagePoints: React.FC = () => {
   const [productFeedback, setProductFeedback] = useState("");
   const [productOrderDirty, setProductOrderDirty] = useState(false);
   const [productOrderSaving, setProductOrderSaving] = useState(false);
-  const [productOrderFeedback, setProductOrderFeedback] = useState("");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("requested");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderMemo, setOrderMemo] = useState("");
@@ -735,12 +728,8 @@ const ManagePoints: React.FC = () => {
       setSavedPolicy(nextPolicy);
       setPolicyDraft(nextPolicy);
       setPolicyDirty(false);
-      setPolicyFeedbackMessage("");
-      setPolicyFeedbackTone(null);
       setRankThemeDraft(createRankThemeDraft(nextPolicy.rankPolicy));
       setRankThemeDirty(false);
-      setRankThemeFeedbackMessage("");
-      setRankThemeFeedbackTone(null);
       setRankSettingsDraft(createRankSettingsDraft(nextPolicy.rankPolicy));
       setRankSettingsDirty(false);
       setRankSettingsFeedbackMessage("");
@@ -752,7 +741,6 @@ const ManagePoints: React.FC = () => {
       setProducts(nextProducts);
       setProductOrderDirty(false);
       setProductOrderSaving(false);
-      setProductOrderFeedback("");
       setOrders(nextOrders);
       setRankManualAdjustEarnedPointsByUid(
         nextRankManualAdjustEarnedPointsByUid,
@@ -776,8 +764,6 @@ const ManagePoints: React.FC = () => {
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
     setGrantFeedback("");
-    setPolicyFeedbackMessage("");
-    setPolicyFeedbackTone(null);
     setProductFeedback("");
     setOrderFeedback("");
     if (
@@ -996,8 +982,6 @@ const ManagePoints: React.FC = () => {
   const updatePolicyDraft = (updater: (prev: PointPolicy) => PointPolicy) => {
     setPolicyDraft((prev) => updater(prev));
     setPolicyDirty(true);
-    setPolicyFeedbackMessage("");
-    setPolicyFeedbackTone(null);
   };
 
   const updateRankThemeDraft = (
@@ -1005,8 +989,6 @@ const ManagePoints: React.FC = () => {
   ) => {
     setRankThemeDraft((prev) => updater(prev));
     setRankThemeDirty(true);
-    setRankThemeFeedbackMessage("");
-    setRankThemeFeedbackTone(null);
   };
 
   const updateRankSettingsDraft = (
@@ -1051,7 +1033,6 @@ const ManagePoints: React.FC = () => {
     if (nextProducts === products) return;
     setProducts(nextProducts);
     setProductOrderDirty(true);
-    setProductOrderFeedback("");
   };
 
   const handleSaveProductOrder = async () => {
@@ -1061,7 +1042,6 @@ const ManagePoints: React.FC = () => {
       sortPointProducts(products),
     );
     setProductOrderSaving(true);
-    setProductOrderFeedback("");
 
     try {
       await Promise.all(
@@ -1078,12 +1058,18 @@ const ManagePoints: React.FC = () => {
       );
       setProducts(orderedProducts);
       setProductOrderDirty(false);
-      setProductOrderFeedback("상품 순서를 저장했습니다.");
+      showToast({
+        tone: "success",
+        title: "상품 순서 저장",
+        message: "상품 순서를 저장했습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to save product order:", error);
-      setProductOrderFeedback(
-        error?.message || "상품 순서 저장에 실패했습니다.",
-      );
+      showToast({
+        tone: "error",
+        title: "상품 순서 저장 실패",
+        message: error?.message || "상품 순서 저장에 실패했습니다.",
+      });
     } finally {
       setProductOrderSaving(false);
     }
@@ -1217,9 +1203,6 @@ const ManagePoints: React.FC = () => {
       grantIntentRef.current = null;
       setGrantAmount("");
       setGrantReason("");
-      setGrantFeedback(
-        mode === "grant" ? "지급되었습니다." : "환수되었습니다.",
-      );
 
       const nextWallets = await listPointWallets(config);
       const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
@@ -1250,7 +1233,6 @@ const ManagePoints: React.FC = () => {
     } catch (error: any) {
       console.error("Failed to adjust points:", error);
       const failureMessage = getGrantFailureMessage(error, mode);
-      setGrantFeedback(failureMessage);
       showToast({
         tone: "error",
         title: `위스 ${actionLabel}에 실패했습니다.`,
@@ -1276,14 +1258,19 @@ const ManagePoints: React.FC = () => {
       applyConfirmedPolicy(confirmedPolicy);
       setPolicyDraft(confirmedPolicy);
       setPolicyDirty(false);
-      setPolicyFeedbackTone("success");
-      setPolicyFeedbackMessage("운영 정책이 저장되었습니다.");
+      showToast({
+        tone: "success",
+        title: "운영 정책 저장",
+        message: "운영 정책이 저장되었습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to save point policy:", error);
-      setPolicyFeedbackTone("error");
-      setPolicyFeedbackMessage(
-        "저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.",
-      );
+      showToast({
+        tone: "error",
+        title: "운영 정책 저장 실패",
+        message:
+          "저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.",
+      });
     }
   };
 
@@ -1308,14 +1295,18 @@ const ManagePoints: React.FC = () => {
       const confirmedPolicy = await getPointPolicy(config);
       applyConfirmedPolicy(confirmedPolicy, { resetThemeDraft: true });
       setRankThemeDirty(false);
-      setRankThemeFeedbackTone("success");
-      setRankThemeFeedbackMessage("테마 설정이 저장되었습니다.");
+      showToast({
+        tone: "success",
+        title: "테마 설정 저장",
+        message: "테마 설정이 저장되었습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to save rank theme:", error);
-      setRankThemeFeedbackTone("error");
-      setRankThemeFeedbackMessage(
-        "테마 설정 저장에 실패했습니다. 다시 시도해 주세요.",
-      );
+      showToast({
+        tone: "error",
+        title: "테마 설정 저장 실패",
+        message: "테마 설정 저장에 실패했습니다. 다시 시도해 주세요.",
+      });
     }
   };
 
@@ -1357,14 +1348,22 @@ const ManagePoints: React.FC = () => {
       const confirmedPolicy = await getPointPolicy(config);
       applyConfirmedPolicy(confirmedPolicy, { resetRankSettingsDraft: true });
       setRankSettingsDirty(false);
-      setRankSettingsFeedbackTone("success");
-      setRankSettingsFeedbackMessage("등급 관리가 저장되었습니다.");
+      setRankSettingsFeedbackTone(null);
+      setRankSettingsFeedbackMessage("");
+      showToast({
+        tone: "success",
+        title: "등급 관리 저장",
+        message: "등급 관리가 저장되었습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to save rank settings:", error);
-      setRankSettingsFeedbackTone("error");
-      setRankSettingsFeedbackMessage(
-        "등급 관리 저장에 실패했습니다. 다시 시도해 주세요.",
-      );
+      setRankSettingsFeedbackTone(null);
+      setRankSettingsFeedbackMessage("");
+      showToast({
+        tone: "error",
+        title: "등급 관리 저장 실패",
+        message: "등급 관리 저장에 실패했습니다. 다시 시도해 주세요.",
+      });
     }
   };
 
@@ -1400,14 +1399,22 @@ const ManagePoints: React.FC = () => {
       const confirmedPolicy = await getPointPolicy(config);
       applyConfirmedPolicy(confirmedPolicy, { resetEmojiDraft: true });
       setRankEmojiDirty(false);
-      setRankEmojiFeedbackTone("success");
-      setRankEmojiFeedbackMessage("이모지 모음이 저장되었습니다.");
+      setRankEmojiFeedbackTone(null);
+      setRankEmojiFeedbackMessage("");
+      showToast({
+        tone: "success",
+        title: "이모지 모음 저장",
+        message: "이모지 모음이 저장되었습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to save rank emoji collection:", error);
-      setRankEmojiFeedbackTone("error");
-      setRankEmojiFeedbackMessage(
-        "이모지 모음 저장에 실패했습니다. 다시 시도해 주세요.",
-      );
+      setRankEmojiFeedbackTone(null);
+      setRankEmojiFeedbackMessage("");
+      showToast({
+        tone: "error",
+        title: "이모지 모음 저장 실패",
+        message: "이모지 모음 저장에 실패했습니다. 다시 시도해 주세요.",
+      });
     }
   };
 
@@ -1459,11 +1466,21 @@ const ManagePoints: React.FC = () => {
         actor,
       );
       setProductForm(createEmptyProductForm());
-      setProductFeedback("상품 정보를 저장했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "success",
+        title: "상품 저장 완료",
+        message: "상품 정보를 저장했습니다.",
+      });
       setProducts((prev) => mergePointProductIntoList(prev, canonicalProduct));
     } catch (error: any) {
       console.error("Failed to save point product:", error);
-      setProductFeedback(error?.message || "상품 저장에 실패했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "error",
+        title: "상품 저장 실패",
+        message: error?.message || "상품 저장에 실패했습니다.",
+      });
     }
   };
 
@@ -1548,11 +1565,21 @@ const ManagePoints: React.FC = () => {
       setProductForm(createEmptyProductForm());
       setProductImageFile(null);
       setProductImagePreviewUrl("");
-      setProductFeedback("상품 정보를 저장했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "success",
+        title: "상품 저장 완료",
+        message: "상품 정보를 저장했습니다.",
+      });
       setProducts((prev) => mergePointProductIntoList(prev, savedProduct));
     } catch (error: any) {
       console.error("Failed to save point product with upload:", error);
-      setProductFeedback(error?.message || "상품 저장에 실패했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "error",
+        title: "상품 저장 실패",
+        message: error?.message || "상품 저장에 실패했습니다.",
+      });
     } finally {
       setProductImageUploading(false);
     }
@@ -1580,14 +1607,22 @@ const ManagePoints: React.FC = () => {
             : item,
         ),
       );
-      setProductFeedback(
-        product.isActive
+      setProductFeedback("");
+      showToast({
+        tone: "success",
+        title: "상품 상태 변경",
+        message: product.isActive
           ? "상품을 비활성화했습니다."
           : "상품을 다시 노출했습니다.",
-      );
+      });
     } catch (error: any) {
       console.error("Failed to toggle point product:", error);
-      setProductFeedback(error?.message || "상품 상태 변경에 실패했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "error",
+        title: "상품 상태 변경 실패",
+        message: error?.message || "상품 상태 변경에 실패했습니다.",
+      });
     }
   };
 
@@ -1622,10 +1657,20 @@ const ManagePoints: React.FC = () => {
         setProductImageFile(null);
         setProductImagePreviewUrl("");
       }
-      setProductFeedback("재고가 없는 상품을 보관했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "success",
+        title: "상품 보관 완료",
+        message: "재고가 없는 상품을 보관했습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to delete point product:", error);
-      setProductFeedback(error?.message || "상품 삭제에 실패했습니다.");
+      setProductFeedback("");
+      showToast({
+        tone: "error",
+        title: "상품 보관 실패",
+        message: error?.message || "상품 삭제에 실패했습니다.",
+      });
     }
   };
 
@@ -1660,7 +1705,12 @@ const ManagePoints: React.FC = () => {
             : order,
         ),
       );
-      setOrderFeedback("구매 요청 상태를 반영했습니다.");
+      setOrderFeedback("");
+      showToast({
+        tone: "success",
+        title: "주문 상태 변경",
+        message: "구매 요청 상태를 반영했습니다.",
+      });
       void Promise.all([
         listPointOrders(config, { limitCount: 200 }),
         listPointProducts(config, false),
@@ -1674,7 +1724,12 @@ const ManagePoints: React.FC = () => {
         });
     } catch (error: any) {
       console.error("Failed to review point order:", error);
-      setOrderFeedback(error?.message || "요청 상태 변경에 실패했습니다.");
+      setOrderFeedback("");
+      showToast({
+        tone: "error",
+        title: "주문 상태 변경 실패",
+        message: error?.message || "요청 상태 변경에 실패했습니다.",
+      });
     } finally {
       setOrderSavingOrderId("");
       setOrderSavingStatus(null);
@@ -1719,12 +1774,23 @@ const ManagePoints: React.FC = () => {
         nextDelta,
       });
       await refreshOverviewData();
-      setAdjustmentFeedback("직접 조정 위스를 수정했습니다.");
+      setAdjustmentFeedback("");
+      showToast({
+        tone: "success",
+        title: "위스 조정 수정",
+        message: "직접 조정 위스를 수정했습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to update point adjustment:", error);
+      const message = error?.message || "직접 조정 위스 수정에 실패했습니다.";
       setAdjustmentFeedback(
-        error?.message || "직접 조정 위스 수정에 실패했습니다.",
+        getPendingCanonicalPointAdjustment(config) ? message : "",
       );
+      showToast({
+        tone: "error",
+        title: "위스 조정 수정 실패",
+        message: message,
+      });
     } finally {
       setAdjustmentSaving(false);
       setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
@@ -1745,10 +1811,23 @@ const ManagePoints: React.FC = () => {
       await refreshOverviewData();
       setSelectedEditableTransactionId("");
       setAdjustmentDraftValue("");
-      setAdjustmentFeedback("직접 조정 내역을 취소했습니다.");
+      setAdjustmentFeedback("");
+      showToast({
+        tone: "success",
+        title: "위스 조정 취소",
+        message: "직접 조정 내역을 취소했습니다.",
+      });
     } catch (error: any) {
       console.error("Failed to cancel point adjustment:", error);
-      setAdjustmentFeedback(error?.message || "직접 조정 취소에 실패했습니다.");
+      const message = error?.message || "직접 조정 취소에 실패했습니다.";
+      setAdjustmentFeedback(
+        getPendingCanonicalPointAdjustment(config) ? message : "",
+      );
+      showToast({
+        tone: "error",
+        title: "위스 조정 취소 실패",
+        message: message,
+      });
     } finally {
       setAdjustmentSaving(false);
       setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
@@ -1761,11 +1840,22 @@ const ManagePoints: React.FC = () => {
     try {
       await updatePointAdjustment({ config, ...pendingAdjustment });
       await refreshOverviewData();
-      setAdjustmentFeedback("이전 조정 처리를 완료했습니다.");
+      setAdjustmentFeedback("");
+      showToast({
+        tone: "success",
+        title: "위스 조정 완료",
+        message: "이전 조정 처리를 완료했습니다.",
+      });
     } catch (error: any) {
+      const message = error?.message || "조정 결과를 확인하지 못했습니다.";
       setAdjustmentFeedback(
-        error?.message || "조정 결과를 확인하지 못했습니다.",
+        getPendingCanonicalPointAdjustment(config) ? message : "",
       );
+      showToast({
+        tone: "error",
+        title: "위스 조정 확인 실패",
+        message: message,
+      });
     } finally {
       setAdjustmentSaving(false);
       setPendingAdjustment(getPendingCanonicalPointAdjustment(config));
@@ -1910,8 +2000,8 @@ const ManagePoints: React.FC = () => {
                 policy={policyDraft}
                 canManage={canManage}
                 hasUnsavedChanges={policyDirty}
-                saveFeedbackMessage={policyFeedbackMessage}
-                saveFeedbackTone={policyFeedbackTone}
+                saveFeedbackMessage=""
+                saveFeedbackTone={null}
                 onPolicyChange={updatePolicyDraft}
                 onSubmit={handleSavePolicy}
               />
@@ -1924,8 +2014,8 @@ const ManagePoints: React.FC = () => {
               canManage={canManage}
               themeDraft={rankThemeDraft}
               themeHasUnsavedChanges={rankThemeDirty}
-              themeSaveFeedbackMessage={rankThemeFeedbackMessage}
-              themeSaveFeedbackTone={rankThemeFeedbackTone}
+              themeSaveFeedbackMessage=""
+              themeSaveFeedbackTone={null}
               onThemeDraftChange={updateRankThemeDraft}
               onThemeSave={handleSaveRankTheme}
               rankSettingsDraft={rankSettingsDraft}
@@ -2007,7 +2097,7 @@ const ManagePoints: React.FC = () => {
               onDeleteProduct={(product) => void handleDeleteProduct(product)}
               productOrderDirty={productOrderDirty}
               productOrderSaving={productOrderSaving}
-              productOrderFeedback={productOrderFeedback}
+              productOrderFeedback=""
               onReorderProducts={handleReorderProducts}
               onSaveProductOrder={handleSaveProductOrder}
               onSubmit={handleSaveProductWithUpload}

@@ -1,3 +1,4 @@
+import { useAppToast } from "./AppToastProvider";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -27,6 +28,7 @@ import {
 
 export default function StudentHistoryDictionaryWorkspace() {
   const { currentUser, config, configReady } = useAuth();
+  const { showToast } = useAppToast();
   const [view, setView] = useState<"catalog" | "notebook">("catalog");
   const [words, setWords] = useState<StudentHistoryDictionaryWord[]>([]);
   const [wordsLoading, setWordsLoading] = useState(true);
@@ -51,7 +53,6 @@ export default function StudentHistoryDictionaryWorkspace() {
   const [warningAccepted, setWarningAccepted] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState("");
   const pending = useRef(false);
   const editorRef = useRef<HTMLElement>(null);
   const wordRef = useRef<HTMLInputElement>(null);
@@ -119,7 +120,6 @@ export default function StudentHistoryDictionaryWorkspace() {
     setTeacherTerm(null);
     setTeacherChecked(false);
     setTeacherError("");
-    setFeedback("");
     setError("");
     setBusy("");
     pending.current = false;
@@ -201,7 +201,6 @@ export default function StudentHistoryDictionaryWorkspace() {
     setReference(entry);
     setMemo("");
     setError("");
-    setFeedback("");
     setView("notebook");
     baseDraft.current = { word: nextWord, definition: nextDefinition };
     focusEditor(Boolean(nextWord));
@@ -217,11 +216,15 @@ export default function StudentHistoryDictionaryWorkspace() {
     pending.current = true;
     setBusy(action);
     setError("");
-    setFeedback("");
     try {
       await work(isCurrent);
     } catch (failure) {
-      if (isCurrent()) setError(getHistoryDictionaryErrorMessage(failure));
+      if (isCurrent())
+        showToast({
+          tone: "error",
+          title: "작업 실패",
+          message: getHistoryDictionaryErrorMessage(failure),
+        });
     } finally {
       if (isCurrent()) {
         pending.current = false;
@@ -247,11 +250,13 @@ export default function StudentHistoryDictionaryWorkspace() {
       });
       if (!isCurrent()) return;
       baseDraft.current = { word, definition };
-      setFeedback(
-        result.reward?.awarded
+      showToast({
+        tone: "success",
+        title: "단어장 저장",
+        message: result.reward?.awarded
           ? `저장했습니다. ${Number(result.reward.amount || 0)}위스를 받았습니다.`
           : "내 단어장에 저장했습니다.",
-      );
+      });
     });
   };
 
@@ -276,11 +281,13 @@ export default function StudentHistoryDictionaryWorkspace() {
       setSelectedArchive(null);
       setReference(null);
       baseDraft.current = { word: "", definition: "" };
-      setFeedback(
-        result.reward?.reclaimed
+      showToast({
+        tone: "success",
+        title: "단어 삭제",
+        message: result.reward?.reclaimed
           ? `삭제했습니다. 지급된 ${Number(result.reward.amount || 0)}위스를 회수했습니다.`
           : "단어를 삭제했습니다.",
-      );
+      });
     });
   };
 
@@ -316,7 +323,11 @@ export default function StudentHistoryDictionaryWorkspace() {
       if (!isCurrent()) return;
       setDefinition(teacherTerm.definition);
       baseDraft.current = { word, definition: teacherTerm.definition };
-      setFeedback("선생님 뜻풀이를 내 단어장에 저장했습니다.");
+      showToast({
+        tone: "success",
+        title: "단어장 저장",
+        message: "선생님 뜻풀이를 내 단어장에 저장했습니다.",
+      });
     });
   };
 
@@ -332,7 +343,11 @@ export default function StudentHistoryDictionaryWorkspace() {
       setRequestOpen(false);
       setWarningAccepted(false);
       setMemo("");
-      setFeedback("선생님께 뜻풀이 요청을 보냈습니다.");
+      showToast({
+        tone: "success",
+        title: "요청 완료",
+        message: "선생님께 뜻풀이 요청을 보냈습니다.",
+      });
     });
   };
 
@@ -515,7 +530,6 @@ export default function StudentHistoryDictionaryWorkspace() {
                     setSelectedSource("");
                     setSelectedArchive(null);
                     setError("");
-                    setFeedback("");
                     if (
                       reference &&
                       normalizeHistoryDictionaryWord(event.target.value) !==
@@ -551,7 +565,6 @@ export default function StudentHistoryDictionaryWorkspace() {
                   onChange={(event) => {
                     setDefinition(event.target.value);
                     setError("");
-                    setFeedback("");
                   }}
                 />
                 <span
@@ -595,11 +608,6 @@ export default function StudentHistoryDictionaryWorkspace() {
             {error && (
               <p className="history-dictionary-error" role="alert">
                 {error}
-              </p>
-            )}
-            {feedback && (
-              <p className="history-dictionary-feedback" role="status">
-                {feedback}
               </p>
             )}
             <section className="history-dictionary-teacher">

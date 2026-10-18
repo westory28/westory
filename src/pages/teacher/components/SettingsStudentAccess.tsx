@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { auth } from "../../../lib/firebase";
 import { ADMIN_EMAIL } from "../../../lib/permissions";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   planCurrentAssessmentRelease,
   prepareCurrentAssessmentRelease,
@@ -15,6 +16,7 @@ import {
 
 const SettingsStudentAccess: React.FC = () => {
   const { config: schoolConfig } = useAuth();
+  const { showToast } = useAppToast();
   const [plan, setPlan] = useState<AssessmentReleasePlan | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [planError, setPlanError] = useState("");
@@ -48,14 +50,28 @@ const SettingsStudentAccess: React.FC = () => {
     setPlanError("");
     try {
       await prepareCurrentAssessmentRelease(plan);
-      setPlan(await planCurrentAssessmentRelease(schoolConfig));
+      const preparedPlan = await planCurrentAssessmentRelease(schoolConfig);
+      setPlan(preparedPlan);
+      showToast(
+        preparedPlan.prepareCount || preparedPlan.blockedCount
+          ? {
+              tone: "warning",
+              title: "평가 준비 결과를 확인해 주세요.",
+              message: "준비 목록에서 남은 항목을 확인해 주세요.",
+            }
+          : {
+              tone: "success",
+              title: "현재 학기 평가 공개 준비를 완료했습니다.",
+            },
+      );
     } catch (failure) {
       setPlan(null);
-      setPlanError(
+      const message =
         failure instanceof Error
           ? failure.message
-          : "평가 준비를 완료하지 못했습니다.",
-      );
+          : "평가 준비를 완료하지 못했습니다.";
+      setPlanError(message);
+      showToast({ tone: "error", title: "평가 준비 실패", message });
     } finally {
       setPreparing(false);
     }
@@ -115,19 +131,25 @@ const SettingsStudentAccess: React.FC = () => {
         }
         expectedSemesterId = current.semesterId;
       }
-      setConfig(
-        await setStudentAccessAllowed(
-          config.enabled,
-          config.revision,
-          expectedSemesterId,
-        ),
+      const savedConfig = await setStudentAccessAllowed(
+        config.enabled,
+        config.revision,
+        expectedSemesterId,
       );
+      setConfig(savedConfig);
+      showToast({
+        tone: "success",
+        title: savedConfig.enabled
+          ? "학생 접속을 제한했습니다."
+          : "학생 접속을 열었습니다.",
+      });
     } catch (failure) {
-      setError(
+      const message =
         failure instanceof Error
           ? failure.message
-          : "학생 접속 설정을 저장하지 못했습니다.",
-      );
+          : "학생 접속 설정을 저장하지 못했습니다.";
+      setError(message);
+      showToast({ tone: "error", title: "학생 접속 설정 저장 실패", message });
     } finally {
       setBusy(false);
     }

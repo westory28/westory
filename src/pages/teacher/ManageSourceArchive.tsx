@@ -1,3 +1,4 @@
+import { useAppToast } from "../../components/common/AppToastProvider";
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import StorageImage from "../../components/common/StorageImage";
 import { useAuth } from "../../contexts/AuthContext";
@@ -43,10 +44,8 @@ const UI = {
   listHint:
     "업로드 원본을 보존하고, 이미지 자료는 미리보기를 유지하며 PDF 자료는 구조 추출 결과를 별도 저장합니다.",
   saveDone: "사료를 저장했습니다.",
-  saveProcessing:
-    "사료를 저장했습니다. 업로드 원본을 보존하고 미리보기 자산을 준비하는 중입니다.",
-  savePdfProcessing:
-    "자료를 저장했습니다. 원본 PDF를 보존하고 구조 추출을 준비하는 중입니다.",
+  saveProcessing: "업로드 원본을 보존하고 미리보기 자산을 준비하는 중입니다.",
+  savePdfProcessing: "원본 PDF를 보존하고 구조 추출을 준비하는 중입니다.",
   deleteDone: "사료를 삭제했습니다.",
   loadingError: "사료 창고를 불러오지 못했습니다.",
   previewEmpty: "이미지를 선택하면 미리보기가 표시됩니다.",
@@ -227,6 +226,7 @@ const getStatusHelp = (asset: SourceArchiveAsset) => {
 };
 
 const ManageSourceArchive: React.FC = () => {
+  const { showToast } = useAppToast();
   const { currentUser, userData } = useAuth();
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
   const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
@@ -467,13 +467,19 @@ const ManageSourceArchive: React.FC = () => {
           ? fileUpload.kind === "pdf"
             ? UI.savePdfProcessing
             : UI.saveProcessing
-          : UI.saveDone,
+          : "",
       );
+      showToast({ tone: "success", title: "저장 완료", message: UI.saveDone });
     } catch (error) {
       console.error("Failed to save source archive asset:", error);
-      setErrorMessage(
-        String((error as { message?: string })?.message || UI.loadingError),
-      );
+      showToast({
+        tone: "error",
+        title: "사료 저장 실패",
+        message: String(
+          (error as { message?: string })?.message ||
+            "사료를 저장하지 못했습니다. 다시 시도해 주세요.",
+        ),
+      });
     } finally {
       setSaving(false);
     }
@@ -488,12 +494,21 @@ const ManageSourceArchive: React.FC = () => {
     try {
       await deleteSourceArchiveAsset(asset.id);
       if (selectedId === asset.id) setSelectedId("");
-      setMessage(UI.deleteDone);
+      showToast({
+        tone: "success",
+        title: "삭제 완료",
+        message: UI.deleteDone,
+      });
     } catch (error) {
       console.error("Failed to delete source archive asset:", error);
-      setErrorMessage(
-        String((error as { message?: string })?.message || UI.loadingError),
-      );
+      showToast({
+        tone: "error",
+        title: "사료 삭제 실패",
+        message: String(
+          (error as { message?: string })?.message ||
+            "사료를 삭제하지 못했습니다. 다시 시도해 주세요.",
+        ),
+      });
     } finally {
       setDeleting(false);
     }
@@ -509,7 +524,11 @@ const ManageSourceArchive: React.FC = () => {
       window.open(downloadUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error("Failed to open source archive original file:", error);
-      setErrorMessage(UI.originalOpenError);
+      showToast({
+        tone: "error",
+        title: "원본 열기 실패",
+        message: UI.originalOpenError,
+      });
     } finally {
       setOpeningOriginalId("");
     }

@@ -1,3 +1,4 @@
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   useCallback,
   useEffect,
@@ -75,6 +76,7 @@ const secondsError = (
     : `${label}은 ${minimum}~${maximum}초의 정수로 입력해 주세요.`;
 
 export default function YutManagement() {
+  const { showToast } = useAppToast();
   const { config, currentUser, userData } = useAuth();
   const { confirm } = useAppDialog();
   const [params] = useSearchParams();
@@ -101,7 +103,6 @@ export default function YutManagement() {
   const [readError, setReadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [conflict, setConflict] = useState(false);
-  const [feedback, setFeedback] = useState("");
   const current = loadedScope === scope ? data : null;
   const dirty = !!draft && isDirty(draft);
   const throwError = draft
@@ -122,7 +123,6 @@ export default function YutManagement() {
   const disabled = !canWrite || saving || !!closing || conflict;
   const update = (patch: Partial<DraftValues>) => {
     setDraft((previous) => (previous ? { ...previous, ...patch } : previous));
-    setFeedback("");
   };
 
   const load = useCallback(
@@ -174,7 +174,6 @@ export default function YutManagement() {
     setLoadedScope("");
     setReadError("");
     setSaveError("");
-    setFeedback("");
     setConflict(false);
     setClosing("");
     setSaving(false);
@@ -223,7 +222,6 @@ export default function YutManagement() {
     setRefreshing(false);
     setSaving(true);
     setSaveError("");
-    setFeedback("");
     try {
       const response = await saveYutSettings(config, {
         enabled: validDraft.enabled,
@@ -246,18 +244,26 @@ export default function YutManagement() {
           : previous,
       );
       setDraft(toDraft(response.settings));
-      setFeedback("게임 설정을 저장했습니다.");
+      showToast({
+        tone: "success",
+        title: "게임 설정 저장",
+        message: "게임 설정을 저장했습니다.",
+      });
     } catch (error) {
       if (scopeRef.current === requestedScope && generation.current === token) {
         const changed = String(
           (error as { code?: string })?.code || "",
         ).includes("aborted");
         setConflict(changed);
-        setSaveError(
-          changed
-            ? "다른 곳에서 게임 설정이 바뀌었습니다. 최신 설정을 불러온 뒤 다시 확인해 주세요."
-            : yutErrorMessage(error),
-        );
+        const message = changed
+          ? "다른 곳에서 게임 설정이 바뀌었습니다. 최신 설정을 불러온 뒤 다시 확인해 주세요."
+          : yutErrorMessage(error);
+        if (changed) setSaveError(message);
+        showToast({
+          tone: "error",
+          title: "게임 설정 저장 실패",
+          message: message,
+        });
       }
     } finally {
       if (scopeRef.current === requestedScope && generation.current === token) {
@@ -289,7 +295,6 @@ export default function YutManagement() {
     setRefreshing(false);
     setClosing(room.id);
     setSaveError("");
-    setFeedback("");
     try {
       await commandYutRoom(config, {
         action: "close",
@@ -307,10 +312,18 @@ export default function YutManagement() {
             }
           : previous,
       );
-      setFeedback(`${room.code} 방을 닫았습니다.`);
+      showToast({
+        tone: "success",
+        title: "방 닫기 완료",
+        message: `${room.code} 방을 닫았습니다.`,
+      });
     } catch (error) {
       if (scopeRef.current === requestedScope && generation.current === token) {
-        setSaveError(yutErrorMessage(error));
+        showToast({
+          tone: "error",
+          title: "방 닫기 실패",
+          message: yutErrorMessage(error),
+        });
       }
     } finally {
       if (scopeRef.current === requestedScope && generation.current === token) {
@@ -377,10 +390,7 @@ export default function YutManagement() {
                 <h2 id="yut-settings-title">게임 운영</h2>
                 <div className="yut-management-actions">
                   <span className="yut-management-muted" role="status">
-                    {feedback ||
-                      (dirty
-                        ? "저장하지 않은 변경 사항"
-                        : "저장된 설정과 동일")}
+                    {dirty ? "저장하지 않은 변경 사항" : "저장된 설정과 동일"}
                   </span>
                   {canWrite && (
                     <button

@@ -152,14 +152,14 @@ try {
   await admin.getByRole('button', { name: '이름 저장', exact: true }).click();
   await admin.getByRole('alert').waitFor();
   assert.equal(await field.inputValue(), '실패해도 입력한 이름 유지');
-  assert.equal(await field.getAttribute('aria-invalid'), 'true');
+  assert.equal(await field.getAttribute('aria-invalid'), 'false', 'A transport failure is announced without marking a valid title as invalid.');
   assert.equal(await admin.evaluate(() => window.titleQa.writes.length), 1);
   assert.equal(await admin.getByRole('button', { name: '이름 저장', exact: true }).isEnabled(), true);
   await capture(admin, 'admin-save-failure-draft-1280');
   await admin.getByRole('button', { name: '이름 저장', exact: true }).click();
   await admin.getByRole('heading', { name: '실패해도 입력한 이름 유지', exact: true }).waitFor();
   assert.equal(await admin.evaluate(() => window.titleQa.writes.length), 2);
-  checks.push('A failed Firestore save retains the draft, exposes an associated error, commits nothing, and succeeds on retry.');
+  checks.push('A failed Firestore save retains the valid draft, announces the shared error toast, commits nothing, and succeeds on retry.');
 
   await field.fill('덮어쓰면 안 되는 이름');
   await admin.evaluate(() => { const child=window.titleQa.document.student.find(item=>item.url==='/student/weplay').children[0];child.name='다른 화면에서 바꾼 이름';child.gameTitleCustomized=true; });

@@ -401,7 +401,10 @@ async function sidebarChecks(page, portal, width) {
   if (portal === "teacher") {
     currentHash = "#/teacher/points?tab=products";
     await navigateHash(currentHash);
-    currentGroup = sidebar.getByRole("button", { name: "상점", exact: true });
+    currentGroup = sidebar.getByRole("button", {
+      name: "위스 상점",
+      exact: true,
+    });
     await expanded(
       currentGroup,
       true,

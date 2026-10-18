@@ -116,11 +116,9 @@ const Points: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const [cancellingOrderId, setCancellingOrderId] = useState("");
-  const [orderFeedback, setOrderFeedback] = useState("");
   const { confirm } = useAppDialog();
   const [purchaseMemo, setPurchaseMemo] = useState("");
   const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
-  const [purchaseFeedback, setPurchaseFeedback] = useState("");
   const [purchaseRequestKey, setPurchaseRequestKey] = useState("");
   const { showToast } = useAppToast();
   const historyLoadInFlightRef = useRef(false);
@@ -316,10 +314,8 @@ const Points: React.FC = () => {
     setShopErrorMessage("");
     setSelectedProductId("");
     setPurchaseMemo("");
-    setPurchaseFeedback("");
     setPurchaseRequestKey("");
     setPurchaseQuantity(1);
-    setOrderFeedback("");
     setCancellingOrderId("");
 
     if (!uid) {
@@ -401,7 +397,6 @@ const Points: React.FC = () => {
   );
 
   const handleTabChange = (tab: StudentPointTab) => {
-    setPurchaseFeedback("");
     setSearchParams(tab === "overview" ? {} : { tab });
   };
 
@@ -409,7 +404,6 @@ const Points: React.FC = () => {
     setSelectedProductId(productId);
     setPurchaseQuantity(1);
     setPurchaseMemo("");
-    setPurchaseFeedback("");
     setPurchaseRequestKey(
       `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
     );
@@ -419,7 +413,6 @@ const Points: React.FC = () => {
     if (!selectedProduct || !uid || purchaseSubmitting) return;
 
     setPurchaseSubmitting(true);
-    setPurchaseFeedback("");
     try {
       const requestKey =
         purchaseRequestKey ||
@@ -445,7 +438,6 @@ const Points: React.FC = () => {
       setPurchaseMemo("");
       setSelectedProductId("");
       setPurchaseRequestKey("");
-      setPurchaseFeedback("주문이 접수되었습니다.");
       showToast({
         tone: "success",
         title: "주문이 접수되었습니다.",
@@ -455,27 +447,23 @@ const Points: React.FC = () => {
     } catch (error: any) {
       console.error("Failed to create point purchase request:", error);
       if (error?.message?.includes("Insufficient point balance")) {
-        setPurchaseFeedback("보유 위스가 부족합니다.");
         showToast({
           tone: "warning",
           title: "구매 요청을 보낼 수 없습니다.",
           message: "보유 위스가 부족합니다.",
         });
       } else if (error?.message?.includes("out of stock")) {
-        setPurchaseFeedback("재고가 없습니다.");
         showToast({
           tone: "warning",
           title: "구매 요청을 보낼 수 없습니다.",
           message: "선택한 상품의 재고가 없습니다.",
         });
       } else {
-        setPurchaseFeedback(
-          error?.message || "주문을 처리하지 못했습니다. 다시 시도해 주세요.",
-        );
         showToast({
           tone: "error",
           title: "구매 요청에 실패했습니다.",
-          message: "잠시 후 다시 시도해 주세요.",
+          message:
+            error?.message || "주문을 처리하지 못했습니다. 다시 시도해 주세요.",
         });
       }
     } finally {
@@ -499,10 +487,13 @@ const Points: React.FC = () => {
     )
       return;
     setCancellingOrderId(order.id);
-    setOrderFeedback("");
     try {
       await cancelCanonicalPurchase(config, order.id);
-      setOrderFeedback("주문을 취소하고 위스를 돌려받았습니다.");
+      showToast({
+        tone: "success",
+        title: "주문 취소 완료",
+        message: "주문을 취소하고 위스를 돌려받았습니다.",
+      });
       await Promise.all([
         loadOrdersData({ force: true }),
         loadShopData({ force: true }),
@@ -513,9 +504,12 @@ const Points: React.FC = () => {
         historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
       ]);
     } catch (error: any) {
-      setOrderFeedback(
-        error?.message || "주문을 취소하지 못했습니다. 다시 시도해 주세요.",
-      );
+      showToast({
+        tone: "error",
+        title: "주문 취소 실패",
+        message:
+          error?.message || "주문을 취소하지 못했습니다. 다시 시도해 주세요.",
+      });
     } finally {
       setCancellingOrderId("");
     }
@@ -634,7 +628,7 @@ const Points: React.FC = () => {
                 purchaseQuantity={purchaseQuantity}
                 onPurchaseQuantityChange={setPurchaseQuantity}
                 purchaseSubmitting={purchaseSubmitting}
-                purchaseFeedback={purchaseFeedback}
+                purchaseFeedback=""
                 onSelectProduct={handleSelectProduct}
                 onPurchaseMemoChange={setPurchaseMemo}
                 onCloseRequest={() => {
@@ -658,7 +652,7 @@ const Points: React.FC = () => {
                 onOrderFilterChange={setOrderFilter}
                 onCancelOrder={(order) => void handleCancelOrder(order)}
                 cancellingOrderId={cancellingOrderId}
-                feedback={orderFeedback}
+                feedback=""
                 onOpenShop={() => handleTabChange("shop")}
                 onRefresh={() => void loadOrdersData({ force: true })}
               />

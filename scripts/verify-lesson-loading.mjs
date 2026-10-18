@@ -406,6 +406,11 @@ const harness = (store, { processPdfMapFile } = {}) => {
       "../../components/common/LoadingState": {
         LoadingOverlay: "LoadingOverlay",
       },
+      "../../components/common/AppToastProvider": {
+        useAppToast: () => ({
+          showToast: (value) => alerts.push(value.message || value.title),
+        }),
+      },
       "../../lib/semesterArchive": { isSemesterArchive: false },
       "../../contexts/AuthContext": { useAuth: () => authState },
       "../../lib/firebase": { db: {}, auth },
@@ -569,6 +574,7 @@ const harness = (store, { processPdfMapFile } = {}) => {
   assert.equal(app.saves[0].input.expectedTreeRevision, 3);
   assert.equal(app.saves[0].context.commandScope.expectedSemesterRevision, 9);
   assert.equal(app.find("LessonEditorHeader").saveStateTone, "saved");
+  assert.equal(app.alerts.at(-1), "제목과 공개 설정을 저장했습니다.");
   app.find("LessonPdfSection").onAddFootnote();
   app.render();
   const footnote = app.find("FootnoteEditorDialog");
@@ -879,6 +885,7 @@ console.log(
     JSON.stringify(inkClip),
   );
   assert.equal(saved.worksheetBlanks[0].answer, "이조전랑");
+  assert.match(app.alerts.at(-1), /PDF 편집 내용을 저장했습니다\./);
   const reloaded = harness(
     makeStore({
       [scopePath]: [lesson("A", 300, JSON.parse(JSON.stringify(saved)))],

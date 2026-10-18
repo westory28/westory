@@ -3,6 +3,7 @@ import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import { LoadingOverlay } from "../../components/common/LoadingState";
+import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import { auth, db, getFirebaseStorage } from "../../lib/firebase";
 import {
@@ -611,6 +612,7 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
 
 const ManageLesson: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
+  const { showToast } = useAppToast();
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeTitle, setSelectedNodeTitle] = useState("");
@@ -3003,7 +3005,10 @@ const ManageLesson: React.FC = () => {
     const shouldSaveMeta = source === "header" && hasUnsavedMetaChanges;
     if (!shouldSaveMeta && !shouldSavePdf) return;
     if (shouldSavePdf && selectedPdfFile && !preparedPdf) {
-      alert("PDF 페이지 추출이 끝날 때까지 기다려 주세요.");
+      showToast({
+        tone: "warning",
+        title: "PDF 페이지 추출이 끝날 때까지 기다려 주세요.",
+      });
       return;
     }
 
@@ -3177,7 +3182,10 @@ const ManageLesson: React.FC = () => {
         setLessonSaveState("saved");
       }
       if (!savedDraft) {
-        alert("제목과 공개 설정을 저장했습니다.");
+        showToast({
+          tone: "success",
+          title: "제목과 공개 설정을 저장했습니다.",
+        });
         return;
       }
       savedDraft = {
@@ -3283,7 +3291,14 @@ const ManageLesson: React.FC = () => {
               ? "PDF 편집 내용과 제목/공개 설정을 저장했습니다."
               : "PDF 편집 내용을 저장했습니다.";
       setPdfSaveFeedback({ tone: "success", message: successMessage });
-      if (source === "header") alert(successMessage);
+      showToast({
+        tone:
+          resolvedPdfProcessing.extractionStatus === "failed"
+            ? "warning"
+            : "success",
+        title: "수업 자료 저장 완료",
+        message: successMessage,
+      });
     } catch (error) {
       console.error("Failed to save lesson PDF edits:", error, {
         source,
@@ -3299,7 +3314,11 @@ const ManageLesson: React.FC = () => {
         setPdfSaveState("dirty");
         setPdfSaveFeedback({ tone: "error", message: errorMessage });
       }
-      if (source === "header") alert(errorMessage);
+      showToast({
+        tone: "error",
+        title: "수업 자료 저장 실패",
+        message: errorMessage,
+      });
     } finally {
       lessonSavingRef.current = false;
       if (loadId === lessonLoadIdRef.current) setScreenBusyMessage(null);

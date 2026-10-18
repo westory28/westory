@@ -1,3 +1,4 @@
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import NumericInput from "../../../components/common/NumericInput";
@@ -104,6 +105,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   canEdit,
 }) => {
   const { config } = useAuth();
+  const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
   const scope = useMemo(() => ({ year, semester }), [year, semester]);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -124,8 +126,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [saveError, setSaveError] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [resettingClassId, setResettingClassId] = useState("");
@@ -184,9 +184,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   };
   useQuizDialog(isOpen, dialogRef, () => requestNavigation("close"));
   useEffect(() => {
-    if (saveError || saveMessage || pendingNavigation)
-      resultRef.current?.focus();
-  }, [saveError, saveMessage, pendingNavigation]);
+    if (pendingNavigation) resultRef.current?.focus();
+  }, [pendingNavigation]);
   const allVisibilityTargets = useMemo(
     () => [
       ...defaultVisibilityGroup.targets,
@@ -259,8 +258,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     setLoading(true);
     setSettingsLoaded(false);
     setLoadError("");
-    setSaveError("");
-    setSaveMessage("");
     setPendingNavigation(null);
     setSelectedExamRound(DEFAULT_MOCK_EXAM_ROUND);
     setMockExamRounds(MOCK_EXAM_ROUNDS);
@@ -416,7 +413,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     setSettings(next);
     setSavedFingerprint(formFingerprint(next));
     setConfirmResetClassId("");
-    setSaveError("");
     setPendingNavigation(null);
   }, [
     assessmentSettingsMap,
@@ -436,8 +432,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   const updateSettings = (patch: Partial<QuizSettingsFormState>) => {
     if (!canEdit || busy) return;
     setSettings((prev) => ({ ...prev, ...patch }));
-    setSaveError("");
-    setSaveMessage("");
     setPendingNavigation(null);
   };
   const handleToggleClass = (classId: string) => {
@@ -460,8 +454,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       return;
     saveLock.current = true;
     setSaving(true);
-    setSaveError("");
-    setSaveMessage("");
     setPendingNavigation(null);
     const key = getAssessmentConfigKey(
       nodeId,
@@ -500,18 +492,23 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       setSavedFingerprint(formFingerprint(settings));
       // Round changes use the returned local state without fetching all settings again.
       setAssessmentSettingsMap((prev) => ({ ...prev, [key]: payload }));
-      setSaveMessage(
-        settings.active
+      showToast({
+        tone: "success",
+        title: "평가 설정 저장",
+        message: settings.active
           ? `${normalizedSelectedClassIds.length}개 학급에 공개했습니다.`
           : "학생 비공개로 저장했습니다.",
-      );
+      });
     } catch (error) {
       console.error("Failed to save assessment settings:", error);
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "설정 저장에 실패했습니다. 다시 시도해 주세요.",
-      );
+      showToast({
+        tone: "error",
+        title: "평가 설정 저장 실패",
+        message:
+          error instanceof Error
+            ? error.message
+            : "설정 저장에 실패했습니다. 다시 시도해 주세요.",
+      });
     } finally {
       saveLock.current = false;
       setSaving(false);
@@ -521,8 +518,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     if (!canEdit || !nodeId || busy || dirty || saveLock.current) return;
     saveLock.current = true;
     setResettingClassId(classId);
-    setSaveError("");
-    setSaveMessage("");
     try {
       const result = await executeAssessmentManagementCommand<{
         resetCount: number;
@@ -541,16 +536,21 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         allVisibilityTargets.find((target) => target.id === classId)
           ?.fullLabel || classId;
       setConfirmResetClassId("");
-      setSaveMessage(
-        `${label} 응시 ${result.resetCount}건을 초기화했습니다. 기존 제출 결과와 위스는 유지됩니다.`,
-      );
+      showToast({
+        tone: "success",
+        title: "응시 초기화 완료",
+        message: `${label} 응시 ${result.resetCount}건을 초기화했습니다. 기존 제출 결과와 위스는 유지됩니다.`,
+      });
     } catch (error) {
       console.error("Failed to reset assessment attempts by class:", error);
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "학급별 응시 초기화에 실패했습니다.",
-      );
+      showToast({
+        tone: "error",
+        title: "응시 초기화 실패",
+        message:
+          error instanceof Error
+            ? error.message
+            : "학급별 응시 초기화에 실패했습니다.",
+      });
     } finally {
       saveLock.current = false;
       setResettingClassId("");
@@ -725,7 +725,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           disabled={busy}
                           onClick={() => {
                             if (selectedExamRound !== round) {
-                              setSaveMessage("");
                               requestNavigation(round);
                             }
                           }}
@@ -742,7 +741,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           setMockExamRounds((prev) =>
                             sortMockExamRounds([...prev, next]),
                           );
-                          setSaveMessage("");
                           requestNavigation(next);
                         }}
                       >
@@ -1031,11 +1029,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         </div>
         <footer className="quiz-settings-footer">
           <div ref={resultRef} tabIndex={-1}>
-            {saveError && (
-              <p className="quiz-settings-error" role="alert">
-                {saveError}
-              </p>
-            )}
             {pendingNavigation && (
               <div className="quiz-settings-discard" role="alert">
                 <p>저장하지 않은 변경 사항이 있습니다.</p>
@@ -1071,12 +1064,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     ? "응시를 초기화하는 중…"
                     : dirty
                       ? "저장하지 않은 변경 사항"
-                      : saveMessage ||
-                        (settingsLoaded
-                          ? settings.active
-                            ? `저장된 공개 대상 · ${normalizedSelectedClassIds.length}개 학급`
-                            : "저장된 상태 · 학생 비공개"
-                          : "")}
+                      : settingsLoaded
+                        ? settings.active
+                          ? `저장된 공개 대상 · ${normalizedSelectedClassIds.length}개 학급`
+                          : "저장된 상태 · 학생 비공개"
+                        : ""}
               </p>
               {canEdit && (
                 <button

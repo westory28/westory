@@ -74,6 +74,7 @@ function harness() {
     throw new Error(name);
   };
   const deps = {
+    "./semesterArchive": { isSemesterArchive: false },
     "./firebase": { auth }, "./semesterScope": { getYearSemester: (value) => value || config },
     "./historyDictionarySession": { getHistoryDictionaryCallable: async (name) => async (payload) => ({ data: await service(name, payload) }) },
     "./sensitiveOperation": { ensureSensitiveOperation: async () => sensitive.push(auth.currentUser.uid) },

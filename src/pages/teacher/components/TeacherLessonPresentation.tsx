@@ -11,6 +11,7 @@ import LessonWorksheetStage, {
   type LessonWorksheetAnnotationState,
 } from "../../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import { db } from "../../../lib/firebase";
 import {
   getLessonContentSections,
@@ -65,6 +66,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   onRuntimeStatusChange,
 }) => {
   const { config, currentUser } = useAuth();
+  const { showToast } = useAppToast();
   const classContext = useMemo(
     () =>
       normalizeTeacherPresentationClassContext({
@@ -540,9 +542,22 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
 
   const handleManualSave = async () => {
     emitSessionActivity();
-    await persistPresentation({
+    const hasChanges =
+      serializePresentationSnapshot(latestAnnotationRef.current) !==
+        lastSavedSnapshotRef.current ||
+      latestPageRef.current !== lastSavedPageRef.current;
+    const saved = await persistPresentation({
       annotationState: latestAnnotationRef.current,
       currentPage: latestPageRef.current,
+    });
+    showToast({
+      tone: saved ? "success" : "error",
+      title: saved
+        ? hasChanges
+          ? "수업 메모를 저장했습니다."
+          : "저장할 변경 사항이 없습니다."
+        : "수업 메모를 저장하지 못했습니다.",
+      message: saved ? undefined : "화면을 닫지 말고 다시 저장해 주세요.",
     });
   };
 

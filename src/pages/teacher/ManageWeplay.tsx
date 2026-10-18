@@ -1,3 +1,4 @@
+import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import { InfoHelpIcon } from "../../components/common/InfoHelp";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -58,6 +59,7 @@ export default function ManageWeplay() {
 
 function NavalWeplayManagement() {
   const { config, currentUser, userData, menuConfig } = useAuth();
+  const { showToast } = useAppToast();
   const gameTitle = getWeplayGameTitle(menuConfig);
   const [params, setParams] = useSearchParams();
   const selectedGame = WEPLAY_GAMES.find(
@@ -81,7 +83,6 @@ function NavalWeplayManagement() {
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState("");
   const [reloadRequired, setReloadRequired] = useState(false);
   const [removedSourceCount, setRemovedSourceCount] = useState(0);
   const [difficultyError, setDifficultyError] = useState("");
@@ -163,7 +164,6 @@ function NavalWeplayManagement() {
     setResult(null);
     setData(null);
     setDraft(null);
-    setFeedback("");
     setReloadRequired(false);
     setRemovedSourceCount(0);
     setSaving(false);
@@ -217,7 +217,6 @@ function NavalWeplayManagement() {
   const availableCount = countWords(true);
   const update = (next: Partial<WeplayGameSettings>) => {
     setDraft((previous) => (previous ? { ...previous, ...next } : previous));
-    setFeedback("");
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -233,7 +232,6 @@ function NavalWeplayManagement() {
     const requestedScope = scope;
     setSaving(true);
     setError("");
-    setFeedback("");
     try {
       const response = await saveWeplayGameSettings(config, game.id, draft);
       if (scopeRef.current !== requestedScope) return;
@@ -244,19 +242,31 @@ function NavalWeplayManagement() {
       setSettingsRevision((value) => value + 1);
       setRemovedSourceCount(0);
       setReloadRequired(false);
-      setFeedback("게임 설정을 저장했습니다.");
+      showToast({
+        tone: "success",
+        title: "게임 설정 저장",
+        message: "게임 설정을 저장했습니다.",
+      });
     } catch (caught) {
       if (scopeRef.current === requestedScope)
         setReloadRequired(
           String((caught as { code?: string })?.code || "").includes("aborted"),
         );
-      if (scopeRef.current === requestedScope)
-        setError(
-          weplayErrorMessage(
-            caught,
-            "설정을 저장하지 못했습니다. 입력값을 확인하고 다시 시도해 주세요.",
-          ),
+      if (scopeRef.current === requestedScope) {
+        const message = weplayErrorMessage(
+          caught,
+          "설정을 저장하지 못했습니다. 입력값을 확인하고 다시 시도해 주세요.",
         );
+        if (
+          String((caught as { code?: string })?.code || "").includes("aborted")
+        )
+          setError(message);
+        showToast({
+          tone: "error",
+          title: "게임 설정 저장 실패",
+          message: message,
+        });
+      }
     } finally {
       if (scopeRef.current === requestedScope) setSaving(false);
     }
@@ -535,10 +545,9 @@ function NavalWeplayManagement() {
                           <h2 id="weplay-settings-title">게임 운영</h2>
                           <div className="teacher-weplay-actions">
                             <span role="status">
-                              {feedback ||
-                                (dirty
-                                  ? "저장하지 않은 변경 사항"
-                                  : "저장된 설정과 동일")}
+                              {dirty
+                                ? "저장하지 않은 변경 사항"
+                                : "저장된 설정과 동일"}
                             </span>
                             {canWrite && (
                               <button

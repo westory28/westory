@@ -1,3 +1,4 @@
+import { useAppToast } from "../../../../components/common/AppToastProvider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
 import { useAuth } from "../../../../contexts/AuthContext";
@@ -133,6 +134,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
   active,
 }) => {
   const { menuConfig } = useAuth();
+  const { showToast } = useAppToast();
   const scope = useMemo(
     () => getYearSemester(config),
     [config?.year, config?.semester],
@@ -301,14 +303,16 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
       setSavedPolicy(result.policy);
       setDraft(toDraft(result.policy));
       setPeriod(result.currentRankingPeriod);
-      setFeedback({
+      showToast({
         tone: "success",
+        title: "정책 저장 완료",
         message: "위플레이 정책을 저장했습니다.",
       });
     } catch {
       if (currentScope.current === savingScope)
-        setFeedback({
+        showToast({
           tone: "error",
+          title: "정책 저장 실패",
           message:
             "정책을 저장하지 못했습니다. 입력한 값은 유지됩니다. 다시 저장해 주세요.",
         });

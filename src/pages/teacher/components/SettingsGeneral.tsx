@@ -430,6 +430,11 @@ const SettingsGeneral: React.FC<{ onOpenArchive: () => void }> = ({
       setFeedback(
         `${buildSemesterLabel(year, semester)}를 준비했습니다. 운영 학기 전환을 누르면 학생과 교사에게 적용됩니다.`,
       );
+      showToast({
+        tone: "success",
+        title: `${buildSemesterLabel(year, semester)}를 준비했습니다.`,
+        message: "운영 학기 전환을 누르면 학생과 교사에게 적용됩니다.",
+      });
     } catch (error) {
       console.error("Failed to create semester shell:", error);
       showToast({

@@ -1,3 +1,4 @@
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { sanitizeMenuConfig } from "../../../constants/menus";
@@ -13,11 +14,11 @@ import {
 
 export default function WeplayTitleEditor({ title }: { title: string }) {
   const { currentUser } = useAuth();
+  const { showToast } = useAppToast();
   const canEdit = isDeveloperUser(currentUser?.email);
   const [draft, setDraft] = useState(title);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [feedback, setFeedback] = useState("");
   const mounted = useRef(true);
   useEffect(() => {
     setDraft(title);
@@ -40,7 +41,6 @@ export default function WeplayTitleEditor({ title }: { title: string }) {
     const requestedUser = currentUser;
     setSaving(true);
     setError("");
-    setFeedback("");
     try {
       const reference = doc(db, "site_settings", "menu_config");
       await runTransaction(db, async (transaction) => {
@@ -64,14 +64,21 @@ export default function WeplayTitleEditor({ title }: { title: string }) {
       invalidateSiteSettingDocCache("menu_config");
       notifyMenuConfigUpdated();
       if (mounted.current && auth.currentUser?.uid === requestedUser.uid)
-        setFeedback("게임 이름을 저장했습니다.");
+        showToast({
+          tone: "success",
+          title: "저장 완료",
+          message: "게임 이름을 저장했습니다.",
+        });
     } catch (caught) {
       if (mounted.current && auth.currentUser?.uid === requestedUser.uid)
-        setError(
-          caught instanceof Error && !("code" in caught)
-            ? caught.message
-            : "게임 이름을 저장하지 못했습니다. 다시 시도해 주세요.",
-        );
+        showToast({
+          tone: "error",
+          title: "게임 이름 저장 실패",
+          message:
+            caught instanceof Error && !("code" in caught)
+              ? caught.message
+              : "게임 이름을 저장하지 못했습니다. 다시 시도해 주세요.",
+        });
     } finally {
       if (mounted.current) setSaving(false);
     }
@@ -87,7 +94,6 @@ export default function WeplayTitleEditor({ title }: { title: string }) {
           onChange={(event) => {
             setDraft(event.target.value);
             setError("");
-            setFeedback("");
           }}
           maxLength={60}
           required
@@ -123,11 +129,6 @@ export default function WeplayTitleEditor({ title }: { title: string }) {
           role="alert"
         >
           {error}
-        </p>
-      )}
-      {feedback && (
-        <p className="teacher-weplay-note" role="status">
-          {feedback}
         </p>
       )}
     </form>

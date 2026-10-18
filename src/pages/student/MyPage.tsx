@@ -1740,6 +1740,7 @@ const MyPage: React.FC = () => {
         profileIcon: result.profileIcon,
       }));
       setIconModalOpen(false);
+      showToast({ tone: "success", title: "프로필 아이콘을 저장했습니다." });
     } catch (error) {
       console.error("Failed to update profile icon:", error);
       alert("현재 등급에서 선택할 수 없는 아이콘입니다.");

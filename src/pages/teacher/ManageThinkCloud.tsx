@@ -1,3 +1,4 @@
+import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
@@ -45,6 +46,7 @@ const defaultClassOptions: SchoolOption[] = Array.from(
 
 const ManageThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
+  const { showToast } = useAppToast();
   const [activeSessionIds, setActiveSessionIds] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
@@ -292,12 +294,20 @@ const ManageThinkCloud: React.FC = () => {
         options,
       });
       setRefreshKey((key) => key + 1);
-      setMessage("새 생각모아 세션을 시작했습니다.");
+      showToast({
+        tone: "success",
+        title: "생각모아 시작",
+        message: "새 생각모아 세션을 시작했습니다.",
+      });
       setIsCreateMode(false);
       setSelectedSessionId(added.sessionId);
     } catch (error) {
       console.error("Failed to start think cloud session:", error);
-      setMessage("세션 시작에 실패했습니다.");
+      showToast({
+        tone: "error",
+        title: "생각모아 시작 실패",
+        message: "세션 시작에 실패했습니다.",
+      });
     } finally {
       setLoadingAction(false);
     }
@@ -312,10 +322,18 @@ const ManageThinkCloud: React.FC = () => {
       if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "closed");
       setRefreshKey((key) => key + 1);
-      setMessage("선택한 세션을 종료했습니다.");
+      showToast({
+        tone: "success",
+        title: "생각모아 종료",
+        message: "선택한 세션을 종료했습니다.",
+      });
     } catch (error) {
       console.error("Failed to close think cloud session:", error);
-      setMessage("세션 종료에 실패했습니다.");
+      showToast({
+        tone: "error",
+        title: "생각모아 종료 실패",
+        message: "세션 종료에 실패했습니다.",
+      });
     } finally {
       setLoadingAction(false);
     }
@@ -330,10 +348,18 @@ const ManageThinkCloud: React.FC = () => {
       if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "paused");
       setRefreshKey((key) => key + 1);
-      setMessage("선택한 세션을 일시 정지했습니다.");
+      showToast({
+        tone: "success",
+        title: "생각모아 일시 정지",
+        message: "선택한 세션을 일시 정지했습니다.",
+      });
     } catch (error) {
       console.error("Failed to pause think cloud session:", error);
-      setMessage("일시 정지에 실패했습니다.");
+      showToast({
+        tone: "error",
+        title: "일시 정지 실패",
+        message: "일시 정지에 실패했습니다.",
+      });
     } finally {
       setLoadingAction(false);
     }
@@ -348,10 +374,18 @@ const ManageThinkCloud: React.FC = () => {
       if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "active");
       setRefreshKey((key) => key + 1);
-      setMessage("선택한 세션을 재개했습니다.");
+      showToast({
+        tone: "success",
+        title: "생각모아 재개",
+        message: "선택한 세션을 재개했습니다.",
+      });
     } catch (error) {
       console.error("Failed to resume think cloud session:", error);
-      setMessage("재개에 실패했습니다.");
+      showToast({
+        tone: "error",
+        title: "생각모아 재개 실패",
+        message: "재개에 실패했습니다.",
+      });
     } finally {
       setLoadingAction(false);
     }
@@ -372,10 +406,18 @@ const ManageThinkCloud: React.FC = () => {
       await deleteThinkCloudSession(config, selectedSession);
       setRefreshKey((key) => key + 1);
       setSelectedSessionId("");
-      setMessage("선택한 주제를 삭제했습니다.");
+      showToast({
+        tone: "success",
+        title: "주제 삭제",
+        message: "선택한 주제를 삭제했습니다.",
+      });
     } catch (error) {
       console.error("Failed to delete think cloud session:", error);
-      setMessage("삭제에 실패했습니다.");
+      showToast({
+        tone: "error",
+        title: "주제 삭제 실패",
+        message: "삭제에 실패했습니다.",
+      });
     } finally {
       setLoadingAction(false);
     }
