@@ -53,6 +53,7 @@ import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasAreaDetails from "./AtlasAreaDetails";
 import AtlasCountryDetails from "./AtlasCountryDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
+import AtlasFilterReset from "./AtlasFilterReset";
 import AtlasCompass from "./AtlasCompass";
 import InfoHelp from "./InfoHelp";
 import {
@@ -502,6 +503,9 @@ export default function HistoryAtlas({
   const [viewBounds, setViewBounds] = useState<AtlasUnit["bounds"] | null>(
     null,
   );
+  const [retainedProjectionScale, setRetainedProjectionScale] = useState<
+    number | null
+  >(null);
   const [selectedId, setSelectedId] = useState("");
   const [countryId, setCountryId] = useState("");
   const [traditionalRegionId, setTraditionalRegionId] = useState("");
@@ -744,7 +748,9 @@ export default function HistoryAtlas({
           height: availableMapHeight,
           overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
         })
-      : next;
+      : retainedProjectionScale === null
+        ? next
+        : next.scale(retainedProjectionScale);
   }, [
     subject,
     bounds,
@@ -754,6 +760,7 @@ export default function HistoryAtlas({
     selectedCountry,
     availableMapHeight,
     overlayObstacle?.right,
+    retainedProjectionScale,
   ]);
   const needsWorldGeometry = atlasViewportNeedsWorldGeometry(
     subject,
@@ -1230,10 +1237,10 @@ export default function HistoryAtlas({
       document.removeEventListener("visibilitychange", update);
     };
   }, []);
-  const resetMap = useCallback(
-    () => updateTransform(ATLAS_IDENTITY),
-    [updateTransform],
-  );
+  const resetMap = useCallback(() => {
+    setRetainedProjectionScale(null);
+    updateTransform(ATLAS_IDENTITY);
+  }, [updateTransform]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1754,9 +1761,12 @@ export default function HistoryAtlas({
     resetMap();
   };
   const clearFilters = () => {
+    // Filters may own the base bounds or a fitted area's projection scale.
+    // Retain both so clearing them preserves the geographic view and zoom.
+    setViewBounds(bounds);
+    setRetainedProjectionScale(projection.scale());
     setCountryId("");
     setTraditionalRegionId("");
-    setViewBounds(null);
     setUnitId("");
     setEraId("");
     setRegionId("");
@@ -1764,7 +1774,11 @@ export default function HistoryAtlas({
     setQuery("");
     setFilterNotice("");
     setSelectedId("");
+    setDetailOpen(false);
+    setProvinceDetailOpen(false);
+    setListPage(0);
     pendingFocusRef.current = null;
+    pendingVisualScaleRef.current = null;
   };
   const changeScope = (
     nextUnitId: string,
@@ -2165,6 +2179,7 @@ export default function HistoryAtlas({
             )}
           </div>
         </label>
+        <AtlasFilterReset onReset={clearFilters} />
       </div>
       <div className="history-atlas__workspace">
         <div className="history-atlas__map-column">

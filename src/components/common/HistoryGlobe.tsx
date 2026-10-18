@@ -78,6 +78,7 @@ import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasAreaDetails from "./AtlasAreaDetails";
 import AtlasCountryDetails from "./AtlasCountryDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
+import AtlasFilterReset from "./AtlasFilterReset";
 import AtlasCompass from "./AtlasCompass";
 import {
   ATLAS_KOREA_PROVINCES,
@@ -2091,6 +2092,7 @@ export default function HistoryGlobe({
             }}
           />
         </label>
+        <AtlasFilterReset onReset={resetFilters} />
       </div>
       {notice && (
         <p className="history-globe__notice" role="status">

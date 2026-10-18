@@ -90,6 +90,114 @@ const browser = await playwright.chromium.launch({
 });
 const checks = [];
 let activePage;
+async function expectFilterReset(page, view) {
+  const reset = page.getByRole("button", {
+    name: "지도 필터 초기화",
+    exact: true,
+  });
+  const search = page.getByRole("searchbox", {
+    name: "지명 검색",
+    exact: true,
+  });
+  const target = await reset.boundingBox();
+  const input = await search.boundingBox();
+  assert(target.width >= 44 && target.height >= 44, "Reset touch target");
+  assert(
+    target.x >= input.x + input.width &&
+      Math.abs(target.y + target.height / 2 - input.y - input.height / 2) < 2,
+    "Reset stays at the right of the search on the same row",
+  );
+  const camera = async () =>
+    page.evaluate((globe) => {
+      if (!globe) {
+        const matrix = document
+          .querySelector(".history-atlas__geography")
+          .transform.baseVal.consolidate().matrix;
+        return {
+          zoom: document.querySelector(".history-atlas__zoom").textContent,
+          transform: [matrix.a, matrix.e, matrix.f],
+          land: document
+            .querySelector(".history-atlas__land")
+            .getAttribute("d"),
+        };
+      }
+      return {
+        zoom: document.querySelector(".history-globe__zoom").textContent,
+        bearing: document
+          .querySelector(".history-globe .atlas-compass")
+          ?.getAttribute("style"),
+      };
+    }, view === "globe");
+  const resetAndCompare = async () => {
+    await page.waitForTimeout(350);
+    const before = await camera();
+    await reset.press("Enter");
+    await page.waitForTimeout(350);
+    assert.deepEqual(await camera(), before, view + ": reset preserves camera");
+    for (const name of [
+      "단원",
+      "시대",
+      view === "korea" ? "지역 · 8도" : "지역",
+    ])
+      assert.equal(
+        await page.getByRole("combobox", { name, exact: true }).inputValue(),
+        "",
+      );
+    assert.equal(await search.inputValue(), "");
+    assert.equal(
+      await page
+        .locator(".history-atlas__overlay, .history-globe__overlay")
+        .count(),
+      0,
+    );
+  };
+  // First clear the selected region/country left by the preceding interaction.
+  await resetAndCompare();
+  for (const name of ["단원", "시대"])
+    await page
+      .getByRole("combobox", { name, exact: true })
+      .selectOption({ index: 1 });
+  const region = page.getByRole("combobox", {
+    name: view === "korea" ? "지역 · 8도" : "지역",
+    exact: true,
+  });
+  await region.selectOption(
+    view === "korea"
+      ? "area:giho"
+      : view === "globe"
+        ? "world:africa"
+        : "africa",
+  );
+  if (view !== "korea")
+    await page
+      .getByRole("combobox", { name: "세부 지역", exact: true })
+      .selectOption("africa-east");
+  await search.fill("초기화검증없는지명");
+  await page
+    .getByRole("button", {
+      name: view === "globe" ? "지구본 확대" : "지도 확대",
+      exact: true,
+    })
+    .click();
+  await page
+    .locator(view === "globe" ? "canvas" : ".history-atlas__map")
+    .press("ArrowRight");
+  await resetAndCompare();
+  assert.equal(
+    await page
+      .getByRole("combobox", { name: "세부 지역", exact: true })
+      .count(),
+    0,
+  );
+  // Repeating reset must remain stable, and navigation must still work afterwards.
+  await resetAndCompare();
+  await page
+    .getByRole("button", {
+      name: view === "globe" ? "지구본 전체 보기" : "전체 보기",
+      exact: true,
+    })
+    .click();
+}
 async function expectRegionDescription(page) {
   const article = page.getByRole("article", { name: "지역 설명", exact: true });
   await article.locator(".atlas-place-details__definition").waitFor();
@@ -423,6 +531,7 @@ try {
           .getByRole("combobox", { name: "지역", exact: true })
           .selectOption("");
       }
+      await expectFilterReset(page, view);
       assert.deepEqual(errors, [], `${view}/${width} browser errors`);
       await page.screenshot({
         path: path.join(out, `${view}-${width}.png`),
