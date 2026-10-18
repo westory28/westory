@@ -154,6 +154,7 @@ interface SecurePurchaseRequestInput {
   expectedPrice?: number;
   memo?: string;
   requestKey: string;
+  quantity?: number;
 }
 
 interface UpdatePointAdjustmentInput {

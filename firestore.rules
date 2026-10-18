@@ -209,6 +209,40 @@ service cloud.firestore {
       return hasUserProfile() && userProfile().role == 'teacher' && canUseWestory();
     }
 
+    function wisShopSemesterOrdinal(semesterId) {
+      let parts = semesterId.split('-');
+      return int(parts[0]) * 2 + int(parts[1]);
+    }
+
+    function hasWisShopArchiveTeacherPermission(profile) {
+      return profile.role == 'teacher'
+        && profile.teacherPortalEnabled == true
+        && profile.staffPermissions is list
+        && profile.staffPermissions.hasAny(['point_read', 'point_manage']);
+    }
+
+    function canReadArchivedWisShop(data) {
+      let activePath = /databases/$(database)/documents/site_settings/semester_active;
+      let activeSemesterId = get(activePath).data.get('semesterId', '');
+      let selectedSemesterId = data.get('semesterId', '');
+      // Same point permission + teacher/admin contract, with the application
+      // fence evaluated once so a full maintenance bypass list stays in budget.
+      return canUseWestory()
+        && (request.auth.token.email == "westoria28@gmail.com"
+          || hasWisShopArchiveTeacherPermission(userProfile()))
+        && selectedSemesterId is string
+        && selectedSemesterId.matches('^[0-9]{4}-[12]$')
+        && exists(activePath)
+        && activeSemesterId is string
+        && activeSemesterId.matches('^[0-9]{4}-[12]$')
+        && wisShopSemesterOrdinal(selectedSemesterId)
+          < wisShopSemesterOrdinal(activeSemesterId);
+    }
+
+    function isBoundedWisShopArchiveQuery() {
+      return request.query.limit <= 200;
+    }
+
     function isStudentRole() {
       // All student-role callers already enforce the application access fence.
       return hasUserProfile() && userProfile().role == 'student';
@@ -889,6 +923,24 @@ service cloud.firestore {
           get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
         )
         && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.status == 'active';
+    }
+
+    // Only historical semester snapshots are readable directly. Live shop
+    // data, global products, accounts and ledger remain command/query-only.
+    // A scoped semester equality query lets Firestore prove the archive fence;
+    // an unfiltered collection scan cannot satisfy the resource predicate.
+    match /semester_wis_inventory/{inventoryId} {
+      allow get: if canReadArchivedWisShop(resource.data);
+      allow list: if isBoundedWisShopArchiveQuery()
+        && canReadArchivedWisShop(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /semester_wis_orders/{orderId} {
+      allow get: if canReadArchivedWisShop(resource.data);
+      allow list: if isBoundedWisShopArchiveQuery()
+        && canReadArchivedWisShop(resource.data);
+      allow create, update, delete: if false;
     }
 
     // 사용자 기본 문서 권한

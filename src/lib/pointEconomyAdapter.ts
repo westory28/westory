@@ -143,7 +143,7 @@ export const listCanonicalPointOrders = async (
     .filter((order) => !options?.uid || order.studentUid === options.uid)
     .map((order) =>
       wisOrder(
-        order,
+        { ...order, readOnly: state.readOnly || order.readOnly },
         state.accounts.find((account) => account.accountId === order.accountId),
       ),
     );
@@ -213,6 +213,8 @@ export const upsertCanonicalPointProduct = async (
     stock: Number(product.stock || 0),
     isActive: product.isActive !== false,
     imageUrl: (product.imageUrl || "").trim(),
+    previewImageUrl: (product.previewImageUrl || "").trim(),
+    sortOrder: Number(product.sortOrder || 0),
   };
   if (
     !value.name ||
@@ -245,12 +247,14 @@ export const upsertCanonicalPointProduct = async (
             name: value.name,
             description: value.description,
             imageUrl: value.imageUrl,
+            previewImageUrl: value.previewImageUrl,
+            sortOrder: value.sortOrder,
             active: value.isActive,
             reason: "위스 상점 상품 저장",
           },
         };
       });
-      await step("inventory", async () => {
+      const inventoryResult = await step("inventory", async () => {
         const state = await queryAllWisState(config, "catalog");
         const current = state.inventory.find(
           (item) => item.productId === saved.productId,
@@ -277,7 +281,11 @@ export const upsertCanonicalPointProduct = async (
         stock: value.stock,
         isActive: value.isActive,
         imageUrl: value.imageUrl,
-        sortOrder: 0,
+        previewImageUrl: value.previewImageUrl,
+        availableStock: inventoryResult.available,
+        reservedStock: inventoryResult.reserved,
+        soldStock: inventoryResult.sold,
+        sortOrder: value.sortOrder,
       };
     },
   );
@@ -305,12 +313,13 @@ export const reviewCanonicalPointOrder = async (input: {
   assertWisOwner(input.actor.uid);
   const actions: Partial<Record<PointOrderStatus, string>> = {
     approved: "APPROVE",
+    ready: "READY",
     rejected: "REJECT",
-    cancelled: "REJECT",
+    cancelled: "CANCEL",
     fulfilled: "FULFILL",
   };
   const action = actions[input.nextStatus];
-  if (!action) throw new Error("승인한 주문은 지급 처리로 이어집니다.");
+  if (!action) throw new Error("주문 처리 상태를 다시 확인해 주세요.");
   return runWisOperation(
     [
       "review",
@@ -336,9 +345,13 @@ export const reviewCanonicalPointOrder = async (input: {
               input.memo?.trim() ||
               (action === "REJECT"
                 ? "교사 주문 반려"
-                : action === "FULFILL"
-                  ? "상품 지급 완료"
-                  : "교사 주문 승인"),
+                : action === "CANCEL"
+                  ? "교사 주문 취소"
+                  : action === "READY"
+                    ? "상품 수령 준비 완료"
+                    : action === "FULFILL"
+                      ? "상품 지급 완료"
+                      : "교사 주문 승인"),
           },
         };
       });
@@ -507,8 +520,12 @@ export const createCanonicalPurchase = async (input: {
   expectedPrice?: number;
   memo?: string;
   requestKey: string;
+  quantity?: number;
 }) => {
   if (!input.requestKey) throw new Error("구매할 상품을 다시 선택해 주세요.");
+  const quantity = input.quantity ?? 1;
+  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99)
+    throw new Error("구매 수량은 1~99개로 입력해 주세요.");
   return runWisOperation(
     ["purchase", wisSemesterId(input.config), input.requestKey],
     false,
@@ -520,7 +537,7 @@ export const createCanonicalPurchase = async (input: {
           (item) =>
             item.productId === input.productId &&
             item.active &&
-            item.available > 0,
+            item.available >= quantity,
         );
         if (!inventory)
           throw new Error("재고가 없습니다. 상품 목록을 새로고침해 주세요.");
@@ -538,7 +555,7 @@ export const createCanonicalPurchase = async (input: {
             inventoryId: inventory.inventoryId,
             expectedInventoryRevision: inventory.revision,
             expectedAccountRevision: account.revision,
-            quantity: 1,
+            quantity,
             memo: input.memo?.trim() || "",
           },
         };
@@ -554,3 +571,32 @@ export const createCanonicalPurchase = async (input: {
     true,
   );
 };
+
+export const cancelCanonicalPurchase = async (
+  config: WisConfig,
+  orderId: string,
+) =>
+  runWisOperation(
+    ["cancel-order", wisSemesterId(config), orderId],
+    false,
+    async (step) => {
+      return step("cancel", async () => {
+        const state = await queryWisState(config, "student", "orders");
+        const order = state.orders.find((item) => item.orderId === orderId);
+        if (!order || order.status !== "REQUESTED")
+          throw new Error(
+            "승인 전 주문만 취소할 수 있습니다. 내역을 새로고침해 주세요.",
+          );
+        return {
+          commandType: "cancelWisOrder",
+          payload: {
+            ...wisRevisionScope(state),
+            orderId,
+            expectedOrderRevision: order.revision,
+            reason: "학생 주문 취소",
+          },
+        };
+      });
+    },
+    true,
+  );

@@ -33,6 +33,12 @@ import {
   resolvePointRankPolicyDraft,
 } from "../../lib/pointRanks";
 import { canManagePoints, canReadPoints } from "../../lib/permissions";
+import { isSemesterArchive } from "../../lib/semesterArchive";
+import {
+  readArchivedShopProducts,
+  readArchivedShopOrders,
+} from "../../lib/pointShopArchive";
+import { optimizeProductImage } from "../../lib/pointProductImages";
 import { getYearSemester } from "../../lib/semesterScope";
 import type {
   PointOrder,
@@ -284,124 +290,6 @@ const createRankEmojiCollectionDraft = (
   };
 };
 
-const loadImageElement = (file: File) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("상품 이미지를 읽지 못했습니다."));
-    };
-    image.src = objectUrl;
-  });
-
-const canvasToBlob = (
-  canvas: HTMLCanvasElement,
-  quality: number,
-  contentType = "image/jpeg",
-) =>
-  new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error("상품 이미지를 압축하지 못했습니다."));
-          return;
-        }
-        resolve(blob);
-      },
-      contentType,
-      quality,
-    );
-  });
-
-interface ProductImageOptimizationOptions {
-  maxSize: number;
-  baselineQuality: number;
-  targetSizeRatio: number;
-  minQuality: number;
-}
-
-const drawProductImageCanvas = (image: HTMLImageElement, maxSize: number) => {
-  const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) {
-    throw new Error("상품 이미지 캔버스를 준비하지 못했습니다.");
-  }
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas;
-};
-
-const buildOptimizedImageBlob = async (
-  file: File,
-  {
-    maxSize,
-    baselineQuality,
-    targetSizeRatio,
-    minQuality,
-  }: ProductImageOptimizationOptions,
-) => {
-  const image = await loadImageElement(file);
-  const baselineCanvas = drawProductImageCanvas(image, maxSize);
-  const baselineBlob = await canvasToBlob(
-    baselineCanvas,
-    baselineQuality,
-    "image/jpeg",
-  );
-  const targetBytes = Math.ceil(baselineBlob.size * targetSizeRatio);
-  const candidates: Blob[] = [baselineBlob];
-
-  for (const sizeRatio of [1, 0.92, 0.84]) {
-    const candidateCanvas =
-      sizeRatio === 1
-        ? baselineCanvas
-        : drawProductImageCanvas(
-            image,
-            Math.max(1, Math.round(maxSize * sizeRatio)),
-          );
-
-    for (
-      let quality = Math.min(0.92, baselineQuality + 0.08);
-      quality >= minQuality;
-      quality -= 0.06
-    ) {
-      const candidateBlob = await canvasToBlob(
-        candidateCanvas,
-        quality,
-        "image/webp",
-      );
-      if (candidateBlob.type === "image/webp") {
-        candidates.push(candidateBlob);
-        if (candidateBlob.size <= targetBytes) {
-          return candidateBlob;
-        }
-      }
-    }
-  }
-
-  return candidates.reduce(
-    (bestBlob, candidateBlob) =>
-      candidateBlob.size <= targetBytes && candidateBlob.size > bestBlob.size
-        ? candidateBlob
-        : bestBlob,
-    candidates.find((candidateBlob) => candidateBlob.size <= targetBytes) ||
-      baselineBlob,
-  );
-};
-
-const getProductImageExtension = (blob: Blob) =>
-  blob.type === "image/webp" ? "webp" : "jpg";
-
 const ManagePoints: React.FC = () => {
   const {
     config,
@@ -414,7 +302,8 @@ const ManagePoints: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   const canRead = canReadPoints(userData, currentUser?.email);
-  const canManage = canManagePoints(userData, currentUser?.email);
+  const canManage =
+    !isSemesterArchive && canManagePoints(userData, currentUser?.email);
 
   const [activeTab, setActiveTab] = useState<TeacherPointTab>("overview");
   const [loading, setLoading] = useState(true);
@@ -502,6 +391,7 @@ const ManagePoints: React.FC = () => {
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("requested");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderMemo, setOrderMemo] = useState("");
+  const [shopLoadError, setShopLoadError] = useState("");
   const [orderFeedback, setOrderFeedback] = useState("");
   const [orderSavingOrderId, setOrderSavingOrderId] = useState("");
   const [orderSavingStatus, setOrderSavingStatus] =
@@ -807,7 +697,20 @@ const ManagePoints: React.FC = () => {
     }
 
     setLoading(true);
+    setShopLoadError("");
     try {
+      if (
+        isSemesterArchive &&
+        ["products", "requests"].includes(searchParams.get("tab") || "")
+      ) {
+        const [archiveProducts, archiveOrders] = await Promise.all([
+          readArchivedShopProducts(),
+          readArchivedShopOrders(),
+        ]);
+        setProducts(archiveProducts);
+        setOrders(archiveOrders);
+        return;
+      }
       const [
         nextWallets,
         nextSchoolOptions,
@@ -861,6 +764,11 @@ const ManagePoints: React.FC = () => {
           ? selectedUid
           : nextWallets[0]?.uid || "";
       setSelectedUid(nextSelectedUid);
+    } catch (error: any) {
+      setShopLoadError(
+        error?.message ||
+          "상점 자료를 불러오지 못했습니다. 다시 시도해 주세요.",
+      );
     } finally {
       setLoading(false);
     }
@@ -889,7 +797,7 @@ const ManagePoints: React.FC = () => {
 
   useEffect(() => {
     void loadAll();
-  }, [canRead, config]);
+  }, [canRead, config, isSemesterArchive ? searchParams.get("tab") : null]);
 
   useEffect(() => {
     if (!selectedUid) {
@@ -1040,7 +948,7 @@ const ManagePoints: React.FC = () => {
   ]);
 
   useEffect(() => {
-    setOrderMemo(selectedOrder?.memo || "");
+    setOrderMemo(selectedOrder?.reviewReason || "");
   }, [selectedOrder?.id, selectedOrder?.memo]);
 
   useEffect(
@@ -1519,7 +1427,7 @@ const ManagePoints: React.FC = () => {
 
   const handleSaveProduct = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canManage) return;
+    if (!canManage || productImageUploading) return;
     if (!productForm.name.trim()) {
       setProductFeedback("상품명을 입력해 주세요.");
       return;
@@ -1569,6 +1477,7 @@ const ManagePoints: React.FC = () => {
     }
 
     try {
+      setProductImageUploading(true);
       const productId = productForm.id || crypto.randomUUID();
       const sortOrder = resolveProductSortOrder(
         productForm.id,
@@ -1586,35 +1495,28 @@ const ManagePoints: React.FC = () => {
         await ensureSensitiveOperation();
         const { year, semester } = getYearSemester(config);
         const basePath = `years/${year}/semesters/${semester}/point_products/${productId}`;
-        const compressedBlob = await buildOptimizedImageBlob(productImageFile, {
-          maxSize: 960,
-          baselineQuality: 0.82,
-          targetSizeRatio: 1.03,
-          minQuality: 0.64,
-        });
-        const previewBlob = await buildOptimizedImageBlob(productImageFile, {
-          maxSize: 320,
-          baselineQuality: 0.62,
-          targetSizeRatio: 1.03,
-          minQuality: 0.58,
-        });
+        const [compressedBlob, previewBlob] = await Promise.all([
+          optimizeProductImage(productImageFile, "detail"),
+          optimizeProductImage(productImageFile, "preview"),
+        ]);
+        const imageVersion = crypto.randomUUID();
         const storage = await getFirebaseStorage();
         const imageRef = ref(
           storage,
-          `${basePath}/image.${getProductImageExtension(compressedBlob)}`,
+          `${basePath}/image-1200-${imageVersion}.${compressedBlob.type === "image/webp" ? "webp" : "jpg"}`,
         );
         const previewRef = ref(
           storage,
-          `${basePath}/preview.${getProductImageExtension(previewBlob)}`,
+          `${basePath}/preview-640-${imageVersion}.${previewBlob.type === "image/webp" ? "webp" : "jpg"}`,
         );
 
         await uploadBytes(imageRef, compressedBlob, {
           contentType: compressedBlob.type || "image/jpeg",
-          cacheControl: "public,max-age=86400",
+          cacheControl: "public,max-age=31536000,immutable",
         });
         await uploadBytes(previewRef, previewBlob, {
           contentType: previewBlob.type || "image/jpeg",
-          cacheControl: "public,max-age=86400",
+          cacheControl: "public,max-age=31536000,immutable",
         });
 
         imagePayload = {
@@ -1693,7 +1595,9 @@ const ManagePoints: React.FC = () => {
   const handleDeleteProduct = async (product: PointProduct) => {
     if (!canManage) return;
 
-    const stock = Math.max(0, Math.floor(Number(product.stock || 0)));
+    const stock =
+      Math.max(0, Number(product.availableStock ?? product.stock)) +
+      Number(product.reservedStock || 0);
     if (stock > 0) {
       setProductFeedback("재고가 0개인 상품만 보관할 수 있습니다.");
       return;
@@ -1752,14 +1656,20 @@ const ManagePoints: React.FC = () => {
                   result.status === "approved" || result.status === "fulfilled",
                 reviewedAt: createLocalPointTimestamp(),
                 reviewedBy: actor.uid,
-                memo: memo || order.memo || "",
+                reviewReason: memo,
               }
             : order,
         ),
       );
       setOrderFeedback("구매 요청 상태를 반영했습니다.");
-      void listPointOrders(config, { limitCount: 200 })
-        .then((nextOrders) => setOrders(nextOrders))
+      void Promise.all([
+        listPointOrders(config, { limitCount: 200 }),
+        listPointProducts(config, false),
+      ])
+        .then(([nextOrders, nextProducts]) => {
+          setOrders(nextOrders);
+          setProducts(nextProducts);
+        })
         .catch((error) => {
           console.warn("Failed to refresh point orders after review:", error);
         });
@@ -2059,6 +1969,19 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
+          {!loading &&
+            shopLoadError &&
+            ["products", "requests"].includes(activeTab) && (
+              <div role="alert" className="wis-shop-feedback">
+                {shopLoadError}{" "}
+                <button
+                  className="wis-shop-button"
+                  onClick={() => void loadAll()}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            )}
           {!loading && activeTab === "products" && (
             <PointProductsTab
               products={products}
@@ -2087,7 +2010,7 @@ const ManagePoints: React.FC = () => {
                 });
                 setProductImageFile(null);
                 setProductImagePreviewUrl(
-                  product.previewImageUrl || product.imageUrl || "",
+                  product.imageUrl || product.previewImageUrl || "",
                 );
                 setProductFeedback("");
               }}
@@ -2111,6 +2034,7 @@ const ManagePoints: React.FC = () => {
           {!loading && activeTab === "requests" && (
             <PointRequestsTab
               orders={filteredOrders}
+              allOrders={ordersWithStudentProfiles}
               orderFilter={orderFilter}
               selectedOrderId={selectedOrderId}
               selectedOrder={selectedOrder}
@@ -2123,6 +2047,7 @@ const ManagePoints: React.FC = () => {
               onSelectOrder={setSelectedOrderId}
               onOrderMemoChange={setOrderMemo}
               onSaveOrder={(status) => void handleSaveOrder(status)}
+              onRefresh={() => void loadAll()}
             />
           )}
         </div>

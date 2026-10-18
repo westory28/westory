@@ -1,6 +1,6 @@
-import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
+import React, { useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
-import React, { useEffect, useMemo, useState } from "react";
+import InfoHelp from "../../../../components/common/InfoHelp";
 import WisProductCard, {
   WIS_PRODUCT_CARD_GRID_CLASSNAME,
 } from "../../../../components/common/WisProductCard";
@@ -8,6 +8,7 @@ import WisProductDetailModal from "../../../../components/common/WisProductDetai
 import { getPointFeedbackToneClass } from "../../../../constants/pointLabels";
 import { formatWisAmount } from "../../../../lib/pointFormatters";
 import type { PointProduct } from "../../../../types";
+import "./TeacherWisShop.css";
 
 type ProductFormState = {
   id: string;
@@ -46,15 +47,28 @@ interface PointProductsTabProps {
   onSubmit: (event: React.FormEvent) => void;
 }
 
-const formFieldClassName = "grid min-w-0 content-start gap-2";
-const inputClassName =
-  "h-11 w-full min-w-0 rounded-lg border border-gray-300 px-4 text-sm box-border";
-const textareaClassName =
-  "w-full min-w-0 rounded-lg border border-gray-300 px-4 py-3 text-sm box-border";
-const helperTextClassName = "text-xs leading-5 text-gray-500";
-
+type ProductFilter = "all" | "selling" | "low" | "soldout" | "hidden";
 const normalizeSearchValue = (value: string) =>
   value.toLowerCase().replace(/\s+/g, "");
+const availableStock = (product: PointProduct) =>
+  Math.max(0, Number(product.availableStock ?? product.stock ?? 0));
+const matchesFilter = (product: PointProduct, filter: ProductFilter) => {
+  const available = availableStock(product);
+  if (filter === "selling") return product.isActive !== false && available > 0;
+  if (filter === "low")
+    return product.isActive !== false && available > 0 && available <= 3;
+  if (filter === "soldout")
+    return product.isActive !== false && available === 0;
+  if (filter === "hidden") return product.isActive === false;
+  return true;
+};
+const FILTERS: { value: ProductFilter; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "selling", label: "판매 중" },
+  { value: "low", label: "3개 이하" },
+  { value: "soldout", label: "품절" },
+  { value: "hidden", label: "숨김" },
+];
 
 const PointProductsTab: React.FC<PointProductsTabProps> = ({
   products,
@@ -63,8 +77,6 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   canManage,
   productImagePreviewUrl,
   productImageUploading,
-  productOrderDirty,
-  productOrderSaving,
   productOrderFeedback,
   onProductFormChange,
   onProductImageChange,
@@ -72,537 +84,519 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   onResetForm,
   onToggleProduct,
   onDeleteProduct,
-  onReorderProducts,
-  onSaveProductOrder,
   onSubmit,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState<ProductFilter>("all");
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewSelectedProductId, setPreviewSelectedProductId] = useState("");
-  const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
-  const [dragOverProductId, setDragOverProductId] = useState<string | null>(
-    null,
-  );
-
+  const [previewSelectedProduct, setPreviewSelectedProduct] =
+    useState<PointProduct | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const editorRef = useRef<HTMLFormElement>(null);
+  const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const normalizedSearchQuery = normalizeSearchValue(searchQuery);
-  const canReorderProducts = false;
-  const filteredProducts = useMemo(() => {
-    if (!normalizedSearchQuery) return products;
-    return products.filter((product) =>
-      normalizeSearchValue(String(product.name || "")).includes(
-        normalizedSearchQuery,
-      ),
-    );
-  }, [normalizedSearchQuery, products]);
-
-  const previewProducts = useMemo(() => {
-    return filteredProducts.filter((product) => product.isActive !== false);
-  }, [filteredProducts]);
-  const previewSelectedProduct = useMemo(
+  const filteredProducts = useMemo(
     () =>
-      previewProducts.find(
-        (product) => product.id === previewSelectedProductId,
-      ) || null,
-    [previewProducts, previewSelectedProductId],
+      products.filter(
+        (product) =>
+          matchesFilter(product, filter) &&
+          normalizeSearchValue(
+            `${product.name} ${product.description}`,
+          ).includes(normalizedSearchQuery),
+      ),
+    [products, filter, normalizedSearchQuery],
   );
+  const previewProducts = products.filter(
+    (product) => product.isActive !== false,
+  );
+  const editingProduct = products.find(
+    (product) => product.id === productForm.id,
+  );
+  const committedStock =
+    Number(editingProduct?.reservedStock || 0) +
+    Number(editingProduct?.soldStock || 0);
 
-  const handleDragStart = (
-    productId: string,
-    event: React.DragEvent<HTMLElement>,
-  ) => {
-    if (!canReorderProducts) return;
-    setDraggedProductId(productId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", productId);
+  const openEditor = (trigger: HTMLButtonElement, product?: PointProduct) => {
+    editorTriggerRef.current = trigger;
+    if (product) onEditProduct(product);
+    else onResetForm();
+    setEditorOpen(true);
+    window.requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({
+        block: "nearest",
+        behavior: "instant",
+      });
+      editorRef.current
+        ?.querySelector<HTMLInputElement>("input[name='product-name']")
+        ?.focus();
+    });
   };
-
-  const handleDrop = (
-    targetId: string,
-    event: React.DragEvent<HTMLElement>,
-  ) => {
-    event.preventDefault();
-    const sourceId =
-      draggedProductId || event.dataTransfer.getData("text/plain") || "";
-    setDraggedProductId(null);
-    setDragOverProductId(null);
-    if (!sourceId || sourceId === targetId) return;
-    onReorderProducts(sourceId, targetId);
+  const closeEditor = () => {
+    setEditorOpen(false);
+    editorTriggerRef.current?.focus();
   };
-
-  useEffect(() => {
-    if (!previewOpen) return undefined;
-
-    const releaseScrollLock = acquirePageScrollLock();
-
-    return () => {
-      releaseScrollLock();
-    };
-  }, [previewOpen]);
-
-  useEffect(() => {
-    if (!previewOpen) return undefined;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (previewSelectedProductId) {
-          setPreviewSelectedProductId("");
-          return;
-        }
-        setPreviewOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [previewOpen, previewSelectedProductId]);
 
   return (
-    <>
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.52fr)_minmax(320px,380px)]">
-        <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 bg-gray-50 p-5">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold text-gray-800">
-                  상점 상품 목록
-                </h2>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-500 whitespace-nowrap">
-                  {normalizedSearchQuery
-                    ? `검색 결과 ${filteredProducts.length}개 / 전체 ${products.length}개`
-                    : `${products.length}개`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPreviewOpen(true)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-50 whitespace-nowrap"
-                >
-                  학생 상점 미리보기
-                </button>
-              </div>
-            </div>
+    <section className="teacher-wis-shop" aria-label="상점 상품 관리">
+      <header className="teacher-wis-shop__heading">
+        <div>
+          <span className="teacher-wis-shop__eyebrow">위스 상점</span>
+          <h2>상품과 재고</h2>
+        </div>
+        <div className="teacher-wis-shop__actions">
+          <button
+            type="button"
+            className="teacher-wis-shop__button"
+            aria-pressed={previewOpen}
+            onClick={() => setPreviewOpen((value) => !value)}
+          >
+            {previewOpen ? "상품 관리 보기" : "학생 상점 미리보기"}
+          </button>
+          {canManage && (
+            <button
+              type="button"
+              className="teacher-wis-shop__button is-primary"
+              disabled={productImageUploading}
+              onClick={(event) => openEditor(event.currentTarget)}
+            >
+              <i className="fas fa-plus" aria-hidden="true" /> 상품 등록
+            </button>
+          )}
+          {!canManage && (
+            <span className="teacher-wis-shop__badge">조회 전용</span>
+          )}
+        </div>
+      </header>
 
-            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+      {previewOpen ? (
+        <div className="teacher-wis-shop__preview">
+          <h3>
+            학생 상점 미리보기 <span>{previewProducts.length}개</span>
+          </h3>
+          {previewProducts.length ? (
+            <div className={WIS_PRODUCT_CARD_GRID_CLASSNAME}>
+              {previewProducts.map((product) => (
+                <WisProductCard
+                  key={product.id}
+                  product={{ ...product, stock: availableStock(product) }}
+                  walletBalance={Number(product.price || 0)}
+                  previewOnly
+                  onCardClick={() =>
+                    setPreviewSelectedProduct({
+                      ...product,
+                      stock: availableStock(product),
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="teacher-wis-shop__empty">
+              학생에게 공개된 상품이 없습니다.
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="teacher-wis-shop__toolbar">
+            <div
+              className="teacher-wis-shop__filters"
+              role="group"
+              aria-label="상품 상태"
+            >
+              {FILTERS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-pressed={filter === item.value}
+                  onClick={() => setFilter(item.value)}
+                >
+                  {item.label}
+                  <span>
+                    {
+                      products.filter((product) =>
+                        matchesFilter(product, item.value),
+                      ).length
+                    }
+                  </span>
+                </button>
+              ))}
+            </div>
+            <label className="teacher-wis-shop__search">
+              <i className="fas fa-search" aria-hidden="true" />
+              <span className="sr-only">상품명 또는 설명 검색</span>
               <input
-                lang="ko"
-                inputMode="text"
+                type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="상품명 검색"
-                className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm"
+                placeholder="상품명 또는 설명 검색"
               />
-              {normalizedSearchQuery && (
+            </label>
+          </div>
+
+          <div className="teacher-wis-shop__inventory-label">
+            <span aria-live="polite">{filteredProducts.length}개 상품</span>
+            <span>
+              재고 기준{" "}
+              <InfoHelp
+                label="재고 기준"
+                sections={[
+                  {
+                    rows: [
+                      {
+                        label: "총 입고",
+                        content:
+                          "처음 등록한 수량과 추가 입고를 합친 누적 수량입니다.",
+                      },
+                      {
+                        label: "판매 가능",
+                        content:
+                          "총 입고에서 주문 확보 수량과 지급 완료 수량을 뺀 값입니다.",
+                      },
+                      {
+                        label: "주문 확보",
+                        content:
+                          "구매 요청부터 지급 전까지 확보한 수량입니다. 반려·취소 시 판매 가능 수량으로 돌아갑니다.",
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </span>
+          </div>
+
+          {filteredProducts.length ? (
+            <div className="teacher-wis-shop__products">
+              {filteredProducts.map((product) => {
+                const available = availableStock(product);
+                const status =
+                  product.isActive === false
+                    ? "숨김"
+                    : available === 0
+                      ? "품절"
+                      : "판매 중";
+                return (
+                  <article
+                    className="teacher-wis-shop__product"
+                    key={product.id}
+                  >
+                    <button
+                      type="button"
+                      className="teacher-wis-shop__product-image"
+                      onClick={() =>
+                        setPreviewSelectedProduct({
+                          ...product,
+                          stock: available,
+                        })
+                      }
+                      aria-label={`${product.name} 상세 보기`}
+                    >
+                      {product.previewImageUrl || product.imageUrl ? (
+                        <img
+                          src={product.previewImageUrl || product.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <i className="fas fa-gift" aria-hidden="true" />
+                      )}
+                    </button>
+                    <div className="teacher-wis-shop__product-main">
+                      <div className="teacher-wis-shop__product-title">
+                        <h3>{product.name}</h3>
+                        <span
+                          className={`teacher-wis-shop__badge ${status === "판매 중" ? "is-selling" : status === "품절" ? "is-warning" : ""}`}
+                        >
+                          {status}
+                        </span>
+                      </div>
+                      <strong className="teacher-wis-shop__price">
+                        {formatWisAmount(product.price)}
+                      </strong>
+                      {product.description && (
+                        <p className="teacher-wis-shop__description">
+                          {product.description}
+                        </p>
+                      )}
+                      <dl className="teacher-wis-shop__stock">
+                        <div className={available <= 3 ? "is-low" : ""}>
+                          <dt>판매 가능</dt>
+                          <dd>
+                            {available}
+                            <span>개</span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>주문 확보</dt>
+                          <dd>
+                            {product.reservedStock || 0}
+                            <span>개</span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>지급 완료</dt>
+                          <dd>
+                            {product.soldStock || 0}
+                            <span>개</span>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>총 입고</dt>
+                          <dd>
+                            {product.stock}
+                            <span>개</span>
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                    {canManage && (
+                      <div className="teacher-wis-shop__product-actions">
+                        <button
+                          type="button"
+                          className="teacher-wis-shop__button"
+                          disabled={productImageUploading}
+                          onClick={(event) =>
+                            openEditor(event.currentTarget, product)
+                          }
+                        >
+                          상품·재고 수정
+                        </button>
+                        <button
+                          type="button"
+                          className="teacher-wis-shop__button is-quiet"
+                          disabled={productImageUploading}
+                          onClick={() => onToggleProduct(product)}
+                        >
+                          {product.isActive !== false ? "숨기기" : "판매 재개"}
+                        </button>
+                        {available <= 0 &&
+                          Number(product.reservedStock || 0) === 0 && (
+                            <button
+                              type="button"
+                              className="teacher-wis-shop__button is-danger"
+                              disabled={productImageUploading}
+                              onClick={() => onDeleteProduct(product)}
+                            >
+                              보관
+                            </button>
+                          )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="teacher-wis-shop__empty">
+              <i className="fas fa-store" aria-hidden="true" />
+              <p>
+                {products.length
+                  ? "조건에 맞는 상품이 없습니다."
+                  : "등록된 상품이 없습니다."}
+              </p>
+              {products.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 whitespace-nowrap"
+                  className="teacher-wis-shop__button"
+                  onClick={() => {
+                    setFilter("all");
+                    setSearchQuery("");
+                  }}
                 >
-                  검색 초기화
+                  전체 상품 보기
                 </button>
               )}
             </div>
-            {productOrderFeedback && (
-              <div
-                className={`mt-3 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(productOrderFeedback)}`}
-              >
-                {productOrderFeedback}
-              </div>
-            )}
-          </div>
+          )}
+        </>
+      )}
 
-          <div className="min-w-0 overflow-x-auto">
-            <table className="min-w-[720px] w-full table-fixed text-sm text-left">
-              <colgroup>
-                <col className="w-[52px]" />
-                <col />
-                <col className="w-[108px]" />
-                <col className="w-[78px]" />
-                <col className="w-[96px]" />
-                <col className="w-[136px]" />
-              </colgroup>
-              <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
-                <tr>
-                  <th className="p-4 text-center whitespace-nowrap">번호</th>
-                  <th className="p-4 whitespace-nowrap">상품명</th>
-                  <th className="p-4 text-right whitespace-nowrap">가격</th>
-                  <th className="p-4 text-right whitespace-nowrap">재고</th>
-                  <th className="p-4 text-center whitespace-nowrap">상태</th>
-                  <th className="p-4 text-center whitespace-nowrap">관리</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {filteredProducts.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-10 text-center text-gray-400">
-                      {normalizedSearchQuery
-                        ? "검색 조건에 맞는 상품이 없습니다."
-                        : "등록된 상품이 없습니다."}
-                    </td>
-                  </tr>
-                )}
-                {filteredProducts.map((product, index) => (
-                  <tr
-                    key={product.id}
-                    onDragOver={(event) => {
-                      if (!canReorderProducts) return;
-                      event.preventDefault();
-                      setDragOverProductId(product.id);
-                    }}
-                    onDragLeave={() => {
-                      if (dragOverProductId === product.id) {
-                        setDragOverProductId(null);
-                      }
-                    }}
-                    onDrop={(event) => handleDrop(product.id, event)}
-                    className={`transition ${
-                      dragOverProductId === product.id &&
-                      draggedProductId !== product.id
-                        ? "bg-blue-50"
-                        : "hover:bg-gray-50"
-                    }`}
-                  >
-                    <td className="p-4 text-center">{index + 1}</td>
-                    <td className="min-w-0 p-4">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
-                          {product.previewImageUrl || product.imageUrl ? (
-                            <img
-                              src={product.previewImageUrl || product.imageUrl}
-                              alt={product.name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <i className="fas fa-image text-gray-300"></i>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-bold text-gray-800">
-                            {product.name}
-                          </div>
-                          <div className="mt-1 truncate text-xs text-gray-500">
-                            {product.description || "설명이 아직 없습니다."}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 text-right font-bold text-gray-800 whitespace-nowrap">
-                      {formatWisAmount(product.price)}
-                    </td>
-                    <td className="p-4 text-right text-gray-700 whitespace-nowrap">
-                      {product.stock}개
-                    </td>
-                    <td className="p-4 text-center">
-                      <span
-                        className={`inline-flex min-w-[86px] items-center justify-center whitespace-nowrap rounded-full px-3.5 py-1 text-xs font-bold leading-none ${product.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}
-                      >
-                        {product.isActive ? "노출 중" : "숨김"}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="mx-auto grid w-full max-w-[96px] gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onEditProduct(product)}
-                          className="w-full rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-100 whitespace-nowrap"
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!canManage}
-                          onClick={() => onToggleProduct(product)}
-                          className="w-full rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-60 whitespace-nowrap"
-                        >
-                          {product.isActive ? "숨기기" : "다시 노출"}
-                        </button>
-                        {Number(product.stock || 0) <= 0 && (
-                          <button
-                            type="button"
-                            disabled={!canManage}
-                            onClick={() => onDeleteProduct(product)}
-                            className="w-full rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 disabled:opacity-60 whitespace-nowrap"
-                          >
-                            보관
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <form
-          onSubmit={onSubmit}
-          className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+      {productOrderFeedback && (
+        <p
+          role="status"
+          className={`teacher-wis-shop__feedback ${getPointFeedbackToneClass(productOrderFeedback)}`}
         >
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-gray-800">
-                {productForm.id ? "상품 정보 수정" : "새 상품 등록"}
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                학생 위스 상점에 노출할 상품 정보와 대표 이미지를 관리합니다.
-              </p>
-            </div>
-            {productForm.id && (
-              <button
-                type="button"
-                onClick={onResetForm}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 whitespace-nowrap"
-              >
-                새 상품 작성
-              </button>
-            )}
-          </div>
+          {productOrderFeedback}
+        </p>
+      )}
+      {!editorOpen && productFeedback && (
+        <p
+          role="status"
+          className={`teacher-wis-shop__feedback ${getPointFeedbackToneClass(productFeedback)}`}
+        >
+          {productFeedback}
+        </p>
+      )}
 
-          <div className="grid grid-cols-1 gap-4">
-            <label className={formFieldClassName}>
-              <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                상품명
-              </span>
-              <input
-                lang="ko"
-                inputMode="text"
-                value={productForm.name}
-                onChange={(event) =>
-                  onProductFormChange((prev) => ({
-                    ...prev,
-                    name: event.target.value,
-                  }))
-                }
-                placeholder="예: 문화상품권 5천원권"
-                className={inputClassName}
-              />
-            </label>
-            <label className={formFieldClassName}>
-              <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                상품 설명
-              </span>
-              <textarea
-                lang="ko"
-                inputMode="text"
-                value={productForm.description}
-                onChange={(event) =>
-                  onProductFormChange((prev) => ({
-                    ...prev,
-                    description: event.target.value,
-                  }))
-                }
-                rows={3}
-                placeholder="학생에게 보여줄 상품 설명을 입력하세요."
-                className={textareaClassName}
-              />
-            </label>
-            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <label className={formFieldClassName}>
-                <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                  가격(위스)
-                </span>
-                <NumericInput
-                  allowEmpty
-                  type="number"
-                  min="0"
-                  value={productForm.price}
-                  onChange={(event) =>
-                    onProductFormChange((prev) => ({
-                      ...prev,
-                      price: event.target.value,
-                    }))
-                  }
-                  placeholder="예: 500"
-                  className={inputClassName}
-                />
-                <span className={`${helperTextClassName} min-h-[2.5rem]`}>
-                  학생 상점에는 {formatWisAmount(productForm.price || 0)} 형태로
-                  표시됩니다.
-                </span>
-              </label>
-              <label className={formFieldClassName}>
-                <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                  재고(개)
-                </span>
-                <NumericInput
-                  allowEmpty
-                  type="number"
-                  min="0"
-                  value={productForm.stock}
-                  onChange={(event) =>
-                    onProductFormChange((prev) => ({
-                      ...prev,
-                      stock: event.target.value,
-                    }))
-                  }
-                  placeholder="예: 20"
-                  className={inputClassName}
-                />
-                <span className={`${helperTextClassName} min-h-[2.5rem]`}>
-                  0 입력 시 학생 화면에서 품절 상태로 표시됩니다.
-                </span>
-              </label>
-            </div>
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:flex-nowrap sm:items-start">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm">
+      {editorOpen && canManage && (
+        <form
+          ref={editorRef}
+          onSubmit={onSubmit}
+          className="teacher-wis-shop__editor"
+          aria-labelledby="wis-product-editor-title"
+          aria-busy={productImageUploading}
+        >
+          <div className="teacher-wis-shop__heading">
+            <h3 id="wis-product-editor-title">
+              {productForm.id ? "상품·재고 수정" : "새 상품 등록"}
+            </h3>
+            <button
+              type="button"
+              className="teacher-wis-shop__button is-quiet"
+              disabled={productImageUploading}
+              onClick={closeEditor}
+            >
+              닫기
+            </button>
+          </div>
+          <fieldset disabled={productImageUploading}>
+            <div className="teacher-wis-shop__editor-layout">
+              <div className="teacher-wis-shop__image-editor">
+                <div className="teacher-wis-shop__image-preview">
                   {productImagePreviewUrl ? (
                     <img
                       src={productImagePreviewUrl}
-                      alt="상품 미리보기"
-                      className="h-full w-full object-cover"
+                      alt="선택한 상품 이미지"
                     />
                   ) : (
-                    <i className="fas fa-image text-2xl text-gray-300"></i>
+                    <i className="fas fa-image" aria-hidden="true" />
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-gray-800 whitespace-nowrap">
-                    대표 이미지
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    학생 상점에 보일 대표 이미지를 등록하세요. 선택한 이미지는
-                    자동으로 압축되어 저장됩니다.
-                  </p>
-                  <label className="mt-3 inline-flex w-full cursor-pointer items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 sm:w-auto whitespace-nowrap">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
+                <label className="teacher-wis-shop__field">
+                  <span>상품 사진</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      onProductImageChange(event.target.files?.[0] || null);
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="teacher-wis-shop__fields">
+                <label className="teacher-wis-shop__field">
+                  <span>상품명</span>
+                  <input
+                    name="product-name"
+                    value={productForm.name}
+                    required
+                    maxLength={120}
+                    onChange={(event) =>
+                      onProductFormChange((prev) => ({
+                        ...prev,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="teacher-wis-shop__field">
+                  <span>상품 설명</span>
+                  <textarea
+                    rows={3}
+                    value={productForm.description}
+                    onChange={(event) =>
+                      onProductFormChange((prev) => ({
+                        ...prev,
+                        description: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <div className="teacher-wis-shop__field-pair">
+                  <label className="teacher-wis-shop__field">
+                    <span>가격 (위스)</span>
+                    <NumericInput
+                      allowEmpty
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      value={productForm.price}
                       onChange={(event) =>
-                        onProductImageChange(event.target.files?.[0] || null)
+                        onProductFormChange((prev) => ({
+                          ...prev,
+                          price: event.target.value,
+                        }))
                       }
                     />
-                    대표 이미지 선택
                   </label>
-                  <p className="mt-2 text-xs text-gray-500">
-                    파일을 선택한 뒤 상품 저장을 누르면 대표 이미지로
-                    적용됩니다.
-                  </p>
+                  <label className="teacher-wis-shop__field">
+                    <span>총 입고 (개)</span>
+                    <NumericInput
+                      allowEmpty
+                      type="number"
+                      min={committedStock}
+                      step="1"
+                      required
+                      value={productForm.stock}
+                      onChange={(event) =>
+                        onProductFormChange((prev) => ({
+                          ...prev,
+                          stock: event.target.value,
+                        }))
+                      }
+                    />
+                    {committedStock > 0 && (
+                      <small>주문 확보·지급 완료 {committedStock}개 이상</small>
+                    )}
+                  </label>
                 </div>
+                {editingProduct && (
+                  <div className="teacher-wis-shop__stock-result">
+                    저장 후 판매 가능{" "}
+                    <strong>
+                      {Math.max(
+                        0,
+                        Number(productForm.stock || 0) - committedStock,
+                      )}
+                      개
+                    </strong>
+                  </div>
+                )}
+                <label className="teacher-wis-shop__checkbox">
+                  <input
+                    type="checkbox"
+                    checked={productForm.isActive}
+                    onChange={(event) =>
+                      onProductFormChange((prev) => ({
+                        ...prev,
+                        isActive: event.target.checked,
+                      }))
+                    }
+                  />
+                  <span>학생 상점에 공개</span>
+                </label>
               </div>
             </div>
-            <div className="grid min-w-0 gap-2">
-              <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
-                대표 이미지 상태
-              </span>
-              <div className="min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs font-bold leading-5 text-gray-500 break-keep">
-                {productImageUploading
-                  ? "대표 이미지를 준비하고 있습니다."
-                  : productImagePreviewUrl
-                    ? "대표 이미지가 준비되어 있습니다."
-                    : "아직 등록된 대표 이미지가 없습니다."}
-              </div>
-              <span className={helperTextClassName}>
-                이미지를 선택한 뒤 저장하면 상품 대표 이미지로 적용됩니다.
-              </span>
-            </div>
-            <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="font-bold text-gray-800 whitespace-nowrap">
-                학생 화면에 노출하기
-              </span>
-              <input
-                type="checkbox"
-                checked={productForm.isActive}
-                onChange={(event) =>
-                  onProductFormChange((prev) => ({
-                    ...prev,
-                    isActive: event.target.checked,
-                  }))
-                }
-                className="h-4 w-4"
-              />
-            </label>
-          </div>
-
-          {!!productFeedback && (
-            <div
-              className={`mt-4 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(productFeedback)}`}
+          </fieldset>
+          {productFeedback && (
+            <p
+              role="status"
+              className={`teacher-wis-shop__feedback ${getPointFeedbackToneClass(productFeedback)}`}
             >
               {productFeedback}
-            </div>
+            </p>
           )}
-
-          <button
-            type="submit"
-            disabled={!canManage || productImageUploading}
-            className="mt-5 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:bg-blue-300 whitespace-nowrap"
-          >
-            상품 저장
-          </button>
-        </form>
-      </div>
-
-      {previewOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 sm:p-6"
-          onClick={() => setPreviewOpen(false)}
-        >
-          <div
-            className="flex max-h-[min(88vh,54rem)] w-full max-w-[min(1100px,100%)] min-w-0 flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex shrink-0 flex-col gap-3 border-b border-gray-100 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-              <div className="min-w-0">
-                <h3 className="text-lg font-bold text-gray-900 whitespace-nowrap">
-                  학생 상점 미리보기
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  학생이 보게 될 상점 목록과 상품 상세 화면을 함께 확인합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(false)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50"
-                aria-label="학생 상점 미리보기 닫기"
-              >
-                <i className="fas fa-times text-sm" aria-hidden="true"></i>
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5 sm:px-6 sm:py-6">
-              {previewProducts.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-5 py-12 text-center text-gray-500">
-                  학생에게 보이는 상품이 없습니다.
-                </div>
-              ) : (
-                <div className={WIS_PRODUCT_CARD_GRID_CLASSNAME}>
-                  {previewProducts.map((product) => (
-                    <WisProductCard
-                      key={`preview-${product.id}`}
-                      product={product}
-                      walletBalance={Math.max(0, Number(product.price || 0))}
-                      previewOnly
-                      onCardClick={() =>
-                        setPreviewSelectedProductId(product.id)
-                      }
-                      statusNote="클릭하면 학생 상세 화면을 확인합니다."
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="teacher-wis-shop__editor-footer">
+            <button
+              type="submit"
+              className="teacher-wis-shop__button is-primary"
+              disabled={productImageUploading}
+            >
+              {productImageUploading ? "저장 중…" : "상품 저장"}
+            </button>
           </div>
-        </div>
+        </form>
       )}
-      {previewOpen && (
-        <WisProductDetailModal
-          open={Boolean(previewSelectedProduct)}
-          product={previewSelectedProduct}
-          walletBalance={
-            previewSelectedProduct
-              ? Math.max(0, Number(previewSelectedProduct.price || 0))
-              : 0
-          }
-          onClose={() => setPreviewSelectedProductId("")}
-        />
-      )}
-    </>
+      <WisProductDetailModal
+        open={Boolean(previewSelectedProduct)}
+        product={previewSelectedProduct}
+        walletBalance={Math.max(0, Number(previewSelectedProduct?.price || 0))}
+        onClose={() => setPreviewSelectedProduct(null)}
+      />
+    </section>
   );
 };
 

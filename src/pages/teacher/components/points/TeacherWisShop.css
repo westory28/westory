@@ -1,0 +1,871 @@
+.teacher-wis-shop {
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+  font-size: 14px;
+}
+
+.teacher-wis-shop :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 3px;
+}
+
+.teacher-wis-shop :is(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.teacher-wis-shop .ws-info-help > .ws-info-help__button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.teacher-wis-shop__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.teacher-wis-shop__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.teacher-wis-shop__heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.teacher-wis-shop__heading h3,
+.teacher-wis-shop__preview h3 {
+  margin: 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.teacher-wis-shop__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.teacher-wis-shop__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text, #1f2937);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.teacher-wis-shop__button:hover:not(:disabled) {
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+.teacher-wis-shop__button.is-primary {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary, #2563eb);
+  color: var(--ws-surface, #ffffff);
+}
+.teacher-wis-shop__button.is-primary:hover:not(:disabled) {
+  background: var(--ws-primary-hover, #1d4ed8);
+}
+.teacher-wis-shop__button.is-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__button.is-danger {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ws-danger-text, #b91c1c);
+}
+.teacher-wis-shop__button.is-danger:hover:not(:disabled) {
+  background: var(--ws-danger-soft, #fef2f2);
+}
+
+.teacher-wis-shop__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.teacher-wis-shop__filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.teacher-wis-shop__filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ws-text-muted, #6b7280);
+  background: transparent;
+  font-weight: 700;
+}
+
+.teacher-wis-shop__filters button[aria-pressed="true"] {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.teacher-wis-shop__filters button span {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.teacher-wis-shop__filters button:hover {
+  color: var(--ws-text-strong, #111827);
+}
+
+.teacher-wis-shop__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 320px);
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.teacher-wis-shop__search input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--ws-text, #1f2937);
+}
+.teacher-wis-shop__search:focus-within {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+.teacher-wis-shop__search input:focus-visible {
+  outline: none;
+}
+.teacher-wis-shop__inventory-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 8px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.teacher-wis-shop__inventory-label > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.teacher-wis-shop__inventory-label .ws-info-help {
+  margin: 0;
+}
+.teacher-wis-shop__products {
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.teacher-wis-shop__product {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 24px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.teacher-wis-shop__product-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ws-surface-subtle, #f8fafc);
+  color: var(--ws-text-soft, #9ca3af);
+  font-size: 32px;
+}
+
+.teacher-wis-shop__product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.teacher-wis-shop__product-main {
+  min-width: 0;
+}
+.teacher-wis-shop__product-title {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.teacher-wis-shop__product-title h3 {
+  margin: 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.teacher-wis-shop__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--ws-surface-subtle, #f8fafc);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.teacher-wis-shop__badge.is-selling {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.teacher-wis-shop__badge.is-warning {
+  color: var(--ws-danger-text, #b91c1c);
+  background: var(--ws-danger-soft, #fef2f2);
+}
+.teacher-wis-shop__badge.is-complete {
+  color: var(--ws-success-hover, #15803d);
+  background: var(--ws-success-soft, #dcfce7);
+}
+.teacher-wis-shop__price {
+  display: block;
+  margin-top: 8px;
+  color: var(--ws-text-strong, #111827);
+  font-size: 20px;
+  font-weight: 800;
+}
+.teacher-wis-shop__description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 8px 0 0;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.teacher-wis-shop__stock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 16px 0 0;
+}
+.teacher-wis-shop__stock div {
+  min-width: 48px;
+}
+.teacher-wis-shop__stock dt {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.teacher-wis-shop__stock dd {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin: 4px 0 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.teacher-wis-shop__stock dd span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+}
+.teacher-wis-shop__stock .is-low dd {
+  color: var(--ws-danger-text, #b91c1c);
+}
+.teacher-wis-shop__product-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.teacher-wis-shop__product-actions .teacher-wis-shop__button {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+.teacher-wis-shop__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__empty > i {
+  font-size: 24px;
+}
+.teacher-wis-shop__empty p {
+  margin: 0;
+  font-size: 16px;
+}
+.teacher-wis-shop__preview {
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__preview h3 {
+  margin-bottom: 24px;
+  font-size: 16px;
+}
+.teacher-wis-shop__preview h3 span {
+  margin-left: 8px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 500;
+}
+.teacher-wis-shop__feedback {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.teacher-wis-shop__editor {
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #ffffff);
+  scroll-margin-block: 24px;
+}
+.teacher-wis-shop__editor fieldset {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.teacher-wis-shop__editor-layout {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  gap: 24px;
+}
+.teacher-wis-shop__image-editor {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.teacher-wis-shop__image-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ws-surface-subtle, #f8fafc);
+  color: var(--ws-text-soft, #9ca3af);
+  font-size: 32px;
+}
+.teacher-wis-shop__image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.teacher-wis-shop__fields {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.teacher-wis-shop__field {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.teacher-wis-shop__field > span {
+  color: var(--ws-text, #1f2937);
+  font-size: 14px;
+  font-weight: 700;
+}
+.teacher-wis-shop__field :is(input, textarea),
+.teacher-wis-shop__select select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text, #1f2937);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.teacher-wis-shop__field textarea {
+  resize: vertical;
+}
+.teacher-wis-shop__field input[type="file"] {
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  font-size: 12px;
+}
+.teacher-wis-shop__field input[type="file"]::file-selector-button {
+  min-height: 44px;
+  margin-right: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  color: var(--ws-text, #1f2937);
+  background: var(--ws-surface, #ffffff);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+.teacher-wis-shop__field small {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.teacher-wis-shop__field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.teacher-wis-shop__stock-result {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.teacher-wis-shop__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.teacher-wis-shop__checkbox input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ws-primary, #2563eb);
+}
+.teacher-wis-shop__editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.teacher-wis-shop__queues {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 24px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ws-surface, #ffffff);
+}
+.teacher-wis-shop__queues button {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  color: var(--ws-text, #1f2937);
+  background: transparent;
+  text-align: left;
+}
+.teacher-wis-shop__queues button + button {
+  border-left: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__queues button[aria-pressed="true"] {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+  box-shadow: inset 0 -3px 0 var(--ws-primary, #2563eb);
+}
+.teacher-wis-shop__queues button:focus-visible {
+  outline-offset: -4px;
+}
+.teacher-wis-shop__queue-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 700;
+}
+.teacher-wis-shop__queue-label > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+}
+.teacher-wis-shop__queues button > strong {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.teacher-wis-shop__queues small {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.teacher-wis-shop__result-count {
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__select select {
+  font-size: 14px;
+}
+.teacher-wis-shop__orders {
+  margin-top: 16px;
+}
+.teacher-wis-shop__order-columns,
+.teacher-wis-shop__order-summary {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.5fr) minmax(112px, 1fr) minmax(112px, 0.7fr)
+    128px;
+  gap: 16px;
+  align-items: center;
+}
+.teacher-wis-shop__order-columns {
+  padding: 12px 16px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__order-columns > :nth-child(3) {
+  text-align: right;
+}
+.teacher-wis-shop__order-columns > :last-child {
+  text-align: center;
+}
+.teacher-wis-shop__order {
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__order-summary {
+  width: 100%;
+  min-height: 88px;
+  padding: 16px;
+  background: transparent;
+  text-align: left;
+}
+.teacher-wis-shop__order-summary:hover,
+.teacher-wis-shop__order.is-selected .teacher-wis-shop__order-summary {
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+.teacher-wis-shop__order-summary > span {
+  min-width: 0;
+}
+.teacher-wis-shop__order-product > strong {
+  display: block;
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.teacher-wis-shop__quantity {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--ws-text-muted, #6b7280);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.teacher-wis-shop__order-product time {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__order-student strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+.teacher-wis-shop__order-student small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__order-price {
+  text-align: right;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.teacher-wis-shop__order-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.teacher-wis-shop__order-status > i {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.teacher-wis-shop__order-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+  gap: 24px;
+  padding: 24px 16px;
+  border-top: 1px solid var(--ws-border-soft, #f3f4f6);
+  background: var(--ws-surface, #ffffff);
+}
+.teacher-wis-shop__detail-body {
+  min-width: 0;
+}
+.teacher-wis-shop__timeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+.teacher-wis-shop__timeline li {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border-top: 2px solid var(--ws-border, #e5e7eb);
+  padding-top: 12px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__timeline li.is-reached {
+  border-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary-text, #1e3a8a);
+}
+.teacher-wis-shop__step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ws-surface-subtle, #f8fafc);
+  font-size: 12px;
+}
+.teacher-wis-shop__timeline .is-reached .teacher-wis-shop__step-number {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.teacher-wis-shop__timeline strong {
+  font-size: 12px;
+}
+.teacher-wis-shop__timeline time {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.teacher-wis-shop__order-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--ws-border-soft, #f3f4f6);
+}
+.teacher-wis-shop__order-facts dt {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.teacher-wis-shop__order-facts dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.teacher-wis-shop__closed-note {
+  margin: 0 0 16px;
+  color: var(--ws-danger-text, #b91c1c);
+  line-height: 1.6;
+}
+.teacher-wis-shop__order-note {
+  padding: 16px 0 0;
+  border-top: 1px solid var(--ws-border-soft, #f3f4f6);
+}
+.teacher-wis-shop__order-note > strong {
+  font-size: 12px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.teacher-wis-shop__order-note p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.teacher-wis-shop__order-processing {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__secondary-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.teacher-wis-shop__previous-memo {
+  margin: 0;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.teacher-wis-shop__order-processing .teacher-wis-shop__feedback {
+  margin-top: 0;
+}
+
+@media (max-width: 1023px) {
+  .teacher-wis-shop__product {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .teacher-wis-shop__product-image {
+    width: 96px;
+  }
+  .teacher-wis-shop__product-actions {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .teacher-wis-shop__order-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-wis-shop__order-processing {
+    border-left: 0;
+    border-top: 1px solid var(--ws-border, #e5e7eb);
+    padding: 16px 0 0;
+  }
+  .teacher-wis-shop__order-processing > .teacher-wis-shop__button {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 767px) {
+  .teacher-wis-shop__heading {
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+  .teacher-wis-shop__heading h2 {
+    font-size: 20px;
+  }
+  .teacher-wis-shop__toolbar > .teacher-wis-shop__search {
+    width: 100%;
+  }
+  .teacher-wis-shop__toolbar > .teacher-wis-shop__actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .teacher-wis-shop__stock {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .teacher-wis-shop__product-actions {
+    grid-column: 1 / -1;
+  }
+  .teacher-wis-shop__product-actions .teacher-wis-shop__button:first-child {
+    flex: 1;
+  }
+  .teacher-wis-shop__price {
+    font-size: 18px;
+  }
+  .teacher-wis-shop__editor {
+    padding: 16px;
+  }
+  .teacher-wis-shop__editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-wis-shop__image-editor {
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+  }
+  .teacher-wis-shop__editor-footer .teacher-wis-shop__button {
+    width: 100%;
+  }
+  .teacher-wis-shop__queues {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .teacher-wis-shop__queues button {
+    padding: 16px;
+  }
+  .teacher-wis-shop__queues button:nth-child(3) {
+    border-left: 0;
+  }
+  .teacher-wis-shop__queues button:nth-child(n + 3) {
+    border-top: 1px solid var(--ws-border, #e5e7eb);
+  }
+  .teacher-wis-shop__order-columns {
+    display: none;
+  }
+  .teacher-wis-shop__order-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px 0;
+  }
+  .teacher-wis-shop__order-product {
+    grid-column: 1 / -1;
+  }
+  .teacher-wis-shop__order-student {
+    grid-row: 2;
+  }
+  .teacher-wis-shop__order-price {
+    grid-row: 2;
+    grid-column: 2;
+  }
+  .teacher-wis-shop__order-status {
+    grid-column: 1 / -1;
+  }
+  .teacher-wis-shop__order-detail {
+    padding: 20px 0;
+  }
+  .teacher-wis-shop__timeline {
+    gap: 4px;
+  }
+  .teacher-wis-shop__order-processing > .teacher-wis-shop__button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-wis-shop *,
+  .teacher-wis-shop *::before,
+  .teacher-wis-shop *::after {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

@@ -5,7 +5,7 @@
 - 시작 checkout: `C:\westory`, `main`, `e1671e0b0bfbee33d91730cf4a426c9de7403316`.
 - 수행평가 작업과 분리하기 위해 `codex/dictionary-improvements` worktree에서 수정했다.
 - 운영 Vercel 도메인 `www.westory.kr`의 시작 배포 `dpl_BhWLZE1W1TKXTndc2bV6SgyvTrmV`는 같은 `e1671e0` 커밋이었다.
-- 작업 중 원격에 추가된 `860626f` 수행평가 패치와 `7461dbd` 위플레이 패치를 fast-forward로 포함했다. 사전과 위플레이의 `DESIGN.md` 계약을 모두 유지했다.
+- 작업 중 원격에 추가된 `860626f` 수행평가 패치와 `7461dbd` 위플레이 패치를 fast-forward로 포함했다. 이후 `ee7974d` 상점 패치도 병합하여 모든 화면 계약과 Functions 검증 항목을 유지했다.
 
 ## 재현 및 수정 근거
 
@@ -26,6 +26,7 @@
 ## 검증
 
 - 사전 Firestore rules 회귀 검사 통과(로컬 demo emulator).
+- 최종 병합 규칙으로 사전 검사와 상점 보관 학기 58개 검사를 각각 격리된 demo 프로젝트에서 통과했다.
 - 기존 사전 navigation, session, contract 검사 통과.
 - `npm run build` 통과: TypeScript, 수행평가 XLSX 원본 hair 테두리 검사, 학기·학습지·지도 회귀 검사 포함.
 - `npm --prefix functions run check` 통과. 교사 조회 605건/4페이지, 범위·권한·커서·복구 원본 해시 검사 포함.
@@ -44,6 +45,7 @@
 - `firebase deploy --only functions:listStudentHistoryDictionaryWordsForTeacher --project history-quiz-yongsin` 성공. 다른 Functions는 배포하지 않았다.
 - `firebase functions:list` 및 `gcloud functions describe`에서 서울 리전 Node 22 함수가 ACTIVE임을 확인했다. 업데이트 시각은 `2026-10-18T07:00:02.138324587Z`, revision은 `liststudenthistorydictionarywordsforteacher-00011-vak`다.
 - 운영 교사 사전을 새로 열었을 때 기존 terms/requests 권한 오류가 더 발생하지 않았다. 실제 학기/legacy 컬렉션이 비어 있는 것과 조회 실패를 구분했다.
+- 상점 배포 후 운영 ruleset `f8a63d93-4137-4d5d-9c61-15dcfd217aca`가 사전·상점 통합 규칙과 일치함을 REST 읽기 및 LF 정규화 비교로 확인했다. 갱신 시각은 `2026-10-18T07:05:07.177899Z`이며 불필요한 재배포는 하지 않았다.
 
 ## 확인 범위와 유지보수
 

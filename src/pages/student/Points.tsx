@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { cancelCanonicalPurchase } from "../../lib/pointEconomyAdapter";
+import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
 import {
@@ -112,6 +114,10 @@ const Points: React.FC = () => {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+  const [cancellingOrderId, setCancellingOrderId] = useState("");
+  const [orderFeedback, setOrderFeedback] = useState("");
+  const { confirm } = useAppDialog();
   const [purchaseMemo, setPurchaseMemo] = useState("");
   const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
   const [purchaseFeedback, setPurchaseFeedback] = useState("");
@@ -312,6 +318,9 @@ const Points: React.FC = () => {
     setPurchaseMemo("");
     setPurchaseFeedback("");
     setPurchaseRequestKey("");
+    setPurchaseQuantity(1);
+    setOrderFeedback("");
+    setCancellingOrderId("");
 
     if (!uid) {
       setWallet(null);
@@ -325,11 +334,11 @@ const Points: React.FC = () => {
   useEffect(() => {
     if (!uid) return;
     if (activeTab === "orders") {
-      void loadOrdersData();
+      void loadOrdersData({ force: true });
     } else if (activeTab === "shop") {
-      void loadShopData();
+      void loadShopData({ force: true });
     }
-  }, [activeTab, config, uid, historyLoaded, ordersLoaded, shopLoaded]);
+  }, [activeTab, config, uid]);
 
   useEffect(() => {
     if (!uid) return undefined;
@@ -398,6 +407,8 @@ const Points: React.FC = () => {
 
   const handleSelectProduct = (productId: string) => {
     setSelectedProductId(productId);
+    setPurchaseQuantity(1);
+    setPurchaseMemo("");
     setPurchaseFeedback("");
     setPurchaseRequestKey(
       `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
@@ -405,7 +416,7 @@ const Points: React.FC = () => {
   };
 
   const handlePurchaseRequest = async () => {
-    if (!selectedProduct || !uid) return;
+    if (!selectedProduct || !uid || purchaseSubmitting) return;
 
     setPurchaseSubmitting(true);
     setPurchaseFeedback("");
@@ -418,6 +429,7 @@ const Points: React.FC = () => {
         config,
         productId: selectedProduct.id,
         expectedPrice: selectedProduct.price,
+        quantity: purchaseQuantity,
         memo: purchaseMemo,
         requestKey,
       });
@@ -433,10 +445,10 @@ const Points: React.FC = () => {
       setPurchaseMemo("");
       setSelectedProductId("");
       setPurchaseRequestKey("");
-      setPurchaseFeedback("구매 요청이 접수되었습니다.");
+      setPurchaseFeedback("주문이 접수되었습니다.");
       showToast({
         tone: "success",
-        title: "구매 요청이 접수되었습니다.",
+        title: "주문이 접수되었습니다.",
         message: `${selectedProduct.name} 요청과 위스 상태가 최신 정보로 반영되었습니다.`,
       });
       setSearchParams({ tab: "orders" });
@@ -458,7 +470,7 @@ const Points: React.FC = () => {
         });
       } else {
         setPurchaseFeedback(
-          "구매 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          error?.message || "주문을 처리하지 못했습니다. 다시 시도해 주세요.",
         );
         showToast({
           tone: "error",
@@ -468,6 +480,44 @@ const Points: React.FC = () => {
       }
     } finally {
       setPurchaseSubmitting(false);
+    }
+  };
+
+  const handleCancelOrder = async (order: PointOrder) => {
+    if (cancellingOrderId) return;
+    if (
+      !(await confirm({
+        title: "주문을 취소할까요?",
+        message:
+          order.productName +
+          " 주문을 취소하면 " +
+          order.priceSnapshot.toLocaleString() +
+          " 위스를 돌려받습니다.",
+        confirmLabel: "취소하고 환불받기",
+        tone: "warning",
+      }))
+    )
+      return;
+    setCancellingOrderId(order.id);
+    setOrderFeedback("");
+    try {
+      await cancelCanonicalPurchase(config, order.id);
+      setOrderFeedback("주문을 취소하고 위스를 돌려받았습니다.");
+      await Promise.all([
+        loadOrdersData({ force: true }),
+        loadShopData({ force: true }),
+        loadPointData({
+          showLoading: false,
+          setTransactionsFromCore: !historyLoaded,
+        }),
+        historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
+      ]);
+    } catch (error: any) {
+      setOrderFeedback(
+        error?.message || "주문을 취소하지 못했습니다. 다시 시도해 주세요.",
+      );
+    } finally {
+      setCancellingOrderId("");
     }
   };
 
@@ -586,6 +636,8 @@ const Points: React.FC = () => {
                 products={products}
                 selectedProduct={selectedProduct}
                 purchaseMemo={purchaseMemo}
+                purchaseQuantity={purchaseQuantity}
+                onPurchaseQuantityChange={setPurchaseQuantity}
                 purchaseSubmitting={purchaseSubmitting}
                 purchaseFeedback={purchaseFeedback}
                 onSelectProduct={handleSelectProduct}
@@ -609,6 +661,11 @@ const Points: React.FC = () => {
                 orderFilter={orderFilter}
                 orders={filteredOrders}
                 onOrderFilterChange={setOrderFilter}
+                onCancelOrder={(order) => void handleCancelOrder(order)}
+                cancellingOrderId={cancellingOrderId}
+                feedback={orderFeedback}
+                onOpenShop={() => handleTabChange("shop")}
+                onRefresh={() => void loadOrdersData({ force: true })}
               />
             )}
         </div>
