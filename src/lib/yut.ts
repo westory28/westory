@@ -198,10 +198,16 @@ export const subscribeYutRoom = (
   roomId: string,
   onRoom: (room: YutRoom | null) => void,
   onError: (error: unknown) => void,
+  onConnectionChange?: (connected: boolean) => void,
 ) =>
   onSnapshot(
     doc(db, getSemesterDocPath(config, "yut_rooms", roomId)),
+    { includeMetadataChanges: true },
     (snapshot) => {
+      // Cached data does not establish current participation or server state.
+      // Metadata changes deliver the server confirmation even if data is equal.
+      onConnectionChange?.(!snapshot.metadata.fromCache);
+      if (snapshot.metadata.fromCache) return;
       onRoom(
         snapshot.exists()
           ? ({ ...snapshot.data(), id: snapshot.id } as YutRoom)

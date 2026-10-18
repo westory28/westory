@@ -74,6 +74,10 @@ async function withYutTimeout<T>(request: Promise<T>): Promise<T> {
     window.clearTimeout(timer);
   }
 }
+const uncertainYutFailure = (failure: unknown) => {
+  const code = String((failure as { code?: string })?.code || "");
+  return !code || /deadline|unavailable|network|internal|unknown/.test(code);
+};
 
 export function YutVictory({
   room,
@@ -638,6 +642,11 @@ export default function YutGame({
     Record<string, { label: string; value: number; atMs: number }>
   >({});
   const generation = useRef(0);
+  const roomEpoch = useRef(0);
+  const recoveryCommand = useRef<{ scope: string; data: YutCommand } | null>(
+    null,
+  );
+  const clockSample = useRef({ latency: Infinity, atMs: 0 });
   const pendingRef = useRef(false);
   const mounted = useRef(true);
   const visualRoomId = useRef<string | null>(null);
@@ -767,16 +776,34 @@ export default function YutGame({
       });
   }, [throwKey, moving]);
   const acceptRoom = useCallback((next: YutRoom | null) => {
-    setRoom((previous) =>
+    const previous = roomRef.current;
+    if (
       previous &&
       next &&
       previous.id === next.id &&
       (previous.syncRevision ?? previous.revision) >
         (next.syncRevision ?? next.revision)
-        ? previous
-        : next,
-    );
+    )
+      return;
+    roomRef.current = next;
+    setRoom(next);
   }, []);
+  const recordServerTime = useCallback(
+    (serverNowMs: number, sentAtMs: number) => {
+      const receivedAtMs = Date.now(),
+        latency = Math.max(0, receivedAtMs - sentAtMs);
+      // A delayed response must not shift an already accurate turn clock back.
+      if (
+        latency <= clockSample.current.latency ||
+        receivedAtMs - clockSample.current.atMs > 60000
+      ) {
+        clockSample.current = { latency, atMs: receivedAtMs };
+        setServerOffset(serverNowMs - (sentAtMs + receivedAtMs) / 2);
+      }
+      setClock(receivedAtMs);
+    },
+    [],
+  );
 
   useEffect(() => {
     const measure = () => {
@@ -921,6 +948,12 @@ export default function YutGame({
   }, []);
   useEffect(() => {
     const run = ++generation.current;
+    const scope = identity;
+    roomEpoch.current++;
+    roomRef.current = null;
+    if (recoveryCommand.current?.scope !== scope)
+      recoveryCommand.current = null;
+    clockSample.current = { latency: Infinity, atMs: 0 };
     pendingRef.current = false;
     setPending("");
     setMoving(false);
@@ -962,16 +995,49 @@ export default function YutGame({
       return;
     }
     setLoading(true);
-    void withYutTimeout(getYutLobby(config))
-      .then((data) => {
-        if (!mounted.current || generation.current !== run) return;
+    const recovery = recoveryCommand.current;
+    const readLobby = async () => {
+      if (recovery) {
+        // Only the explicit recovery button replays the exact uncertain request.
+        // The server receipt prevents a second throw/join even after a lost reply.
+        try {
+          await withYutTimeout(commandYutRoom(config, recovery.data));
+          if (recoveryCommand.current === recovery)
+            recoveryCommand.current = null;
+        } catch (failure) {
+          if (
+            !uncertainYutFailure(failure) &&
+            recoveryCommand.current === recovery
+          )
+            recoveryCommand.current = null;
+          throw failure;
+        }
+      }
+      if (
+        !mounted.current ||
+        generation.current !== run ||
+        identityRef.current !== scope
+      )
+        return null;
+      const sentAtMs = Date.now();
+      return { data: await withYutTimeout(getYutLobby(config)), sentAtMs };
+    };
+    void readLobby()
+      .then((response) => {
+        if (
+          !response ||
+          !mounted.current ||
+          generation.current !== run ||
+          identityRef.current !== scope
+        )
+          return;
+        const { data, sentAtMs } = response;
         setLobby(data);
         if (data.settings) {
           localSettings.current = normalizeYutSettings(data.settings);
           setSingleCount(data.settings.defaultPlayerCount);
         }
-        setServerOffset(data.serverNowMs - Date.now());
-        setClock(Date.now());
+        recordServerTime(data.serverNowMs, sentAtMs);
         setNeedsSync(false);
         acceptRoom(data.room);
       })
@@ -986,7 +1052,7 @@ export default function YutGame({
       generation.current++;
     };
     // Scope changes invalidate every pending response and room subscription.
-  }, [identity, retry, acceptRoom]);
+  }, [identity, retry, acceptRoom, recordServerTime]);
 
   useEffect(() => {
     if (local || !room?.id || !uid || !config) return;
@@ -1004,6 +1070,14 @@ export default function YutGame({
             roomRef.current?.id !== id
           )
             return;
+          const current = roomRef.current;
+          if (
+            next &&
+            current &&
+            (next.syncRevision ?? next.revision) <
+              (current.syncRevision ?? current.revision)
+          )
+            return;
           if (
             next &&
             next.status !== "closed" &&
@@ -1012,6 +1086,8 @@ export default function YutGame({
             acceptRoom(next);
             setDisconnected(false);
           } else {
+            roomEpoch.current++;
+            recoveryCommand.current = null;
             roomRef.current = null;
             acceptRoom(null);
             setNote("방이 닫혔습니다. 새 판을 열 수 있습니다.");
@@ -1026,6 +1102,14 @@ export default function YutGame({
             setDisconnected(true);
             setError(yutErrorMessage(failure));
           }
+        },
+        (connected) => {
+          if (
+            active &&
+            identityRef.current === scope &&
+            roomRef.current?.id === id
+          )
+            setDisconnected(!connected);
         },
       );
       return () => {
@@ -1147,33 +1231,44 @@ export default function YutGame({
     }
     const scope = identityRef.current,
       run = generation.current;
-    const oldRoomId = room?.id;
+    const epoch = roomEpoch.current;
+    const activeRoom = roomRef.current;
+    const oldRoomId = activeRoom?.id;
     pendingRef.current = true;
     setPending(action);
+    const data: YutCommand = {
+      action,
+      requestKey: requestKey(),
+      ...(activeRoom
+        ? { roomId: activeRoom.id, expectedRevision: activeRoom.revision }
+        : {}),
+      ...extra,
+    };
+    const recovery = { scope, data };
+    recoveryCommand.current = recovery;
+    const sentAtMs = Date.now();
     try {
-      const result = await withYutTimeout(
-        commandYutRoom(config, {
-          action,
-          requestKey: requestKey(),
-          ...(room ? { roomId: room.id, expectedRevision: room.revision } : {}),
-          ...extra,
-        }),
-      );
+      const result = await withYutTimeout(commandYutRoom(config, data));
       if (
         !mounted.current ||
         identityRef.current !== scope ||
-        generation.current !== run
+        generation.current !== run ||
+        roomEpoch.current !== epoch
       )
         return;
       if (oldRoomId && roomRef.current && roomRef.current.id !== oldRoomId)
         return;
-      setServerOffset(result.serverNowMs - Date.now());
-      setClock(Date.now());
+      if (recoveryCommand.current === recovery) recoveryCommand.current = null;
+      recordServerTime(result.serverNowMs, sentAtMs);
       setDisconnected(false);
       setError("");
-      if (action === "leave" || action === "close") roomRef.current = null;
+      if (action === "leave" || action === "close") {
+        roomEpoch.current++;
+        roomRef.current = null;
+      }
       acceptRoom(action === "leave" || action === "close" ? null : result.room);
       if (action === "leave" || action === "close") {
+        const refreshedAtMs = Date.now();
         const refreshed = await withYutTimeout(getYutLobby(config));
         if (
           mounted.current &&
@@ -1181,10 +1276,12 @@ export default function YutGame({
           generation.current === run
         ) {
           setLobby(refreshed);
-          setServerOffset(refreshed.serverNowMs - Date.now());
+          recordServerTime(refreshed.serverNowMs, refreshedAtMs);
         }
       }
     } catch (failure) {
+      if (!uncertainYutFailure(failure) && recoveryCommand.current === recovery)
+        recoveryCommand.current = null;
       if (
         automatic &&
         /aborted|failed-precondition/.test(
@@ -1195,7 +1292,8 @@ export default function YutGame({
       if (
         mounted.current &&
         identityRef.current === scope &&
-        generation.current === run
+        generation.current === run &&
+        roomEpoch.current === epoch
       ) {
         setError(yutErrorMessage(failure));
         setNeedsSync(true);
@@ -1315,6 +1413,7 @@ export default function YutGame({
       return;
     const scope = identityRef.current,
       id = room.id;
+    const run = generation.current;
     emoteFlight.current = true;
     setEmotePending(true);
     setEmoteError("");
@@ -1334,19 +1433,23 @@ export default function YutGame({
           setClock(Date.now());
         }
       } else {
-        const result = await commandYutRoom(config, {
-          action: "emote",
-          kind,
-          roomId: id,
-          requestKey: requestKey(),
-        });
+        const sentAtMs = Date.now();
+        const result = await withYutTimeout(
+          commandYutRoom(config, {
+            action: "emote",
+            kind,
+            roomId: id,
+            requestKey: requestKey(),
+          }),
+        );
         if (
           !mounted.current ||
           identityRef.current !== scope ||
+          generation.current !== run ||
           roomRef.current?.id !== id
         )
           return;
-        setServerOffset(result.serverNowMs - Date.now());
+        recordServerTime(result.serverNowMs, sentAtMs);
         acceptRoom(result.room);
       }
       setEmoteOpen(false);
@@ -1354,11 +1457,16 @@ export default function YutGame({
       if (
         mounted.current &&
         identityRef.current === scope &&
+        generation.current === run &&
         roomRef.current?.id === id
       )
         setEmoteError(yutErrorMessage(failure));
     } finally {
-      if (mounted.current && identityRef.current === scope) {
+      if (
+        mounted.current &&
+        identityRef.current === scope &&
+        generation.current === run
+      ) {
         emoteFlight.current = false;
         setEmotePending(false);
       }
