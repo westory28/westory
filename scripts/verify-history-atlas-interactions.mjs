@@ -424,6 +424,7 @@ for (const viewport of viewports)
         unitId: "",
         eraId: "",
         regionId: "",
+        traditionalArea: null,
         subregionId: "",
         query: "",
         searchRank,

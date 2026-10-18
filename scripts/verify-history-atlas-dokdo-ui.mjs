@@ -37,6 +37,7 @@ const dataset = load("src/data/historyAtlasContent.ts").historyAtlasDataset;
 const atlas = load("src/lib/historyAtlas.ts");
 const geometry = load("src/lib/historyAtlasGeometry.ts");
 const globe = load("src/lib/historyGlobeMath.ts");
+const globeRendering = load("src/lib/historyGlobeRendering.ts");
 const regions = load("src/lib/historyAtlasRegions.ts");
 const areaModel = load("src/lib/historyAtlasAreas.ts");
 const units = new Map(dataset.units.map((unit) => [unit.id, unit]));
@@ -287,21 +288,32 @@ for (const width of [286, 356, 640, 920]) {
     ...geography,
     ...geometry,
     ...globe,
+    ...globeRendering,
     ...state,
+    id: "dokdo-ui-globe",
+    gesture: { current: null },
+    wheelActive: { current: false },
     canvasRef: { current: { getContext: () => context } },
     rootRef: { current: {} },
     window: { devicePixelRatio: 1 },
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
     GLOBE_COLORS: evaluate(sphere.expression("GLOBE_COLORS"), {}),
+    palette: evaluate(sphere.expression("GLOBE_COLORS"), {}),
     selectionViewport: evaluate(sphere.expression("selectionViewport"), {}),
     zoomRef: { current: node() },
     compassRef: { current: node() },
     riverHaloRef: { current: node() },
+    landClipRef: { current: node() },
     haloRef: { current: halo },
     labelsRef: { current: { children: labels } },
     drawnPoints,
     land: null,
     geography: null,
+    geographyLabels: [],
+    terrain: null,
+    terrainLayers: [],
+    mountainTexture: null,
+    desertTexture: null,
     countries: null,
     selectedCountry: null,
     selectedPlaceCountry: null,
@@ -570,6 +582,7 @@ evaluate(flat.expression("selectStory"), {
   unitId: "different-unit",
   eraId: "different-era",
   regionId: "gyeonggi",
+  traditionalArea: null,
   subregionId: "",
   query: "different query",
   ...atlas,

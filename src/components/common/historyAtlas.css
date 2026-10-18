@@ -280,6 +280,14 @@
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
+.history-atlas__coastline {
+  fill: none;
+  stroke: var(--atlas-coast);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
 .history-atlas__point {
   position: absolute;
   width: 44px;
@@ -301,6 +309,7 @@
 }
 .history-atlas__country.is-active {
   fill: var(--ws-accent-soft, #fffbeb);
+  fill-opacity: 0.35;
 }
 .history-atlas__country-border {
   fill: none;
@@ -552,17 +561,17 @@
   flex-direction: column;
   min-width: 0;
   height: 642px;
-  gap: 12px;
-  padding: 12px;
+  gap: 0;
+  padding: 0;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 12px;
-  background: var(--ws-surface-subtle, #f8fafc);
+  background: var(--ws-surface, #ffffff);
 }
 .history-atlas__places {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 .history-atlas__side-panel .history-atlas__places {
   flex: 1;
@@ -571,10 +580,13 @@
 .history-atlas__places-heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .history-atlas__places-heading h2 {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
 }
 .history-atlas__places-heading > span {
@@ -584,7 +596,9 @@
 .history-atlas__place-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
+  padding: 0 12px;
+  background: var(--ws-surface, #ffffff);
   overflow-y: auto;
   min-height: 0;
   overscroll-behavior: contain;
@@ -601,9 +615,10 @@
   flex-shrink: 0;
   padding: 8px 12px;
   text-align: left;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 0;
+  background: var(--ws-surface, #ffffff);
   color: var(--ws-text, #1f2937);
   font-size: 16px;
   font-weight: 500;
@@ -619,13 +634,14 @@
   border-color: var(--ws-border-blue, #dbeafe);
 }
 .history-atlas__place-list button:hover {
-  border-color: var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft, #eff6ff);
 }
 .history-atlas__pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 12px;
   font-size: 14px;
 }
 .history-atlas__detail {
@@ -1031,17 +1047,83 @@
   }
 }
 .history-atlas__landform {
-  fill: rgb(203 153 81 / 18%);
-  stroke: rgb(161 110 48 / 40%);
+  fill: transparent;
+  stroke: transparent;
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
   pointer-events: visiblePainted;
   cursor: pointer;
 }
 .history-atlas__landform.is-active {
-  fill: rgb(203 153 81 / 28%);
+  fill: var(--atlas-terrain-desert);
+  fill-opacity: 0.3;
   stroke: var(--ws-primary, #2563eb);
   stroke-width: 2;
+}
+.history-atlas__terrain {
+  pointer-events: none;
+}
+.history-atlas__terrain-fill {
+  fill: var(--atlas-terrain-plain);
+  fill-opacity: 0.75;
+}
+.history-atlas__terrain-fill.is-mountain {
+  fill: var(--atlas-terrain-mountain);
+}
+.history-atlas__terrain-fill.is-plateau,
+.history-atlas__terrain-fill.is-basin {
+  fill: var(--atlas-terrain-plateau);
+}
+.history-atlas__terrain-fill.is-desert {
+  fill: var(--atlas-terrain-desert);
+  fill-opacity: 0.85;
+}
+.history-atlas__sand-grain {
+  fill: var(--atlas-terrain-sand);
+  opacity: 0.5;
+}
+.history-atlas__ridge-mark {
+  fill: none;
+  stroke: var(--atlas-terrain-ridge);
+  stroke-width: 0.7;
+  opacity: 0.35;
+}
+.history-atlas__traditional-boundary {
+  fill: none;
+  stroke: var(--ws-text-muted, #6b7280);
+  stroke-opacity: 0.5;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+.history-atlas__traditional-label,
+.history-atlas__terrain-label {
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow:
+    1px 0 1px var(--atlas-land),
+    -1px 0 1px var(--atlas-land),
+    0 1px 1px var(--atlas-land),
+    0 -1px 1px var(--atlas-land);
+}
+.history-atlas__terrain-label {
+  pointer-events: none;
+}
+.history-atlas__traditional-label {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ws-primary-text, #1e3a8a);
+}
+.history-atlas__traditional-label[aria-pressed="true"] {
+  visibility: hidden;
 }
 .history-atlas__landform.is-area {
   fill: var(--ws-primary-soft, #eff6ff);
@@ -1049,7 +1131,7 @@
   stroke: var(--ws-primary, #2563eb);
 }
 .history-atlas__landform.is-area.is-active {
-  fill-opacity: 0.65;
+  fill-opacity: 0.35;
 }
 .history-atlas .history-atlas__province-label {
   position: absolute;

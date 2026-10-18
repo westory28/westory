@@ -9,7 +9,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
-import { geoArea, geoCentroid, geoPath } from "d3-geo";
+import { geoArea, geoCentroid, geoContains, geoPath } from "d3-geo";
 import { useMapViewportHeight } from "./useMapViewportHeight";
 import {
   ATLAS_COUNTRY_HELP,
@@ -50,9 +50,14 @@ import {
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import AtlasPlaceDetails from "./AtlasPlaceDetails";
 import AtlasAreaDetails from "./AtlasAreaDetails";
+import AtlasCountryDetails from "./AtlasCountryDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasCompass from "./AtlasCompass";
 import InfoHelp from "./InfoHelp";
+import {
+  atlasTerrainCreditItems,
+  ATLAS_TERRAIN_HELP,
+} from "./AtlasTerrainCredits";
 import {
   atlasRiverCreditItems,
   atlasDokdoCreditItems,
@@ -66,7 +71,14 @@ import {
   findAtlasLandform,
   loadAtlasLandformGeometry,
 } from "../../lib/historyAtlasLandforms";
+import { loadAtlasTerrainGeometry } from "../../lib/historyAtlasTerrain";
+import {
+  atlasKoreanTraditionalRegions,
+  getAtlasKoreanTraditionalRegion,
+  ATLAS_KOREAN_TRADITIONAL_REGION_OPTIONS,
+} from "../../lib/historyAtlasTraditionalRegions";
 import "./historyAtlas.css";
+import "./atlasTerrain.css";
 import {
   findAtlasArea,
   findAtlasRegionArea,
@@ -150,6 +162,7 @@ function AtlasHelp() {
         {
           title: "지형과 위치",
           rows: [
+            { label: "지형", content: ATLAS_TERRAIN_HELP },
             {
               label: "바탕 지도",
               content:
@@ -175,6 +188,7 @@ function AtlasHelp() {
         {
           title: "자료 출처",
           items: [
+            ...atlasTerrainCreditItems,
             ...atlasRiverCreditItems,
             ...atlasDokdoCreditItems,
             <a
@@ -195,7 +209,7 @@ function AtlasHelp() {
               국가 경계 자료 이용 조건 · CC BY 4.0
             </a>,
             <a
-              key="osm"
+              key="osm-area"
               href="https://www.openstreetmap.org/copyright"
               target="_blank"
               rel="noreferrer"
@@ -248,11 +262,15 @@ const AtlasBackground = memo(function AtlasBackground({
   transform,
   selectedRiver,
   countries,
+  terrain,
+  clipId,
 }: {
   paths: { land: string; rivers: string } | null;
   transform: AtlasTransform;
   selectedRiver: string;
   countries?: ReactNode;
+  terrain?: ReactNode;
+  clipId: string;
 }) {
   if (!paths) return null;
   return (
@@ -261,7 +279,15 @@ const AtlasBackground = memo(function AtlasBackground({
       transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
     >
       <path className="history-atlas__land" d={paths.land} />
-      {countries}
+      <defs>
+        <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
+          <path d={paths.land} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${clipId})`}>
+        {terrain}
+        {countries}
+      </g>
       <path className="history-atlas__rivers" d={paths.rivers} />
       {selectedRiver && (
         <>
@@ -471,6 +497,11 @@ export default function HistoryAtlas({
   );
   const [selectedId, setSelectedId] = useState("");
   const [countryId, setCountryId] = useState("");
+  const [traditionalRegionId, setTraditionalRegionId] = useState("");
+  const [terrainGeometry, setTerrainGeometry] = useState<Awaited<
+    ReturnType<typeof loadAtlasTerrainGeometry>
+  > | null>(null);
+  const [terrainError, setTerrainError] = useState(false);
   const [countryGeometry, setCountryGeometry] =
     useState<AtlasCountryGeometry | null>(null);
   const [countryError, setCountryError] = useState(false);
@@ -575,19 +606,29 @@ export default function HistoryAtlas({
     });
     return result;
   }, [subjectEntries]);
+  const traditionalArea = useMemo(
+    () =>
+      subject === "korea" && traditionalRegionId && areaGeometry
+        ? getAtlasKoreanTraditionalRegion(traditionalRegionId, areaGeometry)
+        : null,
+    [subject, traditionalRegionId, areaGeometry],
+  );
   const scopeEntries = useMemo(
     () =>
       subjectEntries.filter(
         ({ entry, place }) =>
           (!unitId || entry.unitId === unitId) &&
           (!eraId || entry.eraIds?.includes(eraId)) &&
-          matchesAtlasCurrentRegion(
-            place,
-            subject,
-            regionId,
-            subregionId,
-            areaGeometry,
-          ),
+          (traditionalArea
+            ? !!place.coordinates &&
+              geoContains(traditionalArea, place.coordinates)
+            : matchesAtlasCurrentRegion(
+                place,
+                subject,
+                regionId,
+                subregionId,
+                areaGeometry,
+              )),
       ),
     [
       subjectEntries,
@@ -597,6 +638,7 @@ export default function HistoryAtlas({
       regionId,
       subregionId,
       areaGeometry,
+      traditionalArea,
     ],
   );
   const entries = useMemo(
@@ -607,16 +649,26 @@ export default function HistoryAtlas({
   const selectedCountry = countryGeometry?.countries.features.find(
     (country) => country.properties.id === countryId,
   );
+  const traditionalRegions = useMemo(
+    () =>
+      subject === "korea" && areaGeometry
+        ? atlasKoreanTraditionalRegions(areaGeometry)
+        : null,
+    [subject, areaGeometry],
+  );
   const provinceArea =
     areaGeometry && !selected && !countryId
-      ? findAtlasRegionArea(subregionId || regionId, areaGeometry)
+      ? traditionalRegionId
+        ? traditionalArea
+        : findAtlasRegionArea(subregionId || regionId, areaGeometry)
       : null;
   const overlayWidth = Math.min(wide ? 320 : 280, mapWidth - 16);
   const overlayMaxHeight = mapHeight * (wide ? 0.55 : 0.42);
   const overlayTop = !wide || mapWidth < 650 ? 56 : 8;
   const overlayObstacle = useMemo(
     () =>
-      detailOpen && (selected || (provinceDetailOpen && provinceArea))
+      detailOpen &&
+      (selected || selectedCountry || (provinceDetailOpen && provinceArea))
         ? {
             left: 8,
             top: overlayTop,
@@ -627,6 +679,7 @@ export default function HistoryAtlas({
     [
       detailOpen,
       !!selected,
+      !!selectedCountry,
       provinceDetailOpen,
       provinceArea,
       overlayTop,
@@ -705,6 +758,24 @@ export default function HistoryAtlas({
       disputedBorders: path(countryGeometry.disputedBorders) || "",
     };
   }, [subject, countryGeometry, projection]);
+  const terrainPaths = useMemo(() => {
+    const path = geoPath(projection).digits(2);
+    return (
+      terrainGeometry?.features.map((feature) => ({
+        feature,
+        path: path(feature) || "",
+      })) || []
+    );
+  }, [terrainGeometry, projection]);
+  const traditionalPaths = useMemo(() => {
+    const path = geoPath(projection).digits(2);
+    return (
+      traditionalRegions?.features.map((feature) => ({
+        feature,
+        path: path(feature) || "",
+      })) || []
+    );
+  }, [traditionalRegions, projection]);
   const riversByPlace = useMemo(() => {
     const result = new Map<
       string,
@@ -826,6 +897,91 @@ export default function HistoryAtlas({
       bottom: point[1] + 22,
     };
   }, [selectedCountry, projection, transform, mapWidth, mapHeight]);
+  const geographyLabels = useMemo(() => {
+    const base = createAtlasProjection(
+      "world",
+      ATLAS_SUBJECT_BOUNDS.world,
+      mapWidth,
+      mapHeight,
+    ).scale();
+    const zoom = (projection.scale() * transform.scale) / base;
+    const candidates = [
+      ...(traditionalRegions?.features || []).map((feature) => ({
+        id: feature.properties.id,
+        name: feature.properties.name,
+        coordinates: feature.properties.coordinates,
+        minZoom: 0,
+        region: feature.properties.regionId || "",
+        kind: "region",
+      })),
+      ...[...(terrainGeometry?.features || [])]
+        .sort((a, b) => {
+          const ranks = {
+            mountain: 0,
+            desert: 1,
+            plateau: 2,
+            plain: 3,
+            basin: 4,
+          };
+          return (
+            a.properties.minZoom - b.properties.minZoom ||
+            ranks[a.properties.kind] - ranks[b.properties.kind]
+          );
+        })
+        .map((feature) => ({
+          ...feature.properties,
+          region: "",
+        })),
+    ];
+    const boxes = overlayObstacle ? [overlayObstacle] : [];
+    if (selectedCountryLabel) boxes.push(selectedCountryLabel);
+    return candidates.flatMap((feature) => {
+      if (zoom < feature.minZoom) return [];
+      if (
+        selected &&
+        normalizeAtlasSearch(selected.place.name) ===
+          normalizeAtlasSearch(feature.name)
+      )
+        return [];
+      const point = projection(feature.coordinates);
+      if (!point) return [];
+      const x = point[0] * transform.scale + transform.x;
+      const y = point[1] * transform.scale + transform.y;
+      const width = feature.name.length * 14 + 16;
+      const box = {
+        left: x - width / 2,
+        right: x + width / 2,
+        top: y - 14,
+        bottom: y + 14,
+      };
+      if (
+        box.left < 8 ||
+        box.right > mapWidth - 8 ||
+        box.top < 56 ||
+        box.bottom > mapHeight - 40 ||
+        boxes.some(
+          (other) =>
+            box.left < other.right &&
+            box.right > other.left &&
+            box.top < other.bottom &&
+            box.bottom > other.top,
+        )
+      )
+        return [];
+      boxes.push(box);
+      return [{ ...feature, x, y, box }];
+    });
+  }, [
+    traditionalRegions,
+    terrainGeometry,
+    projection,
+    transform,
+    mapWidth,
+    mapHeight,
+    overlayObstacle,
+    selectedCountryLabel,
+    selected?.place.name,
+  ]);
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
     mapPlaces.forEach((item) => {
@@ -885,7 +1041,20 @@ export default function HistoryAtlas({
       mapHeight,
       overlayObstacle,
       selectedCountryLabel,
-    );
+    ).map((point) => ({
+      ...point,
+      labelVisible:
+        point.labelVisible &&
+        (point.active ||
+          point.priority ||
+          !geographyLabels.some(
+            ({ box }) =>
+              point.x - 22 + point.labelLeft < box.right &&
+              point.x - 22 + point.labelLeft + point.labelWidth > box.left &&
+              point.y - 22 + point.labelTop < box.bottom &&
+              point.y - 22 + point.labelTop + 24 > box.top,
+          )),
+    }));
   }, [
     mapPlaces,
     projection,
@@ -899,6 +1068,7 @@ export default function HistoryAtlas({
     riversByPlace,
     landformsByPlace,
     selectedCountryLabel,
+    geographyLabels,
   ]);
   const minorDotsPath = useMemo(
     () =>
@@ -919,6 +1089,7 @@ export default function HistoryAtlas({
         bottom: point.y - 22 + point.labelTop + 44,
       }));
     if (overlayObstacle) boxes.push(overlayObstacle);
+    boxes.push(...geographyLabels.map(({ box }) => box));
     // Keep labels clear of the map controls, compass and attribution.
     boxes.push(
       { left: 0, top: 0, right: mapWidth, bottom: 48 },
@@ -1004,6 +1175,7 @@ export default function HistoryAtlas({
     mapWidth,
     mapHeight,
     selectedCountryLabel,
+    geographyLabels,
   ]);
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
@@ -1111,6 +1283,25 @@ export default function HistoryAtlas({
   }, [subject, unitId, eraId, regionId, subregionId, query]);
 
   useEffect(() => {
+    setTraditionalRegionId("");
+  }, [subject]);
+
+  useEffect(() => {
+    let disposed = false;
+    setTerrainError(false);
+    loadAtlasTerrainGeometry()
+      .then((data) => {
+        if (!disposed) setTerrainGeometry(data);
+      })
+      .catch(() => {
+        if (!disposed) setTerrainError(true);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [geometryAttempt]);
+
+  useEffect(() => {
     let disposed = false;
     loadAtlasLandformGeometry()
       .then((data) => {
@@ -1156,7 +1347,7 @@ export default function HistoryAtlas({
     const map = mapRef.current;
     if (
       !detailOpen ||
-      !(selected || (provinceDetailOpen && provinceArea)) ||
+      !(selected || selectedCountry || (provinceDetailOpen && provinceArea)) ||
       !card ||
       !map
     ) {
@@ -1177,6 +1368,7 @@ export default function HistoryAtlas({
     detailOpen,
     wide,
     selected?.entry.id,
+    countryId,
     provinceDetailOpen,
     provinceArea,
     mapHeight,
@@ -1262,10 +1454,25 @@ export default function HistoryAtlas({
           coordinates: selectedCountry.properties.coordinates,
           geometry: selectedCountry,
         },
-        { width: mapWidth, height: mapHeight },
+        {
+          width: mapWidth,
+          height: availableMapHeight,
+          top: availableMapTop,
+          mapHeight,
+          overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
+        },
       ),
     );
-  }, [selectedCountry, projection, mapWidth, mapHeight, updateTransform]);
+  }, [
+    selectedCountry,
+    projection,
+    mapWidth,
+    mapHeight,
+    availableMapHeight,
+    availableMapTop,
+    overlayObstacle?.right,
+    updateTransform,
+  ]);
 
   useEffect(() => {
     if (!provinceArea) return;
@@ -1513,6 +1720,7 @@ export default function HistoryAtlas({
   };
   const resetView = () => {
     setCountryId("");
+    setTraditionalRegionId("");
     setDetailOpen(false);
     setViewBounds(null);
     pendingFocusRef.current = null;
@@ -1520,6 +1728,7 @@ export default function HistoryAtlas({
   };
   const clearFilters = () => {
     setCountryId("");
+    setTraditionalRegionId("");
     setViewBounds(null);
     setUnitId("");
     setEraId("");
@@ -1535,11 +1744,15 @@ export default function HistoryAtlas({
     nextEraId: string,
     nextRegionId = regionId,
     nextSubregionId = subregionId,
+    regionControlChanged = false,
   ) => {
     setCountryId("");
+    setTraditionalRegionId("");
     if (nextUnitId !== unitId) setViewBounds(null);
     const regionChanged =
-      nextRegionId !== regionId || nextSubregionId !== subregionId;
+      nextRegionId !== regionId ||
+      nextSubregionId !== subregionId ||
+      (regionControlChanged && !!traditionalRegionId);
     if (regionChanged) {
       setProvinceDetailOpen(false);
       setListPage(0);
@@ -1648,6 +1861,15 @@ export default function HistoryAtlas({
     const cleared: string[] = [];
     const nextSubject = unitsById.get(next.entry.unitId)?.subject || subject;
     if (nextSubject !== subject) return;
+    if (
+      traditionalArea &&
+      (!next.place.coordinates ||
+        !geoContains(traditionalArea, next.place.coordinates))
+    ) {
+      setTraditionalRegionId("");
+      setViewBounds(null);
+      cleared.push("지역");
+    }
     if (unitId && next.entry.unitId !== unitId) {
       setUnitId("");
       setViewBounds(null);
@@ -1687,10 +1909,24 @@ export default function HistoryAtlas({
   };
   const selectCountry = (country: AtlasCountryFeature) => {
     setCountryId(country.properties.id);
+    setTraditionalRegionId("");
     setSelectedId("");
-    setDetailOpen(false);
+    setDetailOpen(true);
     setProvinceDetailOpen(false);
     setFilterNotice("");
+    pendingFocusRef.current = null;
+  };
+  const selectTraditionalRegion = (region: string) => {
+    setTraditionalRegionId(region);
+    setRegionId("");
+    setSubregionId("");
+    setQuery("");
+    setFilterNotice("");
+    setListPage(0);
+    setSelectedId("");
+    setCountryId("");
+    setProvinceDetailOpen(true);
+    setDetailOpen(true);
     pendingFocusRef.current = null;
   };
   const placeList = (
@@ -1868,8 +2104,15 @@ export default function HistoryAtlas({
             subject={subject}
             groupId={regionId}
             subregionId={subregionId}
+            areaOptions={
+              subject === "korea"
+                ? ATLAS_KOREAN_TRADITIONAL_REGION_OPTIONS
+                : undefined
+            }
+            selectedAreaId={traditionalRegionId}
+            onAreaChange={selectTraditionalRegion}
             onChange={(group, subregion) =>
-              changeScope(unitId, eraId, group, subregion)
+              changeScope(unitId, eraId, group, subregion, true)
             }
           />
         </div>
@@ -2045,7 +2288,7 @@ export default function HistoryAtlas({
                 event.detail === 0 ||
                 !(event.target instanceof Element) ||
                 event.target.closest(
-                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__province-label, .history-atlas__country-label, .history-atlas__attribution",
+                  ".history-atlas__overlay, .history-atlas__selection-card, .history-atlas__reopen, .history-atlas__point-label, .history-atlas__province-label, .history-atlas__country-label, .history-atlas__traditional-label, .history-atlas__attribution",
                 )
               )
                 return;
@@ -2069,7 +2312,9 @@ export default function HistoryAtlas({
               }
             }}
           >
-            {(selected || (provinceDetailOpen && provinceArea)) &&
+            {(selected ||
+              selectedCountry ||
+              (provinceDetailOpen && provinceArea)) &&
               (detailOpen ? (
                 <section
                   ref={overlayRef}
@@ -2105,15 +2350,21 @@ export default function HistoryAtlas({
                       ×
                     </button>
                   </div>
-                  {selected
-                    ? placeDetail
-                    : provinceArea && (
-                        <div className="history-atlas__detail">
-                          <AtlasAreaDetails area={provinceArea} />
-                        </div>
-                      )}
+                  {selected ? (
+                    placeDetail
+                  ) : selectedCountry ? (
+                    <div className="history-atlas__detail" key={countryId}>
+                      <AtlasCountryDetails country={selectedCountry} />
+                    </div>
+                  ) : (
+                    provinceArea && (
+                      <div className="history-atlas__detail">
+                        <AtlasAreaDetails area={provinceArea} />
+                      </div>
+                    )
+                  )}
                 </section>
-              ) : selected ? (
+              ) : selected || selectedCountry ? (
                 <button
                   type="button"
                   className="history-atlas__button history-atlas__reopen"
@@ -2126,10 +2377,13 @@ export default function HistoryAtlas({
                   }}
                   onClick={() => {
                     setDetailOpen(true);
-                    requestPlaceFocus(selected.place.id);
+                    if (selected) requestPlaceFocus(selected.place.id);
                   }}
                 >
-                  {entryName(selected)} · 설명
+                  {selected
+                    ? entryName(selected)
+                    : selectedCountry?.properties.name}{" "}
+                  · 설명
                 </button>
               ) : null)}
             <svg
@@ -2138,10 +2392,75 @@ export default function HistoryAtlas({
               viewBox={`0 0 ${mapWidth} ${mapHeight}`}
               aria-label="지도에 표시된 장소"
             >
+              <defs>
+                <pattern
+                  id={`${id}-sand`}
+                  width="8"
+                  height="8"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform={`scale(${1 / transform.scale})`}
+                >
+                  <circle
+                    cx="2"
+                    cy="2"
+                    r="0.7"
+                    className="history-atlas__sand-grain"
+                  />
+                  <circle
+                    cx="6"
+                    cy="6"
+                    r="0.7"
+                    className="history-atlas__sand-grain"
+                  />
+                </pattern>
+                <pattern
+                  id={`${id}-ridge`}
+                  width="14"
+                  height="12"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform={`scale(${1 / transform.scale})`}
+                >
+                  <path
+                    d="M2 8L6 4L10 8"
+                    className="history-atlas__ridge-mark"
+                  />
+                </pattern>
+              </defs>
               <AtlasBackground
                 paths={paths}
                 transform={transform}
                 selectedRiver={selectedRiverPath}
+                clipId={`${id}-land-clip`}
+                terrain={
+                  <g className="history-atlas__terrain" aria-hidden="true">
+                    {terrainPaths.map(({ feature, path }) => (
+                      <g
+                        key={feature.properties.id}
+                        data-terrain-id={feature.properties.id}
+                      >
+                        <path
+                          d={path}
+                          className={`history-atlas__terrain-fill is-${feature.properties.kind}`}
+                        />
+                        {(feature.properties.kind === "desert" ||
+                          feature.properties.kind === "mountain") && (
+                          <path
+                            d={path}
+                            fill={`url(#${id}-${feature.properties.kind === "desert" ? "sand" : "ridge"})`}
+                          />
+                        )}
+                      </g>
+                    ))}
+                    {traditionalPaths.map(({ feature, path }) => (
+                      <path
+                        key={feature.properties.id}
+                        d={path}
+                        data-traditional-region={feature.properties.regionId}
+                        className="history-atlas__traditional-boundary"
+                      />
+                    ))}
+                  </g>
+                }
                 countries={
                   countryPaths && (
                     <g className="history-atlas__countries">
@@ -2176,6 +2495,7 @@ export default function HistoryAtlas({
                     <path
                       key={placeId}
                       data-place-id={placeId}
+                      clipPath={`url(#${id}-land-clip)`}
                       className={`history-atlas__landform${areaGeometry && findAtlasArea(placesById.get(placeId)!, areaGeometry) ? " is-area" : ""}${selected?.place.id === placeId ? " is-active" : ""}`}
                       d={path}
                       onClick={() => focusPlace(placeId)}
@@ -2184,6 +2504,11 @@ export default function HistoryAtlas({
                   {provinceArea && (
                     <path
                       className="history-atlas__landform is-area is-active"
+                      clipPath={
+                        regionId === "water" || regionId === "arctic"
+                          ? undefined
+                          : `url(#${id}-land-clip)`
+                      }
                       d={provincePath}
                       onClick={(event) => {
                         if (
@@ -2227,6 +2552,7 @@ export default function HistoryAtlas({
                       onClick={() => focusPlace(placeId)}
                     />
                   ))}
+                  <path className="history-atlas__coastline" d={paths.land} />
                 </g>
               )}
               {paths && (
@@ -2238,6 +2564,38 @@ export default function HistoryAtlas({
               )}
             </svg>
             {paths &&
+              geographyLabels.map((label) =>
+                label.region ? (
+                  <button
+                    key={label.id}
+                    type="button"
+                    className="history-atlas__traditional-label"
+                    data-traditional-label={label.region}
+                    style={{ left: label.x, top: label.y }}
+                    aria-label={`${label.name} 지역 범위와 설명 보기`}
+                    aria-pressed={traditionalRegionId === label.region}
+                    onClick={() => selectTraditionalRegion(label.region)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      selectTraditionalRegion(label.region);
+                      mapRef.current?.focus({ preventScroll: true });
+                    }}
+                  >
+                    {label.name}
+                  </button>
+                ) : (
+                  <span
+                    key={label.id}
+                    className={`history-atlas__terrain-label is-${label.kind}`}
+                    data-terrain-label={label.id}
+                    style={{ left: label.x, top: label.y }}
+                  >
+                    {label.name}
+                  </span>
+                ),
+              )}
+            {paths &&
               countryLabels.map(({ country, x, y, width }) => (
                 <button
                   key={country.properties.id}
@@ -2245,7 +2603,7 @@ export default function HistoryAtlas({
                   className={`history-atlas__country-label${country.properties.id === countryId ? " is-active" : ""}`}
                   data-country-label={country.properties.id}
                   style={{ left: x, top: y, width }}
-                  aria-label={`${country.properties.name} 영역 보기`}
+                  aria-label={`${country.properties.name} 설명과 영역 보기`}
                   aria-pressed={country.properties.id === countryId}
                   onClick={() => selectCountry(country)}
                   onKeyDown={(event) => {
@@ -2388,6 +2746,18 @@ export default function HistoryAtlas({
                 </div>
               )}
             <AtlasCompass />
+            {terrainError && (
+              <div className="history-atlas__country-error" role="alert">
+                지형을 불러오지 못했습니다.
+                <button
+                  type="button"
+                  className="history-atlas__button"
+                  onClick={() => setGeometryAttempt((value) => value + 1)}
+                >
+                  다시 시도
+                </button>
+              </div>
+            )}
             {countryError && subject === "world" && (
               <div className="history-atlas__country-error" role="alert">
                 국가 경계를 불러오지 못했다.
