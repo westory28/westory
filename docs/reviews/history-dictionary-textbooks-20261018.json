@@ -1520,7 +1520,22 @@
       "모바일 두 줄 필터",
       "복수 태그 선택",
       "좁은 화면 출처 펼침"
-    ]
+    ],
+    "memoButtonOverlapFix": {
+      "reason": "운영 교사 화면의 a-z 버튼과 우측 하단 메모 버튼 겹침 확인",
+      "scope": "패치 메모 버튼이 있는 화면만 기존 하단 여유 토큰 적용",
+      "desktop1280": {
+        "railBottom": 772,
+        "memoTop": 820
+      },
+      "mobile390": {
+        "railBottom": 724,
+        "memoTop": 764
+      },
+      "latinExpansionClickable": true,
+      "internalScroll": false,
+      "build": "passed"
+    }
   },
   "independentReview": {
     "representativeTermsComparedToPdf": 47,

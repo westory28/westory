@@ -13,6 +13,9 @@
 .history-dictionary-initial-content {
   min-width: 0;
 }
+body:has(button[data-patch-memo-root]) .history-dictionary-initial-filter {
+  --history-dictionary-rail-bottom-clearance: var(--ws-page-float-bottom, 96px);
+}
 .history-dictionary-initial-filter {
   grid-column: 2;
   grid-row: 1;
@@ -29,7 +32,10 @@
         --history-dictionary-rail-max-height,
         calc(100dvh - var(--history-dictionary-sticky-top, 80px) - 16px)
       ),
-      var(--history-dictionary-rail-visible-height, 100dvh)
+      calc(
+        var(--history-dictionary-rail-visible-height, 100dvh) -
+          var(--history-dictionary-rail-bottom-clearance, 0px)
+      )
     )
   );
   box-sizing: border-box;
