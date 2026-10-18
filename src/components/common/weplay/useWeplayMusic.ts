@@ -5,7 +5,12 @@ import {
   setWeplayAudioMuted,
 } from "./weplayAudioPreference";
 
-export default function useWeplayMusic(active = true) {
+let audiblePlayer: HTMLAudioElement | null = null;
+
+export default function useWeplayMusic(
+  active = true,
+  source = `${import.meta.env.BASE_URL}assets/weplay/naval/tide-of-victory.wav`,
+) {
   const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [started, setStarted] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -24,18 +29,31 @@ export default function useWeplayMusic(active = true) {
       document.hidden
     )
       return;
-    const player = (audio.current ||= new Audio(
-      `${import.meta.env.BASE_URL}assets/weplay/naval/tide-of-victory.wav`,
-    ));
+    const player = (audio.current ||= new Audio(source));
+    // A mounted preview or a route transition must not leave two scores playing.
+    if (audiblePlayer && audiblePlayer !== player) audiblePlayer.pause();
+    audiblePlayer = player;
     player.loop = true;
     player.volume = 0.28;
+    player.onerror = () => {
+      if (
+        audio.current === player &&
+        activeRef.current &&
+        alive.current &&
+        !muteRef.current
+      )
+        setFailed(true);
+    };
+    if (player.error) player.load();
     void player.play().then(
       () => {
         if (
           !activeRef.current ||
           !alive.current ||
           muteRef.current ||
-          document.hidden
+          document.hidden ||
+          audiblePlayer !== player ||
+          audio.current !== player
         )
           player.pause();
         else setFailed(false);
@@ -45,12 +63,14 @@ export default function useWeplayMusic(active = true) {
           activeRef.current &&
           alive.current &&
           !muteRef.current &&
-          !document.hidden
+          !document.hidden &&
+          audio.current === player &&
+          audiblePlayer === player
         )
           setFailed(true);
       },
     );
-  }, []);
+  }, [source]);
   const start = useCallback(() => {
     wanted.current = true;
     setStarted(true);
@@ -84,6 +104,8 @@ export default function useWeplayMusic(active = true) {
       unsubscribe();
       document.removeEventListener("visibilitychange", visibility);
       audio.current?.pause();
+      if (audiblePlayer === audio.current) audiblePlayer = null;
+      if (audio.current) audio.current.onerror = null;
       audio.current?.removeAttribute("src");
       audio.current?.load();
       audio.current = null;

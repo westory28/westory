@@ -30,10 +30,27 @@ import WeplayRecordsDialog, {
 import "./weplay/weplay.css";
 import "./weplay/lobby.css";
 
+import YutGameEntry from "../../components/common/weplay/YutGameEntry";
+import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
+
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
+
 export default function Weplay() {
+  const [params] = useSearchParams();
+  return params.get("game") === "joseon-yut" ? (
+    <YutGameEntry portal="student" />
+  ) : (
+    <NavalWeplay />
+  );
+}
+
+function NavalWeplay() {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const [params, setParams] = useSearchParams();
+  const [introComplete, setIntroComplete] = useState(false);
+  useEffect(() => {
+    if (params.get("game") !== "history-rain") setIntroComplete(false);
+  }, [params.get("game")]);
   const selectedGame = WEPLAY_GAMES.find(
     (game) => game.id === params.get("game"),
   );
@@ -227,6 +244,9 @@ export default function Weplay() {
         <WeplayGameCatalog gameTitle={gameTitle} portal="student" />
       </main>
     );
+  }
+  if (!session && !introComplete) {
+    return <WeplayStudioIntro onComplete={() => setIntroComplete(true)} />;
   }
   return (
     <main className="weplay-page">

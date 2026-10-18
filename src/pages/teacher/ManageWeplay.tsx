@@ -41,7 +41,22 @@ import WeplayDifficultyEditor from "./components/WeplayDifficultyEditor";
 import WeplayTitleEditor from "./components/WeplayTitleEditor";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
+import YutGameEntry from "../../components/common/weplay/YutGameEntry";
+import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
+
 export default function ManageWeplay() {
+  const [params] = useSearchParams();
+  const { userData, currentUser } = useAuth();
+  if (params.get("game") === "joseon-yut") {
+    if (!canReadLessonManagement(userData, currentUser?.email)) {
+      return <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>;
+    }
+    return <YutGameEntry portal="teacher" />;
+  }
+  return <NavalWeplayManagement />;
+}
+
+function NavalWeplayManagement() {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const gameTitle = getWeplayGameTitle(menuConfig);
   const [params, setParams] = useSearchParams();
@@ -51,6 +66,10 @@ export default function ManageWeplay() {
   const game = selectedGame || WEPLAY_GAMES[0];
   const music = useWeplayMusic(!!selectedGame);
   const previewView = !!selectedGame && params.get("view") === "preview";
+  const [introComplete, setIntroComplete] = useState(false);
+  useEffect(() => {
+    if (!previewView) setIntroComplete(false);
+  }, [previewView]);
   const viewKey = selectedGame ? `${game.id}/${previewView}` : "catalog";
   const previousView = useRef(viewKey);
   const mainRef = useRef<HTMLElement>(null);
@@ -308,6 +327,9 @@ export default function ManageWeplay() {
         <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>
       </main>
     );
+  if (previewView && !introComplete) {
+    return <WeplayStudioIntro onComplete={() => setIntroComplete(true)} />;
+  }
   return (
     <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
       <main

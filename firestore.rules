@@ -1253,6 +1253,45 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
+      // Only participants may subscribe to a single room. All mutations and
+      // join-code lookups are server commands; collection discovery stays shut.
+      match /yut_rooms/{roomId} {
+        function currentYutScope() {
+          let scope = year + '-' + semester;
+          let config = get(/databases/$(database)/documents/site_settings/config).data;
+          let pointer = get(/databases/$(database)/documents/site_settings/semester_active).data;
+          let manifest = get(/databases/$(database)/documents/semester_manifests/$(scope)).data;
+          return string(config.year) == year && string(config.semester) == semester
+            && pointer.semesterId == scope && manifest.status == 'ACTIVE'
+            && manifest.get('readOnly', false) == false && manifest.revision is int
+            && manifest.revision >= 1 && pointer.revision == manifest.revision;
+        }
+        function currentYutMember() {
+          let profile = userProfile();
+          let enrollmentId = resource.data.enrollmentIds.get(request.auth.uid, 'none');
+          let enrollment = get(/databases/$(database)/documents/semester_enrollments/$(enrollmentId)).data;
+          let slotId = resource.data.enrollmentSlotIds.get(request.auth.uid, 'none');
+          let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
+          let classroom = get(/databases/$(database)/documents/semester_classes/$(resource.data.classId)).data;
+          return profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
+            && profile.get('weplayDeletionPending', false) == false
+            && classroom.semesterId == year + '-' + semester && classroom.status == 'ACTIVE'
+            && classroom.get('readOnly', false) == false
+            && (request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
+              || (profile.role == 'staff' && hasPermission('lesson_read'))
+              || (profile.role == 'student' && enrollment.studentUid == request.auth.uid
+                && enrollment.semesterId == year + '-' + semester && enrollment.classId == resource.data.classId
+                && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false
+                && slot.studentUid == request.auth.uid && slot.semesterId == year + '-' + semester
+                && slot.activeEnrollmentId == enrollmentId && slot.get('status', 'ACTIVE') == 'ACTIVE'));
+        }
+        allow get: if canUseWestory() && hasActiveApplicationSession()
+          && request.auth.uid in resource.data.participantUids
+          && resource.data.expiresAtMs > request.time.toMillis()
+          && currentYutScope() && currentYutMember();
+        allow list, create, update, delete: if false;
+      }
+
       match /point_public/{docId} {
         allow read: if canUseWestory() && docId == 'hall_of_fame';
         allow create, update, delete: if false;

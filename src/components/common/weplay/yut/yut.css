@@ -1,0 +1,1197 @@
+@font-face {
+  font-family: "Galmuri11";
+  src: url("/assets/weplay/yut/fonts/Galmuri11.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+.yut-game {
+  --yut-night: #171d35;
+  --yut-panel: #232c46;
+  --yut-ink: #111627;
+  --yut-paper: #ead9ad;
+  --yut-muted: #bba77d;
+  --yut-gold: #d9af61;
+  --yut-red: #ad504c;
+  --yut-green: #5f9c86;
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--yut-paper);
+  background: var(--yut-night);
+  border: 2px solid #786b54;
+  box-shadow: inset 0 0 0 3px var(--yut-ink);
+  font:
+    16px/1.6 "Galmuri11",
+    "Noto Sans KR",
+    sans-serif;
+  word-break: keep-all;
+}
+.yut-game *,
+.yut-dialog * {
+  box-sizing: border-box;
+}
+.yut-game button,
+.yut-game input,
+.yut-game select,
+.yut-dialog button {
+  font: inherit;
+}
+.yut-game button,
+.yut-dialog button {
+  cursor: pointer;
+}
+.yut-game button:disabled,
+.yut-dialog button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.yut-game :is(button, input, select):focus-visible,
+.yut-dialog button:focus-visible {
+  outline: 3px solid #f7d784;
+  outline-offset: 3px;
+}
+.yut-game :is(h1, h2, p),
+.yut-dialog :is(h2, p) {
+  margin: 0;
+}
+.yut-topbar {
+  position: relative;
+  z-index: 2;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 16px;
+  background: var(--yut-ink);
+  border-bottom: 1px solid #625d50;
+}
+.yut-topbar-brand {
+  color: var(--yut-gold);
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+.yut-topbar-brand span {
+  margin-left: 12px;
+  letter-spacing: 0;
+  color: var(--yut-muted);
+}
+.yut-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.yut-plain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  color: var(--yut-paper, #ead9ad);
+  border: 0;
+  background: transparent;
+}
+.yut-plain:hover {
+  color: #fff5d7;
+  background: #ead9ad0d;
+}
+.yut-info {
+  width: 44px;
+  font-family: Georgia, serif !important;
+  font-size: 20px !important;
+}
+.yut-info::first-letter {
+  border: 1px solid;
+}
+.yut-sound {
+  font-size: 14px !important;
+  white-space: nowrap;
+}
+.yut-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: #263e43;
+  color: #eee2c4;
+  border-bottom: 1px solid #5f9c86;
+}
+.yut-message > span {
+  flex: 1;
+}
+.yut-message.is-error {
+  background: #4f3038;
+  border-color: #ad504c;
+}
+.yut-message .yut-button {
+  white-space: nowrap;
+}
+.yut-entry {
+  min-height: 560px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 344px;
+}
+.yut-entry-scene {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  background: url("/assets/weplay/yut/moonlit-village.svg") center bottom / auto
+    100% no-repeat;
+  image-rendering: pixelated;
+}
+.yut-entry-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #171d3533 0%, transparent 65%, #11162740);
+}
+.yut-title {
+  position: relative;
+  padding: 36px 32px;
+  width: fit-content;
+  text-shadow: 3px 3px 0 var(--yut-ink);
+}
+.yut-title p {
+  color: #b8bdcc;
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+.yut-title h1 {
+  margin: 4px 0 0;
+  color: #f3dfac;
+  font:
+    700 clamp(42px, 5vw, 64px)/1.5 "Galmuri11",
+    sans-serif;
+  letter-spacing: 2px;
+}
+.yut-title-sub {
+  display: block;
+  font-size: 24px;
+  letter-spacing: 14px;
+  text-align: center;
+  color: #c8b689;
+}
+.yut-title-seal {
+  position: absolute;
+  top: 63px;
+  right: -16px;
+  padding: 6px 7px;
+  background: #ad504c;
+  color: #f7e4bb;
+  font-size: 13px;
+  line-height: 1.4;
+  border: 1px solid #d08b6a;
+  text-shadow: none;
+}
+.yut-village-people {
+  position: absolute;
+  bottom: 12%;
+  left: 18%;
+  right: 10%;
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  gap: 24px;
+}
+.yut-village-people > div {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+}
+.yut-village-people > div:nth-child(2) {
+  transform: translateY(12px);
+}
+.yut-village-people > div:nth-child(3) {
+  transform: translateY(-8px);
+}
+.yut-village-people > div > .yut-sprite {
+  width: 64px;
+  height: 90px;
+  filter: drop-shadow(2px 3px 0 #11162780);
+}
+.yut-village-people > div > span {
+  padding: 0 8px;
+  background: #111627b3;
+  font-size: 14px;
+  color: #ead9ad;
+}
+.yut-sprite {
+  width: 44px;
+  height: 60px;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+.yut-entry-menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  padding: 44px 28px 28px;
+  background: var(--yut-ink);
+  border-left: 1px solid #625d50;
+}
+.yut-eyebrow {
+  color: var(--yut-muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.yut-entry-menu h2 {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 400;
+}
+.yut-menu-rule {
+  margin: 24px 0;
+  height: 1px;
+  background: #73664e;
+  position: relative;
+}
+.yut-menu-rule::before,
+.yut-menu-rule::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  background: #bba77d;
+}
+.yut-menu-rule::after {
+  right: 0;
+}
+.yut-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--yut-muted);
+  margin-bottom: 12px;
+}
+.yut-game input,
+.yut-game select {
+  min-width: 0;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #726953;
+  background: #1d253c;
+  border-radius: 0;
+  padding: 8px 12px;
+  color: #ead9ad;
+  font-size: 16px;
+}
+.yut-game input::placeholder {
+  color: #a09b8c;
+}
+.yut-button {
+  display: inline-flex;
+  min-height: 48px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid #9e8b67;
+  border-radius: 0;
+  background: #2d354a;
+  box-shadow:
+    inset 0 0 0 2px #171d35,
+    0 3px 0 #111627;
+  color: #ead9ad;
+  font-weight: 400;
+  transition:
+    background 120ms,
+    transform 120ms;
+}
+.yut-button:not(:disabled):hover {
+  background: #3a455b;
+}
+.yut-button:not(:disabled):active {
+  transform: translateY(2px);
+}
+.yut-button--primary {
+  background: #d9bd80;
+  color: #272a30;
+  border-color: #f3dfac;
+  box-shadow:
+    inset 0 0 0 2px #a38a5e,
+    0 3px 0 #111627;
+}
+.yut-button--primary:not(:disabled):hover {
+  background: #ead9ad;
+}
+.yut-button--danger {
+  background: #733e40;
+  border-color: #ad504c;
+}
+.yut-wide {
+  width: 100%;
+}
+.yut-wide > span {
+  margin-left: auto;
+  font-size: 14px;
+}
+.yut-join {
+  margin: 28px 0 20px;
+}
+.yut-join > div {
+  display: flex;
+  gap: 8px;
+}
+.yut-join .yut-label {
+  margin-bottom: 8px;
+}
+.yut-join input {
+  flex: 1;
+  width: 100px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.yut-join .yut-button {
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+.yut-practice {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #413f3c;
+  color: #c3c8d0;
+  text-align: left;
+}
+.yut-practice:hover {
+  color: #f3dfac;
+}
+.yut-entry-meta {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 4px;
+  color: #9fa6b7;
+  font-size: 12px;
+}
+.yut-entry-meta span + span::before {
+  content: "·";
+  margin-right: 12px;
+}
+.yut-loading {
+  margin: 24px 0 40px !important;
+  color: #c3c8d0;
+}
+.yut-waiting {
+  padding: 28px 32px 24px;
+  min-height: 560px;
+  background:
+    linear-gradient(#171d35d9, #171d358c),
+    url("/assets/weplay/yut/moonlit-village.svg") center / cover;
+  image-rendering: pixelated;
+}
+.yut-waiting-heading,
+.yut-match-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.yut-waiting h1,
+.yut-match h1 {
+  margin-top: 4px;
+  font-size: 28px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+.yut-room-code {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+}
+.yut-room-code > span {
+  font-size: 13px;
+  color: var(--yut-muted);
+}
+.yut-room-code > strong {
+  font-size: 24px;
+  letter-spacing: 4px;
+  font-weight: 400;
+}
+.yut-room-code .yut-plain {
+  font-size: 13px;
+}
+.yut-waiting-seats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 40px 0 32px;
+}
+.yut-seat {
+  min-height: 292px;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-block: 1px solid #8b7b5c;
+  background: #111627a6;
+}
+.yut-seat.is-filled {
+  border-color: #b39b6a;
+  box-shadow:
+    inset 0 3px 0 #3c3f45,
+    inset 0 -3px 0 #3c3f45;
+}
+.yut-seat-job {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  color: #d9af61;
+}
+.yut-seat-job small {
+  font-size: 14px;
+  color: #bba77d;
+}
+.yut-seat .yut-sprite {
+  width: 80px;
+  height: 112px;
+}
+.yut-seat > strong {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.yut-me {
+  margin-left: 6px;
+  color: #e8c987;
+  font-size: 12px;
+}
+.yut-seat-status {
+  font-size: 13px;
+  color: #b4b3b0;
+}
+.yut-seat-status.is-ready {
+  color: #9fceb4;
+}
+.yut-empty-seat {
+  color: #797663;
+  font-size: 40px;
+}
+.yut-seat:not(.is-filled) > span:last-child {
+  font-size: 13px;
+  color: #b7b4a8;
+  text-align: center;
+}
+.yut-waiting-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.yut-waiting-footer > span {
+  color: #b8bdcc;
+  font-size: 14px;
+}
+.yut-waiting-footer .yut-button {
+  min-width: 240px;
+  justify-content: space-between;
+}
+.yut-match {
+  padding: 20px 24px 24px;
+  background:
+    linear-gradient(#171d35f5, #171d35ed),
+    url("/assets/weplay/yut/moonlit-village.svg") center / cover;
+}
+.yut-match h1 span {
+  margin-left: 8px;
+  font-size: 18px;
+  color: #bba77d;
+}
+.yut-turn-state {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.yut-turn-state > span {
+  color: #f0d296;
+}
+.yut-turn-state > strong {
+  min-width: 64px;
+  font-size: 28px;
+  text-align: right;
+  font-weight: 400;
+}
+.yut-turn-state > strong small {
+  margin-left: 4px;
+  color: #bba77d;
+  font-size: 14px;
+}
+.yut-turn-state > strong.is-low {
+  color: #e7a28b;
+}
+.yut-players {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 20px 0;
+  padding-block: 8px;
+  border-block: 1px solid #5a584e;
+}
+.yut-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-left: 2px solid transparent;
+}
+.yut-player.is-turn {
+  background: #d9af6112;
+  border-color: #d9af61;
+}
+.yut-player.is-left {
+  opacity: 0.45;
+}
+.yut-player .yut-sprite {
+  width: 36px;
+  height: 50px;
+}
+.yut-player > div {
+  min-width: 0;
+}
+.yut-player strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.yut-player > div > span {
+  display: block;
+  color: #aeb7c6;
+  font-size: 12px;
+}
+.yut-match-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  align-items: start;
+  gap: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.yut-board-wrap {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  background: #67553d;
+  border: 2px solid #bc9e65;
+  box-shadow:
+    inset 0 0 0 3px #302d2c,
+    0 4px 0 #111627;
+}
+.yut-board {
+  position: relative;
+  aspect-ratio: 1;
+  width: 100%;
+  background-color: #ead9ad;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 5px,
+    #715a3506 5px,
+    #715a3506 6px
+  );
+  border: 1px solid #aa8c58;
+  color: #806a49;
+}
+.yut-board-lines {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+.yut-board-word {
+  position: absolute;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #8d7755;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.yut-board-word--top {
+  top: 5%;
+}
+.yut-board-word--bottom {
+  bottom: 3%;
+  font-size: 11px;
+  text-align: right;
+  right: 8%;
+  letter-spacing: 0;
+}
+.yut-board-piece {
+  position: absolute;
+  transform: translate(-50%, -65%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: end;
+  padding: 0;
+  width: 44px;
+  height: 56px;
+  border: 0;
+  background: transparent;
+  opacity: 1 !important;
+  transition:
+    left 280ms,
+    top 280ms;
+  z-index: 2;
+}
+.yut-board-piece .yut-sprite {
+  width: 36px;
+  height: 46px;
+  filter: drop-shadow(1px 2px 0 #11162733);
+}
+.yut-board-piece > span {
+  position: absolute;
+  bottom: 0;
+  font:
+    11px/1.3 "Galmuri11",
+    sans-serif;
+  background: #242c3e;
+  color: #f3dfac;
+  padding: 1px 4px;
+  white-space: nowrap;
+}
+.yut-board-piece.is-selected:not(:disabled) {
+  filter: drop-shadow(0 0 4px #ac4e38);
+}
+.yut-destination {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px dashed #9d4136;
+  border-radius: 50%;
+  background: #fff4d2bf;
+  color: #87392e;
+  z-index: 3;
+  box-shadow: 0 0 0 3px #ead9ad73;
+}
+.yut-destination > span {
+  font-size: 12px;
+  font-weight: 700;
+}
+.yut-destination:hover {
+  background: #fff6df;
+}
+.yut-command-panel {
+  padding: 16px 0 0;
+  min-width: 0;
+}
+.yut-throw-zone {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.yut-sticks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 112px;
+  margin: 8px 0;
+}
+.yut-stick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 20px;
+  height: 72px;
+  background: #b78953;
+  border: 2px solid #6c4c30;
+  box-shadow:
+    inset 3px 0 0 #d8ad71,
+    inset -3px 0 0 #92683e,
+    2px 3px 0 #111627;
+  transform: rotate(calc(-14deg + var(--stick-index) * 9deg));
+}
+.yut-stick:nth-child(2) {
+  margin-top: -16px;
+}
+.yut-stick:nth-child(4) {
+  margin-top: 8px;
+}
+.yut-stick.is-flat {
+  background: #e6cea1;
+  box-shadow:
+    inset 2px 0 0 #f2deb5,
+    inset -2px 0 0 #c3a270,
+    2px 3px 0 #111627;
+}
+.yut-stick i {
+  width: 8px;
+  height: 8px;
+  border: 1px solid #714c33;
+  transform: rotate(45deg);
+}
+.yut-stick:not(.is-flat) i {
+  opacity: 0;
+}
+.yut-sticks.is-tossing .yut-stick {
+  animation: yut-toss 700ms ease-in-out infinite;
+  animation-delay: calc(var(--stick-index) * 60ms);
+}
+@keyframes yut-toss {
+  50% {
+    transform: translateY(-16px) rotate(30deg);
+  }
+}
+.yut-throw-result {
+  min-height: 64px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+.yut-throw-result > strong {
+  font-size: 40px;
+  font-weight: 400;
+  color: #f3dfac;
+}
+.yut-throw-result > span {
+  color: #c2c8d2;
+  font-size: 14px;
+}
+.yut-piece-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.yut-piece-choice {
+  min-height: 68px;
+  padding: 8px 4px;
+  background: #232c46;
+  color: #ead9ad;
+  border: 1px solid #726953;
+}
+.yut-piece-choice strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 400;
+}
+.yut-piece-choice span {
+  display: block;
+  font-size: 12px;
+  color: #bba77d;
+}
+.yut-piece-choice.is-selected {
+  border-color: #d9af61;
+  background: #3b3c46;
+  box-shadow: inset 0 0 0 1px #d9af61;
+}
+.yut-route-choices {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.yut-route-choices .yut-button {
+  font-size: 14px;
+}
+.yut-route-choices .yut-button > span {
+  font-size: 11px;
+}
+.yut-wait-turn {
+  min-height: 48px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px;
+  color: #b8bdcc;
+  background: #232c4666;
+  font-size: 14px;
+}
+.yut-event {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 16px;
+  margin-top: 24px;
+  border-top: 1px solid #625d50;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #b5bdca;
+  overflow-wrap: anywhere;
+}
+.yut-event > span {
+  color: #a68e61;
+  font-size: 8px;
+}
+.yut-result {
+  text-align: center;
+  padding: 16px 0;
+}
+.yut-result .yut-sprite {
+  display: block;
+  width: 80px;
+  height: 112px;
+  margin: 12px auto;
+}
+.yut-result h2 {
+  color: #f3dfac;
+  font-size: 28px;
+  font-weight: 400;
+}
+.yut-result p {
+  color: #b8bdcc;
+  font-size: 14px;
+  margin: 12px 0 24px;
+}
+.yut-dialog {
+  --yut-paper: #ead9ad;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin: auto;
+  padding: 24px;
+  color: #ead9ad;
+  border: 2px solid #bba77d;
+  background: #171d35;
+  box-shadow:
+    inset 0 0 0 4px #232c46,
+    0 24px 80px #0008;
+  font:
+    16px/1.8 "Galmuri11",
+    "Noto Sans KR",
+    sans-serif;
+  word-break: keep-all;
+}
+.yut-dialog::backdrop {
+  background: #0a1024bd;
+}
+.yut-dialog-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.yut-dialog-top h2 {
+  font-size: 22px;
+  font-weight: 400;
+}
+.yut-dialog .yut-plain {
+  font-size: 24px;
+}
+.yut-rules {
+  padding-left: 24px;
+  margin: 0;
+}
+.yut-rules li {
+  padding-left: 4px;
+  margin-bottom: 12px;
+}
+.yut-rule-note {
+  padding-top: 16px;
+  border-top: 1px solid #625d50;
+  color: #bdc3ce;
+  font-size: 14px;
+  margin: 16px 0 24px !important;
+}
+.yut-dialog-actions {
+  display: flex;
+  justify-content: end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 1023px) {
+  .yut-entry {
+    grid-template-columns: minmax(0, 1fr) 312px;
+  }
+  .yut-entry-menu {
+    padding-inline: 24px;
+  }
+  .yut-title {
+    padding: 32px 20px;
+  }
+  .yut-title h1 {
+    font-size: 42px;
+  }
+  .yut-title p {
+    font-size: 10px;
+    letter-spacing: 2px;
+  }
+  .yut-title-seal {
+    right: -12px;
+  }
+  .yut-village-people {
+    gap: 8px;
+    left: 8%;
+    right: 8%;
+  }
+  .yut-village-people > div > .yut-sprite {
+    width: 48px;
+    height: 68px;
+  }
+  .yut-waiting {
+    padding-inline: 24px;
+  }
+  .yut-match-grid {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 20px;
+  }
+  .yut-player {
+    padding-inline: 4px;
+    gap: 4px;
+  }
+  .yut-player .yut-sprite {
+    width: 30px;
+  }
+}
+@media (max-width: 767px) {
+  .yut-topbar {
+    padding-inline: 8px;
+    gap: 4px;
+  }
+  .yut-topbar-brand {
+    display: none;
+  }
+  .yut-topbar .yut-plain {
+    font-size: 14px;
+  }
+  .yut-entry {
+    display: flex;
+    flex-direction: column;
+  }
+  .yut-entry-scene {
+    min-height: 360px;
+    background-size: cover;
+    background-position: center bottom;
+  }
+  .yut-title {
+    padding: 24px 88px 24px 24px;
+    max-width: 100%;
+  }
+  .yut-title h1 {
+    font-size: 44px;
+  }
+  .yut-title p {
+    font-size: 10px;
+  }
+  .yut-title-sub {
+    font-size: 20px;
+  }
+  .yut-title-seal {
+    top: 48px;
+    right: 16px;
+  }
+  .yut-village-people {
+    bottom: 9%;
+    left: 16%;
+    right: 12%;
+    gap: 20px;
+  }
+  .yut-village-people > div > .yut-sprite {
+    width: 48px;
+    height: 68px;
+  }
+  .yut-entry-menu {
+    padding: 24px;
+    border-left: 0;
+    border-top: 1px solid #625d50;
+  }
+  .yut-entry-menu h2 {
+    font-size: 24px;
+  }
+  .yut-menu-rule {
+    margin: 16px 0 20px;
+  }
+  .yut-entry-meta {
+    padding-top: 20px;
+  }
+  .yut-waiting {
+    padding: 20px 16px;
+  }
+  .yut-waiting-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .yut-waiting h1 {
+    font-size: 24px;
+  }
+  .yut-room-code {
+    padding: 0;
+  }
+  .yut-waiting-seats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .yut-seat {
+    min-height: 228px;
+    padding: 12px 8px;
+  }
+  .yut-seat .yut-sprite {
+    width: 64px;
+    height: 90px;
+  }
+  .yut-seat-job {
+    font-size: 20px;
+  }
+  .yut-seat > strong {
+    font-size: 14px;
+  }
+  .yut-seat-status {
+    font-size: 12px;
+  }
+  .yut-waiting-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .yut-waiting-footer > span {
+    text-align: center;
+  }
+  .yut-match {
+    padding: 16px 12px 20px;
+  }
+  .yut-match-heading {
+    gap: 8px;
+    align-items: start;
+  }
+  .yut-match h1 {
+    font-size: 22px;
+  }
+  .yut-match h1 span {
+    font-size: 14px;
+    display: block;
+    margin: 0;
+  }
+  .yut-match-heading .yut-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+  .yut-turn-state {
+    flex-direction: column;
+    gap: 0;
+    align-items: end;
+    font-size: 14px;
+  }
+  .yut-turn-state > strong {
+    font-size: 24px;
+  }
+  .yut-players {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 12px 0 16px;
+    gap: 4px;
+  }
+  .yut-player strong {
+    font-size: 13px;
+  }
+  .yut-player .yut-sprite {
+    width: 28px;
+    height: 38px;
+  }
+  .yut-player > div > span {
+    font-size: 11px;
+  }
+  .yut-match-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .yut-board-wrap {
+    padding: 5px;
+  }
+  .yut-board-word {
+    font-size: 10px;
+  }
+  .yut-board-word--bottom {
+    font-size: 9px;
+  }
+  .yut-board-piece {
+    transform: translate(-50%, -61%);
+  }
+  .yut-board-piece .yut-sprite {
+    width: 30px;
+    height: 40px;
+  }
+  .yut-command-panel {
+    width: 100%;
+    padding-top: 0;
+  }
+  .yut-throw-zone {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0 16px;
+    text-align: left;
+    margin-bottom: 16px;
+  }
+  .yut-throw-zone > .yut-eyebrow {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+  .yut-throw-zone .yut-sticks {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    height: 84px;
+    margin: 0 8px;
+    gap: 8px;
+  }
+  .yut-stick {
+    width: 15px;
+    height: 56px;
+    gap: 6px;
+  }
+  .yut-stick i {
+    width: 6px;
+    height: 6px;
+  }
+  .yut-throw-result {
+    min-height: 44px;
+    align-self: start;
+    justify-content: start;
+    gap: 12px;
+  }
+  .yut-throw-result > strong {
+    font-size: 32px;
+  }
+  .yut-throw-result > span {
+    font-size: 13px;
+  }
+  .yut-event {
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+  .yut-message {
+    flex-wrap: wrap;
+    padding-inline: 12px;
+    font-size: 14px;
+  }
+  .yut-dialog {
+    padding: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-game *,
+  .yut-game *::before,
+  .yut-game *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
