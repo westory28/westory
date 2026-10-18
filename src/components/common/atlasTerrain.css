@@ -1,0 +1,9 @@
+.history-atlas,
+.history-globe {
+  --atlas-terrain-mountain: #cbd8ca;
+  --atlas-terrain-ridge: #6b826d;
+  --atlas-terrain-plateau: #ded7c8;
+  --atlas-terrain-desert: #edd5a5;
+  --atlas-terrain-sand: #b58a50;
+  --atlas-terrain-plain: #e6eddf;
+}

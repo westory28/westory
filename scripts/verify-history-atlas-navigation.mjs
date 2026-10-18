@@ -841,6 +841,7 @@ for (const subject of ["korea", "world"])
           unitId: "chosen-unit",
           eraId: "chosen-era",
           regionId: "gyeonggi",
+          traditionalRegionId: "gwanseo",
           subregionId: "",
           query: "old search",
           selected: undefined,
@@ -867,6 +868,7 @@ for (const subject of ["korea", "world"])
           ...Object.fromEntries(
             [
               "CountryId",
+              "TraditionalRegionId",
               "ListPage",
               "Query",
               "UnitId",
@@ -896,6 +898,11 @@ for (const subject of ["korea", "world"])
         nextSubregion,
       );
       assert.equal(state.Query, "");
+      assert.equal(
+        state.TraditionalRegionId,
+        "",
+        "Administrative/world region navigation clears the traditional-region filter",
+      );
       assert.equal(state.UnitId, "chosen-unit");
       assert.equal(state.EraId, "chosen-era");
       assert.equal(state.SelectedId, "");

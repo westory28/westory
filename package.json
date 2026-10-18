@@ -36,7 +36,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "verify:history-dictionary": "node scripts/verify-history-dictionary-catalog.mjs && node scripts/verify-history-dictionary-classification.mjs && node scripts/verify-history-dictionary-browse.mjs && node scripts/verify-history-dictionary-initials.mjs && node scripts/verify-history-dictionary-navigation.mjs && node scripts/verify-history-dictionary-session.mjs && node scripts/verify-history-dictionary-contract.mjs",
-    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs"
+    "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs && node scripts/verify-history-atlas-terrain.mjs && node scripts/verify-history-atlas-country-profiles.mjs",
+    "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",
