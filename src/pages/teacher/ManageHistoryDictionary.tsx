@@ -1138,13 +1138,6 @@ const ManageHistoryDictionary: React.FC = () => {
               </div>
 
               <div className="history-dictionary-initial-layout mt-5">
-                <HistoryDictionaryInitialFilter
-                  value={activeInitial}
-                  onChange={handleInitialFilterClick}
-                  counts={initialCounts}
-                  label="교사 등록 단어 첫 글자"
-                />
-
                 <div className="min-w-0">
                   <label className="relative block">
                     <span className="sr-only">등록 풀이 검색</span>
@@ -1248,6 +1241,12 @@ const ManageHistoryDictionary: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                <HistoryDictionaryInitialFilter
+                  value={activeInitial}
+                  onChange={handleInitialFilterClick}
+                  counts={initialCounts}
+                  label="교사 등록 단어 첫 글자"
+                />
               </div>
             </aside>
           ) : activePanel === "studentWords" ? (
@@ -1259,13 +1258,6 @@ const ManageHistoryDictionary: React.FC = () => {
               </div>
 
               <div className="history-dictionary-initial-layout mt-5">
-                <HistoryDictionaryInitialFilter
-                  value={activeStudentWordInitial}
-                  onChange={handleStudentWordInitialFilterClick}
-                  counts={studentWordInitialCounts}
-                  label="학생 등록 단어 첫 글자"
-                />
-
                 <div className="min-w-0">
                   <label className="relative block">
                     <span className="sr-only">학생 등록 단어 검색</span>
@@ -1361,6 +1353,12 @@ const ManageHistoryDictionary: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                <HistoryDictionaryInitialFilter
+                  value={activeStudentWordInitial}
+                  onChange={handleStudentWordInitialFilterClick}
+                  counts={studentWordInitialCounts}
+                  label="학생 등록 단어 첫 글자"
+                />
               </div>
             </aside>
           ) : activePanel === "requests" ? (

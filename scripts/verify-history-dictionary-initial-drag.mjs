@@ -3,114 +3,123 @@ import { build } from "esbuild";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 
 const require = createRequire(import.meta.url);
-async function bundle(path) {
-  const result = await build({
-    entryPoints: [fileURLToPath(new URL(path, import.meta.url))],
-    bundle: true,
-    write: false,
-    platform: "node",
-    format: "cjs",
-    jsx: "automatic",
-    external: ["react", "react/jsx-runtime"],
-    loader: { ".css": "empty" },
-  });
-  const module = { exports: {} };
-  vm.runInNewContext(result.outputFiles[0].text, {
-    module,
-    exports: module.exports,
-    require,
-  });
-  return module.exports;
-}
+const result = await build({
+  entryPoints: [
+    fileURLToPath(
+      new URL("../src/lib/historyDictionaryInitialDrag.ts", import.meta.url),
+    ),
+  ],
+  bundle: true,
+  write: false,
+  platform: "node",
+  format: "cjs",
+});
+const module = { exports: {} };
+vm.runInNewContext(result.outputFiles[0].text, {
+  module,
+  exports: module.exports,
+  require,
+});
 const {
-  getHistoryDictionaryInitialScrollSpeed: speed,
-  intersectHistoryDictionaryInitialBounds: intersect,
+  getHistoryDictionaryInitialItems: itemsFor,
+  getHistoryDictionaryInitialWindow: windowFor,
+  getHistoryDictionaryInitialDragSteps: stepsFor,
   attachHistoryDictionaryInitialDrag: attach,
-} = await bundle("../src/lib/historyDictionaryInitialDrag.ts");
-const Filter = (
-  await bundle("../src/components/common/HistoryDictionaryInitialFilter.tsx")
-).default;
-const markup = renderToStaticMarkup(
-  React.createElement(Filter, { value: "", onChange() {} }),
-);
-const renderedButtons = [...markup.matchAll(/<button([^>]*)>/g)].map(
-  (match) => ({
-    initial: match[1].match(/data-history-initial="([^"]*)"/)?.[1],
-    character: match[1].includes("data-history-initial-character"),
-  }),
-);
-assert.equal(renderedButtons.length, 53);
-assert.equal(renderedButtons.filter((button) => button.character).length, 50);
-assert.ok(renderedButtons.every((button) => button.initial !== undefined));
-assert.equal(speed(200, 100, 300), 0);
-assert.equal(speed(100, 100, 300), -480);
-assert.equal(speed(120, 100, 300), -240);
-assert.equal(speed(280, 100, 300), 240);
-assert.equal(speed(300, 100, 300), 480);
-assert.equal(speed(-200, 100, 300), -480);
-assert.equal(speed(800, 100, 300), 480);
-assert.equal(speed(100, 100, 100), 0);
-assert.equal(speed(115, 100, 130), 0);
-const clipped = intersect(
-  { top: 232, bottom: 936, left: 10, right: 74 },
-  { top: 0, bottom: 800, left: 0, right: 1280 },
-);
-assert.equal(clipped.bottom, 800);
-assert.equal(clipped.top, 232);
-assert.equal(
-  intersect(clipped, { top: 300, bottom: 600, left: 30, right: 60 }, false)
-    .left,
-  10,
-);
+  intersectHistoryDictionaryInitialBounds: intersect,
+} = module.exports;
+
+for (const [numbers, letters] of [
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+]) {
+  const items = itemsFor(numbers, letters);
+  assert.equal(items.length, 17 + (numbers ? 10 : 0) + (letters ? 26 : 0));
+  for (let capacity = 1; capacity <= 54; capacity++)
+    for (const value of items) {
+      const rows = windowFor(items, value, capacity);
+      assert.ok(rows.length <= capacity, `${capacity} slots / ${value}`);
+      assert.equal(
+        rows.filter((row) => row.type === "initial" && row.value === value)
+          .length,
+        1,
+        `Selection must remain visible: ${capacity}/${value}`,
+      );
+      assert.equal(
+        new Set(
+          rows.filter((row) => row.type === "initial").map((row) => row.value),
+        ).size,
+        rows.filter((row) => row.type === "initial").length,
+      );
+      if (capacity >= 4)
+        for (const anchor of ["", "0-9", "a-z"])
+          assert.ok(
+            rows.some((row) => row.type === "initial" && row.value === anchor),
+          );
+      for (const row of rows)
+        if (row.type === "more") assert.ok(items.includes(row.target));
+    }
+}
+const middle = windowFor(itemsFor(false, false), "ㅁ", 8);
+assert.equal(middle[0].value, "");
+assert.equal(middle[1].value, "0-9");
+assert.equal(middle.at(-1).value, "a-z");
+assert.equal(middle.filter((row) => row.type === "more").length, 2);
+assert.equal(stepsFor(43), 0);
+assert.equal(stepsFor(44), 1);
+assert.equal(stepsFor(131), 2);
+assert.equal(stepsFor(-44), -1);
 assert.equal(
   intersect(
-    clipped,
-    { top: 300, bottom: 600, left: 30, right: 60 },
-    true,
-    false,
-  ).top,
-  232,
+    { top: 232, bottom: 936, left: 10, right: 74 },
+    { top: 0, bottom: 800, left: 0, right: 1280 },
+  ).bottom,
+  800,
 );
 
-// Real EventTarget dispatch exercises the production listeners. Only geometry,
-// capture and animation frames are modeled; browser layout is checked separately.
 function fixture({
-  railTop = 80,
-  railHeight = 240,
+  initial = "ㄱ",
+  numbers = false,
+  letters = false,
+  top = 80,
+  maxHeight = 320,
   viewportHeight = 800,
   clips = [],
 } = {}) {
+  let value = initial;
   let disabled = false;
-  let numbersOpen = false;
-  let lettersOpen = false;
-  let sequence = 0;
+  let capacity = 1;
   let clock = 0;
-  let focused = null;
-  let captures = new Set();
+  let sequence = 0;
+  let styleWrites = 0;
+  let captureFails = false;
+  let resizeObserver;
+  const items = itemsFor(numbers, letters);
   const selected = [];
   const frames = new Map();
+  const captures = new Set();
+  const styles = new Map();
   const view = new EventTarget();
   view.innerWidth = 1280;
   view.innerHeight = viewportHeight;
   view.visualViewport = new EventTarget();
-  view.visualViewport.offsetLeft = 0;
-  view.visualViewport.offsetTop = 0;
+  Object.assign(view.visualViewport, { offsetTop: 0, offsetLeft: 0 });
   Object.defineProperty(view.visualViewport, "width", {
     get: () => view.innerWidth,
   });
   Object.defineProperty(view.visualViewport, "height", {
     get: () => view.innerHeight,
   });
-  let styleReads = 0;
-  view.getComputedStyle = (node) => {
-    styleReads++;
-    return node.style;
+  view.getComputedStyle = (node) => node.style;
+  view.requestAnimationFrame = (callback) => {
+    const id = ++sequence;
+    frames.set(id, callback);
+    return id;
   };
-  let resizeObserver;
+  view.cancelAnimationFrame = (id) => frames.delete(id);
   view.ResizeObserver = class {
     constructor(callback) {
       this.callback = callback;
@@ -122,56 +131,54 @@ function fixture({
     }
     disconnect() {
       this.observed.clear();
-      this.disconnected = true;
     }
   };
-  view.requestAnimationFrame = (callback) => {
-    const id = ++sequence;
-    frames.set(id, callback);
-    return id;
-  };
-  view.cancelAnimationFrame = (id) => frames.delete(id);
   const rail = new EventTarget();
-  const styleProperties = new Map();
-  let styleWrites = 0;
   rail.style = {
-    getPropertyValue(name) {
-      return styleProperties.get(name) ?? "";
-    },
-    getPropertyPriority() {
-      return "";
-    },
-    setProperty(name, value) {
+    getPropertyValue: (name) => styles.get(name) ?? "",
+    getPropertyPriority: () => "",
+    setProperty: (name, value) => {
       styleWrites++;
-      styleProperties.set(name, value);
+      styles.set(name, value);
     },
-    removeProperty(name) {
-      styleProperties.delete(name);
-    },
+    removeProperty: (name) => styles.delete(name),
   };
-  rail.scrollTop = 0;
   Object.defineProperty(rail, "clientHeight", {
     get: () =>
       Math.min(
-        railHeight,
-        parseFloat(
-          rail.style.getPropertyValue(
-            "--history-dictionary-rail-visible-height",
-          ),
-        ) || Infinity,
-      ),
+        maxHeight,
+        items.length * 44 + 10,
+        parseFloat(styles.get("--history-dictionary-rail-visible-height")) ||
+          Infinity,
+      ) - 2,
   });
-  rail.captureFails = false;
+  Object.defineProperty(rail, "scrollTop", {
+    get: () => 0,
+    set() {
+      assert.fail("The rail must never internally scroll");
+    },
+  });
   rail.getBoundingClientRect = () => ({
+    top,
+    bottom: top + rail.clientHeight + 2,
     left: 10,
     right: 74,
-    top: railTop,
-    bottom: railTop + rail.clientHeight,
   });
+  rail.setPointerCapture = (id) => {
+    if (captureFails) throw new Error("inactive");
+    captures.add(id);
+  };
+  rail.hasPointerCapture = (id) => captures.has(id);
+  rail.releasePointerCapture = (id) => captures.delete(id);
   const ancestors = clips.map(
-    ({ top, bottom, overflowX = "visible", overflowY = "auto" }) => ({
+    ({
+      clipTop = 0,
+      bottom = 800,
+      overflowY = "auto",
+      overflowX = "visible",
+    }) => ({
       style: { overflowX, overflowY },
-      bounds: { top, bottom, left: 0, right: 1280 },
+      bounds: { top: clipTop, bottom, left: 0, right: 1280 },
       getBoundingClientRect() {
         return this.bounds;
       },
@@ -181,71 +188,55 @@ function fixture({
     node.parentElement = ancestors[index + 1] ?? null;
   });
   rail.parentElement = ancestors[0] ?? null;
-  rail.setPointerCapture = (id) => {
-    if (rail.captureFails) throw new Error("Pointer is no longer active");
-    captures.add(id);
-  };
-  rail.hasPointerCapture = (id) => captures.has(id);
-  rail.releasePointerCapture = (id) => captures.delete(id);
-  const buttons = renderedButtons.map(({ initial, character }) => ({
+  const buttons = items.map((initial) => ({
     initial,
-    character,
     disabled: false,
     closest(selector) {
-      return selector.includes("-character]") && !character ? null : this;
+      return selector.includes("-character]") &&
+        (!initial || initial === "0-9" || initial === "a-z")
+        ? null
+        : this;
+    },
+    getAttribute: (name) => (name === "data-history-initial" ? initial : null),
+    hasAttribute: (name) =>
+      name === "data-history-initial-character" &&
+      Boolean(initial) &&
+      initial !== "0-9" &&
+      initial !== "a-z",
+    focus() {},
+  }));
+  rail.contains = (node) => node === rail || buttons.includes(node);
+  const button = (initial) => buttons.find((item) => item.initial === initial);
+  const more = {
+    disabled: false,
+    target: "ㅇ",
+    closest() {
+      return this;
+    },
+    hasAttribute() {
+      return false;
     },
     getAttribute(name) {
-      return name === "data-history-initial" ? initial : null;
+      return name === "data-history-initial-more-target" ? this.target : null;
     },
-    focus(options) {
-      assert.equal(options.preventScroll, true);
-      focused = initial;
-    },
-  }));
-  rail.contains = (button) => buttons.includes(button);
-  const visible = () =>
-    buttons.filter(
-      ({ initial }) =>
-        (!/^[0-9]$/.test(initial) && !/^[a-z]$/.test(initial)) ||
-        (/^[0-9]$/.test(initial) && numbersOpen) ||
-        (/^[a-z]$/.test(initial) && lettersOpen),
-    );
-  Object.defineProperty(rail, "scrollHeight", {
-    get: () => visible().length * 48 + 8,
-  });
-  const button = (initial) => buttons.find((item) => item.initial === initial);
-  const center = (initial) =>
-    railTop + 4 + visible().indexOf(button(initial)) * 48 + 22 - rail.scrollTop;
+  };
+  buttons.push(more);
   const doc = new EventTarget();
   doc.defaultView = view;
-  doc.elementFromPoint = (x, y) => {
-    if (
-      x < 14 ||
-      x > 70 ||
-      y < railTop + 4 ||
-      y > railTop + rail.clientHeight - 4 ||
-      y < 0 ||
-      y > view.innerHeight
-    )
-      return null;
-    if (
-      ancestors.some(
-        (node) =>
-          /auto|scroll|hidden|clip/.test(node.style.overflowY) &&
-          (y < node.bounds.top || y > node.bounds.bottom),
-      )
-    )
-      return null;
-    const offset = y - railTop - 4 + rail.scrollTop;
-    return offset % 48 < 44 ? visible()[Math.floor(offset / 48)] || null : null;
+  doc.elementFromPoint = () => {
+    assert.fail("Window replacement must not hit-test a stationary pointer");
   };
   rail.ownerDocument = doc;
   const controller = attach(rail, {
     isDisabled: () => disabled,
-    onSelect(initial) {
-      selected.push(initial);
-      if (initial === "0-9") numbersOpen = true;
-      if (initial === "a-z") lettersOpen = true;
+    getItems: () => items,
+    getValue: () => value,
+    onSelect(initial, focus) {
+      value = initial;
+      selected.push({ value, focus });
+    },
+    onCapacityChange(next) {
+      capacity = next;
     },
   });
   function dispatch(type, values = {}) {
@@ -257,254 +248,119 @@ function fixture({
       button: 0,
       buttons: 1,
       clientX: 40,
-      clientY: center("ㄱ"),
+      clientY: 200,
       detail: 1,
+      deltaMode: 0,
+      deltaX: 0,
+      deltaY: 0,
       ...values,
     };
     Object.defineProperty(event, "target", {
       value: props.target ?? button("ㄱ"),
     });
+    Object.defineProperty(event, "timeStamp", {
+      value: props.timeStamp ?? clock,
+    });
     delete props.target;
+    delete props.timeStamp;
     Object.assign(event, props);
     rail.dispatchEvent(event);
     return event;
   }
   return {
     rail,
-    doc,
     view,
+    doc,
     controller,
-    buttons,
+    items,
     button,
-    center,
+    more,
     selected,
     frames,
     captures,
-    dispatch,
     ancestors,
     resizeObserver,
+    dispatch,
+    get value() {
+      return value;
+    },
+    get capacity() {
+      return capacity;
+    },
     get styleWrites() {
       return styleWrites;
     },
-    setRailTop(top) {
-      railTop = top;
+    get rows() {
+      return windowFor(items, value, capacity);
     },
-    get styleReads() {
-      return styleReads;
+    setTop(next) {
+      top = next;
     },
-    get focused() {
-      return focused;
+    setDisabled(next) {
+      disabled = next;
     },
-    setDisabled(value) {
-      disabled = value;
+    failCapture() {
+      captureFails = true;
     },
-    nextFrame() {
+    nextFrame(duration = 16) {
       const callbacks = [...frames.values()];
       frames.clear();
-      clock += 16;
+      clock += duration;
       callbacks.forEach((callback) => callback(clock));
     },
   };
 }
-
-{
-  const f = fixture({ railTop: 232, railHeight: 704, viewportHeight: 800 });
-  f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: 799 });
-  const count = f.selected.length;
-  for (let index = 0; index < 10; index++) f.nextFrame();
-  assert.ok(
-    f.rail.scrollTop > 0,
-    "The visible viewport bottom starts edge scrolling before the rail bottom",
-  );
-  assert.ok(
-    f.selected.length > count,
-    "Hit testing remains inside the visible viewport during scrolling",
-  );
-  assert.equal(f.rail.clientHeight, 552);
-  for (let index = 0; index < 600; index++) f.nextFrame();
-  assert.ok(
-    f.selected.includes("z"),
-    "The first, partly clipped page can reach the final expanded letter",
-  );
-  assert.equal(f.rail.scrollTop, f.rail.scrollHeight - f.rail.clientHeight);
-  f.controller.dispose();
-}
-
-{
-  const f = fixture({ railTop: 232, railHeight: 704 });
-  assert.equal(f.rail.clientHeight, 552);
-  f.setRailTop(272);
-  f.dispatch("pointerdown");
-  assert.equal(
-    f.rail.clientHeight,
-    512,
-    "Drag start refits after an above-rail filter moves the unchanged grid",
-  );
-  f.dispatch("pointermove", { clientY: 799 });
-  for (let index = 0; index < 600; index++) f.nextFrame();
-  assert.ok(
-    f.selected.includes("z"),
-    "Layout shifts without scroll/resize still allow reaching the last letter",
-  );
-  f.controller.dispose();
-}
-
-{
-  const f = fixture({
-    railTop: 232,
-    railHeight: 704,
-    clips: [{ top: 0, bottom: 900 }],
-  });
-  assert.equal(f.rail.clientHeight, 552);
-  assert.equal(
-    f.resizeObserver.observed.size,
-    1,
-    "Each clipping/parent element is observed once",
-  );
-  const writes = f.styleWrites;
-  f.doc.dispatchEvent(new Event("scroll"));
-  f.view.dispatchEvent(new Event("resize"));
-  f.view.visualViewport.dispatchEvent(new Event("resize"));
-  f.view.visualViewport.dispatchEvent(new Event("scroll"));
-  f.resizeObserver.callback();
-  assert.equal(
-    f.frames.size,
-    1,
-    "Scroll, resize and observer updates share one layout frame",
-  );
-  f.nextFrame();
-  assert.equal(
-    f.styleWrites,
-    writes,
-    "Unchanged dimensions do not rewrite the CSS variable",
-  );
-  f.setRailTop(80);
-  f.doc.dispatchEvent(new Event("scroll"));
-  f.nextFrame();
-  assert.equal(
-    f.rail.clientHeight,
-    704,
-    "A rail grows again after reaching its sticky top",
-  );
-  f.ancestors[0].bounds.bottom = 500;
-  f.resizeObserver.callback();
-  f.nextFrame();
-  assert.equal(
-    f.rail.clientHeight,
-    404,
-    "Resized scrollport height constrains the rail",
-  );
-  f.view.innerHeight = 400;
-  f.view.visualViewport.dispatchEvent(new Event("resize"));
-  f.nextFrame();
-  assert.equal(
-    f.rail.clientHeight,
-    304,
-    "Mobile visible viewport changes constrain the rail",
-  );
-  f.view.dispatchEvent(new Event("resize"));
-  assert.equal(f.frames.size, 1);
-  f.controller.dispose();
-  assert.equal(f.frames.size, 0, "Unmount cancels pending layout measurement");
-  assert.equal(f.resizeObserver.observed.size, 0);
-  assert.equal(
-    f.rail.style.getPropertyValue("--history-dictionary-rail-visible-height"),
-    "",
-  );
-  f.doc.dispatchEvent(new Event("scroll"));
-  f.view.dispatchEvent(new Event("resize"));
-  f.view.visualViewport.dispatchEvent(new Event("resize"));
-  f.resizeObserver.callback();
-  assert.equal(
-    f.frames.size,
-    0,
-    "Unmount removes layout listeners and late observer callbacks do nothing",
-  );
-}
-
-{
-  const f = fixture({
-    railTop: 200,
-    railHeight: 704,
-    clips: [
-      { top: 200, bottom: 640, overflowY: "auto" },
-      { top: 180, bottom: 600, overflowY: "hidden" },
-    ],
-  });
-  f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: 599 });
-  for (let index = 0; index < 10; index++) f.nextFrame();
-  assert.ok(
-    f.rail.scrollTop > 0,
-    "Nested dialog/scrollport clipping determines the visible edge",
-  );
-  assert.equal(f.styleReads, 2, "Overflow styles are read once at attachment");
-  const before = f.rail.scrollTop;
-  f.ancestors[1].bounds.bottom = 500;
-  f.dispatch("pointermove", { clientY: 499 });
-  f.nextFrame();
-  assert.ok(
-    f.rail.scrollTop > before,
-    "Ancestor geometry is refreshed after dialog resizing/scrolling",
-  );
-  assert.equal(f.styleReads, 2);
-  f.controller.dispose();
-}
-
-{
-  const f = fixture({
-    railTop: 200,
-    railHeight: 704,
-    clips: [
-      { top: 200, bottom: 300, overflowY: "visible", overflowX: "hidden" },
-    ],
-  });
-  f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: 299 });
-  f.nextFrame();
-  assert.equal(
-    f.rail.scrollTop,
-    0,
-    "An x-only clipping ancestor must not invent a vertical edge",
-  );
-  f.view.innerHeight = 450;
-  f.dispatch("pointermove", { clientY: 449 });
-  f.nextFrame();
-  assert.ok(
-    f.rail.scrollTop > 0,
-    "Viewport dimensions are refreshed after resize",
-  );
-  f.controller.dispose();
-}
-
 {
   const f = fixture();
   let nativeClicks = 0;
   f.rail.addEventListener("click", () => nativeClicks++);
   assert.equal(f.dispatch("pointerdown").defaultPrevented, true);
-  assert.equal(f.focused, "ㄱ");
   assert.ok(f.captures.has(7));
-  assert.deepEqual(f.selected, ["ㄱ"]);
-  f.dispatch("pointermove", { clientY: f.center("ㄴ") });
-  f.dispatch("pointermove", { clientY: f.center("ㄴ") });
-  f.dispatch("pointermove", { pointerId: 8, clientY: f.center("ㄷ") });
-  f.dispatch("pointermove", { clientX: 100, clientY: f.center("ㄷ") });
-  assert.deepEqual(f.selected, ["ㄱ", "ㄴ"]);
-  f.dispatch("pointerup");
-  assert.equal(f.captures.size, 0);
-  assert.equal(f.frames.size, 0);
-  assert.equal(f.dispatch("click").defaultPrevented, true);
+  f.dispatch("pointermove", { clientY: 243 });
+  assert.equal(f.value, "ㄱ");
+  f.dispatch("pointermove", { clientY: 244 });
+  assert.equal(f.value, "ㄴ");
+  const selected = f.selected.length;
+  for (let index = 0; index < 80; index++) f.nextFrame();
   assert.equal(
-    nativeClicks,
-    0,
-    "Drag must not also run the React click action",
+    f.selected.length,
+    selected,
+    "Replacing the visible window cannot re-select at a stationary middle coordinate",
   );
+  f.dispatch("pointermove", { clientY: 288 });
+  assert.equal(f.value, "ㄷ");
+  f.dispatch("pointermove", { clientY: 244 });
+  assert.equal(f.value, "ㄴ");
+  f.dispatch("pointermove", { pointerId: 8, clientY: 288 });
+  assert.equal(f.value, "ㄴ");
+  f.dispatch("pointermove", { clientX: 100, clientY: 288 });
+  assert.equal(f.value, "ㄴ");
+  f.dispatch("pointerup");
+  assert.equal(f.frames.size, 0);
+  assert.equal(f.captures.size, 0);
+  assert.equal(f.dispatch("click").defaultPrevented, true);
+  assert.equal(nativeClicks, 0);
   assert.equal(f.dispatch("click", { detail: 0 }).defaultPrevented, false);
-  assert.equal(nativeClicks, 1, "Keyboard/assistive activation remains native");
+  assert.equal(nativeClicks, 1);
   f.controller.dispose();
 }
-
+{
+  const f = fixture({ numbers: true, letters: true });
+  f.dispatch("pointerdown");
+  f.dispatch("pointermove", { clientY: 399 });
+  for (let index = 0; index < 1000; index++) f.nextFrame();
+  assert.equal(
+    f.value,
+    "z",
+    "Holding at the lower edge reaches the final expanded letter",
+  );
+  assert.ok(f.rows.some((row) => row.type === "initial" && row.value === "z"));
+  assert.ok(f.rows.length <= f.capacity);
+  f.dispatch("pointermove", { clientY: 80 });
+  for (let index = 0; index < 1000; index++) f.nextFrame();
+  assert.equal(f.value, "", "Holding the upper edge reaches All");
+  f.controller.dispose();
+}
 {
   const f = fixture();
   for (const initial of ["", "0-9", "a-z"]) {
@@ -512,72 +368,72 @@ function fixture({
       f.dispatch("pointerdown", { target: f.button(initial) }).defaultPrevented,
       false,
     );
+    f.dispatch("pointerup", { target: f.button(initial) });
     assert.equal(
       f.dispatch("click", { target: f.button(initial) }).defaultPrevented,
       false,
     );
   }
-  assert.deepEqual(
-    f.selected,
-    [],
-    "All/group native click and keyboard behavior is preserved",
-  );
   f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: f.center("0-9") });
-  assert.deepEqual(f.selected, ["ㄱ", "0-9"]);
-  f.dispatch("pointermove", { clientY: f.center("0-9") });
+  f.dispatch("pointermove", { clientY: 156 });
+  assert.equal(f.value, "0-9");
   assert.equal(
-    f.selected.length,
-    2,
-    "Holding a group must not repeatedly toggle it closed",
-  );
-  f.dispatch("pointermove", { clientY: f.center("0") });
-  assert.equal(
-    f.selected.at(-1),
-    "0",
-    "Expanded characters can be selected in the same drag",
-  );
-  f.dispatch("pointerup");
-  f.dispatch("pointerdown", { target: f.button("0"), clientY: f.center("0") });
-  assert.equal(
-    f.selected.at(-1),
-    "0",
-    "Number characters can start a new drag",
+    f.items.length,
+    17,
+    "Dragging into a group selects it without toggling disclosure",
   );
   f.controller.dispose();
 }
-
 {
   const f = fixture();
-  f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: 319 });
-  for (let index = 0; index < 600; index++) f.nextFrame();
-  assert.equal(f.rail.scrollTop, f.rail.scrollHeight - f.rail.clientHeight);
-  assert.ok(
-    f.selected.includes("a-z"),
-    "Drag automatically opens the Latin group at the bottom",
-  );
-  assert.ok(
-    f.selected.includes("z"),
-    "Edge scrolling reaches the last expanded character",
-  );
-  const downTop = f.rail.scrollTop;
-  f.dispatch("pointermove", { clientX: 100, clientY: 80 });
-  f.nextFrame();
+  for (let index = 0; index < 4; index++)
+    f.dispatch("wheel", { deltaY: 12, timeStamp: index * 20 });
+  assert.equal(f.value, "ㄴ");
+  f.dispatch("wheel", { deltaY: 200, timeStamp: 100 });
   assert.equal(
-    f.rail.scrollTop,
-    downTop,
-    "Leaving the rail horizontally stops edge scrolling",
+    f.value,
+    "ㄴ",
+    "Wheel events inside 120ms do not skip another character",
   );
-  f.dispatch("pointermove", { clientX: 40, clientY: 80 });
-  for (let index = 0; index < 600; index++) f.nextFrame();
-  assert.equal(f.rail.scrollTop, 0);
-  assert.ok(f.selected.includes(""), "Dragging upward can reach All");
+  f.dispatch("wheel", { deltaY: 48, timeStamp: 400 });
+  assert.equal(f.value, "ㄷ");
+  f.dispatch("wheel", { deltaY: -48, timeStamp: 420 });
+  assert.equal(f.value, "ㄴ");
+  assert.equal(
+    f.dispatch("wheel", { deltaY: 48, ctrlKey: true }).defaultPrevented,
+    false,
+  );
+  assert.equal(
+    f.dispatch("wheel", { deltaY: 4, deltaX: 100 }).defaultPrevented,
+    false,
+  );
+  f.dispatch("wheel", { deltaY: 3, deltaMode: 1, timeStamp: 800 });
+  assert.equal(f.value, "ㄷ");
+  f.dispatch("wheel", { deltaY: 1, deltaMode: 2, timeStamp: 1100 });
+  assert.equal(f.value, "ㄹ");
   f.controller.dispose();
-  assert.equal(f.frames.size, 0);
 }
-
-for (const end of [
+{
+  const f = fixture({ letters: true });
+  f.dispatch("keydown", { key: "ArrowDown", target: f.button("ㄴ") });
+  assert.equal(
+    f.value,
+    "ㄷ",
+    "Arrow navigation starts from the focused button",
+  );
+  assert.equal(f.selected.at(-1).focus, true);
+  f.dispatch("keydown", { key: "End" });
+  assert.equal(f.value, "z");
+  f.dispatch("keydown", { key: "Home" });
+  assert.equal(f.value, "");
+  assert.equal(f.dispatch("keydown", { key: "Enter" }).defaultPrevented, false);
+  assert.equal(
+    f.dispatch("keydown", { key: "ArrowDown", ctrlKey: true }).defaultPrevented,
+    false,
+  );
+  f.controller.dispose();
+}
+for (const ending of [
   "pointerup",
   "pointercancel",
   "lostpointercapture",
@@ -588,27 +444,26 @@ for (const end of [
 ]) {
   const f = fixture();
   f.dispatch("pointerdown");
-  f.dispatch("pointermove", { clientY: 319 });
-  f.nextFrame();
-  const top = f.rail.scrollTop;
-  const selectionCount = f.selected.length;
-  if (end === "blur") f.view.dispatchEvent(new Event("blur"));
-  else if (end === "disabled") {
+  f.dispatch("pointermove", { clientY: 399 });
+  if (ending === "blur") f.view.dispatchEvent(new Event("blur"));
+  else if (ending === "disabled") {
     f.setDisabled(true);
     f.nextFrame();
-  } else if (end === "dispose") f.controller.dispose();
-  else if (end === "released-mouse")
+  } else if (ending === "dispose") f.controller.dispose();
+  else if (ending === "released-mouse")
     f.dispatch("pointermove", { pointerType: "mouse", buttons: 0 });
-  else f.dispatch(end);
-  f.nextFrame();
-  f.dispatch("pointermove", { clientY: f.center("ㄴ") });
-  assert.equal(f.captures.size, 0, `${end} releases capture`);
-  assert.equal(f.frames.size, 0, `${end} cancels all animation work`);
-  assert.equal(f.rail.scrollTop, top, `${end} stops scrolling`);
-  assert.equal(f.selected.length, selectionCount, `${end} stops selection`);
+  else
+    f.dispatch(
+      ending,
+      ending === "lostpointercapture" ? { target: f.rail } : {},
+    );
+  const value = f.value;
+  for (let index = 0; index < 100; index++) f.nextFrame();
+  assert.equal(f.value, value, ending);
+  assert.equal(f.frames.size, 0, ending);
+  assert.equal(f.captures.size, 0, ending);
   f.controller.dispose();
 }
-
 for (const ignored of [
   "disabled",
   "button-disabled",
@@ -619,7 +474,7 @@ for (const ignored of [
   const f = fixture();
   if (ignored === "disabled") f.setDisabled(true);
   if (ignored === "button-disabled") f.button("ㄱ").disabled = true;
-  if (ignored === "capture-failure") f.rail.captureFails = true;
+  if (ignored === "capture-failure") f.failCapture();
   const overrides =
     ignored === "secondary"
       ? { isPrimary: false }
@@ -627,25 +482,160 @@ for (const ignored of [
         ? { button: 2 }
         : {};
   assert.equal(f.dispatch("pointerdown", overrides).defaultPrevented, false);
-  assert.deepEqual(f.selected, []);
+  assert.equal(f.selected.length, 0);
+  assert.equal(f.frames.size, 0);
+  f.controller.dispose();
+}
+{
+  const f = fixture({ top: 232, maxHeight: 704, clips: [{ bottom: 900 }] });
+  assert.equal(f.capacity, 12);
+  assert.ok(f.rows.length * 44 + 8 <= f.rail.clientHeight);
+  const writes = f.styleWrites;
+  f.doc.dispatchEvent(new Event("scroll"));
+  f.view.dispatchEvent(new Event("resize"));
+  f.view.visualViewport.dispatchEvent(new Event("resize"));
+  f.resizeObserver.callback();
+  assert.equal(f.frames.size, 1);
+  f.nextFrame();
+  assert.equal(f.styleWrites, writes);
+  f.setTop(80);
+  f.doc.dispatchEvent(new Event("scroll"));
+  f.nextFrame();
+  assert.equal(f.capacity, 15);
+  f.setTop(272);
+  f.dispatch("pointerdown");
+  assert.equal(
+    f.capacity,
+    11,
+    "A position-only shift is remeasured at drag start",
+  );
+  f.dispatch("pointerup");
+  f.ancestors[0].bounds.bottom = 500;
+  f.resizeObserver.callback();
+  f.nextFrame();
+  assert.equal(f.capacity, 4);
+  f.view.innerHeight = 400;
+  f.view.visualViewport.dispatchEvent(new Event("resize"));
+  f.nextFrame();
+  assert.equal(f.capacity, 2);
+  assert.ok(f.rows.length * 44 + 8 <= f.rail.clientHeight);
+  f.view.dispatchEvent(new Event("resize"));
+  f.controller.dispose();
+  assert.equal(f.frames.size, 0);
+  assert.equal(f.resizeObserver.observed.size, 0);
+  assert.equal(
+    f.rail.style.getPropertyValue("--history-dictionary-rail-visible-height"),
+    "",
+  );
+  f.doc.dispatchEvent(new Event("scroll"));
+  f.view.dispatchEvent(new Event("resize"));
+  f.resizeObserver.callback();
+  assert.equal(f.frames.size, 0);
+  f.dispatch("pointerdown");
   assert.equal(f.frames.size, 0);
   assert.equal(f.dispatch("click").defaultPrevented, false);
-  f.controller.dispose();
-}
-
-{
-  const f = fixture();
-  f.dispatch("pointerdown");
-  f.controller.dispose();
-  const count = f.selected.length;
-  f.dispatch("pointerdown");
-  assert.equal(f.selected.length, count, "Unmount removes pointer listeners");
-  assert.equal(
-    f.dispatch("click").defaultPrevented,
-    false,
-    "Unmount removes click suppression listener",
-  );
 }
 console.log(
-  "PASS initial rail rendered targets, pointer capture, continuous selection, native/keyboard clicks, group expansion, edge scrolling, cancellation, disabled state, and teardown",
+  "PASS bounded initial windows/anchors, no internal scrolling, logical drag, wheel gestures, keyboard, edge repeat, clipping/resize, cancellation, and cleanup",
+);
+{
+  const f = fixture();
+  for (let index = 0; index < 10; index++)
+    f.dispatch("wheel", { deltaY: 100, timeStamp: index * 100 });
+  assert.equal(
+    f.value,
+    "ㅂ",
+    "Continuous same-direction wheel input keeps advancing with 120ms throttling",
+  );
+  assert.equal(f.selected.length, 5);
+  f.controller.dispose();
+}
+for (const maxHeight of [54, 98, 142]) {
+  for (const initial of ["", "0-9", "a-z"]) {
+    const f = fixture({ initial, maxHeight });
+    assert.equal(
+      f.dispatch("pointerdown", { target: f.button(initial) }).defaultPrevented,
+      false,
+    );
+    f.dispatch("pointermove", { clientY: initial === "a-z" ? 156 : 244 });
+    assert.ok(f.captures.has(7));
+    assert.notEqual(
+      f.value,
+      initial,
+      `${maxHeight}px capsule starts touch traversal from ${initial || "All"}`,
+    );
+    assert.ok(
+      f.rows.some((row) => row.type === "initial" && row.value === f.value),
+    );
+    f.dispatch("pointerup");
+    assert.equal(
+      f.dispatch("click").defaultPrevented,
+      true,
+      "Dragging a group must not also toggle it",
+    );
+    f.controller.dispose();
+  }
+}
+console.log(
+  "PASS continuous wheel detents and touch traversal from all/group controls in one-to-three-row capsules",
+);
+{
+  const f = fixture();
+  f.dispatch("pointerdown", { target: f.button("0-9") });
+  f.dispatch("pointermove", { clientY: 244 });
+  f.dispatch("lostpointercapture", { target: f.button("0-9") });
+  assert.ok(
+    f.captures.has(7),
+    "Implicit touch capture transfer must not end the rail gesture",
+  );
+  f.dispatch("pointermove", { clientY: 288 });
+  assert.equal(f.value, "ㄴ");
+  f.dispatch("lostpointercapture", { target: f.rail });
+  assert.equal(f.captures.size, 0);
+  f.controller.dispose();
+}
+console.log(
+  "PASS implicit touch capture transfer and final rail capture cancellation",
+);
+{
+  const f = fixture({ top: 232, maxHeight: 704 });
+  let nativeClicks = 0;
+  f.rail.addEventListener("click", () => nativeClicks++);
+  f.dispatch("pointerdown", { target: f.more });
+  f.setTop(192);
+  f.doc.dispatchEvent(new Event("scroll"));
+  f.nextFrame();
+  f.more.target = "ㅌ";
+  f.dispatch("pointerup", { target: f.more });
+  f.dispatch("click", { target: f.more });
+  assert.equal(
+    f.value,
+    "ㅇ",
+    "Ellipsis pointer click keeps the target pressed before capacity changes",
+  );
+  assert.equal(
+    nativeClicks,
+    0,
+    "The reused React click target must not run a second selection",
+  );
+  f.more.target = "ㅁ";
+  f.dispatch("keydown", { key: " ", target: f.more });
+  f.more.target = "ㅂ";
+  f.dispatch("click", { detail: 0, target: f.more });
+  assert.equal(
+    f.value,
+    "ㅁ",
+    "Space activation keeps its target across focus/resize changes",
+  );
+  f.dispatch("pointerdown", { target: f.more });
+  f.dispatch("pointercancel", { target: f.more });
+  assert.equal(
+    f.dispatch("click", { target: f.more }).defaultPrevented,
+    false,
+    "Cancellation discards the pending ellipsis target",
+  );
+  f.controller.dispose();
+}
+console.log(
+  "PASS ellipsis target stability across pointer/keyboard activation and viewport changes",
 );

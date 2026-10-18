@@ -63,6 +63,7 @@
 }
 .history-dictionary-active-filters {
   margin: 0 0 16px;
+  scroll-margin-top: var(--history-dictionary-sticky-top, 80px);
 }
 .history-dictionary-active-filters:empty {
   display: none;
@@ -196,8 +197,49 @@
   margin: 12px 0;
 }
 .history-dictionary-catalog-entry {
-  padding: 20px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.history-dictionary-catalog-entry > h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.history-dictionary-catalog-entry .history-dictionary-definition {
+  margin: 6px 0 8px;
+  line-height: 1.6;
+}
+.history-dictionary-entry-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+.history-dictionary-entry-footer > .history-dictionary-tags {
+  flex: 1 1 240px;
+}
+.history-dictionary-entry-footer > .history-dictionary-button {
+  margin-right: auto;
+}
+.history-dictionary-entry-footer > .history-dictionary-sources {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+}
+.history-dictionary-entry-footer > .history-dictionary-sources[open] {
+  flex-basis: 100%;
+}
+.history-dictionary-entry-footer .history-dictionary-sources > summary {
+  width: fit-content;
+  margin-left: auto;
+  text-align: right;
+}
+.history-dictionary-entry-footer .history-dictionary-source {
+  margin: 4px 0 8px;
+  text-align: left;
 }
 .history-dictionary-catalog-entry .history-dictionary-count {
   margin: 0;

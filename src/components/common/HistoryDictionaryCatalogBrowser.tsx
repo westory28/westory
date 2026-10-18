@@ -11,8 +11,11 @@ import {
   emptyHistoryDictionaryFilters,
   filterHistoryDictionaryEntries,
   getHistoryDictionaryVisibleBadges,
-  historyDictionaryFiltersForFacet,
-  type HistoryDictionaryBrowseFilters,
+  getHistoryDictionarySelectedFacets,
+  isHistoryDictionaryFacetSelected,
+  removeHistoryDictionaryFacet,
+  toggleHistoryDictionaryTag,
+  type HistoryDictionaryBrowseFilterKey,
 } from "../../lib/historyDictionaryBrowse";
 import { getHistoryDictionaryInitialCounts } from "../../lib/historyDictionaryInitials";
 import HistoryDictionaryInitialFilter from "./HistoryDictionaryInitialFilter";
@@ -92,6 +95,7 @@ export default function HistoryDictionaryCatalogBrowser({
     >();
   const id = useId();
   const resultsRef = useRef<HTMLDivElement>(null);
+  const selectedFacetsRef = useRef<HTMLDivElement>(null);
   const facetById = useMemo(
     () => new Map(facets.map((facet) => [facet.id, facet])),
     [facets],
@@ -169,10 +173,11 @@ export default function HistoryDictionaryCatalogBrowser({
     query.trim() ||
     filters.kind !== "all" ||
     filters.initial ||
+    filters.tags.length > 0 ||
     facetGroups.some(({ group }) => filters[group]);
 
   const changeFilter = (
-    key: keyof HistoryDictionaryBrowseFilters,
+    key: HistoryDictionaryBrowseFilterKey,
     value: string,
   ) => {
     setFilters((previous) =>
@@ -209,12 +214,14 @@ export default function HistoryDictionaryCatalogBrowser({
     });
   };
   const browseFacet = (facet: HistoryDictionaryFacet) => {
-    setQuery("");
-    setFilters(historyDictionaryFiltersForFacet(facet));
+    setFilters((previous) => toggleHistoryDictionaryTag(previous, facet));
     setVisibleCount(12);
     requestAnimationFrame(() => {
       resultsRef.current?.focus({ preventScroll: true });
-      resultsRef.current?.scrollIntoView({ block: "start" });
+      selectedFacetsRef.current?.scrollIntoView({
+        block: "nearest",
+        behavior: "instant",
+      });
     });
   };
   const facetLabel = (facet: HistoryDictionaryFacet) => {
@@ -332,34 +339,31 @@ export default function HistoryDictionaryCatalogBrowser({
         </div>
       ) : (
         <>
-          <div className="history-dictionary-active-filters">
-            {facetGroups
-              .map(
-                ({ group }) => filters[group] && facetById.get(filters[group]),
-              )
-              .filter((facet): facet is HistoryDictionaryFacet =>
-                Boolean(facet),
-              )
-              .map((facet) => (
+          <div
+            className="history-dictionary-active-filters"
+            ref={selectedFacetsRef}
+          >
+            {getHistoryDictionarySelectedFacets(filters, facets).map(
+              (facet) => (
                 <button
                   type="button"
                   className="history-dictionary-tag is-selected"
                   key={facet.id}
-                  onClick={() => changeFilter(facet.group, "")}
+                  onClick={() => {
+                    setFilters((previous) =>
+                      removeHistoryDictionaryFacet(previous, facet),
+                    );
+                    setVisibleCount(12);
+                  }}
                   aria-label={`${facet.label} 필터 해제`}
                 >
                   {facet.label}
                   <span aria-hidden="true">×</span>
                 </button>
-              ))}
+              ),
+            )}
           </div>
           <div className="history-dictionary-initial-layout">
-            <HistoryDictionaryInitialFilter
-              value={filters.initial}
-              onChange={browseInitial}
-              counts={initialCounts}
-              label="사전 첫 글자"
-            />
             <div
               className="ws-surface history-dictionary-initial-content history-dictionary-search-results"
               ref={resultsRef}
@@ -400,46 +404,46 @@ export default function HistoryDictionaryCatalogBrowser({
                     className="history-dictionary-catalog-entry"
                     key={entry.id}
                   >
-                    <div className="history-dictionary-row">
-                      <h3>{entry.word}</h3>
-                      <span className="history-dictionary-count">
-                        {entry.kind === "place" ? "지명" : "역사 용어"}
-                      </span>
-                    </div>
+                    <h3>{entry.word}</h3>
                     <p className="history-dictionary-definition">
                       {entry.definition}
                     </p>
-                    <div
-                      className="history-dictionary-tags"
-                      aria-label={`${entry.word} 분류`}
-                    >
-                      {getHistoryDictionaryVisibleBadges(
-                        entry.facetIds,
-                        facets,
-                      ).map((facet) => (
-                        <button
-                          key={facet.id}
-                          type="button"
-                          className="history-dictionary-tag"
-                          aria-label={`${facet.label} 단어 모아 보기`}
-                          aria-pressed={filters[facet.group] === facet.id}
-                          onClick={() => browseFacet(facet)}
-                        >
-                          {facet.label}
-                        </button>
-                      ))}
-                    </div>
-                    <HistoryDictionaryAttribution entry={entry} />
-                    {onChoose && (
-                      <button
-                        className="history-dictionary-button"
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => onChoose(entry)}
+                    <div className="history-dictionary-entry-footer">
+                      <div
+                        className="history-dictionary-tags"
+                        aria-label={`${entry.word} 분류`}
                       >
-                        {chooseLabel}
-                      </button>
-                    )}
+                        {getHistoryDictionaryVisibleBadges(
+                          entry.facetIds,
+                          facets,
+                        ).map((facet) => (
+                          <button
+                            key={facet.id}
+                            type="button"
+                            className="history-dictionary-tag"
+                            aria-label={`${facet.label} 태그 ${isHistoryDictionaryFacetSelected(filters, facet) ? "해제" : "추가"}`}
+                            aria-pressed={isHistoryDictionaryFacetSelected(
+                              filters,
+                              facet,
+                            )}
+                            onClick={() => browseFacet(facet)}
+                          >
+                            {facet.label}
+                          </button>
+                        ))}
+                      </div>
+                      {onChoose && (
+                        <button
+                          className="history-dictionary-button"
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onChoose(entry)}
+                        >
+                          {chooseLabel}
+                        </button>
+                      )}
+                      <HistoryDictionaryAttribution entry={entry} />
+                    </div>
                   </article>
                 ))}
               </div>
@@ -454,6 +458,12 @@ export default function HistoryDictionaryCatalogBrowser({
                 </button>
               )}
             </div>
+            <HistoryDictionaryInitialFilter
+              value={filters.initial}
+              onChange={browseInitial}
+              counts={initialCounts}
+              label="사전 첫 글자"
+            />
           </div>
         </>
       )}

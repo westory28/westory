@@ -107,16 +107,24 @@ const render = (value = "") =>
   );
 const all = render();
 assert.match(all, /<nav[^>]*aria-label="사전 첫 글자"/);
-assert.match(all, /aria-label="전체 · 11개" aria-pressed="true"/);
+assert.match(all, /aria-label="전체 · 11개"[^>]*aria-pressed="true"/);
 assert.equal((all.match(/aria-expanded="false"/g) || []).length, 2);
 assert.equal((all.match(/aria-controls=/g) || []).length, 2);
-assert.equal((all.match(/ hidden=""/g) || []).length, 2);
-assert.equal((all.match(/<button /g) || []).length, 53);
+assert.equal((all.match(/ hidden=""/g) || []).length, 0);
+assert.ok((all.match(/<button /g) || []).length <= 8);
+assert.match(all, /다음 숨긴 글자 보기/);
+assert.match(all, /data-history-initial="a-z"/);
 assert.doesNotMatch(all, / disabled=/, "Zero-count letters stay selectable");
 for (const number of "0123456789")
-  assert.ok(all.includes(`>${number}</button>`));
+  assert.match(
+    render(number),
+    new RegExp(`data-history-initial="${number}"[^>]*aria-pressed="true"`),
+  );
 for (const letter of "abcdefghijklmnopqrstuvwxyz")
-  assert.ok(all.includes(`>${letter}</button>`));
+  assert.match(
+    render(letter),
+    new RegExp(`data-history-initial="${letter}"[^>]*aria-pressed="true"`),
+  );
 const selectedNumber = render("3");
 assert.equal((selectedNumber.match(/aria-expanded="true"/g) || []).length, 1);
 assert.match(selectedNumber, /aria-label="3 · 2개"[^>]*aria-pressed="true"/);
@@ -126,5 +134,5 @@ assert.match(selectedLetter, /aria-label="a · 2개"[^>]*aria-pressed="true"/);
 assert.equal((render("0-9").match(/aria-expanded="true"/g) || []).length, 1);
 assert.equal((render("a-z").match(/aria-expanded="true"/g) || []).length, 1);
 console.log(
-  "PASS complete digit/Latin panels, selected characters, group disclosure semantics, and accessible counts",
+  "PASS bounded visible rows, all digit/Latin selections, group disclosure semantics, and accessible counts",
 );

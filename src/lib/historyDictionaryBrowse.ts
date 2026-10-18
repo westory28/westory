@@ -14,7 +14,14 @@ export type HistoryDictionaryBrowseFilters = Record<
 > & {
   kind: "all" | "history" | "place";
   initial: string;
+  /** Every selected card tag must match, including tags in the same group. */
+  tags: string[];
 };
+
+export type HistoryDictionaryBrowseFilterKey = Exclude<
+  keyof HistoryDictionaryBrowseFilters,
+  "tags"
+>;
 
 export const emptyHistoryDictionaryFilters =
   (): HistoryDictionaryBrowseFilters => ({
@@ -24,15 +31,16 @@ export const emptyHistoryDictionaryFilters =
     era: "",
     region: "",
     topic: "",
+    tags: [],
   });
 
 export function changeHistoryDictionaryFilter(
   previous: HistoryDictionaryBrowseFilters,
-  key: keyof HistoryDictionaryBrowseFilters,
+  key: HistoryDictionaryBrowseFilterKey,
   value: string,
   facets: HistoryDictionaryFacet[],
 ): HistoryDictionaryBrowseFilters {
-  const next = { ...previous, [key]: value };
+  const next = { ...previous, tags: [...previous.tags], [key]: value };
   if (key === "kind" && value === "history") next.region = "";
   const eraSubject = facets.find((facet) => facet.id === next.era)?.subjectId;
   if (key === "subject" && value && eraSubject && eraSubject !== value)
@@ -41,10 +49,53 @@ export function changeHistoryDictionaryFilter(
   return next;
 }
 
+export function isHistoryDictionaryFacetSelected(
+  filters: HistoryDictionaryBrowseFilters,
+  facet: HistoryDictionaryFacet,
+) {
+  return filters[facet.group] === facet.id || filters.tags.includes(facet.id);
+}
+
+/** Remove this facet from both selection paths without changing other filters. */
+export function removeHistoryDictionaryFacet(
+  previous: HistoryDictionaryBrowseFilters,
+  facet: HistoryDictionaryFacet,
+): HistoryDictionaryBrowseFilters {
+  return {
+    ...previous,
+    [facet.group]:
+      previous[facet.group] === facet.id ? "" : previous[facet.group],
+    tags: previous.tags.filter((id) => id !== facet.id),
+  };
+}
+
+export function toggleHistoryDictionaryTag(
+  previous: HistoryDictionaryBrowseFilters,
+  facet: HistoryDictionaryFacet,
+): HistoryDictionaryBrowseFilters {
+  if (isHistoryDictionaryFacetSelected(previous, facet))
+    return removeHistoryDictionaryFacet(previous, facet);
+  return { ...previous, tags: [...new Set([...previous.tags, facet.id])] };
+}
+
+/** Keep taxonomy order while combining dropdown and card-tag selections. */
+export function getHistoryDictionarySelectedFacets(
+  filters: HistoryDictionaryBrowseFilters,
+  facets: HistoryDictionaryFacet[],
+) {
+  const seen = new Set<string>();
+  return facets.filter((facet) => {
+    if (seen.has(facet.id) || !isHistoryDictionaryFacetSelected(filters, facet))
+      return false;
+    seen.add(facet.id);
+    return true;
+  });
+}
+
 export function filterHistoryDictionaryEntries(
   terms: HistoryDictionaryCatalogTerm[],
   filters: HistoryDictionaryBrowseFilters,
-  omit?: keyof HistoryDictionaryBrowseFilters,
+  omit?: HistoryDictionaryBrowseFilterKey,
 ) {
   return terms.filter(
     (term) =>
@@ -53,6 +104,7 @@ export function filterHistoryDictionaryEntries(
         term.kind === filters.kind) &&
       (omit === "initial" ||
         matchesHistoryDictionaryInitial(term.word, filters.initial)) &&
+      filters.tags.every((id) => term.facetIds.includes(id)) &&
       (["subject", "era", "region", "topic"] as const).every(
         (group) =>
           omit === group ||
@@ -86,17 +138,6 @@ export function compareHistoryDictionaryHeadwords(
     collator.compare(a.word, b.word) ||
     a.id.localeCompare(b.id)
   );
-}
-
-/** A badge starts a new theme, independent of the previous search or letter. */
-export function historyDictionaryFiltersForFacet(
-  facet: HistoryDictionaryFacet,
-): HistoryDictionaryBrowseFilters {
-  return {
-    ...emptyHistoryDictionaryFilters(),
-    kind: facet.group === "region" ? "place" : "all",
-    [facet.group]: facet.id,
-  };
 }
 
 /** Display specific regions without repeating every ancestor on each entry. */

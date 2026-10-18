@@ -1,51 +1,63 @@
 .history-dictionary-initial-layout {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 64px;
   align-items: start;
   gap: 8px;
+  min-width: 0;
+}
+.history-dictionary-initial-layout > :not(.history-dictionary-initial-filter) {
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 .history-dictionary-initial-content {
   min-width: 0;
 }
 .history-dictionary-initial-filter {
+  grid-column: 2;
+  grid-row: 1;
   position: sticky;
   top: var(--history-dictionary-sticky-top, 80px);
   align-self: start;
   width: 64px;
   min-width: 0;
-  max-height: min(
-    var(
-      --history-dictionary-rail-max-height,
-      calc(100dvh - var(--history-dictionary-sticky-top, 80px) - 16px)
-    ),
-    var(--history-dictionary-rail-visible-height, 100dvh)
+  height: calc(var(--history-dictionary-rail-item-count, 17) * 44px + 10px);
+  max-height: max(
+    54px,
+    min(
+      var(
+        --history-dictionary-rail-max-height,
+        calc(100dvh - var(--history-dictionary-sticky-top, 80px) - 16px)
+      ),
+      var(--history-dictionary-rail-visible-height, 100dvh)
+    )
   );
   box-sizing: border-box;
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 32px;
+  background: #fff;
   touch-action: none;
   user-select: none;
   padding: 4px;
-  scrollbar-width: thin;
-  scroll-behavior: auto;
 }
 .history-dictionary-initial-items {
-  display: grid;
-  grid-template-columns: minmax(44px, 1fr);
-  align-content: start;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 .history-dictionary-initial-button {
   display: inline-flex;
+  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
   min-width: 44px;
+  height: 44px;
   min-height: 44px;
+  box-sizing: border-box;
   padding: 8px 4px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 24px;
   color: var(--ws-text, #1f2937);
   background: transparent;
   font-size: 14px;
@@ -63,14 +75,11 @@
 }
 .history-dictionary-initial-button:focus-visible {
   outline: 2px solid var(--ws-primary, #2563eb);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 .history-dictionary-initial-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-.history-dictionary-initial-group {
-  display: contents;
 }
 .history-dictionary-initial-group-button {
   gap: 2px;
@@ -78,14 +87,11 @@
 .history-dictionary-initial-group-button span {
   font-size: 12px;
 }
-.history-dictionary-initial-expanded {
-  display: grid;
-  grid-template-columns: minmax(44px, 1fr);
-  gap: 4px;
-  padding: 0 0 4px;
+.history-dictionary-initial-end {
+  margin-top: auto;
 }
-.history-dictionary-initial-expanded[hidden] {
-  display: none;
+.history-dictionary-initial-more {
+  color: var(--ws-text-muted, #6b7280);
 }
 .history-dictionary-initial-region {
   container: dictionary-initial-region / inline-size;

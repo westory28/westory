@@ -362,12 +362,6 @@ export default function StudentHistoryDictionaryWorkspace() {
               </button>
             </div>
             <div className="history-dictionary-initial-layout">
-              <HistoryDictionaryInitialFilter
-                value={initial}
-                onChange={setInitial}
-                counts={initialCounts}
-                label="내 단어장 첫 글자"
-              />
               <div className="history-dictionary-initial-content">
                 <label
                   className="history-dictionary-field"
@@ -428,6 +422,12 @@ export default function StudentHistoryDictionaryWorkspace() {
                   ))}
                 </div>
               </div>
+              <HistoryDictionaryInitialFilter
+                value={initial}
+                onChange={setInitial}
+                counts={initialCounts}
+                label="내 단어장 첫 글자"
+              />
             </div>
           </section>
           <section
