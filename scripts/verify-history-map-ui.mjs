@@ -235,25 +235,38 @@ try {
         ),
         `${view}/${width} overflow`,
       );
-      const terrainToggle = page.getByRole("checkbox", {
+      const terrainToggle = page.getByRole("button", {
         name: "지형",
         exact: true,
       });
-      assert(
-        await terrainToggle.isChecked(),
+      assert.equal(
+        await terrainToggle.getAttribute("aria-pressed"),
+        "true",
         `${view}/${width}: terrain defaults on`,
       );
-      const target = await terrainToggle.locator("..").boundingBox();
+      const target = await terrainToggle.boundingBox();
+      const title = await page.getByRole("heading", { level: 1 }).boundingBox();
+      assert(
+        target.x >= title.x + title.width &&
+          target.x - title.x - title.width < 80 &&
+          Math.abs(target.y + target.height / 2 - title.y - title.height / 2) <
+            2,
+        `${view}/${width}: terrain badge stays beside the title`,
+      );
+      assert.equal(
+        await terrainToggle.locator("[data-terrain-eye-slash]").count(),
+        0,
+      );
       assert(
         target.width >= 44 && target.height >= 44,
         "Terrain toggle has a touch target",
       );
       if (view === "globe") {
         await page.waitForFunction(terrainPixelCount);
-        await terrainToggle.uncheck();
+        await terrainToggle.click();
         await page.waitForFunction(`(${terrainPixelCount.toString()})() === 0`);
       } else {
-        await terrainToggle.uncheck();
+        await terrainToggle.click();
         assert.equal(
           await page.locator("[data-terrain-id], [data-terrain-label]").count(),
           0,
@@ -263,8 +276,21 @@ try {
             (await page.locator("[data-traditional-region]").count()) >= 9,
           );
       }
+      assert.equal(await terrainToggle.getAttribute("aria-pressed"), "false");
+      assert.equal(
+        await terrainToggle.locator("[data-terrain-eye-slash]").count(),
+        1,
+      );
       await terrainToggle.press("Space");
-      assert(await terrainToggle.isChecked(), "Keyboard restores terrain");
+      assert.equal(
+        await terrainToggle.getAttribute("aria-pressed"),
+        "true",
+        "Keyboard restores terrain",
+      );
+      assert.equal(
+        await terrainToggle.locator("[data-terrain-eye-slash]").count(),
+        0,
+      );
       if (view === "globe") await page.waitForFunction(terrainPixelCount);
       else
         await page
@@ -430,14 +456,14 @@ try {
     .waitFor({ state: "attached" });
   await retry.getByRole("alert").waitFor({ state: "hidden" });
   checks.push({ retry: true, passed: true });
-  await retry.getByRole("checkbox", { name: "지형", exact: true }).uncheck();
+  await retry.getByRole("button", { name: "지형", exact: true }).click();
   for (const name of ["세계사", "지구본", "한국사"]) {
     await retry.getByRole("button", { name, exact: true }).click();
     assert.equal(
       await retry
-        .getByRole("checkbox", { name: "지형", exact: true })
-        .isChecked(),
-      false,
+        .getByRole("button", { name: "지형", exact: true })
+        .getAttribute("aria-pressed"),
+      "false",
       `${name}: terrain preference survives view switching`,
     );
   }

@@ -271,6 +271,13 @@ for (const portal of ["student", "teacher"]) {
   assert.equal(
     MENUS[portal]
       .flatMap((item) => item.children || [])
+      .find((item) => item.url === mapsUrl).name,
+    "역사 지도",
+    "Both portals use the same history-map menu name",
+  );
+  assert.equal(
+    MENUS[portal]
+      .flatMap((item) => item.children || [])
       .filter((item) => item.url === legacyUrl).length,
     0,
     "Globe is a map tab, not a separate sidebar item",
@@ -280,7 +287,9 @@ for (const portal of ["student", "teacher"]) {
     item.children?.some((child) => child.url === mapsUrl),
   );
   lessonMenu.children.push({ name: "기존 지구본", url: legacyUrl });
-  lessonMenu.children.find((child) => child.url === mapsUrl).hidden = true;
+  const savedMap = lessonMenu.children.find((child) => child.url === mapsUrl);
+  savedMap.name = "지도";
+  savedMap.hidden = true;
   const migratedChildren = sanitizeMenuConfig(old)[portal].flatMap(
     (item) => item.children || [],
   );
@@ -296,6 +305,19 @@ for (const portal of ["student", "teacher"]) {
     migratedChildren.find((item) => item.url === mapsUrl).hidden,
     true,
     "Existing map visibility is preserved",
+  );
+  assert.equal(
+    migratedChildren.find((item) => item.url === mapsUrl).name,
+    "역사 지도",
+    "Saved legacy map labels receive the new name without changing their URL",
+  );
+  savedMap.name = "우리 반 지도 자료";
+  assert.equal(
+    sanitizeMenuConfig(old)
+      [portal].flatMap((item) => item.children || [])
+      .find((item) => item.url === mapsUrl).name,
+    "우리 반 지도 자료",
+    "Explicitly customized menu names stay intact",
   );
 }
 const { canAccessTeacherPath } = load("src/lib/permissions.ts");
@@ -357,7 +379,8 @@ const dependencies = {
     useState: () => [
       terrainPreference,
       (value) => {
-        terrainPreference = value;
+        terrainPreference =
+          typeof value === "function" ? value(terrainPreference) : value;
       },
     ],
   },
@@ -430,9 +453,9 @@ assert.equal(lazyRegistrations, 1);
 assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
 assert.equal(rendered.props.initialSubject, "korea");
 assert.equal(rendered.props.showTerrain, true);
-rendered.props.toolbar.props.children[0].props.onChange({
-  target: { checked: false },
-});
+assert.equal(rendered.props.toolbar.type, "button");
+assert.equal(rendered.props.toolbar.props["aria-pressed"], true);
+rendered.props.toolbar.props.onClick();
 rendered = renderMaps();
 assert.equal(rendered.props.showTerrain, false);
 assert.equal(rendered.props.onOpenOriginals, undefined);

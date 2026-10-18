@@ -43,14 +43,29 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
     setSearchParams(next, { state: null });
   };
   const terrainControl = (
-    <label className="atlas-terrain-toggle">
-      <input
-        type="checkbox"
-        checked={showTerrain}
-        onChange={(event) => setShowTerrain(event.target.checked)}
-      />
+    <button
+      type="button"
+      className="atlas-terrain-toggle"
+      aria-pressed={showTerrain}
+      title={showTerrain ? "지형 숨기기" : "지형 표시"}
+      onClick={() => setShowTerrain((visible) => !visible)}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+        {!showTerrain && <path d="M3 3 21 21" data-terrain-eye-slash="" />}
+      </svg>
       <span>지형</span>
-    </label>
+    </button>
   );
   const navigation = (
     <div

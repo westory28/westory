@@ -269,37 +269,169 @@ async function mapLayout(page, selector, width, height) {
   return layout;
 }
 async function sidebarChecks(page, portal, width) {
+  const mobile = width < 1024;
   const menuLabel = portal === "teacher" ? "학습 자료 관리" : "학습";
   const toggle = page.getByRole("button", {
     name: `${portal === "teacher" ? "교사" : "학생"} 메뉴 열기`,
     exact: true,
   });
-  if (width < 1024) await toggle.click();
   const sidebar = page.locator(".teacher-sidebar");
   const group = sidebar.getByRole("button", { name: menuLabel, exact: true });
-  if ((await group.getAttribute("aria-expanded")) !== "true")
-    await group.press("Enter");
-  await sidebar
-    .getByRole("link", { name: "수업 자료", exact: true })
-    .press("Enter");
-  await page.waitForFunction(
-    (value) =>
-      location.hash ===
-      `#/${value}/lesson${value === "student" ? "/note" : ""}`,
-    portal,
-  );
-  if (width < 1024) {
+  const expanded = async (button, expected, message) => {
+    await page.waitForFunction(
+      ([element, value]) => element?.getAttribute("aria-expanded") === value,
+      [await button.elementHandle(), String(expected)],
+    );
+    assert.equal(
+      await button.getAttribute("aria-expanded"),
+      String(expected),
+      message,
+    );
+  };
+  const openMobile = async () => {
+    if (
+      mobile &&
+      !(await sidebar.getAttribute("class")).includes("is-mobile-open")
+    )
+      await toggle.click();
+  };
+  const checkMobileReturn = async () => {
+    if (!mobile) return;
     await page.getByRole("dialog").waitFor({ state: "hidden" });
-    await toggle.click();
-  }
-  await page.waitForFunction(
-    (element) => element?.getAttribute("aria-expanded") === "false",
-    await group.elementHandle(),
+    await page.waitForFunction(
+      (element) => element === document.activeElement,
+      await toggle.elementHandle(),
+    );
+    await openMobile();
+  };
+  const navigateLink = async (name) => {
+    const link = sidebar.getByRole("link", { name, exact: true });
+    const target = new URL(await link.getAttribute("href"), page.url()).hash;
+    await link.press("Enter");
+    await page.waitForFunction((hash) => location.hash === hash, target);
+    await checkMobileReturn();
+    return link;
+  };
+  const navigateHash = async (hash) => {
+    await page.evaluate((next) => {
+      location.hash = next;
+    }, hash);
+    await page.waitForFunction((next) => location.hash === next, hash);
+    await checkMobileReturn();
+  };
+  await openMobile();
+  await expanded(group, true, "An initial deep link opens its selected group");
+  assert.equal(
+    await sidebar.getByRole("link", { name: "역사 지도", exact: true }).count(),
+    1,
   );
   assert.equal(
-    await group.getAttribute("aria-expanded"),
-    "false",
-    "Navigation collapses the previously open accordion",
+    await sidebar.getByRole("link", { name: "지도", exact: true }).count(),
+    0,
+  );
+  const lessonLink = await navigateLink("수업 자료");
+  await expanded(group, true, "Selecting a child keeps its group open");
+  if (!mobile)
+    assert(
+      await lessonLink.evaluate((el) => el === document.activeElement),
+      "A visible child retains keyboard focus",
+    );
+  const mapLink = await navigateLink("역사 지도");
+  await expanded(
+    group,
+    true,
+    "Another child in the same group remains exposed",
+  );
+  if (!mobile)
+    assert(
+      await mapLink.evaluate((el) => el === document.activeElement),
+      "Same-group navigation does not move child focus",
+    );
+  await navigateHash(`#/${portal}/lesson/maps?view=world`);
+  await expanded(group, true, "Map query changes keep the group open");
+
+  await group.press("Enter");
+  await expanded(group, false, "Manual folding is available");
+  if (mobile) {
+    await page.keyboard.press("Escape");
+    await checkMobileReturn();
+  } else {
+    await sidebar
+      .getByRole("button", { name: "메뉴 접기", exact: true })
+      .click();
+    await sidebar
+      .getByRole("button", { name: "메뉴 펼치기", exact: true })
+      .click();
+  }
+  await expanded(
+    group,
+    false,
+    "Unchanged-route rerenders preserve a manual fold",
+  );
+  await navigateHash(`#/${portal}/lesson/maps?view=korea`);
+  await expanded(group, true, "A new route reveals the selected group again");
+
+  const points = sidebar.getByRole("button", {
+    name: portal === "teacher" ? "위스 관리" : "위스",
+    exact: true,
+  });
+  await points.press("Enter");
+  await expanded(
+    group,
+    false,
+    "Opening another upper menu closes the old group",
+  );
+  await navigateLink(portal === "teacher" ? "위스 현황" : "내 위스");
+  await expanded(points, true, "The newly selected group remains open");
+  const queryLink = await navigateLink(
+    portal === "teacher" ? "명예의 전당 관리" : "명예의 전당",
+  );
+  await expanded(
+    points,
+    true,
+    "Query-only child navigation keeps its group open",
+  );
+  if (!mobile)
+    assert(
+      await queryLink.evaluate((el) => el === document.activeElement),
+      "Query-only navigation preserves child focus",
+    );
+  let currentHash = `#/${portal}/points?tab=hall-of-fame`;
+  let currentGroup = points;
+  if (portal === "teacher") {
+    currentHash = "#/teacher/points?tab=products";
+    await navigateHash(currentHash);
+    currentGroup = sidebar.getByRole("button", { name: "상점", exact: true });
+    await expanded(
+      currentGroup,
+      true,
+      "A query selecting another group opens that group",
+    );
+    await expanded(
+      points,
+      false,
+      "A cross-group query closes the previous group",
+    );
+  }
+  await page.goBack();
+  await page.waitForFunction(
+    (hash) => location.hash === hash,
+    portal === "teacher"
+      ? "#/teacher/points?tab=hall-of-fame"
+      : "#/student/points",
+  );
+  await checkMobileReturn();
+  await expanded(points, true, "Back restores the selected group");
+  await page.goForward();
+  await page.waitForFunction((hash) => location.hash === hash, currentHash);
+  await checkMobileReturn();
+  await expanded(currentGroup, true, "Forward restores the selected group");
+
+  await navigateLink(portal === "teacher" ? "캘린더" : "마이페이지");
+  await expanded(
+    currentGroup,
+    false,
+    "A standalone destination closes the previous group",
   );
   assert.equal(
     await sidebar
@@ -316,9 +448,19 @@ async function sidebarChecks(page, portal, width) {
     0,
     "Hidden children are excluded from keyboard navigation",
   );
-  await group.press("Enter");
-  assert.equal(await group.getAttribute("aria-expanded"), "true");
-  if (width < 1024) {
+  await page.goBack();
+  await page.waitForFunction((hash) => location.hash === hash, currentHash);
+  await checkMobileReturn();
+  await expanded(
+    currentGroup,
+    true,
+    "Back from a standalone destination restores its group",
+  );
+  await page.screenshot({
+    path: path.join(evidence, `${portal}-sidebar-${width}.png`),
+    fullPage: true,
+  });
+  if (mobile) {
     await page.keyboard.press("Escape");
     assert.equal(
       await toggle.evaluate((el) => el === document.activeElement),
@@ -326,6 +468,15 @@ async function sidebarChecks(page, portal, width) {
       "Escape returns focus to the menu toggle",
     );
   }
+  checks.push({
+    label: `${portal}-sidebar-${width}`,
+    deepLink: true,
+    sameGroup: true,
+    queryNavigation: true,
+    backForward: true,
+    manualFold: true,
+    mobileFocus: mobile,
+  });
 }
 try {
   for (const portal of ["teacher", "student"])

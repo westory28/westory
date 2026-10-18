@@ -30,7 +30,7 @@ export const MENUS: MenuConfig = {
       children: [
         { name: "수업 자료", url: "/student/lesson/note" },
         { name: "역사 사전", url: "/student/lesson/history-dictionary" },
-        { name: "지도", url: "/student/lesson/maps" },
+        { name: "역사 지도", url: "/student/lesson/maps" },
         { name: "싱크 클라우드", url: "/student/lesson/think-cloud" },
       ],
     },
@@ -89,7 +89,7 @@ export const MENUS: MenuConfig = {
       children: [
         { name: "수업 자료", url: "/teacher/lesson" },
         { name: "역사 사전 관리", url: "/teacher/lesson/history-dictionary" },
-        { name: "지도", url: "/teacher/lesson/maps" },
+        { name: "역사 지도", url: "/teacher/lesson/maps" },
         { name: "사료 창고", url: "/teacher/lesson/source-archive" },
         { name: "싱크 클라우드 관리", url: "/teacher/lesson/think-cloud" },
       ],
@@ -217,6 +217,12 @@ const isLegacyRemovedUrl = (value: unknown) => {
 const normalizeMenuName = (value: unknown, url: string) => {
   const name = toSafeText(value);
   const [path, query = ""] = url.split("?");
+  if (
+    name === "지도" &&
+    (path === "/student/lesson/maps" || path === "/teacher/lesson/maps")
+  ) {
+    return "역사 지도";
+  }
   if (
     (path === "/student/points" || path === "/teacher/points") &&
     new URLSearchParams(query).get("tab") === "hall-of-fame" &&
