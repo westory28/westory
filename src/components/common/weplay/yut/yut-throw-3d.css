@@ -1,0 +1,72 @@
+.yut-throw-3d {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  overflow: visible;
+  border-radius: inherit;
+  isolation: isolate;
+}
+
+.yut-throw-3d.is-settled {
+  animation: yut-throw-reveal-board 250ms ease-out forwards;
+}
+
+@keyframes yut-throw-reveal-board {
+  to {
+    opacity: 0;
+  }
+}
+
+.yut-throw-3d__canvas,
+.yut-throw-3d__canvas canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.yut-throw-3d[data-renderer="fallback"] .yut-throw-3d__canvas {
+  display: none;
+}
+
+.yut-throw-3d__fallback {
+  position: absolute;
+  inset: 24% 15%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8%;
+}
+
+.yut-throw-3d__wood {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12%;
+  height: 70%;
+  max-height: 180px;
+  border: 1px solid #784921;
+  border-radius: 45% / 8%;
+  background: linear-gradient(90deg, #8d552c, #dfb27a 45%, #a46e38);
+  box-shadow: 4px 8px 8px #171e2440;
+  transform: rotate(-12deg);
+}
+
+.yut-throw-3d__wood:nth-child(even) {
+  transform: rotate(10deg) translateY(12px);
+}
+.yut-throw-3d__wood.is-flat {
+  border-radius: 3px;
+  background: #d2a56d;
+}
+.yut-throw-3d__wood i {
+  font:
+    700 clamp(16px, 3vw, 24px)/1.8 Georgia,
+    serif;
+  color: #392416;
+  text-align: center;
+  font-style: normal;
+}

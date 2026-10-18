@@ -1,44 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="40 0 400 300" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="720" viewBox="0 0 1200 900">
 <defs>
- <pattern id="sky" width="80" height="64" patternUnits="userSpaceOnUse"><rect width="80" height="64" fill="#171d35"/><path d="M13 9h1v1h-1zM65 36h1v1h-1zM38 54h1v1h-1z" fill="#7c89a6" opacity=".55"/></pattern>
- <pattern id="stone" width="24" height="12" patternUnits="userSpaceOnUse"><rect width="24" height="12" fill="#575a60"/><path d="M0 0h24v1H0zM0 6h24v1H0zM4 0h1v6H4zM17 6h1v6h-1z" fill="#444952"/><path d="M6 2h8v1H6zM18 8h4v1h-4z" fill="#727169" opacity=".5"/></pattern>
- <pattern id="roof" width="12" height="8" patternUnits="userSpaceOnUse"><rect width="12" height="8" fill="#344155"/><path d="M0 0h12v2H0zM1 2h2v6H1zM7 2h2v6H7z" fill="#4b5b70"/><path d="M4 2h1v6H4zM10 2h1v6h-1z" fill="#263348"/></pattern>
- <g id="pine"><path d="M-2 0h4v-44h-4zM0-23h13v3H0zM-12-33H0v3h-12z" fill="#363b3c"/><path d="M-18-36h9v-5H0v-5h7v4h10v5h8v6h-11v3H0v-2h-18zM-8-22h8v-5h12v3h12v7H5v3H-8z" fill="#294c4c"/><path d="M-11-38h10v-4h8v3h9v3H-11zM1-23h10v2h7v2H1z" fill="#3b6560"/></g>
- <g id="lamp"><path d="M-2 0h4v-34h-4zM-7-35H7v2H-7z" fill="#35343b"/><path d="M-5-32H5v12H-5z" fill="#d19b57"/><path d="M-3-30h6v8h-6z" fill="#f2d398"/><path d="M-6-21H6v2H-6zM-1-32h2v12h-2z" fill="#845e43"/><path d="M-7 0H7v2H-7z" fill="#383c47"/></g>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#14241d"/><stop offset=".55" stop-color="#354c3b"/><stop offset="1" stop-color="#7c8060"/></linearGradient>
+ <radialGradient id="moon"><stop stop-color="#f1e2b6" stop-opacity=".14"/><stop offset=".45" stop-color="#c9d0ab" stop-opacity=".08"/><stop offset="1" stop-color="#c9d0ab" stop-opacity="0"/></radialGradient>
+ <linearGradient id="hill" x2="0" y2="1"><stop stop-color="#263f35"/><stop offset="1" stop-color="#213b31"/></linearGradient>
+ <linearGradient id="water" x2="0" y2="1"><stop stop-color="#4a6450"/><stop offset="1" stop-color="#1c332c"/></linearGradient>
+ <linearGradient id="roof" x2=".2" y2="1"><stop stop-color="#657464"/><stop offset=".35" stop-color="#304a3e"/><stop offset="1" stop-color="#1f3129"/></linearGradient>
+ <linearGradient id="stone" x2="0" y2="1"><stop stop-color="#7d806b"/><stop offset="1" stop-color="#384a3b"/></linearGradient>
+ <linearGradient id="wood" x2="1"><stop stop-color="#493e2d"/><stop offset=".5" stop-color="#64523b"/><stop offset="1" stop-color="#352e22"/></linearGradient>
+ <linearGradient id="mist"><stop stop-color="#a6b39b" stop-opacity="0"/><stop offset=".5" stop-color="#a6b39b" stop-opacity=".18"/><stop offset="1" stop-color="#a6b39b" stop-opacity="0"/></linearGradient>
+ <radialGradient id="lamp"><stop stop-color="#e7c582" stop-opacity=".32"/><stop offset="1" stop-color="#e7c582" stop-opacity="0"/></radialGradient>
+ <pattern id="tiles" width="16" height="28" patternUnits="userSpaceOnUse"><path d="M0 1Q8 6 16 1M8 5v22" fill="none" stroke="#90a18b" stroke-opacity=".16" stroke-width="1"/></pattern>
+ <g id="lantern"><path d="M-12-9h24l-3 26H-9Z" fill="#c39956"/><path d="M-7-6H7v20H-7Z" fill="#e9cc87"/><path d="M-14-12h28l-4 5h-20ZM-9 15H9l3 4h-24Z" fill="#534630"/><path d="M0-12v-14M0 18v8" stroke="#ac8b53" stroke-width="2"/></g>
 </defs>
-<rect width="480" height="300" fill="url(#sky)"/>
-<!-- An original stepped moon and distant ridges. -->
-<path d="M338 25h18v3h5v5h3v18h-3v5h-5v3h-18v-3h-5v-5h-3V33h3v-5h5z" fill="#ead9ad"/>
-<path d="M338 28h7v3h-5v6h-4v10h-3V34h3v-3h2zM352 48h6v5h-6z" fill="#c9c29d"/>
-<path d="M0 107h15v-7h15V89h12v-9h15v-8h9v-6h7v8h10v8h12v7h11v12h18v8h9v-7h10V91h10V78h13v-9h10V58h9v-8h7v8h9v10h11v8h13v8h12v11h14v10h18v-8h12V86h13v-9h9v-7h8v7h9v10h12v8h16v9h9v-5h8v-9h9v-7h10v-9h9v10h10v8h14v10h13v10h25v65H0z" fill="#26334c"/>
-<path d="M0 124h23v-7h18v-8h13v-7h10v7h17v8h21v12h17v9h27v-9h13v-9h16v-8h13v-12h11v-9h12v9h12v12h17v8h16v10h18v10h21v-8h18v-7h14v-8h11v7h17v9h12v10h26v-8h17v-9h12v-9h11v-7h12v7h14v9h21v8h21v62H0z" fill="#2d424f"/>
-<path d="M0 156h80v-7h61v5h48v-5h65v5h82v-6h77v9h67v143H0z" fill="#304b4c"/>
-<path d="M0 184h107v-12h94v3h78v6h101v12h100v107H0z" fill="#465251"/>
-<!-- Far village wall and tiled eaves. -->
-<path d="M68 157h239v35H68z" fill="#8c897b"/><path d="M65 154h245v4H65z" fill="#202c3e"/><path d="M71 160h231v3H71z" fill="#aaa28b"/><path d="M69 176h235v3H69zM92 158h3v33h-3zM135 158h3v33h-3zM267 158h3v33h-3z" fill="#656d68"/>
-<!-- Left hanok. -->
-<path d="M51 133h106v53H51z" fill="#b2a080"/><path d="M53 139h102v5H53zM54 180h104v8H54z" fill="#655343"/><path d="M57 137h5v44h-5zM98 137h5v44h-5zM147 137h5v44h-5z" fill="#715b47"/>
-<path d="M66 149h28v23H66zM108 149h32v23h-32z" fill="#d5ad6d"/><path d="M69 152h22v17H69zM111 152h26v17h-26z" fill="#e8c98a"/><path d="M76 149h2v23h-2zM84 149h2v23h-2zM66 159h28v2H66zM119 149h2v23h-2zM129 149h2v23h-2zM108 159h32v2h-32z" fill="#927451"/>
-<path d="M43 130h11v-6h10v-8h11v-8h17v-5h25v5h16v8h12v8h11v6h11v7H43z" fill="url(#roof)"/>
-<path d="M40 130h11v3h107v-3h12v7h-13v3H53v-3H40zM89 102h30v4H89z" fill="#192b3b"/><path d="M54 133h101v2H54zM90 102h29v1H90z" fill="#7e898a"/>
-<!-- Right workshop. -->
-<path d="M326 149h112v66H326z" fill="#9d9077"/><path d="M324 209h118v8H324z" fill="#54534a"/><path d="M333 151h6v57h-6zM389 151h6v57h-6zM429 151h6v57h-6zM333 173h102v5H333z" fill="#65523f"/>
-<path d="M346 161h34v12h-34zM401 162h20v34h-20z" fill="#e1b86d"/><path d="M350 163h26v8h-26zM404 165h14v28h-14z" fill="#f0d297"/><path d="M409 162h2v34h-2zM401 176h20v2h-20zM357 161h2v12h-2zM367 161h2v12h-2z" fill="#98714a"/>
-<path d="M317 146h12v-6h12v-8h12v-8h15v-6h31v6h15v8h12v8h12v6h12v8H317z" fill="url(#roof)"/><path d="M314 146h14v4h110v-4h15v8h-15v3H328v-3h-14zM366 117h35v4h-35z" fill="#1c2c3b"/><path d="M330 151h105v2H330z" fill="#7e898a"/>
-<path d="M345 193h35v17h-35z" fill="#604b3c"/><path d="M349 194h27v3h-27zM351 200h23v2h-23z" fill="#9c7a4f"/><path d="M439 199h10v17h-10z" fill="#8c6e49"/><path d="M437 198h14v3h-14zM439 208h10v2h-10z" fill="#c1a379"/>
-<!-- Courtyard path, bridge and water. -->
-<path d="M157 171h94v11h23v13h24v14h28v17h42v74H87v-39h33v-37h18v-28h19z" fill="url(#stone)"/>
-<path d="M0 268h118v-8h46v-6h44v-7h74v-5h54v8h60v11h42v8h42v31H0z" fill="#243f50"/>
-<path d="M0 281h85v2H0zM112 273h46v2h-46zM250 278h77v2h-77zM350 267h34v2h-34zM395 287h77v2h-77zM49 294h51v2H49zM176 291h49v2h-49z" fill="#527282" opacity=".7"/>
-<path d="M186 244h110v39H186z" fill="#7c7664"/><path d="M182 241h118v6H182zM183 279h118v6H183z" fill="#b2a282"/><path d="M192 248h99v3h-99zM192 262h99v3h-99zM205 247h2v33h-2zM226 247h2v33h-2zM247 247h2v33h-2zM268 247h2v33h-2z" fill="#5b605b"/>
-<path d="M181 231h5v20h-5zM213 231h5v20h-5zM264 231h5v20h-5zM296 231h5v20h-5zM181 234h120v4H181z" fill="#aa9876"/>
-<use href="#pine" x="27" y="191"/><use href="#pine" x="296" y="172"/><use href="#pine" x="457" y="226"/>
-<use href="#lamp" x="160" y="207"/><use href="#lamp" x="306" y="225"/>
-<!-- Front willow: stepped leaves instead of vector curves. -->
-<path d="M24 243h12v-59h5v-54h-7v-11h-5v70h-5zM36 142h24v-5H36zM14 155h17v-5H14z" fill="#494d42"/>
-<path d="M0 96h27v-9h22v7h22v10h17v18H75v24h-5v-33H57v42h-5v-49H41v46h-5v-48H23v43h-5v-37H7v39H2v-27H0z" fill="#355e50"/>
-<path d="M2 101h21v-8h25v7h21v7H54v-3H36v7H22v-4H6v22H2zM72 115h4v25h-4zM52 151h4v18h-4zM18 143h4v21h-4zM35 147h4v17h-4z" fill="#557a60"/>
-<path d="M0 240h69v5h25v10h-9v6H0zM372 237h53v7h24v8h31v19h-43v-9h-37v-9h-28z" fill="#263e43"/>
-<path d="M12 240h2v-7h2v7h3v-4h2v7H12zM67 245h2v-7h2v7h4v-3h2v5H67zM403 242h2v-8h2v8h3v-4h2v6h-9z" fill="#668367"/>
-<path d="M95 206h2v2h-2zM285 193h2v2h-2zM323 241h2v2h-2zM79 225h2v2h-2z" fill="#dcc482"/>
+<path fill="url(#sky)" d="M0 0h1440v900H0z"/>
+<circle cx="867" cy="173" r="230" fill="url(#moon)"/><circle cx="867" cy="173" r="46" fill="#d2d4af"/><path d="M844 135c-14 23-15 51 4 75-22-8-33-37-23-57 5-9 11-15 19-18" fill="#c1c7a6"/>
+<g fill="#d9ddc0" opacity=".5"><circle cx="650" cy="82" r="1"/><circle cx="1108" cy="139" r="1"/><circle cx="350" cy="117" r="1.4"/><circle cx="1000" cy="62" r="1"/><circle cx="521" cy="202" r=".8"/></g>
+<path d="M0 384c79-20 116-88 170-82 51 6 104 88 148 68 51-23 69-131 124-147 59-18 106 106 154 112 48 6 72-61 112-70 48-11 88 97 131 91 45-5 102-138 159-129 65 10 83 98 128 106 66 11 99-73 140-55 57 25 70 99 174 104v194H0Z" fill="#5b715c" opacity=".46"/>
+<path d="M0 440c96-31 115-107 180-88s75 69 126 46c74-34 92-131 156-120 40 7 49 90 104 95 75 6 94-52 148-37 52 15 81 87 123 71 75-28 101-129 159-105 50 21 66 79 108 76 71-5 104-70 151-51 68 27 76 86 185 101v176H0Z" fill="url(#hill)"/>
+<path d="M0 486c128-25 176 8 265-15 136-37 215-3 317-12 112-10 179 22 306-10 166-42 303 43 552-3v454H0Z" fill="#243d31"/>
+<path d="M0 567c250-48 348-22 537-37 215-16 277 43 478 16 177-23 258-3 425 22v332H0Z" fill="url(#water)"/>
+<g fill="none" stroke="#afbd99" stroke-opacity=".12"><path d="M512 606q164-9 331 1M694 646q133-7 232 0M501 725q100-6 208 0M927 585q104-7 224 0M990 788q178-11 333 0M755 841q93-6 167 0"/></g>
+<path d="M0 600c90-51 156-58 254-50 105 9 149 71 249 87l116 263H0Z" fill="#273a2c"/>
+<path d="M0 750c109-72 264-76 352-52 76 21 88 91 153 130l92 72H0Z" fill="#1b3026"/>
+<!-- Original waterside pavilion with gently upturned tiled roof. -->
+<path d="M103 572h344l53 43H63Z" fill="#777e66"/><path d="M63 615h437v22H63Z" fill="#354537"/><path d="M83 637h394l20 18H63ZM103 655h354l20 18H83Z" fill="url(#stone)"/>
+<path d="M128 388h21v190h-21ZM385 388h21v190h-21ZM244 416h17v162h-17Z" fill="url(#wood)"/>
+<path d="M151 424h230v142H151Z" fill="#1b2821"/>
+<path d="M162 440h70v102h-70ZM278 440h89v102h-89Z" fill="#b5995c" opacity=".54"/>
+<g fill="none" stroke="#4c4a32" stroke-width="3"><path d="M175 440v102m14-102v102m15-102v102m15-102v102M162 465h70m-70 28h70m-70 28h70M292 440v102m15-102v102m15-102v102m15-102v102m15-102v102M278 465h89m-89 28h89m-89 28h89"/></g>
+<path d="M110 406h318v22H110Z" fill="#4b4732"/><path d="M114 406h310v4H114Z" fill="#a29663" opacity=".5"/>
+<path d="M59 395c92-15 144-50 209-101 57 51 121 86 209 101-47 18-124 20-209 14-89 6-157 4-209-14Z" fill="url(#roof)"/>
+<path d="M59 395c92-15 144-50 209-101 57 51 121 86 209 101-47 18-124 20-209 14-89 6-157 4-209-14Z" fill="url(#tiles)"/>
+<path d="M58 391c52 10 134 11 210 5 82 6 157 4 210-5" fill="none" stroke="#81917b" stroke-width="4"/>
+<path d="M55 389q8 17 24 20c63 10 122 10 189 5 76 5 136 5 189-5q16-4 24-20" fill="none" stroke="#23392e" stroke-width="7"/>
+<path d="M240 295q29 7 57-1" fill="none" stroke="#82907a" stroke-width="5"/>
+<path d="M109 564h319v12H109ZM106 548h328v6H106Z" fill="#6d6445"/>
+<g stroke="#5c5941" stroke-width="6"><path d="M116 532v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44m42-44v44"/></g>
+<circle cx="139" cy="462" r="64" fill="url(#lamp)"/><use href="#lantern" x="139" y="460"/><circle cx="395" cy="462" r="64" fill="url(#lamp)"/><use href="#lantern" x="395" y="460"/>
+<!-- Pine silhouette, formed from sweeping branches and needle masses. -->
+<path d="M40 688c19-104 22-178 9-269-7-47-10-114 3-157 8-23 18-41 21-58 2-10 8-7 9 2 3 23-11 53-13 78-6 73 12 134 9 203-2 69-9 133-18 205Z" fill="#18291f"/>
+<path d="M67 380c38-25 54-44 87-54m-90 99C34 403 8 387-26 384m91-94c30-25 53-44 78-53" fill="none" stroke="#1b2c22" stroke-width="11" stroke-linecap="round"/>
+<path d="M72 215c22-17 55-18 75-7 16-7 39 0 47 11 21-2 35 7 40 16-16 8-40 11-61 5-26 11-52 8-73 1-24 6-45 0-57-8 6-9 17-16 29-18ZM114 313c28-15 66-13 87 1 18-2 37 7 47 20-27 12-58 8-78 3-25 11-56 10-86-1 8-10 18-18 30-23ZM0 359c29-13 55-9 71 5 17-3 40 7 47 17-21 9-43 7-59 2-24 9-44 10-71 2Z" fill="#203d2d"/>
+<path d="M78 215c23-9 48-6 67 1m-27 101c25-8 46-6 66 0M8 364c18-5 37-2 49 5" fill="none" stroke="#4a6546" stroke-width="2" opacity=".55"/>
+<g fill="url(#mist)"><ellipse cx="772" cy="445" rx="520" ry="30"/><ellipse cx="696" cy="524" rx="600" ry="22"/><ellipse cx="983" cy="685" rx="420" ry="18"/></g>
+<path d="M0 868c114-17 163-8 227-30 58-20 93 17 149 13 53-4 74-10 132 17l78 32H0ZM1240 900c21-43 41-66 75-61 27-28 57-28 76-9l49 1v69Z" fill="#13261c"/>
 </svg>

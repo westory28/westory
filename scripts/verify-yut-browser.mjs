@@ -54,7 +54,14 @@ const bundled = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(os.tmpdir(), "westory-yut-qa.js"),
-  loader: { ".svg": "dataurl", ".png": "dataurl", ".webp": "dataurl" },
+  loader: {
+    ".svg": "dataurl",
+    ".png": "dataurl",
+    ".webp": "dataurl",
+    ".woff2": "file",
+    ".woff": "file",
+  },
+  assetNames: "qa-fonts/[name]-[hash]",
   define: {
     "process.env.NODE_ENV": '"production"',
     "import.meta.env.BASE_URL": '"/"',
@@ -84,6 +91,14 @@ const js = bundled.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css = bundled.outputFiles
   .find((file) => file.path.endsWith(".css"))
   .text.replace(/@import\s+[^;]+;/g, "");
+const fontFiles = new Map(
+  bundled.outputFiles
+    .filter((file) => /\.woff2?$/.test(file.path))
+    .map((file) => [
+      "/" + path.relative(os.tmpdir(), file.path).replaceAll("\\", "/"),
+      file.contents,
+    ]),
+);
 let room = null;
 const commands = [];
 const history = new Map();
@@ -96,6 +111,13 @@ const server = http.createServer(async (request, response) => {
       response.setHeader("Content-Type", "application/json");
       response.end(JSON.stringify(value));
     };
+    if (fontFiles.has(url.pathname)) {
+      response.setHeader(
+        "Content-Type",
+        url.pathname.endsWith(".woff2") ? "font/woff2" : "font/woff",
+      );
+      return response.end(fontFiles.get(url.pathname));
+    }
     if (url.pathname === "/qa/reset") {
       room = null;
       commands.length = 0;
@@ -269,7 +291,7 @@ try {
     await page
       .getByRole("button", { name: "대기실부터 체험하기", exact: true })
       .click();
-    await page.getByRole("heading", { name: "달빛 마을 대기실" }).waitFor();
+    await page.getByRole("heading", { name: "한 판의 인연" }).waitFor();
     const before = await page.evaluate(() => window.yutQA.calls.length);
     await capture(page, "yut-preview-waiting-" + width);
     await page
@@ -285,9 +307,17 @@ try {
     await page.getByRole("dialog", { name: "윷판의 약속" }).waitFor();
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "윷 던지기", exact: true }).click();
-    await page.locator(".yut-route-choices button").first().waitFor();
+    await page.locator(".yut-throw-3d.is-rolling").waitFor();
+    assert.equal(
+      await page.locator(".yut-isometric-destination").count(),
+      0,
+      "no move destinations before landing",
+    );
+    await page.waitForTimeout(850);
+    await capture(page, "yut-3d-flight-" + width);
+    await page.locator(".yut-isometric-destination").first().waitFor();
     await capture(page, "yut-move-" + width);
-    await page.locator(".yut-route-choices button").first().click();
+    await page.locator(".yut-isometric-destination").first().click();
     assert.equal(
       await page.evaluate(() => window.yutQA.calls.length),
       before,
@@ -306,7 +336,7 @@ try {
   await host
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
     .click();
-  await host.getByRole("heading", { name: "달빛 마을 대기실" }).waitFor();
+  await host.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   assert.equal(
     await host
       .getByRole("button", { name: "윷판 펼치기", exact: true })
@@ -315,7 +345,7 @@ try {
   );
   await guest.getByLabel("친구의 방 코드").fill("AB2345");
   await guest.getByRole("button", { name: "들어가기", exact: true }).click();
-  await guest.getByRole("heading", { name: "달빛 마을 대기실" }).waitFor();
+  await guest.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   await guest.getByRole("button", { name: "준비 완료", exact: true }).click();
   await host.getByRole("button", { name: "윷판 펼치기", exact: true }).click();
   await host.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
@@ -325,7 +355,9 @@ try {
     0,
   );
   await host.getByRole("button", { name: "윷 던지기", exact: true }).click();
-  await host.getByRole("button", { name: "2칸 이동하기", exact: true }).click();
+  await host
+    .getByRole("button", { name: /바깥 2칸으로 이동/, exact: true })
+    .click();
   await guest.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   assert.equal(room.players[0].pieces[0].node, "o2");
   await capture(host, "yut-online-host");
@@ -335,16 +367,16 @@ try {
   await guest.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   await guest.getByRole("button", { name: "윷 던지기", exact: true }).click();
   await guest
-    .getByRole("button", { name: "1칸 이동하기", exact: true })
+    .getByRole("button", { name: /바깥 1칸으로 이동/, exact: true })
     .click();
   await host.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   assert.equal(room.players[1].pieces[0].node, "o1");
-  await guest.getByRole("button", { name: /← 방 나가기/ }).click();
+  await guest.getByRole("button", { name: "방 나가기", exact: true }).click();
   await guest
     .getByRole("dialog")
     .getByRole("button", { name: "방 나가기", exact: true })
     .click();
-  await host.getByRole("heading", { name: /첫째 학생 승리/ }).waitFor();
+  await host.getByRole("heading", { name: "첫째 학생", exact: true }).waitFor();
   await capture(host, "yut-result");
   assert.equal(room.status, "finished");
   assert.equal(room.winnerUid, "qa-host");
@@ -381,7 +413,7 @@ try {
   await recovery
     .getByRole("button", { name: "방 상태 다시 확인", exact: true })
     .click();
-  await recovery.getByRole("heading", { name: "달빛 마을 대기실" }).waitFor();
+  await recovery.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   assert.equal(
     commands.filter((command) => command.action === "create").length,
     1,
