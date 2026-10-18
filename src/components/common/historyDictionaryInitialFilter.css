@@ -1,6 +1,6 @@
 .history-dictionary-initial-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
+  grid-template-columns: minmax(0, 1fr) 54px;
   align-items: start;
   gap: 8px;
   min-width: 0;
@@ -19,7 +19,7 @@
   position: sticky;
   top: var(--history-dictionary-sticky-top, 80px);
   align-self: start;
-  width: 64px;
+  width: 54px;
   min-width: 0;
   height: calc(var(--history-dictionary-rail-item-count, 17) * 44px + 10px);
   max-height: max(
@@ -80,12 +80,6 @@
 .history-dictionary-initial-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-.history-dictionary-initial-group-button {
-  gap: 2px;
-}
-.history-dictionary-initial-group-button span {
-  font-size: 12px;
 }
 .history-dictionary-initial-end {
   margin-top: auto;

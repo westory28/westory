@@ -156,7 +156,6 @@ export default function HistoryDictionaryInitialFilter({
               }}
             >
               {initial || "전체"}
-              {group && <span aria-hidden="true">{expanded ? "−" : "+"}</span>}
             </button>
           );
         })}

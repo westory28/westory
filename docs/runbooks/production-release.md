@@ -20,7 +20,9 @@
 
 기본 사전 갱신은 `node scripts/sync-history-dictionary-catalog.mjs --project history-quiz-yongsin`으로 변경 계획을 먼저 확인한다. 적용할 때에는 출력된 `sourceHash`, `planHash`를 각각 `--expect-source-sha`, `--expect-plan-sha`에 넣고 `--apply`를 추가한다. 이 도구는 관리 대상 항목만 버전 조건으로 생성·수정하며, 삭제하지 않는다. 적용 후 전체 항목과 출처를 다시 읽어 확인한다. 2026-10-18 최초 저장분은 2,373개(역사 133개·지명 2,240개), 출처 2,994건이다.
 
-조회·저장 검증은 `npm run verify:history-dictionary`와 `npm --prefix functions run check`에 포함된다. 이 패치의 Firebase 배포 대상은 서울 `getHistoryDictionaryContinuity`, `executeCommand` 두 함수다. 규칙이나 기존 사전 mutation callable을 일괄 배포하지 않는다.
+같은 날 제공된 역사2 전체본·1학기 자료·역사 부도를 대조해 994개를 추가하고 96개 풀이를 보완했다. 확장본은 3,367개(역사 1,125개·지명 2,242개), 출처 4,863건이다. 교과서 인쇄 쪽수와 PDF 쪽수를 함께 남기며 교과서를 공개 라이선스로 표시하지 않는다. 기존 2,373개 ID·지도 연결·출처는 유지한다. [교과서 대조 기록](../reviews/history-dictionary-textbooks-20261018.json)에 자료 해시, 검토 범위, 보충 출처와 검증을 남겼다. 이 자료 확장은 기존 조회 함수를 사용하므로 Functions나 rules 재배포가 필요하지 않다.
+
+조회·저장 검증은 `npm run verify:history-dictionary`와 `npm --prefix functions run check`에 포함된다. 최초 학기 유지 패치의 Firebase 배포 대상은 서울 `getHistoryDictionaryContinuity`, `executeCommand` 두 함수다. 규칙이나 기존 사전 mutation callable을 일괄 배포하지 않는다.
 
 ## Windows 작업 환경 확인
 

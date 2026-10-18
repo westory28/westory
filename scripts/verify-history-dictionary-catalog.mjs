@@ -177,7 +177,8 @@ assert(
 );
 const compressedBytes = gzipSync(Buffer.from(JSON.stringify(terms))).length;
 assert(
-  compressedBytes < 350000,
+  // Reviewed textbook vocabulary adds roughly 1,000 entries to the original catalog.
+  compressedBytes < 380000,
   `Dictionary gzip budget exceeded: ${compressedBytes}`,
 );
 console.log(
