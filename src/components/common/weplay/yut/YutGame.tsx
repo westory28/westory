@@ -487,6 +487,12 @@ export default function YutGame({
   initialSettings?: YutSettings;
 }) {
   const { config, currentUser } = useAuth();
+  useEffect(() => {
+    // Load before the first result exists, so its short reveal never swaps fonts.
+    void document.fonts
+      .load('400 120px "Yut Brush"', "도개걸윷모!")
+      .catch(() => {});
+  }, []);
   const [localMode, setLocalMode] = useState<YutLocalMode | null>(
     preview ? "preview" : null,
   );

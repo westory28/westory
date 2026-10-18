@@ -1115,6 +1115,7 @@ async function verifyCommonGameFrame() {
         assert.equal(lobby.width, opening.width); assert.equal(lobby.height, opening.height);
         const inner = await page.locator(game === 'joseon-yut' ? '.yut-game' : '.weplay-launch').boundingBox();
         assert(Math.abs(inner.width-opening.width)<2, JSON.stringify({game,inner,opening}));
+        if(game === 'joseon-yut') await page.waitForFunction(()=>document.fonts.check('400 120px "Yut Brush"','도개걸윷모!'));
         if(game === 'joseon-yut' && width >= 1280) {
           if(portal === 'student') await page.getByRole('button',{name:/혼자서 시작/}).click();
           else await page.getByRole('button',{name:'윷판 펼치기',exact:true}).click();
