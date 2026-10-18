@@ -1,5 +1,10 @@
-// Match TeacherSidebar's wordmark: Noto Sans KR 800, -0.025em, We/story.
-const FONT = '800 100px "Noto Sans KR", sans-serif';
+// Reuse the displayed brand font, including the portal's CSS cascade/fallback.
+// TeacherSidebar's wordmark uses weight 800 and -0.025em letter spacing.
+const watermarkFont = () => {
+  const logo = document.querySelector(".teacher-sidebar-wordmark, .logo-text");
+  const family = getComputedStyle(logo || document.body).fontFamily;
+  return `800 100px ${family || "sans-serif"}`;
+};
 const PARTS = [
   { text: "We", color: "#2563eb" },
   { text: "story", color: "#f59e0b" },
@@ -7,8 +12,8 @@ const PARTS = [
 const LETTER_SPACING = -2.5;
 
 export const prepareProductWatermarkFont = async () => {
-  // If the site's webfont cannot load, use the same sans-serif fallback as its logo.
-  await document.fonts.load(FONT, "Westory").catch(() => []);
+  // If the site's webfont cannot load, use the same fallback as its logo.
+  await document.fonts.load(watermarkFont(), "Westory").catch(() => []);
 };
 
 export const drawProductWatermark = (
@@ -18,7 +23,7 @@ export const drawProductWatermark = (
 ) => {
   if (width <= 0 || height <= 0) return;
   context.save();
-  context.font = FONT;
+  context.font = watermarkFont();
   context.textAlign = "left";
   context.textBaseline = "alphabetic";
   const letters: { text: string; color: string; x: number }[] = [];
