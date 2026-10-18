@@ -195,7 +195,7 @@ const ManageSchedule = () => {
         </p>
       )}
       {scopeReady && (
-        <div style={{ height: "calc(100dvh - 176px)", minHeight: 600 }}>
+        <div className="teacher-schedule-calendar">
           <TeacherCalendarSection
             events={visibleEvents}
             onDateClick={setSelectedDate}

@@ -2469,8 +2469,8 @@ button.lesson-core-point-floating-status:disabled {
   overflow: visible;
 }
 
-/* Student full calendar keeps FullCalendar's offsets for overlapping date ranges. */
-.student-calendar-shell__body[data-calendar-view="dayGridMonth"]:not(.student-full-calendar__body)
+/* Full calendars keep FullCalendar's offsets for overlapping date ranges. */
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]:not(.student-full-calendar__body):not(.teacher-calendar-shell__body)
   .fc
   .fc-daygrid-event-harness {
   margin-top: 0 !important;
@@ -2479,7 +2479,7 @@ button.lesson-core-point-floating-status:disabled {
   overflow: hidden;
 }
 
-.student-calendar-shell__body[data-calendar-view="dayGridMonth"]:not(.student-full-calendar__body)
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]:not(.student-full-calendar__body):not(.teacher-calendar-shell__body)
   .fc
   .fc-daygrid-event-harness
   + .fc-daygrid-event-harness {

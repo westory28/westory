@@ -12,6 +12,7 @@ import type { CalendarEvent } from "../../../types";
 import {
   getScheduleCategoryMeta,
   getScheduleEventColor,
+  getScheduleEventTextColor,
   type ScheduleCategory,
 } from "../../../lib/scheduleCategories";
 import {
@@ -23,6 +24,7 @@ import TeacherScheduleTitle from "./TeacherScheduleTitle";
 import {
   eventIncludesDate,
   formatCalendarEventDateRange,
+  getDayScheduleEvents,
   getKoreanDateKey,
   getWeekEvents,
   getWeekStart,
@@ -347,8 +349,10 @@ const TeacherWeekSchedule: React.FC<Props> = ({
               </svg>
             </button>
             {days.map((date, index) => {
-              const dayEvents = weekEvents.filter((event) =>
-                eventIncludesDate(event, date),
+              const dayEvents = getDayScheduleEvents(
+                weekEvents,
+                date,
+                categories,
               );
               const holiday = dayEvents.some(
                 (event) => event.eventType === "holiday",
@@ -357,23 +361,30 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                 (event) => event.eventType !== "holiday",
               );
               const ribbonColor = ribbonEvent
-                ? readableEventColor(
-                    getScheduleEventColor(ribbonEvent, categories),
-                  )
+                ? getScheduleCategoryMeta(ribbonEvent.eventType, categories)
+                    .color
                 : undefined;
+              const dayDescription = dayEvents
+                .map(
+                  (event) =>
+                    `${event.title} (${event.eventType === "holiday" ? "공휴일" : getScheduleCategoryMeta(event.eventType, categories).label}, ${formatCalendarEventDateRange(event)}, ${event.eventType === "holiday" ? "종일" : getSchedulePeriodRangeLabel(event.startPeriod ?? event.period, event.endPeriod)})`,
+                )
+                .join("; ");
               return (
                 <button
                   key={index}
                   type="button"
                   className={`teacher-week-strip__day${date === today ? " is-today" : ""}${date === selectedDate ? " is-selected" : ""}${ribbonEvent ? " has-ribbon" : ""}${holiday || index === 0 ? " is-holiday" : index === 6 ? " is-saturday" : ""}`}
-                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["일", "월", "화", "수", "목", "금", "토"][index]}요일, 일정 ${dayEvents.length}개${ribbonEvent ? `, 표시 리본: ${ribbonEvent.title}` : ""}`}
-                  title={
-                    ribbonEvent ? `표시 리본: ${ribbonEvent.title}` : undefined
-                  }
+                  aria-label={`${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${["일", "월", "화", "수", "목", "금", "토"][index]}요일, 일정 ${dayEvents.length}개${ribbonEvent ? `, 중요 일정: ${ribbonEvent.title}` : ""}${dayDescription ? `, ${dayDescription}` : ""}`}
+                  title={dayDescription || undefined}
                   style={
-                    ribbonColor
+                    ribbonEvent && ribbonColor
                       ? ({
                           "--week-ribbon-color": ribbonColor,
+                          "--week-ribbon-text-color": getScheduleEventTextColor(
+                            { eventType: ribbonEvent.eventType },
+                            categories,
+                          ),
                         } as React.CSSProperties)
                       : undefined
                   }
@@ -391,9 +402,33 @@ const TeacherWeekSchedule: React.FC<Props> = ({
                     </span>
                   </strong>
                   <span
-                    className={`teacher-week-strip__marker${dayEvents.length ? " has-events" : ""}`}
+                    className="teacher-week-strip__markers"
                     aria-hidden="true"
-                  />
+                    style={
+                      {
+                        "--week-event-count": Math.max(1, dayEvents.length),
+                      } as React.CSSProperties
+                    }
+                  >
+                    {dayEvents.map((event) => (
+                      <span
+                        key={event.id}
+                        className="teacher-week-strip__marker"
+                        title={event.title}
+                        style={
+                          {
+                            "--week-marker-color":
+                              event.eventType === "holiday"
+                                ? "var(--ws-danger-text, #b91c1c)"
+                                : getScheduleCategoryMeta(
+                                    event.eventType,
+                                    categories,
+                                  ).color,
+                          } as React.CSSProperties
+                        }
+                      />
+                    ))}
+                  </span>
                 </button>
               );
             })}

@@ -183,7 +183,7 @@
 }
 
 .student-week-strip__day.has-ribbon strong {
-  color: white;
+  color: var(--week-ribbon-text-color);
   background: var(--week-ribbon-color);
 }
 
@@ -225,15 +225,25 @@
   background: var(--ws-primary-soft, #eff6ff);
 }
 
-.student-week-strip__marker {
-  width: 4px;
+.student-week-strip__markers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: min(4px, calc(100% / (var(--week-event-count) * 2)));
+  width: 44px;
+  max-width: calc(100% - 8px);
   height: 4px;
-  border-radius: 50%;
+  flex-shrink: 0;
   transform: translateY(-2px);
 }
 
-.student-week-strip__marker.has-events {
-  background: currentColor;
+.student-week-strip__marker {
+  flex: 0 1 4px;
+  min-width: 0;
+  max-width: 4px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--week-marker-color);
 }
 
 .student-week-schedule__filters {

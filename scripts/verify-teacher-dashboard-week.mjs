@@ -124,6 +124,76 @@ const events = [
   event("saturday", "2026-09-26"),
   event("invalid", "invalid"),
 ];
+
+const priorityCategories = [
+  { key: "custom-admission", label: "고입", order: 99 },
+  { key: "custom-exam", label: "정기 시험", order: 98 },
+  { key: "custom-safety", label: "안전·생활교육", order: 0 },
+  { key: "custom-school", label: "학사 운영", order: 1 },
+  { key: "custom-activity", label: "창의적 체험활동", order: 2 },
+];
+const priorityEvent = (id, eventType, startPeriod = "period1") => ({
+  ...event(id, "2026-10-19", "2026-10-22", startPeriod),
+  eventType,
+});
+const overlapping = [
+  priorityEvent("holiday", "holiday"),
+  priorityEvent("unknown", "unknown"),
+  priorityEvent("activity", "custom-activity"),
+  priorityEvent("school", "custom-school"),
+  priorityEvent("event", "event"),
+  priorityEvent("safety", "custom-safety"),
+  priorityEvent("performance", "performance"),
+  priorityEvent("exam", "custom-exam"),
+  priorityEvent("admission-later", "custom-admission", "period7"),
+  priorityEvent("admission-first", "custom-admission"),
+  priorityEvent("admission-second", "custom-admission"),
+];
+const unchanged = JSON.stringify(overlapping);
+assert.deepEqual(
+  week
+    .getDayScheduleEvents(overlapping, "2026-10-22", priorityCategories)
+    .map((item) => item.id),
+  [
+    "admission-first",
+    "admission-second",
+    "admission-later",
+    "exam",
+    "performance",
+    "safety",
+    "school",
+    "event",
+    "activity",
+    "unknown",
+    "holiday",
+  ],
+);
+assert.equal(JSON.stringify(overlapping), unchanged);
+assert.deepEqual(
+  week.getDayScheduleEvents(overlapping, "2026-10-23", priorityCategories),
+  [],
+);
+assert.equal(week.getScheduleImportance(priorityEvent("exam", "exam"), []), 1);
+assert.equal(
+  week.getScheduleImportance(
+    {
+      ...priorityEvent("other", "unknown"),
+      title: "고입이라는 제목만으로 우선하지 않음",
+    },
+    priorityCategories,
+  ),
+  6,
+);
+assert.equal(
+  week.getDayScheduleEvents(
+    Array.from({ length: 12 }, (_, index) =>
+      priorityEvent(`same-color-${index}`, "custom-activity"),
+    ),
+    "2026-10-20",
+    priorityCategories,
+  ).length,
+  12,
+);
 const before = events.map((item) => item.id);
 assert.deepEqual(
   week.getWeekEvents(events, "2026-09-20").map((item) => item.id),
@@ -144,5 +214,5 @@ assert.equal(
 );
 
 console.log(
-  "Teacher dashboard week checks passed: KST, Sunday–Saturday/month/year boundaries, inclusive stored ranges, timed midnight, complete date labels, sorting and complete weekly list.",
+  "Teacher dashboard week checks passed: KST, Sunday–Saturday/month/year boundaries, inclusive stored ranges, timed midnight, complete date labels, category importance, stable same-priority ordering and complete daily/weekly lists.",
 );

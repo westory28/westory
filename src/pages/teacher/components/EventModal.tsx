@@ -466,10 +466,7 @@ const EventModal: React.FC<EventModalProps> = ({
   const previewColor = labelColor || selectedCategory?.color;
 
   return (
-    <div
-      className="teacher-event-backdrop"
-      onClick={() => !loading && onClose()}
-    >
+    <div className="teacher-event-backdrop">
       <div
         ref={dialogRef}
         role="dialog"

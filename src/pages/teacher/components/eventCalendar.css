@@ -339,3 +339,27 @@
   white-space: nowrap;
   overflow: hidden;
 }
+
+/* The management calendar grows by week instead of hiding a third event. */
+.teacher-schedule-calendar {
+  min-width: 0;
+}
+
+.teacher-schedule-calendar .teacher-calendar-shell {
+  height: auto;
+}
+
+.teacher-schedule-calendar .teacher-calendar-shell__body[data-calendar-view] {
+  flex: 0 0 auto;
+  height: max(
+    calc(var(--teacher-calendar-week-count, 5) * 160px + 40px),
+    calc(100dvh - 240px)
+  );
+}
+
+.teacher-schedule-calendar
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-frame {
+  min-height: 160px;
+}

@@ -19,7 +19,7 @@ const bundle = await build({
     contents: `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import EventModal from './src/pages/teacher/components/EventModal';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/assets/index.css';
 window.qa={calls:[],saved:0,closed:0,toasts:[]};
 const event={id:'event-delete-fixture',title:'설 연휴 (수동 등록 검증)',start:'2027-02-06',end:'2027-02-08',eventType:'event',targetType:'common',startPeriod:'allDay',endPeriod:'allDay',revision:7};
-function Fixture(){const [open,setOpen]=useState(true);return <AppDialogProvider><EventModal isOpen={open} eventData={event} onSave={()=>window.qa.saved++} onClose={()=>{window.qa.closed++;setOpen(false);}}/></AppDialogProvider>;}
+function Fixture(){const [open,setOpen]=useState(true);return <AppDialogProvider><EventModal isOpen={open} eventData={location.search==='?create'?undefined:event} initialDate="2026-10-21" onSave={()=>window.qa.saved++} onClose={()=>{window.qa.closed++;setOpen(false);}}/></AppDialogProvider>;}
 createRoot(document.getElementById('root')).render(<Fixture/>);`,
   },
   bundle: true,
@@ -120,6 +120,53 @@ try {
       void dialog.dismiss();
     });
     page.on("pageerror", (error) => errors.push(error.message));
+    for (const mode of ["create", "edit"]) {
+      await page.goto(mode === "create" ? `${origin}?create` : origin);
+      const editor = page.getByRole("dialog", {
+        name: mode === "create" ? "일정 등록" : "일정 수정",
+        exact: true,
+      });
+      const title = editor.getByRole("textbox", {
+        name: "일정 제목",
+        exact: true,
+      });
+      await title.fill("입력 중인 일정");
+      await editor
+        .getByPlaceholder("메모를 입력하세요.")
+        .fill("바깥 클릭 후에도 보존할 메모");
+      const values = () =>
+        editor.locator("input,select,textarea").evaluateAll((elements) =>
+          elements.map((element) => ({
+            value: element.value,
+            checked: element.checked,
+          })),
+        );
+      const before = await values();
+      await page.mouse.click(2, 2);
+      assert(
+        await editor.isVisible(),
+        `${width}px ${mode}: backdrop keeps editor open`,
+      );
+      assert.deepEqual(
+        await values(),
+        before,
+        `${width}px ${mode}: all draft inputs survive backdrop click`,
+      );
+      assert.equal(await page.evaluate(() => qa.closed), 0);
+      assert.equal(await page.evaluate(() => qa.calls.length), 0);
+      await page.screenshot({
+        path: path.join(evidence, `${width}-${mode}-draft-preserved.png`),
+        fullPage: true,
+      });
+      await editor
+        .getByRole("button", {
+          name: mode === "create" ? "취소" : "팝업 닫기",
+          exact: true,
+        })
+        .click();
+      await editor.waitFor({ state: "hidden" });
+      assert.equal(await page.evaluate(() => qa.closed), 1);
+    }
     await page.goto(origin);
     const deleteButton = page.getByRole("button", {
       name: "일정 삭제",
@@ -221,6 +268,8 @@ try {
     assert.deepEqual(errors, []);
     checks.push({
       width,
+      createAndEditDraftSurviveBackdrop: true,
+      explicitCancelAndClose: true,
       cancel: true,
       escape: true,
       singleConfirmation: true,
@@ -236,7 +285,7 @@ try {
     JSON.stringify(checks, null, 2),
   );
   console.log(
-    `Event delete confirmation passed at 390/1280px: visible app dialog, cancel/Escape, duplicate protection, unchanged ID/revision/scope, error retry and confirmed deletion. Evidence: ${evidence}`,
+    `Event editor passed at 390/1280px: create/edit drafts survive outside clicks, explicit cancel/close, app deletion confirmation, duplicate protection, unchanged ID/revision/scope and error retry. Evidence: ${evidence}`,
   );
 } finally {
   await browser.close();

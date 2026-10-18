@@ -69,6 +69,27 @@ const getInclusiveSpanDays = (start?: string, end?: string) => {
   return diffDays + 1;
 };
 
+const compareMonthCalendarEvents = (
+  leftValue: unknown,
+  rightValue: unknown,
+) => {
+  const left = (leftValue || {}) as Record<string, unknown>;
+  const right = (rightValue || {}) as Record<string, unknown>;
+  // FullCalendar exposes extended properties as comparable primitive fields.
+  const rangeOrder =
+    Number(Boolean(right.isMultiDayRange)) -
+    Number(Boolean(left.isMultiDayRange));
+  if (rangeOrder) return rangeOrder;
+  const spanOrder =
+    Number(right.inclusiveSpanDays || 1) - Number(left.inclusiveSpanDays || 1);
+  if (spanOrder) return spanOrder;
+  return (
+    compareFullCalendarSchedulePeriod(left, right) ||
+    Number(left.start) - Number(right.start) ||
+    String(left.id || "").localeCompare(String(right.id || ""))
+  );
+};
+
 const ChevronLeftIcon = () => (
   <svg
     viewBox="0 0 20 20"
@@ -124,32 +145,6 @@ const SearchIcon = () => (
       d="m12 12 4 4"
       stroke="currentColor"
       strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const CalendarBadgeIcon = () => (
-  <svg
-    viewBox="0 0 20 20"
-    fill="none"
-    aria-hidden="true"
-    width="16"
-    height="16"
-  >
-    <rect
-      x="3"
-      y="4.5"
-      width="14"
-      height="12.5"
-      rx="2.5"
-      stroke="currentColor"
-      strokeWidth="1.7"
-    />
-    <path
-      d="M6.5 3v3M13.5 3v3M3 8.25h14"
-      stroke="currentColor"
-      strokeWidth="1.7"
       strokeLinecap="round"
     />
   </svg>
@@ -218,6 +213,14 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     anchorRect: ScheduleMorePopoverAnchor;
   } | null>(null);
   const isMonthView = currentViewType === "dayGridMonth";
+  const visibleWeekCount =
+    visibleRange.start && visibleRange.end
+      ? Math.round(
+          (new Date(`${visibleRange.end}T00:00:00`).getTime() -
+            new Date(`${visibleRange.start}T00:00:00`).getTime()) /
+            (7 * 24 * 60 * 60 * 1000),
+        )
+      : 5;
 
   const fcEvents = events
     .filter(
@@ -444,17 +447,15 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   return (
     <div
       className={`student-calendar-section student-calendar-shell teacher-calendar-shell ${isMonthView ? "student-calendar-shell--month" : ""}`}
+      style={
+        {
+          "--teacher-calendar-week-count": visibleWeekCount,
+        } as React.CSSProperties
+      }
     >
       <div className="student-calendar-shell__header">
         <div className="student-calendar-shell__header-main">
           <div className="student-calendar-shell__heading-group">
-            <span className="student-calendar-shell__eyebrow">
-              <span className="student-calendar-shell__eyebrow-icon">
-                <CalendarBadgeIcon />
-              </span>
-              학사 일정
-            </span>
-
             <div className="student-calendar-shell__month-row">
               <div className="student-calendar-shell__month-badge">
                 <button
@@ -566,7 +567,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       </div>
 
       <div
-        className={`calendar-wrapper student-calendar-shell__body ${currentViewType === "listMonth" ? "custom-list-active" : ""}`}
+        className={`calendar-wrapper student-calendar-shell__body teacher-calendar-shell__body ${currentViewType === "listMonth" ? "custom-list-active" : ""}`}
         data-calendar-view={currentViewType}
       >
         <FullCalendar
@@ -583,7 +584,15 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           displayEventTime={false}
           headerToolbar={false}
           events={fcEvents}
-          eventOrder={compareFullCalendarSchedulePeriod}
+          // Reserve the highest lanes for complete date ranges before placing
+          // single-day events. Strict order prevents compactness from breaking
+          // a continuous ribbon into different vertical positions.
+          eventOrder={
+            isMonthView
+              ? compareMonthCalendarEvents
+              : compareFullCalendarSchedulePeriod
+          }
+          eventOrderStrict
           datesSet={(arg) => {
             setMorePopover(null);
             setCurrentViewType(arg.view.type as CalendarViewType);
@@ -728,7 +737,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           contentHeight="100%"
           expandRows
           eventDisplay="block"
-          dayMaxEvents
+          dayMaxEvents={3}
           moreLinkText={(count) => `+${count}개`}
           moreLinkClick={handleMoreLinkClick}
           fixedWeekCount={false}

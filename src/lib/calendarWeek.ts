@@ -1,5 +1,9 @@
 import type { CalendarEvent } from "../types";
-import { compareSchedulePeriod } from "./schedulePeriods";
+import type { ScheduleCategory } from "./scheduleCategories";
+import {
+  compareSchedulePeriod,
+  getSchedulePeriodOrder,
+} from "./schedulePeriods";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -85,6 +89,50 @@ export const eventIncludesDate = (event: CalendarEvent, date: string) => {
   const end = calendarEventEndDate(event);
   return Boolean(start && start <= date && (end > start ? end : start) >= date);
 };
+
+// Daily emphasis follows the student's deadlines and safety needs, independent
+// of editable category order, event colors, or the order of Firestore results.
+export const getScheduleImportance = (
+  event: CalendarEvent,
+  categories: ReadonlyArray<Pick<ScheduleCategory, "key" | "label">>,
+) => {
+  const key = event.eventType;
+  const label = (
+    categories.find((category) => category.key === key)?.label || ""
+  ).replace(/\s/g, "");
+  if (key === "holiday") return 7;
+  if (key === "admission" || /고입|진학|입시/.test(label)) return 0;
+  if (key === "exam" || /정기시험|정기고사/.test(label)) return 1;
+  if (
+    ["performance", "diagnosis", "formative"].includes(key) ||
+    /평가/.test(label)
+  )
+    return 2;
+  if (key === "safety" || /안전|생활교육/.test(label)) return 3;
+  if (key === "event" || /행사|학사/.test(label)) return 4;
+  if (key === "activity" || /창체|창의적체험활동/.test(label)) return 5;
+  return 6;
+};
+
+export const getDayScheduleEvents = (
+  events: CalendarEvent[],
+  date: string,
+  categories: ReadonlyArray<Pick<ScheduleCategory, "key" | "label">>,
+) =>
+  events
+    .filter((event) => eventIncludesDate(event, date))
+    .map((event, index) => ({ event, index }))
+    .sort(
+      (left, right) =>
+        getScheduleImportance(left.event, categories) -
+          getScheduleImportance(right.event, categories) ||
+        getSchedulePeriodOrder(left.event.startPeriod ?? left.event.period) -
+          getSchedulePeriodOrder(
+            right.event.startPeriod ?? right.event.period,
+          ) ||
+        left.index - right.index,
+    )
+    .map(({ event }) => event);
 
 export const getWeekEvents = (events: CalendarEvent[], weekStart: string) => {
   const weekEnd = shiftCalendarDate(weekStart, 6);
