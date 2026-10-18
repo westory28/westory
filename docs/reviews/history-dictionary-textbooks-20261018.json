@@ -1,0 +1,1593 @@
+{
+  "reviewDate": "2026-10-18",
+  "scope": "제공된 역사2 전체본·1학기 자료·역사 부도의 주요 역사 개념과 지명 풀이 대조",
+  "books": [
+    {
+      "name": "[비상] 중등_역사2(이병인).pdf",
+      "sha256": "7108f4fe3549a7e3675f4de92cfbc995e7ce813b12518b127baf1bf0d1368c2d",
+      "book": "history2",
+      "pdfPages": 209
+    },
+    {
+      "name": "[비상] 중등_역사 부도(22개정).pdf",
+      "sha256": "283dc8a224cf019d2a4ae6f5f02cc498e6a2daad403fb69f9e74fb28b6cb205a",
+      "book": "atlas",
+      "pdfPages": 107
+    },
+    {
+      "name": "[비상] 중등_역사2(이병인)_1학기.pdf",
+      "sha256": "11620de242bac3a8364a8e6fe104c70707c4869d88594f715031596f69689022",
+      "book": "history2-sem1",
+      "pdfPages": 107
+    }
+  ],
+  "method": [
+    "본문·핵심어·낱말풀이·도표·그림 설명을 읽고 기존 표제어 및 별칭과 대조",
+    "교과서 뜻에 맞춰 중학생용 풀이를 새로 작성하고 설명 없는 중요어는 공신력 있는 자료로 보충",
+    "교과서 원문·PDF·이미지는 저장소와 서비스에 수록하지 않으며 공개 라이선스로 표시하지 않음",
+    "학기 자료의 표지 외 106쪽은 전체본 +2쪽의 추출 내용과 공백 정규화 후 일치함",
+    "원본 2373개 ID·지도 연결·참고 출처를 보존하고 전역 Firestore 카탈로그에 삭제 없이 반영"
+  ],
+  "pagination": {
+    "history2": "본문 PDF쪽+2=인쇄쪽",
+    "history2-sem1": "본문 PDF쪽+4=인쇄쪽",
+    "atlasFoldouts": {
+      "17": [
+        17,
+        18
+      ],
+      "19": [
+        20,
+        21
+      ],
+      "65": [
+        67,
+        68
+      ],
+      "66": [
+        69,
+        70
+      ]
+    }
+  },
+  "counts": {
+    "baseline": 2373,
+    "reviewed": 1090,
+    "added": 994,
+    "updatedDefinitions": 96,
+    "total": 3367,
+    "history": 1125,
+    "places": 2242,
+    "attributions": 4863
+  },
+  "sectionCoverage": {
+    "early": {
+      "summary": {
+        "reviews": 438,
+        "added": 402,
+        "updated": 36,
+        "existingHistoryUpdated": 4,
+        "existingPlacesUpdated": 32,
+        "alreadyAdequate": 18,
+        "excludedCandidateGroups": 36,
+        "externallySupplemented": 10,
+        "externalSourceReferences": 11,
+        "maxDefinitionCharacters": 95,
+        "duplicateNormalizedWords": 0,
+        "unknownFacetIds": 0,
+        "invalidSourcePages": 0
+      },
+      "units": [
+        {
+          "id": "I-1",
+          "title": "선사 문화와 고조선",
+          "reviewedPrintedPages": [
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ],
+          "reviewedFullPdfPages": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "reviewedSemesterPdfPages": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13
+          ],
+          "candidateCount": 49
+        },
+        {
+          "id": "I-2",
+          "title": "여러 나라의 성장",
+          "reviewedPrintedPages": [
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "reviewedFullPdfPages": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21
+          ],
+          "reviewedSemesterPdfPages": [
+            14,
+            15,
+            16,
+            17,
+            18,
+            19
+          ],
+          "candidateCount": 39
+        },
+        {
+          "id": "I-3",
+          "title": "삼국의 성립과 발전",
+          "reviewedPrintedPages": [
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35
+          ],
+          "reviewedFullPdfPages": [
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33
+          ],
+          "reviewedSemesterPdfPages": [
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ],
+          "candidateCount": 66
+        },
+        {
+          "id": "I-4",
+          "title": "삼국의 문화와 대외 교류",
+          "reviewedPrintedPages": [
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43
+          ],
+          "reviewedFullPdfPages": [
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41
+          ],
+          "reviewedSemesterPdfPages": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ],
+          "candidateCount": 45
+        },
+        {
+          "id": "I-review",
+          "title": "I 단원 마무리와 활동",
+          "reviewedPrintedPages": [
+            44,
+            45
+          ],
+          "reviewedFullPdfPages": [
+            42,
+            43
+          ],
+          "reviewedSemesterPdfPages": [
+            40,
+            41
+          ],
+          "candidateCount": 2
+        },
+        {
+          "id": "II-opening",
+          "title": "남북국 단원 도입",
+          "reviewedPrintedPages": [
+            46,
+            47
+          ],
+          "reviewedFullPdfPages": [
+            44,
+            45
+          ],
+          "reviewedSemesterPdfPages": [
+            42,
+            43
+          ],
+          "candidateCount": 0
+        },
+        {
+          "id": "II-1",
+          "title": "신라의 삼국 통일과 발해의 건국",
+          "reviewedPrintedPages": [
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55
+          ],
+          "reviewedFullPdfPages": [
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53
+          ],
+          "reviewedSemesterPdfPages": [
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51
+          ],
+          "candidateCount": 30
+        },
+        {
+          "id": "II-2",
+          "title": "남북국의 발전과 변화",
+          "reviewedPrintedPages": [
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63
+          ],
+          "reviewedFullPdfPages": [
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61
+          ],
+          "reviewedSemesterPdfPages": [
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59
+          ],
+          "candidateCount": 53
+        },
+        {
+          "id": "II-3",
+          "title": "남북국의 문화와 대외 관계",
+          "reviewedPrintedPages": [
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71
+          ],
+          "reviewedFullPdfPages": [
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69
+          ],
+          "reviewedSemesterPdfPages": [
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67
+          ],
+          "candidateCount": 42
+        },
+        {
+          "id": "II-review",
+          "title": "II 단원 마무리와 활동",
+          "reviewedPrintedPages": [
+            72,
+            73
+          ],
+          "reviewedFullPdfPages": [
+            70,
+            71
+          ],
+          "reviewedSemesterPdfPages": [
+            68,
+            69
+          ],
+          "candidateCount": 1
+        },
+        {
+          "id": "III-opening",
+          "title": "고려 단원 도입",
+          "reviewedPrintedPages": [
+            74,
+            75
+          ],
+          "reviewedFullPdfPages": [
+            72,
+            73
+          ],
+          "reviewedSemesterPdfPages": [
+            70,
+            71
+          ],
+          "candidateCount": 0
+        },
+        {
+          "id": "III-1",
+          "title": "고려의 건국과 정치 변화",
+          "reviewedPrintedPages": [
+            76,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            83,
+            84,
+            85
+          ],
+          "reviewedFullPdfPages": [
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81,
+            82,
+            83
+          ],
+          "reviewedSemesterPdfPages": [
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81
+          ],
+          "candidateCount": 96
+        },
+        {
+          "id": "III-2",
+          "title": "고려의 대외 관계",
+          "reviewedPrintedPages": [
+            86,
+            87,
+            88,
+            89,
+            90,
+            91
+          ],
+          "reviewedFullPdfPages": [
+            84,
+            85,
+            86,
+            87,
+            88,
+            89
+          ],
+          "reviewedSemesterPdfPages": [
+            82,
+            83,
+            84,
+            85,
+            86,
+            87
+          ],
+          "candidateCount": 18
+        },
+        {
+          "id": "III-3",
+          "title": "몽골의 간섭과 고려의 개혁",
+          "reviewedPrintedPages": [
+            92,
+            93,
+            94,
+            95,
+            96,
+            97,
+            98,
+            99
+          ],
+          "reviewedFullPdfPages": [
+            90,
+            91,
+            92,
+            93,
+            94,
+            95,
+            96,
+            97
+          ],
+          "reviewedSemesterPdfPages": [
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            94,
+            95
+          ],
+          "candidateCount": 46
+        },
+        {
+          "id": "III-4",
+          "title": "고려의 생활과 문화",
+          "reviewedPrintedPages": [
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            107,
+            108,
+            109
+          ],
+          "reviewedFullPdfPages": [
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            107
+          ],
+          "reviewedSemesterPdfPages": [
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105
+          ],
+          "candidateCount": 72
+        },
+        {
+          "id": "III-review",
+          "title": "III 단원 마무리와 활동",
+          "reviewedPrintedPages": [
+            110,
+            111
+          ],
+          "reviewedFullPdfPages": [
+            108,
+            109
+          ],
+          "reviewedSemesterPdfPages": [
+            106,
+            107
+          ],
+          "candidateCount": 10
+        },
+        {
+          "id": "cross-era",
+          "title": "조선의 교육·관리 등용과 향리 비교",
+          "reviewedPrintedPages": [
+            119
+          ],
+          "reviewedFullPdfPages": [
+            117
+          ],
+          "reviewedSemesterPdfPages": [],
+          "candidateCount": 4
+        }
+      ]
+    },
+    "late": {
+      "summary": {
+        "reviewRows": 432,
+        "maximumDefinitionLength": 101,
+        "sourceReferenceCount": 450,
+        "statusCounts": {
+          "add": 421,
+          "update": 11,
+          "alreadyAdequate": 131,
+          "integratedByOtherSection": 4,
+          "excluded": 49
+        },
+        "historyUpdates": 6,
+        "placeUpdates": 5,
+        "externalEvidenceTerms": [
+          "인내천",
+          "삼백 산업",
+          "헤이그 특사",
+          "측우기",
+          "호적",
+          "천주교",
+          "국민 국가",
+          "민주주의",
+          "광무개혁",
+          "민립 대학 설립 운동",
+          "조선어 학회",
+          "민족 유일당 운동",
+          "카이로 선언",
+          "포츠담 선언",
+          "국제 통화 기금",
+          "경제 협력 개발 기구",
+          "자유 무역 협정",
+          "국내 총생산",
+          "국민 총소득",
+          "계엄",
+          "비무장 지대"
+        ]
+      },
+      "pagesPerSection": {
+        "IV-1 통치 체제와 대외 관계": 8,
+        "IV-2 사림 세력과 정치 변화": 6,
+        "IV-3 문화의 발달과 사회 변화": 6,
+        "IV-4 왜란·호란의 발발과 영향": 6,
+        "IV 마무리": 2,
+        "V 도입 연표": 2,
+        "V-1 조선 후기의 정치 변동": 6,
+        "V-2 사회 변화와 농민의 봉기": 6,
+        "V-3 학문과 예술의 새로운 경향": 8,
+        "V-4 생활과 문화의 새로운 양상": 6,
+        "V 마무리": 2,
+        "VI 도입 연표": 2,
+        "VI-1 국민 국가의 수립": 12,
+        "VI-2 자본주의와 사회 변화": 10,
+        "VI-3 민주주의의 발전": 8,
+        "VI-4 평화 통일을 위한 노력": 6,
+        "VI 마무리": 2
+      }
+    },
+    "atlas": {
+      "summary": {
+        "authored": 205,
+        "history": 158,
+        "existingPlaceUpdates": 45,
+        "newPlaces": 2,
+        "retainedCandidates": 78
+      },
+      "units": [
+        {
+          "title": "표지·차례·사용 안내",
+          "pdfPages": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "status": "front-matter",
+          "reviewedWordCount": 0
+        },
+        {
+          "title": "역사 학습의 기초",
+          "pdfPages": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "status": "shared-concepts-reviewed-by-parent",
+          "reviewedWordCount": 0
+        },
+        {
+          "title": "문명의 발생과 고대 세계의 형성",
+          "pdfPages": [
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 41
+        },
+        {
+          "title": "세계 종교의 확산과 지역 문화의 발전·르네상스",
+          "pdfPages": [
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 41
+        },
+        {
+          "title": "지역 세계의 교류와 변화·음식과 교역",
+          "pdfPages": [
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 33
+        },
+        {
+          "title": "제국주의와 국민 국가 건설 운동",
+          "pdfPages": [
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 33
+        },
+        {
+          "title": "세계 대전과 사회 변동",
+          "pdfPages": [
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 21
+        },
+        {
+          "title": "현대 세계의 전개와 과제",
+          "pdfPages": [
+            54,
+            55,
+            56,
+            57,
+            58,
+            59
+          ],
+          "status": "reviewed",
+          "reviewedWordCount": 17
+        },
+        {
+          "title": "한국사 구분 표지",
+          "pdfPages": [
+            60,
+            61
+          ],
+          "status": "front-matter",
+          "reviewedWordCount": 0
+        },
+        {
+          "title": "국가의 형성과 발전",
+          "pdfPages": [
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 5
+        },
+        {
+          "title": "통일 신라와 발해",
+          "pdfPages": [
+            70,
+            71,
+            72,
+            73
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 1
+        },
+        {
+          "title": "고려의 성립과 변천",
+          "pdfPages": [
+            74,
+            75,
+            76,
+            77,
+            78,
+            79,
+            80,
+            81
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 4
+        },
+        {
+          "title": "조선의 성립과 발전",
+          "pdfPages": [
+            82,
+            83,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 0
+        },
+        {
+          "title": "조선 사회의 변동",
+          "pdfPages": [
+            90,
+            91,
+            92,
+            93,
+            94,
+            95
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 1
+        },
+        {
+          "title": "근·현대 사회로의 전환",
+          "pdfPages": [
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105
+          ],
+          "status": "places-reviewed-korean-concepts-delegated",
+          "reviewedWordCount": 3
+        },
+        {
+          "title": "직업으로 역사 읽기",
+          "pdfPages": [
+            106,
+            107
+          ],
+          "status": "reviewed-no-core-map-addition",
+          "reviewedWordCount": 0
+        }
+      ]
+    }
+  },
+  "sourceCautions": [
+    {
+      "word": "백운동 서원",
+      "printedPage": 125,
+      "issue": "교과서 연표는 1542년, 기존 검증된 사전은 1543년이다.",
+      "resolution": "교과서 연표 수치를 복사하여 기존 정의를 덮어쓰지 않음."
+    },
+    {
+      "word": "현량과",
+      "printedPage": 124,
+      "issue": "낱말풀이가 과거를 치르지 않고 등용한다고 요약하여 시험 절차가 없다는 오해를 줄 수 있다.",
+      "resolution": "기존 사전의 추천받아 시험을 거쳐 뽑았다는 설명 유지."
+    },
+    {
+      "word": "인내천",
+      "printedPage": 153,
+      "issue": "최제우의 동학과 후대 손병희의 인내천 용례가 한 문장에 섞여 있다.",
+      "resolution": "국사편찬위원회 용어 해설로 천도교의 용례를 확인하고 externalSources에 근거 추가."
+    },
+    {
+      "word": "삼백 산업",
+      "printedPage": 190,
+      "issue": "원조 농산물과 생산품을 혼동하지 않도록 원료·제품 구분이 필요하다.",
+      "resolution": "국사편찬위원회 설명에 따라 제분·제당·면방직 산업과 제품을 구분하여 새로 서술함."
+    },
+    {
+      "word": "38도선",
+      "printedPage": 204,
+      "issue": "도입부의 전후 남북 경계를 38도선으로만 표현한 문장은 군사 분계선과 혼동할 수 있다.",
+      "resolution": "광복 직후 분할 점령 경계로 한정하고 전후 군사 분계선과 구별함."
+    },
+    {
+      "word": "현대 정치·경제·남북 관계",
+      "printedPage": 202,
+      "issue": "교과서의 현재·최근 표현과 수치가 이후 시점에도 유지된다고 단정할 수 없다.",
+      "resolution": "사건 연도와 당시 제도·합의의 내용 중심으로 재서술하고 현재 상태 주장은 제외함."
+    },
+    {
+      "pdfPage": 12,
+      "printedPages": [
+        12
+      ],
+      "issue": "인류 출현 연대와 단선적 진화 설명은 최신 연구와 차이가 있을 수 있어 구체적 연대를 옮기지 않음."
+    },
+    {
+      "pdfPage": 45,
+      "printedPages": [
+        47
+      ],
+      "issue": "대일본 제국 헌법 연도가 1898로 표시됨. 해당 날짜를 뜻풀이에 사용하지 않음."
+    },
+    {
+      "pdfPage": 48,
+      "printedPages": [
+        50
+      ],
+      "issue": "아우슈비츠 희생자 약 400만 명이라는 오래된 수치를 사용하지 않음. 구체적 인원 없이 학살 시설과 기억 장소를 설명함."
+    },
+    {
+      "pdfPage": 48,
+      "printedPages": [
+        50
+      ],
+      "issue": "메닌 게이트를 전사자 묘역으로 단정하지 않고 추모 시설로 설명함."
+    },
+    {
+      "pdfPage": 52,
+      "printedPages": [
+        54
+      ],
+      "issue": "네루의 무력 저항 설명을 그대로 수록하지 않음. 네루 인물 항목은 이번 작성에서 제외함."
+    },
+    {
+      "pdfPage": 53,
+      "printedPages": [
+        55
+      ],
+      "issue": "5·4 운동 이후 국민당 결성이라는 단순한 선후 관계를 옮기지 않음."
+    },
+    {
+      "pdfPage": 60,
+      "printedPages": [
+        62
+      ],
+      "issue": "숭례문 사진의 서울 종로 위치 설명을 재사용하지 않음."
+    },
+    {
+      "pdfPage": 74,
+      "printedPages": [
+        78
+      ],
+      "issue": "공산 전투에서 고려가 승리한 듯한 도입 설명을 사용하지 않음. 기존 공산/팔공산의 고려 패배 설명을 유지함."
+    },
+    {
+      "pdfPage": 104,
+      "printedPages": [
+        108
+      ],
+      "issue": "연평도 포격 도표의 2011년 표시는 재사용하지 않음."
+    }
+  ],
+  "externalReferences": [
+    {
+      "word": "양인",
+      "sources": [
+        {
+          "title": "양인, 『한국민족문화대백과사전』",
+          "author": "김성우 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0035708",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "노비",
+      "sources": [
+        {
+          "title": "노비, 『한국민족문화대백과사전』",
+          "author": "권내현 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0012757",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "무신",
+      "sources": [
+        {
+          "title": "무신정권, 『한국민족문화대백과사전』",
+          "author": "민병하 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0019118",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "음각",
+      "sources": [
+        {
+          "title": "국립국어원 우리말샘 · 음각",
+          "author": "국립국어원 우리말샘",
+          "url": "https://opendict.korean.go.kr/dictionary/view?sense_no=248896",
+          "license": "CC BY-SA 2.0 KR",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/kr/",
+          "changes": "뜻풀이를 쉬운 말로 재서술 · 이 항목의 재서술 뜻풀이는 동일한 CC BY-SA 2.0 KR로 제공 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "양각",
+      "sources": [
+        {
+          "title": "국립국어원 우리말샘 · 양각",
+          "author": "국립국어원 우리말샘",
+          "url": "https://opendict.korean.go.kr/dictionary/view?sense_no=220455",
+          "license": "CC BY-SA 2.0 KR",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/kr/",
+          "changes": "뜻풀이를 쉬운 말로 재서술 · 이 항목의 재서술 뜻풀이는 동일한 CC BY-SA 2.0 KR로 제공 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "투각",
+      "sources": [
+        {
+          "title": "국립국어원 우리말샘 · 투각",
+          "author": "국립국어원 우리말샘",
+          "url": "https://opendict.korean.go.kr/dictionary/view?sense_no=302859",
+          "license": "CC BY-SA 2.0 KR",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/kr/",
+          "changes": "뜻풀이를 쉬운 말로 재서술 · 이 항목의 재서술 뜻풀이는 동일한 CC BY-SA 2.0 KR로 제공 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "매병",
+      "sources": [
+        {
+          "title": "매병, 『한국민족문화대백과사전』",
+          "author": "박정민 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0017945",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "향로",
+      "sources": [
+        {
+          "title": "향로, 『한국민족문화대백과사전』",
+          "author": "김창균 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0062901",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "주자(도자기)",
+      "sources": [
+        {
+          "title": "주전자, 『한국민족문화대백과사전』",
+          "author": "윤용이 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0053421",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        },
+        {
+          "title": "백자 주자 · 국립중앙박물관 소장품 검색",
+          "author": "국립중앙박물관",
+          "url": "https://www.museum.go.kr/MUSEUM/contents/M0502000000.do?schM=view&searchId=search&relicId=173578",
+          "license": "공공누리 제1유형 · 출처 표시",
+          "licenseUrl": "https://www.kogl.or.kr/info/licenseType1.do",
+          "changes": "주자와 주전자의 명칭·용도를 확인하여 학생용 뜻풀이로 재서술 · 이미지 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "연적",
+      "sources": [
+        {
+          "title": "연적, 『한국민족문화대백과사전』",
+          "author": "최숙경 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0036900",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "본문의 사실과 용어 의미를 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "인내천",
+      "sources": [
+        {
+          "title": "인내천 · 우리역사넷 교과서 용어 해설",
+          "author": "국사편찬위원회",
+          "url": "https://contents.history.go.kr/front/tg/view.do?levelId=tg_004_0800",
+          "changes": "최제우의 사상과 손병희의 천도교 인내천 용례를 구분하여 뜻풀이를 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "헤이그 특사",
+      "sources": [
+        {
+          "title": "헤이그특사 사건 · 우리역사넷 한국사 연대기",
+          "author": "국사편찬위원회",
+          "url": "https://contents.history.go.kr/mobile/kc/view.do?levelId=kc_i403600",
+          "changes": "교과서의 만국 평화 회의 개최 도시와 특사 파견의 배경을 확인하여 뜻풀이를 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "삼백 산업",
+      "sources": [
+        {
+          "title": "삼백산업 · 우리역사넷 한국사 연대기",
+          "author": "국사편찬위원회",
+          "url": "https://contents.history.go.kr/mobile/kc/view.do?levelId=kc_i502360",
+          "changes": "원조 원료와 생산품을 구분하여 세 산업의 뜻풀이를 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "측우기",
+      "sources": [
+        {
+          "title": "측우기, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0058337",
+          "changes": "세종 때의 제작, 원통과 자를 이용한 측정, 조선 후기의 재설치 사실을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "호적",
+      "sources": [
+        {
+          "title": "호적, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0063846",
+          "changes": "여러 시대에 사용된 호적의 의미와 조선의 인구·세금·군역·신분 확인 용도를 구분하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "천주교",
+      "sources": [
+        {
+          "title": "천주교, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0008156",
+          "changes": "종교의 기본 의미와 조선 후기의 전래를 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "국민 국가",
+      "sources": [
+        {
+          "title": "민족주의, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0020272",
+          "changes": "근대 국민 국가의 형성과 국민의 정치적 결속을 설명한 부분을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        },
+        {
+          "title": "한민족, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0061622",
+          "changes": "국민을 뜻하는 정치적 공동체와 문화적 민족 집단의 차이를 확인하고 동일 혈통이 필수라는 오해를 피하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "민주주의",
+      "sources": [
+        {
+          "title": "민주주의, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0020297",
+          "changes": "국민 주권과 시민의 자유·평등, 정치 참여를 중심으로 뜻풀이를 새로 작성",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "광무개혁",
+      "sources": [
+        {
+          "title": "광무개혁, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0005118",
+          "changes": "광무개혁이라는 명칭과 황제권 강화, 토지·산업·교육·교통 개혁의 내용을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "민립 대학 설립 운동",
+      "sources": [
+        {
+          "title": "민립대학설립운동, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0020095",
+          "changes": "운동의 명칭·시기·주도 인물과 모금 활동, 대학 설립에 이르지 못한 이유를 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "조선어 학회",
+      "sources": [
+        {
+          "title": "조선어 학회 · 우리역사넷 교과서 용어 해설",
+          "author": "국사편찬위원회",
+          "url": "https://contents.history.go.kr/mobile/tg/view.do?levelId=tg_004_2840",
+          "changes": "조선어 연구회와 조선어 학회의 관계, 맞춤법·표준어·사전 편찬 활동을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "민족 유일당 운동",
+      "sources": [
+        {
+          "title": "민족유일당운동, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0020265",
+          "changes": "독립운동 세력의 통합이라는 목적과 시기·활동 지역을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "카이로 선언",
+      "sources": [
+        {
+          "title": "카이로 선언 · 우리역사넷 사료로 본 한국사",
+          "author": "국사편찬위원회",
+          "url": "https://contents.history.go.kr/front/hm/print.do?levelId=hm_143_0010",
+          "changes": "선언 원문과 해설에서 발표 주체·연도와 한국 독립 약속의 시기 표현을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "포츠담 선언",
+      "sources": [
+        {
+          "title": "포츠담 선언, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0066870",
+          "changes": "선언의 발표 주체를 회담 참가국과 구별하고 카이로 선언 이행 조항을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "국제 통화 기금",
+      "sources": [
+        {
+          "title": "What is the IMF? · International Monetary Fund",
+          "author": "국제통화기금(IMF)",
+          "url": "https://www.imf.org/en/about/factsheets/imf-at-a-glance",
+          "changes": "공식 소개에서 통화 협력·금융 안정·정책 조언·자금 지원 역할을 확인하고 교과서의 1997년 사례와 연결하여 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "경제 협력 개발 기구",
+      "sources": [
+        {
+          "title": "About: Better policies for better lives · OECD",
+          "author": "경제협력개발기구(OECD)",
+          "url": "https://www.oecd.org/en/about.html",
+          "changes": "공식 소개의 정책 협력·통계·분석 역할을 확인하고 교과서의 한국 가입 연도와 연결하여 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "자유 무역 협정",
+      "sources": [
+        {
+          "title": "자유무역협정(FTA)이란? · 관세청 FTA 포털",
+          "author": "관세청",
+          "url": "https://www2.customs.go.kr/ftaportalkor/cm/cntnts/cntntsView.do?cntntsId=981&mi=3304",
+          "changes": "FTA의 당사국 간 무역 장벽 완화라는 의미를 학생 수준으로 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "국내 총생산",
+      "sources": [
+        {
+          "title": "국내총생산 · 지표누리",
+          "author": "국가데이터처 지표누리",
+          "url": "https://index.go.kr/unity/potal/indicator/IndexInfo.do?idxCd=5001",
+          "changes": "국내 생산 범위와 최종 재화·서비스라는 지표 정의를 확인하여 새로 서술하고 시점에 따라 변하는 수치는 사용하지 않음",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "국민 총소득",
+      "sources": [
+        {
+          "title": "1인당 국민총소득(GNI) · 지표누리",
+          "author": "국가데이터처 지표누리",
+          "url": "https://www.index.go.kr/unity/potal/indicator/IndexInfo.do?idxCd=F0133",
+          "changes": "국민총소득의 거주자 기준과 국외 순수취 요소소득을 확인하여 국민총소득 자체의 뜻을 새로 서술하고 1인당 지표와 구별",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "계엄",
+      "sources": [
+        {
+          "title": "계엄, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0003200",
+          "changes": "전쟁 등에 준하는 비상사태, 군의 역할과 법적 요건, 비상계엄의 권리 제한 가능성을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18",
+          "license": "공공저작물 자유이용·출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse"
+        }
+      ]
+    },
+    {
+      "word": "비무장 지대",
+      "sources": [
+        {
+          "title": "군사정전협정 제1조 · 통일부 남북관계관리단",
+          "author": "통일부",
+          "url": "https://dialogue.unikorea.go.kr/ukd/a/ad/usrtaltotal/View.do?id=162",
+          "changes": "정전협정 제1조의 양쪽 각 2km 후퇴·완충지대·적대 행위 금지 조항과 1953년 체결 시점을 확인하여 새로 서술",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "말갈",
+      "sources": [
+        {
+          "title": "말갈, 『한국민족문화대백과사전』",
+          "author": "김락기 · 한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0017802",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "거주 지역과 발해의 주민 구성에 관한 사실을 확인하여 학생용 뜻풀이를 새로 작성 · 미디어 미사용",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "전국 시대(일본)",
+      "sources": [
+        {
+          "title": "나라현 공식 관광 안내 · History — Sengoku",
+          "author": "일본 나라현",
+          "url": "https://www.visitnara.jp/history/",
+          "changes": "일본 전국 시대의 정치적 배경을 확인하여 한국어 학습용 풀이를 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "권리 청원",
+      "sources": [
+        {
+          "title": "영국 의회 · The Petition of Right",
+          "author": "UK Parliament · Parliamentary Archives",
+          "url": "https://www.parliament.uk/about/living-heritage/evolutionofparliament/parliamentaryauthority/civilwar/collections/petition-of-right/",
+          "changes": "원문 기록의 연도와 요구 사항을 확인하여 한국어 학습용 풀이를 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "사료",
+      "sources": [
+        {
+          "title": "사료, 『한국민족문화대백과사전』",
+          "author": "한국학중앙연구원",
+          "url": "https://encykorea.aks.ac.kr/Article/E0025532",
+          "license": "공공저작물 자유이용 · 출처 표시",
+          "licenseUrl": "https://encykorea.aks.ac.kr/Guide/ContentUse",
+          "changes": "사료의 종류와 검증 방법을 확인하여 학습용 설명을 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "사르디스",
+      "sources": [
+        {
+          "title": "UNESCO 세계유산센터 · Sardis and the Lydian Tumuli of Bin Tepe",
+          "author": "UNESCO 세계유산센터",
+          "url": "https://whc.unesco.org/en/list/1731/",
+          "license": "CC BY-SA 3.0 IGO",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0/igo/",
+          "changes": "영문 설명을 한국어로 번역·요약하고 중학생 수준으로 재구성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "파탈리푸트라",
+      "sources": [
+        {
+          "title": "인도 비하르주 파트나 지구 · History",
+          "author": "District Patna, Government of Bihar",
+          "url": "https://patna.nic.in/history/",
+          "changes": "고대 수도의 위치와 왕조를 확인하여 학습용 설명을 새로 작성",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "카슈가르",
+      "sources": [
+        {
+          "title": "UNESCO · On the Silk Roads — The Desert Route Expedition",
+          "author": "UNESCO 실크로드 프로그램",
+          "url": "https://www.unesco.org/archives/multimedia/document-4583",
+          "changes": "파미르 기슭의 위치와 옛 비단길의 상업 중심지였음을 확인하여 풀이 보완",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    },
+    {
+      "word": "카슈가르",
+      "sources": [
+        {
+          "title": "UNESCO · On the Silk Roads — The Desert Route Expedition",
+          "author": "UNESCO 실크로드 프로그램",
+          "url": "https://www.unesco.org/archives/multimedia/document-4583",
+          "changes": "파미르 기슭의 위치와 옛 비단길의 상업 중심지였음을 확인하여 풀이 보완",
+          "retrievedAt": "2026-10-18"
+        }
+      ]
+    }
+  ],
+  "ui": {
+    "railWidthBefore": 64,
+    "railWidthAfter": 54,
+    "pointerTarget": 44,
+    "labels": [
+      "0-9",
+      "a-z"
+    ],
+    "labelSuffix": null,
+    "viewportsChecked": [
+      390,
+      768,
+      1280
+    ],
+    "horizontalOverflow": false,
+    "railInternalScroll": false,
+    "checks": [
+      "숫자·영문 펼침",
+      "키보드 초성 이동",
+      "모바일 두 줄 필터",
+      "복수 태그 선택",
+      "좁은 화면 출처 펼침"
+    ],
+    "memoButtonOverlapFix": {
+      "reason": "운영 교사 화면의 a-z 버튼과 우측 하단 메모 버튼 겹침 확인",
+      "scope": "패치 메모 버튼이 있는 화면만 기존 하단 여유 토큰 적용",
+      "desktop1280": {
+        "railBottom": 772,
+        "memoTop": 820
+      },
+      "mobile390": {
+        "railBottom": 724,
+        "memoTop": 764
+      },
+      "latinExpansionClickable": true,
+      "internalScroll": false,
+      "build": "passed"
+    }
+  },
+  "independentReview": {
+    "representativeTermsComparedToPdf": 47,
+    "findingsResolved": [
+      "한 군현",
+      "말갈",
+      "아스카 문화",
+      "스에키",
+      "우산국"
+    ],
+    "remainingConfirmedDefects": 0
+  },
+  "validation": {
+    "npm run build": "passed",
+    "npm --prefix functions run check": "passed",
+    "npm run format:check": "passed",
+    "textbookRegression": {
+      "reviewed": 1090,
+      "originalIdsAndSourcesPreserved": true,
+      "printedPageMappingVerified": true,
+      "ambiguousMatchesRejected": true,
+      "newPlaceMapLinksNotInvented": true
+    }
+  },
+  "files": {
+    "historyDictionaryTextbookAtlas.ts": "e927d4fcad799b3cc2b4047840897699a4d053ed570b292884185c06862da078",
+    "historyDictionaryTextbookEarly.ts": "a808803ec218a5f5ce9ffb3cc1c126f5ff5d67b24fc459e62e936aba452c0c04",
+    "historyDictionaryTextbookLate.ts": "e1ed887275e0880b2c05f73d6b34ac8ddbe99da08bddc6f95fa36a67ce4047d5",
+    "historyDictionaryTextbookSupplement.ts": "0a1955cbd97e5bd069543949b5b4ebea9748a6120a34888ee8281f85d8b215e3",
+    "historyDictionaryTextbookTypes.ts": "a7abfb6ff67708dfe37d45f6864968a95c6476d82a39b36dda5d08602dd0a39a"
+  },
+  "fileHashNormalization": "UTF-8 with LF",
+  "firebaseVerification": {
+    "mode": "verify",
+    "projectId": "history-quiz-yongsin",
+    "collection": "history_dictionary_catalog",
+    "sourceHash": "213fdffa97c02311b1bd100eb49f1eade7cba8c0493ae8a5c7c5391e1017e9a2",
+    "total": 3367,
+    "history": 1125,
+    "places": 2242,
+    "attributions": 4863,
+    "applied": {
+      "create": 994,
+      "update": 96,
+      "batches": 6
+    },
+    "counts": {
+      "create": 0,
+      "update": 0,
+      "unchanged": 3367,
+      "conflict": 0
+    },
+    "verified": true
+  }
+}

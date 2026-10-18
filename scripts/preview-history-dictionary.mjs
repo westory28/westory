@@ -1,7 +1,7 @@
 /** Real dictionary UI with in-memory fixtures. No Firebase connection or live writes.
  * node scripts/preview-history-dictionary.mjs
  * ?mode=student|floating|teacher&width=390|768|1280
- * Optional: &empty=1&listError=1&saveError=1&lookupError=1&delay=1000&archived=1&catalogError=1
+ * Optional: &memo=1 (teacher floating-control overlap), &empty=1&listError=1&saveError=1&lookupError=1&delay=1000&archived=1&catalogError=1
  * Browser interaction is intentionally left to the approved browser tool.
  */
 import { build } from "esbuild";
@@ -60,7 +60,7 @@ import './src/components/layout/studentLayout.css';
 const params=new URLSearchParams(location.search);const mode=params.get('mode')||'student';
 const width=Number(params.get('width')||1280);
 document.documentElement.style.setProperty('--fixture-width',width+'px');
-function Fixture(){return <MemoryRouter initialEntries={[mode==='teacher'?'/teacher/lesson/history-dictionary?panel='+(params.get('panel')||'terms'):'/student/dashboard']}><div className="student-layout">{mode==='teacher'?<Teacher/>:mode==='floating'?<><h1 className="p-6 text-xl font-bold">가상 학생 학습 화면</h1><p className="px-6">오른쪽 아래 사전 버튼을 누르세요.</p><Floating/></>:<Student/>}</div></MemoryRouter>}
+function Fixture(){return <MemoryRouter initialEntries={[mode==='teacher'?'/teacher/lesson/history-dictionary?panel='+(params.get('panel')||'terms'):'/student/dashboard']}><div className="student-layout">{mode==='teacher'?<Teacher/>:mode==='floating'?<><h1 className="p-6 text-xl font-bold">가상 학생 학습 화면</h1><p className="px-6">오른쪽 아래 사전 버튼을 누르세요.</p><Floating/></>:<Student/>}</div>{params.has('memo')&&<button data-patch-memo-root="true" aria-label="검증용 패치 메모" style={{position:'fixed',right:24,bottom:24,width:56,height:56,zIndex:112,borderRadius:'50%',background:'#fff',border:'1px solid #ddd'}}>메모</button>}</MemoryRouter>}
 createRoot(document.getElementById('root')).render(<Fixture/>);
 `;
 const compiled = await build({

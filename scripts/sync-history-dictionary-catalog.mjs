@@ -14,7 +14,7 @@ import { build } from "esbuild";
 export const COLLECTION = "history_dictionary_catalog";
 export const MANAGED_BY = "westory-history-dictionary-catalog";
 export const SCHEMA_VERSION = 1;
-export const EXPECTED_SOURCE_COUNT = 2373;
+export const EXPECTED_SOURCE_COUNT = 3367;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const reservedKeys = new Set([
   "schemaVersion",
@@ -94,8 +94,10 @@ export function validateCatalogSource(
       fail("CATALOG_SOURCE_CONTENT_INVALID");
     if (
       term.kind === "place" &&
-      (!nonempty(term.atlasPlaceId) ||
-        term.id !== `catalog-place-${term.atlasPlaceId}`)
+      (term.atlasPlaceId
+        ? term.id !== `catalog-place-${term.atlasPlaceId}`
+        : term.id !==
+          `catalog-place-reference-${encodeURIComponent(term.word)}`)
     )
       fail("CATALOG_SOURCE_PLACE_ID_INVALID");
     if (

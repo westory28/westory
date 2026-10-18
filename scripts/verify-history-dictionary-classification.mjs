@@ -22,9 +22,8 @@ function load(filename) {
   );
   return exports;
 }
-const { getHistoryDictionaryCatalog, searchHistoryDictionaryCatalog } = load(
-  "src/lib/historyDictionaryCatalog.ts",
-);
+const { getHistoryDictionaryBaselineCatalog, searchHistoryDictionaryCatalog } =
+  load("src/lib/historyDictionaryCatalog.ts");
 const themes = load("src/lib/historyDictionaryThemes.ts");
 const {
   historyDictionaryFacets: facets,
@@ -33,7 +32,9 @@ const {
   getHistoryDictionaryTermFacets,
   matchesHistoryDictionaryFacets,
 } = themes;
-const terms = getHistoryDictionaryCatalog();
+// Preserve the original map/worksheet classification audit. Textbook revisions
+// are independently checked against their page evidence in the textbook check.
+const terms = getHistoryDictionaryBaselineCatalog();
 const metadata = load("src/data/historyDictionaryClassification.ts");
 const audit = JSON.parse(
   readFileSync(

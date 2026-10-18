@@ -1,4 +1,5 @@
 import { historyDictionaryCoreRows } from "../data/historyDictionaryCore";
+import { applyHistoryDictionaryTextbookReviews } from "./historyDictionaryTextbooks";
 import {
   historyDictionaryCoreClassification,
   historyDictionaryPlaceClassification,
@@ -54,12 +55,13 @@ export type HistoryDictionaryCoreRow = [
 const normalize = (value: string) =>
   value.normalize("NFKC").toLocaleLowerCase("ko").replace(/\s+/gu, "");
 
+let baselineCatalog: HistoryDictionaryCatalogTerm[] | undefined;
 let catalog: HistoryDictionaryCatalogTerm[] | undefined;
 
 /** Load this module with import() so reference data is downloaded on demand. */
-export const getHistoryDictionaryCatalog =
+export const getHistoryDictionaryBaselineCatalog =
   (): HistoryDictionaryCatalogTerm[] => {
-    if (catalog) return catalog;
+    if (baselineCatalog) return baselineCatalog;
     const history: HistoryDictionaryCatalogTerm[] =
       historyDictionaryCoreRows.map(
         ([word, definition, title, revision, tags, aliases]) => ({
@@ -106,9 +108,14 @@ export const getHistoryDictionaryCatalog =
           ),
         }),
       );
-    catalog = [...history, ...places];
-    return catalog;
+    baselineCatalog = [...history, ...places];
+    return baselineCatalog;
   };
+
+export const getHistoryDictionaryCatalog = (): HistoryDictionaryCatalogTerm[] =>
+  (catalog ||= applyHistoryDictionaryTextbookReviews(
+    getHistoryDictionaryBaselineCatalog(),
+  ));
 
 const searchIndexes = new WeakMap<
   HistoryDictionaryCatalogTerm[],

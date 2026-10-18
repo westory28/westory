@@ -133,6 +133,15 @@ assert.equal((selectedLetter.match(/aria-expanded="true"/g) || []).length, 1);
 assert.match(selectedLetter, /aria-label="a · 2개"[^>]*aria-pressed="true"/);
 assert.equal((render("0-9").match(/aria-expanded="true"/g) || []).length, 1);
 assert.equal((render("a-z").match(/aria-expanded="true"/g) || []).length, 1);
+for (const value of ["", "0-9", "a-z"]) {
+  const markup = render(value);
+  for (const group of ["0-9", "a-z"])
+    assert.match(
+      markup,
+      new RegExp(`data-history-initial="${group}"[^>]*>${group}</button>`),
+      "Numeric and Latin controls display only their group label in both disclosure states",
+    );
+}
 console.log(
   "PASS bounded visible rows, all digit/Latin selections, group disclosure semantics, and accessible counts",
 );

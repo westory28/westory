@@ -353,17 +353,17 @@ test("empty catalog fails explicitly while an empty final page is allowed", asyn
   assert.deepEqual(await f.handler(request("catalog", { after: `${CATALOG_COLLECTION}/catalog-history-last` })), { items: [], nextCursor: "" });
 });
 
-test("catalog pagination preserves all 2,373 complete source records across 500-document pages", async () => {
+test("catalog pagination preserves the complete reviewed source across 500-document pages", async () => {
   const { loadCatalogSource, catalogDocumentFor } = await import("../../scripts/sync-history-dictionary-catalog.mjs");
   const { terms } = await loadCatalogSource();
   const f = fixture();
   for (const entry of terms) f.documents.set(`${CATALOG_COLLECTION}/${entry.id}`, { ...catalogDocumentFor(entry), updatedAt: stamp });
   const { items, pages } = await allPages(f, "catalog");
-  assert.equal(items.length, 2373);
-  assert.deepEqual(pages.map(page => page.items.length), [500, 500, 500, 500, 373]);
+  assert.equal(items.length, terms.length);
+  assert.deepEqual(pages.map(page => page.items.length), [...Array(Math.floor(terms.length / 500)).fill(500), terms.length % 500]);
   assert.ok(f.queries.every(query => query.limit === CATALOG_PAGE_SIZE && !query.group));
   const expected = new Map(terms.map(entry => [entry.id, entry]));
-  assert.equal(new Set(items.map(entry => entry.id)).size, 2373);
+  assert.equal(new Set(items.map(entry => entry.id)).size, terms.length);
   for (const entry of items) assert.deepEqual(entry, expected.get(entry.id), `${entry.id}: preserve every alias, tag, facet and attribution`);
   const sample = terms[0];
   for (const malformed of [
