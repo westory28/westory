@@ -70,7 +70,7 @@ const mocks = {
   "qa-service": `
 import {MENUS} from ${source("src/constants/menus.ts")};
 const params=new URLSearchParams(location.search),teacher=params.has('teacher');
-export const qa=window.openingQa={calls:[],writes:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)}};
+export const qa=window.openingQa={calls:[],writes:[],settings:${JSON.stringify({ ...core.DEFAULT_GAME_SETTINGS, enabled: true })}};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
 export const auth={currentUser:{uid:'opening-qa',email:teacher?'westoria28@gmail.com':'student@example.invalid'}};
 const state={config,currentUser:auth.currentUser,userData:{uid:'opening-qa',role:teacher?'teacher':'student',teacherPortalEnabled:teacher,staffPermissions:[],name:'검증 계정',weplayGuideCompleted:!params.has('guide')},loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,menuConfig:MENUS,settingsLoadedAt:Date.now(),refreshConfig:async()=>{},refreshMenuConfig:async()=>{},refreshInterfaceConfig:async()=>{},logout:async()=>{}};
@@ -87,7 +87,9 @@ export const getHttpsCallable=async name=>async data=>{
  if(name==='previewWeplayGame'||name==='startWeplayGame')return {data:session(data?.mode)};
  throw new Error('Unexpected service call: '+name);
 };
-export const getYutLobby=async()=>{qa.calls.push({name:'getYutLobby'});return {room:null,classes:[{id:'qa-class',label:'1학년 1반'}],classId:'qa-class',serverNowMs:Date.now()}};
+export const getYutLobby=async()=>{qa.calls.push({name:'getYutLobby'});return {enabled:true,room:null,classes:[{id:'qa-class',label:'1학년 1반'}],classId:'qa-class',serverNowMs:Date.now()}};
+export const getYutManagement=async()=>{qa.calls.push({name:'getYutManagement'});return {settings:{enabled:true,version:1},rooms:[],truncated:false,serverNowMs:Date.now()}};
+export const saveYutSettings=async()=>{throw new Error('Unexpected Yut settings write')};
 export const commandYutRoom=async()=>{throw new Error('Unexpected Yut command')};
 export const subscribeYutRoom=()=>()=>{};
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
@@ -256,6 +258,7 @@ const errors = [],
   checks = [],
   screenshots = [],
   geometry = [],
+  linkedFrames = [],
   diagnostics = [];
 let failure;
 async function openAudio(route, extra = "") {
@@ -626,6 +629,187 @@ async function introSample(page) {
     };
   });
 }
+async function verifyLinkedIntro() {
+  for (const width of [390, 768, 1280]) {
+    for (const reducedMotion of ["no-preference", "reduce"]) {
+      const page = await open(
+        "/student/weplay?game=history-rain",
+        width,
+        "",
+        reducedMotion,
+      );
+      await page.locator("[data-intro-point]").waitFor();
+      await page.clock.runFor(500);
+      await page.evaluate(() => {
+        const intro = document.querySelector(".weplay-studio-intro");
+        const dot = intro.querySelector("[data-intro-point]");
+        const prefix = intro.querySelector(".weplay-studio-intro__prefix");
+        const svg = dot.ownerSVGElement;
+        const opacity = (element) => {
+          let value = 1;
+          for (
+            let node = element;
+            node && node !== intro.parentElement;
+            node = node.parentElement
+          ) {
+            const style = getComputedStyle(node);
+            if (style.display === "none" || style.visibility === "hidden")
+              return 0;
+            value *= Number(style.opacity);
+          }
+          return value;
+        };
+        const start = performance.now();
+        const samples = (window.linkedIntroQa = []);
+        const captureFrame = (now) => {
+          if (!intro.isConnected) return;
+          const currentDot = intro.querySelector("[data-intro-point]");
+          const currentPrefix = intro.querySelector(
+            ".weplay-studio-intro__prefix",
+          );
+          const center = new DOMPoint(
+            currentDot.cx.baseVal.value,
+            currentDot.cy.baseVal.value,
+          )
+            .matrixTransform(currentDot.getScreenCTM())
+            .matrixTransform(svg.getScreenCTM().inverse());
+          const rect = currentPrefix.getBoundingClientRect();
+          const story = intro.querySelector(".weplay-studio-intro__westory");
+          const play = intro.querySelector(".weplay-studio-intro__weplay");
+          samples.push({
+            time: now - start,
+            sameDot: currentDot === dot,
+            dotCount: intro.querySelectorAll("[data-intro-point]").length,
+            x: center.x,
+            y: center.y,
+            radius: currentDot.r.baseVal.value,
+            dotOpacity: opacity(currentDot),
+            samePrefix: currentPrefix === prefix,
+            prefixCount: intro.querySelectorAll(".weplay-studio-intro__prefix")
+              .length,
+            prefixText: currentPrefix.textContent,
+            prefixBox: {
+              x: rect.x,
+              y: rect.y,
+              width: rect.width,
+              height: rect.height,
+            },
+            prefixOpacity: opacity(currentPrefix),
+            story: {
+              text: story.textContent,
+              opacity: opacity(story),
+              transform: getComputedStyle(story).transform,
+            },
+            play: {
+              text: play.textContent,
+              opacity: opacity(play),
+              transform: getComputedStyle(play).transform,
+            },
+            secondaryRadius: intro.querySelector(
+              "[data-intro-secondary-button]",
+            ).r.baseVal.value,
+          });
+          if (now - start < 1800) requestAnimationFrame(captureFrame);
+        };
+        requestAnimationFrame(captureFrame);
+      });
+      await page.clock.runFor(700);
+      await capture(page, `linked-${width}-${reducedMotion}-departure`);
+      await page.clock.runFor(350);
+      await capture(page, `linked-${width}-${reducedMotion}-middle`);
+      await page.clock.runFor(650);
+      await capture(page, `linked-${width}-${reducedMotion}-landing`);
+      const samples = await page.evaluate(() => window.linkedIntroQa);
+      assert(
+        samples.length >= 80,
+        "Continuous frame sampling must cover the transfer",
+      );
+      const first = samples[0],
+        last = samples.at(-1);
+      let maximumStep = 0,
+        maximumSpeed = 0;
+      for (const [index, sample] of samples.entries()) {
+        assert(
+          sample.sameDot && sample.dotCount === 1,
+          "One identical circle must survive the entire transfer",
+        );
+        assert(sample.dotOpacity > 0.99, JSON.stringify(sample));
+        assert(
+          sample.samePrefix &&
+            sample.prefixCount === 1 &&
+            sample.prefixText === "We",
+        );
+        assert(sample.prefixOpacity > 0.99, JSON.stringify(sample));
+        for (const key of ["x", "y", "width", "height"])
+          assert(
+            Math.abs(sample.prefixBox[key] - first.prefixBox[key]) < 0.1,
+            "The shared We box must remain fixed: " + JSON.stringify(sample),
+          );
+        assert.equal(sample.story.text, "story");
+        assert.equal(sample.play.text, "play");
+        if (index) {
+          const previous = samples[index - 1];
+          const step = Math.hypot(sample.x - previous.x, sample.y - previous.y);
+          maximumStep = Math.max(maximumStep, step);
+          maximumSpeed = Math.max(
+            maximumSpeed,
+            step / (sample.time - previous.time),
+          );
+          assert(
+            step < 10 && step / (sample.time - previous.time) < 0.6,
+            "The dot must not jump between consecutive frames",
+          );
+          assert(sample.story.opacity <= previous.story.opacity + 0.001);
+          assert(sample.play.opacity >= previous.play.opacity - 0.001);
+        }
+      }
+      assert(
+        Math.abs(Math.hypot(first.x - 180, first.y - 180) - 148) < 0.1,
+        "The same dot starts on the globe orbit",
+      );
+      assert(
+        Math.abs(last.x - 233) < 0.01 &&
+          Math.abs(last.y - 166) < 0.01 &&
+          Math.abs(last.radius - 8) < 0.01,
+        JSON.stringify(last),
+      );
+      assert(first.story.opacity > 0.99 && first.play.opacity < 0.01);
+      assert(last.story.opacity < 0.01 && last.play.opacity > 0.99);
+      assert(
+        samples.some(
+          (sample) =>
+            sample.story.opacity > 0.1 &&
+            sample.story.opacity < 0.9 &&
+            sample.play.opacity < 0.01,
+        ),
+        "story fades before play appears",
+      );
+      assert(
+        samples.some(
+          (sample) =>
+            sample.story.opacity < 0.01 &&
+            sample.play.opacity > 0.1 &&
+            sample.play.opacity < 0.9,
+        ),
+        "play rises after story leaves",
+      );
+      assert.equal(first.secondaryRadius, 0);
+      assert(Math.abs(last.secondaryRadius - 8) < 0.01);
+      linkedFrames.push({
+        width,
+        reducedMotion,
+        maximumStep,
+        maximumSpeed,
+        samples,
+      });
+      await page.getByRole("button", { name: /건너뛰기/ }).click();
+      await page.close();
+    }
+  }
+  checks.push(
+    "390/768/1280px normal/reduced motion: the identical fully-visible orbit dot travels continuously to (233,166), radius 8; a single fixed We stays visible while story exits before play rises; secondary button appears afterward.",
+  );
+}
 async function verifyOpeningLayout() {
   for (const width of [390, 768, 1280, 1366, 1440, 1920]) {
     const page = await open("/teacher/weplay?game=history-rain", width);
@@ -884,6 +1068,9 @@ async function verifyOpeningLayout() {
       0,
     );
     await capture(page, "student-yut-portrait-" + width);
+    const callsBeforeRotation = await page.evaluate(() =>
+      window.openingQa.calls.map((call) => call.name),
+    );
     await page.setViewportSize({
       width: width === 390 ? 844 : 1024,
       height: width === 390 ? 390 : 768,
@@ -897,13 +1084,14 @@ async function verifyOpeningLayout() {
       await page.evaluate(() =>
         window.openingQa.calls.map((call) => call.name),
       ),
-      ["getYutLobby"],
+      callsBeforeRotation,
     );
     await page.close();
   }
   checks.push(
     "Merged Yut under the real portal layout retains the game-specific wrapper and 1360px bound; portrait 390/768 gates entry, and landscape rotation restores the lobby without duplicate reads/writes or page overflow.",
   );
+  await verifyLinkedIntro();
 }
 try {
   if (audioOnly) await verifyAudioBrowser();
@@ -938,6 +1126,7 @@ try {
         checks,
         screenshots,
         geometry,
+        linkedFrames,
         errors,
         externalRequests,
         diagnostics,

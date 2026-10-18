@@ -10,6 +10,8 @@ import { createWeplayIntroAudio } from "./weplayIntroAudio";
 import "./weplay-studio-intro.css";
 
 const DURATION = 3600;
+const POINT_DEPARTURE = 1320;
+const POINT_TRAVEL = 600;
 const smooth = (value: number) => {
   const x = Math.max(0, Math.min(1, value));
   return x * x * (3 - 2 * x);
@@ -57,6 +59,14 @@ export default function WeplayStudioIntro({
       "[data-intro-controller]",
     )!;
     const orbit = element.querySelector<SVGGElement>("[data-intro-orbit]")!;
+    const point =
+      element.querySelector<SVGCircleElement>("[data-intro-point]")!;
+    const secondary = element.querySelector<SVGCircleElement>(
+      "[data-intro-secondary-button]",
+    )!;
+    const wordmark = element.querySelector<HTMLElement>(
+      ".weplay-studio-intro__wordmarks",
+    )!;
     const westory = element.querySelector<HTMLElement>(
       ".weplay-studio-intro__westory",
     )!;
@@ -73,6 +83,14 @@ export default function WeplayStudioIntro({
     let last: number | null = null;
     let frame = 0;
     let visible = typeof IntersectionObserver === "undefined";
+    const departureAngle = ((-70 + POINT_DEPARTURE / 12) * Math.PI) / 180;
+    const startX = 180 + 148 * Math.cos(departureAngle);
+    const startY = 180 + 148 * Math.sin(departureAngle);
+    // Match the orbit's tangent velocity at departure, then settle to zero at
+    // the button. The same circle remains visible throughout the handoff.
+    const tangent = (148 * Math.PI * POINT_TRAVEL) / (2160 * 3);
+    const controlX = startX - tangent * Math.sin(departureAngle);
+    const controlY = startY + tangent * Math.cos(departureAngle);
     const draw = (time: number) => {
       const enter = smooth(time / 500);
       const change = smooth((time - 1500) / 600);
@@ -89,11 +107,33 @@ export default function WeplayStudioIntro({
       controller.style.opacity = String(change);
       controller.style.strokeDashoffset = String(1 - change);
       orbit.setAttribute("transform", `rotate(${-70 + time / 12} 180 180)`);
-      orbit.style.opacity = String(enter * (1 - change));
-      westory.style.opacity = String(enter * (1 - change) * leave);
-      westory.style.transform = `translateY(${(1 - enter) * 12 - change * 12}px)`;
-      weplay.style.opacity = String(change * leave);
-      weplay.style.transform = `translateY(${(1 - change) * 12}px)`;
+      orbit.style.opacity = String(1 - smooth((time - POINT_DEPARTURE) / 500));
+      const travel = Math.max(
+        0,
+        Math.min(1, (time - POINT_DEPARTURE) / POINT_TRAVEL),
+      );
+      if (time < POINT_DEPARTURE) {
+        const angle = ((-70 + time / 12) * Math.PI) / 180;
+        point.setAttribute("cx", String(180 + 148 * Math.cos(angle)));
+        point.setAttribute("cy", String(180 + 148 * Math.sin(angle)));
+      } else {
+        const remaining = 1 - travel;
+        const position = (start: number, control: number, end: number) =>
+          remaining ** 3 * start +
+          3 * remaining ** 2 * travel * control +
+          (3 * remaining * travel ** 2 + travel ** 3) * end;
+        point.setAttribute("cx", String(position(startX, controlX, 233)));
+        point.setAttribute("cy", String(position(startY, controlY, 166)));
+      }
+      point.setAttribute("r", String(6 + 2 * smooth(travel)));
+      secondary.setAttribute("r", String(8 * smooth((time - 1850) / 280)));
+      const storyOut = smooth((time - 1350) / 350);
+      const playIn = smooth((time - 1700) / 450);
+      wordmark.style.opacity = String(enter * leave);
+      westory.style.opacity = String(1 - storyOut);
+      westory.style.transform = `translateY(${-storyOut * 0.22}em)`;
+      weplay.style.opacity = String(playIn);
+      weplay.style.transform = `translateY(${(1 - playIn) * 0.4}em)`;
       element.style.setProperty("--intro-art-opacity", String(enter * leave));
     };
     const tick = (now: number) => {
@@ -185,12 +225,6 @@ export default function WeplayStudioIntro({
               className="weplay-studio-intro__orbit"
               d="M180 32a148 148 0 0 1 148 148"
             />
-            <circle
-              cx="328"
-              cy="180"
-              r="6"
-              className="weplay-studio-intro__point"
-            />
           </g>
           <g data-intro-controller className="weplay-studio-intro__controller">
             <path
@@ -198,19 +232,22 @@ export default function WeplayStudioIntro({
               d="M126 128h108c22 0 32 16 37 36l16 66c5 24-16 38-34 22l-29-25h-88l-29 25c-18 16-39 2-34-22l16-66c5-20 15-36 37-36Z"
             />
             <path pathLength="1" d="M120 162v40m-20-20h40" />
-            <circle cx="233" cy="166" r="8" />
-            <circle cx="252" cy="192" r="8" />
+            <circle data-intro-secondary-button cx="252" cy="192" r="0" />
           </g>
+          <circle
+            data-intro-point
+            cx="328"
+            cy="180"
+            r="6"
+            className="weplay-studio-intro__point"
+          />
         </svg>
         <div className="weplay-studio-intro__wordmarks">
-          <div className="weplay-studio-intro__westory">
-            <span>We</span>
-            <span>story</span>
-          </div>
-          <div className="weplay-studio-intro__weplay">
-            <span>We</span>
-            <span>play</span>
-          </div>
+          <span className="weplay-studio-intro__prefix">We</span>
+          <span className="weplay-studio-intro__suffix">
+            <span className="weplay-studio-intro__westory">story</span>
+            <span className="weplay-studio-intro__weplay">play</span>
+          </span>
         </div>
       </div>
       <button
