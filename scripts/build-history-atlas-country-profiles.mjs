@@ -92,6 +92,24 @@ const relationSelections = {
     "2024년 5월, 탄자니아의",
   ],
 };
+// Exclude reviewed source claims instead of rewriting diplomatic dates. The
+// remaining reading text continues to be verbatim openly licensed excerpts.
+const excludedRelationClaims = {
+  // MOFA records September 1973, not November:
+  // https://www.mofa.go.kr/www/nation/m_3458/view.do?seq=28
+  // Omit the precise-day sentence too: AKS lists September 17 while KIEP's
+  // Indonesia report lists September 18; no new date is synthesized here.
+  // https://encykorea.aks.ac.kr/Article/E0046857
+  // https://www.kiep.go.kr/galleryDownload.es?bid=0001&list_no=10672&seq=1
+  IDN: [/1973년\s*11월/u, /1973년\s*9월\s*17일/u],
+  // MOFA's second strategic dialogue records the 70th anniversary in 2020.
+  // https://www.mofa.go.kr/www/brd/m_4080/view.do?seq=370739
+  ESP: [/2019년.*수교.*70주년/u],
+  // MOFA dates diplomatic relations to August 22, 1985, not 1992. Preserve
+  // the source's separate North/South Yemen predecessor-state dates.
+  // https://overseas.mofa.go.kr/www/brd/m_4080/view.do?seq=376324
+  YEM: [/1992년.*외교\s*관계.*수립/u],
+};
 let nextRequestAt = 0;
 
 async function queryArticle(title, language = "ko") {
@@ -446,6 +464,13 @@ await Promise.all(
           return true;
         })
         .slice(0, 4);
+      const retainedRelations = relations.filter(
+        (text) =>
+          !excludedRelationClaims[id]?.some((pattern) => pattern.test(text)),
+      );
+      const excludedRelationshipClaim =
+        retainedRelations.length < relations.length;
+      relations = retainedRelations;
       profiles.push({
         id,
         name,
@@ -485,6 +510,14 @@ await Promise.all(
           .sources.filter((source) => source.role === "relations")
           .forEach((source) => {
             source.changes += ", 중복 주어·조사·국가 지칭 정리";
+          });
+      if (excludedRelationshipClaim)
+        profiles
+          .at(-1)
+          .sources.filter((source) => source.role === "relations")
+          .forEach((source) => {
+            source.changes +=
+              ", 공식 기록과 충돌하거나 일자 확인이 엇갈린 수교 문장 제외";
           });
       if (profiles.length % 20 === 0)
         console.log(`${profiles.length}/${countries.length} country profiles`);

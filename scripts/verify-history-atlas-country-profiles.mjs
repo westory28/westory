@@ -100,6 +100,28 @@ for (const [id, profile] of profiles) {
   }
 }
 
+// Reviewed date conflicts must not return when source revisions are refreshed.
+// Consular/ambassador upgrades and the two Yemen predecessor states are
+// distinct events, so this deliberately does not infer one date per country.
+const indonesiaRelations = profiles.get("IDN").relations.join(" ");
+assert.doesNotMatch(indonesiaRelations, /1973년\s*11월/u);
+assert.doesNotMatch(indonesiaRelations, /1973년\s*9월\s*17일/u);
+assert.match(indonesiaRelations, /2017년.*특별 전략적 동반자 관계/u);
+const spainRelations = profiles.get("ESP").relations.join(" ");
+assert.doesNotMatch(spainRelations, /2019년[^.]*수교[^.]*70주년/u);
+assert.match(spainRelations, /1950년\s*3월\s*수교/u);
+const yemenRelations = profiles.get("YEM").relations.join(" ");
+assert.doesNotMatch(yemenRelations, /1992년[^.]*외교\s*관계[^.]*수립/u);
+assert.match(yemenRelations, /북예멘[^.]*1985년/u);
+assert.match(yemenRelations, /남예멘[^.]*1990년/u);
+for (const id of ["IDN", "ESP", "YEM"])
+  assert(
+    profiles
+      .get(id)
+      .sources.some((source) => source.changes.includes("수교 문장 제외")),
+    `${id}: relationship source records reviewed omissions`,
+  );
+
 // Source-cache verification is available during refresh/review; a clean build
 // uses the committed revision-identified snapshot without network access.
 const cacheDir = "output/atlas-country-sources";
