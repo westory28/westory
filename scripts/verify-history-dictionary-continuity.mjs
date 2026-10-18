@@ -13,6 +13,7 @@ const root = "years/2026/semesters/2";
 const oldRoot = "years/2026/semesters/1";
 const auth = { currentUser: { uid: "student-1" } };
 let epoch = "2026-10-18T00:00:00Z";
+let beforeTokenResult;
 let responder = async () => ({ items: [], nextCursor: "" });
 const calls = [],
   reads = [],
@@ -24,7 +25,12 @@ const snapshot = (path, data) => ({
   exists: () => data !== null,
 });
 const modules = {
-  "firebase/auth": { getIdTokenResult: async () => ({ authTime: epoch }) },
+  "firebase/auth": {
+    getIdTokenResult: async () => {
+      if (beforeTokenResult) await beforeTokenResult();
+      return { authTime: epoch };
+    },
+  },
   "./firebase": { auth, db: {} },
   "./semesterScope": {
     getSemesterCollectionPath: (config, name) =>
@@ -69,6 +75,29 @@ const modules = {
   },
 };
 const api = {};
+const cacheApi = {};
+vm.runInNewContext(
+  ts.transpileModule(
+    readFileSync(
+      new URL("../src/lib/historyDictionaryCatalogCache.ts", import.meta.url),
+      "utf8",
+    ),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText,
+  {
+    exports: cacheApi,
+    crypto: webcrypto,
+    TextEncoder,
+    setTimeout,
+    clearTimeout,
+  },
+);
+modules["./historyDictionaryCatalogCache"] = cacheApi;
 vm.runInNewContext(
   ts.transpileModule(source, {
     compilerOptions: {
@@ -350,6 +379,73 @@ assert.ok(
   !source.includes("getHistoryDictionaryCatalog()"),
   "failed Firebase reads must not silently use static content",
 );
+
+// Two views opened together share a fetch only within this exact user/session/scope.
+auth.currentUser = { uid: "catalog-reader" };
+const completeCatalogItem = {
+  ...catalogItem,
+  aliases: [],
+  tags: [],
+  facetIds: [],
+};
+const catalogResponse = {
+  items: [completeCatalogItem],
+  nextCursor: "",
+  version: createHash("sha256")
+    .update(JSON.stringify([completeCatalogItem]))
+    .digest("hex"),
+};
+const catalogGate = deferred();
+responder = () => catalogGate.promise;
+const beforeConcurrent = calls.length;
+const concurrentCatalogA = api.loadHistoryDictionaryCatalog(scope);
+const concurrentCatalogB = api.loadHistoryDictionaryCatalog({ ...scope });
+await tick();
+assert.equal(
+  calls.length - beforeConcurrent,
+  1,
+  "simultaneous catalog opens by the same user share one callable request",
+);
+catalogGate.resolve(catalogResponse);
+const concurrentCatalogResults = await Promise.all([
+  concurrentCatalogA,
+  concurrentCatalogB,
+]);
+assert.equal(concurrentCatalogResults[0][0].id, completeCatalogItem.id);
+assert.deepEqual(concurrentCatalogResults[0], concurrentCatalogResults[1]);
+
+// Exercise the real loader's final identity guard while token resolution waits.
+// A small cache boundary avoids coupling this regression to the number of hash
+// passes/guard calls performed internally by the cache implementation.
+const originalSnapshotLoader = cacheApi.loadHistoryDictionaryCatalogSnapshot;
+const tokenStarted = deferred();
+const tokenReleased = deferred();
+cacheApi.loadHistoryDictionaryCatalogSnapshot = async (
+  request,
+  assertCurrent,
+) => {
+  const response = await request({ catalogMode: "batch" });
+  beforeTokenResult = async () => {
+    beforeTokenResult = undefined;
+    tokenStarted.resolve();
+    await tokenReleased.promise;
+  };
+  await assertCurrent();
+  return response.items;
+};
+responder = async () => catalogResponse;
+const racedCatalog = api.loadHistoryDictionaryCatalog(scope);
+const rejectsSwitchedAccount = assert.rejects(
+  racedCatalog,
+  /로그인 상태가 변경/,
+  "identity must be checked after the pending token read finishes",
+);
+await tokenStarted.promise;
+auth.currentUser = { uid: "other-catalog-reader" };
+tokenReleased.resolve();
+await rejectsSwitchedAccount;
+cacheApi.loadHistoryDictionaryCatalogSnapshot = originalSnapshotLoader;
+beforeTokenResult = undefined;
 console.log(
-  "history dictionary continuity checks passed (pagination, precedence, live merge, source CAS, cancellation, account epoch, retry)",
+  "history dictionary continuity checks passed (pagination, precedence, live merge, source CAS, cancellation, account epoch, retry, catalog singleflight, account change during token await)",
 );

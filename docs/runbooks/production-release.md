@@ -90,6 +90,16 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 
 로그인 함수 4개의 복구가 다른 모든 운영 Functions의 소스 복구를 뜻하지는 않는다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않고, 다른 백엔드 패치는 대상 운영 소스부터 대조한다.
 
+## 역사 사전 조회 비용과 캐시 (2026-10-18)
+
+`history_dictionary_catalog`는 학기와 무관한 영구 원본이다. 기본 사전 조회 함수는 이 컬렉션을 스캔하지 않는다. `history_dictionary_catalog_snapshots/current`의 버전과 같은 컬렉션의 불변 gzip/base64 조각을 읽는다. 현재 3,367개 단어는 조각 1개(압축 399,735바이트)에 들어간다. 사전 데이터 읽기는 서버 최초 조회 2문서, 이후 조회 및 클라이언트 버전 일치 시 1문서다. 세션·사용자·학기 권한 확인용 읽기는 별도이며 그대로 유지한다.
+
+브라우저 IndexedDB에는 기본 사전의 단어·출처와 SHA-256 버전만 저장한다. 방문마다 서버 권한·버전 확인 후 재사용하며 개인 단어장·학생 정보·세션 증명은 저장하지 않는다. 버전 변경 시에만 전체 내용을 받는다. 저장소 차단·손상은 재다운로드로 복구하고, 권한 거부 시에는 캐시를 표시하지 않는다. 검색 함수는 내장 전체 단어 데이터를 가져오지 않는다.
+
+내용을 갱신할 때는 `scripts/sync-history-dictionary-catalog.mjs --project history-quiz-yongsin --apply`를 사용한다. 원본 검증 후 압축 조각을 저장·재검증하고 manifest를 버전 비교로 교체한다. 기존 원본이 이미 일치하고 조회용 묶음만 발행할 때는 `--snapshot-only --apply --expect-source-sha <검증한 sourceHash>`를 사용한다. 이 명령은 원본을 한 번 검증하며 원본을 수정하지 않는다. 직접 원본만 바꿔 manifest 갱신을 빠뜨리지 않는다. 조각·manifest가 없거나 손상되어도 전체 원본 조회로 우회하지 않는다.
+
+배포는 스냅샷 게시 → `npm --prefix functions run check` → `firebase deploy --only "functions:getHistoryDictionaryContinuity" --project history-quiz-yongsin` → 프론트엔드 순서다. 구 클라이언트의 500개 페이지 조회도 압축 묶음에서 처리하므로 먼저 백엔드를 배포해도 호환된다. 기본 사전 화면에서는 학생 요청·교사 등록·학생 등록·알림 기록의 관리용 조회를 시작하지 않고 해당 탭에 들어갈 때 읽는다.
+
 ## 학생 개방 및 canonical 명령
 
 2026-10-08 학생 개방 패치는 `functions/productionGateway`에 현재 운영 `executeCommand`

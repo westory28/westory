@@ -119,6 +119,29 @@ const modules = {
   },
 };
 const exports = {};
+const catalogCache = {};
+vm.runInNewContext(
+  ts.transpileModule(
+    readFileSync(
+      new URL("../src/lib/historyDictionaryCatalogCache.ts", import.meta.url),
+      "utf8",
+    ),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText,
+  {
+    exports: catalogCache,
+    crypto: webcrypto,
+    TextEncoder,
+    setTimeout,
+    clearTimeout,
+  },
+);
+modules["./historyDictionaryCatalogCache"] = catalogCache;
 const code = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.CommonJS,

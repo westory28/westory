@@ -453,7 +453,7 @@ const Header: React.FC<{
   if (dictionaryChild)
     teacherSidebarGroups.push({
       id: "dictionary",
-      name: "사전",
+      name: "역사 사전",
       icon: "dictionary",
       secondary: true,
       children: HISTORY_DICTIONARY_PANELS.filter(

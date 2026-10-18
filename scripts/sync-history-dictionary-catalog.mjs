@@ -3,6 +3,8 @@
  * node scripts/sync-history-dictionary-catalog.mjs --project history-quiz-yongsin
  * Add --apply to commit the reviewed plan; --expect-source-sha/--expect-plan-sha
  * can bind that execution to the hashes printed by the dry run.
+ * --snapshot-only verifies existing source documents once and publishes the
+ * durable read snapshot without changing the original catalog documents.
  */
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
@@ -10,6 +12,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { build } from "esbuild";
+import {
+  prepareCatalogSnapshot,
+  publishCatalogSnapshot,
+  readCatalogSnapshotManifest,
+  snapshotSummary,
+} from "./history-dictionary-catalog-snapshot.mjs";
 
 export const COLLECTION = "history_dictionary_catalog";
 export const MANAGED_BY = "westory-history-dictionary-catalog";
@@ -371,6 +379,7 @@ export async function applyCatalogSyncPlan({
 export function parseCatalogSyncArgs(args) {
   const options = {
     apply: false,
+    snapshotOnly: false,
     projectId: "",
     expectedSourceHash: "",
     expectedPlanHash: "",
@@ -386,11 +395,15 @@ export function parseCatalogSyncArgs(args) {
   const seen = new Set();
   for (let index = 0; index < args.length; index++) {
     const [name, ...inline] = args[index].split("=");
-    if (["--apply", "--dry-run", "--help"].includes(name) && !inline.length) {
+    if (
+      ["--apply", "--dry-run", "--snapshot-only", "--help"].includes(name) &&
+      !inline.length
+    ) {
       if (seen.has(name)) fail("CATALOG_DUPLICATE_ARGUMENT");
       seen.add(name);
       if (name === "--apply") applySeen = options.apply = true;
       else if (name === "--dry-run") drySeen = true;
+      else if (name === "--snapshot-only") options.snapshotOnly = true;
       else options.help = true;
       continue;
     }
@@ -447,6 +460,7 @@ export async function runCatalogSync({
   );
   const summary = {
     mode: options.apply ? "apply" : "dry-run",
+    ...(options.snapshotOnly ? { snapshotOnly: true } : {}),
     projectId: options.projectId,
     collection: COLLECTION,
     managedBy: MANAGED_BY,
@@ -462,7 +476,15 @@ export async function runCatalogSync({
   if (options.expectedPlanHash && options.expectedPlanHash !== plan.planHash)
     fail("CATALOG_PLAN_HASH_CHANGED");
   if (plan.counts.conflict) fail("CATALOG_PLAN_CONFLICT");
+  if (options.snapshotOnly && plan.counts.unchanged !== source.terms.length)
+    fail("CATALOG_SNAPSHOT_SOURCE_MISMATCH");
   if (!options.apply) return summary;
+  if (options.snapshotOnly)
+    return {
+      ...summary,
+      applied: { create: 0, update: 0, batches: 0 },
+      verified: true,
+    };
   const applied = await applyCatalogSyncPlan({
     db,
     plan,
@@ -490,11 +512,41 @@ export async function runCatalogSync({
   return { ...summary, applied, verified: true };
 }
 
+/** CLI orchestration: a verified source precedes immutable snapshot publication. */
+export async function runCatalogSyncWithSnapshot(args) {
+  const { db, source, options, serverTimestamp, report = console.log } = args;
+  const prepared = prepareCatalogSnapshot(source.terms, source);
+  // Capture the publication baseline before source reads/writes, so a slower
+  // older publisher cannot replace a newer manifest after verification.
+  const baseline = await readCatalogSnapshotManifest(db);
+  const result = await runCatalogSync(args);
+  const snapshot = snapshotSummary(prepared);
+  if (!options.apply) {
+    report(
+      JSON.stringify({
+        mode: "snapshot-plan",
+        ...snapshot,
+        currentVersion: baseline.data?.version ?? null,
+        manifestChange: baseline.data?.version !== snapshot.version,
+      }),
+    );
+    return { ...result, snapshot };
+  }
+  const published = await publishCatalogSnapshot({
+    db,
+    prepared,
+    baseline,
+    serverTimestamp,
+  });
+  report(JSON.stringify({ mode: "snapshot-verify", ...published }));
+  return { ...result, snapshot: published };
+}
+
 async function main() {
   const options = parseCatalogSyncArgs(process.argv.slice(2));
   if (options.help) {
     console.log(
-      "Usage: node scripts/sync-history-dictionary-catalog.mjs --project PROJECT_ID [--apply | --dry-run] [--expect-source-sha SHA256] [--expect-plan-sha SHA256]\nDefault: dry run. Uses Application Default Credentials. Only owned catalog documents may change; no documents are deleted.",
+      "Usage: node scripts/sync-history-dictionary-catalog.mjs --project PROJECT_ID [--apply | --dry-run] [--snapshot-only] [--expect-source-sha SHA256] [--expect-plan-sha SHA256]\nDefault: dry run. Uses Application Default Credentials. Apply verifies the source, then publishes immutable snapshot chunks and atomically replaces the current manifest. Snapshot-only requires all original documents to match and never changes them. Only owned catalog documents may change; no documents are deleted.",
     );
     return;
   }
@@ -511,7 +563,7 @@ async function main() {
     `dictionary-catalog-sync-${process.pid}`,
   );
   try {
-    await runCatalogSync({
+    await runCatalogSyncWithSnapshot({
       db: getFirestore(app),
       source,
       options,

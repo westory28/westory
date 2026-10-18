@@ -18,6 +18,10 @@ import {
 } from "./historyDictionarySession";
 import { getSemesterCollectionPath } from "./semesterScope";
 import type { HistoryDictionaryCatalogTerm } from "./historyDictionaryCatalog";
+import {
+  loadHistoryDictionaryCatalogSnapshot,
+  type HistoryDictionaryCatalogResponse,
+} from "./historyDictionaryCatalogCache";
 import type {
   HistoryDictionaryRequest,
   HistoryDictionaryTerm,
@@ -270,6 +274,7 @@ const loadContinuityItems = async (
   await assertIdentity();
   const callable = await getHistoryDictionaryCallable(
     "getHistoryDictionaryContinuity",
+    { reuseSessionProof: true },
   );
   const items: Record<string, unknown>[] = [];
   const cursors = new Set<string>();
@@ -374,28 +379,44 @@ const continuityWords = async (
     true,
   );
 };
+const catalogFlights = new WeakMap<
+  NonNullable<typeof auth.currentUser>,
+  { key: string; promise: Promise<HistoryDictionaryCatalogTerm[]> }
+>();
 export const loadHistoryDictionaryCatalog = async (
   config: ConfigLike,
 ): Promise<HistoryDictionaryCatalogTerm[]> => {
-  const items = await loadContinuityItems("catalog", config);
-  return items.map((item) => {
-    if (
-      typeof item.id !== "string" ||
-      typeof item.word !== "string" ||
-      typeof item.definition !== "string" ||
-      !Array.isArray(item.attributions) ||
-      !["history", "place"].includes(String(item.kind))
-    )
-      throw new Error(
-        "사전 자료의 형식을 확인하지 못했습니다. 다시 불러와 주세요.",
-      );
-    return {
-      ...item,
-      aliases: Array.isArray(item.aliases) ? item.aliases : [],
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      facetIds: Array.isArray(item.facetIds) ? item.facetIds : [],
-    } as unknown as HistoryDictionaryCatalogTerm;
-  });
+  const scope = getYearSemester(config);
+  const user = auth.currentUser;
+  if (!user) throw new Error("다시 로그인해 주세요.");
+  const epoch = (await getIdTokenResult(user)).authTime;
+  const assertCurrent = async () => {
+    const currentEpoch = (await getIdTokenResult(user)).authTime;
+    if (auth.currentUser !== user || currentEpoch !== epoch)
+      throw new Error("로그인 상태가 변경되었습니다. 다시 불러와 주세요.");
+  };
+  await assertCurrent();
+  const key = `${epoch}:${scope.year}:${scope.semester}`;
+  const existing = catalogFlights.get(user);
+  if (existing?.key === key) return existing.promise;
+  const promise = (async () => {
+    const callable = await getHistoryDictionaryCallable<
+      Record<string, unknown>,
+      HistoryDictionaryCatalogResponse
+    >("getHistoryDictionaryContinuity", { reuseSessionProof: true });
+    return loadHistoryDictionaryCatalogSnapshot(
+      async (input) =>
+        (await callable({ kind: "catalog", ...scope, ...input })).data,
+      assertCurrent,
+    );
+  })();
+  catalogFlights.set(user, { key, promise });
+  try {
+    return await promise;
+  } finally {
+    if (catalogFlights.get(user)?.promise === promise)
+      catalogFlights.delete(user);
+  }
 };
 const readRequestVersion = async (path: string, studentUid: string) => {
   if (versions.has(path)) return versions.get(path)!;

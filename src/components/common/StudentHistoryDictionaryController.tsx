@@ -113,8 +113,8 @@ export default function StudentHistoryDictionaryController() {
           setOpen(true);
         }}
         className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
-        aria-label="위스토리 사전 열기"
-        title="위스토리 사전"
+        aria-label="역사 사전 열기"
+        title="역사 사전"
       >
         <i className="fas fa-book-open text-lg" aria-hidden="true" />
       </button>
@@ -129,11 +129,11 @@ export default function StudentHistoryDictionaryController() {
         onClose={() => setOpen(false)}
       >
         <header className="history-dictionary-dialog-header history-dictionary-row">
-          <h2 id="floating-history-dictionary-title">위스토리 사전</h2>
+          <h2 id="floating-history-dictionary-title">역사 사전</h2>
           <button
             className="history-dictionary-dialog-close"
             type="button"
-            aria-label="위스토리 사전 닫기"
+            aria-label="역사 사전 닫기"
             onClick={close}
           >
             <i className="fas fa-times" aria-hidden="true" />

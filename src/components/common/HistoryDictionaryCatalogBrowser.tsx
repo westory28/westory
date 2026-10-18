@@ -2,8 +2,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { HistoryDictionaryCatalogTerm } from "../../lib/historyDictionaryCatalog";
 import { useAuth } from "../../contexts/AuthContext";
 import { loadHistoryDictionaryCatalog } from "../../lib/historyDictionary";
+import { searchHistoryDictionaryCatalog } from "../../lib/historyDictionarySearch";
 import {
   HISTORY_DICTIONARY_THEME_HELP,
+  historyDictionaryFacets,
   type HistoryDictionaryFacet,
   type HistoryDictionaryFacetGroup,
 } from "../../lib/historyDictionaryThemes";
@@ -85,17 +87,13 @@ export default function HistoryDictionaryCatalogBrowser({
 }: Props) {
   const { currentUser, config, configReady } = useAuth();
   const [catalog, setCatalog] = useState<HistoryDictionaryCatalogTerm[]>([]);
-  const [facets, setFacets] = useState<HistoryDictionaryFacet[]>([]);
+  const facets = historyDictionaryFacets;
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(emptyHistoryDictionaryFilters);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const searchCatalog =
-    useRef<
-      typeof import("../../lib/historyDictionaryCatalog").searchHistoryDictionaryCatalog
-    >();
   const id = useId();
   const resultsRef = useRef<HTMLDivElement>(null);
   const selectedFacetsRef = useRef<HTMLDivElement>(null);
@@ -114,16 +112,10 @@ export default function HistoryDictionaryCatalogBrowser({
       if (configReady) setFailed(true);
       return;
     }
-    Promise.all([
-      import("../../lib/historyDictionaryCatalog"),
-      import("../../lib/historyDictionaryThemes"),
-      loadHistoryDictionaryCatalog(config),
-    ])
-      .then(([module, themes, items]) => {
+    loadHistoryDictionaryCatalog(config)
+      .then((items) => {
         if (active) {
-          searchCatalog.current = module.searchHistoryDictionaryCatalog;
           setCatalog(items);
-          setFacets(themes.historyDictionaryFacets);
         }
       })
       .catch(() => {
@@ -138,8 +130,11 @@ export default function HistoryDictionaryCatalogBrowser({
   }, [retry, configReady, config?.year, config?.semester, currentUser]);
 
   const searched = useMemo(() => {
-    const entries =
-      searchCatalog.current?.(query, catalog.length, catalog) || [];
+    const entries = searchHistoryDictionaryCatalog(
+      query,
+      catalog.length,
+      catalog,
+    );
     return query.trim()
       ? entries
       : [...entries].sort(compareHistoryDictionaryHeadwords);

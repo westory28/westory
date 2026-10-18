@@ -1,8 +1,12 @@
 const assert = require("node:assert/strict");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { FieldPath } = require("firebase-admin/firestore");
+const { createHash } = require("node:crypto");
+const { gzipSync } = require("node:zlib");
 const {
   createHistoryDictionaryContinuityHandler, CATALOG_COLLECTION, PAGE_SIZE, CATALOG_PAGE_SIZE,
+  CATALOG_BATCH_SIZE, CATALOG_BATCH_BYTES, CATALOG_SNAPSHOT_COLLECTION, CATALOG_SNAPSHOT_MAX_BYTES,
+  CATALOG_SNAPSHOT_MAX_ITEMS, CATALOG_SNAPSHOT_MAX_CHUNKS, CATALOG_CHUNK_MAX_CHARS,
 } = require("../historyDictionaryContinuity");
 
 // The production handler is exercised with an in-memory Firestore query model.
@@ -18,6 +22,11 @@ const record = (source = current, extra = {}) => ({
   status: "saved", definitionSource: "student", tags: ["정치"], createdAt: stamp, updatedAt: stamp, ...extra,
 });
 const term = (source = current, extra = {}) => record(source, { status: "published", ...extra });
+const catalogRecord = (key, extra = {}) => ({
+  id: key, kind: "history",
+  word: key, definition: "검증용 뜻풀이", aliases: [], tags: [], facetIds: [], attributions: [], ...extra,
+});
+const batchRequest = extra => request("catalog", { catalogMode: "batch", ...extra });
 const request = (kind = "terms", extra = {}) => ({
   auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
   data: { ...current, kind, _session: { sessionId: "test-session", sessionVersion: 1 }, ...extra },
@@ -26,7 +35,8 @@ const code = expected => error => error.code === expected;
 const tests = [];
 const test = (name, run) => tests.push({ name, run });
 
-function fixture({ role = "student", profile = {}, sessionError, queryError } = {}) {
+function fixture({ role = "student", profile = {}, sessionError, queryError, beforeQuery, beforeGetAll, snapshotReadError } = {}) {
+  const controls = { sessionError, queryError, beforeQuery, beforeGetAll, snapshotReadError };
   const documents = new Map([
     [`users/${uid}`, { uid, role, ...profile }],
     ["site_settings/semester_active", { semesterId: "2026-2", revision: 3 }],
@@ -50,7 +60,8 @@ function fixture({ role = "student", profile = {}, sessionError, queryError } = 
         queries.push(definition);
         assert.ok(definition.order.isEqual(FieldPath.documentId()), "Use a stable document-ID order");
         assert.ok(Number.isSafeInteger(definition.limit) && definition.limit > 0, "Every query is bounded");
-        if (queryError) throw queryError;
+        if (controls.beforeQuery) await controls.beforeQuery();
+        if (controls.queryError) throw controls.queryError;
         const paths = [...documents.keys()].filter(path => {
           const parts = path.split("/");
           if (group ? parts.at(-2) !== collection : parts.length !== 2 || parts[0] !== collection) return false;
@@ -66,7 +77,12 @@ function fixture({ role = "student", profile = {}, sessionError, queryError } = 
   };
   const db = {
     doc(path) { events.push("doc"); return { path }; },
-    async getAll(...refs) { events.push("getAll"); reads.push(...refs.map(ref => ref.path)); return refs.map(ref => snapshot(ref.path)); },
+    async getAll(...refs) {
+      events.push("getAll"); reads.push(...refs.map(ref => ref.path));
+      if (controls.beforeGetAll) await controls.beforeGetAll(refs);
+      if (controls.snapshotReadError && refs.some(ref => ref.path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`))) throw controls.snapshotReadError;
+      return refs.map(ref => snapshot(ref.path));
+    },
     collection: name => buildQuery(name, false),
     collectionGroup: name => buildQuery(name, true),
   };
@@ -75,10 +91,25 @@ function fixture({ role = "student", profile = {}, sessionError, queryError } = 
     assertSession: async incoming => {
       events.push("session");
       assert.equal(incoming.data._session.sessionId, "test-session");
-      if (sessionError) throw sessionError;
+      if (controls.sessionError) throw controls.sessionError;
     },
   });
-  return { documents, events, queries, reads, handler };
+  return { documents, events, queries, reads, handler, controls };
+}
+
+function publishSnapshot(f, entries, { chunkSize = CATALOG_CHUNK_MAX_CHARS, sort = true } = {}) {
+  const items = sort ? [...entries].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : entries;
+  const raw = Buffer.from(JSON.stringify(items));
+  const version = createHash("sha256").update(raw).digest("hex");
+  const encoded = gzipSync(raw).toString("base64"), chunkIds = [];
+  for (let offset = 0; offset < encoded.length; offset += chunkSize) {
+    const index = chunkIds.length, key = `${version}-${index}`;
+    chunkIds.push(key);
+    f.documents.set(`${CATALOG_SNAPSHOT_COLLECTION}/${key}`, { schemaVersion: 1, version, index, data: encoded.slice(offset, offset + chunkSize) });
+  }
+  const manifest = { schemaVersion: 1, version, count: items.length, totalRawBytes: raw.length, encoding: "gzip-base64", chunkIds };
+  f.documents.set(`${CATALOG_SNAPSHOT_COLLECTION}/current`, manifest);
+  return { manifest, items, chunkPath: `${CATALOG_SNAPSHOT_COLLECTION}/${chunkIds[0]}` };
 }
 
 async function allPages(f, kind, extra = {}) {
@@ -138,6 +169,10 @@ test("unknown input and malformed or unrelated-collection cursors fail before da
       `history_dictionary_terms/${"a".repeat(1501)}`, "secret/doc", "years/2026/history_dictionary_terms/test/odd",
     ].map(after => ({ after })),
     { kind: "catalog", after: "history_dictionary_terms/term" },
+    { catalogMode: "batch" }, { catalogVersion: "a".repeat(64) },
+    { kind: "catalog", catalogMode: "all" }, { kind: "catalog", catalogMode: false },
+    ...[null, "", "abc", "A".repeat(64), 1, {}].map(catalogVersion => ({ kind: "catalog", catalogMode: "batch", catalogVersion })),
+    { kind: "catalog", catalogMode: "batch", catalogVersion: "a".repeat(64), after: `${CATALOG_COLLECTION}/last` },
   ];
   for (const extra of invalid) {
     const f = fixture();
@@ -339,40 +374,226 @@ test("responses retain source and version metadata but omit private and internal
   assert.equal(personal.rewardTransactionId, "txn-1");
 });
 
-test("query failures surface instead of silently returning an empty dictionary", async () => {
+test("query and snapshot failures surface instead of silently returning an empty dictionary", async () => {
   const error = Object.assign(new Error("query-failed"), { code: "unavailable" });
   for (const kind of ["terms", "words", "catalog"]) {
-    const f = fixture({ queryError: error });
+    const f = fixture({ queryError: error, snapshotReadError: error });
     await assert.rejects(f.handler(request(kind)), value => value === error);
   }
 });
 
-test("empty catalog fails explicitly while an empty final page is allowed", async () => {
+test("missing snapshots fail explicitly without falling back to original catalog documents", async () => {
   const f = fixture();
+  f.documents.set(`${CATALOG_COLLECTION}/original`, { schemaVersion: 1, managedBy: "westory-history-dictionary-catalog", ...catalogRecord("original") });
   await assert.rejects(f.handler(request("catalog")), code("unavailable"));
+  await assert.rejects(f.handler(batchRequest()), code("unavailable"));
+  assert.equal(f.queries.length, 0);
+  assert.ok(!f.reads.some(path => path.startsWith(`${CATALOG_COLLECTION}/`)));
+  publishSnapshot(f, [catalogRecord("catalog-history-first")]);
   assert.deepEqual(await f.handler(request("catalog", { after: `${CATALOG_COLLECTION}/catalog-history-last` })), { items: [], nextCursor: "" });
 });
 
-test("catalog pagination preserves the complete reviewed source across 500-document pages", async () => {
-  const { loadCatalogSource, catalogDocumentFor } = await import("../../scripts/sync-history-dictionary-catalog.mjs");
+test("legacy pagination and one batch preserve the complete source using only snapshot documents", async () => {
+  const { loadCatalogSource } = await import("../../scripts/sync-history-dictionary-catalog.mjs");
+  const { prepareCatalogSnapshot } = await import("../../scripts/history-dictionary-catalog-snapshot.mjs");
   const { terms } = await loadCatalogSource();
   const f = fixture();
-  for (const entry of terms) f.documents.set(`${CATALOG_COLLECTION}/${entry.id}`, { ...catalogDocumentFor(entry), updatedAt: stamp });
+  const prepared = prepareCatalogSnapshot(terms), { manifest } = prepared;
+  f.documents.set(`${CATALOG_SNAPSHOT_COLLECTION}/current`, manifest);
+  for (const chunk of prepared.chunks) f.documents.set(`${CATALOG_SNAPSHOT_COLLECTION}/${chunk.id}`, chunk.document);
   const { items, pages } = await allPages(f, "catalog");
   assert.equal(items.length, terms.length);
   assert.deepEqual(pages.map(page => page.items.length), [...Array(Math.floor(terms.length / 500)).fill(500), terms.length % 500]);
-  assert.ok(f.queries.every(query => query.limit === CATALOG_PAGE_SIZE && !query.group));
+  assert.equal(f.queries.length, 0);
+  assert.equal(f.reads.filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`) && !path.endsWith("/current")).length, manifest.chunkIds.length);
   const expected = new Map(terms.map(entry => [entry.id, entry]));
   assert.equal(new Set(items.map(entry => entry.id)).size, terms.length);
   for (const entry of items) assert.deepEqual(entry, expected.get(entry.id), `${entry.id}: preserve every alias, tag, facet and attribution`);
+  const cold = fixture();
+  publishSnapshot(cold, terms);
+  const batch = await cold.handler(batchRequest());
+  assert.deepEqual(batch.items, items);
+  assert.equal(batch.nextCursor, "");
+  assert.equal(batch.version, manifest.version);
+  assert.equal(cold.events.filter(event => event === "session").length, 1);
+  assert.equal(cold.queries.length, 0);
+  assert.equal(cold.reads.filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`)).length, 1 + manifest.chunkIds.length);
+  const beforeWarm = cold.reads.length;
+  await cold.handler(batchRequest());
+  const warmReads = cold.reads.slice(beforeWarm).filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`));
+  assert.deepEqual(warmReads, [`${CATALOG_SNAPSHOT_COLLECTION}/current`]);
+  const beforeConditional = cold.reads.length;
+  assert.equal((await cold.handler(batchRequest({ catalogVersion: manifest.version }))).notModified, true);
+  const conditionalReads = cold.reads.slice(beforeConditional).filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`));
+  assert.deepEqual(conditionalReads, [`${CATALOG_SNAPSHOT_COLLECTION}/current`]);
+  console.log(JSON.stringify({ suite: "dictionary-catalog-read-cost", items: terms.length,
+    rawBytes: manifest.totalRawBytes, chunks: manifest.chunkIds.length,
+    coldDictionaryDocumentReads: 1 + manifest.chunkIds.length, warmDictionaryDocumentReads: warmReads.length,
+    conditionalDictionaryDocumentReads: conditionalReads.length, originalCatalogQueries: cold.queries.length,
+    originalCatalogDocumentReads: cold.reads.filter(path => path.startsWith(`${CATALOG_COLLECTION}/`)).length }));
   const sample = terms[0];
   for (const malformed of [
-    { schemaVersion: 2 }, { managedBy: "untrusted" }, { id: "different-id" }, { kind: "unsupported" },
+    { id: "bad/id" }, { kind: "unsupported" },
     { word: "" }, { definition: "" }, { aliases: {} }, { facetIds: null }, { attributions: "missing" },
   ]) {
     const bad = fixture();
-    bad.documents.set(`${CATALOG_COLLECTION}/${sample.id}`, { ...catalogDocumentFor(sample), ...malformed });
+    publishSnapshot(bad, [{ ...sample, ...malformed }]);
     await assert.rejects(bad.handler(request("catalog")), code("data-loss"), JSON.stringify(malformed));
+  }
+});
+
+test("matching catalog versions read only the manifest even on a cold instance", async () => {
+  const f = fixture();
+  const { manifest, chunkPath } = publishSnapshot(f, [catalogRecord("a")]);
+  f.documents.delete(chunkPath); // Version validation must not read or decompress chunks.
+  assert.deepEqual(await f.handler(batchRequest({ catalogVersion: manifest.version })), {
+    items: [], nextCursor: "", version: manifest.version, notModified: true,
+  });
+  assert.deepEqual(f.reads, [`users/${uid}`, "site_settings/semester_active", "semester_manifests/2026-2", `${CATALOG_SNAPSHOT_COLLECTION}/current`]);
+  assert.equal(f.queries.length, 0);
+});
+
+test("catalog cache and conditional validation never bypass session, profile or semester checks", async () => {
+  for (const failure of ["session", "profile", "pointer", "manifest"]) {
+    const f = fixture();
+    const { manifest } = publishSnapshot(f, [catalogRecord("a")]);
+    await f.handler(batchRequest());
+    const readsBefore = f.reads.length;
+    if (failure === "session") f.controls.sessionError = new HttpsError("unauthenticated", "expired");
+    if (failure === "profile") f.documents.set(`users/${uid}`, { role: "outsider" });
+    if (failure === "pointer") f.documents.set("site_settings/semester_active", { semesterId: "2027-1", revision: 3 });
+    if (failure === "manifest") f.documents.set("semester_manifests/2026-2", { semesterId: "2026-2", revision: 3, status: "CLOSED" });
+    const expected = failure === "session" ? "unauthenticated" : failure === "profile" ? "permission-denied" : "failed-precondition";
+    await assert.rejects(f.handler(batchRequest({ catalogVersion: manifest.version })), code(expected));
+    assert.ok(!f.reads.slice(readsBefore).some(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`)));
+    if (failure === "session") assert.equal(f.reads.length, readsBefore);
+  }
+});
+
+test("concurrent catalog reads share chunk decoding but each request authenticates and reads the manifest", async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let signal;
+  const started = new Promise(resolve => { signal = resolve; });
+  const f = fixture({ beforeGetAll: async refs => {
+    if (refs.some(ref => ref.path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`) && !ref.path.endsWith("/current"))) { signal(); await gate; }
+  } });
+  const { manifest } = publishSnapshot(f, [catalogRecord("a")], { chunkSize: 40 });
+  const first = f.handler(batchRequest());
+  await started;
+  const second = f.handler(batchRequest());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.reads.filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`) && !path.endsWith("/current")).length, manifest.chunkIds.length,
+    "The second request must join the first pending load before either can finish");
+  release();
+  const results = await Promise.all([first, second]);
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(f.events.filter(event => event === "session").length, 2);
+  assert.equal(f.reads.filter(path => path.endsWith("/current")).length, 2);
+  assert.equal(f.reads.filter(path => path.startsWith(`${CATALOG_SNAPSHOT_COLLECTION}/`) && !path.endsWith("/current")).length, manifest.chunkIds.length);
+});
+
+test("a new manifest version replaces warm data immediately and old versions never validate it", async () => {
+  const f = fixture();
+  const first = publishSnapshot(f, [catalogRecord("a")]);
+  await f.handler(batchRequest());
+  const second = publishSnapshot(f, [catalogRecord("a", { definition: "바뀐 뜻" }), catalogRecord("b")]);
+  const changed = await f.handler(batchRequest({ catalogVersion: first.manifest.version }));
+  assert.deepEqual(changed.items, second.items);
+  assert.equal(changed.version, second.manifest.version);
+  assert.equal(changed.notModified, undefined);
+  const readCount = f.reads.length;
+  await f.handler(batchRequest());
+  assert.equal(f.reads.length - readCount, 4, "Warm reads still read authorization documents plus current manifest");
+});
+
+test("failed snapshot loads are retried and never poison the version cache", async () => {
+  const f = fixture();
+  const { chunkPath } = publishSnapshot(f, [catalogRecord("a")]);
+  const valid = f.documents.get(chunkPath);
+  f.documents.set(chunkPath, { ...valid, data: "not-base64!" });
+  await assert.rejects(f.handler(batchRequest()), code("data-loss"));
+  f.documents.set(chunkPath, valid);
+  assert.equal((await f.handler(batchRequest())).items.length, 1);
+  assert.equal(f.reads.filter(path => path === chunkPath).length, 2);
+  assert.equal(f.queries.length, 0);
+});
+
+test("snapshot schema, bounds, identity, encoding, hash, byte count and sorted unique IDs are enforced", async () => {
+  const mutations = [
+    (f, s) => { s.manifest.schemaVersion = 2; },
+    (f, s) => { s.manifest.encoding = "json"; },
+    (f, s) => { s.manifest.count = CATALOG_SNAPSHOT_MAX_ITEMS + 1; },
+    (f, s) => { s.manifest.count++; },
+    (f, s) => { s.manifest.totalRawBytes = CATALOG_SNAPSHOT_MAX_BYTES + 1; },
+    (f, s) => { s.manifest.totalRawBytes++; },
+    (f, s) => { s.manifest.chunkIds = Array(CATALOG_SNAPSHOT_MAX_CHUNKS + 1).fill(s.manifest.chunkIds[0]); },
+    (f, s) => { s.manifest.chunkIds = ["unrelated-document"]; },
+    (f, s) => { f.documents.delete(s.chunkPath); },
+    (f, s) => { f.documents.get(s.chunkPath).schemaVersion = 2; },
+    (f, s) => { f.documents.get(s.chunkPath).version = "a".repeat(64); },
+    (f, s) => { f.documents.get(s.chunkPath).index = 1; },
+    (f, s) => { f.documents.get(s.chunkPath).data = "a".repeat(CATALOG_CHUNK_MAX_CHARS + 1); },
+    (f, s) => { f.documents.get(s.chunkPath).data = Buffer.from("not-gzip").toString("base64"); },
+    (f, s) => { f.documents.get(s.chunkPath).data = gzipSync(Buffer.from("[]")).toString("base64"); },
+    (f, s) => { f.documents.get(s.chunkPath).data = gzipSync(Buffer.alloc(CATALOG_SNAPSHOT_MAX_BYTES + 1, 97)).toString("base64"); },
+  ];
+  for (const mutate of mutations) {
+    const f = fixture(); const snapshot = publishSnapshot(f, [catalogRecord("a")]);
+    mutate(f, snapshot);
+    await assert.rejects(f.handler(batchRequest()), code("data-loss"));
+    assert.equal(f.queries.length, 0);
+  }
+  for (const rows of [[catalogRecord("a"), catalogRecord("a")], [catalogRecord("b"), catalogRecord("a")]]) {
+    const f = fixture(); publishSnapshot(f, rows, { sort: false });
+    await assert.rejects(f.handler(batchRequest()), code("data-loss"));
+  }
+});
+
+test("large snapshots page by count with one generation version and can be revalidated without chunks", async () => {
+  const f = fixture();
+  const entries = Array.from({ length: CATALOG_BATCH_SIZE + 1 }, (_, i) => catalogRecord(`entry-${String(i).padStart(5, "0")}`));
+  const { manifest } = publishSnapshot(f, entries);
+  const first = await f.handler(batchRequest());
+  assert.equal(first.items.length, CATALOG_BATCH_SIZE);
+  assert.equal(first.version, manifest.version);
+  assert.equal(first.notModified, undefined);
+  const next = await f.handler(batchRequest({ after: first.nextCursor }));
+  assert.deepEqual(next.items, entries.slice(CATALOG_BATCH_SIZE));
+  assert.equal(next.nextCursor, "");
+  assert.equal(next.version, manifest.version);
+  const readCount = f.reads.length;
+  assert.equal((await f.handler(batchRequest({ catalogVersion: manifest.version }))).notModified, true);
+  assert.equal(f.reads.length - readCount, 4);
+});
+
+test("batch byte limits retain every record with the same complete-snapshot version", async () => {
+  const f = fixture();
+  const entries = Array.from({ length: 12 }, (_, i) => catalogRecord(`entry-${String(i).padStart(2, "0")}`, { definition: "a".repeat(800000) }));
+  const { manifest } = publishSnapshot(f, entries);
+  const first = await f.handler(batchRequest());
+  assert.ok(first.items.length > 0 && first.items.length < entries.length);
+  assert.ok(Buffer.byteLength(JSON.stringify(first)) < CATALOG_BATCH_BYTES);
+  assert.equal(first.version, manifest.version);
+  assert.equal(first.notModified, undefined);
+  const second = await f.handler(batchRequest({ after: first.nextCursor }));
+  assert.deepEqual([...first.items, ...second.items], entries);
+  assert.equal(second.nextCursor, "");
+  assert.equal(second.version, manifest.version);
+  assert.equal((await f.handler(batchRequest({ catalogVersion: manifest.version }))).notModified, true);
+});
+
+test("personal and teacher records are read afresh even after the catalog is cached", async () => {
+  for (const kind of ["terms", "words", "studentWords"]) {
+    const f = fixture({ role: kind === "studentWords" ? "teacher" : "student" });
+    publishSnapshot(f, [catalogRecord("a")]);
+    await f.handler(batchRequest());
+    const path = kind === "terms" ? termPath("one") : wordPath("one");
+    f.documents.set(path, kind === "terms" ? term() : record());
+    assert.equal((await f.handler(request(kind))).items[0].definition, "법과 행정 규정");
+    f.documents.set(path, { ...f.documents.get(path), definition: "수정된 뜻" });
+    assert.equal((await f.handler(request(kind))).items[0].definition, "수정된 뜻");
+    assert.equal(f.queries.length, 2);
   }
 });
 
@@ -383,5 +604,5 @@ test("catalog pagination preserves the complete reviewed source across 500-docum
     catch (error) { error.message = `${name}: ${error.message}`; failures.push(error); }
   }
   if (failures.length) throw new AggregateError(failures, `${failures.length}/${tests.length} continuity regression groups failed`);
-  console.log(`History dictionary continuity: ${tests.length} regression groups passed (200/500 pagination, session, authorization, privacy, complete catalog).`);
+  console.log(`History dictionary continuity: ${tests.length} regression groups passed (snapshot-only catalog, cold/warm/conditional reads, bounded batches, 200/500 pagination, session, authorization, privacy).`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

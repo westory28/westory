@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-18",
+  "scope": "History dictionary loading, Firestore read cost and menu naming",
+  "originalCount": 3367,
+  "originalWrites": 0,
+  "sourceHash": "213fdffa97c02311b1bd100eb49f1eade7cba8c0493ae8a5c7c5391e1017e9a2",
+  "snapshot": {
+    "version": "71c3f9bea9898ecdca603b8a586faef8ec815c0989e8bf8f7890dc93a432f155",
+    "publishedAndReadBack": true,
+    "chunks": 1,
+    "rawBytes": 3041390,
+    "gzipBytes": 399735,
+    "preservedAttributions": 4863
+  },
+  "verifiedCatalogReadCostExcludingSessionAndAuthorization": {
+    "originalCatalogQueries": 0,
+    "coldSnapshotDocuments": 2,
+    "warmSnapshotDocuments": 1,
+    "unchangedClientVersionDocuments": 1,
+    "unchangedClientVersionPayloadItems": 0
+  },
+  "client": {
+    "storage": "IndexedDB; shared catalog content and version only",
+    "privateRecordsPersisted": false,
+    "everyVisitAuthorizedBeforeDisplay": true,
+    "concurrentLoadsCoalesced": true,
+    "hiddenTeacherPanelQueriesAtCatalogEntry": 0,
+    "searchHelperBundleBytes": 1358,
+    "runtimeStaticCatalogImport": false
+  },
+  "regressions": [
+    "Snapshot publication is content addressed, verified and CAS protected; source documents preserved",
+    "Legacy 500-item clients and 5001-item / 8 MiB pagination remain supported",
+    "Whole snapshot SHA checked after pagination; mixed generations rejected",
+    "Reload reuses persistent content; changed version replaces it",
+    "Corrupt and cyclic local cache, blocked storage and quota errors recover safely",
+    "Denied requests never display local cached content",
+    "Identity changes during pending token reads reject stale responses",
+    "No student notebook, session or permission result caching",
+    "Teacher tab subscriptions are deferred and cleaned up on navigation/account change"
+  ],
+  "browserFixtures": {
+    "widths": [390, 768, 1280],
+    "checked": ["student search", "teacher search", "teacher registered-terms tab", "catalog retry", "history dictionary titles", "horizontal overflow"]
+  }
+}

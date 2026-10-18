@@ -188,6 +188,8 @@ const ManageHistoryDictionary: React.FC = () => {
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [loadedPanels, setLoadedPanels] = useState<Record<string, boolean>>({});
   const showCatalog = activePanel === "terms" && termsView === "catalog";
+  const needsTerms = !showCatalog;
+  const needsRequests = activePanel === "requests";
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
   const [activeStudentWordInitial, setActiveStudentWordInitial] =
     useState(ALL_INITIAL);
@@ -196,6 +198,10 @@ const ManageHistoryDictionary: React.FC = () => {
     editorSourceRef.current = "";
     setRequests([]);
     setTerms([]);
+    setStudentWords([]);
+    setNotificationRequests([]);
+    setLoadErrors({});
+    setLoadedPanels({});
     setSelectedRequestId("");
     setSelectedTermId("");
     setSelectedStudentWordId("");
@@ -209,31 +215,53 @@ const ManageHistoryDictionary: React.FC = () => {
   }, [configReady, config?.year, config?.semester, currentUser]);
 
   useEffect(() => {
-    setLoadErrors({});
-    setLoadedPanels({});
-    if (!configReady || !config || !currentUser?.uid) return;
-    const loaded = (panel: string) => {
-      setLoadedPanels((previous) => ({ ...previous, [panel]: true }));
-      setLoadErrors((previous) => ({ ...previous, [panel]: "" }));
-    };
+    if (!needsRequests || !configReady || !config || !currentUser?.uid) return;
+    let active = true;
+    setLoadedPanels((previous) => ({ ...previous, requests: false }));
+    setLoadErrors((previous) => ({ ...previous, requests: "" }));
     const unsubscribeRequests = subscribeTeacherHistoryDictionaryRequests(
       (items) => {
+        if (!active) return;
         setRequests(items);
-        loaded("requests");
+        setLoadedPanels((previous) => ({ ...previous, requests: true }));
+        setLoadErrors((previous) => ({ ...previous, requests: "" }));
       },
       config,
-      (error) =>
+      (error) => {
+        if (!active) return;
         setLoadErrors((previous) => ({
           ...previous,
           requests: getHistoryDictionaryErrorMessage(error),
-        })),
+        }));
+      },
     );
+    return () => {
+      active = false;
+      unsubscribeRequests();
+    };
+  }, [
+    needsRequests,
+    configReady,
+    config?.year,
+    config?.semester,
+    currentUser,
+    reloadKey,
+  ]);
+
+  useEffect(() => {
+    if (!needsTerms || !configReady || !config || !currentUser?.uid) return;
+    let active = true;
+    setLoadedPanels((previous) => ({ ...previous, terms: false }));
+    setLoadErrors((previous) => ({ ...previous, terms: "" }));
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
       (items) => {
+        if (!active) return;
         setTerms(items);
-        loaded("terms");
+        setLoadedPanels((previous) => ({ ...previous, terms: true }));
+        setLoadErrors((previous) => ({ ...previous, terms: "" }));
       },
       (error) => {
+        if (!active) return;
         setLoadErrors((previous) => ({
           ...previous,
           terms: getHistoryDictionaryErrorMessage(error),
@@ -242,15 +270,30 @@ const ManageHistoryDictionary: React.FC = () => {
       config,
     );
     return () => {
-      unsubscribeRequests();
+      active = false;
       unsubscribeTerms();
     };
-  }, [configReady, config?.year, config?.semester, currentUser, reloadKey]);
+  }, [
+    needsTerms,
+    configReady,
+    config?.year,
+    config?.semester,
+    currentUser,
+    reloadKey,
+  ]);
 
   useEffect(() => {
     setStudentWords([]);
-    if (!configReady || !config || !currentUser?.uid) return;
+    if (
+      activePanel !== "studentWords" ||
+      !configReady ||
+      !config ||
+      !currentUser?.uid
+    )
+      return;
     let cancelled = false;
+    setLoadedPanels((previous) => ({ ...previous, studentWords: false }));
+    setLoadErrors((previous) => ({ ...previous, studentWords: "" }));
 
     const loadStudentWords = async () => {
       try {
@@ -279,11 +322,18 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [configReady, config?.semester, config?.year, currentUser, reloadKey]);
+  }, [
+    activePanel,
+    configReady,
+    config?.semester,
+    config?.year,
+    currentUser,
+    reloadKey,
+  ]);
 
   useEffect(() => {
     setNotificationRequests([]);
-    if (!configReady || !config || !currentUser?.uid) return;
+    if (!needsRequests || !configReady || !config || !currentUser?.uid) return;
     let cancelled = false;
 
     const loadFallbackRequests = async () => {
@@ -308,7 +358,14 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [configReady, config?.semester, config?.year, currentUser]);
+  }, [
+    needsRequests,
+    configReady,
+    config?.semester,
+    config?.year,
+    currentUser,
+    reloadKey,
+  ]);
 
   useEffect(() => {
     if (activePanel !== "terms") setSelectedTermId("");
