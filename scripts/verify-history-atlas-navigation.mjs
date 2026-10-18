@@ -1030,7 +1030,11 @@ for (const subject of ["korea", "world"])
       assert.equal(state.SelectedId, "");
       assert.equal(state.DetailOpen, false);
       assert.equal(pendingFocusRef.current, null);
-      assert.equal(state.reset, true);
+      assert.equal(
+        state.reset,
+        undefined,
+        "Region fitting continues from the current camera without an identity reset",
+      );
       assert.deepEqual(
         JSON.parse(JSON.stringify(state.ViewBounds)),
         useArea

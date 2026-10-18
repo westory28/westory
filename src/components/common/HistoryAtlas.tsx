@@ -9,12 +9,12 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { geoArea, geoCentroid, geoContains, geoPath } from "d3-geo";
 import { useMapViewportHeight } from "./useMapViewportHeight";
 import {
   ATLAS_COUNTRY_HELP,
   ATLAS_COUNTRY_LICENSE_URL,
-  findAtlasCountry,
   loadAtlasCountryGeometry,
   type AtlasCountryFeature,
   type AtlasCountryGeometry,
@@ -34,7 +34,7 @@ import {
   ATLAS_IDENTITY,
   ATLAS_MAX_ZOOM,
   atlasRegionCameraBounds,
-  atlasShapeLabelAnchor,
+  atlasShapeGeographicAnchor,
   constrainAtlasTransform,
   atlasViewportNeedsWorldGeometry,
   createAtlasPaths,
@@ -399,10 +399,6 @@ function placeLabelLayout(
             ? point.y + 14
             : point.y - labelHeight - 14
           : point.y - labelHeight / 2;
-      if (emphasized) {
-        left = Math.max(frameLeft, Math.min(width - labelWidth - 8, left));
-        top = Math.max(frameTop, Math.min(height - labelHeight - 8, top));
-      }
       const box = {
         left,
         right: left + labelWidth,
@@ -549,6 +545,9 @@ export default function HistoryAtlas({
   const [cameraMoving, setCameraMoving] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
   const transformRef = useRef(transform);
+  const cameraFrameRef = useRef<number | null>(null);
+  const resetProjectionRef = useRef(false);
+  const regionOverviewRef = useRef(false);
   const movedRef = useRef(false);
   const dragRef = useRef<{
     x: number;
@@ -739,18 +738,39 @@ export default function HistoryAtlas({
     currentPage * PAGE_SIZE,
     (currentPage + 1) * PAGE_SIZE,
   );
+  const baseProjection = useMemo(() => {
+    const next = createAtlasProjection(
+      subject,
+      bounds,
+      mapWidth,
+      mapHeight,
+      (ATLAS_SUBJECT_BOUNDS[subject][0] + ATLAS_SUBJECT_BOUNDS[subject][2]) / 2,
+    );
+    return retainedProjectionScale === null
+      ? next
+      : next.scale(retainedProjectionScale);
+  }, [subject, bounds, mapWidth, mapHeight, retainedProjectionScale]);
   const projection = useMemo(() => {
-    const next = createAtlasProjection(subject, bounds, mapWidth, mapHeight);
     const fittedArea = selectedCountry || provinceArea;
     return fittedArea
-      ? fitAtlasRegionProjection(next, fittedArea, {
-          width: mapWidth,
-          height: availableMapHeight,
-          overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
-        })
-      : retainedProjectionScale === null
-        ? next
-        : next.scale(retainedProjectionScale);
+      ? fitAtlasRegionProjection(
+          createAtlasProjection(
+            subject,
+            bounds,
+            mapWidth,
+            mapHeight,
+            (ATLAS_SUBJECT_BOUNDS[subject][0] +
+              ATLAS_SUBJECT_BOUNDS[subject][2]) /
+              2,
+          ),
+          fittedArea,
+          {
+            width: mapWidth,
+            height: availableMapHeight,
+            overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
+          },
+        )
+      : baseProjection;
   }, [
     subject,
     bounds,
@@ -760,7 +780,7 @@ export default function HistoryAtlas({
     selectedCountry,
     availableMapHeight,
     overlayObstacle?.right,
-    retainedProjectionScale,
+    baseProjection,
   ]);
   const needsWorldGeometry = atlasViewportNeedsWorldGeometry(
     subject,
@@ -771,10 +791,10 @@ export default function HistoryAtlas({
   );
   const paths = useMemo(
     () =>
-      geometry?.subject === subject && geometry.bounds === bounds
+      geometry?.subject === subject
         ? createAtlasPaths(geometry.data, projection)
         : null,
-    [geometry, subject, bounds, projection],
+    [geometry, subject, projection],
   );
   const countryPaths = useMemo(() => {
     if (subject !== "world" || !countryGeometry) return null;
@@ -812,14 +832,13 @@ export default function HistoryAtlas({
       string,
       NonNullable<ReturnType<typeof findAtlasRiver>>
     >();
-    if (geometry?.subject !== subject || geometry.bounds !== bounds)
-      return result;
+    if (geometry?.subject !== subject) return result;
     for (const { place } of visiblePlaces) {
       const river = findAtlasRiver(place, geometry.data.rivers);
       if (river) result.set(place.id, river);
     }
     return result;
-  }, [visiblePlaces, geometry, subject, bounds]);
+  }, [visiblePlaces, geometry, subject]);
   const selectedRiver = selected
     ? riversByPlace.get(selected.place.id) || null
     : null;
@@ -842,31 +861,30 @@ export default function HistoryAtlas({
     ? landformsByPlace.get(selected.place.id) || null
     : null;
   const selectedShape = selectedRiver || selectedLandform;
-  const provincePath = provinceArea
-    ? geoPath(projection)(provinceArea) || ""
-    : "";
-  const provinceLabel = provinceArea
-    ? atlasShapeLabelAnchor(
-        provinceArea,
-        (coordinate) => {
-          const point = projection(coordinate as [number, number]);
-          return point
-            ? [
-                point[0] * transform.scale + transform.x,
-                point[1] * transform.scale + transform.y,
-              ]
-            : null;
-        },
-        {
-          left:
-            overlayObstacle && mapWidth >= 650
-              ? overlayObstacle.right + 48
-              : 48,
-          top: availableMapTop + 56,
-          right: mapWidth - 48,
-          bottom: mapHeight - 48,
-        },
-      )
+  const shapeAnchors = useMemo(() => {
+    const result = new Map<string, [number, number]>();
+    for (const [placeId, shape] of [...riversByPlace, ...landformsByPlace]) {
+      const point = projection(atlasShapeGeographicAnchor(shape));
+      if (point) result.set(placeId, point);
+    }
+    return result;
+  }, [riversByPlace, landformsByPlace, projection]);
+  const provincePath = useMemo(
+    () => (provinceArea ? geoPath(projection)(provinceArea) || "" : ""),
+    [provinceArea, projection],
+  );
+  const provinceAnchor = useMemo(
+    () =>
+      provinceArea
+        ? projection(atlasShapeGeographicAnchor(provinceArea))
+        : null,
+    [provinceArea, projection],
+  );
+  const provinceLabel = provinceAnchor
+    ? [
+        provinceAnchor[0] * transform.scale + transform.x,
+        provinceAnchor[1] * transform.scale + transform.y,
+      ]
     : null;
   const landformPaths = useMemo(() => {
     const path = geoPath(projection).digits(1);
@@ -906,19 +924,13 @@ export default function HistoryAtlas({
   );
   const selectedCountryLabel = useMemo(() => {
     if (!selectedCountry) return null;
-    const point = atlasShapeLabelAnchor(
-      selectedCountry,
-      (coordinate) => {
-        const projected = projection(coordinate as [number, number]);
-        return projected
-          ? [
-              projected[0] * transform.scale + transform.x,
-              projected[1] * transform.scale + transform.y,
-            ]
-          : null;
-      },
-      { left: 48, top: 64, right: mapWidth - 48, bottom: mapHeight - 56 },
-    );
+    const projected = projection(atlasShapeGeographicAnchor(selectedCountry));
+    const point = projected
+      ? [
+          projected[0] * transform.scale + transform.x,
+          projected[1] * transform.scale + transform.y,
+        ]
+      : null;
     if (!point) return null;
     const width = selectedCountry.properties.name.length * 14 + 16;
     return {
@@ -942,6 +954,7 @@ export default function HistoryAtlas({
         name: feature.properties.name,
         coordinates: feature.properties.coordinates,
         minZoom: 0,
+        korea: false,
         region: feature.properties.regionId || "",
         kind: "region",
       })),
@@ -963,11 +976,16 @@ export default function HistoryAtlas({
           ...feature.properties,
           region: "",
         })),
-    ];
+    ].sort(
+      (a, b) =>
+        Number(subject === "korea" && b.korea) -
+        Number(subject === "korea" && a.korea),
+    );
     const boxes = overlayObstacle ? [overlayObstacle] : [];
     if (selectedCountryLabel) boxes.push(selectedCountryLabel);
     return candidates.flatMap((feature) => {
-      if (zoom < feature.minZoom) return [];
+      const koreanTerrain = subject === "korea" && feature.korea;
+      if (!koreanTerrain && zoom < feature.minZoom) return [];
       if (
         selected &&
         normalizeAtlasSearch(selected.place.name) ===
@@ -976,8 +994,11 @@ export default function HistoryAtlas({
         return [];
       const point = projection(feature.coordinates);
       if (!point) return [];
-      const x = point[0] * transform.scale + transform.x;
-      const y = point[1] * transform.scale + transform.y;
+      let x = point[0] * transform.scale + transform.x;
+      let y = point[1] * transform.scale + transform.y;
+      const anchorX = x;
+      const anchorY = y;
+      if (x < 0 || x > mapWidth || y < 0 || y > mapHeight) return [];
       const width = feature.name.length * 14 + 16;
       const box = {
         left: x - width / 2,
@@ -985,6 +1006,42 @@ export default function HistoryAtlas({
         top: y - 14,
         bottom: y + 14,
       };
+      if (koreanTerrain) {
+        // Keep every Korean landform legible before optional regional labels.
+        // Small vertical offsets remain connected to the actual feature anchor.
+        const offsets = [0, -28, 28, -56, 56, -84, 84]
+          .flatMap((dx) =>
+            [0, -28, 28, -56, 56, -84, 84].map((dy) => ({ dx, dy })),
+          )
+          .sort((a, b) => Math.hypot(a.dx, a.dy) - Math.hypot(b.dx, b.dy));
+        for (const { dx, dy } of offsets) {
+          const left = x - width / 2 + dx;
+          const right = x + width / 2 + dx;
+          const top = y - 14 + dy;
+          const bottom = y + 14 + dy;
+          if (
+            left < 8 ||
+            right > mapWidth - 8 ||
+            top < 56 ||
+            bottom > mapHeight - 40 ||
+            boxes.some(
+              (other) =>
+                left < other.right &&
+                right > other.left &&
+                top < other.bottom &&
+                bottom > other.top,
+            )
+          )
+            continue;
+          box.top = top;
+          box.bottom = bottom;
+          box.left = left;
+          box.right = right;
+          x += dx;
+          y += dy;
+          break;
+        }
+      }
       if (
         box.left < 8 ||
         box.right > mapWidth - 8 ||
@@ -1000,7 +1057,16 @@ export default function HistoryAtlas({
       )
         return [];
       boxes.push(box);
-      return [{ ...feature, x, y, box }];
+      return [
+        {
+          ...feature,
+          x,
+          y,
+          anchorX,
+          anchorY,
+          box,
+        },
+      ];
     });
   }, [
     traditionalRegions,
@@ -1013,6 +1079,7 @@ export default function HistoryAtlas({
     overlayObstacle,
     selectedCountryLabel,
     selected?.place.name,
+    subject,
   ]);
   const mapPoints = useMemo(() => {
     const points: MapPoint[] = [];
@@ -1024,38 +1091,15 @@ export default function HistoryAtlas({
         place.id === ATLAS_DOKDO_ID
           ? ATLAS_DOKDO_COORDINATES
           : river
-            ? geoCentroid(river)
+            ? atlasShapeGeographicAnchor(river)
             : place.coordinates;
       if (!coordinates) return;
-      const shapeViewport = {
-        left:
-          overlayObstacle && mapWidth >= 650 ? overlayObstacle.right + 24 : 24,
-        top: availableMapTop + 24,
-        right: mapWidth - 24,
-        bottom: mapHeight - 48,
-      };
       const position = river
-        ? atlasShapeLabelAnchor(
-            river,
-            (coordinate) => {
-              const point = projection(coordinate as [number, number]);
-              return point
-                ? [
-                    point[0] * transform.scale + transform.x,
-                    point[1] * transform.scale + transform.y,
-                  ]
-                : null;
-            },
-            shapeViewport,
-          )
+        ? shapeAnchors.get(place.id)
         : projection(coordinates);
       if (!position) return;
-      const x = river
-        ? position[0]
-        : position[0] * transform.scale + transform.x;
-      const y = river
-        ? position[1]
-        : position[1] * transform.scale + transform.y;
+      const x = position[0] * transform.scale + transform.x;
+      const y = position[1] * transform.scale + transform.y;
       if (x < 0 || x > mapWidth || y < 0 || y > mapHeight) return;
       points.push({
         place,
@@ -1101,6 +1145,7 @@ export default function HistoryAtlas({
     landformsByPlace,
     selectedCountryLabel,
     geographyLabels,
+    shapeAnchors,
   ]);
   const minorDotsPath = useMemo(
     () =>
@@ -1160,7 +1205,7 @@ export default function HistoryAtlas({
             ] as [number, number])
           : null;
       };
-      const point = active
+      let point = active
         ? selectedCountryLabel && [
             (selectedCountryLabel.left + selectedCountryLabel.right) / 2,
             (selectedCountryLabel.top + selectedCountryLabel.bottom) / 2,
@@ -1168,6 +1213,39 @@ export default function HistoryAtlas({
         : project(country.properties.coordinates);
       if (!point) continue;
       const width = country.properties.name.length * 14 + 16;
+      if (!active) {
+        // Names are the only country hit target. Keep them reachable beside
+        // nearby terrain/place labels instead of discarding them on overlap.
+        const anchor = point;
+        point =
+          [
+            [0, 0],
+            [0, -44],
+            [0, 44],
+            [-48, 0],
+            [48, 0],
+            [-48, -44],
+            [48, 44],
+            [0, -88],
+            [0, 88],
+          ]
+            .map(([dx, dy]) => [anchor[0] + dx, anchor[1] + dy])
+            .find(
+              ([x, y]) =>
+                x - width / 2 >= 4 &&
+                x + width / 2 <= mapWidth - 4 &&
+                y - 22 >= 48 &&
+                y + 22 <= mapHeight - 40 &&
+                !boxes.some(
+                  (other) =>
+                    x - width / 2 < other.right &&
+                    x + width / 2 > other.left &&
+                    y - 22 < other.bottom &&
+                    y + 22 > other.top,
+                ),
+            ) || null;
+        if (!point) continue;
+      }
       const box = {
         left: point[0] - width / 2,
         right: point[0] + width / 2,
@@ -1211,17 +1289,79 @@ export default function HistoryAtlas({
   ]);
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
-      setCameraMoving(animate);
-      transformRef.current = value;
-      setTransform(value);
+      if (cameraFrameRef.current !== null)
+        cancelAnimationFrame(cameraFrameRef.current);
+      cameraFrameRef.current = null;
+      const from = transformRef.current;
+      const apply = (next: AtlasTransform) => {
+        transformRef.current = next;
+        setTransform(next);
+      };
+      if (
+        !animate ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        setCameraMoving(false);
+        apply(value);
+        return;
+      }
+      setCameraMoving(true);
+      let started: number | null = null;
+      const step = () => {
+        const now = performance.now();
+        started ??= now;
+        const progress = Math.max(0, Math.min(1, (now - started) / 300));
+        const amount = 1 - Math.pow(1 - progress, 3);
+        flushSync(() =>
+          apply({
+            x: from.x + (value.x - from.x) * amount,
+            y: from.y + (value.y - from.y) * amount,
+            scale: from.scale + (value.scale - from.scale) * amount,
+          }),
+        );
+        if (progress < 1) cameraFrameRef.current = requestAnimationFrame(step);
+        else {
+          cameraFrameRef.current = null;
+          setCameraMoving(false);
+        }
+      };
+      cameraFrameRef.current = requestAnimationFrame(step);
     },
     [],
   );
-  useEffect(() => {
-    if (!cameraMoving) return;
-    const timer = window.setTimeout(() => setCameraMoving(false), 300);
-    return () => window.clearTimeout(timer);
-  }, [cameraMoving, focusRevision]);
+  useEffect(
+    () => () => {
+      if (cameraFrameRef.current !== null)
+        cancelAnimationFrame(cameraFrameRef.current);
+    },
+    [],
+  );
+  const previousProjectionRef = useRef(projection);
+  useLayoutEffect(() => {
+    const previous = previousProjectionRef.current;
+    previousProjectionRef.current = projection;
+    if (resetProjectionRef.current) {
+      resetProjectionRef.current = false;
+      updateTransform(ATLAS_IDENTITY);
+      return;
+    }
+    if (previous === projection) return;
+    // Rebase without painting an identity frame when the selection changes the
+    // projection's fit. The next camera motion starts at the visible position.
+    const current = transformRef.current;
+    const coordinate = previous.invert?.([
+      (mapWidth / 2 - current.x) / current.scale,
+      (mapHeight / 2 - current.y) / current.scale,
+    ]);
+    const point = coordinate && projection(coordinate);
+    if (!point) return;
+    const scale = (current.scale * previous.scale()) / projection.scale();
+    updateTransform({
+      scale,
+      x: mapWidth / 2 - point[0] * scale,
+      y: mapHeight / 2 - point[1] * scale,
+    });
+  }, [projection, mapWidth, mapHeight, updateTransform]);
   useEffect(() => {
     let onscreen = true;
     const update = () => setMotionPaused(document.hidden || !onscreen);
@@ -1278,7 +1418,7 @@ export default function HistoryAtlas({
     return () => {
       disposed = true;
     };
-  }, [subject, bounds, needsWorldGeometry, geometryAttempt]);
+  }, [subject, needsWorldGeometry, geometryAttempt]);
 
   useEffect(() => {
     let disposed = false;
@@ -1351,7 +1491,7 @@ export default function HistoryAtlas({
 
   useEffect(() => {
     resetMap();
-  }, [subject, bounds, mapWidth, mapHeight, resetMap]);
+  }, [subject, mapWidth, mapHeight, resetMap]);
 
   useEffect(() => {
     setListPage(0);
@@ -1417,7 +1557,7 @@ export default function HistoryAtlas({
       pendingFocusRef.current = selected.place.id;
       setFocusRevision((value) => value + 1);
     }
-  }, [wide, detailOpen, subject, mapWidth, mapHeight, availableMapHeight]);
+  }, [wide, subject, mapWidth, mapHeight]);
 
   const panelOpen = mobilePanel !== null && !wide;
   useEffect(() => {
@@ -1470,6 +1610,10 @@ export default function HistoryAtlas({
   );
 
   useEffect(() => {
+    regionOverviewRef.current = false;
+  }, [provinceArea]);
+
+  useEffect(() => {
     if (!provinceArea) return;
     const next = atlasAreaCameraBounds(provinceArea);
     setViewBounds((current) =>
@@ -1496,6 +1640,7 @@ export default function HistoryAtlas({
           overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
         },
       ),
+      true,
     );
   }, [
     selectedCountry,
@@ -1509,7 +1654,7 @@ export default function HistoryAtlas({
   ]);
 
   useEffect(() => {
-    if (!provinceArea) return;
+    if (!provinceArea || regionOverviewRef.current) return;
     updateTransform(
       fitAtlasSelection(
         projection,
@@ -1525,6 +1670,7 @@ export default function HistoryAtlas({
           overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
         },
       ),
+      true,
     );
   }, [
     provinceArea,
@@ -1547,10 +1693,7 @@ export default function HistoryAtlas({
     // Persist the actual filtered selection, so removing a query cannot restore
     // an older fallback entry while leaving the camera at the search result.
     if (selectedId !== selected.entry.id) setSelectedId(selected.entry.id);
-    if (
-      selected.place.kind === "water" &&
-      (geometry?.subject !== subject || geometry.bounds !== bounds)
-    )
+    if (selected.place.kind === "water" && geometry?.subject !== subject)
       return;
     if (selected.place.kind === "desert" && !landformGeometry) return;
     if (isAtlasAreaPlace(selected.place) && !areaGeometry) return;
@@ -1662,6 +1805,8 @@ export default function HistoryAtlas({
         return;
       }
       if (event.touches.length === 0) return;
+      if (cameraFrameRef.current !== null)
+        updateTransform(transformRef.current);
       movedRef.current =
         event.touches.length > 1 || (!!touch && movedRef.current);
       if (event.cancelable && event.touches.length > 1) event.preventDefault();
@@ -1753,6 +1898,12 @@ export default function HistoryAtlas({
     setFocusRevision((value) => value + 1);
   };
   const resetView = () => {
+    regionOverviewRef.current = true;
+    resetProjectionRef.current =
+      bounds !== baseBounds ||
+      retainedProjectionScale !== null ||
+      !!selectedCountry ||
+      !!traditionalArea;
     setCountryId("");
     setTraditionalRegionId("");
     setDetailOpen(false);
@@ -1842,7 +1993,10 @@ export default function HistoryAtlas({
             ? atlasRegionCameraBounds(coordinates, subject)
             : null,
       );
-      resetMap();
+      if (!nextRegionId) {
+        resetProjectionRef.current = true;
+        resetMap();
+      }
       return;
     }
     const next =
@@ -2272,6 +2426,8 @@ export default function HistoryAtlas({
             }}
             onPointerDown={(event) => {
               if (event.pointerType === "touch" || event.button !== 0) return;
+              if (cameraFrameRef.current !== null)
+                updateTransform(transformRef.current);
               movedRef.current = false;
               dragRef.current = {
                 x: event.clientX,
@@ -2516,7 +2672,6 @@ export default function HistoryAtlas({
                           data-country-id={country.properties.id}
                           className={`history-atlas__country${country.properties.id === countryId ? " is-active" : ""}`}
                           d={path}
-                          onClick={() => selectCountry(country)}
                         >
                           <title>{country.properties.name}</title>
                         </path>
@@ -2556,32 +2711,7 @@ export default function HistoryAtlas({
                           : `url(#${id}-land-clip)`
                       }
                       d={provincePath}
-                      onClick={(event) => {
-                        if (
-                          subject === "world" &&
-                          countryGeometry &&
-                          projection.invert
-                        ) {
-                          const rect = mapRef.current?.getBoundingClientRect();
-                          const coordinates =
-                            rect &&
-                            projection.invert([
-                              (event.clientX - rect.left - transform.x) /
-                                transform.scale,
-                              (event.clientY - rect.top - transform.y) /
-                                transform.scale,
-                            ]);
-                          const country =
-                            coordinates &&
-                            findAtlasCountry(
-                              coordinates,
-                              countryGeometry.countries,
-                            );
-                          if (country) {
-                            selectCountry(country);
-                            return;
-                          }
-                        }
+                      onClick={() => {
                         setProvinceDetailOpen(true);
                         setDetailOpen(true);
                       }}
@@ -2608,6 +2738,23 @@ export default function HistoryAtlas({
                   aria-hidden="true"
                 />
               )}
+              {paths &&
+                geographyLabels
+                  .filter(
+                    (label) =>
+                      label.x !== label.anchorX || label.y !== label.anchorY,
+                  )
+                  .map((label) => (
+                    <line
+                      key={label.id}
+                      className="history-atlas__terrain-leader"
+                      x1={label.anchorX}
+                      y1={label.anchorY}
+                      x2={label.x}
+                      y2={label.y}
+                      aria-hidden="true"
+                    />
+                  ))}
             </svg>
             {paths &&
               geographyLabels.map((label) =>

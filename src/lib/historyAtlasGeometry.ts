@@ -164,9 +164,10 @@ export function createAtlasProjection(
   bounds: AtlasUnit["bounds"],
   width: number,
   height: number,
+  centralLongitude?: number,
 ) {
   const [west, south, east, north] = bounds;
-  const middleLongitude = (west + east) / 2;
+  const middleLongitude = centralLongitude ?? (west + east) / 2;
   const projection =
     subject === "korea"
       ? geoMercator()
@@ -518,6 +519,39 @@ export function fitAtlasSelection(
     width,
     viewport.mapHeight ?? height,
   );
+}
+
+const shapeAnchorCache = new WeakMap<object, [number, number]>();
+
+/** A fixed geographic anchor cannot slide along the viewport edge or bridge
+ * the antimeridian when a selected shape is dragged offscreen. */
+export function atlasShapeGeographicAnchor(
+  shape: GeoPermissibleObjects,
+): [number, number] {
+  const cached = shapeAnchorCache.get(shape);
+  if (cached) return cached;
+  const center = geoCentroid(shape);
+  let anchor: [number, number] = center;
+  if (!geoContains(shape, center)) {
+    let distance = Infinity;
+    geoStream(shape, {
+      point(x, y) {
+        const point: [number, number] = [x, y];
+        const next = geoDistance(center, point);
+        if (next < distance) {
+          distance = next;
+          anchor = point;
+        }
+      },
+      lineStart() {},
+      lineEnd() {},
+      polygonStart() {},
+      polygonEnd() {},
+      sphere() {},
+    });
+  }
+  shapeAnchorCache.set(shape, anchor);
+  return anchor;
 }
 
 /** Anchor a label on its actual visible shape, never at a river's off-line centroid.

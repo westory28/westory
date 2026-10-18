@@ -249,6 +249,9 @@ const node = () => ({
   setAttribute(name, value) {
     this.attributes[name] = value;
   },
+  getAttribute(name) {
+    return this.attributes[name] ?? null;
+  },
   removeAttribute(name) {
     delete this.attributes[name];
   },
@@ -293,9 +296,12 @@ for (const width of [286, 356, 640, 920]) {
     id: "dokdo-ui-globe",
     gesture: { current: null },
     wheelActive: { current: false },
+    cameraFrame: { current: null },
+    projectionCenter: { current: { x: 0.5, y: 0.5 } },
     canvasRef: { current: { getContext: () => context } },
     rootRef: { current: {} },
     window: { devicePixelRatio: 1 },
+    document: { activeElement: null },
     getComputedStyle: () => ({ getPropertyValue: () => "" }),
     GLOBE_COLORS: evaluate(sphere.expression("GLOBE_COLORS"), {}),
     palette: evaluate(sphere.expression("GLOBE_COLORS"), {}),
@@ -323,6 +329,7 @@ for (const width of [286, 356, 640, 920]) {
     selectedShape: null,
     selectedLandform: null,
     highlightedShape: null,
+    shapeLabelCoordinates: null,
     highlightedArea: false,
     provinceArea: null,
     selectableGeography: [],
@@ -372,6 +379,15 @@ for (const width of [286, 356, 640, 920]) {
       offsetHeight: height * 0.42,
       offsetWidth: Math.min(280, width - 16),
     },
+  };
+  const selectedFrame = dependencies.selectionViewport(
+    width,
+    height,
+    dependencies.detailRef.current.parentElement,
+  );
+  dependencies.projectionCenter.current = {
+    x: (selectedFrame.left + selectedFrame.right) / (2 * width),
+    y: (selectedFrame.top + selectedFrame.bottom) / (2 * height),
   };
   evaluate(sphere.draw, dependencies)();
   assert.equal(
@@ -441,6 +457,8 @@ for (const width of [286, 356, 640, 920]) {
     dependencies.mapItems = [shapeItem];
     dependencies.selected = shapeItem;
     dependencies.selectedShape = dependencies.highlightedShape = shape;
+    dependencies.shapeLabelCoordinates =
+      geometry.atlasShapeGeographicAnchor(shape);
     dependencies.highlightedArea = shape.type === "Polygon";
     state.viewRef.current = globe.focusGlobeView(
       globe.GLOBE_INITIAL_VIEW,
@@ -474,17 +492,16 @@ for (const width of [286, 356, 640, 920]) {
     assert(
       x - 8 <= anchor.x &&
         x + textWidth + 8 >= anchor.x &&
-        Math.abs(
-          Math.min(anchor.x - (x - 8), x + textWidth + 8 - anchor.x) - 8,
-        ) < 1e-6 &&
+        Math.abs(x + textWidth / 2 - anchor.x) < 1e-6 &&
         Math.abs(y - anchor.y) < 1e-6,
-      "The active badge overlaps the shape anchor by 8px at either edge, leaving the selected shape visible",
+      "The active badge stays centered on its fixed geographic anchor",
     );
     globeCases += 1;
   }
   dependencies.mapItems = mapItems;
   dependencies.selected = dokdoItem;
   dependencies.selectedShape = dependencies.highlightedShape = null;
+  dependencies.shapeLabelCoordinates = null;
   dependencies.highlightedArea = false;
   state.viewRef.current = {
     longitude: coordinates[0] - 180,
@@ -516,10 +533,13 @@ for (const width of [286, 356, 640, 920]) {
     dependencies.mapItems = [];
     dependencies.selected = undefined;
     dependencies.detailOpen = false;
+    dependencies.projectionCenter.current = { x: 0.5, y: 0.5 };
     dependencies.provinceDetailOpen = false;
     dependencies.highlightedArea = true;
     for (const province of provinces) {
       dependencies.provinceArea = dependencies.highlightedShape = province;
+      dependencies.shapeLabelCoordinates =
+        geometry.atlasShapeGeographicAnchor(province);
       state.viewRef.current = globe.focusGlobeView(
         globe.GLOBE_INITIAL_VIEW,
         geography.geoCentroid(province),
@@ -679,8 +699,11 @@ assert.equal(globeState.Panel, "detail");
 assert.equal(globeState.revision, 1);
 for (const key of ["UnitId", "EraId", "RegionId", "SubregionId", "Query"])
   assert.equal(globeState[key], "");
-assert(Math.abs(globeState.Camera.longitude - coordinates[0]) < 1e-9);
-assert(Math.abs(globeState.Camera.latitude - coordinates[1]) < 1e-9);
+assert.equal(
+  globeState.Camera,
+  undefined,
+  "The selection effect performs the camera transition once the detail layout is available",
+);
 let pointEntry;
 evaluate(sphere.expression("endPointer"), {
   gesture: { current: { moved: false, multiple: false } },

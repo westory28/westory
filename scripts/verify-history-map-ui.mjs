@@ -115,7 +115,9 @@ async function expectFilterReset(page, view) {
           .transform.baseVal.consolidate().matrix;
         return {
           zoom: document.querySelector(".history-atlas__zoom").textContent,
-          transform: [matrix.a, matrix.e, matrix.f],
+          transform: [matrix.a, matrix.e, matrix.f].map(
+            (value) => Math.round(value * 1e6) / 1e6 || 0,
+          ),
           land: document
             .querySelector(".history-atlas__land")
             .getAttribute("d"),
@@ -130,9 +132,17 @@ async function expectFilterReset(page, view) {
     }, view === "globe");
   const resetAndCompare = async () => {
     await page.waitForTimeout(350);
+    if (view !== "globe")
+      await page.waitForFunction(
+        () => !document.querySelector(".history-atlas--focusing"),
+      );
     const before = await camera();
     await reset.press("Enter");
     await page.waitForTimeout(350);
+    if (view !== "globe")
+      await page.waitForFunction(
+        () => !document.querySelector(".history-atlas--focusing"),
+      );
     assert.deepEqual(await camera(), before, view + ": reset preserves camera");
     for (const name of [
       "단원",
@@ -279,6 +289,9 @@ async function expectKoreanForeignPlaces(page) {
     );
     const marker = page.locator(".history-atlas__point.is-active");
     await marker.waitFor();
+    await page.waitForFunction(
+      () => !document.querySelector(".history-atlas--focusing"),
+    );
     const point = await marker.boundingBox();
     const map = await page.locator(".history-atlas__map").boundingBox();
     assert(
@@ -312,7 +325,9 @@ const terrainPixelCount = () => {
   return count;
 };
 try {
-  for (const width of [320, 390, 768, 1280, 1366, 1440]) {
+  for (const width of process.env.ATLAS_UI_WIDTHS
+    ? process.env.ATLAS_UI_WIDTHS.split(",").map(Number)
+    : [320, 390, 768, 1280, 1366, 1440]) {
     const page = await browser.newPage({
       viewport: { width, height: width === 1366 ? 768 : 900 },
     });
@@ -436,41 +451,71 @@ try {
           .getByRole("searchbox", { name: "지명 검색", exact: true })
           .fill("올두바이");
         await page.locator(".history-atlas__overlay").waitFor();
+        await page.waitForFunction(
+          () => !document.querySelector(".history-atlas--focusing"),
+        );
         await page
           .getByRole("button", { name: "장소 설명 닫기", exact: true })
           .click();
         const label = page.locator('[data-country-label="TZA"]');
-        const countryPoint = await page
-          .locator('path[data-country-id="TZA"]')
-          .evaluate((element) => {
-            const box = element.getBBox(),
-              matrix = element.getScreenCTM();
-            for (let row = 1; row < 20; row++)
-              for (let column = 1; column < 20; column++) {
-                const local = new DOMPoint(
-                  box.x + (box.width * column) / 20,
-                  box.y + (box.height * row) / 20,
-                );
-                if (!element.isPointInFill(local)) continue;
-                const screen = local.matrixTransform(matrix),
-                  hit = document.elementFromPoint(screen.x, screen.y);
-                if (
-                  screen.x > 8 &&
-                  screen.x < innerWidth - 8 &&
-                  screen.y > 8 &&
-                  screen.y < innerHeight - 8 &&
-                  hit?.tagName.toLowerCase() === "path" &&
-                  !hit.closest('[role="button"],button')
-                )
-                  return [screen.x, screen.y];
-              }
-            return null;
-          });
-        assert(
-          countryPoint,
-          "Tanzania has a visible, unobscured land hit target",
+        await page
+          .getByRole("button", { name: "지도 필터 초기화", exact: true })
+          .click();
+        assert.equal(
+          await page
+            .locator('path[data-country-id="TZA"]')
+            .evaluate((element) => getComputedStyle(element).pointerEvents),
+          "none",
+          "Country fills cannot intercept pointer events intended for overlapping terrain",
         );
-        await page.mouse.click(...countryPoint);
+        await page
+          .locator('path[data-country-id="TZA"]')
+          .dispatchEvent("click");
+        assert.equal(
+          await page.locator(".history-atlas__country.is-active").count(),
+          0,
+          "Country geometry must not select a country",
+        );
+        // Reset intentionally retains the Olduvai camera. On a narrow map,
+        // Tanzania's geographic name anchor can remain below the viewport.
+        // Use normal map navigation to bring that name into view before testing
+        // its keyboard action; never activate an offscreen or synthetic label.
+        for (
+          let attempt = 0;
+          attempt < 12 && !(await label.count());
+          attempt++
+        ) {
+          const map = page.locator(".history-atlas__map");
+          const mapBox = await map.boundingBox();
+          const countryBox = await page
+            .locator('path[data-country-id="TZA"]')
+            .boundingBox();
+          const dx =
+            countryBox.x + countryBox.width / 2 - mapBox.x - mapBox.width / 2;
+          const dy =
+            countryBox.y + countryBox.height / 2 - mapBox.y - mapBox.height / 2;
+          if (Math.abs(dx) < 48 && Math.abs(dy) < 48) {
+            const zoomIn = page.getByRole("button", {
+              name: "지도 확대",
+              exact: true,
+            });
+            if (await zoomIn.isDisabled()) break;
+            await zoomIn.click();
+          } else
+            await map.press(
+              Math.abs(dx) > Math.abs(dy)
+                ? dx > 0
+                  ? "ArrowRight"
+                  : "ArrowLeft"
+                : dy > 0
+                  ? "ArrowDown"
+                  : "ArrowUp",
+            );
+        }
+        assert(
+          await label.count(),
+          "Tanzania's name must be reachable by normal panning and zooming, including when terrain names overlap",
+        );
         await label.waitFor();
         await label.press("Enter");
         await page
@@ -522,7 +567,34 @@ try {
         await page
           .getByRole("combobox", { name: "지역", exact: true })
           .selectOption("world:europe");
-        await page.locator('[data-globe-region="europe"]').press("Enter");
+        const regionLabel = page.locator('[data-globe-region="europe"]');
+        // The active badge's decorative ripple changes its bounding box even
+        // after camera motion ends. Wait for the geographic transform itself.
+        await page.waitForFunction(async () => {
+          const started = performance.now();
+          let previous = "",
+            stableSince = started;
+          return new Promise((resolve) => {
+            const frame = (now) => {
+              const label = document.querySelector(
+                '[data-globe-region="europe"]',
+              );
+              const current =
+                label && label.style.display !== "none"
+                  ? label.getAttribute("transform")
+                  : "";
+              if (current !== previous) {
+                previous = current;
+                stableSince = now;
+              }
+              if (current && now - started >= 350 && now - stableSince >= 100)
+                resolve(true);
+              else requestAnimationFrame(frame);
+            };
+            requestAnimationFrame(frame);
+          });
+        });
+        await regionLabel.press("Enter");
         await expectRegionDescription(page);
         await page
           .getByRole("button", { name: "장소 설명 닫기", exact: true })

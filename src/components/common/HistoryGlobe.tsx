@@ -30,6 +30,7 @@ import {
   dragGlobeView,
   focusGlobeView,
   globeCanvasSize,
+  interpolateGlobeView,
   isGlobePointVisible,
   nearestGlobePoint,
   pinchGlobeView,
@@ -44,7 +45,7 @@ import {
 } from "../../lib/historyAtlasTerrain";
 import {
   atlasProjectedNorthBearing,
-  atlasShapeLabelAnchor,
+  atlasShapeGeographicAnchor,
   fitGlobeRegionCamera,
   loadAtlasDokdoGeometry,
   loadAtlasRiverGeometry,
@@ -58,7 +59,6 @@ import { findAtlasLandform } from "../../lib/historyAtlasLandforms";
 import {
   ATLAS_COUNTRY_HELP,
   ATLAS_COUNTRY_LICENSE_URL,
-  findAtlasCountry,
   findAtlasCountryForPlace,
   loadAtlasCountryGeometry,
   type AtlasCountryFeature,
@@ -299,11 +299,15 @@ export default function HistoryGlobe({
   const hitGeography = useRef<(x: number, y: number) => Item | undefined>(
     () => undefined,
   );
-  const hitCountry = useRef<
-    (x: number, y: number) => AtlasCountryFeature | null
-  >(() => null);
   const drawRef = useRef<() => void>(() => {});
   const raf = useRef<number | null>(null);
+  const cameraFrame = useRef<number | null>(null);
+  const projectionCenter = useRef({ x: 0.5, y: 0.5 });
+  const focusedSelection = useRef<{
+    shape: GeoPermissibleObjects | null;
+    revision: number;
+    detailOpen: boolean;
+  } | null>(null);
   const wheelCommit = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelActive = useRef(false);
   const dirty = useRef(true);
@@ -447,6 +451,11 @@ export default function HistoryGlobe({
   const selectedShape =
     selectedRiver || selectedPlaceCountry || selectedLandform || selectedArea;
   const highlightedShape = selectedCountry || selectedShape || provinceArea;
+  const shapeLabelCoordinates = useMemo(
+    () =>
+      highlightedShape ? atlasShapeGeographicAnchor(highlightedShape) : null,
+    [highlightedShape],
+  );
   const highlightedArea =
     highlightedCountry || selectedLandform || selectedArea || provinceArea;
   const detailOpen =
@@ -455,6 +464,7 @@ export default function HistoryGlobe({
   const selectableGeography = useMemo(
     () =>
       filtered.flatMap((item) => {
+        if (item.place.kind === "country") return [];
         const river = rivers ? findAtlasRiver(item.place, rivers) : null;
         const area =
           (areas ? findAtlasArea(item.place, areas) : null) ||
@@ -549,12 +559,41 @@ export default function HistoryGlobe({
     setView({ ...viewRef.current });
     requestDraw();
   }, [requestDraw]);
+  const cancelCamera = useCallback(() => {
+    if (cameraFrame.current !== null) cancelAnimationFrame(cameraFrame.current);
+    cameraFrame.current = null;
+  }, []);
   const setCamera = useCallback(
-    (next: GlobeView) => {
-      updateView(next);
-      setView({ ...viewRef.current });
+    (next: GlobeView, center = projectionCenter.current) => {
+      cancelCamera();
+      const target = constrainGlobeView(next);
+      const from = { ...viewRef.current };
+      const origin = { ...projectionCenter.current };
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        projectionCenter.current = { ...center };
+        updateView(target);
+        commitView();
+        return;
+      }
+      let started: number | null = null;
+      const frame = (now: number) => {
+        started ??= now;
+        const progress = Math.max(0, Math.min(1, (now - started) / 300));
+        const eased = 1 - (1 - progress) ** 3;
+        projectionCenter.current = {
+          x: origin.x + (center.x - origin.x) * eased,
+          y: origin.y + (center.y - origin.y) * eased,
+        };
+        updateView(interpolateGlobeView(from, target, eased));
+        if (progress < 1) cameraFrame.current = requestAnimationFrame(frame);
+        else {
+          cameraFrame.current = null;
+          commitView();
+        }
+      };
+      cameraFrame.current = requestAnimationFrame(frame);
     },
-    [updateView],
+    [cancelCamera, updateView, commitView],
   );
 
   useEffect(() => {
@@ -610,8 +649,19 @@ export default function HistoryGlobe({
     };
   }, [areaAttempt]);
   useEffect(() => {
-    if (!highlightedShape || !mapRef.current) return;
-    const center = geoCentroid(highlightedShape);
+    if ((!highlightedShape && !selected?.place.coordinates) || !mapRef.current)
+      return;
+    const previous = focusedSelection.current;
+    if (
+      previous?.shape === highlightedShape &&
+      previous.revision === selectionRevision &&
+      previous.detailOpen === !!detailOpen &&
+      cameraFrame.current === null
+    )
+      return;
+    const center = highlightedShape
+      ? geoCentroid(highlightedShape)
+      : selected!.place.coordinates!;
     if (!center.every(Number.isFinite)) return;
     const width = mapRef.current.clientWidth,
       height = mapRef.current.clientHeight;
@@ -621,27 +671,41 @@ export default function HistoryGlobe({
       .scale(1)
       .rotate([-center[0], -center[1], 0])
       .clipAngle(90);
-    const [[left, top], [right, bottom]] =
-      geoPath(projection).bounds(highlightedShape);
     const viewport = selectionViewport(
       width,
       height,
       detailOpen ? detailRef.current?.parentElement || null : null,
     );
-    const scale = Math.min(
-      ((viewport.right - viewport.left) * 0.85) /
-        Math.max(0.01, 2 * Math.max(Math.abs(left), Math.abs(right))),
-      ((viewport.bottom - viewport.top) * 0.85) /
-        Math.max(0.01, 2 * Math.max(Math.abs(top), Math.abs(bottom))),
-    );
-    setCamera({
-      longitude: center[0],
-      latitude: center[1],
-      roll: 0,
-      zoom: Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
+    let next = focusGlobeView(viewRef.current, center as [number, number]);
+    if (highlightedShape) {
+      const [[left, top], [right, bottom]] =
+        geoPath(projection).bounds(highlightedShape);
+      const scale = Math.min(
+        ((viewport.right - viewport.left) * 0.85) /
+          Math.max(0.01, 2 * Math.max(Math.abs(left), Math.abs(right))),
+        ((viewport.bottom - viewport.top) * 0.85) /
+          Math.max(0.01, 2 * Math.max(Math.abs(top), Math.abs(bottom))),
+      );
+      next = {
+        ...next,
+        zoom: Math.min(
+          GLOBE_MAX_ZOOM,
+          scale / (Math.min(width, height) * 0.44),
+        ),
+      };
+    }
+    focusedSelection.current = {
+      shape: highlightedShape,
+      revision: selectionRevision,
+      detailOpen: !!detailOpen,
+    };
+    setCamera(next, {
+      x: (viewport.left + viewport.right) / (2 * width),
+      y: (viewport.top + viewport.bottom) / (2 * height),
     });
   }, [
     highlightedShape,
+    selected,
     selectionRevision,
     setCamera,
     size,
@@ -687,6 +751,7 @@ export default function HistoryGlobe({
       setMotionPaused(paused);
       if (paused) {
         cancelDraw();
+        cancelCamera();
         pointers.current.clear();
         gesture.current = null;
       } else requestDraw();
@@ -702,8 +767,9 @@ export default function HistoryGlobe({
       document.removeEventListener("visibilitychange", visibility);
       observer.disconnect();
       cancelDraw();
+      cancelCamera();
     };
-  }, [cancelDraw, requestDraw]);
+  }, [cancelDraw, cancelCamera, requestDraw]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -767,13 +833,10 @@ export default function HistoryGlobe({
       const popup = detailOpen
         ? detailRef.current?.parentElement || null
         : null;
-      const selectionFrame = selectionViewport(width, height, popup);
       const projection = geoOrthographic()
         .translate([
-          popup ? (selectionFrame.left + selectionFrame.right) / 2 : width / 2,
-          popup
-            ? (selectionFrame.top + selectionFrame.bottom) / 2
-            : height * 0.5,
+          projectionCenter.current.x * width,
+          projectionCenter.current.y * height,
         ])
         .scale(Math.min(width, height) * 0.44 * camera.zoom)
         .rotate([-camera.longitude, -camera.latitude, camera.roll])
@@ -784,7 +847,10 @@ export default function HistoryGlobe({
         `${atlasProjectedNorthBearing(projection, [camera.longitude, camera.latitude])}deg`,
       );
       const path = geoPath(projection, context);
-      const interacting = !!gesture.current?.moved || wheelActive.current;
+      const interacting =
+        !!gesture.current?.moved ||
+        wheelActive.current ||
+        cameraFrame.current !== null;
       const lineGeometry = <T extends GeoPermissibleObjects>(shape: T): T =>
         interacting
           ? globeInteractionGeometry(shape, projection.scale())
@@ -978,21 +1044,6 @@ export default function HistoryGlobe({
         }
         return undefined;
       };
-      hitCountry.current = (x, y) => {
-        if (!countries || !projection.invert) return null;
-        const [centerX, centerY] = projection.translate();
-        // Orthographic inversion outside the sphere can otherwise return a
-        // plausible longitude/latitude and select an invisible country.
-        if (Math.hypot(x - centerX, y - centerY) > projection.scale())
-          return null;
-        const coordinates = projection.invert([x, y]);
-        return coordinates && coordinates.every(Number.isFinite)
-          ? findAtlasCountry(
-              coordinates as [number, number],
-              countries.countries,
-            )
-          : null;
-      };
       const points: Point[] = [];
       const addPoint = (item: Item, coordinates: [number, number] | null) => {
         if (!coordinates || !isGlobePointVisible(coordinates, camera)) return;
@@ -1010,18 +1061,21 @@ export default function HistoryGlobe({
             : item.place.coordinates,
         );
       }
-      // Shape badges are anchored on the visible geometry itself. A centroid
-      // can fall outside a winding river or a concave island boundary.
-      const shapeAnchor = highlightedShape
-        ? atlasShapeLabelAnchor(
-            highlightedShape,
-            (coordinates) =>
-              isGlobePointVisible(coordinates as [number, number], camera)
-                ? projection(coordinates as [number, number])
-                : null,
-            selectionFrame,
-          )
-        : null;
+      // The anchor belongs to the place. Hide it when it leaves the viewport;
+      // never clamp it to an edge or select a new point on the visible boundary.
+      const projectedAnchor =
+        shapeLabelCoordinates &&
+        isGlobePointVisible(shapeLabelCoordinates, camera)
+          ? projection(shapeLabelCoordinates)
+          : null;
+      const shapeAnchor =
+        projectedAnchor &&
+        projectedAnchor[0] >= 0 &&
+        projectedAnchor[0] <= width &&
+        projectedAnchor[1] >= 0 &&
+        projectedAnchor[1] <= height
+          ? projectedAnchor
+          : null;
       if (selected && shapeAnchor)
         points.push({ item: selected, x: shapeAnchor[0], y: shapeAnchor[1] });
       const occupied = new Set<string>();
@@ -1051,7 +1105,9 @@ export default function HistoryGlobe({
           context.stroke();
         }
       }
-      drawnPoints.current = rendered;
+      drawnPoints.current = rendered.filter(
+        (point) => point.item.place.kind !== "country",
+      );
       const active = rendered.find(
         (point) => point.item.place.id === selected?.place.id,
       );
@@ -1083,16 +1139,15 @@ export default function HistoryGlobe({
                 width - 32,
                 context.measureText(provinceArea.properties.name).width,
               );
-              const x = Math.max(
-                selectionFrame.left - 8,
-                Math.min(
-                  selectionFrame.right - textWidth + 8,
-                  shapeAnchor[0] + textWidth + 8 <= selectionFrame.right
-                    ? shapeAnchor[0]
-                    : shapeAnchor[0] - textWidth,
-                ),
-              );
+              const x = shapeAnchor[0] - textWidth / 2;
               const y = shapeAnchor[1];
+              if (
+                x < 8 ||
+                x + textWidth > width - 8 ||
+                y < 80 ||
+                y > height - 68
+              )
+                return null;
               boxes.push({ x, y, w: textWidth, h: 44 });
               return { x, y, textWidth };
             })()
@@ -1101,6 +1156,25 @@ export default function HistoryGlobe({
       // a render loop. Reuse this small SVG pool on the existing draw schedule.
       const labelNodes = labelsRef.current?.children;
       if (!labelNodes) return;
+      const focusedLabel = document.activeElement;
+      const claimedLabels = new Set<SVGGElement>();
+      const claimLabel = (key: string) => {
+        const groups = Array.from(labelNodes) as SVGGElement[];
+        const group =
+          groups.find(
+            (node) =>
+              node.getAttribute("data-globe-key") === key &&
+              !claimedLabels.has(node),
+          ) ||
+          groups.find(
+            (node) => !claimedLabels.has(node) && node !== focusedLabel,
+          );
+        if (group) {
+          claimedLabels.add(group);
+          group.setAttribute("data-globe-key", key);
+        }
+        return group;
+      };
       for (const node of labelNodes) {
         const group = node as SVGGElement;
         group.style.display = "none";
@@ -1113,7 +1187,6 @@ export default function HistoryGlobe({
         group.removeAttribute("aria-pressed");
         group.setAttribute("tabindex", "-1");
       }
-      let labelIndex = 0;
       let geographicLabelCount = 0;
       const drawCountryLabel = (
         country: AtlasCountryFeature,
@@ -1126,32 +1199,49 @@ export default function HistoryGlobe({
           id: countryId,
         } = country.properties;
         if (!active && camera.zoom < minZoom / 1.7) return false;
-        const xy =
-          active && shapeAnchor
-            ? shapeAnchor
-            : isGlobePointVisible(coordinates, camera)
-              ? projection(coordinates)
-              : null;
+        const xy = active
+          ? shapeAnchor
+          : isGlobePointVisible(coordinates, camera)
+            ? projection(coordinates)
+            : null;
         if (!xy) return false;
         context.font = `${active ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
         const textWidth = Math.min(width - 32, context.measureText(name).width);
-        const [centerX, y] = xy;
-        const x = active
-          ? Math.max(8, Math.min(width - textWidth - 16, centerX))
-          : centerX - textWidth / 2;
-        if (x < 8 || x + textWidth > width - 8 || y < 80 || y > height - 36)
-          return false;
-        if (
-          boxes.some(
-            (box) =>
-              Math.abs(box.y - y) < (box.h + 44) / 2 &&
-              x < box.x + box.w + 12 &&
-              x + textWidth > box.x - 12,
-          )
-        )
-          return false;
+        const offsets = active
+          ? [[0, 0]]
+          : [
+              [0, 0],
+              [0, -44],
+              [0, 44],
+              [-48, 0],
+              [48, 0],
+              [-48, -44],
+              [48, -44],
+              [-48, 44],
+              [48, 44],
+              [0, -88],
+              [0, 88],
+            ];
+        const placement = offsets
+          .map(([dx, dy]) => ({ x: xy[0] - textWidth / 2 + dx, y: xy[1] + dy }))
+          .find(
+            ({ x, y }) =>
+              x >= 8 &&
+              x + textWidth <= width - 8 &&
+              y >= 80 &&
+              y <= height - 36 &&
+              !boxes.some(
+                (box) =>
+                  Math.abs(box.y - y) < (box.h + 44) / 2 &&
+                  x < box.x + box.w + 12 &&
+                  x + textWidth > box.x - 12,
+              ),
+          );
+        if (!placement) return false;
+        const { x, y } = placement;
         boxes.push({ x, y, w: textWidth, h: 44 });
-        const group = labelNodes[labelIndex++] as SVGGElement;
+        const group = claimLabel(`country:${countryId}`);
+        if (!group) return false;
         group.style.display = "";
         group.classList.toggle("is-active", active);
         group.setAttribute("data-globe-country", countryId);
@@ -1191,27 +1281,8 @@ export default function HistoryGlobe({
           context.measureText(label).width,
         );
         const onShape = activeLabel && !!selectedShape;
-        const x = onShape
-          ? Math.max(
-              selectionFrame.left - 8,
-              Math.min(
-                selectionFrame.right - textWidth + 8,
-                point.x + textWidth + 8 <= selectionFrame.right
-                  ? point.x
-                  : point.x - textWidth,
-              ),
-            )
-          : Math.min(width - textWidth - 12, Math.max(12, point.x + 10));
-        const naturalY = onShape
-          ? point.y
-          : point.y < 100
-            ? point.y + 22
-            : point.y - 18;
-        let y = onShape
-          ? naturalY
-          : emphasized
-            ? Math.max(80, Math.min(height - 80, naturalY))
-            : naturalY;
+        const x = onShape ? point.x - textWidth / 2 : point.x + 10;
+        let y = onShape ? point.y : point.y - 18;
         const labelHeight = 44;
         const overlaps = (candidateY: number) =>
           boxes.some(
@@ -1221,17 +1292,28 @@ export default function HistoryGlobe({
               x + textWidth > box.x - 12,
           );
         if (isDokdo && !onShape) {
-          for (const candidateY of [y, point.y + 32, point.y - 32, 80]) {
-            const candidate = Math.max(80, Math.min(height - 80, candidateY));
-            if (!overlaps(candidate)) {
-              y = candidate;
+          for (const candidateY of [y, point.y + 32, point.y - 32]) {
+            if (
+              candidateY >= 80 &&
+              candidateY <= height - 80 &&
+              !overlaps(candidateY)
+            ) {
+              y = candidateY;
               break;
             }
           }
         }
-        if (y < 80 || y > height - 68 || overlaps(y)) continue;
+        if (
+          x < 8 ||
+          x + textWidth > width - 8 ||
+          y < 80 ||
+          y > height - 68 ||
+          overlaps(y)
+        )
+          continue;
         boxes.push({ x, y, w: textWidth, h: labelHeight });
-        const group = labelNodes[labelIndex++] as SVGGElement;
+        const group = claimLabel(`place:${point.item.entry.id}`);
+        if (!group) continue;
         const background = group.children[0] as SVGRectElement;
         const text = group.children[1] as SVGTextElement;
         const ripple = group.children[2] as SVGRectElement;
@@ -1261,7 +1343,8 @@ export default function HistoryGlobe({
       if (provinceArea && provinceLabel) {
         const label = provinceArea.properties.name;
         const { x, y, textWidth } = provinceLabel;
-        const group = labelNodes[labelIndex++] as SVGGElement;
+        const group = claimLabel(`region:${provinceArea.properties.regionId}`);
+        if (!group) return;
         group.style.display = "";
         group.classList.add("is-active");
         group.setAttribute(
@@ -1339,7 +1422,8 @@ export default function HistoryGlobe({
           continue;
         boxes.push({ x: left, y, w: textWidth, h: labelItem ? 44 : 22 });
         if (labelItem) {
-          const group = labelNodes[labelIndex++] as SVGGElement;
+          const group = claimLabel(`place:${labelItem.entry.id}`);
+          if (!group) continue;
           group.style.display = "";
           group.setAttribute("data-globe-label", labelItem.entry.id);
           group.setAttribute("data-geography-kind", label.kind);
@@ -1396,6 +1480,7 @@ export default function HistoryGlobe({
     selectedShape,
     selectedLandform,
     highlightedShape,
+    shapeLabelCoordinates,
     highlightedArea,
     provinceArea,
     provinceDetailOpen,
@@ -1477,20 +1562,8 @@ export default function HistoryGlobe({
       setSelectionRevision((value) => value + 1);
       setPanel("detail");
       setPanelOpen(false);
-      if (next.place.coordinates)
-        setCamera(focusGlobeView(viewRef.current, next.place.coordinates));
     },
-    [
-      itemsById,
-      areas,
-      subject,
-      unitId,
-      eraId,
-      regionId,
-      subregionId,
-      query,
-      setCamera,
-    ],
+    [itemsById, areas, subject, unitId, eraId, regionId, subregionId, query],
   );
   const chooseFromList = (entryId: string) => {
     const item = itemsById.get(entryId);
@@ -1503,8 +1576,6 @@ export default function HistoryGlobe({
     setPanel("detail");
     setPanelOpen(false);
     setNotice("");
-    if (item.place.coordinates)
-      setCamera(focusGlobeView(viewRef.current, item.place.coordinates));
   };
   const openProvinceDetails = () => {
     if (!provinceArea) return;
@@ -1514,6 +1585,7 @@ export default function HistoryGlobe({
     setSelectionRevision((value) => value + 1);
   };
   const resetFilters = () => {
+    cancelCamera();
     setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     setUnitId("");
@@ -1533,6 +1605,7 @@ export default function HistoryGlobe({
       next !== "korea"
         ? GLOBE_INITIAL_VIEW
         : { longitude: 127, latitude: 36, roll: 0, zoom: 2 },
+      { x: 0.5, y: 0.5 },
     );
   };
   const changeRegion = (group: string, subregion: string) => {
@@ -1565,7 +1638,7 @@ export default function HistoryGlobe({
       : subject !== "korea"
         ? GLOBE_INITIAL_VIEW
         : { longitude: 127, latitude: 36, roll: 0, zoom: 2 };
-    if (next) setCamera(next);
+    if (next) setCamera(next, { x: 0.5, y: 0.5 });
   };
   const returnToList = () => {
     setSelectedCountryId(null);
@@ -1645,6 +1718,7 @@ export default function HistoryGlobe({
   };
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    cancelCamera();
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, localPointer(event));
@@ -1694,11 +1768,7 @@ export default function HistoryGlobe({
       } else {
         const feature = hitGeography.current(pointer.x, pointer.y);
         if (feature) chooseEntry(feature.entry.id);
-        else {
-          const country = hitCountry.current(pointer.x, pointer.y);
-          if (country) chooseCountry(country.properties.id);
-          else setSelectedCountryId(null);
-        }
+        else setSelectedCountryId(null);
       }
     }
     if (pointers.current.size) startGesture(original || undefined);
@@ -1710,6 +1780,7 @@ export default function HistoryGlobe({
     if (!canvas) return;
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
+      cancelCamera();
       const delta =
         event.deltaY *
         (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? size.height : 1);
@@ -1734,7 +1805,7 @@ export default function HistoryGlobe({
       wheelCommit.current = null;
       wheelActive.current = false;
     };
-  }, [updateView, commitView, size.height]);
+  }, [updateView, commitView, cancelCamera, size.height]);
   const onKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
     const current = viewRef.current;
     const step = (event.shiftKey ? 20 : 8) / current.zoom;
@@ -1759,7 +1830,7 @@ export default function HistoryGlobe({
     if (event.key === "Escape") setSelectedCountryId(null);
     if (next) {
       event.preventDefault();
-      setCamera(next);
+      setCamera(next, event.key === "Home" ? { x: 0.5, y: 0.5 } : undefined);
     }
   };
 
@@ -2159,6 +2230,9 @@ export default function HistoryGlobe({
                 style={{ display: "none" }}
                 role="button"
                 tabIndex={-1}
+                onPointerDown={(event) =>
+                  event.currentTarget.focus({ preventScroll: true })
+                }
                 onClick={(event) => {
                   const entryId = event.currentTarget.dataset.globeLabel;
                   if (entryId) chooseEntry(entryId);
@@ -2268,7 +2342,7 @@ export default function HistoryGlobe({
                 aria-label="지구본 전체 보기"
                 onClick={() => {
                   setSelectedCountryId(null);
-                  setCamera(GLOBE_INITIAL_VIEW);
+                  setCamera(GLOBE_INITIAL_VIEW, { x: 0.5, y: 0.5 });
                 }}
               >
                 전체

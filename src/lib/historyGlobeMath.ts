@@ -29,6 +29,22 @@ export function constrainGlobeView(view: GlobeView): GlobeView {
   };
 }
 
+/** Follow the shortest rotation while preserving the displayed camera at t=0. */
+export function interpolateGlobeView(
+  from: GlobeView,
+  to: GlobeView,
+  progress: number,
+): GlobeView {
+  const t = Math.max(0, Math.min(1, progress));
+  return constrainGlobeView({
+    longitude:
+      from.longitude + wrapGlobeLongitude(to.longitude - from.longitude) * t,
+    latitude: from.latitude + (to.latitude - from.latitude) * t,
+    roll: from.roll + wrapGlobeLongitude(to.roll - from.roll) * t,
+    zoom: from.zoom * (to.zoom / from.zoom) ** t,
+  });
+}
+
 /** Drag distances are in CSS pixels, independent of the backing-buffer DPR. */
 export function dragGlobeView(
   view: GlobeView,

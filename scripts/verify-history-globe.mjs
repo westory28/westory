@@ -52,6 +52,16 @@ equal(
   }),
   { longitude: 0, latitude: 0, roll: 0, zoom: 1 },
 );
+const datelineStart = { longitude: 179, latitude: 20, roll: 170, zoom: 1 };
+const datelineEnd = { longitude: -179, latitude: 40, roll: -170, zoom: 4 };
+equal(m.interpolateGlobeView(datelineStart, datelineEnd, 0), datelineStart);
+equal(m.interpolateGlobeView(datelineStart, datelineEnd, 1), datelineEnd);
+equal(m.interpolateGlobeView(datelineStart, datelineEnd, 0.5), {
+  longitude: -180,
+  latitude: 30,
+  roll: -180,
+  zoom: 2,
+});
 for (const center of [
   [127, 37],
   [-77, 39],
@@ -759,7 +769,27 @@ const shapeCameraEffect = globeEffects.find((effect) =>
 );
 assert(
   shapeCameraEffect.arguments[1].getText(globeAst).includes("popupSize"),
-  "Expanding or collapsing source details must re-fit the selected geometry",
+  "The initial detail layout participates in the selection camera fit",
+);
+let unwantedRefit = false;
+const guardedShape = { type: "Sphere" };
+evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+  highlightedShape: guardedShape,
+  mapRef: { current: {} },
+  focusedSelection: {
+    current: { shape: guardedShape, revision: 1, detailOpen: true },
+  },
+  selectionRevision: 1,
+  detailOpen: true,
+  cameraFrame: { current: null },
+  setCamera() {
+    unwantedRefit = true;
+  },
+})();
+assert.equal(
+  unwantedRefit,
+  false,
+  "Popup resizing after camera completion or a drag preserves the displayed view",
 );
 assert(
   globeEffects
@@ -928,19 +958,10 @@ assert.equal(
 );
 assert.equal(
   selectionState.cameraCount,
-  2,
-  "Repeated tag activation returns its pin to the view",
+  0,
+  "Selection schedules one camera fit after the detail layout, without a preliminary jump",
 );
 assert.equal(pendingPanelFocus.current, "detail");
-assert(
-  Math.abs(
-    selectionState.camera.longitude - testItems[0].place.coordinates[0],
-  ) < 1e-9,
-);
-assert(
-  Math.abs(selectionState.camera.latitude - testItems[0].place.coordinates[1]) <
-    1e-9,
-);
 // Exercise the production all-subject filtering with the actual curated dataset.
 function evaluateGlobe(expression, dependencies = {}) {
   const exports = {};
@@ -1014,6 +1035,11 @@ for (const [regionSubject, collection] of Object.entries(areaCollections)) {
         let camera;
         evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
           highlightedShape: feature,
+          focusedSelection: { current: null },
+          selectionRevision: 1,
+          cameraFrame: { current: null },
+          viewRef,
+          focusGlobeView: m.focusGlobeView,
           mapRef: { current: { clientWidth: width, clientHeight: 480 } },
           detailOpen: true,
           detailRef: {
@@ -1273,12 +1299,15 @@ for (const moved of [false, true]) {
     chooseCountry: (id) => {
       selectedCountry = id;
     },
+    setSelectedCountryId: (id) => {
+      selectedCountry = id;
+    },
     commitView() {},
   })({ pointerId: 1, currentTarget: { hasPointerCapture: () => false } });
   assert.equal(
     selectedCountry,
-    moved ? undefined : "KOR",
-    "Country selection follows only deliberate background clicks, never dragging",
+    moved ? undefined : null,
+    "Country interiors never select a country; background clicks only clear it",
   );
 }
 
@@ -1481,6 +1510,129 @@ requestDraw();
 scheduled.get(1)();
 scheduled.clear();
 assert.equal(drawCalls, 2, "Visible globe resumes with its latest camera");
+
+const focusNode = (key) => ({
+  key,
+  getAttribute() {
+    return this.key;
+  },
+  setAttribute(_name, value) {
+    this.key = value;
+  },
+});
+const focusedRegion = focusNode("region:europe");
+const otherLabel = focusNode("country:RUS");
+const claimLabel = evaluateGlobe(
+  globeDeclarations.get("claimLabel").getText(globeAst),
+  {
+    labelNodes: [focusedRegion, otherLabel],
+    focusedLabel: focusedRegion,
+    claimedLabels: new Set(),
+  },
+);
+assert.equal(claimLabel("country:CHN"), otherLabel);
+assert.equal(
+  focusedRegion.key,
+  "region:europe",
+  "Camera redraws must not replace the focused region with another country before Enter",
+);
+assert.equal(claimLabel("region:europe"), focusedRegion);
+
+// Run the production camera transition, including its screen-space center.
+// Opening a detail card must not translate the globe before the first frame.
+const cameraQueue = new Map();
+const cameraFrame = { current: null };
+const cameraView = {
+  current: { longitude: 105, latitude: 25, roll: 0, zoom: 1 },
+};
+const projectionCenter = { current: { x: 0.5, y: 0.5 } };
+let cameraClock = 0,
+  cameraSequence = 0,
+  cameraCommits = 0,
+  reduceCameraMotion = false;
+const cancelCamera = evaluateGlobe(
+  globeDeclarations.get("cancelCamera").arguments[0].getText(globeAst),
+  { cameraFrame, cancelAnimationFrame: (id) => cameraQueue.delete(id) },
+);
+const animateCamera = evaluateGlobe(
+  globeDeclarations.get("setCamera").arguments[0].getText(globeAst),
+  {
+    cameraFrame,
+    projectionCenter,
+    cancelCamera,
+    viewRef: cameraView,
+    constrainGlobeView: m.constrainGlobeView,
+    interpolateGlobeView: m.interpolateGlobeView,
+    performance: { now: () => cameraClock },
+    window: { matchMedia: () => ({ matches: reduceCameraMotion }) },
+    updateView: (next) => {
+      cameraView.current = next;
+    },
+    commitView: () => {
+      cameraCommits += 1;
+    },
+    requestAnimationFrame: (frame) => {
+      const id = ++cameraSequence;
+      cameraQueue.set(id, frame);
+      return id;
+    },
+  },
+);
+const nextCameraFrame = (time) => {
+  const [id, frame] = cameraQueue.entries().next().value;
+  cameraQueue.delete(id);
+  cameraClock = time;
+  frame(time);
+};
+const cameraTarget = { longitude: 127, latitude: 37, roll: 0, zoom: 6 };
+animateCamera(cameraTarget, { x: 0.72, y: 0.63 });
+equal(cameraView.current, { longitude: 105, latitude: 25, roll: 0, zoom: 1 });
+equal(projectionCenter.current, { x: 0.5, y: 0.5 });
+nextCameraFrame(1000);
+equal(cameraView.current, { longitude: 105, latitude: 25, roll: 0, zoom: 1 });
+equal(projectionCenter.current, { x: 0.5, y: 0.5 });
+nextCameraFrame(1060);
+assert(
+  cameraView.current.longitude > 105 && cameraView.current.longitude < 127,
+);
+assert(projectionCenter.current.x > 0.5 && projectionCenter.current.x < 0.72);
+const interruptedView = { ...cameraView.current };
+const interruptedCenter = { ...projectionCenter.current };
+animateCamera({ ...cameraTarget, longitude: 130 }, { x: 0.67, y: 0.6 });
+equal(cameraView.current, interruptedView);
+equal(projectionCenter.current, interruptedCenter);
+assert.equal(
+  cameraQueue.size,
+  1,
+  "Rapid selections replace one animation from its currently displayed frame",
+);
+nextCameraFrame(1060);
+nextCameraFrame(1180);
+nextCameraFrame(1360);
+equal(cameraView.current, { ...cameraTarget, longitude: 130 });
+equal(projectionCenter.current, { x: 0.67, y: 0.6 });
+assert.equal(cameraCommits, 1);
+assert.equal(
+  cameraQueue.size,
+  0,
+  "Completed camera transitions leave no idle frame loop",
+);
+animateCamera(cameraTarget);
+cancelCamera();
+assert.equal(
+  cameraQueue.size,
+  0,
+  "Direct pointer and wheel input can cancel the pending camera frame",
+);
+reduceCameraMotion = true;
+animateCamera(cameraTarget, { x: 0.5, y: 0.5 });
+equal(cameraView.current, cameraTarget);
+equal(projectionCenter.current, { x: 0.5, y: 0.5 });
+assert.equal(
+  cameraQueue.size,
+  0,
+  "Reduced motion applies the final camera without animation",
+);
 
 const { globeInteractionGeometry } = load("src/lib/historyGlobeRendering.ts");
 const detailedBorders = JSON.parse(

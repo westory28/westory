@@ -147,6 +147,7 @@ for (const mapWidth of [356, 720]) {
     mapHeight,
     movedRef,
     transformRef,
+    cameraFrameRef: { current: null },
     mapRef: { current: node },
     updateTransform: (value) => {
       transformRef.current = value;

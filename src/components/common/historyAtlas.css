@@ -304,8 +304,7 @@
 .history-atlas__country {
   fill: transparent;
   stroke: none;
-  pointer-events: fill;
-  cursor: pointer;
+  pointer-events: none;
 }
 .history-atlas__country.is-active {
   fill: var(--ws-accent-soft, #fffbeb);
@@ -427,15 +426,6 @@
 }
 .history-atlas__river-selected {
   stroke-width: 3px;
-}
-.history-atlas--focusing .history-atlas__geography {
-  transition: transform 300ms ease-out;
-}
-.history-atlas--focusing .history-atlas__point,
-.history-atlas--focusing .history-atlas__label-anchor {
-  transition:
-    left 300ms ease-out,
-    top 300ms ease-out;
 }
 @keyframes atlas-point-halo {
   0% {
@@ -1106,6 +1096,12 @@
     0 -1px 1px var(--atlas-land);
 }
 .history-atlas__terrain-label {
+  pointer-events: none;
+}
+.history-atlas__terrain-leader {
+  stroke: var(--atlas-terrain-ridge);
+  stroke-width: 1;
+  opacity: 0.45;
   pointer-events: none;
 }
 .history-atlas__traditional-label {
