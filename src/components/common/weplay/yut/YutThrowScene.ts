@@ -9,54 +9,38 @@ export interface YutThrowState {
 }
 
 const TAU = Math.PI * 2;
-const DURATION = 2.25;
+export const YUT_VISUAL_THROW_MS = 1400;
+const DURATION = YUT_VISUAL_THROW_MS / 1000;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const smooth = (n: number) => {
   const t = clamp(n);
   return t * t * (3 - 2 * t);
 };
-const layout = [
-  {
-    x: -1.18,
-    z: -0.16,
-    yaw: -0.32,
-    delay: 0,
-    flight: 1.42,
-    lift: 1.14,
-    start: -0.32,
-    spin: 1,
-  },
-  {
-    x: -0.39,
-    z: 0.38,
-    yaw: 0.21,
-    delay: 0.045,
-    flight: 1.56,
-    lift: 1.32,
-    start: 0.18,
-    spin: -1,
-  },
-  {
-    x: 0.43,
-    z: -0.29,
-    yaw: -0.12,
-    delay: 0.02,
-    flight: 1.35,
-    lift: 1.07,
-    start: 0.34,
-    spin: 1,
-  },
-  {
-    x: 1.23,
-    z: 0.27,
-    yaw: 0.36,
-    delay: 0.09,
-    flight: 1.48,
-    lift: 1.23,
-    start: -0.16,
-    spin: -1,
-  },
-];
+/** Seeded cosmetics never feed back into the server's random result. */
+export function yutThrowPlan(index: number, power = 0.65, throwKey = "") {
+  let seed = 2166136261;
+  for (const char of `${throwKey}:${index}`)
+    seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const strength = Number.isFinite(power) ? clamp(power) : 0.65;
+  const spread = 0.84 + strength * 0.38;
+  return {
+    x: ([-1.2, -0.4, 0.4, 1.2][index] + (random() - 0.5) * 0.13) * spread,
+    z: ([-0.24, 0.3, -0.3, 0.25][index] + (random() - 0.5) * 0.22) * spread,
+    yaw: (index % 2 ? 1 : -1) * (0.1 + random() * 0.17),
+    delay: random() * 0.045,
+    flight: 0.83 + random() * 0.17 + strength * 0.025,
+    lift: 0.55 + strength * 0.76 + random() * 0.14,
+    start: (random() - 0.5) * 0.44,
+    pitch: (random() - 0.5) * 0.28,
+    curve: (random() - 0.5) * (0.12 + strength * 0.18),
+    spin: index % 2 ? -1 : 1,
+    settle: 0.23 + random() * 0.055,
+  };
+}
 
 /** Cosmetic trajectory only. Each stick has a different release and contact time. */
 export function sampleYutPose(
@@ -64,45 +48,55 @@ export function sampleYutPose(
   index: number,
   flat: boolean,
   power = 0.65,
+  throwKey = "",
 ) {
-  const end = layout[index],
+  const end = yutThrowPlan(index, power, throwKey),
     strength = clamp(power);
   const progress = clamp((time - end.delay) / end.flight);
   const targetRoll = flat ? Math.PI : 0;
   if (progress >= 1) {
-    const settle = clamp((time - end.delay - end.flight) / 0.52);
+    const settle = clamp((time - end.delay - end.flight) / end.settle);
     const envelope = (1 - settle) ** 2;
     return {
       x: end.x + Math.sin(settle * Math.PI) * 0.035 * end.spin,
       y:
         0.122 +
-        Math.sin(settle * Math.PI) * (0.07 + strength * 0.07) * envelope,
+        Math.sin(settle * Math.PI) * (0.035 + strength * 0.045) * envelope,
       z: end.z - Math.sin(settle * Math.PI) * 0.045 * envelope,
-      pitch: Math.sin(settle * TAU) * 0.045 * envelope,
+      pitch: Math.sin(settle * TAU) * 0.035 * envelope,
       yaw: end.yaw,
-      roll: targetRoll + Math.sin(settle * TAU) * 0.1 * envelope,
+      roll: targetRoll + Math.sin(settle * TAU) * 0.075 * envelope,
     };
   }
   const arc = 4 * progress * (1 - progress);
-  const terminalRoll = targetRoll + TAU * end.spin;
+  // One turn at most about the stick's long axis, with a small independent tilt.
+  const terminalRoll = flat ? Math.PI * end.spin : TAU * end.spin;
   return {
     x:
       (index - 1.5) * 0.14 * (1 - progress) +
       end.x * progress +
-      arc * end.start * 0.16,
-    y: 0.122 + arc * (end.lift + strength * 0.48),
+      arc * end.curve,
+    y: 0.122 + arc * end.lift,
     z: 1.55 * (1 - progress) + end.z * progress,
-    pitch:
-      -0.24 * (1 - progress) +
-      Math.sin(progress * Math.PI) * (0.16 + index * 0.025),
+    pitch: -0.12 * (1 - progress) + Math.sin(progress * Math.PI) * end.pitch,
     yaw: end.yaw + end.start * (1 - progress),
     roll: end.start + (terminalRoll - end.start) * smooth(progress),
   };
 }
 
 /** Testable final orientation: local flat-face normal (0,-1,0) becomes +Y. */
-export function finalYutRotation(flat: boolean, index: number) {
-  return new THREE.Euler(0, layout[index].yaw, flat ? Math.PI : 0, "YXZ");
+export function finalYutRotation(
+  flat: boolean,
+  index: number,
+  power = 0.65,
+  throwKey = "",
+) {
+  return new THREE.Euler(
+    0,
+    yutThrowPlan(index, power, throwKey).yaw,
+    flat ? Math.PI : 0,
+    "YXZ",
+  );
 }
 
 let atlasPromise: Promise<HTMLImageElement> | undefined;
@@ -313,6 +307,8 @@ export class YutThrowScene {
   private result: boolean[] | null = null;
   private power = 0.65;
   private didComplete = false;
+  private didRelease = false;
+  private impacts = new Set<number>();
   private broken = false;
   private state: YutThrowState = {
     throwKey: null,
@@ -325,6 +321,8 @@ export class YutThrowScene {
     private seen: Set<string>,
     private onComplete: () => void,
     private onFallback: () => void,
+    private onRelease?: () => void,
+    private onImpact?: (index: number) => void,
   ) {
     this.renderer = new THREE.WebGLRenderer({
       alpha: true,
@@ -514,13 +512,15 @@ export class YutThrowScene {
       state.throwKey !== this.ignoredKey;
     this.rolling = state.rolling;
     if (fresh && state.throwKey && state.sticks) {
-      if (!this.running || this.result) this.begin();
+      this.begin();
       this.key = state.throwKey;
       this.result = [...state.sticks];
       this.didComplete = false;
       if (this.broken) return;
       if (this.seen.has(state.throwKey)) {
         if (this.seen.has(state.throwKey)) this.didComplete = true;
+        this.didRelease = true;
+        this.impacts = new Set([0, 1, 2, 3]);
         this.elapsed = DURATION;
         this.pose();
         this.render();
@@ -540,6 +540,8 @@ export class YutThrowScene {
     this.result = null;
     this.elapsed = 0;
     this.didComplete = false;
+    this.didRelease = false;
+    this.impacts.clear();
     this.running = true;
     this.trailPoints.forEach((points) => points.splice(0));
     this.lastFrame = 0;
@@ -578,14 +580,17 @@ export class YutThrowScene {
     // capping each frame stretches a short throw into an entire turn on slow GPUs.
     const dt = this.lastFrame ? Math.max(0, (now - this.lastFrame) / 1000) : 0;
     this.lastFrame = now;
-    // Wait at the apex until the server result arrives. Never guess final faces.
-    this.elapsed = this.result
-      ? this.elapsed + dt
-      : Math.min(0.66, this.elapsed + dt);
+    // Hold at the release position until the authoritative faces/key arrive.
+    // Every client can then replay the same event's complete seeded trajectory.
+    this.elapsed = this.result ? this.elapsed + dt : 0;
+    if (this.result && !this.didRelease) {
+      this.didRelease = true;
+      this.onRelease?.();
+    }
     this.pose();
     this.render();
     if (this.elapsed >= DURATION && this.result) this.complete();
-    else if (!this.result && this.elapsed >= 0.66) this.lastFrame = 0;
+    else if (!this.result) this.lastFrame = 0;
     else this.schedule();
   };
 
@@ -597,6 +602,7 @@ export class YutThrowScene {
         index,
         this.result?.[index] || false,
         this.power,
+        this.key || "",
       );
       const stick = this.groups[index];
       stick.position.set(pose.x, pose.y, pose.z);
@@ -604,11 +610,20 @@ export class YutThrowScene {
       stick.scale.setScalar(1);
       // A hand-thrown wooden stick has no luminous contrail.
       this.trails[index].visible = false;
+      const plan = yutThrowPlan(index, this.power, this.key || "");
+      if (
+        this.result &&
+        time >= plan.delay + plan.flight &&
+        !this.impacts.has(index)
+      ) {
+        this.impacts.add(index);
+        this.onImpact?.(index);
+      }
     }
-    const dustTime = clamp((time - 1.43) / 0.65);
+    const dustTime = clamp((time - 0.9) / 0.5);
     this.dust.visible = !this.media.matches && dustTime > 0 && dustTime < 1;
     for (let n = 0; n < 96; n++) {
-      const origin = layout[n % 4],
+      const origin = yutThrowPlan(n % 4, this.power, this.key || ""),
         angle = n * 2.399;
       const speed = 0.12 + ((n * 17) % 31) / 80;
       this.dustPositions[n * 3] = origin.x + Math.cos(angle) * dustTime * speed;

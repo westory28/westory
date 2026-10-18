@@ -39,6 +39,9 @@
 }
 
 .yut-throw-3d__wood {
+  position: absolute;
+  left: var(--stick-land-x);
+  top: var(--stick-land-y);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,11 +59,7 @@
     ),
     linear-gradient(90deg, #71512e, #ba945f 45%, #876133);
   box-shadow: 4px 8px 8px #171e2440;
-  transform: rotate(-12deg);
-}
-
-.yut-throw-3d__wood:nth-child(even) {
-  transform: rotate(10deg) translateY(12px);
+  transform: translate(-50%, -50%) rotate(var(--stick-rest));
 }
 .yut-throw-3d__wood.is-flat {
   border-radius: 3px;
@@ -74,29 +73,45 @@
     #c39e69;
 }
 .yut-throw-3d__fallback.has-result .yut-throw-3d__wood {
-  animation: yut-fallback-flight 2100ms var(--stick-delay, 0ms) ease-in-out both !important;
+  animation:
+    yut-fallback-flight var(--stick-flight) var(--stick-delay, 0ms) linear both,
+    yut-fallback-settle var(--stick-settle) var(--stick-contact) ease-out
+      forwards !important;
   animation-play-state: var(--throw-play-state, running) !important;
 }
 @keyframes yut-fallback-flight {
   0% {
-    transform: translate(0, 65%) rotate(var(--stick-start)) rotateY(0deg)
+    left: var(--stick-start-x);
+    top: 95%;
+    transform: translate(-50%, -50%) rotate(var(--stick-start)) rotateY(0deg)
       scale(0.88);
   }
-  36% {
-    transform: translate(calc(var(--stick-drift) * 0.6), var(--throw-apex))
-      rotate(calc(var(--stick-rest) * 0.6)) rotateY(160deg) scale(1.04);
-  }
-  75% {
-    transform: translate(var(--stick-drift), 0) rotate(var(--stick-rest))
-      rotateY(360deg);
-  }
-  85% {
-    transform: translate(var(--stick-drift), -5%) rotate(var(--stick-rest))
-      rotateY(366deg);
+  44% {
+    left: var(--stick-mid-x);
+    top: calc(50% - var(--throw-apex));
+    transform: translate(-50%, -50%) rotate(calc(var(--stick-rest) * 0.6))
+      rotateY(150deg);
   }
   100% {
-    transform: translate(var(--stick-drift), 0) rotate(var(--stick-rest))
-      rotateY(360deg);
+    left: var(--stick-land-x);
+    top: var(--stick-land-y);
+    transform: translate(-50%, -50%) rotate(var(--stick-rest)) rotateY(360deg);
+  }
+}
+@keyframes yut-fallback-settle {
+  0% {
+    left: var(--stick-land-x);
+    top: var(--stick-land-y);
+    transform: translate(-50%, -50%) rotate(var(--stick-rest)) rotateY(360deg);
+  }
+  28% {
+    top: calc(var(--stick-land-y) - 3%);
+    transform: translate(-50%, -50%) rotate(var(--stick-rest)) rotateY(365deg);
+  }
+  100% {
+    left: var(--stick-land-x);
+    top: var(--stick-land-y);
+    transform: translate(-50%, -50%) rotate(var(--stick-rest)) rotateY(360deg);
   }
 }
 .yut-throw-3d__wood i {

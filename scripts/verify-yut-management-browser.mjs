@@ -46,11 +46,12 @@ import Entry from ${modulePath("src/components/common/weplay/YutGameEntry.tsx")}
 import Management from ${modulePath("src/pages/teacher/components/YutManagement.tsx")};
 import Catalog from ${modulePath("src/components/common/weplay/WeplayGameCatalog.tsx")};
 import {AppDialogProvider} from ${modulePath("src/components/common/AppDialogProvider.tsx")};
+import {AppToastProvider} from ${modulePath("src/components/common/AppToastProvider.tsx")};
 import ${modulePath("src/components/common/portalPage.css")};
 import ${modulePath("src/assets/index.css")};
 const query=new URLSearchParams(location.search),portal=query.get('portal')==='student'?'student':'teacher';
 function App(){const [params]=useSearchParams();return params.get('game')==='joseon-yut'?portal==='teacher'?<Management/>:<Entry portal='student'/>:<main className='ws-page'><Catalog portal={portal} gameTitle='내가 충무공이라고?!'/></main>;}
-createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/'+portal+'/weplay'+(query.has('catalog')?'':'?game=joseon-yut')]}><AppDialogProvider><App/></AppDialogProvider></MemoryRouter>);
+createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/'+portal+'/weplay'+(query.has('catalog')?'':'?game=joseon-yut')]}><AppToastProvider><AppDialogProvider><App/></AppDialogProvider></AppToastProvider></MemoryRouter>);
 `;
 const bundled = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -164,141 +165,147 @@ const goto = async (query) => {
   await page.goto(base + "/?" + query);
 };
 try {
-  for (const scenario of ["closed", "missing", "failure"]) {
-    await goto("portal=student&case=" + scenario);
+  if (!process.env.YUT_MANAGEMENT_ONLY) {
+    for (const scenario of ["closed", "missing", "failure"]) {
+      await goto("portal=student&case=" + scenario);
+      await page
+        .getByText(
+          scenario === "failure"
+            ? "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."
+            : "지금은 윷놀이가 열려 있지 않습니다.",
+          { exact: true },
+        )
+        .waitFor();
+      assert.equal(
+        await page
+          .locator('[data-testid="game-mounted"],.weplay-studio-intro')
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page.evaluate(
+          () =>
+            window.yutAccessQA.calls.filter(
+              (call) => call.name === "commandYutRoom",
+            ).length,
+        ),
+        0,
+      );
+    }
+    checks.push(
+      "Direct student URL fails closed for false, missing flag and network error before intro/local game.",
+    );
+    await goto("portal=student&case=pending");
     await page
-      .getByText(
-        scenario === "failure"
-          ? "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."
-          : "지금은 윷놀이가 열려 있지 않습니다.",
-        { exact: true },
-      )
+      .getByText("게임을 확인하고 있습니다.", { exact: true })
       .waitFor();
+    await page.evaluate(() => {
+      window.yutAccessQA.enabled = false;
+      window.yutAccessQA.changeAuth({
+        config: { year: "2026", semester: "1" },
+      });
+    });
+    await page
+      .getByText("지금은 윷놀이가 열려 있지 않습니다.", { exact: true })
+      .waitFor();
+    await page.evaluate(() => window.yutAccessQA.release());
     assert.equal(
       await page
         .locator('[data-testid="game-mounted"],.weplay-studio-intro')
         .count(),
       0,
     );
+    checks.push("Semester change rejects old publication response.");
+    await goto("portal=student&case=closed&catalog=1");
+    await page.getByText("지금은 이용할 수 없음", { exact: true }).waitFor();
+    assert.equal(await page.locator('a[href*="joseon-yut"]').count(), 0);
+    assert.equal(await page.locator('a[href*="history-rain"]').count(), 1);
+    await goto("portal=student&case=open");
+    await page.getByRole("button", { name: /건너뛰기/ }).click();
+    await page.getByTestId("game-mounted").waitFor();
     assert.equal(
-      await page.evaluate(
-        () =>
-          window.yutAccessQA.calls.filter(
-            (call) => call.name === "commandYutRoom",
-          ).length,
-      ),
-      0,
+      await page.evaluate(() => window.yutAccessQA.preview.allowSolo),
+      true,
+    );
+    await page.evaluate(() => {
+      window.yutAccessQA.settings.allowSolo = false;
+      window.yutAccessQA.settings.allowMultiplayer = false;
+      window.yutAccessQA.settings.allowPrivateRooms = false;
+    });
+    await page.waitForFunction(
+      () => window.yutAccessQA.preview?.allowSolo === false,
+      undefined,
+      { timeout: 18000 },
+    );
+    assert.deepEqual(
+      await page.evaluate(() => [
+        window.yutAccessQA.preview.allowSolo,
+        window.yutAccessQA.preview.allowMultiplayer,
+        window.yutAccessQA.preview.allowPrivateRooms,
+      ]),
+      [false, false, false],
+    );
+    assert.equal(await page.getByTestId("game-mounted").count(), 1);
+    checks.push(
+      "The 15-second student publication refresh passes live solo, multiplayer and private-room restrictions into the mounted game without waiting for re-entry.",
+    );
+    await page.evaluate(() => {
+      window.yutAccessQA.enabled = false;
+    });
+    await page
+      .getByText("지금은 윷놀이가 열려 있지 않습니다.", { exact: true })
+      .waitFor({ timeout: 18000 });
+    assert.equal(await page.getByTestId("game-mounted").count(), 0);
+    await page.evaluate(() => {
+      window.yutAccessQA.enabled = true;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.getByTestId("game-mounted").waitFor();
+    await page.evaluate(() => {
+      window.yutAccessQA.fail = true;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page
+      .getByText(
+        "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(await page.getByTestId("game-mounted").count(), 0);
+    checks.push(
+      "Student catalog disables only Yut; 15-second publication refresh unmounts an already entered game.",
+    );
+    await page.evaluate(() => {
+      window.yutAccessQA.fail = false;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.getByTestId("game-mounted").waitFor();
+    const beforeTimeout = await page.evaluate(
+      () => window.yutAccessQA.calls.length,
+    );
+    await page.evaluate(() => {
+      window.yutAccessQA.hold = true;
+      document.dispatchEvent(new Event("visibilitychange"));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    assert.equal(
+      await page.evaluate(() => window.yutAccessQA.calls.length),
+      beforeTimeout + 1,
+    );
+    await page
+      .getByText(
+        "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+        { exact: true },
+      )
+      .waitFor({ timeout: 12000 });
+    assert.equal(await page.getByTestId("game-mounted").count(), 0);
+    await page.evaluate(() => window.yutAccessQA.release());
+    await page.waitForTimeout(100);
+    assert.equal(await page.getByTestId("game-mounted").count(), 0);
+    checks.push(
+      "A stalled publication read times out at 10 seconds, unmounts local play, suppresses duplicate reads and ignores a late open response.",
     );
   }
-  checks.push(
-    "Direct student URL fails closed for false, missing flag and network error before intro/local game.",
-  );
-  await goto("portal=student&case=pending");
-  await page.getByText("게임을 확인하고 있습니다.", { exact: true }).waitFor();
-  await page.evaluate(() => {
-    window.yutAccessQA.enabled = false;
-    window.yutAccessQA.changeAuth({ config: { year: "2026", semester: "1" } });
-  });
-  await page
-    .getByText("지금은 윷놀이가 열려 있지 않습니다.", { exact: true })
-    .waitFor();
-  await page.evaluate(() => window.yutAccessQA.release());
-  assert.equal(
-    await page
-      .locator('[data-testid="game-mounted"],.weplay-studio-intro')
-      .count(),
-    0,
-  );
-  checks.push("Semester change rejects old publication response.");
-  await goto("portal=student&case=closed&catalog=1");
-  await page.getByText("지금은 이용할 수 없음", { exact: true }).waitFor();
-  assert.equal(await page.locator('a[href*="joseon-yut"]').count(), 0);
-  assert.equal(await page.locator('a[href*="history-rain"]').count(), 1);
-  await goto("portal=student&case=open");
-  await page.getByRole("button", { name: /건너뛰기/ }).click();
-  await page.getByTestId("game-mounted").waitFor();
-  assert.equal(
-    await page.evaluate(() => window.yutAccessQA.preview.allowSolo),
-    true,
-  );
-  await page.evaluate(() => {
-    window.yutAccessQA.settings.allowSolo = false;
-    window.yutAccessQA.settings.allowMultiplayer = false;
-    window.yutAccessQA.settings.allowPrivateRooms = false;
-  });
-  await page.waitForFunction(
-    () => window.yutAccessQA.preview?.allowSolo === false,
-    undefined,
-    { timeout: 18000 },
-  );
-  assert.deepEqual(
-    await page.evaluate(() => [
-      window.yutAccessQA.preview.allowSolo,
-      window.yutAccessQA.preview.allowMultiplayer,
-      window.yutAccessQA.preview.allowPrivateRooms,
-    ]),
-    [false, false, false],
-  );
-  assert.equal(await page.getByTestId("game-mounted").count(), 1);
-  checks.push(
-    "The 15-second student publication refresh passes live solo, multiplayer and private-room restrictions into the mounted game without waiting for re-entry.",
-  );
-  await page.evaluate(() => {
-    window.yutAccessQA.enabled = false;
-  });
-  await page
-    .getByText("지금은 윷놀이가 열려 있지 않습니다.", { exact: true })
-    .waitFor({ timeout: 18000 });
-  assert.equal(await page.getByTestId("game-mounted").count(), 0);
-  await page.evaluate(() => {
-    window.yutAccessQA.enabled = true;
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await page.getByTestId("game-mounted").waitFor();
-  await page.evaluate(() => {
-    window.yutAccessQA.fail = true;
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await page
-    .getByText(
-      "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
-      { exact: true },
-    )
-    .waitFor();
-  assert.equal(await page.getByTestId("game-mounted").count(), 0);
-  checks.push(
-    "Student catalog disables only Yut; 15-second publication refresh unmounts an already entered game.",
-  );
-  await page.evaluate(() => {
-    window.yutAccessQA.fail = false;
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await page.getByTestId("game-mounted").waitFor();
-  const beforeTimeout = await page.evaluate(
-    () => window.yutAccessQA.calls.length,
-  );
-  await page.evaluate(() => {
-    window.yutAccessQA.hold = true;
-    document.dispatchEvent(new Event("visibilitychange"));
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  assert.equal(
-    await page.evaluate(() => window.yutAccessQA.calls.length),
-    beforeTimeout + 1,
-  );
-  await page
-    .getByText(
-      "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
-      { exact: true },
-    )
-    .waitFor({ timeout: 12000 });
-  assert.equal(await page.getByTestId("game-mounted").count(), 0);
-  await page.evaluate(() => window.yutAccessQA.release());
-  await page.waitForTimeout(100);
-  assert.equal(await page.getByTestId("game-mounted").count(), 0);
-  checks.push(
-    "A stalled publication read times out at 10 seconds, unmounts local play, suppresses duplicate reads and ignores a late open response.",
-  );
   await goto("portal=teacher&catalog=1");
   await page.getByRole("link", { name: /마우저구 윷놀이.*게임 관리/ }).click();
   await page.getByRole("checkbox", { name: "학생에게 공개" }).waitFor();
@@ -312,6 +319,87 @@ try {
       .count(),
     0,
   );
+  const mute = page.locator(
+    ".yut-management .weplay-game-navigation .weplay-music-button",
+  );
+  assert.equal(await mute.getAttribute("aria-label"), "소리 끄기");
+  await mute.click();
+  assert.equal(await mute.getAttribute("aria-label"), "소리 켜기");
+  assert.equal(
+    await page.evaluate(() =>
+      localStorage.getItem("westory.weplay.musicMuted"),
+    ),
+    "true",
+  );
+  await mute.click();
+  assert.equal(await mute.getAttribute("aria-label"), "소리 끄기");
+  assert.equal(
+    await page.evaluate(() =>
+      localStorage.getItem("westory.weplay.musicMuted"),
+    ),
+    "false",
+  );
+  checks.push(
+    "Management header mute reflects and updates the shared audio preference without starting music.",
+  );
+  if (process.env.YUT_MANAGEMENT_ONLY === "headers") {
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      const title = await page
+        .locator(".yut-management > header h1")
+        .boundingBox();
+      const navigation = await page
+        .locator(".yut-management > header .weplay-game-navigation")
+        .boundingBox();
+      await page.screenshot({
+        path: path.join(evidence, "teacher-header-" + width + ".png"),
+        fullPage: true,
+      });
+      assert.ok(
+        navigation.x > title.x + title.width &&
+          Math.abs(
+            navigation.y + navigation.height / 2 - (title.y + title.height / 2),
+          ) < 8,
+        "management title/actions row at " + width,
+      );
+      const style = await page
+        .locator(".yut-management > header")
+        .getByRole("link", { name: "전체 게임", exact: true })
+        .evaluate((node) => ({
+          height: node.getBoundingClientRect().height,
+          border: getComputedStyle(node).borderTopWidth,
+          weight: getComputedStyle(node).fontWeight,
+        }));
+      assert.ok(
+        style.height >= 44 &&
+          style.border === "1px" &&
+          Number(style.weight) >= 700,
+      );
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth + 1,
+        ),
+        false,
+      );
+      await page.screenshot({
+        path: path.join(evidence, "teacher-header-" + width + ".png"),
+        fullPage: true,
+      });
+    }
+    checks.push(
+      "Management title, bordered44px catalog button and mute share one row at390/768/1280 without overflow.",
+    );
+    assert.deepEqual(errors, []);
+    await fs.writeFile(
+      path.join(evidence, "header-report.json"),
+      JSON.stringify({ checks, errors }, null, 2),
+    );
+    console.log(checks.join("\n"));
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+    process.exit(0);
+  }
+
   await page.getByRole("checkbox", { name: "학생에게 공개" }).focus();
   await page.keyboard.press("Space");
   assert.equal(
@@ -393,6 +481,7 @@ try {
     .getByRole("button", { name: "게임 설정 저장", exact: true })
     .click();
   await page
+    .locator(".yut-management-settings")
     .getByText(
       "다른 곳에서 게임 설정이 바뀌었습니다. 최신 설정을 불러온 뒤 다시 확인해 주세요.",
       { exact: true },
@@ -432,10 +521,34 @@ try {
       ),
       "no overflow at " + width,
     );
+    const heading = await page
+      .locator(".yut-management > header h1")
+      .boundingBox();
+    const allGames = await page
+      .locator(".yut-management > header")
+      .getByRole("link", { name: "전체 게임", exact: true })
+      .boundingBox();
+    assert.ok(
+      allGames.y >= heading.y - 8,
+      "catalog action is no longer above the title",
+    );
+    if (width >= 768)
+      assert.ok(
+        allGames.x > heading.x + heading.width &&
+          Math.abs(allGames.y - heading.y) < 12,
+        "management actions share title row",
+      );
     await page.screenshot({
       path: path.join(evidence, "teacher-management-" + width + ".png"),
       fullPage: true,
     });
+  }
+  // Earlier deliberate save conflicts leave global toasts; dismiss them before the intro.
+  while (await page.getByRole("button", { name: /알림 닫기$/ }).count()) {
+    await page
+      .getByRole("button", { name: /알림 닫기$/ })
+      .first()
+      .click();
   }
   await page.getByRole("link", { name: "체험하기", exact: true }).click();
   await page.getByRole("button", { name: /건너뛰기/ }).click();

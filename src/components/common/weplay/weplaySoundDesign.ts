@@ -1,4 +1,5 @@
-export type WeplaySoundCue = "word" | "cannon" | "special";
+import { renderYutSound, type YutSoundCue } from "./yutSoundDesign";
+export type WeplaySoundCue = "word" | "cannon" | "special" | YutSoundCue;
 
 // Original, deterministic PCM sound design. These short buffers need no network
 // request or decoder: wood/iron loading, a low cannon report and a naval volley.
@@ -56,6 +57,8 @@ export function renderWeplaySound(
   cue: WeplaySoundCue,
   sampleRate = SAMPLE_RATE,
 ) {
+  if (cue === "yut-throw" || cue === "yut-impact" || cue === "yut-step")
+    return renderYutSound(cue, sampleRate);
   const duration = cue === "word" ? 0.23 : cue === "cannon" ? 1.12 : 2.44;
   const samples = new Float32Array(Math.round(duration * sampleRate));
   if (cue === "word") {

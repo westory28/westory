@@ -1,0 +1,22 @@
+/* Grounded breathing: the feet stay planted while the shoulders sway. */
+.yut-seat .yut-sprite--idle {
+  --idle-sway: 1.6deg;
+  --idle-lean: 0.65deg;
+  transform-origin: 50% 96%;
+  animation: yut-wait-sway 3600ms ease-in-out infinite;
+}
+.yut-seat .yut-character--nong { animation-duration: 4100ms; animation-delay: -1300ms; }
+.yut-seat .yut-character--gong { animation-duration: 3300ms; animation-delay: -700ms; }
+.yut-seat .yut-character--sang { animation-duration: 3900ms; animation-delay: -2100ms; }
+@keyframes yut-wait-sway {
+  0%, 100% { transform: rotate(calc(var(--idle-sway) * -1)) skewX(var(--idle-lean)) scaleY(1); }
+  50% { transform: rotate(var(--idle-sway)) skewX(calc(var(--idle-lean) * -1)) scaleY(1.012); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yut-game .yut-seat .yut-sprite--idle {
+    --idle-sway: 0.4deg;
+    --idle-lean: 0deg;
+    animation: yut-wait-sway 5s ease-in-out infinite !important;
+  }
+}
+.yut-game[data-motion-paused="true"] .yut-seat .yut-sprite--idle { animation-play-state: paused !important; }

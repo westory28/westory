@@ -42,12 +42,14 @@ export function subscribeYutRoom(_config,roomId,onRoom,onError){let stopped=fals
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
 `;
 const harness = `
-import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';
+import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';
 import Entry from ${modulePath("src/components/common/weplay/YutGameEntry.tsx")};
+import {YutPowerThrow} from ${modulePath("src/components/common/weplay/yut/YutGame.tsx")};
 import {AppDialogProvider} from ${modulePath("src/components/common/AppDialogProvider.tsx")};
 import ${modulePath("src/assets/index.css")};import ${modulePath("assets/css/style.css")};
 const params=new URLSearchParams(location.search),portal=params.get('portal')==='student'?'student':'teacher';
-createRoot(document.getElementById('root')).render(<><div style={{height:params.has("chrome")?96:0}}/><MemoryRouter initialEntries={['/'+portal+'/weplay?game=joseon-yut'+(params.has('preview')?'&view=preview':'')]}><AppDialogProvider><Entry portal={portal}/></AppDialogProvider></MemoryRouter></>);
+function PowerFixture(){const[disabled,setDisabled]=useState(false);window.yutPowerDisable=setDisabled;window.yutPowerThrows??=[];return <section className="yut-game"><YutPowerThrow disabled={disabled} onThrow={value=>window.yutPowerThrows.push(value)}/></section>}
+createRoot(document.getElementById('root')).render(params.has('power')?<PowerFixture/>:<><div style={{height:params.has("chrome")?96:0}}/><MemoryRouter initialEntries={['/'+portal+'/weplay?game=joseon-yut'+(params.has('preview')?'&view=preview':'')]}><AppDialogProvider><Entry portal={portal}/></AppDialogProvider></MemoryRouter></>);
 `;
 const bundled = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
@@ -303,12 +305,13 @@ async function open(
     reducedMotion,
     deviceScaleFactor: 1,
   });
-  await page.addInitScript(() => {
+  await page.addInitScript((realFullscreen) => {
+    if (realFullscreen) return;
     HTMLElement.prototype.requestFullscreen = async function () {
       window.qaFullscreenRequests = (window.qaFullscreenRequests || 0) + 1;
       throw new Error("QA unsupported fullscreen fallback");
     };
-  });
+  }, query.includes("real-fullscreen=1"));
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", (route) =>
     route.request().url().startsWith(base) ? route.continue() : route.abort(),
@@ -350,6 +353,84 @@ async function throwWithPower(page, duration = 420) {
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
   if (process.env.YUT_QA_ONLY_MODES !== "1") {
+    const powerPage = await open(1280, "power=1");
+    const powerButton = powerPage.getByRole("button", {
+      name: "윷 던지기",
+      exact: true,
+    });
+    await powerButton.waitFor();
+    await powerButton.focus();
+    await powerPage.keyboard.down("Space");
+    const samples = [];
+    for (let sample = 0; sample < 12; sample++) {
+      await powerPage.waitForTimeout(150);
+      samples.push(
+        Number(
+          await powerPage.getByRole("meter").getAttribute("aria-valuenow"),
+        ),
+      );
+    }
+    assert.ok(
+      samples.every(
+        (value, index) => index === 0 || value >= samples[index - 1],
+      ),
+      "held charge never falls",
+    );
+    assert.equal(samples.at(-1), 100);
+    assert.equal(samples.at(-3), 100, "full charge remains full");
+    await powerPage.keyboard.up("Space");
+    assert.deepEqual(
+      await powerPage.evaluate(() => window.yutPowerThrows),
+      [1],
+    );
+    await throwWithPower(powerPage, 100);
+    const shortPower = await powerPage.evaluate(() =>
+      window.yutPowerThrows.at(-1),
+    );
+    assert.ok(shortPower >= 0.12 && shortPower < 0.35);
+    await powerButton.press("Enter");
+    await powerPage.waitForTimeout(600);
+    await powerPage
+      .getByRole("button", { name: "힘을 멈추고 던지기", exact: true })
+      .press("Enter");
+    const mediumPower = await powerPage.evaluate(() =>
+      window.yutPowerThrows.at(-1),
+    );
+    assert.ok(mediumPower > shortPower && mediumPower < 1);
+    await powerButton.focus();
+    await powerPage.keyboard.down("Space");
+    await powerPage.keyboard.press("Escape");
+    await powerPage.keyboard.up("Space");
+    assert.equal(
+      await powerPage.evaluate(() => window.yutPowerThrows.length),
+      3,
+    );
+    await powerButton.press("Enter");
+    await powerPage.evaluate(() => window.dispatchEvent(new Event("blur")));
+    assert.equal(
+      await powerPage.getByRole("meter").getAttribute("aria-valuenow"),
+      "0",
+    );
+    await powerButton.press("Enter");
+    await powerPage.evaluate(() => window.yutPowerDisable(true));
+    await powerPage.waitForFunction(
+      () =>
+        document
+          .querySelector('[role="meter"]')
+          .getAttribute("aria-valuenow") === "0",
+    );
+    assert.equal(
+      await powerPage.getByRole("meter").getAttribute("aria-valuenow"),
+      "0",
+    );
+    assert.equal(
+      await powerPage.evaluate(() => window.yutPowerThrows.length),
+      3,
+    );
+    await powerPage.close();
+    checks.push(
+      "Power rises monotonically for 1.2s and holds at 100%; short pointer, Space-release and Enter-toggle each throw once; Escape, blur and disabled state cancel safely.",
+    );
     const intro = await open(1280, "portal=student&uid=qa-intro");
     await intro.locator("section.weplay-studio-intro").waitFor();
     assert.ok(
@@ -367,7 +448,9 @@ try {
       "Publication is checked before intro; opening performs no game commands and Escape restores lobby.",
     );
     await intro.close();
-    for (const width of [320, 390, 768, 1280, 1440]) {
+    for (const width of process.env.YUT_QA_WIDTHS
+      ? process.env.YUT_QA_WIDTHS.split(",").map(Number)
+      : [320, 390, 768, 1280, 1440]) {
       const page = await open(
         width,
         "portal=teacher&uid=qa-teacher" + (width === 1280 ? "&chrome=1" : ""),
@@ -411,8 +494,108 @@ try {
       await page
         .getByRole("button", { name: "윷 던지기", exact: true })
         .waitFor();
+      assert.equal(
+        await page.locator(".yut-match-heading").count(),
+        0,
+        "duplicate match banner removed",
+      );
+      await page
+        .locator(".yut-topbar-title")
+        .getByText("마우저구 윷놀이", { exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .locator(".weplay-game-navigation .weplay-music-button")
+          .count(),
+        1,
+        "header sound remains after intro",
+      );
+      assert.equal(
+        await page
+          .locator(".weplay-game-navigation")
+          .getByRole("link", { name: "전체 게임", exact: true })
+          .count(),
+        1,
+      );
+      const topbarBounds = await page.locator(".yut-topbar").boundingBox();
+      const stageBounds = await page.locator(".yut-match-stage").boundingBox();
+      assert.ok(
+        stageBounds.y >= topbarBounds.y + topbarBounds.height - 1,
+        "topbar does not cover board stage",
+      );
+      const buttonStyle = await page
+        .getByRole("button", { name: "윷 던지기", exact: true })
+        .evaluate((node) => ({
+          radius: getComputedStyle(node).borderRadius,
+          size: getComputedStyle(node).fontSize,
+          weight: getComputedStyle(node).fontWeight,
+          height: node.getBoundingClientRect().height,
+        }));
+      assert.equal(buttonStyle.radius, "12px");
+      assert.ok(
+        parseFloat(buttonStyle.size) >= 16 &&
+          Number(buttonStyle.weight) >= 700 &&
+          buttonStyle.height >= 44,
+      );
+      if (width === 1280) {
+        const title = await page.locator(".weplay-heading h1").boundingBox();
+        const navigation = await page
+          .locator(".weplay-game-navigation")
+          .boundingBox();
+        assert.ok(
+          navigation.x > title.x + title.width &&
+            Math.abs(
+              navigation.y +
+                navigation.height / 2 -
+                (title.y + title.height / 2),
+            ) < 8,
+          "title and navigation share one row",
+        );
+      }
       await capture(page, "yut-match-" + width);
       const bounds = await page.locator(".yut-isometric-board").boundingBox();
+      await fs.writeFile(
+        path.join(evidence, `layout-${width}.json`),
+        JSON.stringify(
+          await page.evaluate(() =>
+            Object.fromEntries(
+              [
+                ".weplay-heading",
+                ".weplay-game-frame",
+                ".yut-game",
+                ".yut-topbar",
+                ".yut-match",
+                ".yut-match-stage",
+                ".yut-board-area",
+                ".yut-isometric-board",
+                ".yut-isometric-board-wrap",
+                ".yut-action-dock",
+                ".yut-event",
+              ].map((selector) => {
+                const el = document.querySelector(selector),
+                  style = getComputedStyle(el),
+                  rect = el.getBoundingClientRect();
+                return [
+                  selector,
+                  {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                    paddingTop: style.paddingTop,
+                    paddingBottom: style.paddingBottom,
+                    marginTop: style.marginTop,
+                    maxWidth: style.maxWidth,
+                    boardWidth: style.getPropertyValue("--yut-board-max-width"),
+                  },
+                ];
+              }),
+            ),
+          ),
+          null,
+          2,
+        ),
+      );
       if (width === 1280)
         assert.ok(
           bounds.width >= 750,
@@ -462,6 +645,72 @@ try {
     checks.push(
       "Portrait 320/390/768 shows rotation gate without room-start controls; 640/844/1024 landscape and 1280/1440 desktop support waiting/play/throw/move/rules without network writes or overflow; class selector removed.",
     );
+    const full = await open(
+      844,
+      "portal=teacher&uid=qa-fullscreen&real-fullscreen=1",
+      390,
+    );
+    await skip(full);
+    await full
+      .getByRole("button", { name: "대기실부터 체험하기", exact: true })
+      .click();
+    await full.waitForFunction(() =>
+      document.fullscreenElement?.classList.contains("yut-game"),
+    );
+    await full
+      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .click();
+    await full
+      .getByRole("button", { name: "윷 던지기", exact: true })
+      .waitFor();
+    const fullBounds = await full.locator(".yut-game").boundingBox();
+    const fullButton = await full
+      .getByRole("button", { name: "윷 던지기", exact: true })
+      .boundingBox();
+    assert.equal(
+      Math.round(fullBounds.y),
+      0,
+      "fullscreen starts at viewport top",
+    );
+    assert.equal(
+      Math.round(fullBounds.height),
+      390,
+      "fullscreen uses viewport height",
+    );
+    assert.ok(
+      fullButton.y + fullButton.height <= 390,
+      "throw remains visible in fullscreen",
+    );
+    assert.equal(
+      await full
+        .locator(".yut-topbar")
+        .getByRole("button", { name: /소리 (켜기|끄기)/ })
+        .count(),
+      1,
+      "fullscreen retains mute",
+    );
+    await full.screenshot({
+      path: path.join(evidence, "yut-fullscreen-844.png"),
+      fullPage: false,
+    });
+    await full
+      .getByRole("button", { name: "전체 화면 나가기", exact: true })
+      .click();
+    await full.waitForFunction(() => !document.fullscreenElement);
+    await full.close();
+    checks.push(
+      "Native fullscreen at844×390 keeps the title, sound, exit, board and throw action visible.",
+    );
+    if (process.env.YUT_QA_ONLY_UI === "1") {
+      await fs.writeFile(
+        path.join(evidence, "ui-report.json"),
+        JSON.stringify({ checks, errors }, null, 2),
+      );
+      console.log(checks.join("\n"));
+      await browser.close();
+      await new Promise((resolve) => server.close(resolve));
+      process.exit(0);
+    }
     await fetch(base + "/qa/reset");
     const host = await open(1280, "portal=student&uid=qa-host");
     await skip(host);

@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -26,6 +27,12 @@ import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { InfoHelp } from "../../../components/common/InfoHelp";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import YutGameEntry from "../../../components/common/weplay/YutGameEntry";
+import WeplayMusicButton from "../../../components/common/weplay/WeplayMusicButton";
+import {
+  isWeplayAudioMuted,
+  onWeplayAudioMutedChange,
+  setWeplayAudioMuted,
+} from "../../../components/common/weplay/weplayAudioPreference";
 import { prepareWeplayIntroAudio } from "../../../components/common/weplay/weplayIntroAudio";
 import "../../../components/common/portalPage.css";
 import "./YutManagement.css";
@@ -81,6 +88,15 @@ export default function YutManagement() {
   const { confirm } = useAppDialog();
   const [params] = useSearchParams();
   const view = params.get("view");
+  const muted = useSyncExternalStore(
+    onWeplayAudioMutedChange,
+    isWeplayAudioMuted,
+  );
+  const music = {
+    enabled: !muted,
+    failed: false,
+    toggle: () => setWeplayAudioMuted(!isWeplayAudioMuted()),
+  };
   const canRead =
     !!currentUser && canReadLessonManagement(userData, currentUser.email);
   const canWrite =
@@ -350,11 +366,14 @@ export default function YutManagement() {
     );
   return (
     <PortalWorkspace as="main" className="ws-page yut-management">
-      <Link className="weplay-catalog-back" to="/teacher/weplay">
-        전체 게임
-      </Link>
-      <header className="ws-page-header">
+      <header className="weplay-heading">
         <h1>마우저구 윷놀이</h1>
+        <div className="weplay-game-navigation">
+          <Link className="weplay-catalog-back" to="/teacher/weplay">
+            전체 게임
+          </Link>
+          <WeplayMusicButton {...music} />
+        </div>
       </header>
       {readError && (
         <p className="yut-management-error" role="alert">

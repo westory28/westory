@@ -29,9 +29,11 @@ const source = (f) =>
       .join(root, "src/components/common/weplay/yut", f)
       .replaceAll("\\", "/"),
   );
-const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{finalYutRotation,createYutGeometry,sampleYutPose}from ${source("YutThrowScene.ts")};import{Vector3}from'three';
+const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{YutThrowScene,finalYutRotation,createYutGeometry,sampleYutPose,yutThrowPlan}from ${source("YutThrowScene.ts")};import{Vector3,Raycaster}from'three';
+const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=function(){render.call(this);if(this.elapsed>=1.4&&this.result){window.qa.renderedFaces=this.groups.map(group=>{const origin=this.camera.position.clone(),direction=group.position.clone().sub(origin).normalize();const hit=new Raycaster(origin,direction).intersectObjects(group.children,false)[0];return hit?.object===group.children[1];});}};
+window.qa.plan=yutThrowPlan;window.qa.pose=sampleYutPose;window.qa.finalNormal=(flat,index,power,key)=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,index,power,key)).y;
 const room={id:'visual-qa',revision:0,lastEvent:{kind:'create',atMs:0,text:''},status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
-function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -107,7 +109,13 @@ async function fresh(options = {}, noGL = false, frameDelayMs = 0) {
           window.setTimeout(() => callback(performance.now()), frameDelayMs);
         window.cancelAnimationFrame = (id) => window.clearTimeout(id);
       }
-      window.qa = { count: 0, moves: 0, hidden: false };
+      window.qa = {
+        count: 0,
+        moves: 0,
+        hidden: false,
+        releases: 0,
+        impacts: [],
+      };
       Object.defineProperty(document, "hidden", {
         configurable: true,
         get: () => window.qa.hidden,
@@ -139,6 +147,121 @@ async function fresh(options = {}, noGL = false, frameDelayMs = 0) {
 }
 try {
   {
+    const { context, page } = await fresh();
+    const math = await page.evaluate(() => {
+      let maxContact = 0;
+      for (let event = 0; event < 200; event++) {
+        const key = `seed-${event}`;
+        for (let index = 0; index < 4; index++) {
+          const low = window.qa.plan(index, 0, key),
+            high = window.qa.plan(index, 1, key);
+          if (!(high.lift > low.lift && Math.abs(high.x) > Math.abs(low.x)))
+            throw new Error(
+              "power must raise and spread the same seeded throw",
+            );
+          if (
+            JSON.stringify(high) !==
+            JSON.stringify(window.qa.plan(index, 1, key))
+          )
+            throw new Error("unstable event seed");
+          maxContact = Math.max(
+            maxContact,
+            high.delay + high.flight + high.settle,
+          );
+          for (const flat of [false, true]) {
+            const end = window.qa.pose(1.4, index, flat, 1, key);
+            if (
+              Math.abs(end.y - 0.122) > 1e-8 ||
+              Math.abs(end.pitch) > 1e-8 ||
+              Math.abs(
+                window.qa.finalNormal(flat, index, 1, key) - (flat ? 1 : -1),
+              ) > 1e-8
+            )
+              throw new Error("incorrect rest orientation");
+          }
+        }
+      }
+      if (
+        JSON.stringify(window.qa.plan(0, 0.65, "first")) ===
+        JSON.stringify(window.qa.plan(0, 0.65, "second"))
+      )
+        throw new Error("throws lack variation");
+      return { maxContact };
+    });
+    assert.ok(math.maxContact < 1.4);
+    report.checks.push(
+      "200 seeded events: deterministic variations, monotone power height/spread, all four final normals and contact deadlines",
+    );
+    await context.close();
+  }
+  for (const fallback of [false, true]) {
+    const { context, page } = await fresh(
+      { viewport: { width: 1280, height: 900 } },
+      fallback,
+    );
+    for (let mask = 0; mask < 16; mask++) {
+      const sticks = [0, 1, 2, 3].map((index) => Boolean(mask & (1 << index)));
+      await page.evaluate(
+        ({ mask, sticks }) =>
+          window.qa.update({
+            throwKey: `all-faces-${mask}`,
+            sticks,
+            power: mask / 15,
+          }),
+        { mask, sticks },
+      );
+      await page.waitForFunction(
+        (count) => window.qa.count === count,
+        mask + 1,
+      );
+      const faces = fallback
+        ? await page
+            .locator(".yut-throw-3d__wood")
+            .evaluateAll((nodes) =>
+              nodes.map((node) => node.dataset.face === "flat"),
+            )
+        : await page.evaluate(() => window.qa.renderedFaces);
+      assert.deepEqual(
+        faces,
+        sticks,
+        `${fallback ? "CSS" : "rendered WebGL raycast"} mask ${mask}`,
+      );
+      assert.equal(await page.evaluate(() => window.qa.releases), mask + 1);
+      const impacts = await page.evaluate(() =>
+        window.qa.impacts.slice(-4).sort(),
+      );
+      assert.deepEqual(impacts, [0, 1, 2, 3]);
+      if ([0, 1, 3, 7, 15].includes(mask))
+        await page.screenshot({
+          path: path.join(
+            evidence,
+            `${fallback ? "fallback" : "webgl"}-faces-${mask}.png`,
+          ),
+        });
+    }
+    const before = await page.evaluate(() => ({
+      count: window.qa.count,
+      releases: window.qa.releases,
+      impacts: window.qa.impacts.length,
+    }));
+    await page.evaluate(() =>
+      window.qa.update({ sticks: [true, true, true, true] }),
+    );
+    await page.waitForTimeout(50);
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        count: window.qa.count,
+        releases: window.qa.releases,
+        impacts: window.qa.impacts.length,
+      })),
+      before,
+    );
+    report.checks.push(
+      `${fallback ? "CSS" : "real WebGL camera raycast"} all 16 final face combinations match server booleans; release/4 contacts fire once per key`,
+    );
+    await context.close();
+  }
+  {
     const { context, page } = await fresh({}, false, 200);
     // Warm the real WebGL shaders before measuring the animation clock.
     await page.evaluate(() =>
@@ -163,11 +286,11 @@ try {
       () => window.qa.completedAt - window.qa.startedAt,
     );
     assert.ok(
-      elapsed >= 2200 && elapsed < 3500,
+      elapsed >= 1350 && elapsed < 2800,
       `slow GPU duration: ${elapsed}ms`,
     );
     report.checks.push(
-      "5fps WebGL still settles in real time (2.25 seconds plus frame scheduling), without stretching the player's turn",
+      "5fps WebGL still settles in real time (1.4 seconds plus frame scheduling), without stretching the player's turn",
     );
     await context.close();
   }
@@ -185,7 +308,7 @@ try {
       poses.every((pose) => pose.y > 0.12 && pose.y < 2.2),
       "gentle hand-toss arc",
     );
-    const settled = await page.evaluate(() => window.qa.poses(2.25, 0.65));
+    const settled = await page.evaluate(() => window.qa.poses(1.4, 0.65));
     assert.ok(
       settled.every(
         (pose) =>
@@ -384,11 +507,11 @@ try {
     await page.waitForFunction(() => window.qa.count === 1);
     assert.ok(
       await page.evaluate(
-        () => window.qa.completedAt - window.qa.startedAt >= 2200,
+        () => window.qa.completedAt - window.qa.startedAt >= 1350,
       ),
     );
     report.checks.push(
-      "reduced-motion still shows full 2.25-second WebGL throw before completion",
+      "reduced-motion still shows full 1.4-second WebGL throw before completion",
     );
     await context.close();
   }
@@ -407,7 +530,7 @@ try {
     assert.equal(await page.locator('[data-face="flat"]').count(), 2);
     await page.screenshot({ path: path.join(evidence, "fallback.png") });
     report.checks.push(
-      "WebGL unavailable: marked CSS arc completes after a bounded 2.25-second flight",
+      "WebGL unavailable: marked CSS arc completes after a bounded 1.4-second flight",
     );
     await context.close();
   }
@@ -501,7 +624,7 @@ try {
         state: getComputedStyle(node).animationPlayState,
       }));
     assert.notEqual(animation.name, "none");
-    assert.equal(animation.state, "paused");
+    assert.ok(animation.state.split(", ").every((state) => state === "paused"));
     await page.evaluate(() => window.qa.hide(false));
     await page.waitForFunction(() => window.qa.count === 1);
     await page.evaluate(() =>

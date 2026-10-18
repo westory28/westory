@@ -34,10 +34,13 @@ export default function YutGameEntry({
       <main className="weplay-page" tabIndex={-1}>
         <header className="weplay-heading">
           <h1>마우저구 윷놀이</h1>
+          <div className="weplay-game-navigation">
+            <Link className="weplay-catalog-back" to={`/${portal}/weplay`}>
+              전체 게임
+            </Link>
+            <WeplayMusicButton {...music} />
+          </div>
         </header>
-        <Link className="weplay-catalog-back" to={`/${portal}/weplay`}>
-          전체 게임
-        </Link>
         <p role={status === "error" ? "alert" : "status"}>
           {status === "checking"
             ? "게임을 확인하고 있습니다."
@@ -57,21 +60,20 @@ export default function YutGameEntry({
     <main className="weplay-game-page weplay-yut-page" tabIndex={-1}>
       <header className="weplay-heading">
         <h1 tabIndex={-1}>마우저구 윷놀이</h1>
-        {!introduced && (
-          <div className="weplay-game-navigation">
+        <nav className="weplay-game-navigation" aria-label="위플레이 화면 이동">
+          <Link className="weplay-catalog-back" to={`/${portal}/weplay`}>
+            전체 게임
+          </Link>
+          {portal === "teacher" && (
             <Link
               className="weplay-catalog-back"
-              to={
-                portal === "teacher"
-                  ? "/teacher/weplay?game=joseon-yut"
-                  : "/student/weplay"
-              }
+              to="/teacher/weplay?game=joseon-yut"
             >
-              {portal === "teacher" ? "게임 관리" : "전체 게임"}
+              게임 관리
             </Link>
-            <WeplayMusicButton {...music} />
-          </div>
-        )}
+          )}
+          <WeplayMusicButton {...music} />
+        </nav>
       </header>
       <WeplayGameFrame theme="yut">
         {!introduced ? (

@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { YutThrowScene, type YutThrowState } from "./YutThrowScene";
+import {
+  YutThrowScene,
+  YUT_VISUAL_THROW_MS,
+  yutThrowPlan,
+  type YutThrowState,
+} from "./YutThrowScene";
 import "./yut-throw-3d.css";
 
-export type YutThrow3DProps = YutThrowState & { onComplete?: () => void };
+export type YutThrow3DProps = YutThrowState & {
+  onComplete?: () => void;
+  onRelease?: () => void;
+  onImpact?: (index: number) => void;
+};
 
 /** Visual only. `true` is the marked flat face up, exactly as in yutCore. */
 export default function YutThrow3D({
@@ -11,11 +20,16 @@ export default function YutThrow3D({
   rolling,
   power = 0.65,
   onComplete,
+  onRelease,
+  onImpact,
 }: YutThrow3DProps) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<YutThrowScene | null>(null);
   const callback = useRef(onComplete);
   callback.current = onComplete;
+  const audio = useRef({ onRelease, onImpact });
+  audio.current = { onRelease, onImpact };
+  const sounded = useRef(new Map<string, Set<number>>());
   const state = useRef({ throwKey, sticks, rolling, power });
   state.current = { throwKey, sticks, rolling, power };
   const seen = useRef(new Set<string>());
@@ -24,6 +38,18 @@ export default function YutThrow3D({
   const [hidden, setHidden] = useState(document.hidden);
   const [settled, setSettled] = useState(false);
   const visible = rolling || Boolean(throwKey && sticks?.length === 4);
+  const sound = (index: number) => {
+    const key = state.current.throwKey;
+    if (!key || document.hidden || seen.current.has(key)) return;
+    const events = sounded.current.get(key) || new Set<number>();
+    if (events.has(index)) return;
+    events.add(index);
+    sounded.current.set(key, events);
+    if (sounded.current.size > 24)
+      sounded.current.delete(sounded.current.keys().next().value!);
+    if (index < 0) audio.current.onRelease?.();
+    else audio.current.onImpact?.(index);
+  };
 
   useEffect(() => {
     if (!visible || !host.current) return;
@@ -41,6 +67,12 @@ export default function YutThrow3D({
         complete,
         () => {
           if (alive) setFallback(true);
+        },
+        () => {
+          if (alive) sound(-1);
+        },
+        (index) => {
+          if (alive) sound(index);
         },
       );
       scene.current = driver;
@@ -74,10 +106,11 @@ export default function YutThrow3D({
     const key = throwKey;
     setFallbackKey(key);
     setSettled(false);
-    let remaining = 2250,
+    let remaining = YUT_VISUAL_THROW_MS,
       started = 0,
       timer = 0,
       alive = true;
+    let impactTimers: number[] = [];
     const complete = () => {
       if (!alive) return;
       seen.current.add(key);
@@ -86,11 +119,29 @@ export default function YutThrow3D({
     };
     const visibility = () => {
       window.clearTimeout(timer);
+      impactTimers.forEach(window.clearTimeout);
+      impactTimers = [];
       if (started)
         remaining = Math.max(0, remaining - (performance.now() - started));
       started = 0;
       setHidden(document.hidden);
       if (!document.hidden) {
+        sound(-1);
+        for (let index = 0; index < 4; index++) {
+          const plan = yutThrowPlan(index, power, key);
+          impactTimers.push(
+            window.setTimeout(
+              () => {
+                if (alive) sound(index);
+              },
+              Math.max(
+                0,
+                (plan.delay + plan.flight) * 1000 -
+                  (YUT_VISUAL_THROW_MS - remaining),
+              ),
+            ),
+          );
+        }
         started = performance.now();
         timer = window.setTimeout(complete, remaining);
       }
@@ -100,6 +151,7 @@ export default function YutThrow3D({
     return () => {
       alive = false;
       window.clearTimeout(timer);
+      impactTimers.forEach(window.clearTimeout);
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [fallback, throwKey, sticks?.length]);
@@ -120,29 +172,38 @@ export default function YutThrow3D({
           key={fallbackKey}
           className={`yut-throw-3d__fallback ${fallbackKey ? "has-result" : ""}`}
         >
-          {[0, 1, 2, 3].map((index) => (
-            <span
-              key={index}
-              className={`yut-throw-3d__wood ${sticks?.[index] ? "is-flat" : ""}`}
-              data-face={sticks?.[index] ? "flat" : "round"}
-              style={
-                {
-                  "--throw-play-state": hidden ? "paused" : "running",
-                  "--throw-apex": `${-35 - (Number.isFinite(power) ? Math.max(0, Math.min(1, power)) : 0.65) * 40}%`,
-                  "--stick-delay": `${[0, 45, 20, 90][index]}ms`,
-                  "--stick-drift": `${[-20, 8, -10, 24][index]}px`,
-                  "--stick-rest": `${[-14, 9, -6, 18][index]}deg`,
-                  "--stick-start": `${[-28, 20, -16, 34][index]}deg`,
-                } as CSSProperties
-              }
-            >
-              {sticks?.[index] && (
-                <i>
-                  ×<br />×<br />×
-                </i>
-              )}
-            </span>
-          ))}
+          {[0, 1, 2, 3].map((index) => {
+            const plan = yutThrowPlan(index, power, throwKey || "");
+            return (
+              <span
+                key={index}
+                className={`yut-throw-3d__wood ${sticks?.[index] ? "is-flat" : ""}`}
+                data-face={sticks?.[index] ? "flat" : "round"}
+                style={
+                  {
+                    "--throw-play-state": hidden ? "paused" : "running",
+                    "--throw-apex": `${plan.lift * 34}%`,
+                    "--stick-delay": `${plan.delay * 1000}ms`,
+                    "--stick-flight": `${plan.flight * 1000}ms`,
+                    "--stick-settle": `${plan.settle * 1000}ms`,
+                    "--stick-contact": `${(plan.delay + plan.flight) * 1000}ms`,
+                    "--stick-land-x": `${50 + plan.x * 24}%`,
+                    "--stick-land-y": `${53 + plan.z * 26}%`,
+                    "--stick-mid-x": `${50 + plan.x * 12}%`,
+                    "--stick-start-x": `${50 + (index - 1.5) * 3}%`,
+                    "--stick-rest": `${(plan.yaw * 180) / Math.PI}deg`,
+                    "--stick-start": `${(plan.start * 180) / Math.PI}deg`,
+                  } as CSSProperties
+                }
+              >
+                {sticks?.[index] && (
+                  <i>
+                    ×<br />×<br />×
+                  </i>
+                )}
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

@@ -34,6 +34,7 @@ import { PROFESSIONS, YutSprite, YutIcon } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
 import WeplayGameLoading from "../WeplayGameLoading";
+import useYutSoundEffects from "../useYutSoundEffects";
 import "@fontsource/noto-serif-kr/600.css";
 import "./yut.css";
 import "./yut-feedback.css";
@@ -136,7 +137,7 @@ export function YutVictory({
 }
 
 /** The gauge changes the toss animation only; the server still chooses the result. */
-function YutPowerThrow({
+export function YutPowerThrow({
   disabled,
   onThrow,
 }: {
@@ -163,11 +164,13 @@ function YutPowerThrow({
     setCharging(true);
     const tick = () => {
       if (!charge.current) return;
-      const progress =
-        ((performance.now() - charge.current.start) % 1800) / 1800;
-      value.current = 0.12 + 0.88 * (1 - Math.abs(progress * 2 - 1));
+      const progress = Math.min(
+        1,
+        (performance.now() - charge.current.start) / 1200,
+      );
+      value.current = 0.12 + 0.88 * progress;
       setPower(value.current);
-      frame.current = requestAnimationFrame(tick);
+      if (progress < 1) frame.current = requestAnimationFrame(tick);
     };
     tick();
   };
@@ -487,6 +490,7 @@ export default function YutGame({
   initialSettings?: YutSettings;
 }) {
   const { config, currentUser } = useAuth();
+  const sounds = useYutSoundEffects();
   useEffect(() => {
     // Load before the first result exists, so its short reveal never swaps fonts.
     void document.fonts
@@ -723,7 +727,6 @@ export default function YutGame({
         : null;
       const overhead =
         height(".yut-topbar") +
-        height(".yut-match-heading") +
         height(".yut-action-dock") +
         height(".yut-event") +
         value(matchStyle?.paddingTop) +
@@ -737,7 +740,7 @@ export default function YutGame({
       setBoardMaxWidth(
         Math.max(
           compact ? 260 : 320,
-          (available - overhead - 6) * (compact ? 14 / 5 : 21 / 10),
+          (available - overhead - 6) * (compact ? 3 : 5 / 2),
         ),
       );
     };
@@ -754,7 +757,7 @@ export default function YutGame({
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure);
     };
-  }, [room?.status, portrait]);
+  }, [room?.status, portrait, fullscreen]);
   useEffect(() => {
     const visibility = () => setHidden(document.hidden);
     const onFullscreen = () =>
@@ -1334,12 +1337,47 @@ export default function YutGame({
       }
       aria-label="마우저구 윷놀이"
       data-motion-paused={hidden || portrait}
+      onPointerDownCapture={sounds.unlock}
+      onKeyDownCapture={sounds.unlock}
     >
       <div className="yut-game-content" {...(networkBusy ? { inert: "" } : {})}>
         <div className="yut-topbar">
-          <span className="yut-topbar-brand">
-            WESTORY <b>·</b> WEPLAY
-          </span>
+          <div className="yut-topbar-heading">
+            <strong className="yut-topbar-title">마우저구 윷놀이</strong>
+            {room && room.status !== "waiting" && !portrait && (
+              <div className="yut-topbar-state">
+                {local && (
+                  <span className="yut-topbar-mode">
+                    {localMode === "single" ? "싱글" : "체험"}
+                  </span>
+                )}
+                {room.status === "finished" ? (
+                  <span role="status">판 종료</span>
+                ) : (
+                  <>
+                    <span className="yut-topbar-turn" aria-live="polite">
+                      {displayRoom?.turnUid === uid
+                        ? "내 차례"
+                        : `${displayTurn?.name || "친구"}의 차례`}
+                    </span>
+                    <strong
+                      className={`yut-topbar-clock ${seconds <= 3 ? "is-low" : ""}`}
+                      aria-label={
+                        settling || moving || phaseWaiting
+                          ? "연출 중"
+                          : `남은 시간 ${seconds}초`
+                      }
+                    >
+                      {settling || moving || phaseWaiting ? "—" : seconds}
+                      <small>
+                        {settling || moving || phaseWaiting ? "" : "초"}
+                      </small>
+                    </strong>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="yut-topbar-actions">
             {room && !portrait && (
               <div className="yut-emote-control" ref={emotePanel}>
@@ -1398,38 +1436,42 @@ export default function YutGame({
             >
               <YutIcon name="info" />
             </button>
-            <button
-              type="button"
-              className="yut-icon-button"
-              aria-label={room ? "방 나가기" : "전체 게임"}
-              title={room ? "방 나가기" : "전체 게임"}
-              onClick={back}
-              disabled={Boolean(pending)}
-            >
-              <YutIcon name="back" />
-            </button>
-            <button
-              type="button"
-              className="yut-icon-button"
-              aria-label={
-                music.failed
-                  ? "음악 재시도"
-                  : music.enabled
-                    ? "음악 끄기"
-                    : "음악 켜기"
-              }
-              title={
-                music.failed
-                  ? "음악 재시도"
-                  : music.enabled
-                    ? "음악 끄기"
-                    : "음악 켜기"
-              }
-              aria-pressed={music.enabled}
-              onClick={music.toggle}
-            >
-              <YutIcon name={music.enabled ? "sound" : "muted"} />
-            </button>
+            {room && (
+              <button
+                type="button"
+                className="yut-icon-button"
+                aria-label="방 나가기"
+                title="방 나가기"
+                onClick={back}
+                disabled={Boolean(pending)}
+              >
+                <YutIcon name="back" />
+              </button>
+            )}
+            {fullscreen && (
+              <button
+                type="button"
+                className="yut-icon-button"
+                aria-label={
+                  music.failed
+                    ? "음악 재시도"
+                    : music.enabled
+                      ? "소리 끄기"
+                      : "소리 켜기"
+                }
+                title={
+                  music.failed
+                    ? "음악 재시도"
+                    : music.enabled
+                      ? "소리 끄기"
+                      : "소리 켜기"
+                }
+                aria-pressed={music.enabled}
+                onClick={music.toggle}
+              >
+                <YutIcon name={music.enabled ? "sound" : "muted"} />
+              </button>
+            )}
           </div>
         </div>
         {(error || note || disconnected || needsSync) && (
@@ -1785,35 +1827,6 @@ export default function YutGame({
           </div>
         ) : (
           <div className="yut-match">
-            <div className="yut-match-heading">
-              <div>
-                <h1>마우저구 윷놀이</h1>
-                <span className="yut-eyebrow">
-                  {local
-                    ? `${localMode === "single" ? "싱글 모드" : "교사 체험"} · 기록 미반영`
-                    : `${room.classLabel} · ${room.visibility === "public" ? "공개방" : room.code}`}
-                </span>
-              </div>
-              <div className="yut-turn-state">
-                {room.status === "finished" ? (
-                  <span>판 종료</span>
-                ) : (
-                  <>
-                    <span aria-live="polite">
-                      {displayRoom?.turnUid === uid
-                        ? "내 차례"
-                        : `${displayTurn?.name || "친구"}의 차례`}
-                    </span>
-                    <strong className={seconds <= 10 ? "is-low" : ""}>
-                      {settling || moving || phaseWaiting ? "—" : seconds}
-                      <small>
-                        {settling || moving || phaseWaiting ? "연출 중" : "초"}
-                      </small>
-                    </strong>
-                  </>
-                )}
-              </div>
-            </div>
             <div
               className={`yut-match-stage ${settling || pending === "throw" ? "is-tossing" : ""}`}
             >
@@ -1896,6 +1909,7 @@ export default function YutGame({
                   onMove={movePiece}
                   selectedMove={selectedMove}
                   onMotionChange={setMoving}
+                  onStep={sounds.step}
                   disabled={
                     room.status !== "playing" ||
                     busy ||
@@ -1922,6 +1936,10 @@ export default function YutGame({
                         sticks={currentToss?.sticks || null}
                         rolling={pending === "throw"}
                         onComplete={completeToss}
+                        onRelease={() =>
+                          sounds.throw(currentToss?.power ?? throwPower)
+                        }
+                        onImpact={sounds.impact}
                       />
                       {celebrating && currentToss?.room.pendingThrow && (
                         <div

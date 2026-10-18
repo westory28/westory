@@ -254,7 +254,7 @@
   background: linear-gradient(#f3e2b6, #d6b983);
 }
 .yut-button:not(:disabled):active {
-  transform: translateY(1px);
+  transform: translateY(3px) scale(0.97);
 }
 .yut-button--primary {
   color: #fff2d2;
@@ -1571,7 +1571,7 @@
   background: linear-gradient(#849550, #506735);
 }
 .yut-power-control.is-charging .yut-throw-button {
-  transform: translateY(3px);
+  transform: translateY(3px) scale(0.97);
   box-shadow:
     0 2px 0 #26341b,
     0 5px 12px #100b09d9,
@@ -2091,7 +2091,7 @@
   font-size: 23px;
 }
 .yut-board-area {
-  --yut-board-ratio: 21 / 10;
+  --yut-board-ratio: 5 / 2;
   max-width: min(1120px, calc(100% - 40px));
 }
 .yut-match .yut-players {
@@ -2122,7 +2122,7 @@
     font-size: 18px;
   }
   .yut-board-area {
-    --yut-board-ratio: 14 / 5;
+    --yut-board-ratio: 3 / 1;
     max-width: calc(100% - 32px);
   }
   .yut-match .yut-players {
@@ -2223,5 +2223,115 @@
   15%,
   100% {
     opacity: 1;
+  }
+}
+
+/* Keep the title, turn and clock in the wooden rail, outside the play field. */
+.yut-topbar {
+  gap: 12px;
+  height: 52px;
+}
+.yut-topbar-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.yut-topbar-title {
+  flex-shrink: 0;
+  color: #fff2d2;
+  font:
+    600 18px/1.4 "Noto Serif KR",
+    serif;
+  white-space: nowrap;
+}
+.yut-topbar-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #f5e4bd;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.yut-topbar-mode {
+  color: #d8b97b;
+  padding-right: 8px;
+  border-right: 1px solid #b28c4d80;
+}
+.yut-topbar-turn {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.yut-topbar-clock {
+  flex-shrink: 0;
+  min-width: 38px;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.yut-topbar-clock small {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.yut-topbar-clock.is-low {
+  color: #ffd28a;
+}
+.yut-topbar-actions {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.yut-game :is(.yut-button, .yut-icon-button, .yut-plain),
+.yut-dialog button,
+.yut-single-count button,
+.yut-emote-options button,
+button.yut-seat {
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  transition:
+    background 140ms,
+    transform 100ms,
+    box-shadow 100ms;
+}
+.yut-game .yut-button--primary,
+.yut-dialog .yut-button--primary {
+  font-weight: 800;
+}
+.yut-game .yut-throw-button {
+  font-size: 18px;
+}
+.yut-game :is(.yut-button, .yut-icon-button, .yut-plain):not(:disabled):active,
+.yut-dialog button:not(:disabled):active,
+.yut-single-count button:not(:disabled):active,
+.yut-emote-options button:not(:disabled):active,
+button.yut-seat:not(:disabled):active {
+  transform: translateY(3px) scale(0.97);
+}
+.yut-topbar button:focus-visible {
+  outline-color: #fff2d2;
+  outline-offset: -3px;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-topbar {
+    height: 44px;
+    gap: 8px;
+  }
+  .yut-topbar-heading {
+    gap: 12px;
+  }
+  .yut-topbar-title {
+    font-size: 16px;
+  }
+  .yut-topbar-turn {
+    max-width: 120px;
+  }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  .yut-topbar-title {
+    font-size: 16px;
   }
 }
