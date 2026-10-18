@@ -227,7 +227,7 @@ async function measureLobbyScene(page) {
       controlsInside: controls.every(control => inside(control, stage)),
       textFits: [...element.querySelectorAll('h2,.weplay-choice-top strong,.weplay-choice-note')].every(text => text.scrollWidth <= text.clientWidth),
       plumeMotion: plume?.getAttribute('data-motion'),
-      displacementScale: plume?.querySelector('feDisplacementMap')?.getAttribute('scale'),
+      plumeFrame: Number(plume?.getAttribute('data-frame')),
     };
   });
 }
@@ -242,25 +242,90 @@ function assertLobbyScene(geometry, label) {
   assert.ok(geometry.textFits && geometry.controls.every(control => control.width >= 44 && control.height >= 44), `${label}: labels fit and controls preserve 44px targets ${JSON.stringify(geometry.controls)}`);
 }
 async function verifyLobbyMotion() {
-  const plumeScale = page => page.locator('.weplay-lobby-plume feDisplacementMap').getAttribute('scale');
+  const readFrame = page => page.locator('.weplay-lobby-plume').evaluate(element => ({
+    frame: Number(element.getAttribute('data-frame')),
+    motion: element.getAttribute('data-motion'),
+    intensity: element.getAttribute('data-motion-intensity'),
+    now: Date.now(),
+    visible: [...element.querySelectorAll('.weplay-plume-frame')].flatMap((frame, index) => {
+      const style = getComputedStyle(frame);
+      return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 ? [index] : [];
+    }),
+    opacity: [...element.querySelectorAll('.weplay-plume-frame')].map(frame => Number(getComputedStyle(frame).opacity)),
+  }));
+  async function advanceFrame(page, previous) {
+    for (let elapsed = 50; elapsed <= 2000; elapsed += 50) {
+      await page.clock.runFor(50);
+      const state = await readFrame(page);
+      if (state.frame !== previous) return state;
+    }
+    assert.fail(`The visible plume frame did not advance from ${previous}`);
+  }
+  async function openLobby(view, width, reducedMotion = 'no-preference') {
+    const page = await open(view, width, '', { reducedMotion });
+    if (view === 'management') {
+      await page.getByRole('button', { name: '체험하기', exact: true }).click();
+      await skipStudioIntro(page);
+    }
+    await page.locator('.weplay-launch').waitFor();
+    return page;
+  }
   async function captureWind(page, name, intensity) {
-    await page.locator(`.weplay-lobby-plume[data-motion="running"][data-motion-intensity="${intensity}"]`).waitFor();
+    await page.locator(`.weplay-lobby-plume[data-ready="true"][data-motion="running"][data-motion-intensity="${intensity}"]`).waitFor();
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => document.fonts.ready);
+    await page.clock.runFor(400);
+    // Prime a capture after initial decode/compositing. Subsequent captures
+    // measure sustained scene motion separately from the first painted frame.
+    await page.locator('.weplay-launch-art').screenshot();
+    await page.clock.runFor(300);
     const geometry = await measureLobbyScene(page);
     assertLobbyScene(geometry, `${name} motion lobby`);
+    const frameImages = page.locator('.weplay-lobby-plume .weplay-plume-frame');
+    assert.equal(await frameImages.count(), 5, 'Five generated transparent plume frames are mounted');
+    assert.equal(await page.locator('.weplay-lobby-plume filter').count(), 0, 'Frame replacement uses no SVG filter');
+    const assets = await frameImages.evaluateAll(images => images.map(image => ({
+      href: image.getAttribute('href'),
+      x: Number(image.getAttribute('x')),
+      y: Number(image.getAttribute('y')),
+      width: Number(image.getAttribute('width')),
+      height: Number(image.getAttribute('height')),
+      filter: getComputedStyle(image).filter,
+      transform: getComputedStyle(image).transform,
+    })));
+    for (const [index, asset] of assets.entries()) {
+      assert.ok(asset.href.includes(`plume-frame-${index + 1}.webp`), JSON.stringify(asset));
+      assert.equal(asset.filter, 'none', 'Plume pixels are not distorted by a CSS filter');
+      assert.equal(asset.transform, 'none', 'All generated plume roots keep one fixed image placement');
+      assert.deepEqual([asset.x, asset.y, asset.width, asset.height], [assets[0].x, assets[0].y, assets[0].width, assets[0].height]);
+    }
+    await page.evaluate(async urls => Promise.all(urls.map(async src => {
+      const image = new Image(); image.src = src; await image.decode();
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error('A plume frame did not decode: ' + src);
+    })), assets.map(asset => asset.href));
     const motionDirectory = path.join(evidence, 'motion', name);
     await fs.mkdir(motionDirectory, { recursive: true });
     const frames = [];
+    let state = await readFrame(page);
+    const startedAt = state.now;
     for (let index = 0; index < 24; index++) {
-      await page.clock.runFor(160);
+      await page.clock.runFor(100);
+      state = await readFrame(page);
+      assert.ok(Number.isInteger(state.frame) && state.frame >= 0 && state.frame < 5, JSON.stringify(state));
+      assert.deepEqual(state.visible, [state.frame], 'Exactly one opaque generated pose is shown without translucent double hair');
+      assert.ok(Math.abs(state.opacity.reduce((sum, value) => sum + value, 0) - 1) < 0.00001, 'The pose opacities preserve one complete plume');
       const file = `plume-${String(index).padStart(2, '0')}.png`;
       await page.locator('.weplay-launch-art').screenshot({ path: path.join(motionDirectory, file) });
-      frames.push({ name: file, scale: await plumeScale(page) });
+      frames.push({ name: file, frame: state.frame, opacity: state.opacity, elapsedMs: state.now - startedAt });
     }
-    assert.ok(new Set(frames.map(frame => frame.scale)).size > 1, `${name}: requested plume animation remains visible`);
-    const range = intensity === 'gentle' ? [45, 55] : [72, 88];
-    assert.ok(frames.every(frame => Number(frame.scale) >= range[0] && Number(frame.scale) <= range[1]), `${name}: bounded ${intensity} displacement`);
-    await fs.writeFile(path.join(motionDirectory, 'frames.json'), JSON.stringify({ intervalMs: 160, geometry, frames }, null, 2));
-    return motionDirectory;
+    assert.deepEqual([...new Set(frames.map(frame => frame.frame))].sort(), [0, 1, 2, 3, 4], 'All five generated frames are actually shown');
+    const transitions = frames.filter((frame, index) => !index || frame.frame !== frames[index - 1].frame);
+    const intervals = transitions.slice(2).map((frame, index) => frame.elapsedMs - transitions[index + 1].elapsedMs).sort((a, b) => a - b);
+    // Average complete intervals so 100 ms screenshot sampling does not round
+    // both the 180 ms and 240 ms cadence down to the same 200 ms median.
+    const meanIntervalMs = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+    await fs.writeFile(path.join(motionDirectory, 'frames.json'), JSON.stringify({ geometry, assets, fixedRootUntilX: 499, meanIntervalMs, frames }, null, 2));
+    return { directory: motionDirectory, meanIntervalMs };
   }
   async function verifyPauseAndResume(page, directory) {
     await page.getByRole('button', { name: '깃 움직임 멈추기', exact: true }).click();
@@ -268,36 +333,77 @@ async function verifyLobbyMotion() {
     await page.getByRole('button', { name: '깃 움직임 켜기', exact: true }).waitFor();
     await page.mouse.move(0, 0);
     await page.clock.runFor(350);
-    const pausedScale = await plumeScale(page);
+    const pausedFrame = (await readFrame(page)).frame;
     await page.locator('.weplay-launch-art').screenshot({ path: path.join(directory, 'paused-00.png') });
     await page.clock.runFor(700);
-    assert.equal(await plumeScale(page), pausedScale, 'Explicit pause stops the plume in either OS preference');
+    assert.equal((await readFrame(page)).frame, pausedFrame, 'Explicit pause retains the current generated frame');
     await page.locator('.weplay-launch-art').screenshot({ path: path.join(directory, 'paused-01.png') });
     await page.getByRole('button', { name: '깃 움직임 켜기', exact: true }).press('Enter');
     await page.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
-    await page.clock.runFor(350);
-    const resumedScale = await plumeScale(page);
-    await page.clock.runFor(350);
-    assert.notEqual(await plumeScale(page), resumedScale, 'Keyboard resume restarts the plume after the visibility observer reconnects');
+    assert.equal((await readFrame(page)).frame, pausedFrame, 'Keyboard resume keeps the current frame rather than resetting the plume');
+    await advanceFrame(page, pausedFrame);
   }
-  const animatedLobby = await open('lobby', 1280);
+  async function verifyVisibilityPause(page) {
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.locator('.weplay-lobby-plume[data-motion="paused"]').waitFor();
+    const hiddenFrame = (await readFrame(page)).frame;
+    await page.clock.runFor(900);
+    assert.equal((await readFrame(page)).frame, hiddenFrame, 'A hidden tab does not advance plume frames');
+    await page.evaluate(() => {
+      delete document.hidden;
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
+    assert.equal((await readFrame(page)).frame, hiddenFrame, 'A visible tab resumes from the retained frame');
+    await advanceFrame(page, hiddenFrame);
+    await page.evaluate(() => {
+      const spacer = document.createElement('div');
+      spacer.id = 'qa-offscreen-spacer'; spacer.style.height = '2200px';
+      document.body.prepend(spacer); window.scrollTo(0, 0);
+    });
+    await page.locator('.weplay-lobby-plume[data-motion="paused"]').waitFor();
+    const offscreenFrame = (await readFrame(page)).frame;
+    await page.clock.runFor(900);
+    assert.equal((await readFrame(page)).frame, offscreenFrame, 'An offscreen scene does not advance plume frames');
+    await page.evaluate(() => { document.getElementById('qa-offscreen-spacer').remove(); window.scrollTo(0, 0); });
+    await page.locator('.weplay-launch-art').scrollIntoViewIfNeeded();
+    await page.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
+    assert.equal((await readFrame(page)).frame, offscreenFrame, 'Returning onscreen preserves the current plume frame');
+    await advanceFrame(page, offscreenFrame);
+  }
+  const animatedLobby = await openLobby('lobby', 1280);
   const normalDirectory = await captureWind(animatedLobby, 'normal-1280', 'full');
-  await verifyPauseAndResume(animatedLobby, normalDirectory);
+  await verifyPauseAndResume(animatedLobby, normalDirectory.directory);
+  await verifyVisibilityPause(animatedLobby);
+  const beforePreference = (await readFrame(animatedLobby)).frame;
   await animatedLobby.emulateMedia({ reducedMotion: 'reduce' });
   await animatedLobby.locator('.weplay-lobby-plume[data-motion="running"][data-motion-intensity="gentle"]').waitFor();
-  await animatedLobby.clock.runFor(350);
-  const gentleScale = await plumeScale(animatedLobby);
-  await animatedLobby.clock.runFor(350);
-  assert.notEqual(await plumeScale(animatedLobby), gentleScale, 'Changing the OS preference keeps the requested plume flutter active');
-  assert.ok(Number(await plumeScale(animatedLobby)) >= 45 && Number(await plumeScale(animatedLobby)) <= 55, 'Live reduced motion uses the smaller displacement');
+  assert.equal((await readFrame(animatedLobby)).frame, beforePreference, 'Live OS preference changes preserve the current frame');
+  await advanceFrame(animatedLobby, beforePreference);
   await animatedLobby.close();
-  const reducedLobby = await open('lobby', 390, '', { reducedMotion: 'reduce' });
+  const reducedLobby = await openLobby('lobby', 390, 'reduce');
   const reducedDirectory = await captureWind(reducedLobby, 'reduced-390', 'gentle');
-  await verifyPauseAndResume(reducedLobby, reducedDirectory);
+  assert.ok(reducedDirectory.meanIntervalMs > normalDirectory.meanIntervalMs, 'OS reduced motion advances the same five frames more slowly');
+  await verifyPauseAndResume(reducedLobby, reducedDirectory.directory);
   await capture(reducedLobby, 'lobby-reduced-motion-390');
   await reducedLobby.close();
-  checks.push('Normal and OS reduced-motion lobbies both animate the requested local plume; each captures 24 rendered frames, reduced mode uses gentler displacement, and live OS changes keep flutter running');
-  checks.push('An accessible 44px control explicitly pauses the plume in either OS preference, two paused frames retain the same displacement, and keyboard resume restarts motion');
+  for (const width of [390, 768, 1280]) {
+    for (const view of ['lobby', 'management']) {
+      const page = await openLobby(view, width);
+      assertLobbyScene(await measureLobbyScene(page), `${view} ${width}px generated-frame scene`);
+      await page.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
+      const first = await readFrame(page);
+      await advanceFrame(page, first.frame);
+      await capture(page, `generated-plume-${view}-${width}`);
+      await page.close();
+    }
+  }
+  checks.push('Five decoded transparent plume assets replace each other at identical coordinates without SVG/CSS filters or transforms; all five frames are visible in normal and slower OS reduced-motion playback');
+  checks.push('Explicit pause, a hidden tab and an offscreen scene retain their current frame; keyboard resume, visibility restoration and live OS preference changes continue without resetting the plume');
+  checks.push('Actual student and teacher lobbies at390/768/1280 keep the rear-view scene, 44px controls and menu geometry while generated plume frames advance');
 }
 async function verifyLoadingLifecycle() {
   const initial = await open('management', 390, 'previewRoute=1&holdManagement=1');

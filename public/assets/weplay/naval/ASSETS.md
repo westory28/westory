@@ -1,5 +1,21 @@
 # 내가 충무공이라고?! 이미지 소재
 
+## 깃 5프레임 분리 (2026-10-18)
+
+사용자 요청으로 SVG 변위 필터를 제거했습니다. 원본 장면·카탈로그·수자기·BGM은 유지합니다. 기존 깃 자국만 `lobby-plume-clean-plate.webp`로 가리고, 투명한 `plume-frame-1.webp`부터 `plume-frame-5.webp`까지 다섯 자세를 순서대로 표시합니다. 배경 패치는 정적이며 투구·깃발·함대의 원본 이미지를 변형하지 않습니다. 깃 뿌리는 첫 프레임으로 고정합니다.
+
+내장 `image_gen`을 사용했습니다. 배경 제거 원본은 `exec-771d35a6-6a24-411d-a44f-1bb5a95bb85c.png`(1672×941), 다섯 행 투명 아틀라스는 `exec-6da5f931-1b02-4f41-90a8-cf51140a0a03.png`(793×1983)입니다. 행을 균등 분리해 793×397의 무손실 WebP 5개로 저장했습니다. 생성된 알파 채널을 유지하며 그림을 기하학적으로 일그러뜨리지 않습니다.
+
+배경 편집 최종 프롬프트:
+
+> Use case: precise-object-edit. Input image is the exact edit target. Create a clean static background plate of this 1672x941 Yi Sun-sin game scene by REMOVING ONLY the long red horsehair helmet plume and every loose red hair strand to the right of the helmet (roughly x445..1195,y25..420). Reconstruct the sunset sky/clouds/distant scenery that would be behind that plume. The black metal helmet including tip, ornament, outline, armor, admiral, Korean yellow 帥 commander flags, all ships, sea, sun, camera framing and colors MUST remain exactly where they are, unchanged. Keep the tiny helmet attachment socket but no red plume at all. No other changes, no camera shift, no new flags, no blur, no text, no UI. Output exactly the same 1672x941 landscape composition. This will be the permanently motionless layer underneath separately animated transparent hair sprites.
+
+깃 아틀라스 최종 프롬프트:
+
+> Use case: background-extraction and stylized-concept. Input image is a reference for ONLY the red horsehair plume, its warm painterly 3D game style and sunset lighting. Create ONE animation sprite sheet containing EXACTLY FIVE sequential images of ONLY this red helmet plume on genuine transparent background. Canvas 1024x2560 pixels, ONE column of FIVE equal 1024x512 cells, no gaps, no labels, no dividers. Every cell contains the SAME long crimson horsehair plume at IDENTICAL scale, perspective, lighting, strand density and root location. The root is pinned at cell-local (70,105); it initially rises slightly and flows gracefully to the right and downward, tapering into fine separated strands by x940,y410. Keep all art inside each cell with transparent margins. Do not draw any helmet, metal, person, sky, cloud, boat, flag or shadow background. Five frames are small, coherent wind variations of the same plume: frame1 neutral flowing arc; frame2 tips gently lift 12 pixels; frame3 tips lift 24 pixels with delayed small middle wave; frame4 tips ease down 12 pixels; frame5 returns near neutral, continuing a smooth looping ripple. The first 100 pixels after the root must be IDENTICAL across all five cells; no root jitter, no camera motion, no radical outline or volume changes, no twisting, no stretching. Preserve deep red shadows and copper rim-lit fine hair. This is hand-authored pose animation, not image distortion. Transparent alpha between every individual trailing strand. There must be five and only five complete plume poses, vertically stacked in exact equal cells. No checkerboard painted into pixels.
+
+정상 재생은 프레임당 180ms, 동작 감소는 240ms입니다. 한 번에 하나의 불투명 자세만 표시하며 투명도 중첩·변위·이동·확대는 없습니다. 멈춤·숨김·화면 밖에서는 현재 자세를 보존하고 재개합니다. 자산을 전부 디코딩하기 전이나 실패 시 기존 완성 장면을 표시합니다. 아래 변위 필터 관련 이전 설명은 이 계약으로 대체합니다.
+
 ## 수자기와 깃 움직임 정정 (2026-10-18)
 
 아군 판옥선의 일본식 원형 꽃 문양을 제거하고 누런 천·검은 `帥`자·붉은 가장자리의 수자기로 교체했습니다. 작은 아군 깃발은 문양 없는 황색·붉은 천으로 정리했습니다. 멀리 있는 일본 함대는 유지했습니다. `lobby-yi-sunsin.webp`(1672×941)와 같은 장면의 `catalog-yi-sunsin.webp`(960×720)를 함께 교체했고 `?v=sujagi-2`로 이전 브라우저 캐시와 구분합니다.
