@@ -5729,6 +5729,8 @@ Object.assign(exports, require('./weplay').createWeplayFunctions({
 const yutHandlers = require('./yut').createYutHandlers({ db });
 exports.getYutLobby = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutLobby);
 exports.commandYutRoom = onCall({ region: REGION, maxInstances: 20 }, yutHandlers.commandYutRoom);
+exports.getYutManagement = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutManagement);
+exports.saveYutSettings = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.saveYutSettings);
 
 exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
   const manager = await assertQuizManager(request);

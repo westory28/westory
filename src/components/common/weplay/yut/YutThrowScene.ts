@@ -4,6 +4,8 @@ export interface YutThrowState {
   throwKey: string | null;
   sticks: boolean[] | null;
   rolling: boolean;
+  /** Cosmetic launch strength only; the server still determines the four faces. */
+  power?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -231,6 +233,7 @@ export class YutThrowScene {
   private key: string | null = null;
   private ignoredKey: string | null = null;
   private result: boolean[] | null = null;
+  private power = 0.65;
   private didComplete = false;
   private broken = false;
   private state: YutThrowState = {
@@ -413,6 +416,7 @@ export class YutThrowScene {
   update(state: YutThrowState) {
     if (this.disposed) return;
     this.state = state;
+    this.power = Number.isFinite(state.power) ? clamp(state.power!) : 0.65;
     const valid = Boolean(
       state.throwKey &&
       state.sticks?.length === 4 &&
@@ -520,7 +524,10 @@ export class YutThrowScene {
         const envelope = Math.pow(1 - bounce, 3);
         stick.position.set(
           end.x,
-          0.122 + Math.abs(Math.sin(bounce * Math.PI * 2.7)) * 0.27 * envelope,
+          0.122 +
+            Math.abs(Math.sin(bounce * Math.PI * 2.7)) *
+              (0.14 + this.power * 0.2) *
+              envelope,
           end.z,
         );
         stick.rotation.set(
@@ -536,15 +543,25 @@ export class YutThrowScene {
           (index - 1.5) * 0.13 * (1 - progress) +
             end.x * progress +
             Math.sin(progress * Math.PI) * (index - 1.5) * 0.16,
-          0.122 + 4 * progress * (1 - progress) * (2.3 + index * 0.09),
-          1.7 * (1 - progress) + end.z * progress + arc * 0.7,
+          0.122 +
+            4 *
+              progress *
+              (1 - progress) *
+              (1.6 + this.power * 1.05 + index * 0.09),
+          1.7 * (1 - progress) +
+            end.z * progress +
+            arc * (0.4 + this.power * 0.45),
         );
         stick.scale.setScalar(1 + arc * 0.12);
         const rotationProgress = smooth(progress);
         stick.rotation.set(
-          TAU * (2 + (index % 2)) * rotationProgress,
+          TAU *
+            (1 + Math.round(this.power * 2) + (index % 2)) *
+            rotationProgress,
           end.yaw + TAU * rotationProgress,
-          TAU * (3 + (index % 2)) * rotationProgress +
+          TAU *
+            (2 + Math.round(this.power * 2) + (index % 2)) *
+            rotationProgress +
             targetRoll * smooth((progress - 0.55) / 0.45),
           "YXZ",
         );

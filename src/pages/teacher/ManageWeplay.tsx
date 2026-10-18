@@ -40,7 +40,7 @@ import WeplayDifficultyEditor from "./components/WeplayDifficultyEditor";
 import WeplayTitleEditor from "./components/WeplayTitleEditor";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
-import YutGameEntry from "../../components/common/weplay/YutGameEntry";
+import YutManagement from "./components/YutManagement";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 
 export default function ManageWeplay() {
@@ -50,7 +50,7 @@ export default function ManageWeplay() {
     if (!canReadLessonManagement(userData, currentUser?.email)) {
       return <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>;
     }
-    return <YutGameEntry portal="teacher" />;
+    return <YutManagement />;
   }
   return <NavalWeplayManagement />;
 }

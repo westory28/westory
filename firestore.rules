@@ -1267,12 +1267,14 @@ service cloud.firestore {
             && manifest.revision >= 1 && pointer.revision == manifest.revision;
         }
         function currentYutStudentMember() {
+          let settings = get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/weplay_games/joseon-yut).data;
           let enrollmentId = resource.data.enrollmentIds.get(request.auth.uid, 'none');
           let enrollment = get(/databases/$(database)/documents/semester_enrollments/$(enrollmentId)).data;
           let slotId = resource.data.enrollmentSlotIds.get(request.auth.uid, 'none');
           let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
           let classroom = get(/databases/$(database)/documents/semester_classes/$(enrollment.classId)).data;
-          return enrollment.studentUid == request.auth.uid
+          return settings.enabled == true && settings.version is int && settings.version >= 0 && settings.version <= 9007199254740991
+            && enrollment.studentUid == request.auth.uid
             && enrollment.semesterId == year + '-' + semester
             && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false
             && slot.studentUid == request.auth.uid && slot.semesterId == year + '-' + semester
@@ -1282,13 +1284,17 @@ service cloud.firestore {
         }
         function currentYutMember() {
           let profile = userProfile();
-          return profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
+          return (request.auth.token.email == 'westoria28@gmail.com' || approvedRegistrationProfile(profile))
+            && profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
             && profile.get('weplayDeletionPending', false) == false
             && (request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
               || (profile.role == 'staff' && hasPermission('lesson_read'))
               || (profile.role == 'student' && currentYutStudentMember()));
         }
-        allow get: if canUseWestory() && hasActiveApplicationSession()
+        // Same Westory fences, with the active-session branch evaluated once;
+        // a pending reauthentication transition alone cannot read game state.
+        allow get: if hasWestoryIdentity() && hasActiveApplicationSession()
+          && passesStudentMaintenanceFence()
           && request.auth.uid in resource.data.participantUids
           && resource.data.expiresAtMs > request.time.toMillis()
           && currentYutScope() && currentYutMember();

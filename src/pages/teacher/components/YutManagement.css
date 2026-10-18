@@ -1,0 +1,22 @@
+.yut-management { color: var(--ws-text, #1f2937); }
+.yut-management h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.yut-management h3 { margin: 0; font-size: 18px; font-weight: 700; }
+.yut-management p { margin: 12px 0; line-height: 1.6; }
+.yut-management-actions, .yut-management-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.yut-management-row { justify-content: space-between; }
+.yut-management-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 16px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+.yut-management-button.is-primary { background: var(--ws-primary, #2563eb); border-color: var(--ws-primary, #2563eb); color: #fff; }
+.yut-management-button.is-danger { color: var(--ws-danger-text, #b91c1c); }
+.yut-management-button:disabled { opacity: .6; cursor: not-allowed; }
+.yut-management-button:focus-visible, .yut-management input:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.yut-management-settings { padding: 24px; margin-bottom: 24px; }
+.yut-management-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 12px; }
+.yut-management-toggle input { width: 20px; height: 20px; accent-color: var(--ws-primary, #2563eb); }
+.yut-management-muted { color: var(--ws-text-muted, #6b7280); font-size: 14px; }
+.yut-management-error { color: var(--ws-danger-text, #b91c1c); background: var(--ws-danger-soft, #fef2f2); padding: 12px 16px; border-radius: 8px; }
+.yut-management-room-list { display: grid; gap: 16px; padding: 0; list-style: none; margin-top: 16px; }
+.yut-management-room-list > li { padding: 16px; }
+.yut-management-players { list-style: none; padding: 0; margin: 12px 0 0; }
+.yut-management-players > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-height: 44px; border-top: 1px solid var(--ws-border, #e5e7eb); overflow-wrap: anywhere; }
+.yut-management-turn { color: var(--ws-primary, #2563eb); font-weight: 700; }
+@media (max-width: 767px) { .yut-management-settings { padding: 16px; } }

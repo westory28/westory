@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "yut_rooms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "expiresAtMs", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "quiz_results",
       "queryScope": "COLLECTION",
       "fields": [
