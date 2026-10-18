@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "functionName": "listStudentHistoryDictionaryWordsForTeacher",
+  "region": "asia-northeast3",
+  "capturedDate": "2026-10-18",
+  "deployedUpdateTime": "2026-09-17T13:04:19.162988540Z",
+  "source": {
+    "bucket": "gcf-v2-sources-177587430482-asia-northeast3",
+    "object": "listStudentHistoryDictionaryWordsForTeacher/function-source.zip",
+    "generation": "1789650242067947"
+  },
+  "originalSourceSha256": "9d348b8905f62c390d46af750805ab5281b31286821f61eee527ee0fe8d1d05c",
+  "originalHandlerSha256": "f0a194e3bbe0d949c254573db0cb99d7a89eb0f1b37402561d692d372be8159a",
+  "entry": "historyDictionaryQuery.js",
+  "restoredSha256": "4e0d3a994e5487020ec944e84a3869e44c81ec20ce85aa5aedf90e194121f19c",
+  "changes": [
+    "Isolate the deployed read handler and preserve explicit teacher/admin archive reads, lesson_read active-semester restriction, and session/maintenance/registration checks.",
+    "Return bounded 200-document pages with a stable Firestore document cursor instead of rejecting beyond 500 words.",
+    "Require canonical document path ownership to match stored uid; exclude legacy and non-student-source rows.",
+    "Use the existing READY collection-group year/semester/status/name index; no production index mutation."
+  ],
+  "hashNormalization": "LF"
+}

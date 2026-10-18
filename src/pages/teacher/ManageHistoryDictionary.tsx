@@ -12,6 +12,7 @@ import { canWriteLessonManagement } from "../../lib/permissions";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
+import HistoryDictionaryCatalogBrowser from "../../components/common/HistoryDictionaryCatalogBrowser";
 import {
   approveHistoryDictionaryTermForRequests,
   deleteStudentHistoryDictionaryWordByTeacher,
@@ -219,6 +220,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const termSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const studentWordListRef = useRef<HTMLDivElement>(null);
   const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const editorSourceRef = useRef("");
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
   const [notificationRequests, setNotificationRequests] = useState<
     HistoryDictionaryRequest[]
@@ -244,6 +246,11 @@ const ManageHistoryDictionary: React.FC = () => {
   const [termSearch, setTermSearch] = useState("");
   const [studentWordSearch, setStudentWordSearch] = useState("");
   const activePanel = getHistoryDictionaryPanel(searchParams, canWrite);
+  const [termsView, setTermsView] = useState<"catalog" | "teacher">("catalog");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const [loadedPanels, setLoadedPanels] = useState<Record<string, boolean>>({});
+  const showCatalog = activePanel === "terms" && termsView === "catalog";
   const [activeInitial, setActiveInitial] = useState(ALL_INITIAL);
   const [scrollActiveInitial, setScrollActiveInitial] = useState(ALL_INITIAL);
   const [activeStudentWordInitial, setActiveStudentWordInitial] =
@@ -252,6 +259,7 @@ const ManageHistoryDictionary: React.FC = () => {
     useState(ALL_INITIAL);
 
   useEffect(() => {
+    editorSourceRef.current = "";
     setRequests([]);
     setTerms([]);
     setSelectedRequestId("");
@@ -264,25 +272,38 @@ const ManageHistoryDictionary: React.FC = () => {
     setTagInput("");
     setUploadRows([]);
     setUploadFileName("");
+  }, [configReady, config?.year, config?.semester, currentUser?.uid]);
+
+  useEffect(() => {
+    setLoadErrors({});
+    setLoadedPanels({});
     if (!configReady || !config || !currentUser?.uid) return;
+    const loaded = (panel: string) => {
+      setLoadedPanels((previous) => ({ ...previous, [panel]: true }));
+      setLoadErrors((previous) => ({ ...previous, [panel]: "" }));
+    };
     const unsubscribeRequests = subscribeTeacherHistoryDictionaryRequests(
-      setRequests,
+      (items) => {
+        setRequests(items);
+        loaded("requests");
+      },
       config,
       (error) =>
-        showToast({
-          tone: "error",
-          title: "학생 요청 단어를 불러오지 못했습니다.",
-          message: getHistoryDictionaryErrorMessage(error),
-        }),
+        setLoadErrors((previous) => ({
+          ...previous,
+          requests: getHistoryDictionaryErrorMessage(error),
+        })),
     );
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
-      setTerms,
+      (items) => {
+        setTerms(items);
+        loaded("terms");
+      },
       (error) => {
-        showToast({
-          tone: "error",
-          title: "등록된 단어 목록을 불러오지 못했습니다.",
-          message: getHistoryDictionaryErrorMessage(error),
-        });
+        setLoadErrors((previous) => ({
+          ...previous,
+          terms: getHistoryDictionaryErrorMessage(error),
+        }));
       },
       config,
     );
@@ -295,7 +316,7 @@ const ManageHistoryDictionary: React.FC = () => {
     config?.year,
     config?.semester,
     currentUser?.uid,
-    showToast,
+    reloadKey,
   ]);
 
   useEffect(() => {
@@ -306,7 +327,11 @@ const ManageHistoryDictionary: React.FC = () => {
     const loadStudentWords = async () => {
       try {
         const words = await loadTeacherStudentHistoryDictionaryWords(config);
-        if (!cancelled) setStudentWords(words);
+        if (!cancelled) {
+          setStudentWords(words);
+          setLoadedPanels((previous) => ({ ...previous, studentWords: true }));
+          setLoadErrors((previous) => ({ ...previous, studentWords: "" }));
+        }
       } catch (error) {
         console.error(
           "Failed to load student history dictionary words:",
@@ -314,11 +339,10 @@ const ManageHistoryDictionary: React.FC = () => {
         );
         if (!cancelled) {
           setStudentWords([]);
-          showToast({
-            tone: "error",
-            title: "학생 등록 단어를 불러오지 못했습니다.",
-            message: getHistoryDictionaryErrorMessage(error),
-          });
+          setLoadErrors((previous) => ({
+            ...previous,
+            studentWords: getHistoryDictionaryErrorMessage(error),
+          }));
         }
       }
     };
@@ -332,7 +356,7 @@ const ManageHistoryDictionary: React.FC = () => {
     config?.semester,
     config?.year,
     currentUser?.uid,
-    showToast,
+    reloadKey,
   ]);
 
   useEffect(() => {
@@ -624,6 +648,9 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!selectedRequest) return;
+    const sourceKey = `request:${selectedRequest.id}`;
+    if (editorSourceRef.current === sourceKey) return;
+    editorSourceRef.current = sourceKey;
     setSelectedRequestId(selectedRequest.id);
     setSelectedTermId("");
     setWord(selectedRequest.word);
@@ -640,6 +667,9 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!selectedTerm) return;
+    const sourceKey = `term:${selectedTerm.id}`;
+    if (editorSourceRef.current === sourceKey) return;
+    editorSourceRef.current = sourceKey;
     setWord(selectedTerm.word);
     setDefinition(selectedTerm.definition || "");
     setRelatedUnitId(selectedTerm.relatedUnitId || "");
@@ -649,6 +679,9 @@ const ManageHistoryDictionary: React.FC = () => {
 
   useEffect(() => {
     if (!selectedStudentWord) return;
+    const sourceKey = `student:${selectedStudentWord.id}`;
+    if (editorSourceRef.current === sourceKey) return;
+    editorSourceRef.current = sourceKey;
     setSelectedStudentWordId(selectedStudentWord.id);
     setWord(selectedStudentWord.word);
     setDefinition(selectedStudentWord.definition || "");
@@ -679,6 +712,7 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   const handleNewTerm = () => {
+    editorSourceRef.current = "";
     setSelectedRequestId("");
     setSelectedTermId("__new__");
     setSelectedStudentWordId("");
@@ -1190,7 +1224,61 @@ const ManageHistoryDictionary: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]">
+        {activePanel === "terms" && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-extrabold text-slate-900">
+              역사 사전
+            </h1>
+            <div className="flex gap-2" role="group" aria-label="사전 보기">
+              {(
+                [
+                  { id: "catalog", label: "기본 사전" },
+                  { id: "teacher", label: "교사 등록" },
+                ] as const
+              ).map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  aria-pressed={termsView === view.id}
+                  onClick={() => setTermsView(view.id)}
+                  className={`min-h-11 rounded-lg border px-4 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 ${termsView === view.id ? "border-blue-200 bg-blue-50 text-blue-900" : "border-slate-200 bg-white text-slate-700"}`}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showCatalog && <HistoryDictionaryCatalogBrowser />}
+        {!showCatalog &&
+          (loadErrors[activePanel === "upload" ? "terms" : activePanel] ? (
+            <div
+              role="alert"
+              className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+            >
+              <span>
+                목록을 불러오지 못했습니다.{" "}
+                {loadErrors[activePanel === "upload" ? "terms" : activePanel]}
+              </span>
+              <button
+                type="button"
+                onClick={() => setReloadKey((value) => value + 1)}
+                className="min-h-11 rounded-lg border border-red-200 bg-white px-4 font-bold"
+              >
+                다시 불러오기
+              </button>
+            </div>
+          ) : (
+            !loadedPanels[activePanel === "upload" ? "terms" : activePanel] && (
+              <p role="status" className="mb-4 text-sm text-slate-600">
+                단어를 불러오는 중입니다.
+              </p>
+            )
+          ))}
+        <div
+          hidden={showCatalog}
+          className={`${showCatalog ? "hidden" : "grid"} gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]`}
+        >
           {activePanel === "terms" ? (
             <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
@@ -1260,11 +1348,13 @@ const ManageHistoryDictionary: React.FC = () => {
                     onScroll={handleTermListScroll}
                     className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
                   >
-                    {!visibleTerms.length && (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
-                        표시할 단어가 없습니다.
-                      </div>
-                    )}
+                    {!visibleTerms.length &&
+                      loadedPanels.terms &&
+                      !loadErrors.terms && (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                          표시할 단어가 없습니다.
+                        </div>
+                      )}
                     <div className="space-y-3">
                       {groupedVisibleTerms.map(([initial, items]) => (
                         <section
@@ -1352,10 +1442,6 @@ const ManageHistoryDictionary: React.FC = () => {
                 <h2 className="text-lg font-extrabold text-slate-950">
                   학생 등록 단어
                 </h2>
-                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                  학생이 직접 저장한 단어와 뜻풀이를 확인하고 필요한 항목만
-                  수정합니다.
-                </p>
               </div>
 
               <div className="mt-5 grid gap-3 lg:grid-cols-[4.75rem_minmax(0,1fr)]">
@@ -1415,11 +1501,13 @@ const ManageHistoryDictionary: React.FC = () => {
                     onScroll={handleStudentWordListScroll}
                     className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
                   >
-                    {!visibleStudentWords.length && (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
-                        표시할 학생 등록 단어가 없습니다.
-                      </div>
-                    )}
+                    {!visibleStudentWords.length &&
+                      loadedPanels.studentWords &&
+                      !loadErrors.studentWords && (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                          표시할 학생 등록 단어가 없습니다.
+                        </div>
+                      )}
                     <div className="space-y-3">
                       {groupedVisibleStudentWords.map(([initial, items]) => (
                         <section
@@ -1522,11 +1610,13 @@ const ManageHistoryDictionary: React.FC = () => {
               </label>
 
               <div className="mt-4 max-h-[calc(100vh-18rem)] min-h-[26rem] overflow-y-auto pr-1">
-                {!visibleRequests.length && (
-                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
-                    대기 중인 요청이 없습니다.
-                  </div>
-                )}
+                {!visibleRequests.length &&
+                  loadedPanels.requests &&
+                  !loadErrors.requests && (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+                      대기 중인 요청이 없습니다.
+                    </div>
+                  )}
                 <div className="space-y-2">
                   {visibleRequests.map((item) => {
                     const active = selectedRequest?.id === item.id;

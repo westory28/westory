@@ -344,14 +344,21 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    // Dictionary callers enforce canUseWestory once. Repeating the complete
+    // session/maintenance fence for each role exceeds the rules expression
+    // budget when the maintenance bypass list is populated.
+    function hasHistoryDictionaryManagerRole() {
+      return request.auth.token.email == "westoria28@gmail.com"
+        || (hasUserProfile()
+          && (userProfile().get('role', '') == 'teacher'
+            || (userProfile().get('teacherPortalEnabled', false) == true
+              && userProfile().get('staffPermissions', []) is list
+              && 'lesson_read' in userProfile().get('staffPermissions', []))));
+    }
+
     function canReadHistoryDictionaryRequest(data) {
       return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || isAdmin()
-          || isTeacherRole()
-          || hasPermission('lesson_read')
-        );
+        && (hasHistoryDictionaryManagerRole() || data.get('uid', '') == request.auth.uid);
     }
 
     function canReadOwnPointResource(targetUid) {
@@ -940,13 +947,9 @@ service cloud.firestore {
       }
 
       match /history_dictionary_words/{wordId} {
-        allow read: if canUseWestory()
-          && (
-            isOwnUser(userId)
-            || isAdmin()
-            || isTeacherRole()
-            || hasPermission('lesson_read')
-          );
+        allow read: if isSignedIn()
+          && (isOwnUser(userId) || hasHistoryDictionaryManagerRole())
+          && canUseWestory();
         allow create, update, delete: if false;
       }
     }
@@ -957,16 +960,10 @@ service cloud.firestore {
       allow list: if canManagePerformanceScores();
     }
 
-    match /{path=**}/history_dictionary_words/{wordId} {
-      allow read: if canUseWestory()
-        && (
-          isAdmin()
-          || isTeacherRole()
-          || hasPermission('lesson_read')
-          || resource.data.uid == request.auth.uid
-        );
-      allow create, update, delete: if false;
-    }
+    // Dictionary client reads use the explicit semester or legacy user paths.
+    // Teacher collection-group reads run through the guarded server callable.
+    // A second recursive allow here repeats the full access fence even for a
+    // missing own-word document, breaking first-time student registration.
 
     match /site_settings/{docId} {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config']
@@ -1066,14 +1063,15 @@ service cloud.firestore {
     }
 
     match /years/{year}/semesters/{semester}/dictionary_students/{userId}/history_dictionary_words/{wordId} {
-      allow read: if canUseWestory()
-        && (request.auth.uid == userId || isAdmin() || isTeacherRole() || hasPermission('lesson_read'));
+      allow read: if isSignedIn()
+        && (request.auth.uid == userId || hasHistoryDictionaryManagerRole())
+        && canUseWestory();
       allow write: if false;
     }
 
     match /years/{year}/semesters/{semester}/history_dictionary_terms/{termId} {
       allow read: if canUseWestory()
-        && (resource.data.status == 'published' || isAdmin() || isTeacherRole() || hasPermission('lesson_read'));
+        && (hasHistoryDictionaryManagerRole() || resource.data.status == 'published');
       allow write: if false;
     }
 

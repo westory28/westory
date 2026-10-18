@@ -7,7 +7,6 @@ import {
   getDocs,
   limit,
   onSnapshot,
-  orderBy,
   query,
   where,
   type Unsubscribe,
@@ -29,7 +28,6 @@ type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
 const TERMS_COLLECTION = "history_dictionary_terms";
 const REQUESTS_COLLECTION = "history_dictionary_requests";
-const TEACHER_TERMS_LIMIT = 500;
 
 export const normalizeHistoryDictionaryWord = (value: string) =>
   String(value || "")
@@ -41,6 +39,22 @@ const mapDoc = <T extends { id: string }>(docSnap: {
   id: string;
   data: () => Record<string, unknown>;
 }) => ({ id: docSnap.id, ...docSnap.data() }) as T;
+
+const dictionaryTimestamp = (value: unknown): number => {
+  const timestamp = value as {
+    toMillis?: () => number;
+    seconds?: number;
+  } | null;
+  return typeof timestamp?.toMillis === "function"
+    ? timestamp.toMillis()
+    : Number(timestamp?.seconds || 0) * 1000;
+};
+const newestDictionaryFirst = (
+  left: { updatedAt?: unknown; createdAt?: unknown },
+  right: { updatedAt?: unknown; createdAt?: unknown },
+) =>
+  dictionaryTimestamp(right.updatedAt || right.createdAt) -
+  dictionaryTimestamp(left.updatedAt || left.createdAt);
 
 const timestampFromMs = (value: unknown) => {
   const millis = Number(value || 0);
@@ -340,14 +354,14 @@ export const subscribeStudentHistoryDictionaryWords = (
               `dictionary_students/${uid}/history_dictionary_words`,
             ),
           ),
-          orderBy("updatedAt", "desc"),
-          limit(20),
         ),
         (snapshot) =>
           onChange(
-            snapshot.docs.map((item) =>
-              rememberDocument<StudentHistoryDictionaryWord>(item),
-            ),
+            snapshot.docs
+              .map((item) =>
+                rememberDocument<StudentHistoryDictionaryWord>(item),
+              )
+              .sort(newestDictionaryFirst),
           ),
         fail,
       ),
@@ -362,16 +376,12 @@ export const subscribeTeacherHistoryDictionaryRequests = (
   subscribeAfterSession(
     (fail) =>
       onSnapshot(
-        query(
-          collection(db, scopedPath(config, REQUESTS_COLLECTION)),
-          orderBy("updatedAt", "desc"),
-          limit(100),
-        ),
+        query(collection(db, scopedPath(config, REQUESTS_COLLECTION))),
         (snapshot) =>
           onChange(
-            snapshot.docs.map((item) =>
-              rememberDocument<HistoryDictionaryRequest>(item),
-            ),
+            snapshot.docs
+              .map((item) => rememberDocument<HistoryDictionaryRequest>(item))
+              .sort(newestDictionaryFirst),
           ),
         fail,
       ),
@@ -382,25 +392,45 @@ export const loadTeacherStudentHistoryDictionaryWords = async (
   config: ConfigLike,
 ) => {
   const scope = getYearSemester(config);
+  const user = auth.currentUser;
+  if (!user) throw new Error("다시 로그인해 주세요.");
+  const authTime = (await getIdTokenResult(user)).authTime;
   const callable = await getHistoryDictionaryCallable(
     "listStudentHistoryDictionaryWordsForTeacher",
   );
-  const result = await callable(scope);
-  const data = result.data as { words?: Record<string, unknown>[] };
-  return Array.isArray(data.words)
-    ? data.words.map((item) => {
-        if (typeof item.writeVersion === "string") {
-          versions.set(
-            scopedPath(
-              scope,
-              `dictionary_students/${String(item.uid)}/history_dictionary_words/${String(item.termId)}`,
-            ),
-            item.writeVersion,
-          );
-        }
-        return mapTeacherStudentWordData(item);
-      })
-    : [];
+  const words = new Map<string, StudentHistoryDictionaryWord>();
+  const cursors = new Set<string>();
+  let after = "";
+  do {
+    const result = await callable({ ...scope, ...(after ? { after } : {}) });
+    if (
+      auth.currentUser !== user ||
+      (await getIdTokenResult(user)).authTime !== authTime
+    )
+      throw new Error("로그인 상태가 변경되었습니다. 다시 로그인해 주세요.");
+    const data = result.data as {
+      words?: Record<string, unknown>[];
+      nextCursor?: string;
+    };
+    for (const item of Array.isArray(data.words) ? data.words : []) {
+      if (typeof item.writeVersion === "string") {
+        versions.set(
+          scopedPath(
+            scope,
+            `dictionary_students/${String(item.uid)}/history_dictionary_words/${String(item.termId)}`,
+          ),
+          item.writeVersion,
+        );
+      }
+      const word = mapTeacherStudentWordData(item);
+      words.set(word.id, word);
+    }
+    after = typeof data.nextCursor === "string" ? data.nextCursor : "";
+    if (after && cursors.has(after))
+      throw new Error("단어 목록 조회가 중단되었습니다. 다시 불러와 주세요.");
+    if (after) cursors.add(after);
+  } while (after);
+  return [...words.values()].sort(newestDictionaryFirst);
 };
 
 export const subscribeTeacherHistoryDictionaryTerms = (
@@ -411,16 +441,12 @@ export const subscribeTeacherHistoryDictionaryTerms = (
   subscribeAfterSession(
     (fail) =>
       onSnapshot(
-        query(
-          collection(db, scopedPath(config, TERMS_COLLECTION)),
-          orderBy("updatedAt", "desc"),
-          limit(TEACHER_TERMS_LIMIT),
-        ),
+        query(collection(db, scopedPath(config, TERMS_COLLECTION))),
         (snapshot) =>
           onChange(
-            snapshot.docs.map((item) =>
-              rememberDocument<HistoryDictionaryTerm>(item),
-            ),
+            snapshot.docs
+              .map((item) => rememberDocument<HistoryDictionaryTerm>(item))
+              .sort(newestDictionaryFirst),
           ),
         fail,
       ),
@@ -430,16 +456,10 @@ export const subscribeTeacherHistoryDictionaryTerms = (
 export const loadTeacherHistoryDictionaryTerms = async (config: ConfigLike) => {
   const path = scopedPath(config, TERMS_COLLECTION);
   await ensureHistoryDictionarySession();
-  const snapshot = await getDocs(
-    query(
-      collection(db, path),
-      orderBy("updatedAt", "desc"),
-      limit(TEACHER_TERMS_LIMIT),
-    ),
-  );
-  return snapshot.docs.map((item) =>
-    rememberDocument<HistoryDictionaryTerm>(item),
-  );
+  const snapshot = await getDocs(query(collection(db, path)));
+  return snapshot.docs
+    .map((item) => rememberDocument<HistoryDictionaryTerm>(item))
+    .sort(newestDictionaryFirst);
 };
 
 export const requestHistoryDictionaryTerm = async (

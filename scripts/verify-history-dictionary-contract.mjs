@@ -19,6 +19,8 @@ let ready = false,
 let writeConflict = false,
   switchDuringRead = false,
   snapshotId = "term_one";
+let queryRows = null;
+let teacherPages = [];
 const fixture = {
   updatedAt: { seconds: 10, nanoseconds: 123 },
   word: "역사",
@@ -47,6 +49,11 @@ const modules = {
     },
     getHistoryDictionaryCallable: async (name) => async (input) => {
       writes.push({ name, input });
+      if (
+        name === "listStudentHistoryDictionaryWordsForTeacher" &&
+        teacherPages.length
+      )
+        return { data: teacherPages.shift() };
       if (failWrite) throw new Error("network failure");
       if (writeConflict)
         throw {
@@ -80,12 +87,15 @@ const modules = {
       reads.push(ref);
       if (ref.path.endsWith("history_dictionary_requests"))
         return { empty: true, docs: [] };
-      return { empty: false, docs: [snapshot(`${ref.path}/${snapshotId}`)] };
+      return {
+        empty: false,
+        docs: queryRows || [snapshot(`${ref.path}/${snapshotId}`)],
+      };
     },
     onSnapshot: (ref, next) => {
       assert.ok(ready);
       subscriptions.push(ref);
-      next({ docs: [snapshot(`${ref.path}/${snapshotId}`)] });
+      next({ docs: queryRows || [snapshot(`${ref.path}/${snapshotId}`)] });
       return () => {
         stopped++;
       };
@@ -227,6 +237,75 @@ assert.equal(
   "account change cannot send old user's command",
 );
 switchDuringRead = false;
+// The searchable list is complete, including old entries without updatedAt.
+queryRows = Array.from({ length: 605 }, (_, index) =>
+  snapshot(`${root}/history_dictionary_terms/term_${index}`, {
+    word: `단어 ${index}`,
+    createdAt: { seconds: index + 1, nanoseconds: 0 },
+  }),
+);
+const completeTerms = await exports.loadTeacherHistoryDictionaryTerms(scope);
+assert.equal(completeTerms.length, 605);
+assert.equal(completeTerms[0].word, "단어 604");
+assert.equal(
+  reads.at(-1).constraints.length,
+  0,
+  "Do not omit older or undated documents with an orderBy/limit query",
+);
+let completeWords;
+const stopAllWords = exports.subscribeStudentHistoryDictionaryWords(
+  "other-user",
+  (value) => {
+    completeWords = value;
+  },
+  scope,
+);
+await tick();
+stopAllWords();
+assert.equal(completeWords.length, 605);
+assert.equal(subscriptions.at(-1).constraints.length, 0);
+queryRows = null;
+teacherPages = [
+  {
+    words: [
+      {
+        id: "student:one",
+        uid: "student",
+        termId: "one",
+        word: "첫째",
+        updatedAtMs: 1000,
+        writeVersion: "1:0",
+      },
+    ],
+    nextCursor: "page-1",
+  },
+  {
+    words: [
+      {
+        id: "student:two",
+        uid: "student",
+        termId: "two",
+        word: "둘째",
+        updatedAtMs: 2000,
+        writeVersion: "2:0",
+      },
+    ],
+    nextCursor: "",
+  },
+];
+const teacherWords =
+  await exports.loadTeacherStudentHistoryDictionaryWords(scope);
+assert.equal(teacherWords.length, 2);
+assert.equal(teacherWords[0].word, "둘째");
+assert.equal(writes.at(-1).input.after, "page-1");
+teacherPages = [
+  { words: [], nextCursor: "same" },
+  { words: [], nextCursor: "same" },
+];
+await assert.rejects(
+  exports.loadTeacherStudentHistoryDictionaryWords(scope),
+  /조회가 중단/,
+);
 let observed;
 failure = true;
 exports.subscribeStudentHistoryDictionaryWords(
