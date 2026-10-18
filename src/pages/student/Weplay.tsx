@@ -77,6 +77,7 @@ function NavalWeplay() {
     currentUser?.uid,
     userData,
     !!selectedGame &&
+      introComplete &&
       loadedScope === scope &&
       !!lobby &&
       !loading &&
@@ -245,23 +246,8 @@ function NavalWeplay() {
       </main>
     );
   }
-  if (!session && !introComplete) {
-    return <WeplayStudioIntro onComplete={() => setIntroComplete(true)} />;
-  }
   return (
-    <main className="weplay-page">
-      {!session && !starting && (
-        <Link
-          className="weplay-catalog-back"
-          to="/student/weplay"
-          onClick={() => {
-            setResult(null);
-            setRecordsView(null);
-          }}
-        >
-          ← 전체 게임
-        </Link>
-      )}
+    <main className="weplay-page" tabIndex={-1}>
       <header className="weplay-heading">
         <div>
           <span>위플레이</span>
@@ -284,15 +270,31 @@ function NavalWeplay() {
             type="button"
             className="weplay-guide-launch"
             onClick={guide.openGuide}
-            disabled={!currentUser || starting}
+            disabled={!currentUser || starting || (!session && !introComplete)}
           >
             <WeplayLobbyIcon name="info" />
             게임 안내
           </button>
-          <WeplayMusicButton {...music} />
+          <div className="weplay-game-navigation">
+            {!session && !starting && (
+              <Link
+                className="weplay-catalog-back"
+                to="/student/weplay"
+                onClick={() => {
+                  setResult(null);
+                  setRecordsView(null);
+                }}
+              >
+                전체 게임
+              </Link>
+            )}
+            <WeplayMusicButton {...music} />
+          </div>
         </div>
       </header>
-      {session ? (
+      {!session && !introComplete ? (
+        <WeplayStudioIntro onComplete={() => setIntroComplete(true)} />
+      ) : session ? (
         <HistoryRainGame
           key={session.id}
           session={session}
@@ -439,7 +441,7 @@ function NavalWeplay() {
       )}
       <WeplayGuide
         gameTitle={gameTitle}
-        open={guide.open}
+        open={guide.open && (introComplete || !!session)}
         saving={guide.saving}
         error={guide.error}
         gameRunning={!!session}

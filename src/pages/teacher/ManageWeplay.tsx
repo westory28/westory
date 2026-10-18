@@ -6,7 +6,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
   canReadLessonManagement,
   canWriteLessonManagement,
-  canReadPoints,
 } from "../../lib/permissions";
 import {
   getWeplayManagement,
@@ -103,6 +102,7 @@ function NavalWeplayManagement() {
     currentUser?.uid,
     userData,
     !!selectedGame &&
+      (!previewView || introComplete) &&
       loadedScope === scope &&
       canRead &&
       !!data &&
@@ -327,9 +327,6 @@ function NavalWeplayManagement() {
         <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>
       </main>
     );
-  if (previewView && !introComplete) {
-    return <WeplayStudioIntro onComplete={() => setIntroComplete(true)} />;
-  }
   return (
     <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
       <main
@@ -341,45 +338,40 @@ function NavalWeplayManagement() {
           <WeplayGameCatalog portal="teacher" gameTitle={gameTitle} />
         )}
         <div hidden={!selectedGame}>
-          <nav
-            className="teacher-weplay-navigation"
-            aria-label="위플레이 화면 이동"
-          >
-            <Link className="teacher-weplay-button" to="/teacher/weplay">
-              전체 게임
-            </Link>
-            {previewView && (
-              <Link
-                className="teacher-weplay-button"
-                to={`/teacher/weplay?game=${game.id}`}
-              >
-                게임 관리
-              </Link>
-            )}
-          </nav>
           <div className="teacher-weplay-title ws-page-header">
-            <h1>{gameTitle}</h1>
-            <button
-              type="button"
-              className="weplay-guide-launch"
-              onClick={guide.openGuide}
-              disabled={!currentUser || starting}
-            >
-              <InfoHelpIcon />
-              게임 안내
-            </button>
-            {canReadPoints(userData, currentUser?.email) && (
-              <Link
-                className="teacher-weplay-button"
-                to="/teacher/points?tab=policy&section=policy-weplay"
+            <div className="teacher-weplay-heading">
+              <h1 tabIndex={-1}>{gameTitle}</h1>
+              <button
+                type="button"
+                className="weplay-guide-launch"
+                onClick={guide.openGuide}
+                disabled={
+                  !currentUser || starting || (previewView && !introComplete)
+                }
               >
-                위스 설정
-              </Link>
-            )}
-            <WeplayMusicButton {...music} />
-          </div>
-          <div hidden={previewView}>
-            <WeplayTitleEditor title={gameTitle} />
+                <InfoHelpIcon />
+                게임 안내
+              </button>
+            </div>
+            <div className="teacher-weplay-header-actions">
+              <nav
+                className="teacher-weplay-navigation"
+                aria-label="위플레이 화면 이동"
+              >
+                <Link className="teacher-weplay-button" to="/teacher/weplay">
+                  전체 게임
+                </Link>
+                {previewView && (
+                  <Link
+                    className="teacher-weplay-button"
+                    to={`/teacher/weplay?game=${game.id}`}
+                  >
+                    게임 관리
+                  </Link>
+                )}
+              </nav>
+              <WeplayMusicButton {...music} />
+            </div>
           </div>
           {loading || (data && loadedScope !== scope) ? (
             <p role="status">게임 정보를 불러오는 중입니다.</p>
@@ -415,20 +407,26 @@ function NavalWeplayManagement() {
                   className="teacher-weplay-preview"
                   aria-label="교사 게임 체험"
                 >
-                  <div className="teacher-weplay-section-title">
-                    <h2>{preview ? "교사 체험" : "대기 화면 미리보기"}</h2>
-                    {preview && (
-                      <button
-                        className="teacher-weplay-button"
-                        disabled={starting}
-                        onClick={exitPreview}
-                      >
-                        {result ? "대기 화면" : "체험 종료"}
-                      </button>
-                    )}
-                  </div>
+                  {introComplete && (
+                    <div className="teacher-weplay-section-title">
+                      <h2>{preview ? "교사 체험" : "대기 화면 미리보기"}</h2>
+                      {preview && (
+                        <button
+                          className="teacher-weplay-button"
+                          disabled={starting}
+                          onClick={exitPreview}
+                        >
+                          {result ? "대기 화면" : "체험 종료"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="weplay-page">
-                    {!preview ? (
+                    {!introComplete ? (
+                      <WeplayStudioIntro
+                        onComplete={() => setIntroComplete(true)}
+                      />
+                    ) : !preview ? (
                       <WeplayLaunchPanel
                         mode={mode}
                         difficulty={difficulty}
@@ -511,7 +509,7 @@ function NavalWeplayManagement() {
                       />
                     )}
                   </div>
-                  {!preview && dirty && (
+                  {introComplete && !preview && dirty && (
                     <p className="teacher-weplay-note">
                       저장 전 설정으로 체험합니다.
                     </p>
@@ -524,101 +522,115 @@ function NavalWeplayManagement() {
                     읽기 전용입니다. 게임 체험은 이용할 수 있습니다.
                   </p>
                 )}
-                <form noValidate onSubmit={(event) => void save(event)}>
-                  <section
-                    className="teacher-weplay-section"
-                    aria-labelledby="weplay-settings-title"
-                  >
-                    <div className="teacher-weplay-section-title">
-                      <h2 id="weplay-settings-title">게임 운영</h2>
-                      <div className="teacher-weplay-actions">
-                        <span role="status">
-                          {feedback ||
-                            (dirty
-                              ? "저장하지 않은 변경 사항"
-                              : "저장된 설정과 동일")}
-                        </span>
-                        {canWrite && (
-                          <button
-                            className="teacher-weplay-button is-primary"
-                            type="submit"
-                            disabled={!dirty || saving || !!difficultyError}
-                          >
-                            {saving ? "저장 중…" : "게임 설정 저장"}
-                          </button>
+                <div className="teacher-weplay-management">
+                  <div className="teacher-weplay-section teacher-weplay-settings-column ws-surface">
+                    <WeplayTitleEditor title={gameTitle} />
+                    <form noValidate onSubmit={(event) => void save(event)}>
+                      <section
+                        className="teacher-weplay-settings"
+                        aria-labelledby="weplay-settings-title"
+                      >
+                        <div className="teacher-weplay-section-title">
+                          <h2 id="weplay-settings-title">게임 운영</h2>
+                          <div className="teacher-weplay-actions">
+                            <span role="status">
+                              {feedback ||
+                                (dirty
+                                  ? "저장하지 않은 변경 사항"
+                                  : "저장된 설정과 동일")}
+                            </span>
+                            {canWrite && (
+                              <button
+                                className="teacher-weplay-button is-primary"
+                                type="submit"
+                                disabled={!dirty || saving || !!difficultyError}
+                              >
+                                {saving ? "저장 중…" : "게임 설정 저장"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="teacher-weplay-operation-row">
+                          <label className="teacher-weplay-toggle">
+                            <input
+                              type="checkbox"
+                              checked={draft.enabled}
+                              disabled={!canWrite || saving}
+                              onChange={(event) =>
+                                update({ enabled: event.target.checked })
+                              }
+                            />
+                            학생 게임 사용 허용
+                          </label>
+                          <div className="teacher-weplay-counts">
+                            <span>
+                              학생 출제 가능 <strong>{availableCount}개</strong>
+                            </span>
+                            <span>
+                              교사 체험 <strong>{countWords(false)}개</strong>
+                            </span>
+                          </div>
+                        </div>
+                        {removedSourceCount > 0 && (
+                          <p className="teacher-weplay-notice">
+                            삭제된 자료 {removedSourceCount}개를 선택 목록에서
+                            제외했습니다. 게임 설정을 저장하면 적용됩니다.
+                          </p>
                         )}
-                      </div>
-                    </div>
-                    <div className="teacher-weplay-operation-row">
-                      <label className="teacher-weplay-toggle">
-                        <input
-                          type="checkbox"
-                          checked={draft.enabled}
+                        <WeplayWordPool
+                          lessons={data.lessons}
+                          settings={draft}
                           disabled={!canWrite || saving}
-                          onChange={(event) =>
-                            update({ enabled: event.target.checked })
-                          }
+                          update={update}
                         />
-                        학생 게임 사용 허용
-                      </label>
-                      <div className="teacher-weplay-counts">
-                        <span>
-                          학생 출제 가능 <strong>{availableCount}개</strong>
-                        </span>
-                        <span>
-                          교사 체험 <strong>{countWords(false)}개</strong>
-                        </span>
-                      </div>
-                    </div>
-                    {removedSourceCount > 0 && (
-                      <p className="teacher-weplay-notice">
-                        삭제된 자료 {removedSourceCount}개를 선택 목록에서
-                        제외했습니다. 게임 설정을 저장하면 적용됩니다.
-                      </p>
-                    )}
-                    <WeplayWordPool
-                      lessons={data.lessons}
-                      settings={draft}
-                      disabled={!canWrite || saving}
-                      update={update}
-                    />
-                    <WeplayDifficultyEditor
-                      key={`${scope}/${settingsRevision}`}
-                      settings={draft}
-                      disabled={!canWrite || saving}
-                      update={update}
-                      onValidityChange={setDifficultyError}
-                    />
-                  </section>
-                </form>
-                <section
-                  className="teacher-weplay-section teacher-weplay-preview-controls"
-                  aria-labelledby="weplay-preview-title"
-                >
-                  <div className="teacher-weplay-preview-toolbar">
-                    <h2 id="weplay-preview-title">교사 체험</h2>
-                    <button
-                      className="teacher-weplay-button is-primary"
-                      disabled={saving}
-                      onClick={() => {
-                        setError("");
-                        setParams({ game: game.id, view: "preview" });
-                      }}
-                    >
-                      체험하기
-                    </button>
+                        <WeplayDifficultyEditor
+                          key={`${scope}/${settingsRevision}`}
+                          settings={draft}
+                          disabled={!canWrite || saving}
+                          update={update}
+                          onValidityChange={setDifficultyError}
+                        />
+                      </section>
+                    </form>
                   </div>
-                  <p className="teacher-weplay-note">
-                    위스·랭킹·학생 기록에 반영되지 않습니다.
-                    {dirty && " 저장 전 설정으로 체험합니다."}
-                  </p>
-                </section>
+                  <section
+                    className="teacher-weplay-section teacher-weplay-preview-controls ws-surface"
+                    aria-labelledby="weplay-preview-title"
+                  >
+                    <div className="teacher-weplay-preview-toolbar">
+                      <h2 id="weplay-preview-title">교사 체험</h2>
+                      <button
+                        className="teacher-weplay-button is-primary"
+                        disabled={saving}
+                        onClick={() => {
+                          setError("");
+                          setParams({ game: game.id, view: "preview" });
+                        }}
+                      >
+                        체험하기
+                      </button>
+                    </div>
+                    <img
+                      className="teacher-weplay-preview-art"
+                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                      alt=""
+                      width={1200}
+                      height={900}
+                    />
+                    <p className="teacher-weplay-note">
+                      위스·랭킹·학생 기록에 반영되지 않습니다.
+                      {dirty && " 저장 전 설정으로 체험합니다."}
+                    </p>
+                  </section>
+                </div>
               </div>
             </>
           )}
           <WeplayGuide
             gameTitle={gameTitle}
-            open={!!selectedGame && guide.open}
+            open={
+              !!selectedGame && (!previewView || introComplete) && guide.open
+            }
             saving={guide.saving}
             error={guide.error}
             gameRunning={!!preview}

@@ -23,7 +23,7 @@ try {
       ),
   );
 }
-const evidence = path.join(
+const evidence = process.env.WEPLAY_QA_EVIDENCE_DIR ? path.resolve(process.env.WEPLAY_QA_EVIDENCE_DIR) : path.join(
   root,
   ".superloopy/sessions/weplay-settings-20260929/evidence",
 );
@@ -91,8 +91,9 @@ export const config={year:"2026",semester:"2"};
 const readonly=view.includes("readonly");
 const denied=view==="denied";
 const headerRole=view.startsWith("header-")?view.slice(7):null;
-export const userData={uid:"qa-teacher",role:readonly||denied||(headerRole&&headerRole!=="teacher")?"student":"teacher",teacherPortalEnabled:!denied&&headerRole!=="student",staffPermissions:headerRole==="lesson"?["lesson_read"]:headerRole==="points"?["point_read"]:readonly?["point_read","lesson_read"]:[],email:"qa@example.invalid",name:"검증 교사"};
+export const userData={uid:"qa-teacher",weplayGuideCompleted:true,role:readonly||denied||(headerRole&&headerRole!=="teacher")?"student":"teacher",teacherPortalEnabled:!denied&&headerRole!=="student",staffPermissions:headerRole==="lesson"?["lesson_read"]:headerRole==="points"?["point_read"]:readonly?["point_read","lesson_read"]:[],email:"qa@example.invalid",name:"검증 교사"};
 const currentUser={uid:"qa-teacher",email:"qa@example.invalid"};
+export const auth={currentUser};
 export const useAuth=()=>({config,currentUser,userData,interfaceConfig:{},refreshInterfaceConfig:async()=>{},logout:async()=>{},menuConfig:null,menuConfigReady:true,loading:false,configReady:true});
 const policy=${JSON.stringify(core.DEFAULT_POLICY)};
 const originalLessons=${JSON.stringify(sourceLessons)};
@@ -120,7 +121,10 @@ export const getHttpsCallable=async name=>async data=>{
   throw new Error("Unexpected callable in teacher QA: "+name);
 };
 export const db={};
+export const app={};
 export const getFirebaseStorage=async()=>({});
+export const getHistoryDictionaryCallable=getHttpsCallable;
+export const ensureHistoryDictionarySession=async()=>{throw new Error("Unexpected session handshake in fixture");};
 `;
 const firestore = `
 export * from "fixture:real-firestore";
@@ -177,7 +181,7 @@ import ${m("src/pages/teacher/teacherSettings.css")};
 import {view,qa,userData} from "fixture:service";
 qa.routeAllowed=canAccessTeacherPath("/teacher/weplay",userData,"qa@example.invalid");
 const policyView=view.startsWith("policy");
-const initialRoute=policyView?"/teacher/points?tab=policy"+(view.includes("deep")?"&section=policy-weplay":""):"/teacher/weplay";
+const initialRoute=policyView?"/teacher/points?tab=policy"+(view.includes("deep")?"&section=policy-weplay":""):"/teacher/weplay?game=history-rain";
 function Fixture(){return <MemoryRouter initialEntries={[initialRoute]}><AppToastProvider><AppDialogProvider><div className="teacher-layout flex min-h-screen flex-col bg-gray-50">{view.startsWith("header-")?<Header teacherLayout/>:<><aside className="teacher-sidebar" aria-label="QA 전체 메뉴"><strong>Westory</strong><span>전체 메뉴 위치 검증</span></aside><div className="qa-account" aria-label="QA 계정 영역">검증 교사</div><main className="min-h-0 w-full flex-1">{view==="policy-before"?<PriorPoints/>:policyView?<CurrentPoints/>:<ManageWeplay/>}</main></>}</div></AppDialogProvider></AppToastProvider></MemoryRouter>}
 createRoot(document.getElementById("root")).render(<Fixture/>);
 `;
@@ -189,9 +193,9 @@ const bundled = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(os.tmpdir(), "weplay-teacher-fixture.js"),
-  loader: { ".svg": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl", ".woff": "dataurl", ".woff2": "dataurl" },
   external: ["/assets/*"],
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: { "process.env.NODE_ENV": '"production"', "import.meta.env.BASE_URL": '"/"' },
   plugins: [
     {
       name: "teacher-qa-boundary",
@@ -218,6 +222,10 @@ const bundled = await build({
           { filter: /(?:^|\/)lib\/firebase$|^\.\/firebase$/ },
           () => ({ path: "service", namespace: "fixture" }),
         );
+        plugin.onResolve({ filter: /(?:^|\/)historyDictionarySession$/ }, () => ({
+          path: "service",
+          namespace: "fixture",
+        }));
         plugin.onResolve({ filter: /^firebase\/firestore$/ }, () => ({
           path: "firestore",
           namespace: "fixture",
@@ -438,7 +446,12 @@ try {
     name: "게임 설정 저장",
     exact: true,
   });
-  const preview = page.getByRole("button", { name: "체험 시작", exact: true });
+  const preview = page.getByRole("button", { name: "체험하기", exact: true });
+  const enterPreview = async (target) => {
+    await target.getByRole("button", { name: "체험하기", exact: true }).click();
+    await target.getByRole("button", { name: /건너뛰기/ }).click();
+    await target.getByRole("button", { name: "연습 체험 시작", exact: true }).waitFor();
+  };
   await page.locator("details.teacher-weplay-pool > summary").click();
   const word = page.getByRole("checkbox", {
     name: "훈민정음 출제 포함",
@@ -448,69 +461,27 @@ try {
   assert.equal(await word.isChecked(), false);
   await word.check();
   await word.uncheck();
-  await page.getByLabel("단어 직접 추가", { exact: true }).fill("Ａ＜Ｂ");
-  await page.getByRole("button", { name: "추가", exact: true }).click();
-  assert.equal(
-    await page
-      .getByRole("checkbox", { name: "A<B 출제 포함", exact: true })
-      .count(),
-    0,
-  );
-  await page
-    .getByRole("status")
-    .filter({ hasText: "단어는 글자나 숫자를 포함해" })
-    .waitFor();
-  await page.getByLabel("단어 직접 추가", { exact: true }).fill("직접단어");
-  await page.getByRole("button", { name: "추가", exact: true }).click();
-  assert.equal(
-    await page
-      .getByRole("checkbox", { name: "직접단어 출제 포함", exact: true })
-      .isChecked(),
-    true,
-  );
-  await page.getByLabel("단어 직접 추가", { exact: true }).fill("직접 단어");
-  await page.getByRole("button", { name: "추가", exact: true }).click();
-  assert.equal(
-    await page
-      .getByRole("checkbox", { name: "직접단어 출제 포함", exact: true })
-      .count(),
-    1,
-  );
-  await page
-    .getByRole("button", { name: "직접단어 직접 추가 삭제", exact: true })
-    .click();
-  assert.equal(
-    await page
-      .getByRole("checkbox", { name: "직접단어 출제 포함", exact: true })
-      .count(),
-    0,
-  );
-  for (const word of ["직접단어", "추가단어", "연습단어"]) {
-    await page.getByLabel("단어 직접 추가", { exact: true }).fill(word);
-    await page.getByRole("button", { name: "추가", exact: true }).click();
-  }
+  // The current word bank is sourced from lessons; manual word entry was retired.
+  assert.equal(await page.getByLabel("단어 직접 추가", { exact: true }).count(), 0);
   await page
     .getByRole("radio", { name: "선택한 수업 자료", exact: true })
     .check();
-  for (const title of [
-    "조선의 문화",
-    "삼국의 발전과 통일",
-    "다음 수업 준비 자료",
-  ])
-    await page
-      .getByRole("checkbox", { name: `${title} 출제 포함`, exact: true })
-      .uncheck();
+  await page.getByRole("checkbox", { name: "조선의 문화 출제 포함", exact: true }).uncheck();
   assert.equal(
     await preview.isEnabled(),
     true,
-    "Manual-only pool should be playable",
+    "A pool with selected public and private lessons should be previewable",
   );
   const input = (name) =>
     page.getByRole("spinbutton", { name: `착한맛 ${name}`, exact: true });
   await input("전체 제한시간").fill("");
   assert.equal(await input("전체 제한시간").inputValue(), "");
   assert.equal(await save.isDisabled(), true);
-  assert.equal(await preview.isDisabled(), true);
+  await enterPreview(page);
+  assert.equal(await page.getByRole("button", { name: "연습 체험 시작", exact: true }).isDisabled(), true);
+  assert.equal(await page.evaluate(() => window.weplayTeacherQa.calls.some(call => call.name === "previewWeplayGame")), false);
+  await page.getByRole("link", { name: "게임 관리", exact: true }).click();
+  assert.equal(await input("전체 제한시간").inputValue(), "");
   await input("전체 제한시간").fill("120");
   for (const [label, value] of [
     ["초반 입력 시간", "20"],
@@ -518,8 +489,8 @@ try {
     ["후반 입력 시간", "10"],
   ])
     await input(label).fill(value);
-  await input("최소 단어 길이").fill("4");
-  await input("최대 단어 길이").fill("4");
+  await input("최소 단어 길이").fill("2");
+  await input("최대 단어 길이").fill("3");
   assert.equal(await preview.isEnabled(), true);
   assert.equal(
     await page
@@ -542,13 +513,15 @@ try {
     await page.evaluate(() => window.weplayTeacherQa.writes.length),
     0,
   );
-  await preview.click();
+  await enterPreview(page);
+  assert.equal(await page.evaluate(() => window.weplayTeacherQa.calls.some(call => call.name === "previewWeplayGame")), false);
+  await page.getByRole("button", { name: "연습 체험 시작", exact: true }).click();
   await page.getByLabel("단어 입력", { exact: true }).waitFor();
   const session = await page.evaluate(() => window.weplayTeacherQa.session);
   assert.equal(session.endsAtMs - session.startsAtMs, 120000);
   assert.deepEqual(
     [...new Set(session.words.filter((word) => word.kind !== "special").map((word) => word.text))].sort(),
-    ["연습단어", "직접단어", "추가단어"].sort(),
+    ["고구려", "백제", "신라", "고려", "발해"].sort(),
   );
   assert.deepEqual(
     [1, 2, 3].map(
@@ -577,9 +550,9 @@ try {
     "후반 · 격침 0척",
   );
   await page.clock.runFor(41100);
-  await page
-    .getByRole("heading", { name: "체험 결과 · 착한맛", exact: true })
-    .waitFor();
+  // Current naval results wait for the bounded battle effects to finish.
+  await page.clock.runFor(2500);
+  await page.locator(".naval-result").waitFor();
   assert.equal(
     await page.evaluate(() => window.weplayTeacherQa.writes.length),
     0,
@@ -596,7 +569,7 @@ try {
   );
   await capture(page, "settings-preview-result-390");
   await page
-    .getByRole("button", { name: "관리로 돌아가기", exact: true })
+    .getByRole("link", { name: "게임 관리", exact: true })
     .click();
   await save.click();
   await page
@@ -606,17 +579,18 @@ try {
   const settings = await page.evaluate(
     () => window.weplayTeacherQa.writes[0].data.settings,
   );
-  assert.deepEqual(settings.customWords, ["직접단어", "추가단어", "연습단어"]);
+  assert.deepEqual(settings.unitIds, ["public-2", "private-1"]);
   assert.deepEqual(settings.excludedWords, ["훈민정음"]);
   assert.equal(settings.difficulties.mild.durationSeconds, 120);
-  assert.equal(settings.difficulties.mild.minWordLength, 4);
+  assert.equal(settings.difficulties.mild.minWordLength, 2);
+  assert.equal(settings.difficulties.mild.maxWordLength, 3);
   assert.equal(await save.isDisabled(), true);
   await page.close();
   checks.push(
-    "Individual exclusion/reinclusion, duplicate normalization, custom add/remove, custom-only play, raw numeric blank, per-difficulty values, failed-save preservation/retry; exact draft sent and persisted",
+    "Individual exclusion/reinclusion, selected public/private lesson sources, raw numeric blank retained across preview navigation, per-difficulty values, failed-save preservation/retry; exact draft sent and persisted",
   );
   checks.push(
-    "Unsaved 120-second custom-only preview: 20/15/10 seconds, 40/80/120 stage/end boundaries, no student API calls or database writes",
+    "Unsaved 120-second lesson-source preview: 20/15/10 seconds, 40/80/120 stage/end boundaries, no student API calls or database writes; intro/lobby navigation never starts a game",
   );
   for (const view of ["readonly", "denied", "empty", "load-error"]) {
     const p = await pageFor(view, 390);
@@ -650,13 +624,15 @@ try {
             .isDisabled(),
           true,
         );
-      if (view === "empty")
+      if (view === "empty") {
+        await enterPreview(p);
         assert.equal(
           await p
-            .getByRole("button", { name: "체험 시작", exact: true })
+            .getByRole("button", { name: "연습 체험 시작", exact: true })
             .isDisabled(),
           true,
         );
+      }
     }
     await p.close();
   }
@@ -668,6 +644,11 @@ try {
   status = "passed";
 } catch (error) {
   failure = String(error.stack || error);
+  const active = browser.contexts().flatMap(context => context.pages()).at(-1);
+  if (active) {
+    await capture(active, "settings-failure-current");
+    await fs.writeFile(path.join(evidence, "settings-failure-state.json"), JSON.stringify(await active.evaluate(() => ({text:document.body.innerText,qa:window.weplayTeacherQa})), null, 2));
+  }
   throw error;
 } finally {
   await fs.writeFile(

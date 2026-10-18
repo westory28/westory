@@ -276,11 +276,11 @@ async function capture(page, name) {
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
   const intro = await open(1280, "portal=student&uid=qa-intro");
-  await intro.getByRole("dialog", { name: "WEPLAY", exact: true }).waitFor();
+  await intro.locator("section.weplay-studio-intro").waitFor();
   assert.equal(await intro.evaluate(() => window.yutQA?.calls.length || 0), 0);
   await intro.waitForTimeout(1050);
   await capture(intro, "studio-intro");
-  await intro.keyboard.press("Escape");
+  await intro.getByRole("button", { name: /건너뛰기/ }).press("Escape");
   await intro
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
     .waitFor();
@@ -375,6 +375,8 @@ try {
   await guest.getByRole("button", { name: "들어가기", exact: true }).click();
   await guest.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   await guest.getByRole("button", { name: "준비 완료", exact: true }).click();
+  // Capture the revision only after the preceding ready command is acknowledged.
+  await guest.getByRole("button", { name: "준비 취소", exact: true }).waitFor();
   const emoteRevision = room.revision;
   await guest.getByRole("button", { name: "감정표현", exact: true }).click();
   await guest.getByRole("button", { name: "안녕!", exact: true }).click();
