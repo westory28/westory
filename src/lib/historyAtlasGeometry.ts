@@ -191,6 +191,35 @@ export function createAtlasProjection(
   return projection.precision(0.3);
 }
 
+/** Switch away from the clipped East Asian asset when free panning exposes
+ * other continents, then restore the detailed Korean coast on return. */
+export function atlasViewportNeedsWorldGeometry(
+  subject: AtlasSubject,
+  projection: GeoProjection,
+  transform: AtlasTransform,
+  width: number,
+  height: number,
+) {
+  if (subject !== "korea") return false;
+  for (const x of [0, width / 2, width]) {
+    for (const y of [0, height / 2, height]) {
+      const point = projection.invert?.([
+        (x - transform.x) / transform.scale,
+        (y - transform.y) / transform.scale,
+      ]);
+      if (
+        !point ||
+        point[0] < 90 ||
+        point[0] > 160 ||
+        point[1] < 10 ||
+        point[1] > 65
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
 /** A regional overview keeps its full outline visible at the existing 50% zoom
  * floor, even when a source popup leaves less than half the map's height.
  * Adjust only the regional base projection; ordinary place views keep theirs.
@@ -596,14 +625,19 @@ export function atlasShapeLabelAnchor(
 
 export function constrainAtlasTransform(
   transform: AtlasTransform,
-  width: number,
-  height: number,
+  _width: number,
+  _height: number,
 ): AtlasTransform {
-  const scale = Math.min(ATLAS_MAX_ZOOM, Math.max(0.5, transform.scale));
+  const scale = Math.min(
+    ATLAS_MAX_ZOOM,
+    Math.max(0.5, Number.isFinite(transform.scale) ? transform.scale : 1),
+  );
+  // The viewport is not the geographic extent. Capping translation to its
+  // dimensions prevented dragging toward nearby places after a close-up.
   return {
     scale,
-    x: Math.max(width * (0.2 - scale), Math.min(width * 0.8, transform.x)),
-    y: Math.max(height * (0.2 - scale), Math.min(height * 0.8, transform.y)),
+    x: Number.isFinite(transform.x) ? transform.x : 0,
+    y: Number.isFinite(transform.y) ? transform.y : 0,
   };
 }
 

@@ -1217,12 +1217,22 @@ export const koreaHistoricalStories: AtlasHistoricalStory[] = [
         title: "한국민족문화대백과사전 · 남한산성",
         url: "https://encykorea.aks.ac.kr/Article/E0012258",
       },
+      {
+        title: "한국학중앙연구원 한국민족문화대백과사전 · 심양관",
+        url: "https://encykorea.aks.ac.kr/Article/E0076460",
+      },
     ],
     related: [
       {
         placeId: "kr-684290acc045",
         reason:
           "남한산성에서 나온 인조는 1637년 삼전도에서 청 태종에게 항복했다.",
+      },
+      {
+        placeId: "kr-ed074edaab7c",
+        targetEntryId: "story-korea-shenyang-sohyeon-kr-ed074edaab7c",
+        reason:
+          "병자호란의 항복 조건에 따라 소현세자와 봉림대군이 1637년 심양으로 보내졌다.",
       },
     ],
     replacesEntryIds: ["k-namhansanseong"],
@@ -1649,12 +1659,23 @@ export const koreaHistoricalStories: AtlasHistoricalStory[] = [
         title: "한국민족문화대백과사전 · 3·1운동",
         url: "https://encykorea.aks.ac.kr/Article/E0026772",
       },
+      {
+        title: "국사편찬위원회 우리역사넷 · 2·8 독립 선언서와 해설",
+        url: "https://contents.history.go.kr/front/hm/print.do?levelId=hm_123_0030",
+      },
     ],
     related: [
       {
         placeId: "shanghai",
         reason:
           "서울 등지에서 시작된 3·1운동은 상하이의 대한민국 임시정부 수립에 중요한 계기가 되었다.",
+        fromPlaceIds: ["seoul"],
+      },
+      {
+        placeId: "tokyo",
+        targetEntryId: "story-korea-tokyo-february-eighth-tokyo",
+        reason:
+          "도쿄 유학생들의 2·8 독립선언과 국내로 전달된 소식은 3·1 독립선언에 영향을 주었다.",
         fromPlaceIds: ["seoul"],
       },
     ],

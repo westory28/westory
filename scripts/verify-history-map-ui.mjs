@@ -90,6 +90,103 @@ const browser = await playwright.chromium.launch({
 });
 const checks = [];
 let activePage;
+async function expectRegionDescription(page) {
+  const article = page.getByRole("article", { name: "지역 설명", exact: true });
+  await article.locator(".atlas-place-details__definition").waitFor();
+  assert(
+    (await article.locator(".atlas-place-details__definition").innerText())
+      .length > 10,
+  );
+  assert.equal(await article.locator("details").getAttribute("open"), null);
+}
+async function expectFreePanning(page, view) {
+  const map = page.locator(".history-atlas__map");
+  const homeLand = await page.locator(".history-atlas__land").getAttribute("d");
+  const camera = () =>
+    page.locator(".history-atlas__geography").evaluate((element) => {
+      const matrix = element.transform.baseVal.consolidate().matrix;
+      return { x: matrix.e, y: matrix.f, scale: matrix.a };
+    });
+  for (const [dx, dy] of [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]) {
+    await page.getByRole("button", { name: "전체 보기", exact: true }).click();
+    await page.getByRole("button", { name: "지도 확대", exact: true }).click();
+    const box = await map.boundingBox();
+    const before = await camera();
+    const stepX = dx * box.width * 0.5;
+    const stepY = dy * box.height * 0.5;
+    for (let drag = 0; drag < 5; drag++) {
+      const start = [
+        box.x + box.width / 2 - stepX / 2,
+        box.y + box.height / 2 - stepY / 2,
+      ];
+      await page.mouse.move(...start);
+      await page.mouse.down();
+      await page.mouse.move(start[0] + stepX, start[1] + stepY, { steps: 3 });
+      await page.mouse.up();
+    }
+    const after = await camera();
+    assert(
+      Math.abs(after.x - before.x - stepX * 5) < 5,
+      `${view}: repeated horizontal drag is not capped`,
+    );
+    assert(
+      Math.abs(after.y - before.y - stepY * 5) < 5,
+      `${view}: repeated vertical drag is not capped`,
+    );
+    assert.equal(after.scale, before.scale);
+  }
+  await map.press("Home");
+  const reset = await camera();
+  assert.deepEqual(reset, { x: 0, y: 0, scale: 1 });
+  await page.waitForFunction(
+    (land) =>
+      document.querySelector(".history-atlas__land")?.getAttribute("d") ===
+      land,
+    homeLand,
+  );
+}
+async function expectKoreanForeignPlaces(page) {
+  const search = page.getByRole("searchbox", {
+    name: "지명 검색",
+    exact: true,
+  });
+  for (const [name, narrative] of [
+    ["교토", "황윤길"],
+    ["에도", "회답 겸 쇄환사"],
+    ["심양", "소현세자"],
+    ["북경", "아담 샬"],
+    ["도쿄", "조선청년독립단"],
+  ]) {
+    await search.fill(name);
+    const detail = page.locator(".history-atlas__overlay");
+    await detail.getByRole("heading", { name, exact: true }).waitFor();
+    assert(
+      (await detail.innerText()).includes(narrative),
+      `${name}: Korean historical context`,
+    );
+    const marker = page.locator(".history-atlas__point.is-active");
+    await marker.waitFor();
+    const point = await marker.boundingBox();
+    const map = await page.locator(".history-atlas__map").boundingBox();
+    assert(
+      point.x >= map.x &&
+        point.x + point.width <= map.x + map.width &&
+        point.y >= map.y &&
+        point.y + point.height <= map.y + map.height,
+      `${name}: selection moves its marker into the map`,
+    );
+  }
+  await search.fill("");
+  await page
+    .getByRole("button", { name: "장소 설명 닫기", exact: true })
+    .click();
+  await page.getByRole("button", { name: "전체 보기", exact: true }).click();
+}
 const terrainPixelCount = () => {
   const canvas = document.querySelector(".history-globe canvas");
   if (!canvas) return 0;
@@ -174,6 +271,8 @@ try {
           .locator('[data-terrain-id="korea-taebaek"]')
           .waitFor({ state: "attached" });
       if (view === "korea") {
+        if (width === 1280) await expectFreePanning(page, view);
+        await expectKoreanForeignPlaces(page);
         assert((await page.locator("[data-traditional-region]").count()) >= 9);
         await page
           .getByRole("combobox", { name: "지역 · 8도", exact: true })
@@ -181,6 +280,7 @@ try {
         await page
           .getByRole("heading", { name: "기호", exact: true })
           .waitFor();
+        await expectRegionDescription(page);
         await page
           .getByRole("button", { name: "장소 설명 닫기", exact: true })
           .click();
@@ -189,12 +289,15 @@ try {
           .click();
       }
       if (view === "world") {
+        if (width === 1280) await expectFreePanning(page, view);
         await page
           .getByRole("combobox", { name: "지역", exact: true })
           .selectOption("africa");
         await page
           .getByRole("combobox", { name: "세부 지역", exact: true })
           .selectOption("africa-east");
+        await page.locator(".history-atlas__province-label").click();
+        await expectRegionDescription(page);
         await page
           .getByRole("searchbox", { name: "지명 검색", exact: true })
           .fill("올두바이");
@@ -282,6 +385,17 @@ try {
           .getByRole("button", { name: "장소 설명 닫기", exact: true })
           .press("Enter");
         await page.locator("canvas").press("ArrowRight");
+        await page
+          .getByRole("combobox", { name: "지역", exact: true })
+          .selectOption("world:europe");
+        await page.locator('[data-globe-region="europe"]').press("Enter");
+        await expectRegionDescription(page);
+        await page
+          .getByRole("button", { name: "장소 설명 닫기", exact: true })
+          .click();
+        await page
+          .getByRole("combobox", { name: "지역", exact: true })
+          .selectOption("");
       }
       assert.deepEqual(errors, [], `${view}/${width} browser errors`);
       await page.screenshot({

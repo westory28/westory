@@ -36,6 +36,7 @@ import {
   atlasRegionCameraBounds,
   atlasShapeLabelAnchor,
   constrainAtlasTransform,
+  atlasViewportNeedsWorldGeometry,
   createAtlasPaths,
   createAtlasProjection,
   fitAtlasSelection,
@@ -91,6 +92,10 @@ import {
   ATLAS_DOKDO_COORDINATES,
   ATLAS_DOKDO_ID,
 } from "../../data/historyAtlasDokdo";
+import {
+  ATLAS_MOUNTAIN_TEXTURE_SIZE,
+  getAtlasMountainTexture,
+} from "../../lib/historyAtlasTerrainTexture";
 
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
@@ -504,6 +509,15 @@ export default function HistoryAtlas({
     ReturnType<typeof loadAtlasTerrainGeometry>
   > | null>(null);
   const [terrainError, setTerrainError] = useState(false);
+  const [mountainTexture, setMountainTexture] = useState<string>();
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const color = getComputedStyle(root)
+      .getPropertyValue("--atlas-terrain-ridge")
+      .trim();
+    setMountainTexture(getAtlasMountainTexture(color || undefined)?.dataUrl);
+  }, []);
   const [countryGeometry, setCountryGeometry] =
     useState<AtlasCountryGeometry | null>(null);
   const [countryError, setCountryError] = useState(false);
@@ -741,6 +755,13 @@ export default function HistoryAtlas({
     availableMapHeight,
     overlayObstacle?.right,
   ]);
+  const needsWorldGeometry = atlasViewportNeedsWorldGeometry(
+    subject,
+    projection,
+    transform,
+    mapWidth,
+    mapHeight,
+  );
   const paths = useMemo(
     () =>
       geometry?.subject === subject && geometry.bounds === bounds
@@ -1238,7 +1259,9 @@ export default function HistoryAtlas({
   useEffect(() => {
     let disposed = false;
     setGeometryError(false);
-    loadAtlasGeometry(subject, bounds)
+    // The visible viewport decides the asset, including after a foreign-place
+    // selection; the original selection bounds may now be far offscreen.
+    loadAtlasGeometry(needsWorldGeometry ? "world" : subject)
       .then((data) => {
         if (!disposed) setGeometry({ subject, bounds, data });
       })
@@ -1248,7 +1271,7 @@ export default function HistoryAtlas({
     return () => {
       disposed = true;
     };
-  }, [subject, bounds, geometryAttempt]);
+  }, [subject, bounds, needsWorldGeometry, geometryAttempt]);
 
   useEffect(() => {
     let disposed = false;
@@ -2419,15 +2442,19 @@ export default function HistoryAtlas({
                 </pattern>
                 <pattern
                   id={`${id}-ridge`}
-                  width="14"
-                  height="12"
+                  width={ATLAS_MOUNTAIN_TEXTURE_SIZE}
+                  height={ATLAS_MOUNTAIN_TEXTURE_SIZE}
                   patternUnits="userSpaceOnUse"
                   patternTransform={`scale(${1 / transform.scale})`}
                 >
-                  <path
-                    d="M2 8L6 4L10 8"
-                    className="history-atlas__ridge-mark"
-                  />
+                  {mountainTexture && (
+                    <image
+                      href={mountainTexture}
+                      width={ATLAS_MOUNTAIN_TEXTURE_SIZE}
+                      height={ATLAS_MOUNTAIN_TEXTURE_SIZE}
+                      opacity="0.45"
+                    />
+                  )}
                 </pattern>
               </defs>
               <AtlasBackground

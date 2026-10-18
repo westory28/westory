@@ -4,8 +4,8 @@
   "coreCount": 133,
   "placeCount": 2240,
   "facetCount": 118,
-  "facetSetCount": 710,
-  "directEraCount": 674,
+  "facetSetCount": 713,
+  "directEraCount": 676,
   "classifiedPlaceEraCount": 718,
   "directRegionCount": 1898,
   "classifiedPlaceRegionCount": 1996,
@@ -80,14 +80,6 @@
       "source": "둔황시 · oldid=41381171"
     },
     {
-      "id": "kr-23f8483f8d47",
-      "word": "교토",
-      "from": [
-        "world-23f8483f8d47"
-      ],
-      "source": "교토 · oldid=42462652"
-    },
-    {
       "id": "kr-d7a6e266ca8d",
       "word": "일본",
       "from": [
@@ -158,14 +150,6 @@
         "world-8ce2774dbf6d"
       ],
       "source": "청나라 · oldid=42419303"
-    },
-    {
-      "id": "kr-ed074edaab7c",
-      "word": "선양",
-      "from": [
-        "world-ed074edaab7c"
-      ],
-      "source": "선양시 · oldid=42606184"
     },
     {
       "id": "kr-8a9d64bd994a",

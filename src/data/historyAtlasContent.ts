@@ -7,6 +7,10 @@ import { atlasLandformHistoricalStories } from "./historyAtlasLandformRestoratio
 import { atlasKoreaRestoredHistoricalStories } from "./historyAtlasKoreaRestoration";
 import { atlasWorldAdditionalHistoricalStories } from "./historyAtlasWorldRestorationAdditional";
 import {
+  atlasKoreaForeignContextPlaceUpdates,
+  atlasKoreaForeignContextStories,
+} from "./historyAtlasKoreaForeignContext";
+import {
   koreaHistoricalStories,
   koreaHistoricalEntryCorrections,
 } from "./historyAtlasKoreaStories";
@@ -1762,7 +1766,11 @@ for (const place of [
     throw new Error(`Duplicate atlas place: ${place.id}`);
   places.set(place.id, place);
 }
-for (const update of [...koreaPlaceUpdates, ...worldPlaceUpdates]) {
+for (const update of [
+  ...koreaPlaceUpdates,
+  ...worldPlaceUpdates,
+  ...atlasKoreaForeignContextPlaceUpdates,
+]) {
   const current = places.get(update.id);
   if (!current) throw new Error(`Unknown atlas place update: ${update.id}`);
   places.set(update.id, {
@@ -1803,6 +1811,7 @@ export const historyAtlasSourceDataset: AtlasDataset =
       ...atlasLandformHistoricalStories,
       ...atlasKoreaRestoredHistoricalStories,
       ...atlasWorldAdditionalHistoricalStories,
+      ...atlasKoreaForeignContextStories,
     ],
   );
 

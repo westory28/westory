@@ -1082,12 +1082,6 @@
   fill: var(--atlas-terrain-sand);
   opacity: 0.5;
 }
-.history-atlas__ridge-mark {
-  fill: none;
-  stroke: var(--atlas-terrain-ridge);
-  stroke-width: 0.7;
-  opacity: 0.35;
-}
 .history-atlas__traditional-boundary {
   fill: none;
   stroke: var(--ws-text-muted, #6b7280);

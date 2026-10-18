@@ -1487,12 +1487,26 @@ export const historyDictionaryPlaceSources: HistoryDictionaryAttribution[] = [
     retrievedAt: "2026-10-15",
   },
   {
-    title: "위키백과 · 교토",
-    author: "위키백과 기여자",
-    url: "https://ko.wikipedia.org/w/index.php?oldid=42462652",
-    license: "CC BY-SA 4.0",
-    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/deed.ko",
-    changes: "발음·번역 표기 생략, 본문 발췌·요약",
+    title: "국사편찬위원회 우리역사넷 · 조선시대 통신사의 일본 사행록",
+    author: "국사편찬위원회 우리역사넷",
+    url: "https://contents.history.go.kr/front/km/view.do?levelId=km_029_0040_0010_0040",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
+    retrievedAt: "2026-10-15",
+  },
+  {
+    title: "국사편찬위원회 우리역사넷 · 임진왜란",
+    author: "국사편찬위원회 우리역사넷",
+    url: "https://contents.history.go.kr/front/kc/printViewPopup.do?levelId=kc_i305500",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
+    retrievedAt: "2026-10-15",
+  },
+  {
+    title: "GeoNames · Kyoto (1857910, 현대 도시 대표 위치)",
+    author: "GeoNames",
+    url: "https://www.geonames.org/1857910/",
+    license: "CC BY 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
     retrievedAt: "2026-10-15",
   },
   {
@@ -4507,12 +4521,26 @@ export const historyDictionaryPlaceSources: HistoryDictionaryAttribution[] = [
     retrievedAt: "2026-10-15",
   },
   {
-    title: "위키백과 · 선양시",
-    author: "위키백과 기여자",
-    url: "https://ko.wikipedia.org/w/index.php?oldid=42606184",
-    license: "CC BY-SA 4.0",
-    licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/deed.ko",
-    changes: "발음·번역 표기 생략, 본문 발췌·요약",
+    title: "한국학중앙연구원 한국민족문화대백과사전 · 심양관",
+    author: "한국학중앙연구원 한국민족문화대백과사전",
+    url: "https://encykorea.aks.ac.kr/Article/E0076460",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
+    retrievedAt: "2026-10-15",
+  },
+  {
+    title: "한국학중앙연구원 한국민족문화대백과사전 · 심양일기",
+    author: "한국학중앙연구원 한국민족문화대백과사전",
+    url: "https://encykorea.aks.ac.kr/Article/E0033853",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
+    retrievedAt: "2026-10-15",
+  },
+  {
+    title: "GeoNames · Shenyang (2034937, 현대 도시 대표 위치)",
+    author: "GeoNames",
+    url: "https://www.geonames.org/2034937/",
+    license: "CC BY 4.0",
+    licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
     retrievedAt: "2026-10-15",
   },
   {
@@ -4962,6 +4990,13 @@ export const historyDictionaryPlaceSources: HistoryDictionaryAttribution[] = [
     title: "한국민족문화대백과사전 · 3·1운동",
     author: "한국민족문화대백과사전",
     url: "https://encykorea.aks.ac.kr/Article/E0026772",
+    changes: "위스토리 지도에서 작성한 설명의 참고 자료",
+    retrievedAt: "2026-10-15",
+  },
+  {
+    title: "국사편찬위원회 우리역사넷 · 2·8 독립 선언서와 해설",
+    author: "국사편찬위원회 우리역사넷",
+    url: "https://contents.history.go.kr/front/hm/print.do?levelId=hm_123_0030",
     changes: "위스토리 지도에서 작성한 설명의 참고 자료",
     retrievedAt: "2026-10-15",
   },
@@ -19492,9 +19527,9 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계사",
       "지역 세계의 교류",
       "한국사",
+      "조선 사회의 변화",
       "선사 문화와 고대 국가",
       "통일 신라와 발해",
-      "조선 사회의 변화",
       "근현대 사회와 민주주의",
       "고려의 성립과 변화",
       "조선의 성립과 발전",
@@ -19584,8 +19619,8 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "한국사",
       "조선 사회의 변화",
-      "조선의 성립과 발전",
       "근현대 사회와 민주주의",
+      "조선의 성립과 발전",
       "고대 문명과 국가",
       "세계 대전과 평화",
       "냉전과 현대 세계",
@@ -20754,17 +20789,17 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
   [
     "kr-23f8483f8d47",
     "교토",
-    "교토는 일본의 역사적인 도시다.",
+    "1590년 조선은 황윤길·김성일·허성을 통신사로 보내 일본의 정세를 살피게 했다. 교토를 목적지로 한 이 사절단은 도요토미 히데요시를 만났으며, 임진왜란이 일어나기 전 조선과 일본의 외교 교섭을 보여 준다.",
     [],
     [
       "한국사",
+      "조선의 성립과 발전",
       "선사 문화와 고대 국가",
       "고려의 성립과 변화",
       "조선 사회의 변화",
       "통일 신라와 발해",
-      "조선의 성립과 발전",
     ],
-    [187],
+    [0, 187, 188, 189],
   ],
   [
     "kr-173da7aa3542",
@@ -20772,7 +20807,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 교토에 있는 사찰로, 외국에서 건너온 도래인 계통의 하타씨가 세운 사원이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [188],
+    [190],
   ],
   [
     "kr-2de1c2c77227",
@@ -20780,7 +20815,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수산리 고분은 남포특별시 강서구역에 위치한 고구려 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [189],
+    [191],
   ],
   [
     "kr-5fc02c5e484a",
@@ -20788,7 +20823,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다카마쓰 고분은 일본 나라현 다카이치군 아스카촌에 위치한 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [190],
+    [192],
   ],
   [
     "kr-2c2c3b487137",
@@ -20796,7 +20831,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우즈베키스탄 공화국, 약칭 우즈베키스탄은 중앙아시아에 있는 내륙국이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [191],
+    [193],
   ],
   [
     "kr-6cfcb8da7682",
@@ -20804,7 +20839,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "익산에 남아 있는 백제의 절터이다. 석탑 등 유적을 통해 백제의 불교 건축과 높은 석조 기술을 확인할 수 있다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 178, 192, 193],
+    [0, 178, 194, 195],
   ],
   [
     "kr-1801c5fcbcd6",
@@ -20819,7 +20854,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [194],
+    [196],
   ],
   [
     "kr-c8c6d9443f8d",
@@ -20827,7 +20862,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황남대총은 대한민국 경상북도 경주시 황남동에 있는 신라 내물왕, 실성왕, 눌지왕, 자비왕의 왕릉으로 추정되는 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [195],
+    [197],
   ],
   [
     "kr-9580a166392e",
@@ -20835,7 +20870,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유라시아는 아시아와 유럽을 하나의 대륙으로 보는 이름이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [196],
+    [198],
   ],
   [
     "kr-980baeb76ee3",
@@ -20843,7 +20878,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시리아 아랍 공화국, 약칭 시리아는 서아시아에 있는 공화국으로 수도는 다마스쿠스이며 북쪽으로는 튀르키예, 동쪽으로는 이라크, 남쪽으로는 요르단 및 이스라엘, 서쪽으로는 레바논과 지중해에 접한다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [197],
+    [199],
   ],
   [
     "kr-d7a6e266ca8d",
@@ -20859,7 +20894,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [198],
+    [200],
   ],
   [
     "kr-3eb1e4a9289a",
@@ -20867,7 +20902,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "천마총은 신라 21대 소지왕 혹은 22대 지증왕 중 잠정적으로 지증왕의 능으로 추정되는 대한민국 경주의 고분으로, 신라판 타지마할이라 불린다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [199],
+    [201],
   ],
   [
     "kr-987562e4894b",
@@ -20875,7 +20910,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개모성은 중국 랴오닝성 심양시에 위치한 고구려 때 축조된 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [200],
+    [202],
   ],
   [
     "kr-43e23c90d08a",
@@ -20883,7 +20918,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안변군은 조선민주주의인민공화국의 강원도에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [201],
+    [203],
   ],
   [
     "kr-66c46ef45879",
@@ -20891,7 +20926,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비사성, 또는 사비성은 중화인민공화국 다롄시 진저우구에 있는 고구려 시대의 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [202],
+    [204],
   ],
   [
     "kr-dd90d04ad975",
@@ -20899,7 +20934,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라이저우시는 중화인민공화국 산둥성 옌타이 시의 현급 행정구역이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "조선 사회의 변화"],
-    [203],
+    [205],
   ],
   [
     "kr-36945a41f0bd",
@@ -20907,7 +20942,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "요동성, 또는 오열홀은 고구려 광개토대왕이 손수 5만 대군을 이끌고 요동군을 정복하며 설치한 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [204],
+    [206],
   ],
   [
     "kr-1496f1fad6f2",
@@ -20915,7 +20950,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안시성은 삼국시대에 고구려와 당나라의 경계에 있던 산성으로 안시성 전투가 일어난 곳이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [205],
+    [207],
   ],
   [
     "kr-9803d282cf9b",
@@ -20923,7 +20958,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만리장성의 동쪽에 있는 관문으로, 중국의 중요한 군사 요충지였다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "조선 사회의 변화"],
-    [206],
+    [208],
   ],
   [
     "kr-dceb99e842fa",
@@ -20936,7 +20971,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "통일 신라와 발해",
     ],
-    [0, 207],
+    [0, 209],
   ],
   [
     "kr-74abd5157e50",
@@ -20944,7 +20979,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백암성은 현재의 중화인민공화국 랴오닝성에 있었던 고구려의 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [208],
+    [210],
   ],
   [
     "kr-854e13c825f1",
@@ -20952,7 +20987,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "압록강 하구에 있는 삼국시대 고구려의 성곽.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [0, 209],
+    [0, 211],
   ],
   [
     "kr-34558ba7b4ba",
@@ -20960,7 +20995,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "건안성은 중국 요령성 영구시 개주시에 위치한 고구려의 산성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [210],
+    [212],
   ],
   [
     "kr-5779333ad3f8",
@@ -20968,7 +21003,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오골성은 고구려의 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [211],
+    [213],
   ],
   [
     "kr-251858be8b4e",
@@ -20976,7 +21011,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "천리장성은 고구려가 당나라의 침입을 막기 위해 서쪽 변경에 쌓은 장성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [212],
+    [214],
   ],
   [
     "kr-7fe5994d8ec8",
@@ -20990,7 +21025,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "통일 신라와 발해",
     ],
-    [213],
+    [215],
   ],
   [
     "kr-3c2abfe15f5d",
@@ -20998,7 +21033,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돌궐 제국 또는 괵튀르크 카간국은 아사나 씨족의 수장 부민 카간과 그의 동생 이스테미 휘하의 괵튀르크인들이 중앙아시아 일대에 건설한 튀르크족 최초의 카간국이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [214],
+    [216],
   ],
   [
     "kr-44440eae8130",
@@ -21006,7 +21041,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수(隋, 581년 3월 4일 ~ 619년 5월 23일)는 남북조 시대의 혼란을 끝내고, 서진이 멸망한 후 분열되어 있었던 중국을 300년만에 다시 통일한 왕조이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [215],
+    [217],
   ],
   [
     "kr-f2e0675144d2",
@@ -21014,7 +21049,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당(唐, 618년 ~ 907년)은 수나라와 오대 십국 시대 사이 존재한 중국의 통일왕조다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [216],
+    [218],
   ],
   [
     "kr-09d883ec0c98",
@@ -21022,7 +21057,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토번은 티베트고원의 중앙에 성립된 고대왕국으로, 617년 송첸캄포에서 842년 랑다르마에 이르기까지 2백여년간 지속된 티베트 지역 역사상 국력이 가장 강했던 왕조였다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [217],
+    [219],
   ],
   [
     "kr-383ad6bc3b44",
@@ -21030,7 +21065,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영흥만은 조선민주주의인민공화국 강원도 및 함경남도 동해안에 있는 만이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [218],
+    [220],
   ],
   [
     "kr-413f9e5bd70a",
@@ -21038,7 +21073,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "기벌포는 백제 시대에 현재의 충청남도 서천군 장항읍 일대를 일컫던 명칭이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [219],
+    [221],
   ],
   [
     "kr-5e04f8bdc885",
@@ -21046,7 +21081,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "675년 신라는 나당 전쟁 중 매소성에서 당군을 물리쳤다. 백제·고구려를 멸망시킨 뒤 한반도를 직접 지배하려던 당에 맞서 신라가 전쟁의 주도권을 확보한 전투이다. 성의 정확한 위치에는 논의가 남아 있다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [0, 220],
+    [0, 222],
   ],
   [
     "kr-e30a27ebd73f",
@@ -21054,7 +21089,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "회양군은 조선민주주의인민공화국의 강원도에 속해 있는 군이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [221],
+    [223],
   ],
   [
     "kr-335ba8c122c8",
@@ -21062,7 +21097,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한산주 또는 한주는 신라의 광역 행정구역인 9주 5소경의 한 주이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [222],
+    [224],
   ],
   [
     "kr-d855a790a88e",
@@ -21077,7 +21112,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "선사 문화와 고대 국가",
     ],
-    [223],
+    [225],
   ],
   [
     "kr-12b8080e70cc",
@@ -21085,7 +21120,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덕적도는 인천광역시 옹진군 덕적면에 속하는 섬이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [224],
+    [226],
   ],
   [
     "kr-a787e469e6b0",
@@ -21093,7 +21128,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충주 남한강 가에 세운 신라의 일곱 층 석탑으로, 남북국 시대의 큰 석탑 양식을 보여 준다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [225],
+    [227],
   ],
   [
     "kr-80d580cb06cb",
@@ -21101,7 +21136,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "재령군은 조선민주주의인민공화국 황해남도 동쪽 끝에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [226],
+    [228],
   ],
   [
     "kr-b88f5b46ecdf",
@@ -21109,7 +21144,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남소성은 고구려의 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [227],
+    [229],
   ],
   [
     "kr-e1786a782c45",
@@ -21117,7 +21152,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "웅진도독부는 660년(의자왕 20년) 백제가 멸망한 뒤 당나라가 그 고지에 설치한 행정 관청으로, 5도독부의 하나이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [228],
+    [230],
   ],
   [
     "kr-2b733b672c4e",
@@ -21125,7 +21160,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황산벌은 오늘날의 충청남도 논산시 연산면 연산시장 3거리에서 반경 500m 인근의 연산리 및 관동리 일대의 벌판이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [229],
+    [231],
   ],
   [
     "kr-74eb96d6661b",
@@ -21133,7 +21168,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보은 삼년산성은 충청북도 보은군 보은읍에 있는 돌로 쌓은 산성으로 신라 자비왕 13년(470)에 쌓았으며, 소지왕 8년(486)에 고쳐 세웠다.",
     ["충북 보은군 보은읍 성주1길 104 (어암리)"],
     ["한국사", "선사 문화와 고대 국가"],
-    [230],
+    [232],
   ],
   [
     "kr-b33881d90c6e",
@@ -21141,7 +21176,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "주류성은 백제의 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [231],
+    [233],
   ],
   [
     "kr-6f6fd3d4fa76",
@@ -21149,7 +21184,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예산 임존성은 대한민국 충청남도 예산군 대흥면 봉수산 꼭대기에 있는 둘레 약 3km의 산성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [232],
+    [234],
   ],
   [
     "kr-55e0eca01a10",
@@ -21157,7 +21192,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백마강, 또는 백강은 충청남도 부여군을 지나는 금강의 하류 구간을 부르는 이름인데, 경우에 따라서는 금산군 이남의 금강 중하류를 통틀어 가리키는 말로도 쓰인다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [233],
+    [235],
   ],
   [
     "kr-76cc007aa942",
@@ -21165,7 +21200,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충남 부여에 있는 사당으로, 백제의 충신 성충·흥수·계백을 기리는 곳이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 234],
+    [0, 236],
   ],
   [
     "kr-84e61b3eab9a",
@@ -21173,7 +21208,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태종무열왕릉비는 김춘추가 죽은 661년에 세운 비석이다. 비의 몸돌은 없어졌지만 거북 모양 받침과 용을 새긴 머릿돌이 남아 신라 왕실의 조각·서예 문화를 보여 준다.",
     ["경북 경주시 서악동 844-1번지 / (도로명)경주시 대경로 4859"],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [0, 235],
+    [0, 237],
   ],
   [
     "kr-45d624c61b26",
@@ -21181,7 +21216,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동모산은 698년에 발해의 초기 도읍지로 알려져 있으며 대조영이 이곳에서 발해를 건국하였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [236],
+    [238],
   ],
   [
     "kr-484a8c58cf97",
@@ -21189,7 +21224,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "698년 대조영의 세력이 당나라 군대와 싸운 곳으로, 발해 건국으로 이어지는 전투의 무대였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [237],
+    [239],
   ],
   [
     "kr-6c478f7d3a3c",
@@ -21203,7 +21238,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "선사 문화와 고대 국가",
     ],
-    [238],
+    [240],
   ],
   [
     "kr-16c191fbfac9",
@@ -21211,7 +21246,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성산자산성은 중국 지린성에 위치한 발해의 성이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [239],
+    [241],
   ],
   [
     "kr-103c34cec46f",
@@ -21219,7 +21254,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "헤이룽장성 또는 흑룡강성은 중국 둥베이 지방에 있는 성이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [240],
+    [242],
   ],
   [
     "kr-3554358133df",
@@ -21235,7 +21270,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "근현대 사회와 민주주의",
     ],
-    [0, 241],
+    [0, 243],
   ],
   [
     "kr-5946842fc116",
@@ -21243,7 +21278,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "궁예는 905년 송악에서 철원으로 수도를 옮겼다. 당시 국호는 마진이었으며, 철원은 궁예 정권의 새 정치 중심지가 되었다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 242],
+    [0, 244],
   ],
   [
     "kr-25f70fc39b69",
@@ -21257,7 +21292,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "근현대 사회와 민주주의",
     ],
-    [0, 243],
+    [0, 245],
   ],
   [
     "kr-ce90dc274922",
@@ -21265,7 +21300,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "견훤은 900년 완산주, 오늘날의 전주를 수도로 삼고 후백제를 본격적으로 키웠다. 전주는 백제 계승을 내세운 후백제의 정치·군사 중심지가 되었다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 244],
+    [0, 246],
   ],
   [
     "kr-fb3cc3c495bb",
@@ -21273,7 +21308,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "웅천주 또는 웅주는 신라의 행정구역인 9주 5소경의 한 주이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [245],
+    [247],
   ],
   [
     "kr-89457b94f0a7",
@@ -21281,7 +21316,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "웅천주 또는 웅주는 신라의 행정구역인 9주 5소경의 한 주이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [245],
+    [247],
   ],
   [
     "kr-3c130d976834",
@@ -21295,7 +21330,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [0, 246],
+    [0, 248],
   ],
   [
     "kr-fccf1c2757b2",
@@ -21303,7 +21338,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도다이지는 일본 나라현 나라시에 위치한 불교 사찰이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [247],
+    [249],
   ],
   [
     "kr-6f68810a2fb8",
@@ -21311,7 +21346,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "합천 해인사 길상탑은 경상남도 합천군 가야면, 해인사에 있는 통일신라의 탑이다.",
     ["경남 합천군 가야면 해인사길 85, 해인사 (치인리)"],
     ["한국사", "통일 신라와 발해"],
-    [248],
+    [250],
   ],
   [
     "kr-ca693e709d87",
@@ -21319,7 +21354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "감은사지는 대한민국 경상북도 경주시 문무대왕면 용당리 55-1번지 일원에 있는 신라 시대의 절인 감은사의 터 및 초석과 쌍탑등이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [249],
+    [251],
   ],
   [
     "kr-6bae6070884f",
@@ -21327,7 +21362,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라 왕궁의 별궁 터로 많은 생활 유물이 출토되었다. 나무 주사위 등 출토품을 통해 왕실과 귀족의 생활·놀이 문화를 살펴볼 수 있다.",
     ["경북 경주시 인왕동 517 번지 일대"],
     ["한국사", "통일 신라와 발해"],
-    [0, 250, 251, 252, 253],
+    [0, 252, 253, 254, 255],
   ],
   [
     "kr-988c7d07d731",
@@ -21335,7 +21370,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "합천군은 대한민국 경상남도 서북부에 있는 군이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [254],
+    [256],
   ],
   [
     "kr-b2a9074d58df",
@@ -21343,7 +21378,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "완도는 전라남도 완도군의 본섬으로, 대한민국에서 8번째로 넓은 섬이다.",
     [],
     ["한국사", "통일 신라와 발해", "근현대 사회와 민주주의"],
-    [255],
+    [257],
   ],
   [
     "kr-da0de6877681",
@@ -21356,7 +21391,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "근현대 사회와 민주주의",
     ],
-    [256],
+    [258],
   ],
   [
     "kr-f6857648132f",
@@ -21369,7 +21404,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "선사 문화와 고대 국가",
     ],
-    [257],
+    [259],
   ],
   [
     "kr-8b12d94c5688",
@@ -21377,7 +21412,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태봉은 후삼국을 이루던 나라로, 901년에 궁예가 송악을 도읍삼아 건국하였다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [257],
+    [259],
   ],
   [
     "kr-27b79a555c30",
@@ -21390,7 +21425,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "선사 문화와 고대 국가",
     ],
-    [258],
+    [260],
   ],
   [
     "kr-178afbb612a1",
@@ -21405,7 +21440,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "선사 문화와 고대 국가",
     ],
-    [259],
+    [261],
   ],
   [
     "kr-b16638570482",
@@ -21413,7 +21448,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영월군은 대한민국 강원특별자치도 남부에 있는 군이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [260],
+    [262],
   ],
   [
     "kr-12ec82766840",
@@ -21427,7 +21462,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "고려의 성립과 변화",
     ],
-    [0, 261],
+    [0, 263],
   ],
   [
     "kr-a51539f548f4",
@@ -21435,7 +21470,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "문경시는 대한민국 경상북도 북서부에 있는 시이다.",
     [],
     ["한국사", "통일 신라와 발해", "근현대 사회와 민주주의"],
-    [262],
+    [264],
   ],
   [
     "kr-52d60761ebb3",
@@ -21443,7 +21478,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양산시는 대한민국 경상남도 동부에 있는 시이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [263],
+    [265],
   ],
   [
     "kr-6c8ff18ae6fa",
@@ -21451,7 +21486,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "곡성군은 대한민국 전남광주통합특별시 동북부에 있는 군이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [264],
+    [266],
   ],
   [
     "kr-81c55ada08a6",
@@ -21459,7 +21494,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "해주에서 이엄이 수미산문을 연 사찰로, 구산선문의 한 중심지였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-f8ea77dd0a99",
@@ -21467,7 +21502,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강릉에서 범일이 세운 선종 사찰로, 구산선문 가운데 사굴산문의 중심이 된 곳이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-95d6af1fe141",
@@ -21475,7 +21510,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영월에서 절중이 사자산문을 발전시킨 사찰로, 구산선문의 한 중심지였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-87d1e7fdaeea",
@@ -21483,7 +21518,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "봉암사는 대한민국의 경상북도 문경시에 위치한 사찰이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [266],
+    [268],
   ],
   [
     "kr-d5a694869dbb",
@@ -21491,7 +21526,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "의상이 화엄 사상을 전파한 사찰로 제시된다. 통일 신라의 불교 사상과 문화가 발전한 모습을 설명하는 장소이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [0, 267, 268],
+    [0, 269, 270],
   ],
   [
     "kr-baeb5f29792a",
@@ -21499,7 +21534,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보령에서 무염이 선종을 발전시킨 사찰로, 구산선문 가운데 성주산문의 중심이 된 곳이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-b5e272c4b87e",
@@ -21507,7 +21542,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "금산사는 대한민국 전북특별자치도 김제시에 있는 사찰로, 또한 조계종 제17교구 본사로, 전북특별자치도 모악산 도립공원 입구에 위치해 있다.",
     [],
     ["한국사", "통일 신라와 발해", "조선 사회의 변화"],
-    [269],
+    [271],
   ],
   [
     "kr-58a4a9f5c9e0",
@@ -21515,7 +21550,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창원에서 현욱과 심희가 선종을 발전시킨 사찰로, 봉림산문의 중심이었다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-f98fb9acb5a8",
@@ -21523,7 +21558,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양산 통도사는 대한민국 경상남도 양산시에 있는 사찰이며, 영축산 남쪽 기슭에 있다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [270],
+    [272],
   ],
   [
     "kr-b1b5798bf461",
@@ -21531,7 +21566,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장흥 가지산에 있는 사찰로, 신라 말 선종이 자리 잡는 데 중요한 역할을 한 가지산문의 중심지이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [271],
+    [273],
   ],
   [
     "kr-ce21f505cc7a",
@@ -21539,7 +21574,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태안사는 대한민국 곡성군에 위치한 절이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [272],
+    [274],
   ],
   [
     "kr-1e23f7f171bf",
@@ -21547,7 +21582,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "실상사는 대한민국 전북특별자치도 남원시에 있는 대한불교조계종 소속의 사찰이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [273],
+    [275],
   ],
   [
     "kr-60c7f77793c0",
@@ -21555,7 +21590,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "해주 광조사를 중심으로 이엄이 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-57aa8f1b1449",
@@ -21563,7 +21598,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도윤의 가르침을 이어 절중이 영월 흥녕사에서 발전시킨 선종의 한 갈래이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-bd96ecc6ed05",
@@ -21571,7 +21606,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "범일이 강릉 굴산사를 중심으로 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-d3432de7ef3d",
@@ -21579,7 +21614,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도헌이 문경 봉암사를 중심으로 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-555ca4944a83",
@@ -21587,7 +21622,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무염이 보령 성주사를 중심으로 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-b226330c5378",
@@ -21595,7 +21630,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장흥 보림사를 중심으로 체징이 발전시킨 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-030b7ac2bf8a",
@@ -21603,7 +21638,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "혜철이 곡성 태안사를 중심으로 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-7bf53217bce4",
@@ -21611,7 +21646,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "현욱과 심희가 창원 봉림사를 중심으로 발전시킨 선종의 한 갈래이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-80dc3c0cbc31",
@@ -21619,7 +21654,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "홍척이 남원 실상사를 중심으로 연 선종의 한 갈래로, 구산선문에 속한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [265],
+    [267],
   ],
   [
     "kr-cfc5c3d71cf5",
@@ -21627,7 +21662,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선암사는 전라남도 순천시의 조계산에 위치한 사찰이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [274],
+    [276],
   ],
   [
     "kr-378c87b2c979",
@@ -21635,7 +21670,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "화순 쌍봉사는 대한민국 전라남도 화순군 이양면 증리 사동마을에 있는 절이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [275],
+    [277],
   ],
   [
     "kr-fecf10979f99",
@@ -21643,7 +21678,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우수리강은 러시아 극동의 남쪽에 있다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [276],
+    [278],
   ],
   [
     "kr-40c21f23f7f8",
@@ -21657,7 +21692,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "조선 사회의 변화",
     ],
-    [0, 277],
+    [0, 279],
   ],
   [
     "kr-67297dfc092b",
@@ -21665,7 +21700,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "랴오허는 중국 동북부 남부의 주요 강이자 중국의 7대 주요 수계 중 하나이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [278],
+    [280],
   ],
   [
     "kr-bf616421c82e",
@@ -21673,7 +21708,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쑹화강은 백두산 천지에서 발원한 강으로, 아무르강의 가장 큰 지류이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [279],
+    [281],
   ],
   [
     "kr-9f415fa7f5d8",
@@ -21681,7 +21716,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "솔빈부는 발해시기 지금의 러시아 연해주 우수리스크에 설치되어 금나라때까지 존재한 옛 행정구역이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [280],
+    [282],
   ],
   [
     "kr-9194e3e5d89a",
@@ -21689,7 +21724,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해시대의 지방행정구역.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 281],
+    [0, 283],
   ],
   [
     "kr-137d88ba4195",
@@ -21697,7 +21732,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남북국시대 발해의 지방행정구역.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 282],
+    [0, 284],
   ],
   [
     "kr-d65efcd5860e",
@@ -21705,7 +21740,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동평부는 발해 15부중 하나였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [283],
+    [285],
   ],
   [
     "kr-28ceb416f0a2",
@@ -21713,7 +21748,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해시대의 지방행정구역.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 284],
+    [0, 286],
   ],
   [
     "kr-7414cd295707",
@@ -21721,7 +21756,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해시대의 지방행정구역.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 285],
+    [0, 287],
   ],
   [
     "kr-46afd85aa3ef",
@@ -21729,7 +21764,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부여부는 발해 15부중 하나로 거란도에 속했다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [286],
+    [288],
   ],
   [
     "kr-561ae194730d",
@@ -21737,7 +21772,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "막힐부는 발해 시기 설치된 부이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [287],
+    [289],
   ],
   [
     "kr-20ff8a86fa95",
@@ -21745,7 +21780,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장령부는 발해 시기 설치된 부이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [288],
+    [290],
   ],
   [
     "kr-2df1c5d2cdba",
@@ -21753,7 +21788,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서경 압록부는 발해의 중요 도시인 5경 가운데 하나였다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [289],
+    [291],
   ],
   [
     "kr-396027ffedc2",
@@ -21761,7 +21796,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남경 남해부는 발해의 주요 도시인 5경 가운데 하나다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [290],
+    [292],
   ],
   [
     "kr-2d1da0416e0d",
@@ -21769,7 +21804,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해의 다섯 주요 도시인 5경 가운데 동경에 해당하며, 한때 수도가 되었던 곳이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [291],
+    [293],
   ],
   [
     "kr-15359f8ebc86",
@@ -21777,7 +21812,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해의 5경 가운데 중경에 해당하며, 상경으로 옮기기 전 수도 역할을 했던 곳이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [292],
+    [294],
   ],
   [
     "kr-28d4affcbefb",
@@ -21785,7 +21820,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해시대의 지방행정구역.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 293],
+    [0, 295],
   ],
   [
     "kr-c27023f3c34a",
@@ -21793,7 +21828,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남경 남해부는 발해의 5경 가운데 남쪽에 둔 지방 통치·교통 거점이다. 북청 청해토성으로 비정하는 견해가 있으며, 동해안을 따라 신라 및 일본과 오가는 길과 연결되었다.",
     ["남경", "남경(발해)", "청해토성"],
     ["한국사", "통일 신라와 발해"],
-    [0, 294, 295],
+    [0, 296, 297],
   ],
   [
     "kr-46ab0f59d5f6",
@@ -21801,7 +21836,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동경 용원부는 발해가 한때 수도로 삼았으며 동해를 건너 일본과 교류하던 교통 거점이다. 현재 훈춘의 팔련성 유적으로 비정되며, 상경으로 다시 천도한 뒤에도 5경의 하나로 남았다.",
     ["동경", "동경(발해)", "용원부", "용원부 동경", "팔련성"],
     ["한국사", "통일 신라와 발해"],
-    [0, 296, 295],
+    [0, 298, 297],
   ],
   [
     "kr-8ced6b94e17d",
@@ -21809,7 +21844,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중경 현덕부는 발해 문왕이 수도로 삼았던 도시로, 현재 중국 허룽의 서고성 유적으로 비정된다. 발해가 중앙과 지방의 통치 체제를 정비하던 시기의 정치 중심지이다.",
     ["중경", "중경(발해)", "서고성"],
     ["한국사", "통일 신라와 발해"],
-    [0, 297, 295],
+    [0, 299, 297],
   ],
   [
     "kr-0a314eeac193",
@@ -21817,7 +21852,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "압록부라고도 부르는 발해의 주요 도시로, 당나라와 오가는 교역로에서 중요한 곳이었다.",
     ["서경", "서경(발해)", "린장"],
     ["한국사", "통일 신라와 발해"],
-    [298],
+    [300],
   ],
   [
     "kr-7b57cbcdd84d",
@@ -21825,7 +21860,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상경 용천부는 발해의 주요 도시였던 5경 중 하나이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [299],
+    [301],
   ],
   [
     "kr-a92eedf2b73d",
@@ -21833,7 +21868,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해 왕실의 무덤으로 벽돌을 사용한 구조 등이 소개된다. 무덤의 형태와 벽화는 발해가 주변의 문화를 받아들이고 발전시킨 모습을 보여 준다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 300, 301, 302, 303],
+    [0, 302, 303, 304, 305],
   ],
   [
     "kr-62169619f233",
@@ -21841,7 +21876,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산둥성 또는 산동성은 중화인민공화국 동부의 성이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [304],
+    [306],
   ],
   [
     "kr-8857f2a66644",
@@ -21849,7 +21884,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불국사의 석가탑은 통일 신라의 균형 잡힌 석탑 양식을 보여 준다. 탑 안에서 발견된 무구정광대다라니경은 불교 경전의 간행과 인쇄문화를 살펴볼 수 있는 자료이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 305],
+    [0, 307],
   ],
   [
     "kr-507555e467bd",
@@ -21857,7 +21892,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불국사 대웅전은 석가모니불을 모시는 중심 법당이다. 임진왜란 때 불탄 뒤 여러 차례 다시 지었으며, 현재 건물은 통일신라의 기단 위에 1765년 중창한 조선 후기 건축이다.",
     ["경상북도 경주시 불국로 385(진현동, 불국사)"],
     ["한국사", "조선 사회의 변화", "통일 신라와 발해"],
-    [0, 306],
+    [0, 308],
   ],
   [
     "kr-c80fa65a1d43",
@@ -21865,7 +21900,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불국사 다보탑은 대웅전 앞에서 석가탑과 마주 선 석탑이다. 복잡하고 장식적인 모습의 다보탑과 간결한 석가탑은 서로 다른 부처를 상징하며 통일신라 석조 기술을 보여 준다.",
     ["경북 경주시 불국로 385, 불국사 (진현동)"],
     ["한국사", "통일 신라와 발해"],
-    [0, 307],
+    [0, 309],
   ],
   [
     "kr-699f2c61ea69",
@@ -21873,7 +21908,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불국사의 석가탑은 통일 신라의 균형 잡힌 석탑 양식을 보여 준다. 탑 안에서 발견된 무구정광대다라니경은 불교 경전의 간행과 인쇄문화를 살펴볼 수 있는 자료이다.",
     ["경북 경주시 불국로 385, 불국사 (진현동)"],
     ["한국사", "통일 신라와 발해"],
-    [0, 305],
+    [0, 307],
   ],
   [
     "kr-cf410b097a05",
@@ -21881,7 +21916,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "석굴암은 통일 신라 때 토함산에 조성한 인공 석굴 사원이다. 본존불과 여러 조각을 정교하게 배치하여 불교의 이상 세계를 표현했으며, 불국사와 함께 신라의 높은 건축·조각 수준을 보여 준다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 308],
+    [0, 310],
   ],
   [
     "kr-c511972fe60f",
@@ -21889,7 +21924,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠시나가르는 인도 우타르프라데시 주에 위치한 마을로 인구는 17,982명(2001년 기준)이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [309],
+    [311],
   ],
   [
     "kr-0d3883b86e50",
@@ -21903,7 +21938,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "조선 사회의 변화",
     ],
-    [310],
+    [312],
   ],
   [
     "kr-2d56af2054e2",
@@ -21911,7 +21946,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아시아 또는 중앙유라시아는 아시아의 핵심 지역 중 하나로, 서쪽으로 카스피해부터 동쪽으로는 중화인민공화국까지, 북쪽으로는 러시아부터 남쪽으로는 아프가니스탄에 이르는 지역이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [311],
+    [313],
   ],
   [
     "kr-1e48802bad65",
@@ -21926,7 +21961,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "조선 사회의 변화",
     ],
-    [312],
+    [314],
   ],
   [
     "kr-7935abfaa6ee",
@@ -21939,7 +21974,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "고려의 성립과 변화",
     ],
-    [313],
+    [315],
   ],
   [
     "kr-997ff32e91fa",
@@ -21947,7 +21982,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쉬저우는 중국 장쑤성 서북부에 있는 도시이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [314],
+    [316],
   ],
   [
     "kr-48e90e3f82e0",
@@ -21955,7 +21990,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 중국 장쑤성 화이안 일대의 옛 지명으로, 당나라 때 신라인의 거주지인 신라방이 있었던 교류 거점이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 315],
+    [0, 317],
   ],
   [
     "kr-adc7ecf17df7",
@@ -21963,7 +21998,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "닝보는 중화인민공화국의 저장성 해안에 있는 항구 도시인데, 이 도시는 대외적으로는 19세기부터 개항한 도시이고, 상공업이 발달해 있다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [316],
+    [318],
   ],
   [
     "kr-872972e9a3dc",
@@ -21976,7 +22011,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "근현대 사회와 민주주의",
     ],
-    [317],
+    [319],
   ],
   [
     "kr-7816f66482b0",
@@ -21984,7 +22019,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쑤저우시는 중화인민공화국 장쑤성 남동쪽의 타이후 동쪽에 있는 운하 도시이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [318],
+    [320],
   ],
   [
     "kr-2adc976ccf9d",
@@ -21992,7 +22027,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양저우시는 중화인민공화국 장쑤성에 위치한 지급시이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [319],
+    [321],
   ],
   [
     "kr-e7f613c01b93",
@@ -22000,7 +22035,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남북국시대, 당나라가 신라인을 위해서 산둥반도의 등주도독부(登州都督府)에 설치한 숙박소.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 320],
+    [0, 322],
   ],
   [
     "kr-6ee58705b296",
@@ -22008,7 +22043,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "원성왕릉은 대한민국 경상북도 경주시 외동읍 괘릉리에 있는 능으로, 《삼국유사》의 기록에 따라 신라 38대 원성왕의 능으로 비정되고 있다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [321],
+    [323],
   ],
   [
     "kr-93817f8ba48f",
@@ -22016,7 +22051,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "닝안시은 헤이룽장성 무단장 시의 현급시의 하나이다.",
     [],
     ["한국사", "통일 신라와 발해", "근현대 사회와 민주주의"],
-    [322],
+    [324],
   ],
   [
     "kr-3a34dfba544a",
@@ -22024,7 +22059,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "훈춘시는 중화인민공화국 지린성 옌볜 조선족 자치주의 동부에 위치한 현급시로, 조선민주주의인민공화국과 러시아에 인접해 있어 국경 개방 도시로 지정되어 있다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [323],
+    [325],
   ],
   [
     "kr-3fa7938084da",
@@ -22032,7 +22067,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정평군은 함경남도 남부에 위치한 군이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [324],
+    [326],
   ],
   [
     "kr-f264380b68d2",
@@ -22040,7 +22075,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1929년 원산 노동자들은 일본인 감독의 폭행과 노동 탄압에 맞서 총파업을 벌였다. 여러 직종의 노동자와 국내외 노동단체가 연대했지만, 식민 당국과 자본가의 탄압으로 파업은 끝났다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "통일 신라와 발해"],
-    [0, 325],
+    [0, 327],
   ],
   [
     "kr-4af9ed564652",
@@ -22048,7 +22083,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영주도는 조공도와 함께 당나라와 발해 간 교역로로 사용된 길로, 상경에서 장령부를 거쳐 당의 영주도독부에 이르는 길이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [326],
+    [328],
   ],
   [
     "kr-c28f0925ba2b",
@@ -22056,7 +22091,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "거란도는 거란과 발해 간 교역로로 사용된 길로 출발거점은 부여부이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [327],
+    [329],
   ],
   [
     "kr-ea97d26f47a5",
@@ -22064,7 +22099,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조공도는 영주도와 함께 당나라와 발해 간 교역로로 사용된 길로, 해로로 서경압록부를 지나 압록강을 따라 황해를 통해 등주에 도착하는 길이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [328],
+    [330],
   ],
   [
     "kr-cc07bbc5a527",
@@ -22072,7 +22107,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라도는 남북국 시대때 신라와 발해가 서로 오가던 대외교통로이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [329],
+    [331],
   ],
   [
     "kr-4ccd5d69b3d8",
@@ -22080,7 +22115,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영광탑은 중국 지린성에 있는 8~10세기에 축조된 것으로 추정되는 발해의 전탑이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [330],
+    [332],
   ],
   [
     "kr-ed25efdbbb01",
@@ -22088,7 +22123,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "러시아 연방, 약칭 러시아는 동유럽과 북아시아에 걸쳐 있는 연방제 국가이다.",
     [],
     ["한국사", "통일 신라와 발해", "근현대 사회와 민주주의"],
-    [331],
+    [333],
   ],
   [
     "kr-6c3a9774fc76",
@@ -22096,7 +22131,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프리모르스키 변경주는 비공식적으로 프리모리예로 알려져 있고 러시아의 연방주체 이다, 러시아 극동의 극동 연방관구의 일부이다.",
     [],
     ["한국사", "통일 신라와 발해", "근현대 사회와 민주주의"],
-    [332],
+    [334],
   ],
   [
     "kr-7cf5b0e9787b",
@@ -22110,7 +22145,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "조선의 성립과 발전",
     ],
-    [0, 333],
+    [0, 335],
   ],
   [
     "kr-fa9d453d24ed",
@@ -22123,7 +22158,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "선사 문화와 고대 국가",
     ],
-    [334],
+    [336],
   ],
   [
     "kr-4f6291ef395c",
@@ -22136,7 +22171,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "고려의 성립과 변화",
     ],
-    [335],
+    [337],
   ],
   [
     "kr-c39afafdaf45",
@@ -22144,7 +22179,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "936년 왕건의 고려군은 지금의 구미 일대 일리천에서 신검의 후백제군을 격파했다. 후백제가 항복하면서 신라의 항복에 이어 후삼국 통일이 마무리되었다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 336],
+    [0, 338],
   ],
   [
     "kr-2cdc56628f01",
@@ -22158,7 +22193,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "고려의 성립과 변화",
     ],
-    [337],
+    [339],
   ],
   [
     "kr-e8d498555cf9",
@@ -22166,7 +22201,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "927년 신라를 구원하러 온 왕건은 대구 팔공산 일대에서 견훤의 후백제군과 싸워 크게 패했다. 신숭겸과 김락 등이 전사했으며, 이후 고려와 후백제의 통일 전쟁이 더욱 치열해졌다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 338],
+    [0, 340],
   ],
   [
     "kr-15f3e3286b78",
@@ -22174,7 +22209,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "궁예는 905년 송악에서 철원으로 수도를 옮겼다. 당시 국호는 마진이었으며, 철원은 궁예 정권의 새 정치 중심지가 되었다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 242],
+    [0, 244],
   ],
   [
     "kr-f9e005c2746e",
@@ -22188,7 +22223,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "조선 사회의 변화",
     ],
-    [339],
+    [341],
   ],
   [
     "kr-c75537fc787b",
@@ -22204,7 +22239,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "조선 사회의 변화",
     ],
-    [340],
+    [342],
   ],
   [
     "kr-726b26f3a049",
@@ -22212,7 +22247,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신숭겸 장군 유적은 대구광역시 동구 지묘동에 위치하고 있는 고려의 개국공신인 신숭겸을 기리는 유적이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [341],
+    [343],
   ],
   [
     "kr-d527119cb6eb",
@@ -22220,7 +22255,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김제시는 대한민국 전북특별자치도 중서부에 있는 시이다.",
     [],
     ["한국사", "통일 신라와 발해", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [342],
+    [344],
   ],
   [
     "kr-5ebe954bbb41",
@@ -22241,7 +22276,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "927년 신라를 구원하러 온 왕건은 대구 팔공산 일대에서 견훤의 후백제군과 싸워 크게 패했다. 신숭겸과 김락 등이 전사했으며, 이후 고려와 후백제의 통일 전쟁이 더욱 치열해졌다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 338],
+    [0, 340],
   ],
   [
     "kr-14394349d43f",
@@ -22249,7 +22284,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안성시는 대한민국 경기도의 최남단에 있는 시이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선 사회의 변화", "통일 신라와 발해"],
-    [343],
+    [345],
   ],
   [
     "kr-a8ab12b57095",
@@ -22257,7 +22292,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "천리장성은 고려 덕종 때인 1033년부터 평장사 유소가 여진과 거란의 침입을 막기 위하여 쌓은 장성이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [344],
+    [346],
   ],
   [
     "kr-ab0228174178",
@@ -22265,7 +22300,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려가 지방을 다스리기 위해 둔 도호부로, 풍주에 설치된 뒤 해주로 옮겨졌다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 345],
+    [0, 347],
   ],
   [
     "kr-dc4220700139",
@@ -22279,7 +22314,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [346],
+    [348],
   ],
   [
     "kr-52c80072ba18",
@@ -22287,7 +22322,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려의 지방 통치 기구로, 전주·고부·영암·수주 등 시대에 따라 설치 지역이 달라졌다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 347],
+    [0, 349],
   ],
   [
     "kr-8fbc2902ad39",
@@ -22295,7 +22330,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려가 안주에 두었던 도호부로, 지방 통치와 북쪽 방어를 맡는 거점이었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 348],
+    [0, 350],
   ],
   [
     "kr-1b6ca23c39e8",
@@ -22303,7 +22338,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경기도 남동부의 경안천 주변에 자리한 도시이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전", "조선 사회의 변화"],
-    [349],
+    [351],
   ],
   [
     "kr-cd49826a9a1a",
@@ -22311,7 +22346,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서해도는 고려의 행정구역으로, 5도 양계를 구성하였으며, 조선 태조 3년에 풍해도로 개칭하였다.. 1417년 다시 황해도로 개칭했다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [350],
+    [352],
   ],
   [
     "kr-3b3febd4b882",
@@ -22319,7 +22354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북계는 고려의 행정구역인 5도 양계에서 동계와 함께 양계를 구성하며, 1102년(숙종 7년)에는 서북면으로 개칭하였다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [351],
+    [353],
   ],
   [
     "kr-8181ea3fa9aa",
@@ -22327,7 +22362,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "교주도는 고려의 행정구역으로, 지금의 강원도 영서 지방을 관할하였다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [352],
+    [354],
   ],
   [
     "kr-a63c13ee6f60",
@@ -22335,7 +22370,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양광도 또는 양광충청주도는 고려의 행정구역인 5도 양계 중 5도에 속하는 지역으로, 1018년 고려 현종 시기 확립되었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [353],
+    [355],
   ],
   [
     "kr-d469e57518ea",
@@ -22343,7 +22378,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려시대 북계와 함께 양계(兩界)를 구성하던 지방행정구역.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 354],
+    [0, 356],
   ],
   [
     "kr-b36c7a018a57",
@@ -22358,7 +22393,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "통일 신라와 발해",
     ],
-    [355],
+    [357],
   ],
   [
     "kr-177f0fd63f7d",
@@ -22373,7 +22408,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "근현대 사회와 민주주의",
     ],
-    [356],
+    [358],
   ],
   [
     "kr-3e72ef43633f",
@@ -22381,7 +22416,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 때 황해도 신천 지역을 부르던 옛 지명이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 357],
+    [0, 359],
   ],
   [
     "kr-3f93d14e97e5",
@@ -22389,7 +22424,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신천군은 조선민주주의인민공화국 황해남도 중앙부에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [358],
+    [360],
   ],
   [
     "kr-4c4d559939e0",
@@ -22402,7 +22437,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "선사 문화와 고대 국가",
     ],
-    [359],
+    [361],
   ],
   [
     "kr-02e04473bc63",
@@ -22410,7 +22445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "의성군은 대한민국 경상북도 중앙부에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "선사 문화와 고대 국가"],
-    [360],
+    [362],
   ],
   [
     "kr-4fd0b78007ce",
@@ -22418,7 +22453,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "승주군은 1949년부터 1995년까지 존재했던 대한민국 전라남도의 군이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [361],
+    [363],
   ],
   [
     "kr-1d78e09b0623",
@@ -22432,7 +22467,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "통일 신라와 발해",
     ],
-    [0, 362, 363],
+    [0, 364, 365],
   ],
   [
     "kr-2ce8feba8a48",
@@ -22440,7 +22475,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영흥만은 조선민주주의인민공화국 강원도 및 함경남도 동해안에 있는 만이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [218],
+    [220],
   ],
   [
     "kr-0245ccb0ebe0",
@@ -22454,7 +22489,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [364],
+    [366],
   ],
   [
     "kr-b42eb1794177",
@@ -22462,7 +22497,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "왕건이 후백제를 통합한 뒤 세운 절로 논산에 있다. 고려의 후삼국 통일과 불교를 통한 국가 운영을 함께 보여 주는 유적이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 365, 13],
+    [0, 367, 13],
   ],
   [
     "kr-d959c991368e",
@@ -22470,7 +22505,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대위국은 1135년 묘청이 건국한 나라로, 약 1년간 존속한 나라이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [366],
+    [368],
   ],
   [
     "kr-278bb56d9e1b",
@@ -22485,7 +22520,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "근현대 사회와 민주주의",
     ],
-    [0, 367],
+    [0, 369],
   ],
   [
     "kr-a14b0e8e27dd",
@@ -22499,7 +22534,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "선사 문화와 고대 국가",
     ],
-    [0, 368],
+    [0, 370],
   ],
   [
     "kr-e8762a25919b",
@@ -22507,7 +22542,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대요, 약칭 요는 거란족이 중국 화북지역을 정복하고 세운 왕조이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [369],
+    [371],
   ],
   [
     "kr-d95ad83c4fe7",
@@ -22515,7 +22550,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "여진은 9세기부터 17세기까지 중국의 랴오닝성, 지린성, 헤이룽장성과 한반도의 함경도, 러시아의 연해주, 하바롭스크 지방, 아무르주에서 거주했던 퉁구스계 민족이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전", "조선 사회의 변화"],
-    [370],
+    [372],
   ],
   [
     "kr-bd065f0d1538",
@@ -22523,7 +22558,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1019년 강감찬이 이끈 고려군이 침입한 거란군을 크게 물리친 귀주 대첩의 장소다.",
     ["평안북도 구성시"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 371],
+    [0, 373],
   ],
   [
     "kr-557f8b86a43d",
@@ -22531,7 +22566,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 전기, 성종 때 설치한 강동육주(江東六州)에 속한 성보(城堡).",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 372],
+    [0, 374],
   ],
   [
     "kr-e70cb18dbe4c",
@@ -22539,7 +22574,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신계군은 조선민주주의인민공화국의 황해북도 중부에 위치한 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [373],
+    [375],
   ],
   [
     "kr-f6f733c2ebd3",
@@ -22547,7 +22582,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려가 서북쪽 방어를 위해 확보한 강동 6주의 하나로, 오늘날 평안북도 철산 지역에 해당한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 374],
+    [0, 376],
   ],
   [
     "kr-007d255ac052",
@@ -22555,7 +22590,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "995년 서희의 지휘로 성을 쌓은 고려의 북방 방어 거점이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 375],
+    [0, 377],
   ],
   [
     "kr-32465a244847",
@@ -22563,7 +22598,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 전기 973년(광종 24), 북계 지역에 설치한 진(鎭).",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 376],
+    [0, 378],
   ],
   [
     "kr-5abf8c75bf03",
@@ -22571,7 +22606,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "993년 서희의 외교 담판으로 고려가 영토권을 확보한 압록강과 청천강 사이의 여섯 지역이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [377],
+    [379],
   ],
   [
     "kr-7eb2ff16c044",
@@ -22579,7 +22614,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대금, 약칭 금은 중세 만주와 북중국을 지배한 왕조로 여진족 완안부의 아골타가 1115년 황제에 즉위하여 국호를 대금 연호를 수국으로 정하면서 건국됐다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [378],
+    [380],
   ],
   [
     "kr-49c40456dc26",
@@ -22587,7 +22622,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동북 9성은 강동 6주와 함께 고려의 북진 정책 및 영토 확장을 상징하는 지역이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [379],
+    [381],
   ],
   [
     "kr-afd1f3988783",
@@ -22595,7 +22630,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대화궁은 평안남도 대동군 부산면 남궁리에 있었던 것으로 추정되는 고려시대의 궁궐이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [380],
+    [382],
   ],
   [
     "kr-ba0c9e096f74",
@@ -22603,7 +22638,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한반도 서남부의 황해 연안에 있는 고장으로, 법성포 굴비로 널리 알려져 있다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [381],
+    [383],
   ],
   [
     "kr-84cb49699e9e",
@@ -22611,7 +22646,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "공주 지역에서 망이·망소이가 봉기한 곳이다. 차별 대우와 수탈에 대한 저항이 확대되면서 무신 집권기 사회의 동요를 보여 주었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 382, 383, 384],
+    [0, 384, 385, 386],
   ],
   [
     "kr-210ace7101d5",
@@ -22619,7 +22654,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "담양군은 대한민국 전남광주통합특별시의 중북부에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [385],
+    [387],
   ],
   [
     "kr-6ff93702835e",
@@ -22632,7 +22667,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "조선의 성립과 발전",
     ],
-    [386],
+    [388],
   ],
   [
     "kr-666847f19fdc",
@@ -22640,7 +22675,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태백산은 대한민국 강원특별자치도 영월군, 정선군, 태백시, 경상북도 봉화군 경계에 있는 높이 1,567m의 산이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [387],
+    [389],
   ],
   [
     "kr-0f463a501d1e",
@@ -22648,7 +22683,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황룡사는 대한민국 경상북도 경주시에 있었던 사찰이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [388],
+    [390],
   ],
   [
     "kr-24395e0099b6",
@@ -22656,7 +22691,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대구에 있는 사찰로, 몽골과의 전쟁 때 보관하던 대장경 판목이 불에 탔다. 교과서는 전쟁이 문화유산에도 큰 피해를 남겼음을 설명한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 382, 15, 389],
+    [0, 384, 15, 391],
   ],
   [
     "kr-673a5668c860",
@@ -22664,7 +22699,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1019년 강감찬이 이끄는 고려군은 퇴각하던 거란군을 귀주에서 크게 물리쳤다. 이 승리로 거란의 세 번째 침입이 끝났으며, 고려는 국가의 독립과 방어력을 지켜 냈다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 390],
+    [0, 392],
   ],
   [
     "kr-2a3162b69466",
@@ -22672,7 +22707,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "처인성은 대한민국 경기도 용인시 처인구 남사면 아곡리에 있는 고려시대의 성이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [391],
+    [393],
   ],
   [
     "kr-3b5e9e12f282",
@@ -22685,7 +22720,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [392],
+    [394],
   ],
   [
     "kr-8ae30bc3162c",
@@ -22693,7 +22728,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동래는 일본과 오가는 길목이자 부산 지역의 행정 중심지였다. 1592년 임진왜란 초기에 부사 송상현과 군민이 동래성에서 일본군에 맞서 싸웠다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화", "조선 사회의 변화"],
-    [0, 393],
+    [0, 395],
   ],
   [
     "kr-d517715adca0",
@@ -22709,7 +22744,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "통일 신라와 발해",
     ],
-    [394],
+    [396],
   ],
   [
     "kr-ffee12337a4e",
@@ -22722,7 +22757,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "근현대 사회와 민주주의",
     ],
-    [395],
+    [397],
   ],
   [
     "kr-1c0fc803af8f",
@@ -22735,7 +22770,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "선사 문화와 고대 국가",
     ],
-    [0, 396],
+    [0, 398],
   ],
   [
     "kr-f202d28815f2",
@@ -22743,7 +22778,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수안군은 조선민주주의인민공화국의 황해북도 북부에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [397],
+    [399],
   ],
   [
     "kr-feb96c06aa14",
@@ -22751,7 +22786,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼별초가 강화도에서 진도로 이동한 뒤 근거지로 삼은 성이다. 제주로 이동하기 전 대몽 항쟁의 거점이 되었다.",
     ["전남광주통합특별시 진도군 군내면 용장리 106번지"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 382, 398, 15],
+    [0, 384, 400, 15],
   ],
   [
     "kr-65f3cf70b9ca",
@@ -22759,7 +22794,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1270년 개경 환도와 해산 명령에 반대한 삼별초는 강화도에서 진도로 이동했다. 진도를 근거지로 항전했으나 1271년 고려·몽골 연합군의 공격으로 거점을 잃었다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선 사회의 변화"],
-    [0, 399],
+    [0, 401],
   ],
   [
     "kr-0d7749b6ad10",
@@ -22767,7 +22802,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몽골국, 약칭 몽골은 동아시아의 내륙국이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전", "조선 사회의 변화"],
-    [400],
+    [402],
   ],
   [
     "kr-1ed4b496dccb",
@@ -22775,7 +22810,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화 삼랑성은 정족산성이라고도 부르는 산성이다. 1866년 병인양요 때 조선군은 이 성을 이용해 공격해 온 프랑스군을 물리쳤다.",
     ["인천 강화군 길상면 온수리 산41번지"],
     ["한국사", "조선 사회의 변화", "고려의 성립과 변화"],
-    [0, 401],
+    [0, 403],
   ],
   [
     "kr-817519baf122",
@@ -22783,7 +22818,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "교동도는 대한민국 인천광역시 강화군 교동면에 속한 서해의 섬이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [402],
+    [404],
   ],
   [
     "kr-60325ace4b57",
@@ -22791,7 +22826,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "석모도는 강화도 외포항에서 서쪽으로 1.2 km 떨어져 있는 섬으로, 행정구역상 인천광역시 강화군 삼산면에 속한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [403],
+    [405],
   ],
   [
     "kr-d2f376381fab",
@@ -22799,7 +22834,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 서쪽 석모도에 있는 사찰로, 관세음보살과 관련된 창건 이야기가 전해진다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [404],
+    [406],
   ],
   [
     "kr-f39c5050ab60",
@@ -22807,7 +22842,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전등사는 대한민국 인천광역시 강화군 길상면 온수리의 정족산에 위치한 사찰이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [405],
+    [407],
   ],
   [
     "kr-f2f6d44a0a0d",
@@ -22815,7 +22850,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마니산은 인천광역시의 강화도에 있는 해발 472.1 m의 산이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [406],
+    [408],
   ],
   [
     "kr-1d0e549f62ac",
@@ -22823,7 +22858,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화 해협을 내려다보는 문수산성에서 조선군과 프랑스군이 싸웠다. 이 전투로 성곽과 내부 시설이 피해를 입었다.",
     [],
     ["한국사", "조선 사회의 변화", "고려의 성립과 변화"],
-    [0, 407],
+    [0, 409],
   ],
   [
     "kr-84911dd1ba73",
@@ -22831,7 +22866,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 마니산 정상에 있는 제단으로, 단군이 하늘에 제사를 지냈다는 전설이 전해진다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [408],
+    [410],
   ],
   [
     "kr-7f9bb4295f40",
@@ -22839,7 +22874,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "공민왕릉은 개풍구역 해선리에 있는 봉명산의 무선봉 중턱에 자리한 2기의 무덤이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [409],
+    [411],
   ],
   [
     "kr-397947a75133",
@@ -22847,7 +22882,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제주에서 삼별초가 고려·몽골 연합군에 맞서 싸운 유적이다. 강화도와 진도에서 제주로 이어진 삼별초의 이동을 보여 준다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 382, 398, 15],
+    [0, 384, 400, 15],
   ],
   [
     "kr-b33dfd1da50e",
@@ -22855,7 +22890,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화산성은 인천광역시 강화군 강화읍 국화리에 있는 고려시대의 성곽이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [410],
+    [412],
   ],
   [
     "kr-44da41317857",
@@ -22863,7 +22898,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쌍성총관부는 1258년(고종 45년)에 원나라가 화주에 설치한 통치기구이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [411],
+    [413],
   ],
   [
     "kr-07aca2bac9b2",
@@ -22871,7 +22906,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동녕부는 원나라가 고려 서경을 편입한 후 설치한 통치기관이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [412],
+    [414],
   ],
   [
     "kr-729fe890d8bd",
@@ -22879,7 +22914,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "길주군은 함경북도에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [413],
+    [415],
   ],
   [
     "kr-db2efe68d40e",
@@ -22887,7 +22922,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강계시는 자강도의 도청 소재지이고, 지형 때문에 가장 중요한 전략적 요충지이기도 하며, 인민위원장은 박필증, 당 책임비서는 리영남이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [414],
+    [416],
   ],
   [
     "kr-989927bbbe21",
@@ -22895,7 +22930,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "초산군은 자강도에 위치한 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [415],
+    [417],
   ],
   [
     "kr-51615df29bb2",
@@ -22903,7 +22938,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함주군은 조선민주주의인민공화국 함경남도 중부에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [416],
+    [418],
   ],
   [
     "kr-93064df0b1a0",
@@ -22918,7 +22953,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "선사 문화와 고대 국가",
     ],
-    [0, 417],
+    [0, 419],
   ],
   [
     "kr-21ba070b23b6",
@@ -22926,7 +22961,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대원대몽골국, 대원 울루스 또는 대원국, 약칭 원은 13세기 중국 본토와 몽골 고원을 기반으로 한 몽골 제국의 카안 울루스였다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [418],
+    [420],
   ],
   [
     "kr-cc2c5b64a5e6",
@@ -22934,7 +22969,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개성 성균관은 북한 개성시 방직동에 있는 조선 시대의 향교 건축물로, 고려 시대 중앙 교육기관의 역할을 했던 국자감의 후신이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [419],
+    [421],
   ],
   [
     "kr-93ebbe6fe34d",
@@ -22942,7 +22977,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쓰시마섬은 한반도와 규슈 사이의 대한해협 가운데에 있는 일본의 섬이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전", "조선 사회의 변화"],
-    [420],
+    [422],
   ],
   [
     "kr-d3c4396280a0",
@@ -22950,7 +22985,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 때 평안북도 선천 지역을 부르던 이름으로, 방어사가 파견된 북방 방어 거점이었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 421],
+    [0, 423],
   ],
   [
     "kr-47c577f63249",
@@ -22958,7 +22993,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경남 남해에 있는 포구로, 이순신이 전사한 노량해전과 관련된 곳이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [422],
+    [424],
   ],
   [
     "kr-76215d71afa1",
@@ -22966,7 +23001,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "홍산면은 충청남도 부여군에 있는 면이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [423],
+    [425],
   ],
   [
     "kr-aeb934831f1e",
@@ -22974,7 +23009,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경상남도 남서부의 섬 지역으로, 남해도와 창선도를 중심으로 이루어져 있다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선 사회의 변화"],
-    [0, 424],
+    [0, 426],
   ],
   [
     "kr-03ec817998b4",
@@ -22982,7 +23017,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남원 운봉 일대의 산으로, 1380년 이성계가 이끈 고려군이 왜구를 크게 물리친 황산 대첩의 무대다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 425],
+    [0, 427],
   ],
   [
     "kr-a5be8e18b54c",
@@ -22990,7 +23025,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "운봉군은 지금의 운봉읍을 중심으로 서쪽의 아영면. 인월면, 산내면등의 지금 남원시 동쪽 1읍 3면 지역에 있던 옛 행정구역이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [426],
+    [428],
   ],
   [
     "kr-10a041c0a556",
@@ -22998,7 +23033,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단천시는 조선민주주의인민공화국 함경남도의 북동쪽에 있는 도시이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [427],
+    [429],
   ],
   [
     "kr-d27a7a603d08",
@@ -23006,7 +23041,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만권당은 고려 충선왕이 원나라의 수도인 대도에 지은 독서당이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [428],
+    [430],
   ],
   [
     "kr-013f3691faf5",
@@ -23014,7 +23049,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "군산시는 대한민국 전북특별자치도 북서부 해안가에 있는 시이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [429],
+    [431],
   ],
   [
     "kr-eb99d1b9d539",
@@ -23022,7 +23057,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다자이후는 7세기 후반, 규슈 지방의 지쿠젠국에 설치되었던 지방 행정 기관의 이름이다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [430],
+    [432],
   ],
   [
     "kr-fcbdcfb09f89",
@@ -23030,7 +23065,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예성강 하구의 항구로 고려의 국제 무역이 활발하게 이루어졌다. 송과 일본을 비롯해 아라비아 상인들까지 드나든 교류 거점이었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 431, 432, 433, 434, 435, 436, 437],
+    [0, 433, 434, 435, 436, 437, 438, 439],
   ],
   [
     "kr-4d86230d4ab5",
@@ -23038,7 +23073,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "송(宋, 960년 ~ 1279년)은 중국의 옛 왕조이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [438],
+    [440],
   ],
   [
     "kr-552da51c2e8c",
@@ -23046,7 +23081,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아라비아반도는 아시아와 아프리카를 잇는 서아시아의 사막으로 이루어진 반도로, 중동의 중앙에 위치하고 있다.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해", "조선의 성립과 발전"],
-    [439],
+    [441],
   ],
   [
     "kr-abd0e6d54b04",
@@ -23054,7 +23089,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개성 동남쪽에 있는 산으로, 고려의 장수 최영을 모신 사당이 있어 무속 신앙의 중심지로 여겨졌다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 440],
+    [0, 442],
   ],
   [
     "kr-55e1a20fdec1",
@@ -23062,7 +23097,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개경 인근에 있는 산으로, 고려 충렬왕이 중창한 왕실 사찰 신효사가 자리했던 곳이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 441],
+    [0, 443],
   ],
   [
     "kr-6d083bba6bd5",
@@ -23070,7 +23105,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "철산군은 평안북도 서쪽 지역에 있는 군이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선 사회의 변화"],
-    [442],
+    [444],
   ],
   [
     "kr-a1ddc9a77c9e",
@@ -23078,7 +23113,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "풍덕군은 경기도에 존재했던 군으로 개풍군의 남부 지역에 해당한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [443],
+    [445],
   ],
   [
     "kr-0287dd66f860",
@@ -23086,7 +23121,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고척동은 대한민국 서울특별시 구로구에 위치한 법정동이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [444],
+    [446],
   ],
   [
     "kr-726f59c20eb3",
@@ -23094,7 +23129,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황해도 내륙에서 남쪽으로 흘러 개성 서쪽을 지나 서해로 들어가는 강이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 445, 446],
+    [0, 447, 448],
   ],
   [
     "kr-6e808b36fb8b",
@@ -23102,7 +23137,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 사회주의 공화국, 통칭 베트남은 동남아시아의 국가이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [447],
+    [449],
   ],
   [
     "kr-71fc856ca095",
@@ -23110,7 +23145,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지눌이 불교 개혁 운동을 펼친 사찰의 옛 이름이다. 교과서는 수선사를 오늘날의 송광사와 연결하여 설명한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 431, 448, 384, 449, 450],
+    [0, 433, 450, 386, 451, 452],
   ],
   [
     "kr-a49feffdb9e7",
@@ -23118,7 +23153,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "관촉사는 고려 광종 19년(968) 혜명이 창건한 사찰로 대한 불교 조계종 제6교구 본사인 마곡사의 말사이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [451],
+    [453],
   ],
   [
     "kr-8a978749d803",
@@ -23131,7 +23166,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [452],
+    [454],
   ],
   [
     "kr-8eac9b321b73",
@@ -23139,7 +23174,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "평창 오대산에 있는 사찰로, 신라의 승려 자장이 창건했다고 전해진다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [453],
+    [455],
   ],
   [
     "kr-5911d7fdf9b4",
@@ -23152,7 +23187,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "근현대 사회와 민주주의",
     ],
-    [454],
+    [456],
   ],
   [
     "kr-2d42d70b57b6",
@@ -23160,7 +23195,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수덕사는 충청남도 예산군 덕산면 사천리 덕숭산에 있는 대한불교 조계종 소속 사찰이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [455],
+    [457],
   ],
   [
     "kr-62d62eafcb03",
@@ -23168,7 +23203,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "해인사 장경판전은 고려 때 새긴 팔만대장경판을 보관하는 건물이다. 통풍과 습도 조절에 알맞게 공간과 창문을 배치하여 오랫동안 목판을 보존해 온 건축 지혜를 보여 준다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 456],
+    [0, 458],
   ],
   [
     "kr-6185d7d2721d",
@@ -23176,7 +23211,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "해인사 장경판전은 고려 때 새긴 팔만대장경판을 보관하는 건물이다. 통풍과 습도 조절에 알맞게 공간과 창문을 배치하여 오랫동안 목판을 보존해 온 건축 지혜를 보여 준다.",
     ["경남 합천군 가야면 해인사길 122, 해인사 (치인리)"],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [0, 456],
+    [0, 458],
   ],
   [
     "kr-9bcd6a4e7086",
@@ -23184,7 +23219,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함경도는 조선 시대의 행정 구역이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [457],
+    [459],
   ],
   [
     "kr-33b55b9513d5",
@@ -23192,7 +23227,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "평안도는 조선 시대의 행정 구역이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [458],
+    [460],
   ],
   [
     "kr-c633d1f6ac63",
@@ -23205,7 +23240,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [459],
+    [461],
   ],
   [
     "kr-4ff21820bf3c",
@@ -23219,7 +23254,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "고려의 성립과 변화",
     ],
-    [460],
+    [462],
   ],
   [
     "kr-bfcc2516dc87",
@@ -23232,7 +23267,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [461],
+    [463],
   ],
   [
     "kr-da659e667835",
@@ -23246,7 +23281,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "고려의 성립과 변화",
     ],
-    [462],
+    [464],
   ],
   [
     "kr-476d6526ae89",
@@ -23260,7 +23295,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "선사 문화와 고대 국가",
     ],
-    [463],
+    [465],
   ],
   [
     "kr-ac4f4ab96da0",
@@ -23273,7 +23308,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "선사 문화와 고대 국가",
     ],
-    [464],
+    [466],
   ],
   [
     "kr-e4b5af49804d",
@@ -23281,7 +23316,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삭주군은 평안북도 북서부 압록강 중류에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전", "선사 문화와 고대 국가"],
-    [465],
+    [467],
   ],
   [
     "kr-9e633686fde4",
@@ -23289,7 +23324,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만포시는 조선민주주의인민공화국 자강도 북서부에 있는 도시이다.",
     [],
     ["한국사", "조선의 성립과 발전", "선사 문화와 고대 국가"],
-    [466],
+    [468],
   ],
   [
     "kr-c0a5da157086",
@@ -23303,7 +23338,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "근현대 사회와 민주주의",
     ],
-    [467],
+    [469],
   ],
   [
     "kr-0ae286d567ae",
@@ -23311,7 +23346,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경흥군은 함경북도 북동부에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [468],
+    [470],
   ],
   [
     "kr-37e37c2ec840",
@@ -23319,7 +23354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "능주군은 지금의 전라남도 화순군의 서남 7면에 걸친 지역으로 화순군의 전체 면적 중 40%를 차지했던, 옛 행정구역이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [469],
+    [471],
   ],
   [
     "kr-7d5c72324691",
@@ -23327,7 +23362,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "위화도는 압록강 하류에 있는 하중도로, 면적은 11.2 km2이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [470],
+    [472],
   ],
   [
     "kr-5a62fd50d243",
@@ -23335,7 +23370,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "주원장이 1368년에 세운 중국의 왕조로, 원을 이어 중원을 다스렸다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [471],
+    [473],
   ],
   [
     "kr-55eaabde50be",
@@ -23348,7 +23383,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [0, 472],
+    [0, 474],
   ],
   [
     "kr-2bdf73de7094",
@@ -23356,7 +23391,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 왕실 조상의 신위를 모시고 제사를 지내는 공간이다. 궁궐·사직과 함께 한양의 유교적 도시 계획을 보여 준다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 473, 474, 475, 476],
+    [0, 475, 476, 477, 478],
   ],
   [
     "kr-818331855657",
@@ -23369,7 +23404,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "선사 문화와 고대 국가",
     ],
-    [477],
+    [479],
   ],
   [
     "kr-e054895935c4",
@@ -23377,7 +23412,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세종대왕릉역은 경기도 여주시 세종대왕면 신지리에 있는 경강선의 전철역이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [478],
+    [480],
   ],
   [
     "kr-633fc2c4f12c",
@@ -23385,7 +23420,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 울산광역시 북구 염포동 일대에 있었던 포구로, 조선 시대 일본과 교역하던 삼포 중 하나다.",
     ["울산광역시 북구 염포동 일대"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 479, 11],
+    [0, 481, 11],
   ],
   [
     "kr-b90ae636980c",
@@ -23400,7 +23435,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "근현대 사회와 민주주의",
     ],
-    [0, 480],
+    [0, 482],
   ],
   [
     "kr-08b2887f4e5e",
@@ -23408,7 +23443,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 전기 일본과의 교류를 위해 개방한 세 포구 가운데 하나이다. 교역이 허용된 장소를 제포·염포와 함께 비교할 수 있다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 481, 482, 483],
+    [0, 483, 484, 485],
   ],
   [
     "kr-cfcd0e4e5bd4",
@@ -23416,7 +23451,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 전기 일본과의 교역을 위해 개방한 삼포의 하나이다. 부산포·염포와 함께 조선의 대일 교류를 이해하는 장소이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 481, 482, 483],
+    [0, 483, 484, 485],
   ],
   [
     "kr-049670fa94f9",
@@ -23432,7 +23467,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "통일 신라와 발해",
     ],
-    [484],
+    [486],
   ],
   [
     "kr-cfa3bc6c87c3",
@@ -23440,7 +23475,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "류큐국 또는 유구국은 1429년부터 1879년까지 아마미오섬 이남의 류큐 열도에 있었던 왕국이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [485],
+    [487],
   ],
   [
     "kr-7b01436309da",
@@ -23448,7 +23483,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자성군은 자강도 북쪽에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [486],
+    [488],
   ],
   [
     "kr-334ae72e4534",
@@ -23456,7 +23491,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "온성군은 함경북도의 군으로 한반도의 최북단에 있다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [487],
+    [489],
   ],
   [
     "kr-b4614629316b",
@@ -23464,7 +23499,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부령군은 함경북도 북부에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [488],
+    [490],
   ],
   [
     "kr-31ee5f79f84a",
@@ -23472,7 +23507,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 세종 때 압록강 상류에 설치한 여연·자성·무창·우예의 네 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [489],
+    [491],
   ],
   [
     "kr-be8f1454c1ad",
@@ -23480,7 +23515,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 세종 때 두만강 하류에 설치한 여섯 군사 거점으로, 북방 국경을 지키는 역할을 했다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [489],
+    [491],
   ],
   [
     "kr-552294756bf0",
@@ -23488,7 +23523,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청계천은 대한민국 서울특별시 시내에 있는 지방하천으로, 한강 수계에 속하며 중랑천의 지류이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [490],
+    [492],
   ],
   [
     "kr-b6bcc939acd8",
@@ -23496,7 +23531,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "임진왜란 뒤 중건된 병산서당은 1605년 서원으로 불리기 시작했다. 유성룡 사후 제자들이 사당을 세우고 1614년 위패를 모시면서 교육과 제향을 함께하는 서원으로 자리 잡았다.",
     ["경상북도 안동시 병산길 386(풍천면, 병산서원)"],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 491],
+    [0, 493],
   ],
   [
     "kr-a38fd43eddde",
@@ -23504,7 +23539,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "용인 심곡서원은 조선 중종 때 개혁을 추진한 조광조를 기리고 유생을 가르치던 서원이다. 흥선대원군의 서원 철폐 때도 남아 제향과 교육의 전통을 이어 갔다.",
     ["경기도 용인시 수지구 심곡로 16-9 (상현동)"],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 492],
+    [0, 494],
   ],
   [
     "kr-442fb975dab0",
@@ -23512,7 +23547,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만대루는 병산서원 앞쪽에 세운 누각으로, 유생들이 함께 모여 쉬거나 학문을 논하던 공간이다. 낙동강과 병산을 향해 열린 구조는 서원 교육 공간과 주변 자연을 연결한다.",
     ["경상북도 안동시 병산길 386 (풍천면, 병산서원)"],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 493],
+    [0, 495],
   ],
   [
     "kr-2a236cd9fda5",
@@ -23520,7 +23555,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동 병산서원 안에서 류성룡과 류진의 위패를 모시는 사당이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [494],
+    [496],
   ],
   [
     "kr-c3b00a1be92c",
@@ -23528,7 +23563,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동의 도산서원은 이황이 세상을 떠난 뒤인 1574년 제자와 지역 유림이 학문과 덕행을 기리기 위해 세웠다. 1575년 사액을 받아 제향과 유학 교육의 중심지가 되었다.",
     ["경북 안동시 도산면 도산서원길 154 (토계리)"],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 495],
+    [0, 497],
   ],
   [
     "kr-bb926ed564d1",
@@ -23536,7 +23571,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영남 지방은 소백산맥의 동남부에 위치한 지방이다.",
     [],
     ["한국사", "조선의 성립과 발전", "선사 문화와 고대 국가"],
-    [496],
+    [498],
   ],
   [
     "kr-89b13550850e",
@@ -23544,7 +23579,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함양군은 대한민국 경상남도 서부에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [497],
+    [499],
   ],
   [
     "kr-024840394f50",
@@ -23557,7 +23592,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [498],
+    [500],
   ],
   [
     "kr-61d46b9a668d",
@@ -23565,7 +23600,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "괴산군은 대한민국 충청북도 가운데에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [499],
+    [501],
   ],
   [
     "kr-2cb2bcb6aafb",
@@ -23573,7 +23608,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "배천군은 조선민주주의인민공화국 황해남도 동남단에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [500],
+    [502],
   ],
   [
     "kr-58131a33bfbc",
@@ -23581,7 +23616,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함경남도 북청에서 조선의 문신 이항복을 기리기 위해 세운 서원이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [501],
+    [503],
   ],
   [
     "kr-862bd72c7740",
@@ -23589,7 +23624,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영주의 백운동서원은 1550년 소수서원이라는 이름과 국가 지원을 받았다. 안향을 기리고 유생을 가르치던 이곳은 조선에서 서원이 확산되는 출발점이 되었다.",
     ["경북 영주시 순흥면 내죽리 151번지"],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 261],
+    [0, 263],
   ],
   [
     "kr-33b188925aa0",
@@ -23597,7 +23632,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 옥산서원은 성리학자 이언적을 기리기 위해 1572년 세웠다. 이듬해 사액을 받았으며, 제향과 강학을 통해 영남 지역 유학의 전통을 이어 갔다.",
     ["경북 경주시 안강읍 옥산서원길 216-27 (옥산리)"],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 502],
+    [0, 504],
   ],
   [
     "kr-10bb079a880b",
@@ -23605,7 +23640,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함양 남계서원은 1552년 정여창의 학문과 덕행을 기리기 위해 세웠다. 정유재란 때 불탔다가 다시 건립되어, 지역 사림이 선현을 제사하고 유생을 가르치는 공간이 되었다.",
     ["경남 함양군 수동면 남계서원길 8-11, 일원 (원평리)"],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 503],
+    [0, 505],
   ],
   [
     "kr-333194fa9ac9",
@@ -23613,7 +23648,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장성 필암서원은 1590년 김인후를 기리기 위해 세운 서원이다. 정유재란으로 불탄 뒤 다시 세웠으며, 1672년 현재 위치로 옮겨 교육과 제향을 이어 갔다.",
     ["전남광주통합특별시 장성군 필암서원로 184(황룡면)"],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 504],
+    [0, 506],
   ],
   [
     "kr-7595b3e885e7",
@@ -23621,7 +23656,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개성에서 정몽주를 기리기 위해 그의 집터에 세운 조선시대 서원이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [505],
+    [507],
   ],
   [
     "kr-cd245446c0da",
@@ -23629,7 +23664,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "논산 돈암서원은 1634년 김장생을 기리기 위해 세웠다. 예법을 중시한 그의 학문을 이어 가며 충청 지역 유생들의 교육과 제향을 담당했다.",
     ["충남 논산시 연산면 임리 74번지 외 5필지"],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 506],
+    [0, 508],
   ],
   [
     "kr-4c115d1be5b5",
@@ -23637,7 +23672,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예안은 경상북도 안동시 북부에 위치했던 옛 군 또는 현으로, 현재의 안동시 예안면 북부, 도산면, 녹전면 지역을 관할하였다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [507],
+    [509],
   ],
   [
     "kr-85a602a74ce2",
@@ -23645,7 +23680,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강릉에 있는 신사임당과 율곡 이이가 태어난 집이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [508],
+    [510],
   ],
   [
     "kr-2ced8eb8ab98",
@@ -23658,7 +23693,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [509],
+    [511],
   ],
   [
     "kr-388386c5b233",
@@ -23666,7 +23701,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1593년 권율이 이끄는 조선군은 행주산성에서 일본군의 공격을 막아 냈다. 한양 가까이에 거점을 둔 이 승리는 도성을 되찾기 위한 조선·명 연합군의 작전에 힘이 되었다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 510],
+    [0, 512],
   ],
   [
     "kr-a34472ffacdf",
@@ -23674,7 +23709,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이순신은 1597년 명량 해협에서 재정비한 조선 수군을 이끌고 일본 함대를 물리쳤다. 칠천량 패전 뒤 크게 약해졌던 조선 수군이 다시 해상 방어를 이어 갈 수 있었던 전투이다.",
     ["울돌목", "명량해협"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 511, 512],
+    [0, 513, 514],
   ],
   [
     "kr-f8f6a36df2ea",
@@ -23682,7 +23717,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1598년 노량 앞바다에서 이순신과 명의 진린이 이끄는 연합 수군은 철수하려던 일본군과 싸웠다. 조선·명 수군은 승리했으나 이순신이 전사했으며, 임진왜란의 해전도 마무리되었다.",
     ["노량해협"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 512],
+    [0, 514],
   ],
   [
     "kr-c62153b62741",
@@ -23690,7 +23725,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "명량해협 또는 울돌목은 전라남도 해남군 문내면 학동리의 화원반도와 진도군 군내면 녹진리 사이의 있는 해협이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [513],
+    [515],
   ],
   [
     "kr-71051e5892e5",
@@ -23698,7 +23733,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "의령군은 대한민국 경상남도 중앙부에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [514],
+    [516],
   ],
   [
     "kr-70cb5c37802b",
@@ -23706,7 +23741,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1592년 금산에서는 고경명과 조헌 등이 이끄는 의병이 일본군과 차례로 싸웠다. 호남으로 이어지는 길목을 지키려 한 전투에서 의병과 승병이 큰 희생을 치렀다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 515],
+    [0, 517],
   ],
   [
     "kr-cd0c54735d46",
@@ -23719,7 +23754,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "조선 사회의 변화",
     ],
-    [516],
+    [518],
   ],
   [
     "kr-1995365c8e48",
@@ -23727,7 +23762,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "묘향산은 조선민주주의인민공화국의 자강도 향산군과 평안북도 구장군, 평안남도 녕원군, 자강도 희천시에 걸쳐 있는 산이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [517],
+    [519],
   ],
   [
     "kr-9bfe2a2069ab",
@@ -23735,7 +23770,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "맹산군은 평안남도 북동부에 있는 군이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [518],
+    [520],
   ],
   [
     "kr-cce034fb3508",
@@ -23743,7 +23778,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김화군은 조선민주주의인민공화국 강원도에 있는 행정 구역이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [519],
+    [521],
   ],
   [
     "kr-fc070bd9c6d6",
@@ -23751,7 +23786,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토산군은 조선민주주의인민공화국 황해북도의 남동부에 위치한 군이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [520],
+    [522],
   ],
   [
     "kr-0903aae5fa63",
@@ -23759,7 +23794,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북한 함경남도 영흥군 개마고원지대에 있는 고려시대 제6대 성종 당시 축조한 성곽. 산성.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [0, 521],
+    [0, 523],
   ],
   [
     "kr-fdf61bcd0b12",
@@ -23767,7 +23802,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백마산성은 조선민주주의인민공화국 평안북도 의주군에 위치한 건산성이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [522],
+    [524],
   ],
   [
     "kr-60d9cdec28ff",
@@ -23775,7 +23810,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1616년에 세워진 만주 지역의 국가로, 뒤에 국호를 청으로 바꾸었다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [523],
+    [525],
   ],
   [
     "kr-8ce2774dbf6d",
@@ -23788,7 +23823,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "근현대 사회와 민주주의",
     ],
-    [524],
+    [526],
   ],
   [
     "kr-8e16145ff7fe",
@@ -23801,7 +23836,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "선사 문화와 고대 국가",
     ],
-    [0, 525],
+    [0, 527],
   ],
   [
     "kr-684290acc045",
@@ -23809,7 +23844,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인조는 1637년 삼전도에서 청 태종에게 항복했다. 1639년에는 청의 요구로 삼전도비를 세워 항복의 경위를 기록했으며, 비는 전쟁 뒤 달라진 조선과 청의 관계를 보여 준다.",
     [],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 526, 527],
+    [0, 528, 529],
   ],
   [
     "kr-f4b0f5784697",
@@ -23817,7 +23852,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "숙정문은 조선의 수도인 한양의 4대문 중의 하나로 북쪽의 대문이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [528],
+    [530],
   ],
   [
     "kr-93464ab4266a",
@@ -23825,7 +23860,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흥인지문은 한양 도성의 동쪽 큰 문이다. 태조 때 처음 세웠으며, 현재의 문루는 1869년에 다시 지은 것으로 도성 출입과 방어를 맡았던 시설이다.",
     ["서울 종로구 종로 288 (종로6가) / (지번)서울 종로구 종로6가 69"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 529],
+    [0, 531],
   ],
   [
     "kr-8794ff492fec",
@@ -23833,7 +23868,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돈의문은 조선의 수도인 한양의 4대문 중의 하나로 서쪽의 대문이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [530],
+    [532],
   ],
   [
     "kr-6b7944097ae7",
@@ -23841,7 +23876,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인조는 1637년 삼전도에서 청 태종에게 항복했다. 1639년에는 청의 요구로 삼전도비를 세워 항복의 경위를 기록했으며, 비는 전쟁 뒤 달라진 조선과 청의 관계를 보여 준다.",
     ["서울특별시 송파구 잠실동 47"],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 526, 527],
+    [0, 528, 529],
   ],
   [
     "kr-05bf185a28a3",
@@ -23849,7 +23884,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 남서부에 있는 큰 섬으로, 혼슈·시코쿠·홋카이도와 함께 일본열도의 주요 섬을 이룬다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [531],
+    [533],
   ],
   [
     "kr-ddd7324d743e",
@@ -23857,7 +23892,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정조는 1794년부터 1796년까지 수원 화성을 축조했다. 화성은 방어 시설뿐 아니라 행정·상업·생산 기반을 함께 마련한 계획도시로, 조선 후기의 새로운 기술과 도시 구상을 보여 준다.",
     ["경기 수원시 팔달구 장안동 1-2번지"],
     ["한국사", "조선 사회의 변화"],
-    [0, 532, 533],
+    [0, 534, 535],
   ],
   [
     "kr-c6a843e42fcc",
@@ -23865,7 +23900,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영조가 1742년 성균관에 세운 비석으로, 당파에 치우치지 않는 자세를 강조했다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [534],
+    [536],
   ],
   [
     "kr-ca387c21676a",
@@ -23873,7 +23908,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "규장각은 조선 후기의 왕실 학문 연구 기관이자 왕실 도서관으로, 지금의 국립중앙도서관 격이다.",
     [],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [535],
+    [537],
   ],
   [
     "kr-0e5014dff93f",
@@ -23881,7 +23916,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청나라 봉황성에 속했던 국경 관문으로, 조선의 사신이 중국으로 가며 통과하던 곳이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [0, 536],
+    [0, 538],
   ],
   [
     "kr-d919d7f20499",
@@ -23889,7 +23924,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중강군은 자강도 북부에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [537],
+    [539],
   ],
   [
     "kr-3d98a9c40309",
@@ -23897,7 +23932,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "왜관은 조선시대 일본인이 조선에 와서 통상하던 곳이다.",
     [],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [538],
+    [540],
   ],
   [
     "kr-194b588e490b",
@@ -23905,7 +23940,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덕원군은 오늘날 원산시·문천시의 모체가 되는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [539],
+    [541],
   ],
   [
     "kr-ca71452cedc0",
@@ -23913,7 +23948,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 요령성 봉성진에 있었던 삼국시대 고구려의 성곽. 산성.",
     [],
     ["한국사", "선사 문화와 고대 국가", "조선 사회의 변화"],
-    [0, 540],
+    [0, 542],
   ],
   [
     "kr-42477cf6ed41",
@@ -23921,7 +23956,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "박천군은 평안북도 남단에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [541],
+    [543],
   ],
   [
     "kr-e5e84712ea8c",
@@ -23929,7 +23964,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강경장 또는 강경시장은 충청남도 논산시 강경읍에 있었던 장시이자 시장이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [542],
+    [544],
   ],
   [
     "kr-aba93ca0fe86",
@@ -23937,7 +23972,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "랴오양은 랴오닝성에 위치하며 고대부터 요동의 중심지였으며, 군사상 중요도시이며 신흥 공업도시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [543],
+    [545],
   ],
   [
     "kr-fad0004357cb",
@@ -23945,7 +23980,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오사카는 일본 긴키 지방의 지명이다.",
     [],
     ["한국사", "조선 사회의 변화", "통일 신라와 발해"],
-    [544],
+    [546],
   ],
   [
     "kr-529432f8fe49",
@@ -23953,7 +23988,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나고야시는 일본 아이치현 서부에 있는 도시로, 아이치현의 현청 소재지이자 주부 지방의 중심 도시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [545],
+    [547],
   ],
   [
     "kr-8935a0c89053",
@@ -23961,7 +23996,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하마마쓰시는 일본 시즈오카현 서부에 있는 시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [546],
+    [548],
   ],
   [
     "kr-7017b8502bad",
@@ -23969,7 +24004,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시모노세키시는 일본 야마구치현에 있는 항구도시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [547],
+    [549],
   ],
   [
     "kr-142640bb4327",
@@ -23977,15 +24012,15 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하이청시는 중화인민공화국 랴오닝성 안산시의 행정구역이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [548],
+    [550],
   ],
   [
     "kr-ed074edaab7c",
     "선양",
-    "선양시는 중국 랴오닝성의 성도이다.",
-    [],
+    "병자호란의 항복 조건에 따라 소현세자와 봉림대군은 1637년 청의 수도 심양으로 보내졌다. 소현세자 일행은 심양관에 머물며 조선과 청 사이의 연락과 외교 업무를 맡았고, 1644년 청이 북경으로 천도하자 거처를 옮겼다.",
+    ["심양", "중국 랴오닝성 선양"],
     ["한국사", "조선 사회의 변화"],
-    [549],
+    [0, 551, 552, 553],
   ],
   [
     "kr-05068e790d70",
@@ -23993,7 +24028,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에도성은 도쿄도 지요다구 지요다에 있는 윤곽식 평산성이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [550],
+    [554],
   ],
   [
     "kr-4b08af94b8bd",
@@ -24001,7 +24036,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고베시는 일본에서 6번째로 큰 도시로 효고현의 현청 소재지이자 일본을 대표하는 항만 도시로 인구는 약 150만 명이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [551],
+    [555],
   ],
   [
     "kr-0d170e90da46",
@@ -24009,7 +24044,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "봉산군은 조선민주주의인민공화국의 황해북도 서쪽에 위치한 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [552],
+    [556],
   ],
   [
     "kr-383bcce136fe",
@@ -24017,7 +24052,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "거창군은 경상남도 서북부에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "근현대 사회와 민주주의"],
-    [553],
+    [557],
   ],
   [
     "kr-d04fae9dd7ac",
@@ -24030,7 +24065,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "선사 문화와 고대 국가",
     ],
-    [554],
+    [558],
   ],
   [
     "kr-4bdeb2c71c26",
@@ -24038,7 +24073,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부안군은 대한민국 전북특별자치도 서부 변산반도에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [555],
+    [559],
   ],
   [
     "kr-eacfd4409ec9",
@@ -24046,7 +24081,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함평군은 대한민국 전남광주통합특별시 서부에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "근현대 사회와 민주주의"],
-    [556],
+    [560],
   ],
   [
     "kr-af506b381082",
@@ -24054,7 +24089,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "군위군은 대구광역시에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [557],
+    [561],
   ],
   [
     "kr-978540bbb737",
@@ -24062,7 +24097,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청안군은 한국의 옛 행정 구역으로, 현재의 충청북도 증평군 전 지역과 청주시 청원구 북이면·오창읍의 일부, 괴산군 청안면, 진천군 초평면과 음성군 원남면의 일부를 이루고 있었다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [558],
+    [562],
   ],
   [
     "kr-6a142297546f",
@@ -24070,7 +24105,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1592년 김시민이 지휘하는 조선군과 주민들은 진주성을 공격한 일본군을 막아 냈다. 진주성의 승리는 전라도로 향하는 일본군의 진출을 저지하는 데 중요한 역할을 했다.",
     ["경상남도 진주시 남강로 626 (본성동, 진주성)"],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화", "조선 사회의 변화"],
-    [0, 559],
+    [0, 563],
   ],
   [
     "kr-8a39b0f906a4",
@@ -24078,7 +24113,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선천군은 조선민주주의인민공화국 평안북도에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [560],
+    [564],
   ],
   [
     "kr-c2f3162bea59",
@@ -24086,7 +24121,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "곽산군은 평안북도 남서쪽 해안 지역에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [561],
+    [565],
   ],
   [
     "kr-c63cc044f086",
@@ -24094,7 +24129,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태천군은 평안북도 남서쪽 내륙 지역에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [562],
+    [566],
   ],
   [
     "kr-c04e08068668",
@@ -24102,7 +24137,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1811년 평안도에서 일어난 홍경래의 봉기는 서북 지역 차별과 사회·경제적 불만을 배경으로 했다. 봉기군은 정주성에서 관군에 맞섰으나 1812년 성이 함락되면서 진압되었다.",
     [],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [0, 367],
+    [0, 369],
   ],
   [
     "kr-224bcca1b128",
@@ -24110,7 +24145,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "달성 도동서원은 김굉필의 학문을 기리고 유생을 가르치기 위해 세운 서원이다. 강학 공간인 중정당을 앞에, 제향 공간인 사당을 뒤에 두어 조선 서원의 교육과 예법을 건축에 담았다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [0, 563],
+    [0, 567],
   ],
   [
     "kr-ebd4269a3868",
@@ -24118,7 +24153,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정읍 무성서원은 최치원과 신잠 등을 기리고 지역 유생을 가르치던 곳이다. 1696년 무성이라는 이름을 사액받았으며, 조선 후기의 서원 철폐 때도 남았다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [0, 564],
+    [0, 568],
   ],
   [
     "kr-f3b8c1b4da19",
@@ -24126,7 +24161,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "달성군은 대한민국 대구광역시에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [565],
+    [569],
   ],
   [
     "kr-37eaa9a35467",
@@ -24134,7 +24169,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인제군은 대한민국 강원특별자치도 북부에 있는 태백산맥을 중심으로 한 영서북부지역에 위치한 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "근현대 사회와 민주주의"],
-    [566],
+    [570],
   ],
   [
     "kr-f0371e158b35",
@@ -24142,7 +24177,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부평군은 과거 경기도의 행정구역이었다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [567],
+    [571],
   ],
   [
     "kr-532f29d28077",
@@ -24150,7 +24185,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당진시는 대한민국 충청남도 서해안 최북단에 있는 시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [568],
+    [572],
   ],
   [
     "kr-37f4e224b254",
@@ -24163,7 +24198,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "근현대 사회와 민주주의",
     ],
-    [569],
+    [573],
   ],
   [
     "kr-49a8b82d8a71",
@@ -24176,7 +24211,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "근현대 사회와 민주주의",
     ],
-    [570],
+    [574],
   ],
   [
     "kr-e20452975ef9",
@@ -24184,7 +24219,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보은군은 대한민국 충청북도 중남부에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화", "근현대 사회와 민주주의"],
-    [571],
+    [575],
   ],
   [
     "kr-3f95a0905c94",
@@ -24192,7 +24227,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강진에 유배된 정약용은 1808년 다산초당으로 거처를 옮겨 1818년까지 지냈다. 이곳에서 제자들을 가르치고 목민심서 등을 저술하며 현실의 제도와 백성의 삶을 개선할 방안을 모색했다.",
     [],
     ["한국사", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [0, 572],
+    [0, 576],
   ],
   [
     "kr-08bd6fdf1ad4",
@@ -24200,7 +24235,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1987년 6월 서울과 전국에서 시민들은 고문치사 사건의 진상 규명과 대통령 직선제 개헌을 요구했다. 명동성당은 시위대가 농성한 주요 장소였으며, 전국적인 항쟁은 직선제 개헌을 이끌었다.",
     ["서울특별시 중구 명동길 74(명동2가, 명동성당)"],
     ["한국사", "근현대 사회와 민주주의", "조선 사회의 변화"],
-    [0, 573],
+    [0, 577],
   ],
   [
     "kr-729119e6b9f6",
@@ -24213,7 +24248,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "조선의 성립과 발전",
     ],
-    [0, 574, 575],
+    [0, 578, 579],
   ],
   [
     "kr-99bf00bbd6e1",
@@ -24226,7 +24261,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "통일 신라와 발해",
       "근현대 사회와 민주주의",
     ],
-    [576],
+    [580],
   ],
   [
     "kr-ec2cd16cf009",
@@ -24234,7 +24269,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전북 완주군에서 만경강이 만든 충적평야에 자리한 고장이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [577],
+    [581],
   ],
   [
     "kr-07b1b1ab6161",
@@ -24242,7 +24277,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1894년 동학농민군은 공주의 우금치에서 일본군과 관군에 맞섰으나 패배했다. 일본의 침략에 저항한 두 번째 봉기가 큰 타격을 입은 전투이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 578],
+    [0, 582],
   ],
   [
     "kr-7fb5c1b4acd5",
@@ -24250,7 +24285,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고부군은 정읍시 고부면, 덕천면, 소성면, 영원면, 이평면, 정우면과 부안군 백산면 일대에 있었던 옛 고을이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [579],
+    [583],
   ],
   [
     "kr-b5c6da43df96",
@@ -24258,7 +24293,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1894년 동학농민군은 정읍 황토현에서 전라감영군을 물리쳤다. 이 승리로 농민군은 전라도 각지로 세력을 넓혀 전주성으로 진격할 수 있었다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 580],
+    [0, 584],
   ],
   [
     "kr-8a9d64bd994a",
@@ -24272,7 +24307,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "조선 사회의 변화",
     ],
-    [581],
+    [585],
   ],
   [
     "kr-faec8a156570",
@@ -24286,7 +24321,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "조선 사회의 변화",
     ],
-    [582],
+    [586],
   ],
   [
     "kr-534b5de342c8",
@@ -24299,7 +24334,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "고려의 성립과 변화",
     ],
-    [583],
+    [587],
   ],
   [
     "kr-815ebdbea6d6",
@@ -24307,7 +24342,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이탈리아 공화국, 약칭 이탈리아는 남유럽에 위치한 단일 의회 공화국이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "조선 사회의 변화"],
-    [584],
+    [588],
   ],
   [
     "kr-9cdef177f920",
@@ -24315,7 +24350,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스트리아 공화국, 약칭 오스트리아는 중앙유럽 알프스산맥에 있는 내륙국이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [585],
+    [589],
   ],
   [
     "kr-bb028743fdca",
@@ -24328,7 +24363,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선 사회의 변화",
       "고려의 성립과 변화",
     ],
-    [586],
+    [590],
   ],
   [
     "kr-27f5a39c167a",
@@ -24336,7 +24371,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "목포는 대한민국 전남광주통합특별시 서남부의 무안반도 남단에 있는 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "조선의 성립과 발전"],
-    [587],
+    [591],
   ],
   [
     "kr-21cbecd852a8",
@@ -24344,7 +24379,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우정총국은 1884년 근대식 우편 업무를 시작한 관청이다. 개업 축하연을 계기로 갑신정변이 일어났고, 정변 실패 뒤 우편 사업도 중단되었다.",
     ["서울특별시 종로구 우정국로 59 (견지동, 우정총국)"],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 588],
+    [0, 592],
   ],
   [
     "kr-c372351584c4",
@@ -24352,7 +24387,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "독도를 이루는 두 큰 섬 가운데 서쪽에 있는 섬으로, 동도보다 높고 면적도 넓다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 589],
+    [0, 593],
   ],
   [
     "kr-7a90a7bd8645",
@@ -24360,7 +24395,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "독도를 이루는 두 큰 섬 가운데 동쪽에 있는 섬으로, 독도등대와 배가 닿는 접안시설이 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 589],
+    [0, 593],
   ],
   [
     "kr-a42cfe638d05",
@@ -24368,7 +24403,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1900년 대한제국 칙령 제41호에 울도군이 관할하는 섬으로 명시된 독도의 옛 이름이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 590],
+    [0, 594],
   ],
   [
     "kr-3a8cd7d46ccd",
@@ -24381,7 +24416,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "조선의 성립과 발전",
       "조선 사회의 변화",
     ],
-    [0, 591, 592, 593],
+    [0, 595, 596, 597],
   ],
   [
     "kr-f5115b3698cf",
@@ -24389,7 +24424,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우산도는 한국의 역사에서 주로 발견되는 이름으로, 동해에 있는 섬을 가리킨다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [594],
+    [598],
   ],
   [
     "kr-caf0272950d9",
@@ -24397,7 +24432,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고종이 보낸 이준·이상설·이위종은 1907년 헤이그 만국평화회의에서 일본의 외교권 침탈을 알리고자 했다. 공식 회의 참석은 막혔지만 국제 여론에 한국의 처지를 호소했다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 595],
+    [0, 599],
   ],
   [
     "kr-7a5ca87bed95",
@@ -24405,7 +24440,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "네덜란드 왕국는 서유럽에 위치한 입헌군주제 국가이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "조선 사회의 변화"],
-    [596],
+    [600],
   ],
   [
     "kr-f408a789b2b0",
@@ -24413,7 +24448,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "독립협회는 청의 사신을 맞던 영은문 자리 가까이에 독립문을 세웠다. 1897년 완성된 독립문은 자주독립과 근대적 개혁을 지향한 움직임을 상징한다.",
     ["서울 서대문구 현저동 941번지"],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 597],
+    [0, 601],
   ],
   [
     "kr-e10f89720d87",
@@ -24421,7 +24456,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영은문은 조선이 중국의 사신을 맞이 하기 위한 상징적 관문으로서 1537년에 세웠다가 1895년에 철거한 건축물이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [598],
+    [602],
   ],
   [
     "kr-aa752a79b52d",
@@ -24429,7 +24464,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이승훈이 1907년 평안북도 정주에 세워 민족 교육을 펼친 학교이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [599],
+    [603],
   ],
   [
     "kr-7cce2f373ba9",
@@ -24437,7 +24472,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안창호와 윤치호가 1908년 평양에 세워 민족 교육을 펼친 학교이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [600],
+    [604],
   ],
   [
     "kr-c1ed0cb64ada",
@@ -24445,7 +24480,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하얼빈역은 중화인민공화국 헤이룽장성 하얼빈시 난강구의 철도역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [601],
+    [605],
   ],
   [
     "kr-711c3c62294b",
@@ -24453,7 +24488,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대한국, 약칭 대한제국 또는 한국은 1897년 10월 12일부터 1910년 8월 29일까지 존재했던 황제국으로, 조선을 계승한 국가이자 한반도의 마지막 전제군주국이었다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "고려의 성립과 변화"],
-    [602],
+    [606],
   ],
   [
     "kr-617d98ea0194",
@@ -24461,7 +24496,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1919년 3월 1일 탑골공원에 모인 학생과 시민들은 독립선언서를 낭독하고 거리에서 만세를 외쳤다. 서울과 여러 도시에서 시작된 시위는 전국과 국외 한인 사회로 퍼졌다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 603],
+    [0, 607, 608],
   ],
   [
     "kr-fca84e37de49",
@@ -24469,7 +24504,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1919년 4월 15일 일본군은 제암리 주민을 교회에 모아 살해하고 마을에 불을 질렀다. 화성 지역 만세운동에 대한 이 폭력적 탄압은 선교사 등의 조사와 기록으로 국내외에 알려졌다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 604],
+    [0, 609],
   ],
   [
     "kr-2644d14725ef",
@@ -24477,7 +24512,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1919년 4월 15일 일본군은 제암리 주민을 교회에 모아 살해하고 마을에 불을 질렀다. 화성 지역 만세운동에 대한 이 폭력적 탄압은 선교사 등의 조사와 기록으로 국내외에 알려졌다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 604],
+    [0, 609],
   ],
   [
     "kr-52dbcde85397",
@@ -24485,7 +24520,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "블라디보스토크는 러시아의 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [605],
+    [610],
   ],
   [
     "kr-5b4359baf1ed",
@@ -24493,7 +24528,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아메리카는 아시아에 이어 두 번째로 큰 대륙이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [606],
+    [611],
   ],
   [
     "kr-18b733ab896a",
@@ -24501,7 +24536,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고종은 1897년 환구단에서 황제 즉위 의례를 거행하고 대한제국을 선포했다. 경운궁, 오늘날의 덕수궁을 중심으로 자주적인 황제국의 위상을 세우고 근대화를 추진하고자 했다.",
     ["서울 중구 세종대로 99 (정동)"],
     ["한국사", "근현대 사회와 민주주의", "조선의 성립과 발전"],
-    [0, 607],
+    [0, 612],
   ],
   [
     "kr-d8545b50f0b5",
@@ -24509,7 +24544,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "암태도는 전라남도 신안군 암태면에 위치한 섬이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [608],
+    [613],
   ],
   [
     "kr-c0703218b32a",
@@ -24517,7 +24552,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우한시는 후베이성의 성도이며 부성급 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [609],
+    [614],
   ],
   [
     "kr-16595e6c7c89",
@@ -24525,7 +24560,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼원보는 일제강점기에 서간도에 세워진 독립 운동 기지이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [610],
+    [615],
   ],
   [
     "kr-c63040039435",
@@ -24533,7 +24568,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1920년 김좌진·홍범도 등이 이끈 독립군이 일본군과 싸운 북간도의 전투 지역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [611],
+    [616],
   ],
   [
     "kr-75f4f7846e38",
@@ -24541,7 +24576,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1920년 홍범도·최진동 등이 이끈 독립군이 일본군을 물리친 만주의 골짜기이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [612],
+    [617],
   ],
   [
     "kr-3237a72cdb41",
@@ -24549,7 +24584,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옌안은 중화인민공화국 산시성의 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [613],
+    [618],
   ],
   [
     "kr-e0d8d1af9d31",
@@ -24557,7 +24592,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1933년 지청천의 한국독립군과 중국군이 함께 일본군을 물리친 만주의 고개이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [614],
+    [619],
   ],
   [
     "kr-a3ba62f3bf41",
@@ -24565,7 +24600,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1911년 서간도에 설립되어 무장 독립운동에 참여할 독립군을 길러 낸 교육 기관이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [615],
+    [620],
   ],
   [
     "kr-e6d2bda98d15",
@@ -24573,7 +24608,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만주국은 일본 제국이 만주사변 직후 동삼성을 강제로 점령하여 만주 지역에 세운 괴뢰국이자 식민지이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [616],
+    [621],
   ],
   [
     "kr-c8b09d733dab",
@@ -24581,7 +24616,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일제가 1908년에 세워 조선의 토지와 자원을 수탈하는 데 이용한 국책 회사이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [617],
+    [622],
   ],
   [
     "kr-00bdf2ef6961",
@@ -24589,7 +24624,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일제강점기에 조선총독부의 산업 정책에 자금을 공급하며 식민지 경제 지배를 뒷받침한 특수은행이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [618],
+    [623],
   ],
   [
     "kr-f9e0d07817bd",
@@ -24597,7 +24632,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모스크바는 러시아의 수도이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [619],
+    [624],
   ],
   [
     "kr-53e7ff26ab5a",
@@ -24605,7 +24640,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "혜산시는 량강도 북쪽에 있는 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [620],
+    [625],
   ],
   [
     "kr-446279412a7c",
@@ -24613,7 +24648,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청진시는 조선민주주의인민공화국 함경북도 동해안에 있는 시이자 함경북도 도청 소재지이기도 하다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [621],
+    [626],
   ],
   [
     "kr-ba00457c3846",
@@ -24621,7 +24656,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흥남구역, 옛 흥남시는 함경남도 서쪽에 위치하며 동해와 마주하고 있어 어업이 발달한 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [622],
+    [627],
   ],
   [
     "kr-c2ca949794b8",
@@ -24629,7 +24664,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옹진군은 1945년 11월 3일까지 황해도 남서부에 있던 군으로 옹진반도의 대부분과 인근 도서를 관할로 하였으며 옹진읍·부민면·용연면·봉구면·흥미면·동남면·북면·서면·용천면·교정면·가천면의 1읍 10면으로 구성되었다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [623],
+    [628],
   ],
   [
     "kr-1e783cc6f712",
@@ -24637,7 +24672,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대전광역시는 대한민국 충청권의 중남부에 자리한 광역시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "고려의 성립과 변화"],
-    [624],
+    [629],
   ],
   [
     "kr-a81649281d24",
@@ -24645,7 +24680,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포항시는 대한민국 경상북도 동해안에 위치한 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [625],
+    [630],
   ],
   [
     "kr-23db0f581c39",
@@ -24653,7 +24688,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼척시는 대한민국 강원특별자치도 동해안 최남단에 있는 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [626],
+    [631],
   ],
   [
     "kr-465bda1efa95",
@@ -24661,7 +24696,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한반도 군사 분계선 남쪽에 자리한 대한민국을 가리키는 이름이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [627],
+    [632],
   ],
   [
     "kr-4f12e8995f96",
@@ -24669,7 +24704,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대한민국은 동아시아의 한반도 군사 분계선 남부에 위치한 나라이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [627],
+    [632],
   ],
   [
     "kr-b1cdfb9e8948",
@@ -24677,7 +24712,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제주 4·3 사건의 희생과 피해를 기억하는 장소이다. 교과서는 행방불명자들의 표석 사진을 통해 분단 과정의 갈등을 살펴본다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 628, 362],
+    [0, 633, 364],
   ],
   [
     "kr-07af69b04124",
@@ -24685,7 +24720,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "금남로(錦南路, Geumnam-ro, 광주광역시도 제2호선)는 전남광주통합특별시 북구 임동 발산교앞 교차로에서 동구 금남로1가 문화전당역 인근 교차로를 잇는 도로다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [629],
+    [634],
   ],
   [
     "kr-2d9fba52f5e6",
@@ -24693,7 +24728,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울과 부산을 잇는 고속도로로, 한반도 남부의 주요 도시들을 연결한다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [630],
+    [635],
   ],
   [
     "kr-d3902da8765f",
@@ -24701,7 +24736,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경의선은 서울특별시 중구 봉래동2가 서울역과 경기도 파주시 장단면 노상리 도라산역을 잇는 한국철도공사의 간선철도 노선이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [631],
+    [636],
   ],
   [
     "kr-6f3d1976794e",
@@ -24709,7 +24744,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "연평도는 경기만 북서쪽에 있는 대한민국 관할의 섬 또는 제도로, 주 섬인 대연평도를 비롯하여 소연평도 등 주변의 부속 섬들로 이루어져 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "선사 문화와 고대 국가"],
-    [632],
+    [637],
   ],
   [
     "kr-728d9f63e3d3",
@@ -24717,7 +24752,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강원특별자치도는 대한민국의 북동부에 있는 특별자치도 지역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [633],
+    [638],
   ],
   [
     "kr-11a869a4e336",
@@ -24725,7 +24760,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "속초시는 대한민국 강원특별자치도 동해안 북부에 위치한 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [634],
+    [639],
   ],
   [
     "kr-5218234edbca",
@@ -24733,7 +24768,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아바이마을은 강원특별자치도 속초시 청호동에 위치한 함경도 출신 실향민들의 집단촌이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [635],
+    [640],
   ],
   [
     "kr-c7bd18c6951d",
@@ -24741,7 +24776,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비무장 지대는 전쟁, 분쟁 상태 혹은 정전 상태에 있는 둘 이상의 국가 사이에 평화 조약, 휴전 협정 등에 의해서 설치된 군사 활동이 허용되지 않는 지역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [636],
+    [641],
   ],
   [
     "kr-f9e87b1743c5",
@@ -24749,7 +24784,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 워싱턴 D.C.에 있는 대통령의 집무실이자 관저이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [637],
+    [642],
   ],
   [
     "kr-411bda9a20bb",
@@ -24757,7 +24792,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중화인민공화국 홍콩 특별행정구 줄여서 홍콩은 중화인민공화국 화난 주강 삼각주 동쪽에 위치한 특별행정구이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [638],
+    [643],
   ],
   [
     "kr-a34008dc3694",
@@ -24765,7 +24800,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창덕궁은 대한민국 서울특별시의 북악산 왼쪽 봉우리인 응봉자락에 자리 잡고 있는 조선 시대 궁궐로 동쪽으로 창경궁과 맞닿아 있다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [639],
+    [644],
   ],
   [
     "kr-a44dd09097f5",
@@ -24773,7 +24808,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강동군은 평양직할시 북동부에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [640],
+    [645],
   ],
   [
     "kr-5a077940d0c7",
@@ -24781,7 +24816,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영도는 부산광역시 중구·동구·서구와 함께 부산광역시의 원도심을 이루는 섬으로, 섬 전체가 부산광역시 영도구를 구성한다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "근현대 사회와 민주주의"],
-    [641],
+    [646],
   ],
   [
     "kr-2ba5ea9e2a31",
@@ -24789,7 +24824,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양양군은 대한민국 강원특별자치도 동해안 중부에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [642],
+    [647],
   ],
   [
     "kr-171961bc6371",
@@ -24797,7 +24832,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "연천군은 대한민국 경기도의 최북단에 위치하고 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [643],
+    [648],
   ],
   [
     "kr-cdc7fc68d659",
@@ -24805,7 +24840,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단양시는 중화인민공화국 장쑤성 전장 시의 현급시이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [644],
+    [649],
   ],
   [
     "kr-87d1fde40816",
@@ -24813,7 +24848,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 칭하이의 바옌하르 산지에서 발원하여 황토고원을 지나 보하이해로 들어가는 강이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [0, 645, 646],
+    [0, 650, 651],
   ],
   [
     "kr-d9067f874ef9",
@@ -24821,7 +24856,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "눙안현은 중화인민공화국 지린성 창춘시의 행정구역이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [647],
+    [652],
   ],
   [
     "kr-031a5915351d",
@@ -24829,7 +24864,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "각저총은 중화인민공화국 길림성 지안시 여산에 있는 고구려의 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [648],
+    [653],
   ],
   [
     "kr-70de7c323108",
@@ -24837,7 +24872,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼한의 농업을 설명하면서 제천의 저수지 의림지가 제시된다. 벼농사와 수리 시설의 관계를 보여 주는 사례이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 649, 650],
+    [0, 654, 655],
   ],
   [
     "kr-bcf851da163c",
@@ -24845,7 +24880,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김제 벽골제는 넓은 평야에서 물을 관리하기 위해 만든 대규모 수리시설이다. 남아 있는 제방과 수문 돌기둥은 고대의 토목 기술과 농업 생산 기반을 보여 준다.",
     ["전북 김제시 부량면 월승리 119번지"],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 651],
+    [0, 656],
   ],
   [
     "kr-e4a602fa8857",
@@ -24853,7 +24888,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "읍루는 숙신의 후예이자 말갈의 전신 명칭으로 여진계열 민족이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [652],
+    [657],
   ],
   [
     "kr-3f1b10db1519",
@@ -24861,7 +24896,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백마강, 또는 백강은 충청남도 부여군을 지나는 금강의 하류 구간을 부르는 이름인데, 경우에 따라서는 금산군 이남의 금강 중하류를 통틀어 가리키는 말로도 쓰인다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [233],
+    [235],
   ],
   [
     "kr-9efd660ef7fe",
@@ -24869,7 +24904,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성왕은 538년 수도를 웅진에서 사비로 옮기고 나라 이름을 남부여로 고쳤다. 사비는 백제가 멸망한 660년까지 수도로 기능하며 정치와 불교문화의 중심지가 되었다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 653],
+    [0, 658],
   ],
   [
     "kr-9673f65d1cf1",
@@ -24877,7 +24912,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함흥평야는 함경남도의 남쪽에 위치한 평야이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [654],
+    [659],
   ],
   [
     "kr-19506821f6d6",
@@ -24885,7 +24920,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남산은 대한민국 경상북도 경주시 인왕동, 탑동, 배동, 내남면에 걸쳐있는 한국의 화강암 산이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [655],
+    [660],
   ],
   [
     "kr-fd80375e9c6b",
@@ -24893,7 +24928,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "소백산맥은 한반도 남부에 위치하는 산맥이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [656],
+    [661],
   ],
   [
     "kr-b219f699e724",
@@ -24901,7 +24936,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라 진흥왕이 함경남도 이원 일대까지 순시한 일을 기념해 세운 비석이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [657],
+    [662],
   ],
   [
     "kr-253b59b92227",
@@ -24909,7 +24944,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라 진흥왕이 568년 함경남도 황초령 일대를 순시한 일을 기념해 세운 비석이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [658],
+    [663],
   ],
   [
     "kr-72be80ea3c1b",
@@ -24917,7 +24952,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라 진흥왕이 새로 확보한 한강 유역을 순시한 뒤 북한산에 세운 비석이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [659],
+    [664],
   ],
   [
     "kr-36ac142e81a8",
@@ -24925,7 +24960,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단양 신라 적성비는 대한민국 충청북도 단양군 단성면 적성산성 내에 있는 신라 시대의 비석으로, 대한민국의 국보 제198호이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [660],
+    [665],
   ],
   [
     "kr-3e986971b693",
@@ -24933,7 +24968,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창녕에 남아 있는 신라 진흥왕 때의 비석으로, 신라가 영역을 넓혀 가던 역사를 보여 준다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [661],
+    [666],
   ],
   [
     "kr-fe25e26b52fe",
@@ -24949,7 +24984,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덕흥리 고분은 조선민주주의인민공화국 남포시 강서구역 덕흥리에 위치한 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [662],
+    [667],
   ],
   [
     "kr-52e231d7499b",
@@ -24957,7 +24992,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "금관총은 대한민국 경상북도 경주시 노서동에 소재한 고분이자 신라 왕족 혹은 귀족으로 추정되는 이사지왕의 무덤이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [663],
+    [668],
   ],
   [
     "kr-a52af3e9391a",
@@ -24965,7 +25000,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 분황사에 있는 신라의 석탑으로, 선덕여왕 때인 634년에 세운 것으로 본다.",
     ["경북 경주시 분황로 94-11, 분황사 (구황동)"],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [664],
+    [669],
   ],
   [
     "kr-5cdafe98fcce",
@@ -24973,7 +25008,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서산시는 대한민국 충청남도 서북부 태안반도에 있는 시이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "조선의 성립과 발전"],
-    [665],
+    [670],
   ],
   [
     "kr-5b104eb8d4e8",
@@ -24981,7 +25016,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카샨은 이란 이스파한주의 도시로, 인구는 272,359명(2005년 기준)이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [666],
+    [671],
   ],
   [
     "kr-32aec3f91e11",
@@ -24989,7 +25024,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안악 3호분(安岳 3號墳)은 황해남도 안악군에 위치한 고구려 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [667],
+    [672],
   ],
   [
     "kr-39b88a4e18ac",
@@ -24997,7 +25032,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안악 1호분은 황해남도 안악군에 있는 고구려 벽화고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [668],
+    [673],
   ],
   [
     "kr-d85ad4c04bc0",
@@ -25005,7 +25040,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안악군은 조선민주주의인민공화국 황해남도 서쪽에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [669],
+    [674],
   ],
   [
     "kr-7ef597edd2f1",
@@ -25013,7 +25048,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "달서구는 대한민국 대구광역시 남서부에 있는 구이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [670],
+    [675],
   ],
   [
     "kr-eee6e5b43f3f",
@@ -25021,7 +25056,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백제 사비 도성 밖에 조성된 부여의 왕릉급 무덤들로, 백제 왕실의 장례 문화를 보여 준다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [671],
+    [676],
   ],
   [
     "kr-da7c64db4e96",
@@ -25029,7 +25064,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 나라현에 있는 사찰로, 쇼토쿠 태자와 관련된 초기 일본 불교 문화를 보여 준다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [672],
+    [677],
   ],
   [
     "kr-77a01c2cef4b",
@@ -25037,7 +25072,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김해에 있는 1∼5세기 지배층의 무덤들로, 구야국과 금관가야의 역사를 보여 준다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [673],
+    [678],
   ],
   [
     "kr-ab26d4fa5b02",
@@ -25045,7 +25080,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제(齊, 479년 ~ 502년)는 중국 남북조 시대 남조의 2번째 왕조이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [674],
+    [679],
   ],
   [
     "kr-ca40f87e0521",
@@ -25053,7 +25088,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양(梁, 502년 ~ 557년)은 중국 남북조 시대 강남에 건국된 남조의 3번째 왕조이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [675],
+    [680],
   ],
   [
     "kr-79b5561c2abc",
@@ -25061,7 +25096,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진(陳, 557년 ~ 589년)은 중국 남북조 시대 강남 지방에 건국된 남조 최후의 왕조이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [676],
+    [681],
   ],
   [
     "kr-0e8789fab9e5",
@@ -25069,7 +25104,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성왕은 538년 수도를 웅진에서 사비로 옮기고 나라 이름을 남부여로 고쳤다. 사비는 백제가 멸망한 660년까지 수도로 기능하며 정치와 불교문화의 중심지가 되었다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [0, 653],
+    [0, 658],
   ],
   [
     "kr-0ea0d5a4bbcb",
@@ -25077,7 +25112,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "문경새재는 대한민국의 경상북도의 문경시 문경읍 《'문경새재도립공원'》에 있는 백두대간의 조령산의 산마루를 넘는 고갯길이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [677],
+    [682],
   ],
   [
     "kr-ffcdf1e448be",
@@ -25085,7 +25120,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중화군은 조선민주주의인민공화국 황해북도 북부에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [678],
+    [683],
   ],
   [
     "kr-ee929ac870a2",
@@ -25093,7 +25128,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마전군은 지금의 연천군 미산면 마전리를 중심으로 연천군의 미산면과 왕징면, 백학면에 있었던 경기도의 옛 군이다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [679],
+    [684],
   ],
   [
     "kr-667444e22c99",
@@ -25101,7 +25136,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김유신묘는 현재 대한민국 경상북도 경주시 충효동에 있는 옥녀봉 동쪽 능선 한가운데에 위치한 남북국 시대 신라의 고분으로, 신라의 장군이자 재상이었던 김유신의 무덤으로 전하고 있다.",
     ["경북 경주시 충효동 산7-1번지 림"],
     ["한국사", "통일 신라와 발해"],
-    [680],
+    [685],
   ],
   [
     "kr-c2fe1ffb423e",
@@ -25109,7 +25144,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "문무대왕릉은 동해의 바위섬으로, 신라 문무왕의 유해를 모신 곳으로 전해진다. 바다의 용이 되어 나라를 지키겠다는 문무왕의 유언과 연결되는 유적이다.",
     ["경북 경주시 양북면 봉길리 앞 해중(대왕암)"],
     ["한국사", "통일 신라와 발해"],
-    [0, 681],
+    [0, 686],
   ],
   [
     "kr-d2e8437f901e",
@@ -25117,7 +25152,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "견훤산성은 대한민국 경북 상주시 장바위산 꼭대기를 에워싼, 테뫼식 산성이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [682],
+    [687],
   ],
   [
     "kr-5ca1981dec6b",
@@ -25125,7 +25160,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 내륙에서 동쪽으로 흘러 동중국해로 들어가는 중국에서 가장 긴 강이다. 장강·양쯔강이라고도 부른다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 683, 684, 685],
+    [0, 688, 689, 690],
   ],
   [
     "kr-1cf5b8250d8f",
@@ -25133,7 +25168,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토함산 자락에 조성한 석굴암과 불국사는 신라의 불교 신앙을 조각과 건축으로 표현했다. 석굴암의 석조 불상과 불국사의 석축·탑은 당시의 높은 기술을 보여 준다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 686],
+    [0, 691],
   ],
   [
     "kr-b213105433aa",
@@ -25141,7 +25176,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흥법사지는 대한민국 강원특별자치도 원주시에 있는 고려시대의 절터이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [687],
+    [692],
   ],
   [
     "kr-4f450436fd4f",
@@ -25149,7 +25184,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불국사 극락전은 대한민국 경상북도 경주시 불국사에 있는 건물 중 하나이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [688],
+    [693],
   ],
   [
     "kr-6badda9d2e80",
@@ -25157,7 +25192,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "크라스키노는 러시아 하산스키 군에 있는 마을이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [689],
+    [694],
   ],
   [
     "kr-894682d981f9",
@@ -25165,7 +25200,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부천시는 대한민국 경기도의 중서부에 위치한 시이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [690],
+    [695],
   ],
   [
     "kr-ea2e3e94b1b1",
@@ -25173,7 +25208,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "927년 신라를 구원하러 온 왕건은 대구 팔공산 일대에서 견훤의 후백제군과 싸워 크게 패했다. 신숭겸과 김락 등이 전사했으며, 이후 고려와 후백제의 통일 전쟁이 더욱 치열해졌다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 338],
+    [0, 340],
   ],
   [
     "kr-c4202acec21d",
@@ -25181,7 +25216,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정안국(定安國, 938년 ~ 986년)은 발해의 귀족 출신인 열만화가 938년 경 서경 압록부 지역에서 건국한 나라다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [691],
+    [696],
   ],
   [
     "kr-be253a175b8f",
@@ -25189,7 +25224,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북송(北宋, 960년 ~ 1127년)은 중국의 왕조 중 하나이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [692],
+    [697],
   ],
   [
     "kr-100cd8fa0e47",
@@ -25197,7 +25232,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남송(南宋, 1127년 ~ 1279년)은 중국의 왕조이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [693],
+    [698],
   ],
   [
     "kr-1c73339afd0f",
@@ -25205,7 +25240,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서하는 1038년에서 1227년까지 중국 북서부의 간쑤성, 산시성에 위치했던 티베트인의 분파인 탕구트족의 왕조이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [694],
+    [699],
   ],
   [
     "kr-a0a7b7b4e4be",
@@ -25213,7 +25248,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "구성시는 평안북도 중앙부에 있는 소도시이고, 본래 구성군으로 불리다가 1967년 8월 1일에 시로 승격했다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [695],
+    [700],
   ],
   [
     "kr-f6d04964c6f5",
@@ -25221,7 +25256,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함경북도 경원·경흥 지역을 가리키던 고려 말의 지명이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 696],
+    [0, 701],
   ],
   [
     "kr-14f039880b2e",
@@ -25229,7 +25264,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 고려산에 있는 사찰로, 백련사·청련사와 함께 이 산의 불교 유적을 이룬다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 697],
+    [0, 702],
   ],
   [
     "kr-ea79288d87f4",
@@ -25237,7 +25272,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 하점면과 양사면 사이에 있는 산으로, 다른 산줄기와 떨어져 있어 별립산이라 불렸다고 전한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 698],
+    [0, 703],
   ],
   [
     "kr-5654c047c133",
@@ -25245,7 +25280,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려산은 인천광역시 강화군 하점면에 위치한 산으로 해발 436.3 m이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [699],
+    [704],
   ],
   [
     "kr-822a93ca9764",
@@ -25253,7 +25288,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 양도면에 있는 산으로, 조선시대 정상의 봉수대에서 주변 지역으로 군사 신호를 전했다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [0, 700],
+    [0, 705],
   ],
   [
     "kr-a1d1fa237489",
@@ -25261,7 +25296,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도 북부에 있는 산으로, 하늘에 제사를 지냈다는 봉천대와 조선시대 봉수의 역사가 남아 있다.",
     [],
     ["한국사", "조선의 성립과 발전", "고려의 성립과 변화"],
-    [0, 701],
+    [0, 706],
   ],
   [
     "kr-b437acefd302",
@@ -25269,7 +25304,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장진군은 조선민주주의인민공화국의 행정구역으로 함경남도의 서북부에 소재한 군이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [702],
+    [707],
   ],
   [
     "kr-341b19b82dde",
@@ -25277,7 +25312,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "철령은 조선민주주의인민공화국 강원도 고산군과 회양군 사이에 있는 고개이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [703],
+    [708],
   ],
   [
     "kr-10da22f15d48",
@@ -25285,7 +25320,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사천시는 대한민국 경상남도 서남부에 있는 시이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [704],
+    [709],
   ],
   [
     "kr-6ae2d4695ab4",
@@ -25293,7 +25328,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사천 흥사리 매향비는 1387년 승려와 주민들이 향나무를 묻는 의식을 치르고 세운 비석이다. 나라의 안정과 백성의 평안을 기원한 기록은 고려 말 지역 공동체의 불교 신앙을 보여 준다.",
     ["경남 사천시 곤양면 흥사리 산48-2번지"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 705],
+    [0, 710],
   ],
   [
     "kr-de482f669e56",
@@ -25301,7 +25336,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려시대, 성종이 관료로 선발할 인재를 교육하기 위하여 개경에 설치한 최고 교육기관.",
     [],
     ["한국사", "고려의 성립과 변화", "통일 신라와 발해"],
-    [0, 706],
+    [0, 711],
   ],
   [
     "kr-66c7b07aacdd",
@@ -25309,7 +25344,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 시대에 고쳐 지은 목조 건축물이다. 배흘림기둥과 주심포 구조를 통해 고려 중·후기 불교 건축의 특징을 살펴볼 수 있다.",
     ["경상북도 영주시 부석사로 345 (부석면, 부석사)"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 707, 708],
+    [0, 712, 713],
   ],
   [
     "kr-350c3abf80f3",
@@ -25317,7 +25352,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "여주 고달사지는 경기도 여주시 북내면 상교리에 있는 신라의 고달사 터이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [709],
+    [714],
   ],
   [
     "kr-e2b93425f35b",
@@ -25325,7 +25360,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선은 백악산·낙산·남산·인왕산의 능선을 따라 한양도성을 쌓았다. 산세를 이용한 성곽은 새 수도 한양을 방어하고 도성의 경계를 이루었다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 710],
+    [0, 715],
   ],
   [
     "kr-6b90a496f74d",
@@ -25333,7 +25368,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남산은 서울특별시 중구와 용산구에 걸쳐 있는 대한민국의 산이다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [711],
+    [716],
   ],
   [
     "kr-730ce45ad17a",
@@ -25341,7 +25376,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선은 백악산·낙산·남산·인왕산의 능선을 따라 한양도성을 쌓았다. 산세를 이용한 성곽은 새 수도 한양을 방어하고 도성의 경계를 이루었다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [0, 710],
+    [0, 715],
   ],
   [
     "kr-393ac0f3de84",
@@ -25349,7 +25384,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "거제도는 경상남도 거제시의 본섬으로, 제주도에 이어 대한민국에서 2번째로 큰 섬이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [712],
+    [717],
   ],
   [
     "kr-3354b4a9880a",
@@ -25357,7 +25392,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 초기 현 전남광주통합특별시 나주시의 영산강변에 설치되었던 조창(漕倉).",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 713],
+    [0, 718],
   ],
   [
     "kr-151eff6097f0",
@@ -25365,7 +25400,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선 전기에 금강 하류인 현 전북특별자치도 익산시 지역에 설치되었던 조창(漕倉).",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [0, 714],
+    [0, 719],
   ],
   [
     "kr-254b01e6cf36",
@@ -25373,7 +25408,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전교당은 도산서원의 중심 강당으로 유생들이 공부하고 모임을 열던 건물이다. 이황을 기리는 도산서원이 1574년 세워질 때 함께 건립되어 서원의 교육 기능을 맡았다.",
     ["경북 안동시 도산면 도산서원길 154 (토계리)"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 715],
+    [0, 720],
   ],
   [
     "kr-dbd7d66ccd6d",
@@ -25386,7 +25421,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "조선 사회의 변화",
     ],
-    [716],
+    [721],
   ],
   [
     "kr-f236cea16295",
@@ -25394,7 +25429,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프리카는 아시아, 아메리카에 이어 세계에서 세 번째로 큰 대륙이다.",
     [],
     ["한국사", "조선의 성립과 발전", "선사 문화와 고대 국가"],
-    [717],
+    [722],
   ],
   [
     "kr-6cf8131838b1",
@@ -25402,7 +25437,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "연안 또는 해안은 일반적으로 바다와 육지가 맞닿아 서로 밀접한 영향을 미치는 지역 및 해역을 총칭한다.",
     [],
     ["한국사", "조선의 성립과 발전", "조선 사회의 변화"],
-    [718],
+    [723],
   ],
   [
     "kr-aa748b61de78",
@@ -25410,7 +25445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼수군은 량강도 중부에 위치한 군이다.",
     [],
     ["한국사", "조선의 성립과 발전", "근현대 사회와 민주주의"],
-    [719],
+    [724],
   ],
   [
     "kr-ed8ad25e7791",
@@ -25418,7 +25453,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정조가 수원에 머물 때 사용한 임시 궁궐로, 평소에는 수원 유수의 집무 공간이었다.",
     ["경기 수원시 팔달구 남창동 6-2번지"],
     ["한국사", "조선 사회의 변화"],
-    [720],
+    [725],
   ],
   [
     "kr-296cc947b68c",
@@ -25426,7 +25461,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장안문은 화성의 4대문 중 북쪽 대문이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [721],
+    [726],
   ],
   [
     "kr-d18f7d3b24ac",
@@ -25434,7 +25469,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서북공심돈은 수원 화성 성벽 위에 세운 방어시설이다. 안에서 적의 움직임을 살피고 총포를 쏠 수 있도록 설계하여 정조 때 발전한 축성 기술을 보여 준다.",
     ["경기 수원시 팔달구 장안동 332번지"],
     ["한국사", "조선 사회의 변화"],
-    [0, 722],
+    [0, 727],
   ],
   [
     "kr-191c3ec1b73d",
@@ -25442,7 +25477,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "히코네시는 일본 시가현 북동부에 있는 도시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [723],
+    [728],
   ],
   [
     "kr-28eaced00f36",
@@ -25450,7 +25485,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남양주시는 대한민국 경기도의 동북부에 위치하고 있는 시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [724],
+    [729],
   ],
   [
     "kr-c8494afa3761",
@@ -25458,7 +25493,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "봉선사는 경기도 남양주시 진접읍에 있는 대한불교 조계종 소속 사찰이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [725],
+    [730],
   ],
   [
     "kr-2ad7f0aa1fec",
@@ -25466,7 +25501,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "법주사 팔상전은 부처의 생애를 여덟 장면으로 그린 그림을 봉안한 오층 목탑이다. 임진왜란으로 불탄 뒤 다시 지어 조선시대 목조 탑의 구조를 전한다.",
     ["충북 보은군 속리산면 법주사로 379, 법주사 (사내리)"],
     ["한국사", "조선 사회의 변화"],
-    [0, 726],
+    [0, 731],
   ],
   [
     "kr-65239e156701",
@@ -25474,7 +25509,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함부르크는 독일 북부에 있는 주이며 도시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [727],
+    [732],
   ],
   [
     "kr-78f7ffc0a9d3",
@@ -25482,7 +25517,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동에 남아 있는 조선시대 씨족 마을로, 유교적 생활과 전통 주거 문화를 보여 준다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [728],
+    [733],
   ],
   [
     "kr-0b6f47fcf98f",
@@ -25490,7 +25525,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정선군은 대한민국 강원특별자치도 동남부에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [729],
+    [734],
   ],
   [
     "kr-c8c6ec7e5bdd",
@@ -25498,7 +25533,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몽금포는 황해남도 룡연군 몽금포리에 있는 미포구로서 북으로 초도, 남으로 장산곶이 바라보이는 곳에 위치한다.",
     [],
     ["한국사", "조선 사회의 변화", "선사 문화와 고대 국가"],
-    [730],
+    [735],
   ],
   [
     "kr-5f4c48096ad2",
@@ -25506,7 +25541,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경산시는 대한민국 경상북도 남부에 있는 시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [731],
+    [736],
   ],
   [
     "kr-720624ff226e",
@@ -25514,7 +25549,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영산군은 경상남도 창녕군 남부지역에 있던 옛 행정 구역이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [732],
+    [737],
   ],
   [
     "kr-bbe56f1156ac",
@@ -25522,7 +25557,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "해남군은 대한민국 전남광주통합특별시 서남쪽에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [733],
+    [738],
   ],
   [
     "kr-123d4a2d3ed0",
@@ -25530,7 +25565,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강령군은 조선민주주의인민공화국 황해남도 남서부 해안 지역에 있는 군이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [734],
+    [739],
   ],
   [
     "kr-f205128ecf90",
@@ -25538,7 +25573,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "홍천군은 대한민국 강원특별자치도 중서부에 위치한 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [735],
+    [740],
   ],
   [
     "kr-7922acb5a23a",
@@ -25546,7 +25581,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청산군은 1914년 폐지 때까지 오늘날의 옥천군 동부에 있던 옛 행정 구역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [736],
+    [741],
   ],
   [
     "kr-8e0ff4396bf2",
@@ -25554,7 +25589,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하동군은 대한민국 경상남도 서부에 있는 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [737],
+    [742],
   ],
   [
     "kr-5ba7ff7609d3",
@@ -25562,7 +25597,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "여수에는 전라좌수영이 자리해 전라도 동남부의 수군을 지휘했다. 임진왜란 때 이순신은 이 수군을 주축으로 함대를 이끌고 출전해 남해안에서 일본군의 진출을 막았다.",
     [],
     ["한국사", "조선의 성립과 발전", "근현대 사회와 민주주의"],
-    [0, 738],
+    [0, 743],
   ],
   [
     "kr-50dba735c9cb",
@@ -25570,7 +25605,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고종은 1897년 환구단에서 황제 즉위 의례를 거행하고 대한제국을 선포했다. 경운궁, 오늘날의 덕수궁을 중심으로 자주적인 황제국의 위상을 세우고 근대화를 추진하고자 했다.",
     ["서울 중구 소공동 87-14번지"],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 607],
+    [0, 612],
   ],
   [
     "kr-dc6510332cb3",
@@ -25578,7 +25613,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오키 제도 또는 오키 군도는 동해에 있는 일본의 군도이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "조선 사회의 변화"],
-    [739],
+    [744],
   ],
   [
     "kr-544b485f280a",
@@ -25586,7 +25621,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "죽변면은 대한민국 경상북도 울진군의 면이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [740],
+    [745],
   ],
   [
     "kr-c22d00c5eafa",
@@ -25594,7 +25629,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시마네현은 일본 혼슈의 주고쿠 지방에 있는 현이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [741],
+    [746],
   ],
   [
     "kr-0d83a92b2fb2",
@@ -25602,7 +25637,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "울도군은 울릉도의 과거 행정구역이었다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [742],
+    [747],
   ],
   [
     "kr-e5227a1381e4",
@@ -25610,7 +25645,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "치장구은 중화인민공화국 충칭시의 행정구역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [743],
+    [748],
   ],
   [
     "kr-66f95cab05f0",
@@ -25618,7 +25653,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중화인민공화국 마카오 특별행정구 또는 줄여서 마카오는 중화인민공화국의 특별행정구이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [744],
+    [749],
   ],
   [
     "kr-3a677b8411aa",
@@ -25626,7 +25661,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창사는 중화인민공화국 후난성의 성도이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [745],
+    [750],
   ],
   [
     "kr-e9a59f357576",
@@ -25634,7 +25669,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "류저우는 중국 광시 좡족 자치구의 중북부에 위치한 지급시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [746],
+    [751],
   ],
   [
     "kr-3e0c7bdd2609",
@@ -25642,7 +25677,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "광저우는 중화인민공화국 남부 광둥 성의 성도이자, 화난 지역의 전체의 행정 중심 지역이고, 부성급시로서 성에 준하는 권한을 가지고 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [747],
+    [752],
   ],
   [
     "kr-d43389376b46",
@@ -25650,7 +25685,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "둔화시는 중화인민공화국 지린성 옌볜 조선족 자치주의 현급시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [748],
+    [753],
   ],
   [
     "kr-a5025f48b5a8",
@@ -25658,7 +25693,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옌지시 또는 연길시는 중화인민공화국 동북지역 길림성 연변조선족자치주의 주정부가 위치하고 있는 현급시이자 주도이다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "선사 문화와 고대 국가"],
-    [749],
+    [754],
   ],
   [
     "kr-2f05c6ef6235",
@@ -25666,7 +25701,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "룽징시는 중화인민공화국 지린성 연변 조선족 자치주에 있는 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [750],
+    [755],
   ],
   [
     "kr-72d05011eff8",
@@ -25674,7 +25709,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1937년 동북항일연군이 일제의 기관을 습격했던 함경도 지역의 마을이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [751],
+    [756],
   ],
   [
     "kr-cc041a1cd785",
@@ -25682,7 +25717,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서전서숙은 1906년 만주 용정에 설립된 한국의 신학문 민족교육기관이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [752],
+    [757],
   ],
   [
     "kr-0cc563fa13e0",
@@ -25690,7 +25725,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김약연 등이 1908년 북간도에 세워 민족 교육을 펼친 학교이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [753],
+    [758],
   ],
   [
     "kr-fb19b083a7da",
@@ -25698,7 +25733,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1911년 서간도에 세운 독립군 양성 기관으로, 뒤에 신흥무관학교로 이름을 바꾸었다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [615],
+    [620],
   ],
   [
     "kr-92f56f787bf3",
@@ -25706,7 +25741,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "왕칭현는 중화인민공화국 지린성 연변 조선족 자치주의 현이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [754],
+    [759],
   ],
   [
     "kr-fb7dc6132842",
@@ -25714,7 +25749,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단둥시는 중화인민공화국 랴오닝성에 위치한 도시로, 같은 성에 속한 둥강시와 함께 북한과의 최서남단 접경지에 위치해 있는 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [755],
+    [760],
   ],
   [
     "kr-da2cc50b7f4d",
@@ -25722,7 +25757,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하얼빈은 부성급시이자 중국 헤이룽장성의 성도이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [756],
+    [761],
   ],
   [
     "kr-b4d33990a194",
@@ -25730,7 +25765,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창춘 또는 장춘은 중화인민공화국 지린성에 있는 부성급시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [757],
+    [762],
   ],
   [
     "kr-ee70c94cb8ae",
@@ -25738,7 +25773,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스보보드니는 러시아 아무르주의 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [758],
+    [763],
   ],
   [
     "kr-ab1bb41fcb10",
@@ -25746,7 +25781,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1922년부터 1991년까지 유라시아 북부에 존재한 사회주의 연방 국가로, 수도는 모스크바였다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [759],
+    [764],
   ],
   [
     "kr-c4baf4496c37",
@@ -25754,7 +25789,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "간도는 압록강 상류와 두만강 북쪽의 조선인 거주 지역을 일컫는 말로, 간도의 범위에 관하여는 여러 이견이 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [760],
+    [765],
   ],
   [
     "kr-1ef115875c31",
@@ -25762,7 +25797,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나가사키시는 일본 규슈 북서부, 나가사키현 남서부에 있는 도시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [761],
+    [766],
   ],
   [
     "kr-2ffbb37ad8c3",
@@ -25770,7 +25805,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "얄타는 크림반도 남부 연안에 위치한 도시로 우크라이나 크림 자치 공화국에 위치한다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [762],
+    [767],
   ],
   [
     "kr-d31d44135bdf",
@@ -25778,7 +25813,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경원선은 서울특별시 용산구 용산역과 강원특별자치도 철원군 백마고지역을 잇는 간선철도 노선이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [763],
+    [768],
   ],
   [
     "kr-6150c4d66121",
@@ -25786,7 +25821,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1899년 일부 구간이 개통된 한국 최초의 철도로, 서울과 인천을 잇는 노선이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [764],
+    [769],
   ],
   [
     "kr-d7789a172042",
@@ -25794,7 +25829,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경부선은 대한민국 서울특별시 용산구 서울역과 부산광역시 동구 부산역을 잇는 한국철도공사의 간선철도 노선이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [765],
+    [770],
   ],
   [
     "kr-63c46523d494",
@@ -25802,7 +25837,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "송화군은 조선민주주의인민공화국 황해남도에 있는 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [766],
+    [771],
   ],
   [
     "kr-aa778c35f854",
@@ -25810,7 +25845,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신의주는 1905년 용산과 의주를 잇는 철도의 종착역이 들어서며 성장한 도시이다. 일본의 대륙 진출을 뒷받침하는 국경 교통 거점으로 개발되면서 기존 의주와 구별되는 도시가 형성되었다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 767],
+    [0, 772],
   ],
   [
     "kr-b603cdd53c31",
@@ -25818,7 +25853,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "운산군은 조선민주주의인민공화국 평안북도 동부에 있는 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [768],
+    [773],
   ],
   [
     "kr-45fbe8489222",
@@ -25826,7 +25861,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "갑산군은 량강도 중부에 있는 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [769],
+    [774],
   ],
   [
     "kr-a5b22edbde93",
@@ -25834,7 +25869,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "은산군은 조선민주주의인민공화국 평안남도 중부에 위치하는 군이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [770],
+    [775],
   ],
   [
     "kr-89ecaeecfc4e",
@@ -25842,7 +25877,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울 양화나루와 잠두봉 유적은 대한민국 서울특별시 한강의 동북쪽 강변에 있는 사적 제399호로 지정된 양화나루와 잠두봉 일원을 말한다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [771],
+    [776],
   ],
   [
     "kr-99d6bc738c2b",
@@ -25850,7 +25885,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울의 의류 산업과 노동 문제를 설명하며 등장하는 시장이다. 전태일의 활동을 통해 경제 성장기에 노동자들이 겪은 열악한 조건을 살펴본다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 772, 773],
+    [0, 777, 778],
   ],
   [
     "kr-4fde8f0742ba",
@@ -25858,7 +25893,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "개성공업지구는 흔히 개성공단으로 불리며, 대한민국과 조선민주주의인민공화국이 합작으로 추진했던 조선민주주의인민공화국의 경제특구이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [774],
+    [779],
   ],
   [
     "kr-071ef57196fe",
@@ -25866,7 +25901,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제주 어음리 빌레못동굴은 대한민국 제주특별자치도 제주시 애월읍에 있는 동굴이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [775],
+    [780],
   ],
   [
     "kr-92fc65b50b2f",
@@ -25874,7 +25909,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단양에 있는 선사시대 동굴 유적으로, 구석기부터 청동기시대까지의 생활 흔적이 발견되었다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [776],
+    [781],
   ],
   [
     "kr-7f56039faff8",
@@ -25882,7 +25917,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충북 단양 애곡리에 있는 선사시대 유적으로, 옛사람들의 생활 흔적이 남아 있다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [777],
+    [782],
   ],
   [
     "kr-71ddcedb1d47",
@@ -25890,7 +25925,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안투현은 중화인민공화국 지린성 옌볜 조선족 자치주에 위치한 현으로, 백두산과 두만강 상류를 경계로 조선민주주의인민공화국과 이웃해 있다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [778],
+    [783],
   ],
   [
     "kr-ccd722c9d0d5",
@@ -25905,7 +25940,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "근현대 사회와 민주주의",
       "통일 신라와 발해",
     ],
-    [779],
+    [784],
   ],
   [
     "kr-cdb9fc22c7bf",
@@ -25913,7 +25948,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "검은모루동굴유적은 황해북도 상원군 흑우리에서 발견된 구석기 시대 유적이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [780],
+    [785],
   ],
   [
     "kr-8a13d8322c34",
@@ -25921,7 +25956,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제천 점말동굴 유적은 충청북도 제천시 송학면 포전리에 있는 석기시대의 유적이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [781],
+    [786],
   ],
   [
     "kr-ac2b9f941641",
@@ -25929,7 +25964,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충북 단양에 있는 구석기시대 동굴 유적으로, 당시 사람과 동물의 흔적이 발견된 곳이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [782],
+    [787],
   ],
   [
     "kr-9ef92dbede0a",
@@ -25937,7 +25972,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "공주 금강 가에서 구석기시대 사람들의 생활 흔적이 발견된 유적이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [783],
+    [788],
   ],
   [
     "kr-756a3c6cdffb",
@@ -25945,7 +25980,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옥구군은 대한민국 전북특별자치도 서북쪽에 있던 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [784],
+    [789],
   ],
   [
     "kr-85e756426e80",
@@ -25953,7 +25988,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보령시는 대한민국 충청남도 서해안에 있는 시이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [785],
+    [790],
   ],
   [
     "kr-4a899600f438",
@@ -25961,7 +25996,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고성군은 대한민국 강원특별자치도 동해안 최북단에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [786],
+    [791],
   ],
   [
     "kr-3e86ffe49a1d",
@@ -25969,7 +26004,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "은률군은 조선민주주의인민공화국 황해남도 북서쪽에 있는 군이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [787],
+    [792],
   ],
   [
     "kr-b1a69c29b525",
@@ -25977,7 +26012,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다롄은 랴오닝 성의 도시로, 랴오둥반도 끝에 자리잡은 부동항이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [788],
+    [793],
   ],
   [
     "kr-7ea37c795e82",
@@ -25985,7 +26020,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안달루시아 광역자치주는 스페인 남부의 광역자치주이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [789],
+    [794],
   ],
   [
     "kr-622809f2e224",
@@ -25993,7 +26028,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스페인 왕국, 또는 에스파냐는 남유럽에 위치하고 있는 국가이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "조선의 성립과 발전"],
-    [790],
+    [795],
   ],
   [
     "kr-990e7e52cf7d",
@@ -26001,7 +26036,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파주시는 대한민국 경기도의 북서부에 위치하고 있는 시이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [791],
+    [796],
   ],
   [
     "kr-3640b9e1953d",
@@ -26009,7 +26044,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강원도 양양에서 신석기시대 사람들의 집터와 생활 흔적이 발견된 유적이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [792],
+    [797],
   ],
   [
     "kr-f4e7192113d0",
@@ -26017,7 +26052,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스톤헨지는 영국 남부 윌트셔 주 솔즈베리 평원과 에임즈버리에 있는 선사 시대의 거석기념물이자 선사 시대의 환상 열석 유적이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [793],
+    [798],
   ],
   [
     "kr-816d175cb711",
@@ -26025,7 +26060,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "윌트셔는 잉글랜드 사우스웨스트잉글랜드의 주로 주도는 트로브리지, 최대 도시는 스윈던이며 면적은 3,485km2, 인구는 720,060명(2021년 기준), 인구 밀도는 207명/km2이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [794],
+    [799],
   ],
   [
     "kr-4cabb998a9f6",
@@ -26033,7 +26068,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경남 창원의 철기 시대 무덤에서 철제 도구와 칠기, 붓 등 여러 물건이 발견되었다. 붓과 중국 화폐는 당시 중국과의 교류와 문자 사용을 살펴보는 자료이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 795],
+    [0, 800],
   ],
   [
     "kr-ef4605ebde38",
@@ -26049,7 +26084,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전연(前燕, 337년 ~ 370년)은 오호십육국 시대 선비족의 일파인 모용부의 수장 모용황에 의해 건국된 나라이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [796],
+    [801],
   ],
   [
     "kr-5350ddf46cbb",
@@ -26057,7 +26092,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선비족의 탁발씨가 세운 왕조로, 중국 남북조 시대 북조의 첫 왕조이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [797],
+    [802],
   ],
   [
     "kr-1ae018ce2133",
@@ -26065,7 +26100,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "평양직할시 대성구역에 있는 삼국시대 고구려의 도성 유적.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 798],
+    [0, 803],
   ],
   [
     "kr-7e7c4d980398",
@@ -26073,7 +26108,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한성백제박물관은 대한민국 서울특별시 송파구 방이동에 있는 서울시립박물관이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [799],
+    [804],
   ],
   [
     "kr-55ca4e33a315",
@@ -26089,7 +26124,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "공주·부여·익산의 여덟 유적으로 이루어진 세계유산으로, 백제의 역사와 문화를 보여 준다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [800],
+    [805],
   ],
   [
     "kr-4f7cdc2223fa",
@@ -26102,7 +26137,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "고려의 성립과 변화",
       "근현대 사회와 민주주의",
     ],
-    [801],
+    [806],
   ],
   [
     "kr-6e8e468357ba",
@@ -26110,7 +26145,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부여 정림사지는 대한민국 충청남도 부여군 부여읍 동남리에 있는 백제의 사찰 터이다.",
     ["충남 부여군 부여읍 동남리 254번지"],
     ["한국사", "선사 문화와 고대 국가"],
-    [802],
+    [807],
   ],
   [
     "kr-ab144d954c89",
@@ -26118,7 +26153,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 첨성대는 신라 선덕여왕 때 세운 천문 관측 시설로 전해진다. 하늘의 움직임을 살피고 역법을 운영했던 신라의 과학 지식과 왕경 문화를 보여 준다.",
     ["경북 경주시 인왕동 839-1번지"],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [0, 803],
+    [0, 808],
   ],
   [
     "kr-a5382a629d33",
@@ -26126,7 +26161,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "익산 미륵사지 석탑은 백제 무왕 때 세운 미륵사에 남은 석탑이다. 기둥과 지붕을 돌로 표현한 방식은 목탑의 구조가 석탑으로 옮겨 가는 모습을 보여 준다.",
     ["전북 익산시 금마면 기양리 97번지"],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 804],
+    [0, 809],
   ],
   [
     "kr-a4c7cb9e3771",
@@ -26134,7 +26169,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장군총은 중국 지린성 퉁화시 지안시集安市, 집안시 퉁구通溝의 토구자산土口子山 중허리에 있는 고구려 시대의 돌무덤石塚, 석총으로서, 현재 가장 완벽한 형태를 유지하고 있는 돌무지무덤이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [805],
+    [810],
   ],
   [
     "kr-58b40e3ad471",
@@ -26142,7 +26177,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무용총(舞踊塚, JYM458)은 중국 지린성 지안현 통구에 있는 고구려 고분이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [806],
+    [811],
   ],
   [
     "kr-77d6a834bf4a",
@@ -26150,7 +26185,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "합천 대야성은 대한민국 경상남도 합천군 합천읍 죽죽리, 해발 900m의 매봉산 정상울 둘러 쌓은 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [807],
+    [812],
   ],
   [
     "kr-44b0829b8f2d",
@@ -26158,7 +26193,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동도호부는 당나라가 고구려를 멸망시키고 668년, 평양에 설치한 군정 기관이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [808],
+    [813],
   ],
   [
     "kr-bde18a11a561",
@@ -26166,7 +26201,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 돈화에 있는 발해 문왕의 둘째 딸 정혜공주의 무덤이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [809],
+    [814],
   ],
   [
     "kr-41cb469e1908",
@@ -26174,7 +26209,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "궁예가 후고구려의 국호를 바꾸어 사용한 이름으로, 뒤에 태봉으로 다시 바꾸었다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [257],
+    [259],
   ],
   [
     "kr-b7baa87e279e",
@@ -26182,7 +26217,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라의 수도 경주에 남은 왕궁·불교 유적 등을 묶은 세계유산이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [810],
+    [815],
   ],
   [
     "kr-3e952c3a261c",
@@ -26190,7 +26225,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주역은 대한민국 경상북도 경주시 건천읍 화천리에 있는 경부고속선과 동해선의 철도역이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [811],
+    [816],
   ],
   [
     "kr-2f7a06cc1bb6",
@@ -26198,7 +26233,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라의 수도였던 경주에 있는 국립 박물관으로, 신라 역사와 불교 미술의 유물을 전시한다.",
     [],
     ["한국사", "통일 신라와 발해", "선사 문화와 고대 국가"],
-    [812],
+    [817],
   ],
   [
     "kr-811a130012b1",
@@ -26206,7 +26241,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포석정지에는 물을 굽이쳐 흐르게 한 돌 홈이 남아 있다. 신라 왕실이 이용한 공간으로, 물 위에 잔을 띄우는 유상곡수의 흔적을 보여 주며 건물은 남아 있지 않다.",
     ["경북 경주시 배동 454-3번지"],
     ["한국사", "통일 신라와 발해"],
-    [0, 813],
+    [0, 818],
   ],
   [
     "kr-9cac2157f1bd",
@@ -26214,7 +26249,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 남산동 동서 삼층석탑은 서로 다른 양식으로 마주 선 쌍탑이다. 동탑은 돌을 벽돌처럼 다듬어 쌓고, 서탑은 전형적인 삼층석탑 형식을 사용해 통일신라 석탑의 다양성을 보여 준다.",
     ["경북 경주시 남산동 227-3번지"],
     ["한국사", "통일 신라와 발해"],
-    [0, 814],
+    [0, 819],
   ],
   [
     "kr-3a0fd059efbe",
@@ -26222,7 +26257,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 남산의 바위에 새긴 불상군이다. 삼존불과 사각 돌기둥의 각 면에 새긴 불상이 함께 배치되어 있다.",
     ["경북 경주시 남산동 산36-4번지"],
     ["한국사", "통일 신라와 발해"],
-    [0, 251],
+    [0, 253],
   ],
   [
     "kr-dbef1a053624",
@@ -26230,7 +26265,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "감은사는 문무왕이 나라의 안정을 기원하며 짓기 시작해 아들 신문왕이 682년 완성한 절이다. 절터에 남은 동서 삼층석탑은 통일 직후 신라의 쌍탑 배치와 석조 기술을 보여 준다.",
     ["경북 경주시 양북면 용당리 55-3, 55-9번지"],
     ["한국사", "통일 신라와 발해"],
-    [0, 815],
+    [0, 820],
   ],
   [
     "kr-276508faea83",
@@ -26238,7 +26273,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 용장사곡 삼층석탑은 높은 바위 위에 세워 산 전체가 탑의 받침처럼 보이게 한 석탑이다. 용장사 터에 남은 이 탑은 자연 지형을 활용한 통일신라 불교 건축을 보여 준다.",
     ["경북 경주시 내남면 용장리 산1-1번지"],
     ["한국사", "통일 신라와 발해"],
-    [0, 816],
+    [0, 821],
   ],
   [
     "kr-c6ca41fa64db",
@@ -26246,7 +26281,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산둥반도는 중화인민공화국 산둥성 동쪽에 있는 반도이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [817],
+    [822],
   ],
   [
     "kr-fc6d442cee01",
@@ -26254,7 +26289,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신라방은 신라 시대 당나라에 있던 신라 사람들이 주로 모여 살던 집단 거주지이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [818],
+    [823],
   ],
   [
     "kr-d452f401e493",
@@ -26262,7 +26297,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "8세기 중엽 이후 신라인이 당나라 해안 곳곳에 설치한 자치기관.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 819],
+    [0, 824],
   ],
   [
     "kr-1913669999f4",
@@ -26270,7 +26305,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "936년 왕건의 고려군은 지금의 구미 일대 일리천에서 신검의 후백제군을 격파했다. 후백제가 항복하면서 신라의 항복에 이어 후삼국 통일이 마무리되었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 336],
+    [0, 338],
   ],
   [
     "kr-dc2217fc4814",
@@ -26278,7 +26313,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청주 용두사지 철당간은 절의 깃발을 달던 쇠기둥이다. 기둥에 새긴 글에는 962년의 건립 연대와 참여한 사람들의 이름이 남아 고려 초기 청주 지역의 불교 문화를 보여 준다.",
     ["충청북도 청주시 상당구 남문로2가 48-19"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 820],
+    [0, 825],
   ],
   [
     "kr-7fb1e90e9e47",
@@ -26286,7 +26321,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 서경의 장소로, 묘청의 건의에 따라 인종이 대화궁을 지었던 곳이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 821],
+    [0, 826],
   ],
   [
     "kr-4af3e3ae890b",
@@ -26294,7 +26329,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태평양은 지구의 다섯 대양 구분 중 가장 크고 깊은 대양이다.",
     [],
     ["한국사", "고려의 성립과 변화", "근현대 사회와 민주주의"],
-    [822],
+    [827],
   ],
   [
     "kr-fe6083c45bfa",
@@ -26302,7 +26337,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황해도 봉산의 옛 지명으로, 고려 때 북방 방어와 연결되는 지역이었다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 823],
+    [0, 828],
   ],
   [
     "kr-b22fa37b3b12",
@@ -26310,7 +26345,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동 이천동 마애여래입상은 바위에 몸을 새기고 별도로 만든 머리를 올린 거대한 불상이다. 지역의 지형과 돌을 활용한 고려시대 불상 조성 방식을 보여 준다.",
     ["경북 안동시 이천동 산2번지"],
     ["한국사", "고려의 성립과 변화"],
-    [0, 824],
+    [0, 829],
   ],
   [
     "kr-5b7e22cf2ad2",
@@ -26318,7 +26353,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예천군은 대한민국 경상북도 서북부에 있는 군으로 경상북도 청사소재지이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [825],
+    [830],
   ],
   [
     "kr-d4c3c667b774",
@@ -26326,7 +26361,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "평창 월정사에 있는 고려시대 석탑으로, 팔각형의 몸체 위에 아홉 층을 올렸다.",
     ["강원 평창군 진부면 오대산로 374-8, 월정사 (동산리)"],
     ["한국사", "고려의 성립과 변화"],
-    [826],
+    [831],
   ],
   [
     "kr-b11ce9919656",
@@ -26334,7 +26369,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려 말인 1348년 개성 경천사에 세운 열 층의 석탑이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [827],
+    [832],
   ],
   [
     "kr-f86f6fabbb8e",
@@ -26342,7 +26377,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안동 봉정사 극락전은 경상북도 안동시 서후면 봉정사에 있는 고려시대의 건축물로 대한민국의 국보 제15호이다.",
     ["경북 안동시 서후면 봉정사길 222, 봉정사 (태장리)"],
     ["한국사", "고려의 성립과 변화"],
-    [828],
+    [833],
   ],
   [
     "kr-c4a88522c0dc",
@@ -26350,7 +26385,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1308년에 세운 예산 수덕사의 법당으로, 고려시대 목조 건축의 모습을 보여 준다.",
     ["충청남도 예산군 수덕사안길 79 (덕산면, 수덕사)"],
     ["한국사", "고려의 성립과 변화"],
-    [829],
+    [834],
   ],
   [
     "kr-eb238ea07639",
@@ -26358,7 +26393,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황해도 황주의 고려 후기 사찰 건물이다. 원의 영향을 받은 다포 양식의 사례로 제시된다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 708],
+    [0, 713],
   ],
   [
     "kr-b2f29b34ea03",
@@ -26366,7 +26401,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려의 승려 지광국사 해린을 기리기 위해 세운 승탑으로, 화려한 조각 장식이 특징이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [830],
+    [835],
   ],
   [
     "kr-1c9affb4255b",
@@ -26374,7 +26409,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "센소지는 일본 도쿄도 다이토구 아사쿠사에 있는 절로 도쿄에서 가장 큰 사찰이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [831],
+    [836],
   ],
   [
     "kr-060304241ab4",
@@ -26382,7 +26417,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청주 흥덕사 터에 세운 박물관으로, 우리나라의 옛 인쇄 문화를 살펴볼 수 있다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [832],
+    [837],
   ],
   [
     "kr-cf3be15ed800",
@@ -26390,7 +26425,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조선이 서울에 설치한 국가 최고 교육 기관으로, 유학을 가르치고 인재를 길렀다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [833],
+    [838],
   ],
   [
     "kr-556d652da2f8",
@@ -26398,7 +26433,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창경궁은 성종이 왕실의 세 대비를 모시기 위해 마련한 궁궐이다. 1484년 완성되어 창덕궁과 함께 왕실의 생활 공간을 이루었다.",
     ["서울특별시 종로구 창경궁로 185 (와룡동, 창경궁)"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 834],
+    [0, 839],
   ],
   [
     "kr-44484ff2c209",
@@ -26406,7 +26441,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경복궁에서 왕이 연회를 열거나 외국 사신을 접대하던 누각이다.",
     ["서울특별시 종로구 사직로 161 (세종로, 경복궁)"],
     ["한국사", "조선의 성립과 발전"],
-    [835],
+    [840],
   ],
   [
     "kr-3c5bcffe936c",
@@ -26414,7 +26449,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타이 왕국, 약칭 태국은 동남아시아의 말레이반도와 인도차이나반도 사이에 걸쳐 있는 국가이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [836],
+    [841],
   ],
   [
     "kr-48fbf2cc0c22",
@@ -26422,7 +26457,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도네시아 공화국, 약칭 인도네시아는 동남아시아에서 오세아니아까지 이어진 섬나라이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [837],
+    [842],
   ],
   [
     "kr-d5da829e3412",
@@ -26430,7 +26465,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오키나와현은 일본 최남단에 있는 현으로, 류큐 열도 중에 이오토리섬 및 북위 27도 이남에 속하는 섬들과 다이토 제도를 관할한다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [838],
+    [843],
   ],
   [
     "kr-a0b9cd727c60",
@@ -26438,7 +26473,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동남아시아는 아시아 대륙의 남동쪽에 위치한 지역으로, 인도양과 태평양을 연결하는 전략적 요충지다.",
     [],
     ["한국사", "조선의 성립과 발전", "근현대 사회와 민주주의"],
-    [839],
+    [844],
   ],
   [
     "kr-8081f9dbac47",
@@ -26446,7 +26481,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1593년 권율이 이끄는 조선군은 행주산성에서 일본군의 공격을 막아 냈다. 한양 가까이에 거점을 둔 이 승리는 도성을 되찾기 위한 조선·명 연합군의 작전에 힘이 되었다.",
     ["경기 고양시 덕양구 행주내동 산26번지"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 510],
+    [0, 512],
   ],
   [
     "kr-2034939ea738",
@@ -26454,7 +26489,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경남 의령에서 임진왜란 의병장 곽재우와 의병들을 기리는 사당이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [840],
+    [845],
   ],
   [
     "kr-2ba06605d453",
@@ -26462,7 +26497,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충남 아산에 있는 사당으로, 충무공 이순신을 기린다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [841],
+    [846],
   ],
   [
     "kr-0959f39f8275",
@@ -26470,7 +26505,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 교토에 있는 무덤으로, 임진왜란 때 잘려 간 조선인 등의 귀와 코가 묻힌 곳이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [842],
+    [847],
   ],
   [
     "kr-27c2834499ea",
@@ -26478,7 +26513,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팔달문은 수원 화성의 남문으로 서울과 남쪽 지역을 잇는 길을 지키던 관문이다. 성문 바깥을 반원형 옹성으로 둘러 출입과 방어 기능을 함께 갖추었다.",
     ["경기 수원시 팔달구 팔달로2가 138번지"],
     ["한국사", "조선 사회의 변화"],
-    [0, 843],
+    [0, 848],
   ],
   [
     "kr-dcd62974da10",
@@ -26486,7 +26521,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창덕궁 주합루는 서울특별시 종로구, 창덕궁에 있는 조선시대의 건축물이다.",
     ["서울특별시 종로구 율곡로 99-0 (와룡동, 창덕궁)"],
     ["한국사", "조선 사회의 변화"],
-    [844],
+    [849],
   ],
   [
     "kr-eec16cd30d60",
@@ -26494,7 +26529,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "박지원이 청에 갔을 때 방문한 곳이다. 연경에서 더 이동한 여정을 바탕으로 기록한 여행기가 청의 문물과 사회를 이해하는 자료가 되었다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [0, 845],
+    [0, 850],
   ],
   [
     "kr-0529a38b128f",
@@ -26502,7 +26537,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "충남 홍성에 남아 있는 홍주읍성의 성문이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [846],
+    [851],
   ],
   [
     "kr-1046bb1f560d",
@@ -26510,7 +26545,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강진에 유배된 정약용은 1808년 다산초당으로 거처를 옮겨 1818년까지 지냈다. 이곳에서 제자들을 가르치고 목민심서 등을 저술하며 현실의 제도와 백성의 삶을 개선할 방안을 모색했다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [0, 572],
+    [0, 576],
   ],
   [
     "kr-de57e7334fd0",
@@ -26518,7 +26553,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주에 남아 있는 조선시대 양반 집성촌으로, 전통 가옥과 마을 경관을 보존하고 있다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [847],
+    [852],
   ],
   [
     "kr-78218dd7abdc",
@@ -26526,7 +26561,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아산만은 충청남도 서북부과 경기도 서남부 사이 황해 연안에 위치한 만으로, 아산시, 당진시, 평택시 사이에 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [848],
+    [853],
   ],
   [
     "kr-8664e67e3cc8",
@@ -26534,7 +26569,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "죽산군은 현 안성시 죽산면을 중심으로 안성시의 동부 3개 면과 용인시 처인구의 동남부 2개 면을 관할하던 조선 시대의 행정 구역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [849],
+    [854],
   ],
   [
     "kr-2261bcc0d80e",
@@ -26542,7 +26577,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "을미사변 뒤 신변에 위협을 느낀 고종은 1896년 러시아 공사관으로 피신했다. 약 1년간 공사관에서 국정을 운영한 아관파천은 열강의 영향력이 커지던 당시의 위기를 보여 준다.",
     ["서울 중구 정동길 21-18 (정동)"],
     ["한국사", "근현대 사회와 민주주의"],
-    [0, 850],
+    [0, 855],
   ],
   [
     "kr-70ea66c41e6f",
@@ -26550,7 +26585,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "화베이는 중국의 6대 중국지리대구의 하나로서 중국 북부 지방이며, 화베이 평원이 그 중심이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [851],
+    [856],
   ],
   [
     "kr-900e95b6971a",
@@ -26563,7 +26598,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "조선 사회의 변화",
     ],
-    [852],
+    [857],
   ],
   [
     "kr-411d8aae0282",
@@ -26571,7 +26606,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아메리카 또는 남미는 서반구에 위치한 대륙으로, 대부분 남반구에 위치해 있고 일부분은 북반구에 걸쳐 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [853],
+    [858],
   ],
   [
     "kr-f401d796df5e",
@@ -26579,7 +26614,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성지여자고등학교는 대한민국 경상남도 창원시 마산합포구 완월동에 있는 사립 고등학교이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [854],
+    [859],
   ],
   [
     "kr-6b06b51b9f57",
@@ -26587,7 +26622,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울역은 대한민국 서울특별시 용산구와 중구에 걸쳐 있는 서울특별시의 중추 철도역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [855],
+    [860],
   ],
   [
     "kr-8866cada4c43",
@@ -26595,7 +26630,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태백시는 대한민국 강원특별자치도 동남부에 위치해 있으며, 강원특별자치도 최남단에 위치한 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [856],
+    [861],
   ],
   [
     "kr-95963ed713d0",
@@ -26603,7 +26638,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김천시는 대한민국 경상북도 서부에 있는 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [857],
+    [862],
   ],
   [
     "kr-a2bd87d742d3",
@@ -26611,7 +26646,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제주시는 제주특별자치도에 있는 시다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [858],
+    [863],
   ],
   [
     "kr-d63a985bb745",
@@ -26619,7 +26654,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서귀포시는 제주특별자치도에 있는 시다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [859],
+    [864],
   ],
   [
     "kr-c11c6f1255f2",
@@ -26627,7 +26662,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "광양시는 대한민국 전남광주통합특별시 동남부에 있는 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [860],
+    [865],
   ],
   [
     "kr-a227ab1cf5ea",
@@ -26635,7 +26670,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성남시는 대한민국 경기도 중동부에 위치한 시이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [861],
+    [866],
   ],
   [
     "kr-a730c371946e",
@@ -26643,7 +26678,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안양시는 대한민국 경기도 중부에 있는 시다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [862],
+    [867],
   ],
   [
     "kr-3b15c1085e0f",
@@ -26651,7 +26686,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울 광화문 앞에 조성된 시민 광장으로, 시민들의 집회와 정치 참여가 이루어지는 공간이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [863],
+    [868],
   ],
   [
     "kr-91c91fbd292c",
@@ -26659,7 +26694,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "문산역은 경기도 파주시 문산읍 문산리에 있는 경의선의 철도역이며 수도권 전철 경의·중앙선의 전철역이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [864],
+    [869],
   ],
   [
     "kr-bdcf4bc3f9f5",
@@ -26667,7 +26702,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부여에서 백제의 문화유산을 수집·보존하고 전시하는 국립 박물관이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [865],
+    [870],
   ],
   [
     "kr-296dbe381817",
@@ -26675,7 +26710,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부여 정림사지 오층석탑은 백제시대의 대표적 석탑으로서 대한민국 충청남도 부여군 부여읍 동남리에 소재하고 있다.",
     ["충청남도 부여군 정림로 83 (부여읍, 정림사지) 정림사지박물관"],
     ["한국사", "선사 문화와 고대 국가"],
-    [866],
+    [871],
   ],
   [
     "kr-df6b61435478",
@@ -26683,7 +26718,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황룡사 9층 목탑은 황룡사에 세워진 9층 목탑이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "고려의 성립과 변화"],
-    [867],
+    [872],
   ],
   [
     "kr-e7b46df31236",
@@ -26691,7 +26726,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 배동 석조여래삼존입상은 둥근 얼굴과 온화한 표정이 특징인 세 불상이다. 주변에 흩어져 있던 불상을 1923년 함께 세웠으며, 신라 초기 불교 조각의 모습을 전한다.",
     ["경상북도 경주시 배동 산 65-1"],
     ["한국사", "선사 문화와 고대 국가"],
-    [0, 868],
+    [0, 873],
   ],
   [
     "kr-9dc61be2906c",
@@ -26699,7 +26734,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지린성 또는 길림성은 중화인민공화국 둥베이 지방의 한 성이다.",
     [],
     ["한국사", "선사 문화와 고대 국가", "통일 신라와 발해"],
-    [869],
+    [874],
   ],
   [
     "kr-9666e1eb9e53",
@@ -26707,7 +26742,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 공화국, 약칭 그리스는 남유럽의 발칸 반도 남쪽 끝에 있는 국가이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [870],
+    [875],
   ],
   [
     "kr-0381381dd2b5",
@@ -26715,7 +26750,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서아시아는 아시아의 서쪽 지방으로, 유럽과 아프리카 대륙을 모두 접하는 길목이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [871],
+    [876],
   ],
   [
     "kr-66c16b68047d",
@@ -26723,7 +26758,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쓰루가시는 일본 후쿠이현에 있는 도시이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [872],
+    [877],
   ],
   [
     "kr-dbd16a5d5a66",
@@ -26731,7 +26766,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "교토 국립박물관은 일본 교토에 위치한 국립박물관이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [873],
+    [878],
   ],
   [
     "kr-b5e496b48416",
@@ -26739,7 +26774,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보덕국, 또는 고려(高麗, 674년 ~ 684년)는 한반도 남부의 익산에서 고구려 부흥운동을 전개했던 국가이다.",
     [],
     ["한국사", "선사 문화와 고대 국가"],
-    [874],
+    [879],
   ],
   [
     "kr-7e6d4fd4a6ec",
@@ -26747,7 +26782,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대조영은 고구려 유민과 말갈 세력을 이끌고 동모산 일대에 나라를 세웠다. 처음 진국이라 불린 이 나라는 뒤에 발해로 불렸으며, 고구려를 잇는 나라로 성장했다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 875],
+    [0, 880],
   ],
   [
     "kr-7ce1ac70ec91",
@@ -26755,7 +26790,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "헤이룽장성 또는 흑룡강성은 중국 둥베이 지방에 있는 성이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [240],
+    [242],
   ],
   [
     "kr-6867c80f9a0f",
@@ -26763,7 +26798,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쌍봉사 철감선사탑은 선종 승려 철감선사의 사리를 모신 승탑이다. 팔각형 몸돌과 정교한 조각은 신라 말 선종의 성장과 높은 석조 기술을 보여 준다.",
     ["전남광주통합특별시 화순군 쌍산의로 459 (이양면, 쌍봉사)"],
     ["한국사", "통일 신라와 발해"],
-    [0, 876],
+    [0, 881],
   ],
   [
     "kr-50dff25ab3bf",
@@ -26771,7 +26806,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미술 작품을 수집·보존·연구하고 전시하는 국립 미술관이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [877],
+    [882],
   ],
   [
     "kr-add6d536e082",
@@ -26779,7 +26814,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강원특별자치도 평창군 진부면 오대산에 있는, 통일신라 승려 보천과 효명이 창건한 절.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [0, 878],
+    [0, 883],
   ],
   [
     "kr-b66ceee33052",
@@ -26787,7 +26822,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백운교는 청운교와 이어져 불국사 대웅전 영역으로 올라가는 돌계단이다. 다리 형태로 꾸민 계단은 일상의 공간에서 부처의 세계로 들어가는 경계를 표현한다.",
     ["경북 경주시 불국로 385, 불국사 (진현동)"],
     ["한국사", "통일 신라와 발해"],
-    [0, 879],
+    [0, 884],
   ],
   [
     "kr-45aa0d4694b6",
@@ -26795,7 +26830,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경주 불국사 삼층석탑은 대한민국 경상북도 경주시 불국사에 있는, 남북국 시대 신라의 삼층석탑이다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [880],
+    [885],
   ],
   [
     "kr-839493d3f589",
@@ -26803,7 +26838,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대한불교조계종이 서울에 세운 박물관으로, 불교 문화유산을 보존하고 전시한다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [881],
+    [886],
   ],
   [
     "kr-ec5563055d40",
@@ -26811,7 +26846,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해의 중경 현덕부가 있던 성으로 추정되는 곳이며, 중국 화룡의 서고성자 유적과 연결된다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [292],
+    [294],
   ],
   [
     "kr-d2dd5e5517f8",
@@ -26819,7 +26854,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 국립도서관은 프랑스 파리시에 있는 국립도서관이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [882],
+    [887],
   ],
   [
     "kr-3bc817ed2ab7",
@@ -26827,7 +26862,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "막고굴은 중화인민공화국 간쑤 성 둔황에 있는 대표적인 천불동으로 유네스코 세계 문화유산에 지정되어 있다.",
     [],
     ["한국사", "통일 신라와 발해"],
-    [883],
+    [888],
   ],
   [
     "kr-557755b32b49",
@@ -26835,7 +26870,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전남 완도에 세운 기념관으로, 장보고의 생애와 업적을 기린다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [884],
+    [889],
   ],
   [
     "kr-0ac58a0f8c4f",
@@ -26843,7 +26878,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 황실과 관련된 사무를 맡는 국가 행정기관이다.",
     [],
     ["한국사", "통일 신라와 발해", "고려의 성립과 변화"],
-    [885],
+    [890],
   ],
   [
     "kr-edc57cc3e920",
@@ -26851,7 +26886,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "의종을 수행하던 무신들이 정변을 일으킨 장소이다. 교과서는 문신 중심의 정치 질서가 흔들리고 무신들이 권력을 잡는 과정을 설명한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 886, 887],
+    [0, 891, 892],
   ],
   [
     "kr-210ace27324f",
@@ -26859,7 +26894,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려대학교 박물관은 고려대학교의 박물관으로, 서울시 성북구 안암동에 위치한다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [888],
+    [893],
   ],
   [
     "kr-6d424bebdf40",
@@ -26867,7 +26902,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "호림박물관은 서울 관악구 신림동에 있는 박물관이다.",
     [],
     ["한국사", "고려의 성립과 변화", "선사 문화와 고대 국가"],
-    [889],
+    [894],
   ],
   [
     "kr-0c579eed7096",
@@ -26875,7 +26910,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청주에 있던 사찰로, 1377년 금속활자로 직지를 인쇄한 곳이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [890],
+    [895],
   ],
   [
     "kr-c4e47e3d8e21",
@@ -26883,7 +26918,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경희궁은 대한민국 서울특별시에 있는 조선 시대 궁궐로 광해군 9년(1617년)에 건립한 이후, 10대에 걸쳐 임금이 정사를 보았던 궁궐이다.",
     [],
     ["한국사", "조선 사회의 변화", "조선의 성립과 발전"],
-    [891],
+    [896],
   ],
   [
     "kr-1557c028525d",
@@ -26891,7 +26926,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "류코쿠 대학은 일본의 불교계열의 대학이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [892],
+    [897],
   ],
   [
     "kr-2b45a1718a45",
@@ -26899,7 +26934,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "담양 소쇄원은 양산보가 조광조의 죽음 뒤 벼슬길을 떠나 조성한 정원이다. 계곡과 숲을 살린 공간에서 학문을 논하고 시를 지으며 조선 사림의 생활 문화를 남겼다.",
     ["전남 담양군 남면 소쇄원길 17 (지곡리)"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 893],
+    [0, 898],
   ],
   [
     "kr-b30e7e8d2bb3",
@@ -26907,7 +26942,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덴리 대학은 일본 나라현 덴리시에 있는 사립대학이다.",
     [],
     ["한국사", "조선의 성립과 발전", "통일 신라와 발해"],
-    [894],
+    [899],
   ],
   [
     "kr-361994b9d007",
@@ -26915,7 +26950,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1592년 옥포 앞바다에서 이순신이 지휘한 조선 수군이 일본 함대를 공격해 승리했다. 옥포해전은 임진왜란에서 이순신 함대가 거둔 첫 승리로, 남해안 해상 방어를 이어 가는 출발점이 되었다.",
     ["옥포해전", "옥포 앞바다"],
     ["한국사", "조선의 성립과 발전"],
-    [0, 895],
+    [0, 900],
   ],
   [
     "kr-b9bb3131b9b8",
@@ -26923,7 +26958,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동래읍성지는 부산광역시 동래구 복천동과 안락동, 명륜동, 칠산동, 명장동 일대에 있는 조선시대 동래부의 행정중심지를 둘러싸고 있었던 읍성이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [896],
+    [901],
   ],
   [
     "kr-524f8f1dc7c6",
@@ -26931,7 +26966,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부산의 고고·미술·민속·역사 자료를 수집하고 연구·전시하는 시립 박물관이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [897],
+    [902],
   ],
   [
     "kr-65cd9fe7193d",
@@ -26939,7 +26974,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중화민국은 동아시아에 위치한 정부로, 실질적으로 168개의 섬들로 이루어져 있다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [898],
+    [903],
   ],
   [
     "kr-c137ea78cf57",
@@ -26947,7 +26982,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "국민의 모금으로 천안에 세운 역사 박물관으로, 한국의 독립운동 역사를 기린다.",
     [],
     ["한국사", "근현대 사회와 민주주의", "조선의 성립과 발전"],
-    [899],
+    [904],
   ],
   [
     "kr-2541f60d32c7",
@@ -26955,7 +26990,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미얀마 연방공화국, 약칭 미얀마는 동남아시아의 국가이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [900],
+    [905],
   ],
   [
     "kr-b8dffcad4735",
@@ -26963,7 +26998,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "김성수가 1919년에 설립한 방직 회사로, 경방의 전신이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [901],
+    [906],
   ],
   [
     "kr-eb04251319a2",
@@ -26971,7 +27006,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서독은 1949년 독일연방공화국의 정부 수립 이래 1990년 동독과의 재통일이 이루어지기 전까지의 독일연방공화국을 일컫는 이름이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [902],
+    [907],
   ],
   [
     "kr-6a93d59ac3c1",
@@ -26979,7 +27014,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대한민국역사박물관은 대한민국 근현대 역사자료의 수집·보존·조사·연구·전시·교육 및 교류에 관한 사무를 관장하는 대한민국 문화체육관광부의 소속기관이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [903],
+    [908],
   ],
   [
     "kr-fad58d4ba805",
@@ -26987,7 +27022,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돈의문은 조선의 수도인 한양의 4대문 중의 하나로 서쪽의 대문이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [530],
+    [532],
   ],
   [
     "kr-dd9e489658cc",
@@ -26995,7 +27030,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울 지하철 1호선(서울 地下鐵 1號線)은 대한민국 서울특별시 중구 서울역과 동대문구 청량리역을 잇는 대한민국 최초의 도시 철도다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [904],
+    [909],
   ],
   [
     "kr-492525e77f1b",
@@ -27003,7 +27038,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "광주에 있는 기록관으로, 5·18 민주화 운동의 기록을 보존하고 전시한다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [905],
+    [910],
   ],
   [
     "kr-806c661cae29",
@@ -27011,7 +27046,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사람의 기본적 인권을 보호하고 그 수준을 높이기 위해 설치한 독립 국가기관이다.",
     [],
     ["한국사", "근현대 사회와 민주주의"],
-    [906],
+    [911],
   ],
   [
     "kr-cd646aea520a",
@@ -27019,7 +27054,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바닷속에서 나온 유물 등 해양 문화유산을 조사·보존하고 전시하는 국가기관이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전"],
-    [907],
+    [912],
   ],
   [
     "kr-14d26b24bf6f",
@@ -27027,7 +27062,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강화도에 있었던 고려의 사찰로, 대장경판을 보관했던 곳이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [0, 908],
+    [0, 913],
   ],
   [
     "kr-dcc9410d29b7",
@@ -27035,7 +27070,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "탐라총관부는 고려 말기에 원나라가 탐라에 설치한 총관부이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [909],
+    [914],
   ],
   [
     "kr-cd6b34c09074",
@@ -27043,7 +27078,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "정동등처행중서성는 원나라가 한반도의 고려를 대상으로 설치한 특수 행중서성이다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [910],
+    [915],
   ],
   [
     "kr-e7516bc508ba",
@@ -27057,7 +27092,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "선사 문화와 고대 국가",
       "조선 사회의 변화",
     ],
-    [911],
+    [916],
   ],
   [
     "kr-12968d0538d3",
@@ -27065,7 +27100,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려시대인 1010년에 세운 예천 개심사 터의 오층 석탑이다.",
     ["경북 예천군 예천읍 남본리 200-3번지"],
     ["한국사", "고려의 성립과 변화"],
-    [912],
+    [917],
   ],
   [
     "kr-3c3f9544c287",
@@ -27073,7 +27108,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "줘저우시는 중화인민공화국 허베이성 바오딩 시의 행정구역이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [913],
+    [918],
   ],
   [
     "kr-6161f86a8791",
@@ -27081,7 +27116,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지난은 중화인민공화국 산둥성의 성도로 부성급시이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [914],
+    [919],
   ],
   [
     "kr-b867ddf7eb84",
@@ -27089,7 +27124,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이화여자대학교 박물관은 1935년에 개관한 이화여자대학교의 대학 박물관으로 서울특별시 서대문구 대현동에 위치하고 있다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [915],
+    [920],
   ],
   [
     "kr-96ed32b59af4",
@@ -27097,7 +27132,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "간송미술관은 대한민국 최초의 근대식 사립박물관이다.",
     [],
     ["한국사", "고려의 성립과 변화", "조선의 성립과 발전", "조선 사회의 변화"],
-    [916],
+    [921],
   ],
   [
     "kr-12c2cd961afa",
@@ -27105,7 +27140,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "평양에 있는 역사 박물관으로, 한반도의 역사 유물을 전시한다.",
     [],
     ["한국사", "고려의 성립과 변화"],
-    [917],
+    [922],
   ],
   [
     "kr-ce88fcb8a5f2",
@@ -27113,7 +27148,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무굴 제국은 근세 남아시아에 존재했던 이슬람 제국이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [918],
+    [923],
   ],
   [
     "kr-94df3a0838b9",
@@ -27121,7 +27156,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전주 경기전 안에 있는 박물관으로, 조선 태조의 초상화인 어진을 소장하고 있다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [919],
+    [924],
   ],
   [
     "kr-0691c998591c",
@@ -27129,7 +27164,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한글의 역사와 문화를 연구하고 관련 자료를 보존·전시하는 국립 박물관이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [920],
+    [925],
   ],
   [
     "kr-215dd5d7b724",
@@ -27137,7 +27172,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경북대학교는 대구·경북 지역을 대표하는 거점국립대학교로, 1951년 10월 6일 사범대학, 의과대학, 농과대학, 문이과대학 5개로 구성된 종합 대학교로 출범했다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [921],
+    [926],
   ],
   [
     "kr-a079317a82bf",
@@ -27145,7 +27180,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "국가의 주요 공공기록을 수집·보존하고 사람들이 활용할 수 있도록 관리하는 기관이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [922],
+    [927],
   ],
   [
     "kr-05910072ca30",
@@ -27153,7 +27188,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진(秦, 기원전 221년 ~ 기원전 206년)은 중국 최초의 통일 왕조로, 동아시아 최초의 국가원수를 황제로 지칭한 제국이다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [923],
+    [928],
   ],
   [
     "kr-49c82c0a9f33",
@@ -27161,7 +27196,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "육군사관학교에 있는 박물관으로, 군사 유물을 보존·전시하고 국방 역사를 살펴볼 수 있다.",
     [],
     ["한국사", "조선의 성립과 발전"],
-    [924],
+    [929],
   ],
   [
     "kr-3475d2320701",
@@ -27169,7 +27204,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성균관대학교는 대한민국의 사립 종합 대학이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [925],
+    [930],
   ],
   [
     "kr-27307870effe",
@@ -27177,7 +27212,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한국은행 옛 본관에 마련한 박물관으로, 화폐와 중앙은행의 역할을 살펴볼 수 있다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [926],
+    [931],
   ],
   [
     "kr-80acdef1f140",
@@ -27185,7 +27220,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울 숭실대학교에 있는 사립 박물관으로, 한국 기독교와 관련된 자료를 전시한다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [927],
+    [932],
   ],
   [
     "kr-62835be251b5",
@@ -27193,7 +27228,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남양주에 있는 박물관으로, 실학과 관련된 유물과 자료를 전시한다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [928],
+    [933],
   ],
   [
     "kr-60064b649d75",
@@ -27201,7 +27236,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도호쿠 대학은 일본 미야기현 센다이시 아오바구 가타히라 2쵸메 1-1에 본부를 두고있는 일본의 최상위권 명문 국립 대학이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [929],
+    [934],
   ],
   [
     "kr-b452c0e0de62",
@@ -27209,7 +27244,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리움미술관은 서울특별시 용산구 한남동에 위치한 사립미술관으로, 2004년 10월 19일 개관했다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [930],
+    [935],
   ],
   [
     "kr-f5c8b61aaadc",
@@ -27217,7 +27252,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "전북특별자치도 김제시 금산면 금산사에 있는 조선후기에 창건된 사찰건물. 불전.",
     ["전북 김제시 금산면 모악15길 1, 금산사 (금산리)"],
     ["한국사", "조선 사회의 변화"],
-    [0, 931],
+    [0, 936],
   ],
   [
     "kr-09a5e4baa822",
@@ -27227,7 +27262,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "전남광주통합특별시 구례군 마산면 화엄사로 539, 화엄사 (황전리) / (지번)전남 구례군 마산면 황전리 12 화엄사",
     ],
     ["한국사", "조선 사회의 변화"],
-    [0, 932],
+    [0, 937],
   ],
   [
     "kr-b2b866e2a1df",
@@ -27235,7 +27270,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서울대학교 박물관은 서울특별시 관악구의 박물관으로, 서울대학교에서 운영 중인 대학 박물관이다.",
     [],
     ["한국사", "조선 사회의 변화"],
-    [933],
+    [938],
   ],
   [
     "world-cd2b5ec359d4",
@@ -27243,7 +27278,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산시성 시안시 동쪽에 있는 현으로, 선사 인류 유적과 연결되는 지역이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [934],
+    [939],
   ],
   [
     "world-a945f2be5802",
@@ -27251,7 +27286,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "초기 인류의 화석과 석기가 발견되어, 인류가 도구를 만들며 살아간 과정을 보여 주는 유적이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 935],
+    [0, 940],
   ],
   [
     "world-c28adc1d28f4",
@@ -27259,7 +27294,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이집트 고왕국의 수도로 발전했으며, 주변 왕릉 지대와 함께 초기 이집트 국가의 중심을 이루었다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [936],
+    [941],
   ],
   [
     "world-d9ddae77a31a",
@@ -27267,7 +27302,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함무라비가 이끈 바빌로니아의 수도로, 메소포타미아를 통합한 왕권과 법의 발전을 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [937],
+    [942],
   ],
   [
     "world-97df6cd0732f",
@@ -27275,7 +27310,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모헨조다로와 하라파는 인더스 문명의 대표 도시이다. 정비된 거리와 주거 시설은 큰 도시를 조직하여 운영한 사람들의 생활을 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [938],
+    [943],
   ],
   [
     "world-5b8ea5131294",
@@ -27283,7 +27318,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상 왕조 후기의 수도 유적으로, 왕실의 점복 기록인 갑골문을 통해 당시 정치와 신앙을 알 수 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [939, 940],
+    [944, 945],
   ],
   [
     "world-9a51ac2557e3",
@@ -27291,7 +27326,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 서주 왕조의 수도를 이루었던 도시로, 오늘날 시안 부근에 유적이 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [941],
+    [946],
   ],
   [
     "world-bce22ab2c1ce",
@@ -27299,7 +27334,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사르디스 또는 사르데이스 는 현재 튀르키에 마니사 주에 위치한 고대 리디아 왕국의 수도로, 현재의 사르트 에 해당한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [942],
+    [947],
   ],
   [
     "world-e3b98335594b",
@@ -27307,7 +27342,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스의 대표적인 폴리스로, 정복한 주민을 지배하기 위해 시민의 군사 훈련을 중시하였다. 아테네와 다른 정치·사회 모습을 비교하는 사례다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 943, 944, 945, 946, 947, 948, 949, 950, 951],
+    [0, 948, 949, 950, 951, 952, 953, 954, 955, 956],
   ],
   [
     "world-59e18dcb0269",
@@ -27315,7 +27350,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아케메네스 왕조의 궁전과 의례 공간으로 조성되어, 여러 민족을 거느린 페르시아 제국의 권위를 드러냈다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 952],
+    [0, 957],
   ],
   [
     "world-9d7be6c5aca6",
@@ -27323,7 +27358,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수사는 아케메네스 왕조 페르시아의 행정 중심지였다. 다리우스의 궁전과 아파다나 유적은 여러 지역의 기술과 장식이 모인 제국의 궁정 문화를 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 953],
+    [0, 958],
   ],
   [
     "world-0e4c5347dc44",
@@ -27331,7 +27366,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니네베 혹은 니느웨는 상부 메소포타미아에 위치했던 아시리아의 고대 도시로, 오늘날 이라크 북부의 모술지역에 해당한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [954],
+    [959],
   ],
   [
     "world-c8f4eeed3dd9",
@@ -27339,7 +27374,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시돈 또는 사이다는 레바논 남부 지중해 연안에 위치한 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [955],
+    [960],
   ],
   [
     "world-bf0c345a5654",
@@ -27347,7 +27382,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비단길의 길목에서 상인과 승려가 오갔으며, 막고굴의 불교 미술에는 여러 지역 문화가 함께 남았다.",
     ["사주"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가", "지역 세계의 교류"],
-    [0, 956],
+    [0, 961],
   ],
   [
     "world-0e67ab2596bd",
@@ -27355,7 +27390,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타이위안은 중국 산시성의 성도이며 옛날에는 진양이라 불렀던 도시이다.",
     [],
     ["세계사", "고대 문명과 국가", "지역 세계의 교류", "혁명과 국민 국가"],
-    [957],
+    [962],
   ],
   [
     "world-9d0dcab9fa8d",
@@ -27363,7 +27398,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한중은 중국 산시성의 서남부에 있는 지급시이다.",
     [],
     ["세계사", "고대 문명과 국가", "혁명과 국민 국가"],
-    [958],
+    [963],
   ],
   [
     "world-3a677b8411aa",
@@ -27371,7 +27406,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "창사는 중화인민공화국 후난성의 성도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "고대 문명과 국가", "지역 세계의 교류"],
-    [745],
+    [750],
   ],
   [
     "world-07b8c66d6a4e",
@@ -27379,7 +27414,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "셴양은 산시성에 있는 지급시로 관중평원 중부에 있다.",
     ["함양"],
     ["세계사", "고대 문명과 국가"],
-    [959],
+    [964],
   ],
   [
     "world-ed94e354ae97",
@@ -27387,7 +27422,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티루스는 지중해 해상 교역으로 번성한 페니키아의 도시이다. 카르타고와 카디스 같은 식민 도시를 세우며 지중해 여러 지역으로 교역망을 넓혔다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 960],
+    [0, 965],
   ],
   [
     "world-ed58de0394bd",
@@ -27395,7 +27430,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에페수스는 소아시아의 중요한 로마 항구 도시였다. 켈수스 도서관과 대극장, 항구로 이어진 수로는 교역과 도시 문화가 번성했던 모습을 보여 준다.",
     ["에페소스"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 961],
+    [0, 966],
   ],
   [
     "world-88631e068a33",
@@ -27403,7 +27438,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "펠라는 그리스 중앙마케도니아주에 위치한 고대 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [962],
+    [967],
   ],
   [
     "world-9d9bf70b7a60",
@@ -27411,7 +27446,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알렉산드로스가 세운 뒤 프톨레마이오스 왕조의 수도가 되었고, 도서관과 학술 활동이 발달했다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "지역 세계의 교류"],
-    [963],
+    [968],
   ],
   [
     "world-c80c9c6b44d4",
@@ -27419,7 +27454,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트로이는 아나톨리아와 에게해·발칸 지역을 잇는 교류의 거점이었다. 여러 시대의 성벽과 도시 유적이 겹쳐 남아 있으며, 호메로스의 서사시에 나오는 트로이 전쟁의 무대로도 알려져 있다.",
     ["일리온"],
     ["세계사", "고대 문명과 국가"],
-    [0, 964],
+    [0, 969],
   ],
   [
     "world-18c0db61f1b2",
@@ -27427,7 +27462,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 스페인 동부 발렌시아 북쪽에 있는 도시 사군토의 고대 이름이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [965],
+    [970],
   ],
   [
     "world-1b0eb48798b1",
@@ -27435,7 +27470,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타란토는 이탈리아 남부 풀리아주에 있는 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [966],
+    [971],
   ],
   [
     "world-9f0de41cfebd",
@@ -27443,7 +27478,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서지중해의 해상 강국으로 로마와 포에니 전쟁을 벌였으나, 마지막 전쟁에서 로마에 파괴되었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [967],
+    [972],
   ],
   [
     "world-1c2883151fc7",
@@ -27451,7 +27486,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 스페인 카르타헤나의 고대 이름으로, 카르타고가 건설한 뒤 로마의 중요한 항구 도시가 되었다.",
     ["카르타고 노바"],
     ["세계사", "고대 문명과 국가"],
-    [968],
+    [973],
   ],
   [
     "world-72d88c822fad",
@@ -27459,7 +27494,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콘스탄티누스 대제가 크리스트교를 공인한 ‘밀라노 칙령’의 지명이다. 박해를 받던 종교가 제국의 공인을 얻는 변화를 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [0, 969, 970, 951],
+    [0, 974, 975, 956],
   ],
   [
     "world-1cf4720d3424",
@@ -27467,7 +27502,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니카이아 혹은 니케아는 아나톨리아 북부에 위치했던 고대 그리스 시대의 도시로, 제1차와 제2차 니카이아 공의회가 열린 장소로 유명하며, 니카이아 신경 및 니케아 제국으로도 알려져 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [971],
+    [976],
   ],
   [
     "world-88eb1b60d9a5",
@@ -27475,7 +27510,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서로마 제국의 수도였으며 이후 비잔티움 제국이 이탈리아를 다스리는 거점이 된 도시이다. 5~6세기의 성당과 모자이크는 로마 전통과 그리스도교 문화의 결합을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 972, 973],
+    [0, 977, 978],
   ],
   [
     "world-f61188c971b7",
@@ -27483,7 +27518,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이베리아반도에서 이슬람교·그리스도교·유대교 문화가 만난 도시이다. 이슬람 지배와 그리스도교 왕국의 재정복을 거치며 사원·교회·회당과 번역 활동의 전통이 남았다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 974],
+    [0, 979],
   ],
   [
     "world-71f0c245b5a4",
@@ -27499,7 +27534,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 975],
+    [0, 980],
   ],
   [
     "world-50d1a98d3a65",
@@ -27507,7 +27542,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나폴리는 이탈리아 남부에 있는 도시로, 캄파니아주의 주도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "고대 문명과 국가", "종교와 지역 문화"],
-    [976],
+    [981],
   ],
   [
     "world-d14c69b9f3f2",
@@ -27515,7 +27550,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키이우라고도 부르는 도시로, 988년 블라디미르의 세례 이후 그리스도교 문화가 확산되는 중심지가 되었다. 11세기 성 소피아 성당은 콘스탄티노폴리스의 영향을 받은 정교회 문화를 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [0, 973, 972],
+    [0, 978, 977],
   ],
   [
     "world-e5c5a6cda4c3",
@@ -27523,7 +27558,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발트해·스칸디나비아와 중앙아시아·비잔티움을 잇는 교역로에 자리 잡은 도시이다. 중세 도시 공화국과 정교회 문화가 발달했고 1478년 모스크바에 정복되었다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 977, 978],
+    [0, 982, 983],
   ],
   [
     "world-bba99c8a182a",
@@ -27538,7 +27573,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [979],
+    [984],
   ],
   [
     "world-f1afcae2dabc",
@@ -27546,7 +27581,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티베트의 정치와 불교 신앙이 결합한 중심 도시이다. 포탈라궁과 조캉 사원·노르불링카는 통치, 종교 의례, 예술이 서로 연결되어 있었음을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 980],
+    [0, 985],
   ],
   [
     "world-63658712255f",
@@ -27554,7 +27589,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바간 또는 파간은 미얀마 만달레이 구의 고대 도시이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "고대 문명과 국가"],
-    [981],
+    [986],
   ],
   [
     "world-62214dfdf01f",
@@ -27562,7 +27597,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만달레이는 미얀마 중부의 도시로, 만달레도의 도청 소재지이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [982],
+    [987],
   ],
   [
     "world-3e1abb72378b",
@@ -27570,7 +27605,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잠비는 인도네시아 수마트라섬에 위치한 잠비주의 주도로, 면적은 205.38km2, 인구는 372,100명(2000년 기준), 인구밀도는 1,812명/km2이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [983],
+    [988],
   ],
   [
     "world-52219a2e62b2",
@@ -27578,7 +27613,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팔렘방은 인도네시아 수마트라슬라탄주의 주도이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [984],
+    [989],
   ],
   [
     "world-8ebf71da60cd",
@@ -27586,7 +27621,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "석가모니가 깨달음을 얻었다고 전해지는 곳으로, 불교도들이 순례하는 중요한 성지가 되었다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [985],
+    [990],
   ],
   [
     "world-32a24248aa0f",
@@ -27594,7 +27629,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 파키스탄 페샤와르의 옛 이름으로, 카니슈카왕 때 쿠샨 제국의 수도였다.",
     ["푸르샤프라"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [986],
+    [991],
   ],
   [
     "world-eccf638c9772",
@@ -27602,7 +27637,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파탈리푸트라는 오늘날 인도 비하르주의 주도인 파트나에 위치했던 고대 인도의 도시이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [987],
+    [992],
   ],
   [
     "world-44d9dbb2338c",
@@ -27610,7 +27645,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마투라는 인도 우타르프라데시주의 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [988],
+    [993],
   ],
   [
     "world-9655276935bd",
@@ -27618,7 +27653,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 나라현의 지역으로, 아스카 시대 정치의 중심지였으며 궁전과 사찰 등 유적이 남아 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [989],
+    [994],
   ],
   [
     "world-23f8483f8d47",
@@ -27626,7 +27661,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "794년 헤이안쿄로 천도한 뒤 천황의 거처와 귀족 문화의 중심지가 되었다.",
     ["헤이안쿄", "헤이안"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [990],
+    [995],
   ],
   [
     "world-b101efd1859e",
@@ -27641,7 +27676,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [991, 992],
+    [996, 997],
   ],
   [
     "world-685a859c916f",
@@ -27649,7 +27684,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무함마드가 박해를 피해 메카에서 이주한 곳으로, 이 사건은 이슬람 공동체가 발전하는 전환점이 되었다.",
     ["야스리브"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [993],
+    [998],
   ],
   [
     "world-2db150a44604",
@@ -27665,7 +27700,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "고대 문명과 국가",
     ],
-    [0, 994, 995, 996, 997],
+    [0, 999, 1000, 1001, 1002],
   ],
   [
     "world-26d0afbd6492",
@@ -27673,7 +27708,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아덴은 예멘의 항구 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [998],
+    [1003],
   ],
   [
     "world-46a8d449ce7a",
@@ -27681,7 +27716,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "크테시폰은 고대 메소포타미아의 큰 도시들 중의 하나였으며 그리스 도시 셀레우키아에서 강을 건너서 티그리스 강변에 위치하였다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [999],
+    [1004],
   ],
   [
     "world-81e7bc663b95",
@@ -27689,7 +27724,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메르브는 중앙아시아 비단길에 자리한 오아시스 도시로, 11~12세기 셀주크 제국의 수도로 번성했다. 성벽과 술탄 산자르의 영묘는 교역과 이슬람 문화가 모인 도시의 모습을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1000],
+    [0, 1005],
   ],
   [
     "world-e7b216b2a964",
@@ -27697,7 +27732,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사마르칸트는 티무르 제국의 수도로 번성했다. 레기스탄 광장의 울루그 베그 마드라사는 15세기에 세운 이슬람 학교로, 도시의 학문과 건축 문화를 보여 준다.",
     ["마라칸다"],
     ["세계사", "지역 세계의 교류", "고대 문명과 국가", "종교와 지역 문화"],
-    [1001, 1002, 1003],
+    [1006, 1007, 1008],
   ],
   [
     "world-a0dcf4d1999f",
@@ -27706,8 +27741,8 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
     [
-      0, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015,
-      1016,
+      0, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020,
+      1021,
     ],
   ],
   [
@@ -27722,7 +27757,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "냉전과 현대 세계",
     ],
-    [1017],
+    [1022],
   ],
   [
     "world-844dd33bf4b8",
@@ -27736,7 +27771,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "혁명과 국민 국가",
     ],
-    [1018],
+    [1023],
   ],
   [
     "world-1c1dfe790ef3",
@@ -27744,7 +27779,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코르도바는 후우마이야 왕조의 정치·문화 중심지였다. 코르도바 대모스크는 그 번영을 보여 주는 이슬람 종교 건축물이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1019],
+    [0, 1024],
   ],
   [
     "world-6c8f7f219544",
@@ -27752,7 +27787,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북아프리카에서 무와히드·하프스 왕조 시기에 번성한 이슬람 도시이다. 궁전·모스크·마드라사와 시장이 모인 메디나는 당시 도시의 부와 문화를 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "냉전과 현대 세계"],
-    [0, 1020, 1021],
+    [0, 1025, 1026],
   ],
   [
     "world-878a81796ee0",
@@ -27760,7 +27795,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "투르는 프랑스의 중서부에 있는 도시로, 앵드르에루아르주의 주도이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1022],
+    [1027],
   ],
   [
     "world-3f39257dc07c",
@@ -27768,7 +27803,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "푸아티에는 프랑스 중서부 지역 클랭강에 위치한 도시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1023],
+    [1028],
   ],
   [
     "world-d504fb66dba4",
@@ -27776,7 +27811,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동부 지중해와 유럽을 잇는 무역으로 성장한 도시 국가로, 상인들이 해상 교역망을 운영했다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1024],
+    [1029],
   ],
   [
     "world-7ffc7fdbeb12",
@@ -27784,7 +27819,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아스완 이집트 남동부에 있는 아스완 주의 주도이며 인구는 약 21만 9000명(1996년)이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1025],
+    [1030],
   ],
   [
     "world-4af9af54b3c7",
@@ -27792,7 +27827,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리비아 북서부의 지중해 항구 도시이자 오늘날 리비아의 수도다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1026],
+    [1031],
   ],
   [
     "world-7091642a2395",
@@ -27800,7 +27835,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 베트남 중부에 있던 참파 왕국의 수도로, 1471년 대월의 정복으로 함락되었다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1027],
+    [1032],
   ],
   [
     "world-2fb960eee7ee",
@@ -27808,7 +27843,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마린 왕조의 수도로 번성한 북아프리카의 도시이다. 마드라사·모스크·상인 숙소가 남아 있어 이슬람 학문과 교역이 도시 생활을 이루었음을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1021, 1020],
+    [0, 1026, 1025],
   ],
   [
     "world-d833506ddd81",
@@ -27816,7 +27851,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장예(張裔, 167년 ~ 230년)는 중국 후한 말기 ~ 촉한의 관료로, 자는 군사이며 익주 촉군 성도현 사람이다.",
     ["감주"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1028],
+    [1033],
   ],
   [
     "world-28f190fbd40a",
@@ -27840,7 +27875,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사나는 아라비아반도 남서부에 있는 예멘의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계", "종교와 지역 문화"],
-    [1029],
+    [1034],
   ],
   [
     "world-23c5a08b83e0",
@@ -27848,7 +27883,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모가디슈는 소말리아의 수도이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계", "종교와 지역 문화"],
-    [1030],
+    [1035],
   ],
   [
     "world-cbd8f5e1c3e4",
@@ -27856,7 +27891,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말린디는 케냐의 도시로, 인구는 약 120,000명(1999년 기준)이며 인도양과 접한 항구 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1031],
+    [1036],
   ],
   [
     "world-02d9b294203a",
@@ -27864,7 +27899,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동아프리카의 항구로, 포르투갈은 인도양 교역로를 장악하려고 1593~1596년 이곳에 예수 요새를 세웠다. 요새는 해상 교역과 유럽 세력의 진출이 맞물린 역사를 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1032, 1033],
+    [0, 1037, 1038],
   ],
   [
     "world-872972e9a3dc",
@@ -27872,7 +27907,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북방을 잃은 송이 남쪽으로 옮긴 뒤 수도가 되었으며, 강남의 상업과 도시 문화가 번성한 곳이다.",
     ["임안", "여항"],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1034],
+    [1039],
   ],
   [
     "world-186f9d529071",
@@ -27880,7 +27915,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "푸저우는 중화인민공화국 푸젠성의 성도이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "종교와 지역 문화"],
-    [1035],
+    [1040],
   ],
   [
     "world-f1bc721d62c8",
@@ -27888,7 +27923,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "취안저우시또는 천주시는 중화인민공화국 푸젠성에 위치하는 지급시이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1036],
+    [1041],
   ],
   [
     "world-3e0c7bdd2609",
@@ -27903,8 +27938,8 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
     ],
     [
-      0, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048,
-      1049, 1050,
+      0, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053,
+      1054, 1055,
     ],
   ],
   [
@@ -27913,7 +27948,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1541년 돌아온 칼뱅은 제네바에서 교회 규정을 정비하고 종교 개혁을 이끌었다. 이곳에서 마련한 개혁 교회의 조직은 다른 지역의 개혁 교회에도 영향을 주었다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "냉전과 현대 세계"],
-    [0, 1051],
+    [0, 1056],
   ],
   [
     "world-e6b9fed95bb8",
@@ -27921,7 +27956,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아우크스부르크는 독일 바이에른주 남서쪽에 위치한 시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1052],
+    [1057],
   ],
   [
     "world-b5dda255b318",
@@ -27929,7 +27964,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "네덜란드의 해상 진출과 함께 무역·금융 중심지로 성장하며 세계 각지의 상품과 자금이 모였다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계", "종교와 지역 문화"],
-    [0, 1053],
+    [0, 1058],
   ],
   [
     "world-4bb835aa0dab",
@@ -27937,7 +27972,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중세 유럽의 주요 상업·문화 도시이다. 시장과 상업 건물, 고딕 건축 및 플랑드르 회화의 전통은 교역으로 성장한 도시 사회를 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1054, 1055],
+    [0, 1059, 1060],
   ],
   [
     "world-b93b961da157",
@@ -27951,7 +27986,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [1056],
+    [1061],
   ],
   [
     "world-c5077530ed4f",
@@ -27959,7 +27994,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마인츠에서 구텐베르크는 푸스트의 자금 지원을 받아 인쇄 작업장을 운영하고 42행 성서를 인쇄했다. 필사본을 일일이 베끼던 방식과 달리 같은 책을 여러 부 생산하는 유럽 활판 인쇄의 전개를 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1057],
+    [0, 1062],
   ],
   [
     "world-db517ae6e2e9",
@@ -27967,7 +28002,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루터의 활동 거점으로, 면벌부 비판에서 시작된 종교 개혁이 확산하는 중심지가 되었다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1058],
+    [1063],
   ],
   [
     "world-aa3ca89c7d57",
@@ -27975,7 +28010,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바리시는 울리야놉스크 주 바리시스키 군에 속한 도시이름이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1059],
+    [1064],
   ],
   [
     "world-7000f576325c",
@@ -27983,7 +28018,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 북부 센강 유역의 도시로, 잔 다르크가 화형을 당한 곳이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1060],
+    [1065],
   ],
   [
     "world-3ab601a376d0",
@@ -27991,7 +28026,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도나우강을 따라 상업이 발달한 중세 도시이다. 시장·상인 주택과 12세기의 돌다리는 강을 건너는 교통과 교역이 도시 성장에 중요했음을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1061],
+    [0, 1066],
   ],
   [
     "world-f3a7766e75d0",
@@ -27999,7 +28034,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오론테스강의 안티오키아는 오론테스강 동쪽 유역에 있던 고대 도시이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1062],
+    [1067],
   ],
   [
     "world-d750321dee4b",
@@ -28007,7 +28042,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메소포타미아 북부에 세워진 고대 도시로, 오늘날 튀르키예 우르파의 전신이며 십자군 시대 에데사 백국의 수도였다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1063],
+    [1068],
   ],
   [
     "world-97f521ccd2b4",
@@ -28015,7 +28050,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테살로니카는 그리스도교가 일찍 전파된 항구 도시이다. 4~15세기에 세워진 성당과 모자이크는 초기 그리스도교부터 비잔티움 시대까지 이어진 종교 예술을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1064],
+    [0, 1069],
   ],
   [
     "world-3a7f1066c582",
@@ -28023,7 +28058,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "원저우는 중화인민공화국 저장성 동남 연해에 위치하는 지급시이다.",
     ["윈저우"],
     ["세계사", "혁명과 국민 국가", "지역 세계의 교류"],
-    [1065],
+    [1070],
   ],
   [
     "world-b71d04848a05",
@@ -28031,7 +28066,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동서 교역로가 만나는 이란의 상업 도시이다. 지붕이 이어진 바자르에는 상점뿐 아니라 교육·종교 공간도 모여 있어 상품과 문화가 함께 오간 모습을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1066],
+    [0, 1071],
   ],
   [
     "world-949e31a1d379",
@@ -28039,7 +28074,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "볼가강 유역의 중세 도시로, 볼가 불가리아의 수도와 교역 중심지 역할을 했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1067],
+    [1072],
   ],
   [
     "world-f9e0d07817bd",
@@ -28053,7 +28088,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 978, 977],
+    [0, 983, 982],
   ],
   [
     "world-46e515708eee",
@@ -28061,7 +28096,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "러시아 모스크바 동쪽 클랴지마강 유역의 도시로, 블라디미르주의 중심지다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1068],
+    [1073],
   ],
   [
     "world-125082c14c3f",
@@ -28069,7 +28104,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바스라는 이라크 남부의 중심으로 이라크 제3의 도시이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1069],
+    [1074],
   ],
   [
     "world-9f14f6a5fcc9",
@@ -28077,7 +28112,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지중해의 성벽 항구 도시로, 십자군 시대 예루살렘 왕국의 중심지가 되었다. 오늘날 거리 아래에도 당시의 도시 유적이 남아 있어 십자군 국가와 해상 교역의 관계를 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1070],
+    [0, 1075],
   ],
   [
     "world-2aa69c3bbe5b",
@@ -28091,7 +28126,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "고대 문명과 국가",
     ],
-    [0, 1071],
+    [0, 1076],
   ],
   [
     "world-f258dd399718",
@@ -28099,7 +28134,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿤밍은 중화인민공화국 윈난성의 성도이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1072],
+    [1077],
   ],
   [
     "world-074a7a1332ea",
@@ -28107,7 +28142,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트라브존 또는 트라페준타는 튀르키예 북동부 흑해 연안에 있는 도시로, 트라브존 주의 주도이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1073],
+    [1078],
   ],
   [
     "world-43b370fd0aec",
@@ -28115,7 +28150,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 서부 구자라트의 나르마다강 하구에 있는 바루치로, 고대부터 동서 해상 무역이 이루어진 항구다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1074],
+    [1079],
   ],
   [
     "world-2064571eae7e",
@@ -28123,7 +28158,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 간쑤성 장예의 옛 이름으로, 서하의 도시이자 중국 서쪽으로 향하는 교통의 거점이었다.",
     ["간주"],
     ["세계사", "지역 세계의 교류"],
-    [1075],
+    [1080],
   ],
   [
     "world-2adc976ccf9d",
@@ -28131,7 +28166,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양저우시는 중화인민공화국 장쑤성에 위치한 지급시이다.",
     ["장두"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [319],
+    [321],
   ],
   [
     "world-3dde311574e0",
@@ -28139,7 +28174,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바스쿠 다 가마가 아프리카 남단을 돌아 도착한 인도의 항구로 표시된다. 유럽과 인도양을 직접 연결한 신항로의 도착 지점이다.",
     ["코지코드"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [0, 1038, 1039, 1076, 1077, 1046, 1078, 1049, 1050, 1079],
+    [0, 1043, 1044, 1081, 1082, 1051, 1083, 1054, 1055, 1084],
   ],
   [
     "world-84b26a60bb70",
@@ -28147,7 +28182,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수마트라섬 북쪽 해안에서 13~16세기에 번영한 이슬람 왕국 사무드라 파사이의 중심지다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1080],
+    [1085],
   ],
   [
     "world-c69a008674e1",
@@ -28155,7 +28190,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도양과 남중국해를 연결하는 항구로 번성했으며, 1511년 포르투갈의 점령 뒤 유럽 세력의 아시아 진출 거점이 되었다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1081],
+    [1086],
   ],
   [
     "world-fbb7d4168bc0",
@@ -28163,7 +28198,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남의 도시 지역으로, 농업·어업을 기반으로 상업이 발달하고 제조업과 관광업이 성장한 곳이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1082],
+    [1087],
   ],
   [
     "world-e602a1fe2788",
@@ -28171,7 +28206,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캬흐타는 부랴트 공화국에 있는 도시 이름이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1083],
+    [1088],
   ],
   [
     "world-68f0c26b6639",
@@ -28179,7 +28214,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마닐라와 아카풀코 사이의 갈레온 무역은 아시아 상품과 아메리카의 은을 태평양을 건너 교환하게 했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1084],
+    [1089],
   ],
   [
     "world-13685b2251ac",
@@ -28187,7 +28222,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 서부 아라비아해 연안의 지역으로, 오랫동안 포르투갈의 식민지였다가 1961년 인도에 편입되었다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1085],
+    [1090],
   ],
   [
     "world-287e29e93d5f",
@@ -28201,7 +28236,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1084],
+    [1089],
   ],
   [
     "world-3cc22b04fb0d",
@@ -28209,7 +28244,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대규모 은광 개발로 스페인 식민지 경제의 핵심이 되었으며, 은 생산에는 원주민의 강제 노동이 동원되었다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1086],
+    [0, 1091],
   ],
   [
     "world-66f95cab05f0",
@@ -28217,7 +28252,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "16세기 중엽부터 포르투갈의 행정 아래 중국과 서양의 교역을 이어 준 항구이다. 중국식·포르투갈식 주거와 종교 건축은 오랜 해상 교류의 흔적이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1033, 1032],
+    [0, 1038, 1037],
   ],
   [
     "world-35570aabeb92",
@@ -28225,7 +28260,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에스파냐와 아메리카를 잇는 교역·식민 통치의 중심 도시이다. 대성당·알카사르·인디아스 문서관은 이슬람 문화의 흔적과 왕권, 대서양 무역의 성장을 함께 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1087],
+    [0, 1092],
   ],
   [
     "world-97044479ee0e",
@@ -28233,7 +28268,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "샤먼은 중국 푸젠성 남부에 있는 지급시로, 국제적으로는 아모이로도 알려져 있다 푸젠성 내에서는 가장 큰 도시다.",
     ["아모이"],
     ["세계사", "혁명과 국민 국가", "지역 세계의 교류"],
-    [1088],
+    [1093],
   ],
   [
     "world-bd5c355f2b3e",
@@ -28241,7 +28276,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "징더전시는 중화인민공화국 강서성 동북에 위치하는 지급시이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1089],
+    [1094],
   ],
   [
     "world-cf92e4ec620a",
@@ -28249,7 +28284,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 구이저우성의 성도로, 윈구이고원 동쪽 난밍강 유역에 자리한 도시다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1090],
+    [1095],
   ],
   [
     "world-2af353560891",
@@ -28257,7 +28292,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청두시는 중화인민공화국 서남부 쓰촨성의 성도이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "종교와 지역 문화"],
-    [1091],
+    [1096],
   ],
   [
     "world-7816f66482b0",
@@ -28265,7 +28300,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쑤저우시는 중화인민공화국 장쑤성 남동쪽의 타이후 동쪽에 있는 운하 도시이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [318],
+    [320],
   ],
   [
     "world-1ef115875c31",
@@ -28273,7 +28308,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나가사키시는 일본 규슈 북서부, 나가사키현 남서부에 있는 도시이다.",
     [],
     ["세계사", "지역 세계의 교류", "세계 대전과 평화", "혁명과 국민 국가"],
-    [761],
+    [766],
   ],
   [
     "world-fad0004357cb",
@@ -28281,7 +28316,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오사카는 일본 긴키 지방의 지명이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [544],
+    [546],
   ],
   [
     "world-728c452cb149",
@@ -28289,7 +28324,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "헤라트는 서부 아프가니스탄의 헤라트주의 주도이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1092],
+    [1097],
   ],
   [
     "world-2d45ecf65497",
@@ -28297,7 +28332,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이스파한은 아바스 1세가 수도로 삼아 정비한 도시이다. 이맘 광장은 왕궁·모스크·시장과 연결된 공간으로, 사파비 왕조의 정치·종교·상업 생활을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1093, 1094],
+    [1098, 1099],
   ],
   [
     "world-4e2164e6453a",
@@ -28313,7 +28348,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앙카라는 튀르키예의 수도이다.",
     ["앙고라"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1095],
+    [1100],
   ],
   [
     "world-dbd306ee9f55",
@@ -28321,7 +28356,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스페인 남서부의 항구 도시로, 콜럼버스가 1492년 대서양 항해를 시작한 곳이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1096],
+    [1101],
   ],
   [
     "world-e787efd0eb34",
@@ -28329,7 +28364,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코펜하겐은 덴마크의 수도이자 가장 인구가 많은 도시로 도시 지역에 약 140만 명의 인구가 있고, 코펜하겐 광역권에 200만 명이 넘는 인구가 있다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1097],
+    [1102],
   ],
   [
     "world-3853153f06af",
@@ -28344,7 +28379,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [0, 1098],
+    [0, 1103],
   ],
   [
     "world-c9263001c56b",
@@ -28352,7 +28387,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "십자군 전쟁 이후 동방 교역이 활발해지면서 성장한 지중해 상업 도시다. 도시의 성장은 장원 중심 경제가 변화하는 배경이 되었다.",
     [],
     ["세계사", "종교와 지역 문화", "세계 대전과 평화", "혁명과 국민 국가"],
-    [0, 1099, 1100, 1101, 1102],
+    [0, 1104, 1105, 1106, 1107],
   ],
   [
     "world-1221565fd8b8",
@@ -28360,7 +28395,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토리노는 이탈리아 북서부의 산업 도시로 피에몬테주의 주도이자 토리노 광역시의 시청 소재지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1103],
+    [1108],
   ],
   [
     "world-e927495d0c18",
@@ -28368,7 +28403,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "맨체스터와 연결한 철도가 개통되어 항구와 공업 도시 사이의 사람·화물 운송을 바꾸었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [0, 1104, 1105],
+    [0, 1109, 1110],
   ],
   [
     "world-a236f7cd46dd",
@@ -28376,7 +28411,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리즈는 영국 잉글랜드 웨스트요크셔주의 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1106],
+    [1111],
   ],
   [
     "world-98635f611c75",
@@ -28384,7 +28419,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "셰필드는 영국 잉글랜드 사우스요크셔주의 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1107],
+    [1112],
   ],
   [
     "world-27733ed89fa9",
@@ -28392,7 +28427,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "버밍엄은 영국 잉글랜드 중부에 위치한 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1108],
+    [1113],
   ],
   [
     "world-15e2a2c5c985",
@@ -28400,7 +28435,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1848년 프랑크푸르트의 파울 교회에 독일 국민 의회가 모여 자유주의 헌법과 독일 통일 국가의 수립을 논의했다. 혁명 속에서 국민의 대표가 국가 체제를 정하려 한 시도였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [0, 1109],
+    [0, 1114],
   ],
   [
     "world-78bbb09d209f",
@@ -28408,7 +28443,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브뤼셀 수도 지역, 줄여서 브뤼셀은 벨기에의 수도이다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1110],
+    [1115],
   ],
   [
     "world-35c35344f75f",
@@ -28416,7 +28451,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "헨트는 벨기에 오스트플란데런주의 주도이자 가장 큰 도시로 플랑드르에 있는 지방 자치체다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1111],
+    [1116],
   ],
   [
     "world-9be8af9c4b87",
@@ -28424,7 +28459,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빌바오는 스페인 바스크 지방의 중심 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1112],
+    [1117],
   ],
   [
     "world-7ecd1c90370e",
@@ -28432,7 +28467,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바르셀로나는 스페인에서 두 번째로 큰 도시로, 스페인 동부 지중해 연안 지역부터 프랑스 남쪽 피레네산맥과 접경지역을 아우르는 카탈루냐 지방의 중심 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1113],
+    [1118],
   ],
   [
     "world-dbc8d1f04d96",
@@ -28440,7 +28475,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마드리드는 스페인의 수도로, 나라의 중앙부에 있다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1114],
+    [1119],
   ],
   [
     "world-65239e156701",
@@ -28448,7 +28483,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "함부르크는 독일 북부에 있는 주이며 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가", "종교와 지역 문화"],
-    [727],
+    [732],
   ],
   [
     "world-88b3be0c87c3",
@@ -28456,7 +28491,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에든버러는 18세기 계몽사상의 학문과 토론이 활발했던 도시이다. 이 시기에 발전한 신고전주의 신도시는 유럽의 도시 계획에 영향을 주었으며 중세 구시가지와 함께 남아 있다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [0, 1115],
+    [0, 1120],
   ],
   [
     "world-86d1063cecf2",
@@ -28464,7 +28499,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "글래스고는 스코틀랜드 최대의 항구 도시로 면적은 175.5km2, 인구는 612,040명(2016년 기준), 인구 밀도는 3,298명/km2이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1116],
+    [1121],
   ],
   [
     "world-953815853ea7",
@@ -28472,7 +28507,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉글랜드 북부의 도시로, 스코틀랜드와의 경계 가까이에 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1117],
+    [1122],
   ],
   [
     "world-f8cd246966c9",
@@ -28480,7 +28515,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선덜랜드는 영국 잉글랜드 타인 위어주의 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1118],
+    [1123],
   ],
   [
     "world-e95f736a53f1",
@@ -28488,7 +28523,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉글랜드 북동부 더럼 지역의 도시로, 정식 이름은 스톡턴온티스다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1119],
+    [1124],
   ],
   [
     "world-041271ab1158",
@@ -28496,7 +28531,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "달링턴은 잉글랜드 더럼주에 위치한 도시로, 인구는 97,712명이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1120],
+    [1125],
   ],
   [
     "world-6fe2b793fa46",
@@ -28504,7 +28539,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1916년 더블린에서 봉기한 세력은 중앙우체국을 점거하고 아일랜드 공화국을 선언했다. 시가전 끝에 영국군에 항복했으며, 이 사건은 영국의 지배에 맞선 아일랜드 독립운동을 보여 준다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [0, 1121],
+    [0, 1126],
   ],
   [
     "world-82f985fac477",
@@ -28512,7 +28547,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨파스트는 영국의 도시로, 북아일랜드의 수도이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1122],
+    [1127],
   ],
   [
     "world-e9da2579e708",
@@ -28520,7 +28555,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스토크온트렌트는 잉글랜드 중부 스태퍼드셔주의 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1123],
+    [1128],
   ],
   [
     "world-436b58f4f65c",
@@ -28528,7 +28563,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 잉글랜드의 웨스트요크셔주에 있는 도시다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1124],
+    [1129],
   ],
   [
     "world-8fcac02cf0bd",
@@ -28536,7 +28571,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "더비에서는 1721년 롬브 형제의 비단 공장이 세워져 이탈리아식 기계를 이용한 생산이 이루어졌다. 큰 공장에 기계와 노동자를 모은 방식은 근대 공장제의 발달을 보여 주는 초기 사례이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [0, 1125],
+    [0, 1130],
   ],
   [
     "world-3fa76ee00daa",
@@ -28544,7 +28579,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브리스틀은 영국 잉글랜드 서부의 에이번 강에 딸린 항구 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1126],
+    [1131],
   ],
   [
     "world-530f985720bc",
@@ -28552,7 +28587,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "입스위치는 영국 잉글랜드 서퍽주의 주도로, 입스위치 타운 FC의 연고지이기도 하다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1127],
+    [1132],
   ],
   [
     "world-8cae5a9b430d",
@@ -28560,7 +28595,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "노리치는 영국 잉글랜드 동부 이스트앵글리아의 도시로, 노퍽주의 주도이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1128],
+    [1133],
   ],
   [
     "world-ec7d12e70873",
@@ -28568,7 +28603,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사우샘프턴은 영국 잉글랜드 햄프셔주 남부에 위치한 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1129],
+    [1134],
   ],
   [
     "world-5f4e3c16c8c3",
@@ -28576,7 +28611,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "플리머스는 영국 잉글랜드 데번주의 영국 해협에 면한 항구 도시로서 영국 해군의 근거지이며, 외국 무역도 하고 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1130],
+    [1135],
   ],
   [
     "world-f2f88289db6e",
@@ -28584,7 +28619,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉글랜드 북동부 타인강 유역의 도시로, 영국 산업 혁명의 중심지 가운데 하나였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1131],
+    [1136],
   ],
   [
     "world-14d555e5a607",
@@ -28592,7 +28627,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "요크는 영국 잉글랜드 노스요크셔주에 있는 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1132],
+    [1137],
   ],
   [
     "world-78771dc76973",
@@ -28600,7 +28635,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옥스퍼드는 잉글랜드 옥스퍼드셔 주의 중심 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1133],
+    [1138],
   ],
   [
     "world-2f0df936c6f0",
@@ -28608,7 +28643,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프레스턴은 영국 잉글랜드 북서부 랭커셔주의 주도이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1134],
+    [1139],
   ],
   [
     "world-80cb06b0e5b2",
@@ -28616,7 +28651,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 남부 도싯 해안의 섬으로, 육지와 이어져 있고 포틀랜드석이라는 석회석 산지로 알려져 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1135],
+    [1140],
   ],
   [
     "world-300ce67c302a",
@@ -28624,7 +28659,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스코틀랜드 남동부 북해 연안의 도시 던바로, 잉글랜드와의 국경에서 가까운 항구다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1136],
+    [1141],
   ],
   [
     "world-6ceecfcf7168",
@@ -28632,7 +28667,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1963년 워싱턴 행진에서 마틴 루서 킹은 링컨 기념관 앞에서 인종 차별의 철폐를 요구했다. 이 행진은 1964년 민권법과 1965년 투표권법 제정을 촉구한 민권 운동의 중요한 계기였다.",
     [],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가", "세계 대전과 평화"],
-    [0, 1137],
+    [0, 1142],
   ],
   [
     "world-406d831cc5de",
@@ -28640,7 +28675,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 노스캐롤라이나주 케이프피어강 하류의 항구 도시로, 독립 전쟁과 남북 전쟁의 격전지였다.",
     ["웰밍턴"],
     ["세계사", "혁명과 국민 국가"],
-    [1138],
+    [1143],
   ],
   [
     "world-5cd50e5182fe",
@@ -28648,7 +28683,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 버지니아주의 도시로, 남북 전쟁 당시 남부 연합의 수도였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1139],
+    [1144],
   ],
   [
     "world-27469829202d",
@@ -28656,7 +28691,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "퀘벡은 17세기 초 프랑스 탐험가 샹플랭이 건설한 북아메리카의 식민 도시이다. 성벽과 요새, 행정·종교 건물은 유럽 세력이 북아메리카에 정착한 역사를 보여 준다.",
     ["퀘백"],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [0, 1140],
+    [0, 1145],
   ],
   [
     "world-7fb4d0b70279",
@@ -28664,7 +28699,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "디트로이트 시는 미국 미시간주에서 가장 큰 도시이자 미시간주 남동단 웨인군의 중심 소재지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1141],
+    [1146],
   ],
   [
     "world-7652045affb8",
@@ -28672,7 +28707,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 동북부의 대도시이자 항구로, 국제 금융·상업·문화의 중심지이며 유엔 본부가 있다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1142],
+    [1147],
   ],
   [
     "world-b369e43fe03f",
@@ -28680,7 +28715,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1781년 워싱턴이 지휘한 미국·프랑스 연합군이 영국군을 포위한 곳이다. 콘월리스의 항복은 미국 독립 전쟁의 결정적인 전환점이 되었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [0, 1143],
+    [0, 1148],
   ],
   [
     "world-e5ec86b32b42",
@@ -28688,7 +28723,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테헤란은 이란의 수도로 테헤란 주의 인구 1105만명의 중심지이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1144],
+    [1149],
   ],
   [
     "world-82b52c335023",
@@ -28696,7 +28731,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뭄바이에는 1878년부터 약 10년에 걸쳐 빅토리아 터미너스 철도역이 세워졌다. 영국식 고딕 양식과 인도 건축 전통이 결합한 역사는 식민지 시기 국제 무역항의 성장을 보여 준다.",
     ["봄베이"],
     ["세계사", "혁명과 국민 국가", "지역 세계의 교류"],
-    [0, 1145],
+    [0, 1150],
   ],
   [
     "world-c8937d58c6d1",
@@ -28704,7 +28739,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜카타는 인도의 서벵골 주의 주도로, 한때 영국령 인도의 수도였다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "고대 문명과 국가"],
-    [1146],
+    [1151],
   ],
   [
     "world-757696e32799",
@@ -28712,7 +28747,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "첸나이는 인도 최남단 주인 타밀나두주의 수도이자 최대 도시이다.",
     ["마드라스"],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1147],
+    [1152],
   ],
   [
     "world-c682f35c4b3a",
@@ -28720,7 +28755,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양곤은 미얀마에서 가장 큰 도시이자 옛 수도이며 양곤 구의 주도이다.",
     ["양곤"],
     ["세계사", "혁명과 국민 국가"],
-    [1148],
+    [1153],
   ],
   [
     "world-8510abc47546",
@@ -28728,7 +28763,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "호찌민시는 베트남에서 가장 큰 도시로 사이공강과 동나이강 하류에 있다.",
     ["호찌민시"],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1149],
+    [1154],
   ],
   [
     "world-585d73ccc9da",
@@ -28743,7 +28778,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "종교와 지역 문화",
       "세계 대전과 평화",
     ],
-    [0, 1150],
+    [0, 1155],
   ],
   [
     "world-df50d392c54c",
@@ -28751,7 +28786,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자카르타는 인도네시아의 수도이자 최대 도시이다.",
     ["바타비아"],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1151],
+    [1156],
   ],
   [
     "world-5c6e4cc101db",
@@ -28759,7 +28794,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옌타이시는 중국 산둥성의 지급시이다.",
     ["즈푸"],
     ["세계사", "혁명과 국민 국가"],
-    [1152],
+    [1157],
   ],
   [
     "world-c5fe09a8a03a",
@@ -28767,7 +28802,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉커우는 랴오닝성에 위치한 도시로 면적은 4970km2, 인구는 233만명이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1153],
+    [1158],
   ],
   [
     "world-6e9cd3a9a135",
@@ -28775,7 +28810,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "톈진세 또는 천진은 중화인민공화국 동부의 직할시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1154],
+    [1159],
   ],
   [
     "world-d103575254d6",
@@ -28783,7 +28818,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장쑤성에 있는 도시로, 예부터 상업의 중심지로 발달하였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1155],
+    [1160],
   ],
   [
     "world-a7e0e7d05dc0",
@@ -28791,7 +28826,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산터우시는 중화인민공화국 광둥성 동부 해안에 위치한 지급시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1156],
+    [1161],
   ],
   [
     "world-877f53b09370",
@@ -28799,7 +28834,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대만 남부의 도시로, 네덜란드의 거점과 정씨 왕국의 수도가 있었던 지역이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1157],
+    [1162],
   ],
   [
     "world-e9e0ab50361d",
@@ -28807,7 +28842,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단수이구은 중화민국 신베이시의 구이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1158],
+    [1163],
   ],
   [
     "world-6250637ec634",
@@ -28815,7 +28850,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 하이난섬의 옛 지명으로, 오늘날 하이커우시 충산구 일대에 해당한다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1159],
+    [1164],
   ],
   [
     "world-a6ef8381f098",
@@ -28823,7 +28858,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장시성 북부 장강 연안의 중요한 항구 도시다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1160],
+    [1165],
   ],
   [
     "world-ed3838629aad",
@@ -28831,7 +28866,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "구이린은 중화인민공화국 광시 좡족 자치구의 지급시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1161],
+    [1166],
   ],
   [
     "world-93c4b621d059",
@@ -28839,7 +28874,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하코다테시는 일본 홋카이도 남부에 있는 시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1162],
+    [1167],
   ],
   [
     "world-24264553716d",
@@ -28847,7 +28882,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니가타시는 일본 니가타현 북부의 가에쓰 지방에 있는 시이며, 니가타현의 현청 소재지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1163],
+    [1168],
   ],
   [
     "world-4b08af94b8bd",
@@ -28855,7 +28890,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고베시는 일본에서 6번째로 큰 도시로 효고현의 현청 소재지이자 일본을 대표하는 항만 도시로 인구는 약 150만 명이다.",
     ["효고"],
     ["세계사", "혁명과 국민 국가"],
-    [551],
+    [555],
   ],
   [
     "world-b13608d65d51",
@@ -28863,7 +28898,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "케이프타운은 남아프리카 공화국의 입법 수도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1164],
+    [1169],
   ],
   [
     "world-6404df318bc2",
@@ -28871,7 +28906,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1942년 2월 15일 싱가포르의 포드 공장에서 영국군이 일본군에 무조건 항복했다. 이 항복으로 싱가포르는 일본의 점령 아래 들어갔으며, 태평양 전쟁이 동남아시아에 끼친 변화를 보여 준다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [0, 1165],
+    [0, 1170],
   ],
   [
     "world-ae6d96814fa0",
@@ -28879,7 +28914,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "연합국 지도자들이 모여 패전한 독일의 처리 등 전후 문제를 논의한 회담이 열린 곳이다.",
     [],
     ["세계사", "세계 대전과 평화", "지역 세계의 교류"],
-    [1166],
+    [1171],
   ],
   [
     "world-2ffbb37ad8c3",
@@ -28887,7 +28922,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제2차 세계 대전 말 연합국 정상 회담이 열린 곳이다. 전쟁 종결과 전후 국제 질서를 논의한 회담의 하나로 제시된다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [0, 994, 996, 997, 1102],
+    [0, 999, 1001, 1002, 1107],
   ],
   [
     "world-845a3fde2ab5",
@@ -28895,7 +28930,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "체코슬로바키아의 자유화 개혁이 추진되었으나 바르샤바 조약 기구 군대의 개입으로 좌절되었다.",
     [],
     ["세계사", "냉전과 현대 세계", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1167],
+    [1172],
   ],
   [
     "world-91abafbeb8cc",
@@ -28903,7 +28938,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "소피아는 불가리아의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1168],
+    [1173],
   ],
   [
     "world-5ac0fb3528de",
@@ -28911,7 +28946,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트민이 프랑스군을 물리쳐 제1차 인도차이나 전쟁을 끝내는 협상으로 이어진 전투 장소이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1169],
+    [1174],
   ],
   [
     "world-576d4303e8a4",
@@ -28919,7 +28954,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당시 페트로그라드라 불린 이 도시에서 혁명이 일어나 차르 체제가 무너지고 볼셰비키가 권력을 잡았다.",
     [],
     ["세계사", "세계 대전과 평화", "지역 세계의 교류"],
-    [1170],
+    [1175],
   ],
   [
     "world-21ab7727d5e0",
@@ -28927,7 +28962,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한단시는 중화인민공화국 허베이성 남부에 위치하는 지급시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1171],
+    [1176],
   ],
   [
     "world-53b83393e769",
@@ -28935,7 +28970,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "누란 또는 크로라이나, 크로란은 현재 중국령인 신장 위구르 자치구에 있는 고대의 작은 도시 국가였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1172],
+    [1177],
   ],
   [
     "world-f146cd627fc2",
@@ -28943,7 +28978,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "델포이는 아폴론의 신탁을 구하던 고대 그리스의 공동 성소이다. 여러 폴리스가 찾은 종교 중심지로, 정치적으로 나뉜 그리스 세계의 공통된 신앙과 문화를 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1173],
+    [0, 1178],
   ],
   [
     "world-fff4e0bfd841",
@@ -28951,7 +28986,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제우스에게 바치는 고대 올림픽 경기가 열려, 여러 폴리스의 그리스인들이 만나는 종교·체육 중심지가 되었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1174],
+    [1179],
   ],
   [
     "world-bb8c27bc83cb",
@@ -28959,7 +28994,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "밀레토스는 아나톨리아 서부 해안에 있던 고대 그리스 이오니아의 도시의 이름으로, 현재는 터키에 속하는 지역이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1175],
+    [1180],
   ],
   [
     "world-939a1df24c5f",
@@ -28967,7 +29002,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "페르가몬은 헬레니즘 시대 아탈로스 왕조의 수도이자 학문의 중심지였다. 도서관·극장·제단을 가파른 언덕에 배치한 도시 유적은 당시의 건축과 조각 문화를 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1176],
+    [0, 1181],
   ],
   [
     "world-5ec32e9ad526",
@@ -28975,7 +29010,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테노치티틀란은 아즈텍 제국의 수도로, 오늘날의 멕시코시티에 존재했던 알테페틀이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1177],
+    [1182],
   ],
   [
     "world-f26aeb57f038",
@@ -28983,7 +29018,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜롬보는 스리랑카의 최대 도시이자 행정·사법 수도이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1178],
+    [1183],
   ],
   [
     "world-3e2e889d7b56",
@@ -28991,7 +29026,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리야드는 사우디아라비아의 수도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1179],
+    [1184],
   ],
   [
     "world-b6ff742d86b4",
@@ -28999,7 +29034,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "야즈드는 이란 중부에 위치한 도시로, 야즈드주의 주도이며 인구는 533,000명(2008년 기준), 높이는 해발 1,216m이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1180],
+    [1185],
   ],
   [
     "world-e7f3bd2053ba",
@@ -29007,7 +29042,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아헨은 카롤루스 대제의 궁정이 있던 도시이다. 약 790~800년에 세우기 시작한 궁정 예배당은 왕권과 그리스도교가 결합한 카롤링거 시대의 문화를 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1181],
+    [0, 1186],
   ],
   [
     "world-94e150b89eb4",
@@ -29015,7 +29050,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "튀르키예 시바스주의 도시로, 13세기에 세워진 대모스크와 병원 건축으로 알려져 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1182],
+    [1187],
   ],
   [
     "world-d410f7a73809",
@@ -29023,7 +29058,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "피사는 이탈리아 토스카나주에 있는 도시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1183],
+    [1188],
   ],
   [
     "world-a220548dc908",
@@ -29031,7 +29066,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "샤르트르 대성당은 1145년부터 일부가 세워졌고 1194년 화재 뒤 재건되었다. 높은 천장과 조각, 스테인드글라스는 중세 유럽의 고딕 건축과 그리스도교 신앙을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1184],
+    [0, 1189],
   ],
   [
     "world-ffd665fc6736",
@@ -29039,7 +29074,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쾰른은 독일 노르트라인베스트팔렌주의 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "세계 대전과 평화", "혁명과 국민 국가"],
-    [1185],
+    [1190],
   ],
   [
     "world-62b9e6b54d60",
@@ -29047,7 +29082,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안디잔은 우즈베키스탄 공화국의 제4의 도시이고 안디잔 주의 주도이다.",
     ["인디잔"],
     ["세계사", "지역 세계의 교류"],
-    [1186],
+    [1191],
   ],
   [
     "world-b31b784884b5",
@@ -29055,7 +29090,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국군이 잘리안왈라 바그의 군중에게 발포한 학살 사건이 일어나 인도의 반영 독립 운동에 큰 영향을 주었다.",
     [],
     ["세계사", "세계 대전과 평화", "지역 세계의 교류"],
-    [1187],
+    [1192],
   ],
   [
     "world-df9ce94dff2b",
@@ -29063,7 +29098,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉카 제국의 수도로서 정치·종교·문화의 중심을 이루었으며, 안데스 지역을 다스리는 거점이 되었다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1188],
+    [1193],
   ],
   [
     "world-0e331ff8e89c",
@@ -29071,7 +29106,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니샤푸르는 이란 북동부 호라산에라자비주의 도시로, 비날루드 산 기슭에 위치하며 마슈하드와 가깝다.",
     ["나샤푸르"],
     ["세계사", "종교와 지역 문화"],
-    [1189],
+    [1194],
   ],
   [
     "world-ff9f3361bf68",
@@ -29079,7 +29114,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라호르의 성과 샬리마르 정원은 16~17세기 무굴 제국의 궁정 문화를 보여 준다. 특히 샤자한이 1641~1642년에 조성한 정원에는 수로와 연못, 여러 층의 단을 활용한 정원 양식이 나타난다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1190],
+    [0, 1195],
   ],
   [
     "world-c40cf82a1fda",
@@ -29087,7 +29122,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시라즈는 이란의 5번째로 인구 밀집된 도시이며 파르스주의 주도이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1191],
+    [1196],
   ],
   [
     "world-8bcb5aaf1fe6",
@@ -29095,7 +29130,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동아프리카의 스와힐리 해안 교역 도시이다. 스톤타운의 건축과 도시 생활에는 인도양을 오가며 만난 아프리카·아라비아·인도·유럽 문화가 함께 남아 있다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1192],
+    [0, 1197],
   ],
   [
     "world-d12515f624d6",
@@ -29103,7 +29138,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사하라 횡단 교역망의 도시로 성장했으며, 이슬람 학문과 필사본 문화가 발달했다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1193],
+    [1198],
   ],
   [
     "world-6a3a0d4cf3ef",
@@ -29111,7 +29146,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무스카트는 오만의 수도이자 최대 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
-    [1194],
+    [1199],
   ],
   [
     "world-fd370ee5d8b8",
@@ -29119,7 +29154,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알레포는 시리아 북부의 도시로 알레포 주의 주도이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1195],
+    [1200],
   ],
   [
     "world-4f96080e9f80",
@@ -29127,7 +29162,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "툴루즈는 프랑스의 남서쪽 가론강 연안, 지중해와 대서양으로부터 비슷한 거리만큼 떨어져있는 도시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1196],
+    [1201],
   ],
   [
     "world-7e90cda0a860",
@@ -29135,7 +29170,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리옹은 프랑스의 도시로 오베르뉴론알프 지방 내 론 주의 중심 도시이며, 과거 앙시앵 레짐의 프로방스 리요네의 중심지였다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1197],
+    [1202],
   ],
   [
     "world-ba2226fc28c9",
@@ -29143,7 +29178,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마르세유는 프랑스에서 두 번째로 큰 도시이다.",
     ["마실리아"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1198],
+    [1203],
   ],
   [
     "world-a5f858a5d5d6",
@@ -29151,7 +29186,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마그데부르크는 독일 작센안할트주의 주도이며 엘베강변에 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1199],
+    [1204],
   ],
   [
     "world-a4fdb35d4967",
@@ -29159,7 +29194,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발트해와 북해 교역을 이끈 한자 동맹의 중심 도시 가운데 하나이다. 상인의 집과 창고·공방이 모인 구시가에는 중세 상업 도시의 구조가 남아 있다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1055, 1054],
+    [0, 1060, 1059],
   ],
   [
     "world-fd22064dcb83",
@@ -29167,7 +29202,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한자 동맹에 참여한 브레멘에서는 15세기 초 시청사와 롤란트상이 세워졌다. 이 건축물과 조각은 중세 상업 도시가 누린 시민 자치와 권리를 상징한다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1200],
+    [0, 1205],
   ],
   [
     "world-3120a0b4ccc9",
@@ -29175,7 +29210,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "케임브리지는 영국 런던에서 북쪽에 있는 케임브리지셔주의 중심 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1201],
+    [1206],
   ],
   [
     "world-0e64700a72af",
@@ -29183,7 +29218,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "물탄은 파키스탄 펀자브주의 도시로, 체나브강 동안에 위치한다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1202],
+    [1207],
   ],
   [
     "world-a0144bfc49e4",
@@ -29191,7 +29226,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코치 또는 코친은 인도 남부 케랄라 주의 항구 도시이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1203],
+    [1208],
   ],
   [
     "world-30225f61b55e",
@@ -29199,7 +29234,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뮌헨은 독일 바이에른주의 최대 도시이자 주도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1204],
+    [1209],
   ],
   [
     "world-79dbeef5365a",
@@ -29207,7 +29242,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부다페스트는 헝가리의 수도이자 정치·산업·경제·사회·문화의 중심지다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1205],
+    [1210],
   ],
   [
     "world-c194012dc5e0",
@@ -29215,7 +29250,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 남부 지중해 연안의 항구 도시로, 프랑스 리비에라의 중심지다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1206],
+    [1211],
   ],
   [
     "world-98a5f0cff814",
@@ -29223,7 +29258,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스톡홀름은 스웨덴의 스칸디나비아반도 최대 도시이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1207],
+    [1212],
   ],
   [
     "world-b2bf15f06f6b",
@@ -29231,7 +29266,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보르도는 프랑스 남서부에 있는 항구 도시이다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1208],
+    [1213],
   ],
   [
     "world-d4a692181eed",
@@ -29239,7 +29274,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브로츠와프는 폴란드의 남서부 실레시아 지방에 있는 돌니실롱스크주의 주도이다.",
     ["브로츠와프"],
     ["세계사", "혁명과 국민 국가"],
-    [1209],
+    [1214],
   ],
   [
     "world-adc7ecf17df7",
@@ -29247,7 +29282,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "닝보는 중화인민공화국의 저장성 해안에 있는 항구 도시인데, 이 도시는 대외적으로는 19세기부터 개항한 도시이고, 상공업이 발달해 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [316],
+    [318],
   ],
   [
     "world-4745bda9996d",
@@ -29255,7 +29290,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한커우는 중국 후베이성에 있었던 도시이며, 현재는 우한시의 일부에 해당한다.",
     ["한구"],
     ["세계사", "혁명과 국민 국가"],
-    [1210],
+    [1215],
   ],
   [
     "world-c4ec4bc59b1a",
@@ -29263,7 +29298,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가나가와현은 일본 간토 지방 남서부에 위치하며 도쿄도 남쪽에 인접하는 현이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1211],
+    [1216],
   ],
   [
     "world-d06180a7e02c",
@@ -29271,7 +29306,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카리브해의 세인트키츠섬에 있는 세인트키츠 네비스의 수도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1212],
+    [1217],
   ],
   [
     "world-d8af82484a1d",
@@ -29279,7 +29314,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앤티가섬에 있는 앤티가 바부다의 수도이자 중요한 항구와 상업 중심지다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1213],
+    [1218],
   ],
   [
     "world-bb0c74fdef99",
@@ -29287,7 +29322,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로조는 도미니카 연방의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1214],
+    [1219],
   ],
   [
     "world-26a646d09c92",
@@ -29295,7 +29330,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브리지타운은 바베이도스의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1215],
+    [1220],
   ],
   [
     "world-c134ed0fa2d3",
@@ -29303,7 +29338,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "킹스타운은 인구 15,900명(1999년 기준)의 세인트빈센트 그레나딘의 수도이며, 중요한 항구가 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1216],
+    [1221],
   ],
   [
     "world-d599ac149473",
@@ -29311,7 +29346,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베이루트는 레바논의 수도이며, 베이루트 주의 중심지이자 레바논 최대의 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1217],
+    [1222],
   ],
   [
     "world-ccfef6c210c1",
@@ -29319,7 +29354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "반줄은 아프리카 서쪽에 위치한 감비아의 수도로, 같은 이름을 가진 행정 구역 안에 위치한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1218],
+    [1223],
   ],
   [
     "world-be0892878898",
@@ -29327,7 +29362,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포트오브스페인은 트리니다드섬 북서쪽 해안에 위치한 도시로 트리니다드 토바고의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1219],
+    [1224],
   ],
   [
     "world-e977be58feac",
@@ -29335,7 +29370,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카리브해 섬나라 그레나다의 수도로, 세인트조지구의 행정 중심지다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1220],
+    [1225],
   ],
   [
     "world-44ba669bbb01",
@@ -29343,7 +29378,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캐스트리스는 서인도 제도에 있는 세인트루시아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1221],
+    [1226],
   ],
   [
     "world-98993d6ed711",
@@ -29351,7 +29386,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도하는 카타르의 수도이자 최대 도시이며, 페르시아만과 접해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1222],
+    [1227],
   ],
   [
     "world-958f30cdb2a2",
@@ -29359,7 +29394,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키갈리는 르완다의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1223],
+    [1228],
   ],
   [
     "world-faa4313ab0ed",
@@ -29367,7 +29402,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부줌부라는 부룬디의 최대 도시로 2014년 인구는 658,859명으로 추산된다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1224],
+    [1229],
   ],
   [
     "world-03a20f2eef06",
@@ -29375,7 +29410,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마세루는 레소토의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1225],
+    [1230],
   ],
   [
     "world-666e125e51bb",
@@ -29383,7 +29418,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마나마는 1932년 무하라크에서 바뀌어 바레인의 수도로 지정되었으며 페르시아만에 위치해 있고, 바레인 섬에서 북동쪽에 있다.",
     ["마나바"],
     ["세계사", "냉전과 현대 세계"],
-    [1226],
+    [1231],
   ],
   [
     "world-ced298724d79",
@@ -29391,7 +29426,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빈트후크는 나미비아의 수도로 그 뜻은 네덜란드어로 바람이 불어오는 방향이라는 의미이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1227],
+    [1232],
   ],
   [
     "world-b080e7495de6",
@@ -29399,7 +29434,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이슬라마바드는 파키스탄의 수도로 북동쪽에 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1228],
+    [1233],
   ],
   [
     "world-c6f38f10836f",
@@ -29407,7 +29442,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "두샨베는 타지키스탄의 수도로 인구는 58만 2,400명(1991년 통계)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1229],
+    [1234],
   ],
   [
     "world-81f4115173d5",
@@ -29415,7 +29450,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "와가두구는 부르키나파소의 수도이며 행정, 문화, 경제의 중심지이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1230],
+    [1235],
   ],
   [
     "world-123fcb465d1d",
@@ -29423,7 +29458,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팀부는 부탄의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1231],
+    [1236],
   ],
   [
     "world-86cacaf1260d",
@@ -29431,7 +29466,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포트루이스는 모리셔스의 수도로 인구는 약 15만 명이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1232],
+    [1237],
   ],
   [
     "world-34d9f0503d01",
@@ -29439,7 +29474,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안타나나리보 또는 타나나리브 또는 간단히 줄여서 타나는 마다가스카르의 수도로 마다가스카르섬의 거의 중앙에 위치한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1233],
+    [1238],
   ],
   [
     "world-2b4adcaa14eb",
@@ -29447,7 +29482,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도도마는 탄자니아의 법률상의 수도이며 도도마 주의 주도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1234],
+    [1239],
   ],
   [
     "world-5506a44c952f",
@@ -29455,7 +29490,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도양의 섬나라 코모로의 수도이자 최대 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1235],
+    [1240],
   ],
   [
     "world-f35c9a166408",
@@ -29463,7 +29498,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캄팔라는 우간다의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1236],
+    [1241],
   ],
   [
     "world-8e27538d89d6",
@@ -29471,7 +29506,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "주바는 남수단의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1237],
+    [1242],
   ],
   [
     "world-459165107877",
@@ -29479,7 +29514,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나이로비는 케냐의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1238],
+    [1243],
   ],
   [
     "world-b10068d722ea",
@@ -29487,7 +29522,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하르툼은 북아프리카에 속하는 나라인 수단의 수도로, 카르툼이라고도 일컫는다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1239],
+    [1244],
   ],
   [
     "world-ae061c68c10a",
@@ -29495,7 +29530,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프리카 단결 기구가 창설된 도시로, 이후 아프리카 연합 본부가 자리한 대륙 협력의 중심지가 되었다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1240, 1241],
+    [1245, 1246],
   ],
   [
     "world-8938cd22789d",
@@ -29503,7 +29538,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발레타는 몰타의 수도이며 인구는 7,048명(2000년 통계)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1242],
+    [1247],
   ],
   [
     "world-2e2e5509a457",
@@ -29511,7 +29546,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "딜리는 티모르섬 북동부에 위치하는 동티모르의 수도이자, 동티모르 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1243],
+    [1248],
   ],
   [
     "world-953c761e000b",
@@ -29519,7 +29554,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시드니와 멜버른의 경쟁 속에서 새 연방 수도로 선정되었다. 1913년 캔버라라는 이름을 정했고, 1927년 연방 의회가 옮겨 와 정치 중심지가 되었다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1244, 1245],
+    [0, 1249, 1250],
   ],
   [
     "world-fd95d1b39869",
@@ -29527,7 +29562,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포트모르즈비, 혹은 줄여서 모스비는 파푸아뉴기니의 수도이며, 중앙 주와 수도권의 주도이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1246],
+    [1251],
   ],
   [
     "world-89b5a9dc33ab",
@@ -29535,7 +29570,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "호니아라는 인구 5만명의 솔로몬 제도의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1247],
+    [1252],
   ],
   [
     "world-ea2c6319a21a",
@@ -29543,7 +29578,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비엔티안 또는 위앙짠은 메콩강에 접한 라오스의 수도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1248],
+    [1253],
   ],
   [
     "world-e0fa79970f3e",
@@ -29551,7 +29586,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "네피도는 미얀마의 수도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1249],
+    [1254],
   ],
   [
     "world-debb1c6e8f9f",
@@ -29559,7 +29594,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프놈펜은 캄보디아의 수도이자, 행정, 경제, 문화의 중심지로 캄보디아 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1250],
+    [1255],
   ],
   [
     "world-4dc2c2918945",
@@ -29567,7 +29602,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "방콕은 태국의 수도이자 태국에서 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1251],
+    [1256],
   ],
   [
     "world-897c2ffcbe1e",
@@ -29575,7 +29610,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "멜레케오크는 팔라우 멜레케오크주의 주도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1252],
+    [1257],
   ],
   [
     "world-87664e198569",
@@ -29583,7 +29618,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다카는 방글라데시의 수도이자, 방글라데시 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1253],
+    [1258],
   ],
   [
     "world-72891a782815",
@@ -29591,7 +29626,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카트만두는 네팔의 수도로 네팔에서 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1254],
+    [1259],
   ],
   [
     "world-4ca5c460e0aa",
@@ -29599,7 +29634,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포트빌라는 바누아투의 수도이자 최대 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1255],
+    [1260],
   ],
   [
     "world-9adf477d4eac",
@@ -29607,7 +29642,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수바는 피지의 수도이며, 피지의 행정 구역인 중부구의 중심이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1256],
+    [1261],
   ],
   [
     "world-37a726b6aa5b",
@@ -29615,7 +29650,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "누쿠알로파는 통가의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1257],
+    [1262],
   ],
   [
     "world-72e73261214b",
@@ -29623,7 +29658,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남섬의 성장과 오클랜드까지의 긴 이동 거리를 고려하여 수도와 의회가 옮겨 왔다. 이후 뉴질랜드 중앙 정부의 중심지가 되었다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1258],
+    [0, 1263],
   ],
   [
     "world-1397c8e752fd",
@@ -29631,7 +29666,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "푸나푸티섬은 투발루의 수도이자 투발루를 구성하는 섬의 하나에 속한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1259],
+    [1264],
   ],
   [
     "world-02655c997872",
@@ -29639,7 +29674,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팔리키르는 태평양의 미크로네시아 연방의 수도이고, 인구는 대략적으로 약 9,900명이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1260],
+    [1265],
   ],
   [
     "world-f4fc3adc89cb",
@@ -29647,7 +29682,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마주로는 태평양에 위치한 마셜 제도의 수도로, 면적은 9.71km2, 인구는 23,156명(2021년 기준), 최고점은 3m이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1261],
+    [1266],
   ],
   [
     "world-8e3c8d1963b2",
@@ -29655,7 +29690,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타라와 환초는 키리바시의 옛 수도이며 태평양 중부에 있는 환초의 명칭이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1262],
+    [1267],
   ],
   [
     "world-afc24089dcab",
@@ -29663,7 +29698,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "야렌구는 나우루 남서부에 위치한 행정구로, 면적은 1.5km2, 인구는 1,100명(2004년 기준)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1263],
+    [1268],
   ],
   [
     "world-739f04e901b6",
@@ -29671,7 +29706,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아피아는 사모아의 수도로 우폴루섬에 위치한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1264],
+    [1269],
   ],
   [
     "world-0d90d4689bcd",
@@ -29679,7 +29714,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "반다르스리브가완은 브루나이의 수도로, 브루나이 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1265],
+    [1270],
   ],
   [
     "world-adc06734cdce",
@@ -29687,7 +29722,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠알라룸푸르, 공식적으로 쿠알라룸푸르 연방 직할구는 말레이시아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1266],
+    [1271],
   ],
   [
     "world-05ee6433441f",
@@ -29695,7 +29730,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아시가바트는 투르크메니스탄의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1267],
+    [1272],
   ],
   [
     "world-25d9668531ef",
@@ -29703,7 +29738,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뉴델리는 인도의 수도이고, 델리 수도권에 속하는 도시이며, 1911년 인도의 새 수도로 정해진 후 20년간에 걸쳐 완성된 계획도시로 넓은 도로망이 펼쳐진 정치의 중심지이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1268],
+    [1273],
   ],
   [
     "world-8b3c8a38a5f0",
@@ -29711,7 +29746,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우방기강 하류에 있는 중앙아프리카 공화국의 수도로, 프랑스의 식민 기지에서 발전한 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1269],
+    [1274],
   ],
   [
     "world-f900ac604424",
@@ -29719,7 +29754,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라바트는 모로코의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1270],
+    [1275],
   ],
   [
     "world-71406aff84cb",
@@ -29727,7 +29762,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알제는 북아프리카의 알제리의 수도이며 알제리 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1271],
+    [1276],
   ],
   [
     "world-62a91fd70c0b",
@@ -29735,7 +29770,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "민스크는 벨라루스의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1272],
+    [1277],
   ],
   [
     "world-50b3411db883",
@@ -29743,7 +29778,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리가는 라트비아의 수도로, 발트해와 다우가바강에 접해 있다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1273],
+    [1278],
   ],
   [
     "world-cf5d80a41881",
@@ -29751,7 +29786,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오슬로는 노르웨이의 남부 해안에 있는 도시이자 노르웨이의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1274],
+    [1279],
   ],
   [
     "world-c77bc45fa4a3",
@@ -29759,7 +29794,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "헬싱키는 핀란드의 수도로, 핀란드 남부 핀란드만 연안에 위치해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1275],
+    [1280],
   ],
   [
     "world-0fe79474f511",
@@ -29767,7 +29802,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "레이캬비크는 아이슬란드의 수도이며 대표적인 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1276],
+    [1281],
   ],
   [
     "world-51ad3062c706",
@@ -29775,7 +29810,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아스타나은 카자흐스탄의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1277],
+    [1282],
   ],
   [
     "world-aff647f72b9c",
@@ -29783,7 +29818,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비슈케크는 키르기스스탄의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1278],
+    [1283],
   ],
   [
     "world-ff4b7057a082",
@@ -29791,7 +29826,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "울란바타르, 또는 울란바토르는 몽골의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1279],
+    [1284],
   ],
   [
     "world-4405128a577b",
@@ -29799,7 +29834,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오타와는 캐나다의 수도이자, 지방자치단체로 온타리오주 내에 두 번째로 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1280],
+    [1285],
   ],
   [
     "world-a6952efab536",
@@ -29807,7 +29842,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산토도밍고는 도미니카 공화국의 수도로 인구 2,061,200명(2003년)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1281],
+    [1286],
   ],
   [
     "world-0fb91a01683f",
@@ -29815,7 +29850,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포르토프랭스는 인구 약 84만 6200명의 아이티의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1282],
+    [1287],
   ],
   [
     "world-639fe165b2d0",
@@ -29823,7 +29858,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카라카스는 베네수엘라의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1283],
+    [1288],
   ],
   [
     "world-edd79c00c725",
@@ -29831,7 +29866,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보고타는 콜롬비아의 수도이며, 쿤디나마르카 주의 주도이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1284],
+    [1289],
   ],
   [
     "world-521605389ff6",
@@ -29839,7 +29874,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브라질리아는 브라질의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1285],
+    [1290],
   ],
   [
     "world-666dde50c44f",
@@ -29847,7 +29882,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라파스는 볼리비아의 행정 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1286],
+    [1291],
   ],
   [
     "world-5aa7b76bf5d3",
@@ -29855,7 +29890,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리마는 페루의 수도이자 리마군의 군청 소재지이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1287],
+    [1292],
   ],
   [
     "world-f4fa728c36f1",
@@ -29863,7 +29898,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키토는 에콰도르의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1288],
+    [1293],
   ],
   [
     "world-f1c4b006ce2d",
@@ -29871,7 +29906,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몬테비데오는 우루과이의 수도이자 최대의 무역항이며, 우루과이 국내에서 인구가 백만이 넘는 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1289],
+    [1294],
   ],
   [
     "world-90929054ef0d",
@@ -29879,7 +29914,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부에노스아이레스는 아르헨티나의 수도이며 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1290],
+    [1295],
   ],
   [
     "world-6ea3cb9e05ed",
@@ -29887,7 +29922,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산티아고데칠레, 간단히 산티아고는 칠레의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1291],
+    [1296],
   ],
   [
     "world-a588331b0ad8",
@@ -29895,7 +29930,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아순시온은 파라과이 최대 도시이자 수도이며, 인구는 85만 명 정도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1292],
+    [1297],
   ],
   [
     "world-b4120d1e9f49",
@@ -29903,7 +29938,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "멕시코시티는 멕시코의 수도로, 멕시코 고원 위에 위치해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1293],
+    [1298],
   ],
   [
     "world-a25dec022812",
@@ -29911,7 +29946,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바쿠는 아제르바이잔의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1294],
+    [1299],
   ],
   [
     "world-b1c683d0ae94",
@@ -29919,7 +29954,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부쿠레슈티는 루마니아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1295],
+    [1300],
   ],
   [
     "world-6984ccf41df7",
@@ -29927,7 +29962,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가보로네는 아프리카 남부에 있는 보츠와나의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1296],
+    [1301],
   ],
   [
     "world-65d8801c96f1",
@@ -29935,7 +29970,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루안다는 앙골라의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1297],
+    [1302],
   ],
   [
     "world-391e7578815c",
@@ -29943,7 +29978,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리브르빌은 가봉의 수도이자 에스튀에르 주의 주도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1298],
+    [1303],
   ],
   [
     "world-bb79c8ddbecc",
@@ -29951,7 +29986,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상투메는 서아프리카 기니만에 있는 상투메 프린시페의 수도이자 상투메 프린시페의 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1299],
+    [1304],
   ],
   [
     "world-fcd2bc2a92d8",
@@ -29959,7 +29994,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도양의 마에섬에 있는 세이셸의 수도이자 최대 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1300],
+    [1305],
   ],
   [
     "world-ddb7810b25bb",
@@ -29967,7 +30002,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마푸투는 모잠비크의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1301],
+    [1306],
   ],
   [
     "world-6fa201253cf8",
@@ -29975,7 +30010,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "음바바네는 에스와티니의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1302],
+    [1307],
   ],
   [
     "world-29a5168602f9",
@@ -29983,7 +30018,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프리토리아는 남아프리카 공화국 3개의 수도 중 하나로 행정 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1303],
+    [1308],
   ],
   [
     "world-1dddd388ac80",
@@ -29991,7 +30026,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "암만은 요르단의 수도로, 암만주의 주도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1304],
+    [1309],
   ],
   [
     "world-d2a157896c52",
@@ -29999,7 +30034,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아스마라는 에리트레아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1305],
+    [1310],
   ],
   [
     "world-7748807cb509",
@@ -30007,7 +30042,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산살바도르는 엘살바도르의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1306],
+    [1311],
   ],
   [
     "world-66c445c483ab",
@@ -30015,7 +30050,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "과테말라시티는 과테말라 공화국의 수도이자 최대 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1307],
+    [1312],
   ],
   [
     "world-2982520cff06",
@@ -30023,7 +30058,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨모판은 중앙아메리카에 있는 벨리즈의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1308],
+    [1313],
   ],
   [
     "world-e300412f389a",
@@ -30031,7 +30066,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테구시갈파는 온두라스의 수도이며 프란시스코모라산주의 주도이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1309],
+    [1314],
   ],
   [
     "world-77f28b11c333",
@@ -30039,7 +30074,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마나과는 니카라과의 수도이고 인구는 220만~250만명(2010년 공식 센서스)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1310],
+    [1315],
   ],
   [
     "world-d94d4de5a20c",
@@ -30047,7 +30082,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코스타리카 중앙부에 있는 수도로, 정치·경제·문화의 중심지다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1311],
+    [1316],
   ],
   [
     "world-827ae4d954cd",
@@ -30055,7 +30090,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파나마시티는 파나마의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1312],
+    [1317],
   ],
   [
     "world-ed13193a656c",
@@ -30063,7 +30098,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자메이카섬 동남부 해안에 있는 자메이카의 수도이자 최대 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1313],
+    [1318],
   ],
   [
     "world-859934644c76",
@@ -30071,7 +30106,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파라마리보는 수리남의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1314],
+    [1319],
   ],
   [
     "world-ec29da4eeefe",
@@ -30079,7 +30114,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "데메라라강 하구의 대서양 연안에 있는 가이아나의 수도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1315],
+    [1320],
   ],
   [
     "world-aa12967c72cc",
@@ -30087,7 +30122,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트빌리시는 조지아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1316],
+    [1321],
   ],
   [
     "world-38a77f11ea4c",
@@ -30095,7 +30130,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예레반은 아르메니아의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1317],
+    [1322],
   ],
   [
     "world-633681bf3c0d",
@@ -30103,7 +30138,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아부다비는 아랍에미리트의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1318],
+    [1323],
   ],
   [
     "world-9f04bc2fcb4c",
@@ -30111,7 +30146,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니아메는 서아프리카의 내륙국 니제르의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1319],
+    [1324],
   ],
   [
     "world-d97e79ec8d61",
@@ -30119,7 +30154,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아부자는 나이지리아의 수도이자 8번째로 가장 인구가 많은 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1320],
+    [1325],
   ],
   [
     "world-09e4cb92eb23",
@@ -30127,7 +30162,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가나가 영국의 식민 지배에서 독립한 뒤 수도가 되어, 아프리카 탈식민화의 흐름을 보여 준다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1321],
+    [1326],
   ],
   [
     "world-d4b3e5c026e8",
@@ -30135,7 +30170,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말라보는 적도 기니의 도시다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1322],
+    [1327],
   ],
   [
     "world-f1f969b0ab10",
@@ -30143,7 +30178,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로메는 토고의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1323],
+    [1328],
   ],
   [
     "world-5fe54dedfbfd",
@@ -30151,7 +30186,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포르토노보는 베냉의 헌법상의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1324],
+    [1329],
   ],
   [
     "world-bb343ba5a2a3",
@@ -30159,7 +30194,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "야운데는 카메룬의 수도로, 인구는 280만 명 이상이며 항구 도시 두알라 다음으로 카메룬에서 두 번째로 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1325],
+    [1330],
   ],
   [
     "world-4b3e67c591d5",
@@ -30167,7 +30202,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "은자메나는 차드의 수도이고, 인구는 2009년 현재 951,418명, 인구밀도는 9,148명으로 차드 제1의 도시이기도 하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1326],
+    [1331],
   ],
   [
     "world-3fcd5049ac5a",
@@ -30175,7 +30210,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몬로비아는 라이베리아의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1327],
+    [1332],
   ],
   [
     "world-8c7d2ce17b53",
@@ -30183,7 +30218,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프리타운은 시에라리온의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1328],
+    [1333],
   ],
   [
     "world-df13189fdda6",
@@ -30191,7 +30226,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바마코는 말리의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1329],
+    [1334],
   ],
   [
     "world-c80926ca41f1",
@@ -30199,7 +30234,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "야무수크로는 코트디부아르의 법률상 수도이자 자치구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1330],
+    [1335],
   ],
   [
     "world-30a8d6d58f5a",
@@ -30207,7 +30242,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "누악쇼트는 모리타니의 수도이며 사하라 사막최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1331],
+    [1336],
   ],
   [
     "world-2ba7eed0686f",
@@ -30215,7 +30250,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코나크리는 기니 공화국의 수도이며 대서양에 접하고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1332],
+    [1337],
   ],
   [
     "world-888603ae6325",
@@ -30223,7 +30258,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다카르는 세네갈의 수도로 인구 207만9,000명(2000년)이 거주하고 있다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1333],
+    [1338],
   ],
   [
     "world-07e3771e1d91",
@@ -30231,7 +30266,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프라이아는 아프리카 세네갈 서쪽 대서양에 있는 섬나라인 카보베르데의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1334],
+    [1339],
   ],
   [
     "world-a70543c80d9c",
@@ -30239,7 +30274,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비사우는 기니비사우의 수도로, 인구는 492,004명(2015년 기준)이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1335],
+    [1340],
   ],
   [
     "world-d52bf9f8d336",
@@ -30247,7 +30282,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브라자빌은 인구 94만명이 살고 있는, 콩고 공화국의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1336],
+    [1341],
   ],
   [
     "world-495cb5706d68",
@@ -30255,7 +30290,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "킨샤사는 1966년 6월 30일, 이전에 레오폴드빌로 불리던 콩고 민주 공화국의 수도이자 가장 큰 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1337],
+    [1342],
   ],
   [
     "world-cdf37f8a4ed6",
@@ -30263,7 +30298,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "릴롱궤는 인구 866,272명의 말라위의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1338],
+    [1343],
   ],
   [
     "world-2ed7b51b2c7a",
@@ -30271,7 +30306,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루사카는 잠비아의 수도이자 잠비아 최대의 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1339],
+    [1344],
   ],
   [
     "world-0c90108a3272",
@@ -30279,7 +30314,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하라레는 짐바브웨의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1340],
+    [1345],
   ],
   [
     "world-d46bd897574a",
@@ -30287,7 +30322,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나소는 바하마의 수도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1341],
+    [1346],
   ],
   [
     "world-ce7086ea96e3",
@@ -30295,7 +30330,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바티스타 정권을 무너뜨린 혁명군이 1959년 1월 입성하면서 쿠바 혁명으로 세워진 새 정권의 중심지가 되었다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1342],
+    [1347],
   ],
   [
     "world-9b1a5c7ececf",
@@ -30303,7 +30338,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말레는 몰디브 공화국의 수도이자 섬의 이름이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1343],
+    [1348],
   ],
   [
     "world-ba5d065219f4",
@@ -30311,7 +30346,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "퍼스는 오스트레일리아 웨스턴오스트레일리아주의 주도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1344],
+    [1349],
   ],
   [
     "world-195494df6100",
@@ -30319,7 +30354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라스코 동굴은 프랑스 남서쪽에 있는 동굴이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1345],
+    [1350],
   ],
   [
     "world-bec6801683d0",
@@ -30327,7 +30362,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알제리 남동부 사하라 사막의 산지로, 선사 시대 생활을 보여 주는 많은 암벽화가 남아 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1346],
+    [1351],
   ],
   [
     "world-5eb9d9672ff3",
@@ -30335,7 +30370,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선사 시대 조각상인 ‘빌렌도르프의 비너스’의 이름에 등장하는 오스트리아 지명이다. 교과서는 이 유물을 구석기 생활과 다산·풍요의 기원에 연결한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1347, 1348, 1349],
+    [0, 1352, 1353, 1354],
   ],
   [
     "world-d0eefaa3ad53",
@@ -30343,7 +30378,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "탄자니아의 선사 유적으로, 화산재에 남은 초기 인류의 발자국이 두 발 걷기의 중요한 증거가 된 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1350],
+    [1355],
   ],
   [
     "world-119cdcf6ee4c",
@@ -30351,7 +30386,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아테네는 시민의 정치 참여가 확대된 폴리스였다. 아크로폴리스에 세운 파르테논 신전은 전성기 아테네의 문화와 권력을 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1351],
+    [1356],
   ],
   [
     "world-147f05a7502d",
@@ -30359,7 +30394,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파르테논 신전은 그리스 아테네의 아크로폴리스에 있는 명승고적으로, 고대 아테나이의 수호자로 여겨지던 아테나 여신에 봉헌된 신전이다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1352],
+    [1357],
   ],
   [
     "world-0dc97f2223be",
@@ -30367,7 +30402,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜로세움은 고대 로마 시대의 건축물 가운데 하나로 로마 제국 시대에 만들어진 타원형 경기장이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1353],
+    [1358],
   ],
   [
     "world-6f177c8eaf51",
@@ -30375,7 +30410,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카노사는 인구 3,376명의 이탈리아 북부 에밀리아로마냐주 레조넬에밀리아도의 도시이다.",
     ["카노사성"],
     ["세계사", "종교와 지역 문화"],
-    [1354],
+    [1359],
   ],
   [
     "world-7f92f95fbc50",
@@ -30383,7 +30418,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아소카 시대에 시작된 불교 유적으로, 탑과 조각을 통해 불교 신앙이 널리 퍼진 모습을 보여 준다.",
     ["산치"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 1355],
+    [0, 1360],
   ],
   [
     "world-c8afcf2513f3",
@@ -30391,7 +30426,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아잔타에서는 먼저 조성된 불교 석굴에 5~6세기 장식이 풍부한 석굴들이 추가되었다. 벽화와 조각은 불교의 가르침과 이야기를 시각적으로 전하며 다른 지역의 미술에도 영향을 주었다.",
     ["아잔타"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1356],
+    [0, 1361],
   ],
   [
     "world-e10dace492d5",
@@ -30399,7 +30434,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "엘로라에는 600~1000년에 걸쳐 불교·힌두교·자이나교의 사원과 수도원이 나란히 조성되었다. 절벽을 깎아 만든 건축과 조각은 인도의 다양한 종교 전통을 보여 준다.",
     ["엘로라"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1357],
+    [0, 1362],
   ],
   [
     "world-a0e0aace8708",
@@ -30407,7 +30442,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "날란다는 5~13세기에 오랫동안 운영된 불교 수도원이자 교육 기관이었다. 탑·사당·강의와 생활 공간이 남아 있어 승려 공동체의 학문 연구와 지식 전승을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1358],
+    [0, 1363],
   ],
   [
     "world-940724b5425a",
@@ -30415,7 +30450,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "윈강 석굴은 5~6세기 중국의 불교 석굴 미술을 대표하는 유적이다. 남아시아·중앙아시아의 불교 조형 전통이 중국의 문화와 결합한 거대한 불상과 석굴이 남아 있다.",
     ["윈강"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1359],
+    [0, 1364],
   ],
   [
     "world-9e8d217233bd",
@@ -30423,7 +30458,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "룽먼 석굴은 북위 말기부터 당대에 걸쳐 불교 조각이 집중적으로 만들어진 곳이다. 뤄양 부근의 바위에 새긴 불상들은 시대에 따라 달라진 불교 미술과 왕실의 후원을 보여 준다.",
     ["룽먼"],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계", "고대 문명과 국가"],
-    [0, 1360],
+    [0, 1365],
   ],
   [
     "world-9eed50d315d4",
@@ -30431,7 +30466,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앙코르 와트는 캄보디아 시엠레아프주의 앙코르에 위치한 사원으로, 12세기 초에 수리야바르만 2세에 의해 옛 크메르 제국의 사원으로서 창건되었다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화", "고대 문명과 국가"],
-    [1361],
+    [1366],
   ],
   [
     "world-231991299b29",
@@ -30439,7 +30474,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자와섬에 세운 대규모 불교 유적으로, 불교의 가르침을 부조와 탑의 구조로 표현했다.",
     ["보로부두르"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1362],
+    [0, 1367],
   ],
   [
     "world-6bf796c79bf2",
@@ -30447,7 +30482,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프람바난은 자와섬의 힌두교 사원군으로, 시바·비슈누·브라흐마에게 바친 사원과 『라마야나』 이야기의 부조가 남아 있다. 인도의 종교와 서사시가 자와의 건축·조각 문화에 수용된 모습을 보여 준다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1363],
+    [0, 1368],
   ],
   [
     "world-fccf1c2757b2",
@@ -30455,7 +30490,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도다이지는 일본 나라현 나라시에 위치한 불교 사찰이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [247],
+    [249],
   ],
   [
     "world-da7c64db4e96",
@@ -30463,7 +30498,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "호류사의 오래된 목조 건물들은 한반도를 거쳐 일본에 전해진 불교와 건축 문화가 현지에서 자리 잡은 모습을 보여 준다. 현재의 주요 건물에는 670년 화재 뒤 재건된 7세기 말~8세기 초의 건축이 남아 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1364],
+    [0, 1369],
   ],
   [
     "world-b34e87aa7e42",
@@ -30471,7 +30506,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당나라 수도 장안에 있었던 황궁으로, 오랫동안 황제들의 거처로 쓰였다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1365],
+    [1370],
   ],
   [
     "world-a84dd0f2f304",
@@ -30479,7 +30514,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대안탑이란 652년에 당나라의 고승 삼장법사 현장이 인도에서 귀국할 때 가지고 온 경전이나 불상 등을 보존하기 위해서 고종에게 요청하여 건립한 탑이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1366],
+    [1371],
   ],
   [
     "world-46962a011e2d",
@@ -30487,7 +30522,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 시안에 있는 이슬람 사원으로, 중국의 전통 건축과 이슬람 신앙이 만나는 유적이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1367],
+    [1372],
   ],
   [
     "world-674594c5ad7d",
@@ -30495,7 +30530,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만리장성은 흉노족 등의 유목 민족의 침입을 막기 위해 중국의 고대 진나라 때 기존의 성곽을 잇고 부족한 부분은 새롭게 축조하여 만든 거대한 성곽이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1368],
+    [1373],
   ],
   [
     "world-374afd061166",
@@ -30503,7 +30538,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진시황릉 주변의 지하 유적으로, 흙을 구워 만든 수많은 병사와 말의 모형이 묻혀 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1369],
+    [1374],
   ],
   [
     "world-2be2d8c6b68b",
@@ -30511,7 +30546,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우마이야 왕조의 칼리프 알왈리드 1세가 다마스쿠스에 세운 이슬람 사원이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1370],
+    [1375],
   ],
   [
     "world-2ed83376c3d5",
@@ -30519,7 +30554,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알람브라는 스페인 그라나다에 있는 궁전과 성곽의 복합단지로 1238년부터 1358년 사이에 지어졌다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1371],
+    [1376],
   ],
   [
     "world-ce18f783b00f",
@@ -30527,7 +30562,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이스탄불에 있는 비잔티움 제국의 대성당으로, 오스만 제국의 정복 이후 모스크로도 쓰인 건축물이다.",
     ["하기야 소피아", "아야 소피아"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1372],
+    [1377],
   ],
   [
     "world-0e8b90faa11d",
@@ -30535,7 +30570,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스만 술탄 아흐메트 1세가 이스탄불에 세운 이슬람 사원으로, 푸른 타일 때문에 블루 모스크라고도 한다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1373],
+    [1378],
   ],
   [
     "world-c18da6091df4",
@@ -30543,7 +30578,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "튀르키예 이스탄불에 여러 상점이 모여 있는 오래된 대규모 실내 시장이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1374],
+    [1379],
   ],
   [
     "world-526832fb9f58",
@@ -30551,7 +30586,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테오도시우스 성벽은 콘스탄티노폴리스를 방어하는 삼중의 성벽이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1375],
+    [1380],
   ],
   [
     "world-fd1da2d38651",
@@ -30559,7 +30594,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스만 제국이 콘스탄티노폴리스 공략을 위해 보스포루스 해협 유럽 쪽에 세운 요새다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1376],
+    [1381],
   ],
   [
     "world-dda0e2793f60",
@@ -30567,7 +30602,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "레기스탄은 우즈베키스탄의 사마르칸트에 있는 광장이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1377],
+    [1382],
   ],
   [
     "world-ec11b0970d7a",
@@ -30575,7 +30610,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이맘 광장은 1612년 건설을 시작한 당시의 세계에서 가장 규모가 큰 광장으로 가로 512m, 세로 160m의 규모와 아름다움을 자랑한다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1378],
+    [1383],
   ],
   [
     "world-fa40bf609e6e",
@@ -30583,7 +30618,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무굴 제국의 주요 수도 아그라에서 샤자한이 황후를 기려 세운 타지마할은 인도와 이슬람 건축 문화가 어우러진 모습을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1379, 1380],
+    [1384, 1385],
   ],
   [
     "world-78e2fb7e5bbf",
@@ -30591,7 +30626,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황금 사원은 인도 펀자브 암리차르에 위치한 구루드와라으로, 시크교 최대의 성지로 여겨진다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1381],
+    [1386],
   ],
   [
     "world-85f7f6427d22",
@@ -30599,7 +30634,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나가사키는 에도 막부가 대외 교역을 통제한 항구였다. 항구의 인공섬 데지마에는 네덜란드 상관이 자리하여 서양 지식과 상품이 들어오는 창구가 되었다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1382],
+    [1387],
   ],
   [
     "world-a632a7623035",
@@ -30607,7 +30642,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "히메지성은 17세기 초 일본의 성곽 건축을 보여 주는 유적이다. 흰 회벽의 목조 건물과 복잡한 방어 시설은 성이 통치의 거점이자 군사 시설이었음을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1383],
+    [0, 1388],
   ],
   [
     "world-9b94ffe0e820",
@@ -30615,7 +30650,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자금성은 베이징의 중심에 있는 명과 청 왕조의 궁궐이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1384],
+    [1389],
   ],
   [
     "world-934e37b3d63c",
@@ -30623,7 +30658,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "페루의 높은 산지에 남아 있는 15세기 잉카 제국의 도시 유적이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1385],
+    [1390],
   ],
   [
     "world-6af4dc50ea01",
@@ -30631,7 +30666,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마드리드 엘에스코리알 수도원 및 왕령지는 일반적으로 에스코리알 수도원, 엘에스코리알이라는 이름으로 알려진 스페인 군주의 역사적 거주지다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1386],
+    [1391],
   ],
   [
     "world-0ef1477d7652",
@@ -30639,7 +30674,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상수시궁은 독일 프로이센 왕국 호엔촐레른가의 여름 궁전이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1387],
+    [1392],
   ],
   [
     "world-897b554f8e5a",
@@ -30647,7 +30682,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파리 시민의 바스티유 감옥 습격은 프랑스 혁명의 시작을 알렸으며, 감옥이 있던 자리는 오늘날 바스티유 광장으로 남아 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1388],
+    [1393],
   ],
   [
     "world-059f9d2e355c",
@@ -30655,7 +30690,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "피사 대성당은 유럽 중세 시기에 이탈리아의 상업도시였던 피사에 위치해 있는 이탈리아 로마네스크 건축을 대표하는 주교좌 성당이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1389],
+    [1394],
   ],
   [
     "world-2331a4168ea2",
@@ -30663,7 +30698,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "샤르트르 대성당은 프랑스 샤르트르에 있는 고딕 양식의 가톨릭 성당으로 1979년 유네스코 지정 세계유산으로 등록되었다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1390],
+    [1395],
   ],
   [
     "world-10a07d54f014",
@@ -30671,7 +30706,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쾰른 대성당은 독일 쾰른에 있는 로마 가톨릭교회의 성당이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1391],
+    [1396],
   ],
   [
     "world-1f798304d63b",
@@ -30679,7 +30714,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파리 노트르담 대성당은 프랑스 파리 시테 섬 동쪽 반쪽에 있는 프랑스 후기 고딕 양식의 성당이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1392],
+    [1397],
   ],
   [
     "world-9c287315aeee",
@@ -30687,7 +30722,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바티칸에 있는 가톨릭 대성당으로, 전승에 따르면 사도 베드로의 무덤 위에 세워졌다.",
     ["성 베드로 대성당"],
     ["세계사", "종교와 지역 문화"],
-    [1393],
+    [1398],
   ],
   [
     "world-006e23a0c9fa",
@@ -30695,7 +30730,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시스티나 성당은 바티칸 시국에 있는 교황의 관저인 사도 궁전 안에 있는 경당이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1394],
+    [1399],
   ],
   [
     "world-a1c7072bdcf4",
@@ -30703,7 +30738,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루브르 박물관은 프랑스 파리의 중심가인 리볼리가에 있는 국립 박물관이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1395],
+    [1400],
   ],
   [
     "world-85ccc4b7727d",
@@ -30711,7 +30746,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오르세 미술관은 프랑스 파리의 센강 좌안에 있는 박물관이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1396],
+    [1401],
   ],
   [
     "world-a09020985d8a",
@@ -30719,7 +30754,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바티칸 박물관은 로마의 비알레 바티카노 바티칸 내부에 있는 세계 최대급 규모의 미술관 가운데 한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1397],
+    [1402],
   ],
   [
     "world-3ff1d060d317",
@@ -30727,7 +30762,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우피치 미술관은 이탈리아 토스카나주 피렌체에 위치한 미술관이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1398],
+    [1403],
   ],
   [
     "world-655e3d1d4667",
@@ -30735,7 +30770,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대영박물관 또는 영국박물관은 영국의 런던 블룸즈베리에 위치해 있는 영국 최대의 국립 공공박물관이다.",
     ["대영 박물관"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1399],
+    [1404],
   ],
   [
     "world-c872e9e66032",
@@ -30743,7 +30778,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베를린에서는 동서를 갈라놓은 장벽의 통행이 1989년에 열렸다. 같은 해 브란덴부르크 문도 다시 통행할 수 있게 되었고, 이듬해 독일의 통일과 함께 냉전 종식을 상징하게 되었다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화", "고대 문명과 국가"],
-    [1400, 1401],
+    [1405, 1406],
   ],
   [
     "world-f4a4b13bb004",
@@ -30751,7 +30786,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아우슈비츠 강제 수용소는 나치 독일이 유대인을 학살하기 위하여 만들었던 강제 수용소로, 폴란드의 오시비엥침에 있는 옛 수용소이다.",
     ["아우슈비츠"],
     ["세계사", "세계 대전과 평화"],
-    [1402],
+    [1407],
   ],
   [
     "world-7935964e832b",
@@ -30759,7 +30794,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 나가사키 앞바다의 옛 탄광 섬으로, 군함도라고도 하며 식민지 조선인 강제 동원의 역사가 남아 있다.",
     ["군함도"],
     ["세계사", "세계 대전과 평화"],
-    [1403],
+    [1408],
   ],
   [
     "world-c137ea78cf57",
@@ -30767,7 +30802,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 필라델피아의 옛 의회 건물로, 미국 독립 선언과 헌법 제정 회의가 이루어진 곳이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1404],
+    [1409],
   ],
   [
     "world-fef2e018fbf8",
@@ -30775,7 +30810,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "붉은 요새는 인도의 델리에 있는 성이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1405],
+    [1410],
   ],
   [
     "world-cf3d40448b5e",
@@ -30783,7 +30818,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "천안문은 베이징의 황성의 남문이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1406],
+    [1411],
   ],
   [
     "world-d793382e90f0",
@@ -30791,7 +30826,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브란덴부르크 문은 18세기에 베를린에 지어진 초기 고전주의 양식 개선문이다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1407],
+    [1412],
   ],
   [
     "world-477bacb3420f",
@@ -30799,7 +30834,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에펠탑은 프랑스 파리 마르스 광장에 위치한 격자형 철골 타워이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1408],
+    [1413],
   ],
   [
     "world-ddf1cf5695f9",
@@ -30807,7 +30842,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파니파트는 인도 하리아나 주에 위치한 도시로, 인구는 1,202,811명(2011년 기준), 높이는 해발 219m이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1409],
+    [1414],
   ],
   [
     "world-bf7dd6c55d84",
@@ -30815,7 +30850,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 벵골의 전투 장소로, 1757년 영국 동인도 회사의 승리가 영국의 인도 지배를 확대하는 계기가 되었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1410],
+    [1415],
   ],
   [
     "world-3fb94cff0ce7",
@@ -30823,7 +30858,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코도크 또는 파쇼다는 남수단 북동부 상나일 지방의 도시로 서나일 주의 주도이며 인구는 7,709명(2010년 기준)이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1411],
+    [1416],
   ],
   [
     "world-9f0534311414",
@@ -30831,7 +30866,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에티오피아 북부의 도시로, 1896년 에티오피아군이 이탈리아군을 물리쳐 독립을 지켜 낸 전투가 부근에서 벌어졌다.",
     [],
     ["세계사", "세계 대전과 평화", "혁명과 국민 국가"],
-    [1412],
+    [1417],
   ],
   [
     "world-5651dc7e7c3b",
@@ -30839,7 +30874,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아프리카 공화국 콰줄루나탈주에 있는 언덕으로, 줄루족의 땅에 자리한다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1413],
+    [1418],
   ],
   [
     "world-64d4730780be",
@@ -30847,7 +30882,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨기에의 마을로, 1815년 나폴레옹의 마지막 전투가 벌어진 곳이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1414],
+    [1419],
   ],
   [
     "world-dbc48d8da6c1",
@@ -30855,7 +30890,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 체코의 슬라프코프우브르나로, 나폴레옹 시대 아우스터리츠 전투에 이름을 남긴 도시다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1415],
+    [1420],
   ],
   [
     "world-5cc2d3e90816",
@@ -30863,7 +30898,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이퍼르, 또는 이프르는 벨기에 서부 베스트플란데런주의 도시이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1416],
+    [1421],
   ],
   [
     "world-bf1bef5d11c6",
@@ -30871,7 +30906,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베르됭은 프랑스 북부 그랑테스트 레지옹의 뫼즈주에 있는 소도시이다.",
     ["베르떗"],
     ["세계사", "세계 대전과 평화", "종교와 지역 문화"],
-    [1417],
+    [1422],
   ],
   [
     "world-e93160db59da",
@@ -30879,7 +30914,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이탈리아 남동부 아풀리아 지역의 고대 마을로, 오늘날 칸네델라바탈리아에 해당한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1418],
+    [1423],
   ],
   [
     "world-b2348170d975",
@@ -30887,7 +30922,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카르타고 남서쪽의 전투 장소로, 기원전 202년 로마의 승리가 제2차 포에니 전쟁을 끝내는 계기가 되었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1419],
+    [1424],
   ],
   [
     "world-cabe8ba56bdc",
@@ -30895,7 +30930,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "기원전 331년 알렉산드로스의 군대가 페르시아의 다리우스 3세를 격파한 평원이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1420],
+    [1425],
   ],
   [
     "world-03e9d84630a1",
@@ -30903,7 +30938,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아나톨리아 남부의 평원으로, 기원전 333년 알렉산드로스가 페르시아군을 격파한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1421],
+    [1426],
   ],
   [
     "world-e68ee06be63e",
@@ -30911,7 +30946,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 중동부의 좁은 통로로, 기원전 480년 그리스군과 페르시아군이 맞섰던 방어 요충지다.",
     ["테르모필라이"],
     ["세계사", "고대 문명과 국가"],
-    [1422],
+    [1427],
   ],
   [
     "world-6e09fa77bce3",
@@ -30919,7 +30954,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "플라타이아 또는 플라타이아이는 고대 그리스 보이오티아 현 지방에 있던 도시 국가 중 하나이다.",
     ["플라타이아"],
     ["세계사", "고대 문명과 국가"],
-    [1423],
+    [1428],
   ],
   [
     "world-47d4f1ccd9eb",
@@ -30927,7 +30962,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스의 평원으로, 기원전 490년 아테네군이 페르시아군을 물리친 전투가 벌어졌다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1424],
+    [1429],
   ],
   [
     "world-283bfe5c1ed2",
@@ -30935,7 +30970,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 아테네 근처 사로니코스만에 있는 섬으로, 살라미나라고도 한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1425],
+    [1430],
   ],
   [
     "world-ea9b0400b7f9",
@@ -30943,7 +30978,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 잉글랜드 노샘프턴셔에 있는 마을이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1426],
+    [1431],
   ],
   [
     "world-19b64e940438",
@@ -30951,7 +30986,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스코틀랜드 내전의 전투 장소로, 1644년 몬트로즈가 이끄는 왕당파가 스코틀랜드 정부군을 격파한 곳이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1427],
+    [1432],
   ],
   [
     "world-bef57bf71a4c",
@@ -30959,7 +30994,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 잉글랜드 체셔에 있는 시장 도시로, 튜더 왕조와 조지 왕조 시대 건축물이 남아 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1428],
+    [1433],
   ],
   [
     "world-aabd59690e11",
@@ -30967,7 +31002,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뉘른베르크는 독일 바이에른주에 있는 도시이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계", "종교와 지역 문화"],
-    [1429],
+    [1434],
   ],
   [
     "world-4f12e8995f96",
@@ -30983,7 +31018,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [627],
+    [632],
   ],
   [
     "world-d7a6e266ca8d",
@@ -30999,7 +31034,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "고대 문명과 국가",
     ],
-    [198],
+    [200],
   ],
   [
     "world-41ede1bcb4ab",
@@ -31031,7 +31066,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [310],
+    [312],
   ],
   [
     "world-f251e68fb551",
@@ -31047,7 +31082,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1430],
+    [1435],
   ],
   [
     "world-31618adeb2f6",
@@ -31063,7 +31098,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1431],
+    [1436],
   ],
   [
     "world-31a39577c78b",
@@ -31077,7 +31112,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1432],
+    [1437],
   ],
   [
     "world-83cd9ed73391",
@@ -31092,7 +31127,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "고대 문명과 국가",
     ],
-    [1433],
+    [1438],
   ],
   [
     "world-6d78b3425d50",
@@ -31100,7 +31135,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파키스탄 이슬람 공화국, 약칭 파키스탄은 남아시아에 위치한 국가이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "냉전과 현대 세계"],
-    [1434],
+    [1439],
   ],
   [
     "world-c71f3eebc18b",
@@ -31108,7 +31143,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이스라엘국, 약칭 이스라엘은 이스라엘은 서아시아의 남부 레반트 지역에 위치한 국가이다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계", "종교와 지역 문화"],
-    [1435],
+    [1440],
   ],
   [
     "world-7e67f1f66878",
@@ -31116,7 +31151,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "레바논 공화국, 약칭 레바논은 서아시아의 지중해 연안에 있는 이슬람교 54%, 기독교 40.5%의 다종교 국가로, 시리아와 이스라엘과 국경을 접하고 있으며, 수도는 베이루트이다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1436],
+    [1441],
   ],
   [
     "world-980baeb76ee3",
@@ -31130,7 +31165,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [197],
+    [199],
   ],
   [
     "world-5764c06aa251",
@@ -31138,7 +31173,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "요르단은 중동에 있는 입헌 군주국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1437],
+    [1442],
   ],
   [
     "world-7cf4a6abc2e1",
@@ -31152,7 +31187,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1438],
+    [1443],
   ],
   [
     "world-43627abd9bac",
@@ -31160,7 +31195,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예멘 공화국, 약칭 예멘은 서남아시아의 아라비아 반도 남서부에 있는 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1439],
+    [1444],
   ],
   [
     "world-b2c27492bbe9",
@@ -31168,7 +31203,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오만 술탄국은 서남아시아의 아라비아 반도 동쪽 끝에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1440],
+    [1445],
   ],
   [
     "world-3a33b02cd837",
@@ -31176,7 +31211,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠웨이트는 서아시아에 있는 입헌군주국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1441],
+    [1446],
   ],
   [
     "world-d9ba1e9dc251",
@@ -31184,7 +31219,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카타르국, 약칭 카타르는 중동 또는 서아시아에 있는 전제군주국이며 수도는 도하이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1442],
+    [1447],
   ],
   [
     "world-e7097656bbc0",
@@ -31192,7 +31227,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바레인 왕국, 줄여서 바레인은 중동 서아시아에 있는 섬나라이자 입헌 군주제 국가로, 수도는 마나마이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1443],
+    [1448],
   ],
   [
     "world-5bcb83f0195a",
@@ -31200,7 +31235,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아랍에미리트 연합국, 약칭 아랍에미리트 또는 UAE는 서남아시아의 아라비아반도 남동부에 있는 전제군주제 연방 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1444],
+    [1449],
   ],
   [
     "world-2a19b1192677",
@@ -31216,7 +31251,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "고대 문명과 국가",
     ],
-    [1445],
+    [1450],
   ],
   [
     "world-a18ad7e0e769",
@@ -31224,7 +31259,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키프로스 공화국, 줄여서 키프로스 또는 사이프러스는 지중해 동부에 있는 섬나라로, 북쪽으로는 튀르키예·북키프로스, 동쪽으로는 시리아·레바논·이스라엘, 서쪽으로는 그리스, 남쪽으로는 이집트와 접한다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1446],
+    [1451],
   ],
   [
     "world-9666e1eb9e53",
@@ -31240,7 +31275,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [870],
+    [875],
   ],
   [
     "world-815ebdbea6d6",
@@ -31256,7 +31291,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [584],
+    [588],
   ],
   [
     "world-1e48802bad65",
@@ -31272,7 +31307,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [312],
+    [314],
   ],
   [
     "world-faec8a156570",
@@ -31288,7 +31323,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [582],
+    [586],
   ],
   [
     "world-534b5de342c8",
@@ -31304,7 +31339,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [583],
+    [587],
   ],
   [
     "world-622809f2e224",
@@ -31319,7 +31354,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [790],
+    [795],
   ],
   [
     "world-2447b3e85f1f",
@@ -31334,7 +31369,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1447],
+    [1452],
   ],
   [
     "world-7a5ca87bed95",
@@ -31348,7 +31383,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [596],
+    [600],
   ],
   [
     "world-f5cd46b8a260",
@@ -31362,7 +31397,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1448],
+    [1453],
   ],
   [
     "world-15310fe99bb5",
@@ -31370,7 +31405,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "룩셈부르크 대공국, 약칭 룩셈부르크는 서유럽에 위치한 대공국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1449],
+    [1454],
   ],
   [
     "world-7584d2eef4e8",
@@ -31384,7 +31419,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [1450],
+    [1455],
   ],
   [
     "world-23cc549096a1",
@@ -31399,7 +31434,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "지역 세계의 교류",
     ],
-    [1451],
+    [1456],
   ],
   [
     "world-9cdef177f920",
@@ -31415,7 +31450,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [585],
+    [589],
   ],
   [
     "world-cb26b06762b2",
@@ -31430,7 +31465,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [1452],
+    [1457],
   ],
   [
     "world-01ac7b0e8486",
@@ -31445,7 +31480,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1453],
+    [1458],
   ],
   [
     "world-04f7cc4bf68b",
@@ -31453,7 +31488,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "체코 공화국, 줄여서 체코는 중앙유럽에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1454],
+    [1459],
   ],
   [
     "world-de4c3726e191",
@@ -31461,7 +31496,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "슬로바키아 공화국, 약칭 슬로바키아는 중앙유럽에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1455],
+    [1460],
   ],
   [
     "world-b0ae8a68a2c7",
@@ -31469,7 +31504,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세르비아 공화국, 약칭 세르비아는 동남유럽 중앙의 발칸반도와 판노니아 평원에 자리 잡고 있는 내륙국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1456],
+    [1461],
   ],
   [
     "world-b342b174013e",
@@ -31477,7 +31512,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몬테네그로는 동남유럽 발칸반도의 아드리아해 연안에 자리잡은 공화국이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1457],
+    [1462],
   ],
   [
     "world-41eaf625b900",
@@ -31485,7 +31520,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알바니아는 동남유럽 지역에 위치한 국가이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1458],
+    [1463],
   ],
   [
     "world-e23f97970277",
@@ -31493,7 +31528,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "불가리아 공화국, 또는 약칭 불가리아는 동남유럽에 있는 국가이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1459],
+    [1464],
   ],
   [
     "world-bcb3287f45f5",
@@ -31501,7 +31536,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루마니아는 동남유럽에 있는 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1460],
+    [1465],
   ],
   [
     "world-4d8a12fb340c",
@@ -31509,7 +31544,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "크로아티아 공화국, 줄여서 크로아티아는 동남유럽에 속한 나라로 발칸반도 판노니아 평원의 교차점에 자리잡고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1461],
+    [1466],
   ],
   [
     "world-502876e21faf",
@@ -31517,7 +31552,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "슬로베니아 공화국은 중앙유럽 남부에 있는 나라로 알프스산맥 끝부분과 지중해와 접하고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1462],
+    [1467],
   ],
   [
     "world-a2e0b0c23adc",
@@ -31525,7 +31560,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보스니아 헤르체고비나, 줄여서 보통 보스니아는 동남유럽 발칸반도에 있는 나라로 동쪽으로는 세르비아, 동남쪽으로는 몬테네그로, 북쪽과 서쪽은 크로아티아와 접한다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1463],
+    [1468],
   ],
   [
     "world-95fa2f2756bf",
@@ -31533,7 +31568,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북마케도니아 공화국, 약칭 북마케도니아는 동남유럽 발칸반도 한가운데에 있는 내륙국이다.",
     ["마케도니아"],
     ["세계사", "냉전과 현대 세계"],
-    [1464],
+    [1469],
   ],
   [
     "world-1ece0ded5b95",
@@ -31541,7 +31576,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코소보는 동남유럽에 위치한 영토 분쟁 지역이자 부분적 승인 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1465],
+    [1470],
   ],
   [
     "world-ed25efdbbb01",
@@ -31556,7 +31591,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [331],
+    [333],
   ],
   [
     "world-eb497401c359",
@@ -31564,7 +31599,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우크라이나는 동유럽 국가다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1466],
+    [1471],
   ],
   [
     "world-a8b7fa4f39bc",
@@ -31572,7 +31607,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨라루스 공화국, 약칭 벨라루스는 동유럽에 있는 내륙국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1467],
+    [1472],
   ],
   [
     "world-0984ec03345e",
@@ -31580,7 +31615,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몰도바 공화국, 약칭 몰도바는 루마니아와 우크라이나 사이에 자리한 동유럽의 내륙국이며, 공용어는 루마니아어(2013년까지는 몰도바어라고 부름), 수도는 키시너우, 민족은 몰도바인이 다수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1468],
+    [1473],
   ],
   [
     "world-048c39467e94",
@@ -31588,7 +31623,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발트해 동쪽의 나라로, 발트 3국 가운데 가장 북쪽에 있으며 수도는 탈린이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1469],
+    [1474],
   ],
   [
     "world-5377cd84cd44",
@@ -31596,7 +31631,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라트비아는 북유럽에 있는 공화국으로서, 공식 명칭은 라트비아 공화국이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1470],
+    [1475],
   ],
   [
     "world-19418ff1d255",
@@ -31604,7 +31639,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리투아니아 공화국 줄여서 리투아니아는 북유럽에 있는 공화국이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1471],
+    [1476],
   ],
   [
     "world-8ffe4633192b",
@@ -31619,7 +31654,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [1472],
+    [1477],
   ],
   [
     "world-28bba42ea813",
@@ -31634,7 +31669,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [1473],
+    [1478],
   ],
   [
     "world-4a61b39be92f",
@@ -31648,7 +31683,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [1474],
+    [1479],
   ],
   [
     "world-601e89d16ff3",
@@ -31656,7 +31691,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "핀란드 공화국, 약칭 핀란드는 북유럽에 있는 노르딕 국가 가운데 하나이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1475],
+    [1480],
   ],
   [
     "world-8f7f79ade9e7",
@@ -31664,7 +31699,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아이슬란드는 북유럽에 위치한 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1476],
+    [1481],
   ],
   [
     "world-3169ab26731f",
@@ -31672,7 +31707,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몰타 공화국은 남유럽에 위치한 섬나라로 수도는 발레타이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1477],
+    [1482],
   ],
   [
     "world-973894843d99",
@@ -31680,7 +31715,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산마리노 공화국 또는 가장 고귀한 산마리노 공화국, 약칭 산마리노는 전면이 이탈리아에 둘러싸인 내륙국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1478],
+    [1483],
   ],
   [
     "world-f2c2f3a10b35",
@@ -31688,7 +31723,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모나코 공국, 줄여서 모나코는 서유럽에 있는 작은 공국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1479],
+    [1484],
   ],
   [
     "world-9df5fc0e4810",
@@ -31696,7 +31731,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바티칸 시국, 약칭 바티칸은 이탈리아의 로마 시내에 위치한 위요지 도시국가이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1480],
+    [1485],
   ],
   [
     "world-3a54ad6bd567",
@@ -31704,7 +31739,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "안도라 공국, 줄여서 안도라는 카탈루냐와 프랑스의 국경을 이루는 피레네산맥 동부에 있는 유럽의 작은 공국이자 내륙국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1481],
+    [1486],
   ],
   [
     "world-830a930ba348",
@@ -31712,7 +31747,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스위스와 오스트리아 사이에 있는 중앙유럽의 작은 군주국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1482],
+    [1487],
   ],
   [
     "world-0c5bab1129a0",
@@ -31720,7 +31755,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조지아는 캅카스 지역에 위치한 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1483],
+    [1488],
   ],
   [
     "world-391f4cf956c0",
@@ -31728,7 +31763,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아르메니아 공화국, 약칭 아르메니아는 서아시아의 아르메니아고원에 있는 내륙국이며, 수도는 예레반이고, 공용어는 아르메니아어이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1484],
+    [1489],
   ],
   [
     "world-67f93027a8be",
@@ -31736,7 +31771,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아제르바이잔 공화국, 약칭 아제르바이잔은 캅카스에 위치한 공화국으로, 수도는 바쿠, 공용어는 아제르바이잔어이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1485],
+    [1490],
   ],
   [
     "world-a70856ed7805",
@@ -31744,7 +31779,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카자흐스탄 공화국, 약칭 카자흐스탄은 중앙아시아와 동유럽에 걸쳐 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1486],
+    [1491],
   ],
   [
     "world-2c2c3b487137",
@@ -31752,7 +31787,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우즈베키스탄 공화국, 약칭 우즈베키스탄은 중앙아시아에 있는 내륙국이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [191],
+    [193],
   ],
   [
     "world-a60dd4b3ebfb",
@@ -31760,7 +31795,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키르기즈 공화국, 약칭 키르기스스탄은 중앙아시아 내륙에 위치한 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1487],
+    [1492],
   ],
   [
     "world-354bbc0c54ad",
@@ -31768,7 +31803,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타지키스탄 공화국, 약칭 타지키스탄은 중앙아시아에 있는 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1488],
+    [1493],
   ],
   [
     "world-36e48a94bda5",
@@ -31776,7 +31811,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "투르크메니스탄은 중앙아시아에 있는 이슬람 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1489],
+    [1494],
   ],
   [
     "world-0d7749b6ad10",
@@ -31791,7 +31826,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [400],
+    [402],
   ],
   [
     "world-af44c080ed20",
@@ -31799,7 +31834,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "네팔 연방민주공화국, 약칭 네팔은 남아시아 히말라야에 위치한 나라로, 중국과 인도에 둘러싸여 있으며 동쪽 조금 멀리 떨어진 곳에 부탄이 있다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1490],
+    [1495],
   ],
   [
     "world-6ac0e81c2201",
@@ -31807,7 +31842,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부탄 왕국, 약칭 부탄은 남아시아 히말라야산맥에 있는 내륙국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1491],
+    [1496],
   ],
   [
     "world-6baa9a43fd27",
@@ -31815,7 +31850,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "방글라데시 인민공화국 또는 방글라데시는 남아시아에 있는 인민공화국으로서 인도, 미얀마 그리고 벵골만에 인접해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1492],
+    [1497],
   ],
   [
     "world-b995415b3422",
@@ -31823,7 +31858,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스리랑카 민주사회주의공화국, 약칭 스리랑카는 남아시아에 있는 섬나라이며 입법 수도는 스리자야와르데네푸라코테이고 행정·사법 수도 및 최대 도시는 콜롬보이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1493],
+    [1498],
   ],
   [
     "world-c00f14712750",
@@ -31831,7 +31866,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몰디브 공화국, 약칭 몰디브는 남아시아 인도양에 있는 섬나라로, 인도와 스리랑카 서남쪽에 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1494],
+    [1499],
   ],
   [
     "world-2541f60d32c7",
@@ -31847,7 +31882,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "고대 문명과 국가",
     ],
-    [900],
+    [905],
   ],
   [
     "world-2f702d56e366",
@@ -31862,7 +31897,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "고대 문명과 국가",
     ],
-    [836],
+    [841],
   ],
   [
     "world-34ab7f2bece7",
@@ -31870,7 +31905,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라오 인민 민주 공화국, 약칭 라오스는 동남아시아의 국가이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1495],
+    [1500],
   ],
   [
     "world-6e808b36fb8b",
@@ -31886,7 +31921,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [447],
+    [449],
   ],
   [
     "world-fd5da91be12f",
@@ -31901,7 +31936,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "고대 문명과 국가",
     ],
-    [1496],
+    [1501],
   ],
   [
     "world-37fcddcb95c9",
@@ -31909,7 +31944,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말레이시아'는 동남아시아에 있는 연방제 입헌 군주국이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1497],
+    [1502],
   ],
   [
     "world-48fbf2cc0c22",
@@ -31924,7 +31959,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [837],
+    [842],
   ],
   [
     "world-a4b3a91d5217",
@@ -31938,7 +31973,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1498],
+    [1503],
   ],
   [
     "world-5d1c39fb45e0",
@@ -31952,7 +31987,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "세계 대전과 평화",
     ],
-    [1499],
+    [1504],
   ],
   [
     "world-77633f61b479",
@@ -31960,7 +31995,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티모르섬 동부와 주변 섬, 서티모르 북쪽의 일부 지역으로 이루어진 동남아시아의 나라다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1500],
+    [1505],
   ],
   [
     "world-8a9d64bd994a",
@@ -31976,7 +32011,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "종교와 지역 문화",
     ],
-    [581],
+    [585],
   ],
   [
     "world-55045089b35d",
@@ -31984,7 +32019,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캐나다는 북아메리카에 위치한 나라로, 10개의 주와 3개의 준주로 구성되어 있다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1501],
+    [1506],
   ],
   [
     "world-b0e06d098e72",
@@ -31992,7 +32027,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "멕시코 합중국, 약칭 멕시코는 북아메리카 남부에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1502],
+    [1507],
   ],
   [
     "world-b04477644207",
@@ -32000,7 +32035,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠바, 전체 이름 쿠바 공화국은 북아메리카의 카리브 제도에 있는 섬나라로, 아메리카 유일의 사회주의 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1503],
+    [1508],
   ],
   [
     "world-a947d2f569ea",
@@ -32008,7 +32043,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아이티 공화국, 약칭 아이티는 북아메리카 카리브 해의 섬나라이며, 수도는 포르토프랭스이고, 쓰는 언어는 프랑스어와 아이티어이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1504],
+    [1509],
   ],
   [
     "world-2457fb1828e9",
@@ -32016,7 +32051,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도미니카 공화국은 북아메리카 카리브 제도에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1505],
+    [1510],
   ],
   [
     "world-e9fde811d124",
@@ -32024,7 +32059,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카리브해 도미니카섬에 있는 나라로, 수도는 로조다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1506],
+    [1511],
   ],
   [
     "world-34f9d846495f",
@@ -32032,7 +32067,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "자메이카는 북아메리카 카리브해의 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1507],
+    [1512],
   ],
   [
     "world-6cb295a45082",
@@ -32040,7 +32075,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바하마 연방, 줄여서 바하마는 북대서양 루케이언 제도에 있는 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1508],
+    [1513],
   ],
   [
     "world-5590e9f07893",
@@ -32048,7 +32083,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아메리카 유카탄반도 남쪽의 나라로, 카리브해에 접하며 수도는 벨모판이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1509],
+    [1514],
   ],
   [
     "world-5f821e2698de",
@@ -32056,7 +32091,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "과테말라 공화국은 중앙아메리카에 위치한 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1510],
+    [1515],
   ],
   [
     "world-b270347fb602",
@@ -32064,7 +32099,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "온두라스는 중앙아메리카에 있는 공화국이며, 수도는 테구시갈파다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1511],
+    [1516],
   ],
   [
     "world-fcd4ede0679f",
@@ -32072,7 +32107,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "엘살바도르 공화국은 중앙아메리카에 있는 공화국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1512],
+    [1517],
   ],
   [
     "world-77dde5e924e0",
@@ -32080,7 +32115,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니카라과 공화국, 약칭 니카라과는 중앙아메리카에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1513],
+    [1518],
   ],
   [
     "world-0f8021cc6428",
@@ -32088,7 +32123,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코스타리카 공화국, 줄여서 코스타리카는 중앙아메리카에 있는 공화국이며, 수도는 산호세이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1514],
+    [1519],
   ],
   [
     "world-03b4aef6baa2",
@@ -32096,7 +32131,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파나마 공화국은 북아메리카 최남단인 파나마 지협에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1515],
+    [1520],
   ],
   [
     "world-da3b8489fa18",
@@ -32104,7 +32139,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세인트크리스토퍼 네비스 연방 또는 줄여서 세인트키츠 네비스는 1983년 영국으로부터 독립한 섬나라이며 수도는 바스테르이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1516],
+    [1521],
   ],
   [
     "world-e3ab880003af",
@@ -32112,7 +32147,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앤티가 바부다는 카리브해와 대서양을 끼고 있는 섬나라이자 영국 연방의 회원국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1517],
+    [1522],
   ],
   [
     "world-f2515127fc1f",
@@ -32120,7 +32155,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바베이도스는 카리브해 동쪽 끝에 있는 섬나라로 민주공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1518],
+    [1523],
   ],
   [
     "world-570916d49772",
@@ -32128,7 +32163,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세인트빈센트 그레나딘은 카리브해에 있는 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1519],
+    [1524],
   ],
   [
     "world-e60bfdbdbca2",
@@ -32136,7 +32171,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트리니다드 토바고 공화국은 카리브해 남쪽에 있는 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1520],
+    [1525],
   ],
   [
     "world-ec43e868bd10",
@@ -32144,7 +32179,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그레나다는 카리브해에 있는 영연방 군주국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1521],
+    [1526],
   ],
   [
     "world-6cf4a7cd1731",
@@ -32152,7 +32187,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세인트루시아는 중앙아메리카 카리브해의 소앤틸리스 제도에 있는 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1522],
+    [1527],
   ],
   [
     "world-67a84e81ccbf",
@@ -32160,7 +32195,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜롬비아 공화국, 줄여서 콜롬비아는 남아메리카에 있는 공화국이며 수도는 보고타이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1523],
+    [1528],
   ],
   [
     "world-c95139a20020",
@@ -32174,7 +32209,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1524],
+    [1529],
   ],
   [
     "world-d266c6be04dd",
@@ -32182,7 +32217,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가이아나 공화국 또는 줄여서 가이아나는 남아메리카에 있는 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1525],
+    [1530],
   ],
   [
     "world-38846b36d0f9",
@@ -32190,7 +32225,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수리남 공화국, 약칭 수리남은 남아메리카에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1526],
+    [1531],
   ],
   [
     "world-efa5972b75e5",
@@ -32198,7 +32233,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에콰도르 공화국, 영어: Republic of Ecuador, 줄여서 에콰도르는 남미 북서부에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1527],
+    [1532],
   ],
   [
     "world-206e2cc4f705",
@@ -32212,7 +32247,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1528],
+    [1533],
   ],
   [
     "world-72a86731874e",
@@ -32226,7 +32261,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1529],
+    [1534],
   ],
   [
     "world-432b9eb55dec",
@@ -32240,7 +32275,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1530],
+    [1535],
   ],
   [
     "world-ef7afd7dfe5e",
@@ -32248,7 +32283,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파라과이 공화국은 볼리비아와 더불어 남아메리카에 있는 내륙국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1531],
+    [1536],
   ],
   [
     "world-3e06391ea652",
@@ -32256,7 +32291,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우루과이 동방공화국, 약칭 우루과이는 남아메리카 동남부에 있는 공화국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1532],
+    [1537],
   ],
   [
     "world-114af6464ac6",
@@ -32264,7 +32299,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아르헨티나 공화국 줄여서 아르헨티나는 남아메리카 대륙 남부에 자리 잡고 있는 연방 공화국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1533],
+    [1538],
   ],
   [
     "world-ce68aa41e6ac",
@@ -32272,7 +32307,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "칠레 공화국, 줄여서 칠레는 태평양과 남아메리카의 안데스산맥 사이에 남북으로 긴 영토를 가진 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1534],
+    [1539],
   ],
   [
     "world-16bb937044f7",
@@ -32286,7 +32321,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1535],
+    [1540],
   ],
   [
     "world-790efb1a5746",
@@ -32300,7 +32335,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1536],
+    [1541],
   ],
   [
     "world-43354853de34",
@@ -32308,7 +32343,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "튀니지 공화국, 또는 약칭 튀니지는 북아프리카 마그레브에 있는 국가로, 1956년 3월 20일에 튀니지 왕정으로써 프랑스로부터 독립했다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1537],
+    [1542],
   ],
   [
     "world-53d63f5dbb5d",
@@ -32316,7 +32351,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리비아, 공식적으로 리비아국은 북아프리카의 마그레브 지역에 있는 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1538],
+    [1543],
   ],
   [
     "world-7934f508c9da",
@@ -32324,7 +32359,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모리타니아 이슬람 공화국, 약칭 모리타니는 서북아프리카, 서부 사하라에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1539],
+    [1544],
   ],
   [
     "world-76343dbc8b76",
@@ -32332,7 +32367,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말리 공화국은 아프리카에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1540],
+    [1545],
   ],
   [
     "world-a49c6c155919",
@@ -32340,7 +32375,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니제르 공화국는 서아프리카에 있는 내륙국이며 수도는 니아메이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1541],
+    [1546],
   ],
   [
     "world-4b7cd5a7af4c",
@@ -32348,7 +32383,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "차드 공화국, 줄여서 차드는 아프리카에 있는 공화국이다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1542],
+    [1547],
   ],
   [
     "world-afd2495321ce",
@@ -32356,7 +32391,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수단 공화국, 약칭 수단은 아프리카 북부에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1543],
+    [1548],
   ],
   [
     "world-f87cbfae0730",
@@ -32364,7 +32399,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남수단 공화국, 약칭 남수단은 아프리카에 있는 내륙국으로, 수도는 주바이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1544],
+    [1549],
   ],
   [
     "world-0cb1eb54374f",
@@ -32372,7 +32407,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에리트레아는 동아프리카에 위치해 있는 공화국으로 공식 명칭은 에리트레아국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1545],
+    [1550],
   ],
   [
     "world-ecb24fd7a698",
@@ -32386,7 +32421,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1546],
+    [1551],
   ],
   [
     "world-a9ebe6bba25b",
@@ -32394,7 +32429,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "소말리아 연방 공화국, 약칭 소말리아는 아프리카 동부 에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1547],
+    [1552],
   ],
   [
     "world-7675e45c5665",
@@ -32402,7 +32437,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지부티 공화국, 줄여서 지부티는 아프리카 대륙의 아프리카의 뿔 지대에 있는 나라이며 수도는 지부티이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1548],
+    [1553],
   ],
   [
     "world-d8ec1ee7176a",
@@ -32410,7 +32445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세네갈 공화국은 아프리카에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1549],
+    [1554],
   ],
   [
     "world-cfcfe6c978b9",
@@ -32418,7 +32453,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "감비아, 공식 국명 감비아 공화국은 아프리카 서해안에 있는 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1550],
+    [1555],
   ],
   [
     "world-6967bd5cfdd8",
@@ -32426,7 +32461,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "기니비사우는 아프리카 서쪽 끝 연안에 있는 공화국으로, 수도는 비사우이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1551],
+    [1556],
   ],
   [
     "world-380fa8983b7b",
@@ -32434,7 +32469,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "기니, 공식 국명 기니 공화국은 아프리카의 서쪽 끝 대서양 연안에 있는 공화국으로, 수도는 코나크리이다.",
     ["기이나"],
     ["세계사", "냉전과 현대 세계"],
-    [1552],
+    [1557],
   ],
   [
     "world-75112fb82049",
@@ -32442,7 +32477,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시에라리온 공화국은 아프리카 대륙 서부 대서양 해안에 위치한 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1553],
+    [1558],
   ],
   [
     "world-12bd41f4f9a6",
@@ -32450,7 +32485,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라이베리아 공화국, 약칭 라이베리아는 1847년에 세워진 아프리카의 첫 공화국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1554],
+    [1559],
   ],
   [
     "world-3ad5937a1614",
@@ -32458,7 +32493,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코트디부아르는 아프리카 대륙에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1555],
+    [1560],
   ],
   [
     "world-3ca97889c86d",
@@ -32466,7 +32501,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가나 공화국, 약칭 가나는 서아프리카 기니만과 대서양에 면한 나라다.",
     ["골드코스트"],
     ["세계사", "냉전과 현대 세계"],
-    [1556],
+    [1561],
   ],
   [
     "world-1f57281ac0af",
@@ -32474,7 +32509,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토고 공화국은 아프리카에 있는 공화국이며 수도는 로메이다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1557],
+    [1562],
   ],
   [
     "world-b9b2141f062c",
@@ -32482,7 +32517,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베냉 공화국, 줄여서 베냉은 서아프리카에 있는 국가로 수도는 포르토노보이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1558],
+    [1563],
   ],
   [
     "world-7c310c7aada1",
@@ -32490,7 +32525,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부르키나파소는 아프리카에 있는 공화국이며 수도는 와가두구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1559],
+    [1564],
   ],
   [
     "world-f15a383801d7",
@@ -32498,7 +32533,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나이지리아 연방 공화국, 약칭 나이지리아은 서아프리카에 있는 나라다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1560],
+    [1565],
   ],
   [
     "world-f05eb6420eeb",
@@ -32506,7 +32541,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카보베르데 공화국, 줄여서 카보베르데는 서아프리카 해안에서 떨어진 중앙대서양에 있는 화산섬으로 이루어진 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1561],
+    [1566],
   ],
   [
     "world-fa5d69e01d8b",
@@ -32514,7 +32549,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카메룬 공화국, 줄여서 카메룬은 중앙아프리카에 위치한 단일제 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1562],
+    [1567],
   ],
   [
     "world-f5075a8f32d0",
@@ -32522,7 +32557,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아프리카 공화국은 아프리카 중서부에 있는 공화국이다.",
     ["중앙아프리카"],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1563],
+    [1568],
   ],
   [
     "world-ee04238d2356",
@@ -32530,7 +32565,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "적도 기니, 공식 국명 적도 기니 공화국은 아프리카 서부에 있는 나라로, 인구는 약 120만 명이며 면적은 28,051 km2이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1564],
+    [1569],
   ],
   [
     "world-84ef34e783e4",
@@ -32538,7 +32573,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가봉 공화국 또는 가봉은 아프리카 중서부에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1565],
+    [1570],
   ],
   [
     "world-71df61221bba",
@@ -32546,7 +32581,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아프리카 콩고강 유역과 관련된 역사적 지명으로, 오늘날 콩고 공화국과 콩고 민주 공화국의 이름에 남아 있다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1566],
+    [1571],
   ],
   [
     "world-a5e4727d837a",
@@ -32554,7 +32589,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콩고 민주 공화국 또는 단순히 콩고는 중앙아프리카의 국가이다.",
     ["자이르"],
     ["세계사", "냉전과 현대 세계"],
-    [1567],
+    [1572],
   ],
   [
     "world-d9f3975ae8d5",
@@ -32562,7 +32597,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우간다 공화국은 아프리카 중앙에 있는 공화국이며, 영어, 스와힐리어가 공용어이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1568],
+    [1573],
   ],
   [
     "world-493eea97642f",
@@ -32570,7 +32605,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "케냐 공화국 또는 케냐는 동아프리카의 공화국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1569],
+    [1574],
   ],
   [
     "world-9809e2e5b045",
@@ -32578,7 +32613,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "탄자니아 연합 공화국은 동아프리카에 있는 나라이며, 1961년에 독립한 탕가니카와 1963년에 독립한 잔지바르가 1964년에 통합하여 생긴 나라이다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1570],
+    [1575],
   ],
   [
     "world-ab86112eec5e",
@@ -32586,7 +32621,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "르완다 공화국은 1962년 7월 1일 벨기에로부터 독립한 아프리카의 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1571],
+    [1576],
   ],
   [
     "world-fea85c1145b4",
@@ -32594,7 +32629,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "부룬디 공화국은 아프리카에 있는 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1572],
+    [1577],
   ],
   [
     "world-0d0a9e5949a0",
@@ -32602,7 +32637,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앙골라 공화국, 줄여서 앙골라는 아프리카 남서부에 위치한 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1573],
+    [1578],
   ],
   [
     "world-9c2fc5e58c8e",
@@ -32610,7 +32645,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잠비아 공화국은 아프리카에 있는 내륙국으로 수도는 루사카이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1574],
+    [1579],
   ],
   [
     "world-70780978cc9c",
@@ -32618,7 +32653,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말라위 공화국은 동남아프리카에 있는 내륙국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1575],
+    [1580],
   ],
   [
     "world-d3a409395109",
@@ -32626,7 +32661,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모잠비크 공화국, 줄여서 모잠비크는 아프리카 대륙 남동부에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1576],
+    [1581],
   ],
   [
     "world-baf0f923d6b1",
@@ -32634,7 +32669,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "짐바브웨 공화국 또는 짐바브웨는 남아프리카의 내륙국으로, 잠베지강과 림포포강 사이에 위치하고 있으며, 남아프리카 공화국, 보츠와나, 잠비아, 그리고 모잠비크와 국경을 맞대고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1577],
+    [1582],
   ],
   [
     "world-bab9d72f6dd1",
@@ -32642,7 +32677,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나미비아 공화국는 남아프리카에 있는 공화국이며 수도는 빈트후크이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1578],
+    [1583],
   ],
   [
     "world-f549c452d45d",
@@ -32650,7 +32685,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프리카 남부의 내륙 국가로, 국토의 많은 부분을 칼라하리 사막이 차지한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1579],
+    [1584],
   ],
   [
     "world-30a82d46567b",
@@ -32658,7 +32693,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아프리카 공화국은 아프리카 대륙 최남단에 자리한 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1580],
+    [1585],
   ],
   [
     "world-9c2ce63c3d6b",
@@ -32666,7 +32701,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "레소토 왕국은 전면이 남아프리카 공화국 영토에 둘러싸여 있는 내륙국으로, 수도는 마세루이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1581],
+    [1586],
   ],
   [
     "world-21f1159564b5",
@@ -32674,7 +32709,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에스와티니 왕국 혹은 에스와티니는 아프리카의 군주제 국가이다.",
     ["스와질란드"],
     ["세계사", "냉전과 현대 세계"],
-    [1582],
+    [1587],
   ],
   [
     "world-1ce0457eee04",
@@ -32682,7 +32717,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마다가스카르 공화국, 약칭 마다가스카르는 아프리카 동쪽에 있는 공화국이며 섬나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1583],
+    [1588],
   ],
   [
     "world-43ec57cfb892",
@@ -32690,7 +32725,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "모리셔스 공화국은 아프리카의 동부, 인도양 남서부에 있는 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1584],
+    [1589],
   ],
   [
     "world-656c40fa435c",
@@ -32698,7 +32733,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세이셸 공화국 또는 줄여서 세이셸은 아프리카 동부 인도양에 위치한, 155개의 섬으로 구성된 섬나라이자 군도 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1585],
+    [1590],
   ],
   [
     "world-4292c5f99c26",
@@ -32706,7 +32741,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코모로 연방 줄여서 코모로는 인도양에 위치한 공화국이며 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1586],
+    [1591],
   ],
   [
     "world-28e3d94b942e",
@@ -32714,7 +32749,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상투메 프린시페 민주공화국, 약칭 상투메 프린시페는 아프리카의 섬나라이며 수도는 상투메 섬에 있는 상투메이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1587],
+    [1592],
   ],
   [
     "world-182a68a37544",
@@ -32722,7 +32757,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스트레일리아 연방, 줄여서 오스트레일리아, 혹은 호주는 오스트레일리아 대륙 본토와 태즈메이니아섬, 그리고 인도양과 태평양의 많은 섬으로 이루어진 주권국이며 오세아니아에서 1번째, 세계에서 6번째로 면적이 넓은 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "지역 세계의 교류"],
-    [1588],
+    [1593],
   ],
   [
     "world-38cc49cb4793",
@@ -32730,7 +32765,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뉴질랜드 또는 아오테아로아는 오세아니아의 폴리네시아에 위치한 섬나라이자 왕정 주권국이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1589],
+    [1594],
   ],
   [
     "world-f89c3336c67c",
@@ -32738,7 +32773,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파푸아뉴기니 독립국, 약칭 파푸아뉴기니는 오세아니아의 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1590],
+    [1595],
   ],
   [
     "world-ca099418e79c",
@@ -32746,7 +32781,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태평양 캐롤라인 제도의 섬들로 이루어진 연방 국가로, 수도는 폰페이섬의 팔리키르다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1591],
+    [1596],
   ],
   [
     "world-6ee5f0b9e5a7",
@@ -32754,7 +32789,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마셜 제도는 오세아니아의 미크로네시아에 있는 나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1592],
+    [1597],
   ],
   [
     "world-001798768954",
@@ -32762,7 +32797,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키리바시 공화국, 약칭 키리바시는 오세아니아의 미크로네시아에 있는 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1593],
+    [1598],
   ],
   [
     "world-f3f184b453e0",
@@ -32770,7 +32805,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팔라우 공화국, 약칭 팔라우는 오세아니아의 미크로네시아 캐롤라인 제도에 있는 연방 국가로, 필리핀의 남동쪽, 인도네시아 서뉴기니의 북쪽에 위치한 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1594],
+    [1599],
   ],
   [
     "world-7122a6487e95",
@@ -32778,7 +32813,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "솔로몬 제도는 오세아니아의 멜라네시아에 위치한 국가이자 영연방 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1595],
+    [1600],
   ],
   [
     "world-8ec9827b7b18",
@@ -32786,7 +32821,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태평양 미크로네시아에 있는 작은 섬나라로, 오세아니아에 속한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1596],
+    [1601],
   ],
   [
     "world-caf06436677f",
@@ -32794,7 +32829,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바누아투 공화국 혹은 바누아투는 오세아니아의 멜라네시아에 있는 국가이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1597],
+    [1602],
   ],
   [
     "world-70857da4a20b",
@@ -32802,7 +32837,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "피지 공화국는 오세아니아의 멜라네시아에 있는 섬나라이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1598],
+    [1603],
   ],
   [
     "world-d3da1f0aabb5",
@@ -32810,7 +32845,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "통가 왕국, 약칭 통가는 오세아니아의 폴리네시아에 있는 국가로, 수도는 누쿠알로파이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1599],
+    [1604],
   ],
   [
     "world-fc8d3f3f0da6",
@@ -32818,7 +32853,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "투발루는 오세아니아의 폴리네시아에 있는 섬나라로, 키리바시, 나우루, 사모아, 피지하고 서로 가깝고 하와이와 오스트레일리아 사이의 중간 쯤에 위치한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1600],
+    [1605],
   ],
   [
     "world-a25b3cbf93dd",
@@ -32826,7 +32861,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사모아 독립국은 오세아니아의 폴리네시아 사모아 제도에 있는 나라이며, 수도는 아피아이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1601],
+    [1606],
   ],
   [
     "world-1fa80372c8c5",
@@ -32842,7 +32877,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1602],
+    [1607],
   ],
   [
     "world-dbd7d66ccd6d",
@@ -32858,7 +32893,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [716],
+    [721],
   ],
   [
     "world-f236cea16295",
@@ -32874,7 +32909,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [717],
+    [722],
   ],
   [
     "world-5935f7794ca6",
@@ -32888,7 +32923,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "지역 세계의 교류",
     ],
-    [1603],
+    [1608],
   ],
   [
     "world-4e16f698bae4",
@@ -32902,7 +32937,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [1604],
+    [1609],
   ],
   [
     "world-411d8aae0282",
@@ -32916,7 +32951,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [853],
+    [858],
   ],
   [
     "world-ccd722c9d0d5",
@@ -32932,7 +32967,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [779],
+    [784],
   ],
   [
     "world-0381381dd2b5",
@@ -32948,7 +32983,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [871],
+    [876],
   ],
   [
     "world-2d56af2054e2",
@@ -32962,7 +32997,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "냉전과 현대 세계",
     ],
-    [311],
+    [313],
   ],
   [
     "world-8938a8020e65",
@@ -32970,7 +33005,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아시아 또는 남부아시아는 인도, 파키스탄, 방글라데시, 스리랑카, 네팔, 부탄, 몰디브, 아프가니스탄을 포함하는 아시아의 한 지역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1605],
+    [1610],
   ],
   [
     "world-a0b9cd727c60",
@@ -32985,7 +33020,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [839],
+    [844],
   ],
   [
     "world-198c41ae8459",
@@ -33001,7 +33036,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1606],
+    [1611],
   ],
   [
     "world-d6ba2ba5991b",
@@ -33009,7 +33044,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동유럽은 유럽의 동쪽 지역이다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1607],
+    [1612],
   ],
   [
     "world-7d04529249b0",
@@ -33023,7 +33058,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1608],
+    [1613],
   ],
   [
     "world-9b42e42ee4b7",
@@ -33031,7 +33066,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중동은 지중해 동쪽부터 페르시아만까지 영역을 포함하는 아시아 서부 대륙이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1609],
+    [1614],
   ],
   [
     "world-0dd2c0cf6ba9",
@@ -33045,7 +33080,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "냉전과 현대 세계",
     ],
-    [1610],
+    [1615],
   ],
   [
     "world-105e198d8bbf",
@@ -33053,7 +33088,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동아프리카는 소말리아, 케냐, 탄자니아를 포함한 아프리카의 동부 지역을 지칭하는 말이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1611],
+    [1616],
   ],
   [
     "world-230b2d9672fc",
@@ -33061,7 +33096,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서아프리카는 아프리카 서부 지역을 말한다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1612],
+    [1617],
   ],
   [
     "world-e0b313ff9c4c",
@@ -33069,7 +33104,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메소포타미아는 서아시아의 유프라테스강과 티그리스강의 주변 지역을 일컫는다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1613],
+    [1618],
   ],
   [
     "world-82c962e25336",
@@ -33077,7 +33112,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠샨 왕조 때 그리스·헬레니즘 미술의 영향을 받아 불상이 제작된 지역이다. 부처를 인간의 모습으로 표현한 간다라 양식이 여기에서 발달하였다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1614, 1615, 1616, 1617, 1618, 1619, 1620, 1621, 1622],
+    [0, 1619, 1620, 1621, 1622, 1623, 1624, 1625, 1626, 1627],
   ],
   [
     "world-f498ff22bbd5",
@@ -33085,7 +33120,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "데칸고원은 인도아대륙의 남부에 위치한 고원이다.",
     [],
     ["세계사", "고대 문명과 국가", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1623],
+    [1628],
   ],
   [
     "world-535241559ce3",
@@ -33093,7 +33128,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티베트고원 또는 청장고원은 동아시아의 고원으로, 중화인민공화국의 티베트 자치구와 칭하이성, 인도 카슈미르의 라다크 지역에 걸쳐 있다.",
     ["시짱고원"],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1624],
+    [1629],
   ],
   [
     "world-3637da82e98a",
@@ -33109,7 +33144,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아시아의 아무다리야강과 시르다리야강 사이에 자리한 역사적 지역으로, 사마르칸트 등 소그드인 도시들이 발달했다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1625],
+    [1630],
   ],
   [
     "world-25538527916e",
@@ -33117,7 +33152,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "박트리아, 또는 박트리아나는 고대 이란 문명으로, 중앙아시아의 옥수스강 남쪽과 힌두쿠시산맥 북쪽, 즉 현재 아프가니스탄 북부, 타지키스탄, 우즈베키스탄에 걸쳐 위치했다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1626],
+    [1631],
   ],
   [
     "world-4791aba6aa42",
@@ -33125,7 +33160,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파르티아는 이란 북동부에 해당하는 고대의 지역이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1627],
+    [1632],
   ],
   [
     "world-0e48ce55a749",
@@ -33133,7 +33168,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 레바논을 중심으로 지중해 동부 해안에서 성장한 고대 문명으로, 해상 무역과 식민 도시 건설로 번영했다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1628],
+    [1633],
   ],
   [
     "world-1eb30b7015f6",
@@ -33141,7 +33176,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리디아 는 서부 아나톨리아의 한 역사적 지역으로 튀르키예의 현대 이즈미르 주, 마니사 주에 해당한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1629],
+    [1634],
   ],
   [
     "world-13c56bd349d1",
@@ -33149,7 +33184,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메디아는 현재의 이란 북서부의 메디아에 있었던 고대 이란인의 국가이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1630],
+    [1635],
   ],
   [
     "world-e7a04056a204",
@@ -33157,7 +33192,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "철제 무기와 기병을 바탕으로 서아시아를 통일한 국가다. 정복지를 강압적으로 다스려 저항을 받았고, 이후 페르시아가 서아시아를 다시 통합하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1631, 943, 1632, 1633, 946, 947, 949, 1634, 1102],
+    [0, 1636, 948, 1637, 1638, 951, 952, 954, 1639, 1107],
   ],
   [
     "world-0204c02497e0",
@@ -33165,7 +33200,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티그리스강과 유프라테스강 유역에서 농경과 도시 국가를 발전시킨 메소포타미아의 고대 문명이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1635],
+    [1640],
   ],
   [
     "world-a79a36208db8",
@@ -33173,7 +33208,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아카드는 고대 오리엔트에서 활약한 민족 또는 그들이 살던 지방이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1636],
+    [1641],
   ],
   [
     "world-ace9d8a79b30",
@@ -33181,7 +33216,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고바빌로니아 제국, 또는 바빌로니아 제1제국은 셈족 계통의 아모리인들이 바빌론이라는 도시를 중심으로 건설한 제국으로, 바빌로니아의 첫번째 왕조이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1637],
+    [1642],
   ],
   [
     "world-fdc76662f59a",
@@ -33189,7 +33224,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신바빌로니아 제국 또는 바빌로니아 제2제국은 기원전 626년부터 기원전 539년까지 존재한 칼데아인의 바빌로니아 제국이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1638],
+    [1643],
   ],
   [
     "world-447803281e82",
@@ -33197,7 +33232,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유대는 전통적으로 가나안 지방의 남단을 부르는 고대의 지명이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1639],
+    [1644],
   ],
   [
     "world-9bd6026a6551",
@@ -33205,7 +33240,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고대 가나안과 레반트 일대에 살았던 히브리인 또는 이스라엘 민족을 가리킨다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1640],
+    [1645],
   ],
   [
     "world-649df1bb49c2",
@@ -33213,7 +33248,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흐샤싸, 또는 페르시아 제국은 아케메네스의 아들 테이스페스를 시조로 하는 아케메네스 왕조에 의해 건국된 페르시아 제국이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1641],
+    [1646],
   ],
   [
     "world-d4f713481be0",
@@ -33221,7 +33256,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이란국, 통칭 사산 제국은 AD 7세기 초기 무슬림 정복 이전의 마지막 이란 제국이었다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1642],
+    [1647],
   ],
   [
     "world-033369d8bedb",
@@ -33229,7 +33264,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 북쪽에서 성장한 고대 왕국으로, 알렉산드로스의 원정으로 서아시아와 인더스강 유역까지 세력을 넓혔다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1643],
+    [1648],
   ],
   [
     "world-3d70add00e9d",
@@ -33237,7 +33272,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 그리스 북서부와 알바니아 남부에 걸친 역사적 지역으로, 이오니아해와 핀도스산맥 사이에 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1644],
+    [1649],
   ],
   [
     "world-abb60db1739d",
@@ -33245,7 +33280,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아나톨리아 서부 해안의 고대 지역으로, 밀레토스와 에페소스 등 그리스인 도시들이 자리했다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1645],
+    [1650],
   ],
   [
     "world-e9fa45b48444",
@@ -33253,7 +33288,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 남부의 큰 반도로, 코린토스 지협을 통해 그리스 본토와 이어져 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1646],
+    [1651],
   ],
   [
     "world-6c18809a3f48",
@@ -33261,7 +33296,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트라키아 또는 트라키, 트라키야는 역사적, 지리적으로 발칸반도의 남동쪽을 부르는 지명이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1647],
+    [1652],
   ],
   [
     "world-fe16399ca5cc",
@@ -33269,7 +33304,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브리타니아는 고대 로마 시대에 오늘날 영국의 그레이트브리튼섬을 이르던 말이자, 로마 제국의 브리타니아 정복 이후 로마 제국의 속주의 이름이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1648],
+    [1653],
   ],
   [
     "world-a90c90a0b5a0",
@@ -33277,7 +33312,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "게르마니아는 라인강 동쪽 지방을 일컫는 라틴어 지명으로, 로마가 지배하던 라인강 서안 지방이나 사르마티아까지도 포괄하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1649],
+    [1654],
   ],
   [
     "world-bdfe9ecfe1c0",
@@ -33285,7 +33320,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "히스파니아는 고대 로마 제국에서 이베리아반도를 통칭해 일컫는 말이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1650],
+    [1655],
   ],
   [
     "world-853a222277bb",
@@ -33293,7 +33328,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "갈리아는 로마인이 처음으로 명확하게 묘사한 서유럽의 한 지역으로, 오늘날의 프랑스, 벨기에, 룩셈부르크 및 스위스, 네덜란드, 독일, 이탈리아 북부의 일부를 포함한다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1651],
+    [1656],
   ],
   [
     "world-b84adea35f65",
@@ -33301,7 +33336,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "누미디아는 대략 기원전 3세기부터 북아프리카에 존재하던 왕국이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1652],
+    [1657],
   ],
   [
     "world-1a1f1b780879",
@@ -33309,7 +33344,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로마 제국은 지중해를 중심으로 유럽, 북아프리카, 서아시아 등지를 다스린 보편 제국이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1653],
+    [1658],
   ],
   [
     "world-fbf8723724e5",
@@ -33317,7 +33352,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서로마 제국은 로마 제국이 동서로 분할된 395년부터 476년까지 서방 황제의 치하로 존속한 로마 제국의 연속체로, 공식 국호는 이전과 같은 로마 제국이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1654],
+    [1659],
   ],
   [
     "world-e0b191a9746e",
@@ -33331,7 +33366,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "세계 대전과 평화",
     ],
-    [1655],
+    [1660],
   ],
   [
     "world-834556d5afc8",
@@ -33339,7 +33374,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마우리아 제국은 기원전 320년부터 기원전 185년까지 존속했던 고전기 인도의 제국으로, 인도 역사상 가장 광대한 영토를 거느렸던 제국 중 하나이다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1656],
+    [1661],
   ],
   [
     "world-19a6006c03f9",
@@ -33347,7 +33382,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠샨 제국은 1세기 초 박트리아 지역의 월지족에 의해 건국된 혼성 유목제국이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1657],
+    [1662],
   ],
   [
     "world-742ccc763014",
@@ -33355,7 +33390,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "굽타 제국은 서기 4세기 초부터 6세기 후반까지 존재했던 고대 인도 제국이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1658],
+    [1663],
   ],
   [
     "world-389dc8d0c779",
@@ -33363,7 +33398,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 데칸 지역을 중심으로 번영한 고대 왕조로, 사타바하나 왕조라고도 한다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1659],
+    [1664],
   ],
   [
     "world-84223e5416be",
@@ -33371,7 +33406,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "칼링가는 인도의 역사적 지역이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1660],
+    [1665],
   ],
   [
     "world-7cbeab27f763",
@@ -33379,7 +33414,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바카타카는 3세기 중반 데칸에서 시작된 고대 인도 왕조이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1661],
+    [1666],
   ],
   [
     "world-ea335e1223ca",
@@ -33387,7 +33422,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "촐라는 기원전 3세기부터 서기 1279년까지 남인도의 타밀라캄 지역에 존재하던 타밀계 왕조로, 전성기에는 광대한 해양 제국인 촐라 제국을 통치했다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1662],
+    [1667],
   ],
   [
     "world-7724af6f478b",
@@ -33395,7 +33430,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아시아에서 활동한 유목 세력으로, 박트리아를 중심으로 제국을 이루었다가 돌궐과 사산 왕조의 공격을 받았다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1663],
+    [1668],
   ],
   [
     "world-e209bb2a0ca7",
@@ -33410,7 +33445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "고대 문명과 국가",
     ],
-    [1493],
+    [1498],
   ],
   [
     "world-77f46f47568c",
@@ -33418,7 +33453,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스리위자야는 말레이 지역에서 강력한 제해권을 가졌던 국가이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1664],
+    [1669],
   ],
   [
     "world-3f8ac46d1a50",
@@ -33426,7 +33461,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "샤일렌드라 왕조는 8세기 중엽 중부 자바에서 일어난 왕조로 베트남의 참파와 캄보디아를 공격할 만큼 군사력이 강했던 듯하나 그 정치에 대해서는 거의 알려지지 않았다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1665],
+    [1670],
   ],
   [
     "world-b2fe20476666",
@@ -33434,7 +33469,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "앙코르를 중심으로 동남아시아에서 번영한 제국으로, 힌두교와 불교의 영향을 받은 거대한 사원 유적을 남겼다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1666],
+    [1671],
   ],
   [
     "world-91dedcb95f6a",
@@ -33442,7 +33477,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대월국, 또는 대월은 10세기 말부터 19세기 초까지 인도차이나반도에 존재했던 국가이자 베트남의 여러 왕조들이 공식적으로 자신들을 가리키는 국호였다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1667],
+    [1672],
   ],
   [
     "world-b535bdd649d7",
@@ -33450,7 +33485,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "참파 왕국은 베트남 중부 지방에 위치해 있던 말레이계의 참족이 세운 왕국이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1668],
+    [1673],
   ],
   [
     "world-11eddf08f69f",
@@ -33458,7 +33493,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 윈난 지역을 중심으로 937년부터 1253년까지 존속한 왕국이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1669],
+    [1674],
   ],
   [
     "world-cf72440edd36",
@@ -33474,7 +33509,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흉노의 공격을 피해 서쪽으로 이동해 중앙아시아에 자리 잡은 월지의 주요 집단이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1670],
+    [1675],
   ],
   [
     "world-0b54d51fcb12",
@@ -33482,7 +33517,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대완은 중국 역사서인 『사기』와 『한서』에 묘사된 중앙아시아의 페르가나 계곡에 존재했던 나라의 한자 명칭이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1671],
+    [1676],
   ],
   [
     "world-2e650fb5bf69",
@@ -33490,7 +33525,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아시아의 발하시호 남동쪽과 이리강 유역에서 활동한 고대 유목 민족과 그 나라를 가리킨다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1672],
+    [1677],
   ],
   [
     "world-712a73d9835f",
@@ -33498,7 +33533,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강거는 중국 사서에 등장하는 중앙아시아의 고대 국가로, 대략 기원전 3세기부터 기원후 7세기까지 있었던 것으로 추정된다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1673],
+    [1678],
   ],
   [
     "world-85876df4f134",
@@ -33506,7 +33541,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "흉노는 기원전 4세기부터 5세기까지 북아시아 스텝지역에 존재한 유목제국이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1674],
+    [1679],
   ],
   [
     "world-6a0ddfa27692",
@@ -33514,7 +33549,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만주와 중국 북방에서 활동하다 중국 내지로 진출해 북위 등 여러 왕조를 세운 민족이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1675],
+    [1680],
   ],
   [
     "world-75841919e7cd",
@@ -33522,7 +33557,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동돌궐 (583년~630년) 은 583년에 수나라의 이간책으로 분리된 돌궐의 한 세력이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1676],
+    [1681],
   ],
   [
     "world-13ae4ade86e2",
@@ -33530,7 +33565,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돌궐이 동서로 나뉜 뒤 중앙아시아를 지배한 튀르크계 유목 국가다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1677],
+    [1682],
   ],
   [
     "world-7a5412c40597",
@@ -33538,7 +33573,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토욕혼은 4세기경부터 663년 토번의 침공으로 완전히 멸망하기 전까지 존속한 민족이며, 또한 그들이 세운 국가명이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1678],
+    [1683],
   ],
   [
     "world-09d883ec0c98",
@@ -33546,7 +33581,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "토번은 티베트고원의 중앙에 성립된 고대왕국으로, 617년 송첸캄포에서 842년 랑다르마에 이르기까지 2백여년간 지속된 티베트 지역 역사상 국력이 가장 강했던 왕조였다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [217],
+    [219],
   ],
   [
     "world-9a45b048f647",
@@ -33554,7 +33589,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중앙아시아의 튀르크계 민족으로, 역사적으로 위구르 제국과 여러 오아시스 왕국을 이루었다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1679],
+    [1684],
   ],
   [
     "world-1c73339afd0f",
@@ -33562,7 +33597,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서하는 1038년에서 1227년까지 중국 북서부의 간쑤성, 산시성에 위치했던 티베트인의 분파인 탕구트족의 왕조이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [694],
+    [699],
   ],
   [
     "world-be253a175b8f",
@@ -33570,7 +33605,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북송(北宋, 960년 ~ 1127년)은 중국의 왕조 중 하나이다.",
     ["송"],
     ["세계사", "지역 세계의 교류"],
-    [692],
+    [697],
   ],
   [
     "world-100cd8fa0e47",
@@ -33578,7 +33613,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남송(南宋, 1127년 ~ 1279년)은 중국의 왕조이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [693],
+    [698],
   ],
   [
     "world-b6be881f43d6",
@@ -33586,7 +33621,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대금, 약칭 금은 중세 만주와 북중국을 지배한 왕조로 여진족 완안부의 아골타가 1115년 황제에 즉위하여 국호를 대금 연호를 수국으로 정하면서 건국됐다.",
     ["금(여진)", "여진(금)"],
     ["세계사", "지역 세계의 교류"],
-    [378],
+    [380],
   ],
   [
     "world-76a356b47ee0",
@@ -33594,7 +33629,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대요, 약칭 요는 거란족이 중국 화북지역을 정복하고 세운 왕조이다.",
     ["요(거란)", "거란(요)"],
     ["세계사", "지역 세계의 교류"],
-    [369],
+    [371],
   ],
   [
     "world-19d567595754",
@@ -33602,7 +33637,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대몽골국, 통칭 몽골 제국은 13~14세기 사이에 존속한 유목 제국이자 역사상 가장 큰 육상 제국이었다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1680],
+    [1685],
   ],
   [
     "world-4fd182c7e202",
@@ -33610,7 +33645,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "차가타이 울루스라고도 알려진 차가타이 칸국 은 칭기즈 칸의 차남인 차가타이 칸과 그의 후손들이 통치하던 칸국, 즉 동튀르키스탄에서 트란스옥시아나까지의 영토를 가르키던 명칭이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1681],
+    [1686],
   ],
   [
     "world-b8dc36955675",
@@ -33618,7 +33653,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "킵차크 칸국은 1259년 몽골 제국이 분열된 후에 건국된 4대 칸국 중 하나로, 몽골 제국의 북서부 영토를 계승했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1682],
+    [1687],
   ],
   [
     "world-d86e1bc04701",
@@ -33626,7 +33661,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일 칸국, 또는 몽골식 명칭인 훌레구 울루스는 몽골 제국의 남서부 영토, 즉 아나톨리아와 페르시아, 메소포타미아를 계승한 몽골계 칸국이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1683],
+    [1688],
   ],
   [
     "world-d4f5a909fde6",
@@ -33634,7 +33669,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티무르 왕조는 군벌 티무르를 시조로 하는 몽골족 부족 출신의 수니파 무슬림 왕조다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1684],
+    [1689],
   ],
   [
     "world-288919f654aa",
@@ -33642,7 +33677,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사파비 왕조는 페르시아의 사파비 제국(대이란국, 1501-1736)을 다스렸던 왕조이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1685],
+    [1690],
   ],
   [
     "world-bc330fef99da",
@@ -33657,7 +33692,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1686],
+    [1691],
   ],
   [
     "world-ce88fcb8a5f2",
@@ -33665,7 +33700,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "무굴 제국은 근세 남아시아에 존재했던 이슬람 제국이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [918],
+    [923],
   ],
   [
     "world-eaad4d0da858",
@@ -33673,7 +33708,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카자르 왕조는 페르시아 지역의 이란 숭고국을 다스렸던 왕조이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1687],
+    [1692],
   ],
   [
     "world-f126b452c335",
@@ -33681,7 +33716,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우마이야 왕조는 661년부터 750년까지 우마이야 칼리파국, 코르도바 토후국, 코르도바 칼리파국을 지배한 왕조이다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
-    [1688],
+    [1693],
   ],
   [
     "world-6589bb11246a",
@@ -33689,7 +33724,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아바스 칼리파국 혹은 아바스 왕조, 내지는 아바스 제국은 예언자 무함마드를 계승했다고 주장한 세 번째 칼리파국이었다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1689],
+    [1694],
   ],
   [
     "world-7828ce36107f",
@@ -33697,7 +33732,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이베리아반도의 코르도바를 중심으로 이어진 우마이야 왕조로, 뒤에는 칼리파국을 선포하였다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1690],
+    [1695],
   ],
   [
     "world-b45a06fc033f",
@@ -33705,7 +33740,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파티마 칼리파국 또는 파티마 제국은 10세기부터 12세기까지 약 2세기 가량 존속했던 이스마일 시아파계 파티마 왕조의 통치 하에 있던 아랍 제국이자 칼리파국이었다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1691],
+    [1696],
   ],
   [
     "world-05562438a3b1",
@@ -33713,7 +33748,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "셀주크 튀르크, 셀주크 왕조 혹은 셀주크 제국은 1040년부터 1157년까지 중앙아시아, 이란, 이라크, 시리아를 지배한 제국이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1692],
+    [1697],
   ],
   [
     "world-268680974708",
@@ -33721,7 +33756,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑크 왕국은 서기 5세기 말 서게르만족의 한 부족인 프랑크족이 서유럽 지역에 세운 왕국이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1693],
+    [1698],
   ],
   [
     "world-7a26b1e44f9e",
@@ -33729,7 +33764,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서프랑크 왕국은 843년 베르됭 조약으로 세 부분으로 나뉜 카롤링거 왕가의 프랑크 왕국 중에서 서쪽에 위치한 왕국을 말한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1694],
+    [1699],
   ],
   [
     "world-415ab815a87e",
@@ -33737,7 +33772,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중프랑크 왕국 또는 로타르 왕국은 843년 8월 10일 베르됭 조약에 따라 프랑크 왕국이 삼분되면서 생긴 세 왕국 중 하나이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1695],
+    [1700],
   ],
   [
     "world-364a9cd2ca79",
@@ -33745,7 +33780,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동프랑크 왕국은 843년 베르됭 조약으로 세 부분으로 나뉜 카롤링거 왕가의 프랑크 왕국 중에서 동쪽에 있던 왕국을 말한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1696],
+    [1701],
   ],
   [
     "world-4ab644ac30c3",
@@ -33753,7 +33788,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신성 로마 제국은 중앙유럽과 서유럽에서 발달한 다민족·정치 조직체 국가이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1697],
+    [1702],
   ],
   [
     "world-153dc5901e65",
@@ -33761,7 +33796,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "756년부터 1870년까지 이탈리아반도에서 교황이 직접 통치한 영토를 가리킨다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1698],
+    [1703],
   ],
   [
     "world-1d4b1a6026ef",
@@ -33769,7 +33804,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프로이센은 16세기 튜턴 기사단국으로부터 성립하여 1918년까지는 호엔촐레른가의 왕국, 1947년까지는 독일 북부의 주로 존속한 영토였다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1699],
+    [1704],
   ],
   [
     "world-f38a74289d73",
@@ -33777,7 +33812,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사르데냐 왕국은 남유럽에 존재했던 국가로, 1297년부터 1861년까지 존속했다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1700],
+    [1705],
   ],
   [
     "world-f5886bc59a07",
@@ -33785,7 +33820,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양시칠리아 왕국은 1815년부터 1861년까지 부르봉양시칠리아가의 생도 지부인 부르봉가의 통제하에 있던 왕국이었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1701],
+    [1706],
   ],
   [
     "world-db9c270192ea",
@@ -33793,7 +33828,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북독일 연방은 처음에 1866년 8월 프로이센 왕국의 주도로 설립된 독일의 군사 동맹으로, 이듬해 1867년 7월부터 1870년 12월까지 존재했던 국가 연합로 전환되었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1702],
+    [1707],
   ],
   [
     "world-0481776b4f1a",
@@ -33801,7 +33836,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1806년 나폴레옹의 영향 아래 독일의 여러 국가가 결성한 동맹으로, 프랑스와 동유럽 세력 사이의 완충 지대 역할을 했다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1703],
+    [1708],
   ],
   [
     "world-ef65d883abf8",
@@ -33809,7 +33844,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키예프 공국은 키예프 루스의 옛 구성국이자 키예프 루스의 분열 및 멸망 이후 독립한 공국이다.",
     ["키예프 대공국"],
     ["세계사", "종교와 지역 문화"],
-    [1704],
+    [1709],
   ],
   [
     "world-9e1fff55808d",
@@ -33817,7 +33852,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 북서부의 역사적 지역으로, 채널 제도와도 역사·문화적으로 이어져 있다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1705],
+    [1710],
   ],
   [
     "world-5ed88d140465",
@@ -33825,7 +33860,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉글랜드는 영국의 구성국 중 하나이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1706],
+    [1711],
   ],
   [
     "world-fa129181b9e7",
@@ -33833,7 +33868,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스코틀랜드는 유럽의 북서쪽에 위치하며 영국을 이루는 네 구성국 가운데 하나다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1707],
+    [1712],
   ],
   [
     "world-9a844dcf00da",
@@ -33841,7 +33876,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "웨일스는 영국의 구성국 중 하나이며, 그레이트브리튼섬 서부에 위치한다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1708],
+    [1713],
   ],
   [
     "world-fccf212f5473",
@@ -33849,7 +33884,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카슈미르 또는 캐시미르는 남아시아 북쪽 지역의 이름이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [1709],
+    [1714],
   ],
   [
     "world-21185f7f7ea9",
@@ -33857,7 +33892,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "펀자브는 인도와 파키스탄의 국경에 걸쳐 있는 지역을 말한다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1710],
+    [1715],
   ],
   [
     "world-899460cc5238",
@@ -33865,7 +33900,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벵골은 남아시아의 동북부 지방을 부르는 이름이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1711],
+    [1716],
   ],
   [
     "world-ce17d417da7e",
@@ -33873,7 +33908,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동벵골은 벵골의 동부 지역을 가리키는 말으로 현재의 방글라데시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1712],
+    [1717],
   ],
   [
     "world-5b3fe7b915fe",
@@ -33881,7 +33916,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서벵골주는 인도 동북부에 있는 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1713],
+    [1718],
   ],
   [
     "world-49b7c65c72e2",
@@ -33889,7 +33924,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 인도 라자스탄주를 중심으로 한 역사적 지역으로, 여러 라지푸트 왕국과 번왕국이 자리했다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1714],
+    [1719],
   ],
   [
     "world-c550b0632ad8",
@@ -33897,7 +33932,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비하르주는 인도 북부의 동쪽 끝에 자리한 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1715],
+    [1720],
   ],
   [
     "world-2c7076bdb2af",
@@ -33905,7 +33940,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동남아시아에서 남쪽으로 길게 뻗은 반도로, 동쪽의 남중국해와 서쪽의 믈라카 해협 사이에 있다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [1716],
+    [1721],
   ],
   [
     "world-16b97598d7e1",
@@ -33913,7 +33948,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도차이나반도 또는 인도지나반도는 아시아의 남동쪽에 있는 동남아시아의 반도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계", "세계 대전과 평화"],
-    [1717],
+    [1722],
   ],
   [
     "world-9e29771c16b1",
@@ -33921,7 +33956,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "주로 베트남 남부를 가리키던 유럽식 지명으로, 근대에는 사이공을 중심으로 한 프랑스 식민지 지역을 뜻했다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1718],
+    [1723],
   ],
   [
     "world-680a40625695",
@@ -33929,7 +33964,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마자파힛 제국은 인도네시아 자와섬 중부에 존재하던 제국이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1719],
+    [1724],
   ],
   [
     "world-552da51c2e8c",
@@ -33943,7 +33978,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "혁명과 국민 국가",
     ],
-    [439],
+    [441],
   ],
   [
     "world-26400e7ab644",
@@ -33957,7 +33992,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [439],
+    [441],
   ],
   [
     "world-1e901919ab99",
@@ -33965,7 +34000,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아나톨리아는 서남아시아의 한 지역으로, 오늘날 튀르키예 영토에 해당하는 반도를 말한다.",
     [],
     ["세계사", "지역 세계의 교류", "고대 문명과 국가"],
-    [1720],
+    [1725],
   ],
   [
     "world-bf9bc529dbd6",
@@ -33973,7 +34008,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아나톨리아는 서남아시아의 한 지역으로, 오늘날 튀르키예 영토에 해당하는 반도를 말한다.",
     ["아나톨리아반도"],
     ["세계사", "세계 대전과 평화"],
-    [1720],
+    [1725],
   ],
   [
     "world-6f5fb13660bf",
@@ -33987,7 +34022,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1721],
+    [1726],
   ],
   [
     "world-174eeb31601a",
@@ -33995,7 +34030,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시나이반도는 지중해와 홍해 사이에 있는 삼각형 모양의 반도이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1722],
+    [1727],
   ],
   [
     "world-5e1e634ba163",
@@ -34018,7 +34053,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 중국 북서부의 넓은 내륙 지역으로, 명칭은 새로운 영토라는 뜻이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1723],
+    [1728],
   ],
   [
     "world-5514d0f9567a",
@@ -34026,7 +34061,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "칭하이성 또는 청해성은 중화인민공화국 서부의 성으로, 칭하이호의 이름을 따서 붙여졌다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1724],
+    [1729],
   ],
   [
     "world-ca87c5a8a77f",
@@ -34034,7 +34069,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "윈난성 또는 운남성은 중화인민공화국 남부의 성이다.",
     ["운남"],
     ["세계사", "종교와 지역 문화"],
-    [1725],
+    [1730],
   ],
   [
     "world-62169619f233",
@@ -34042,7 +34077,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산둥성 또는 산동성은 중화인민공화국 동부의 성이다.",
     ["산둥성"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [304],
+    [306],
   ],
   [
     "world-66a417af62fd",
@@ -34050,7 +34085,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "광둥성 또는 광동성은 중화인민공화국 남부의 성이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1726],
+    [1731],
   ],
   [
     "world-0829e120c776",
@@ -34064,7 +34099,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "고대 문명과 국가",
     ],
-    [1727],
+    [1732],
   ],
   [
     "world-ec18208ba93c",
@@ -34072,7 +34107,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산시성 또는 산서성은 중화인민공화국 서북부에 있는 성이다.",
     ["산시성"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가", "지역 세계의 교류"],
-    [1728],
+    [1733],
   ],
   [
     "world-35331ec917c8",
@@ -34080,7 +34115,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쓰촨성은 중화인민공화국 서부 내륙 지역에 있는 성이다.",
     [],
     ["세계사", "고대 문명과 국가", "혁명과 국민 국가"],
-    [1729],
+    [1734],
   ],
   [
     "world-1f1712acff27",
@@ -34088,7 +34123,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "저장성은 중화인민공화국 동남부의 성이다.",
     ["저장성"],
     ["세계사", "종교와 지역 문화"],
-    [1730],
+    [1735],
   ],
   [
     "world-6b528a3beff3",
@@ -34096,7 +34131,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "장쑤성은 중화인민공화국 동부의 성으로 화이허와 장강의 하류 지역에 위치하고 있다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1731],
+    [1736],
   ],
   [
     "world-6cd90be5e9fe",
@@ -34104,7 +34139,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "후난성 또는 호남성은 중화인민공화국 남부의 성이다.",
     ["후난박물관"],
     ["세계사", "고대 문명과 국가"],
-    [1732],
+    [1737],
   ],
   [
     "world-7cc2ca430928",
@@ -34112,7 +34147,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "화베이는 중국의 6대 중국지리대구의 하나로서 중국 북부 지방이며, 화베이 평원이 그 중심이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [851],
+    [856],
   ],
   [
     "world-bf91277b21a8",
@@ -34120,7 +34155,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장강 하류 남쪽의 지역으로, 쑤저우·항저우 등 도시를 중심으로 상업과 경제가 발달했다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1733],
+    [1738],
   ],
   [
     "world-36825ba1120b",
@@ -34128,7 +34163,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 간쑤성 서부의 좁고 긴 통로로, 중국 내지와 중앙아시아를 잇는 비단길의 핵심 구간이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1734],
+    [1739],
   ],
   [
     "world-61f2deb8443a",
@@ -34136,7 +34171,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 아프가니스탄 북동부와 타지키스탄 남동부에 걸친 역사적 지역으로, 파미르고원과 힌두쿠시산맥에 접한다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1735],
+    [1740],
   ],
   [
     "world-a96e0b611dc1",
@@ -34144,7 +34179,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알자스는 프랑스 북동부에 위치한 역사적 지역이자 레지옹으로, 중심 도시는 스트라스부르이며 면적은 8,280.20km2, 인구는 1,815,488명(2006년 기준)이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1736],
+    [1741],
   ],
   [
     "world-285ac07a17ac",
@@ -34152,7 +34187,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로렌은 프랑스 동부에 위치한 역사문화적 지역이자, 그랑테스트 지방의 레지옹이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1737],
+    [1742],
   ],
   [
     "world-d916ab01efbf",
@@ -34160,7 +34195,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사부아는 서유럽의 문화적 지역이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1738],
+    [1743],
   ],
   [
     "world-31d3e4b2cd8d",
@@ -34168,7 +34203,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유틀란트반도 남부의 역사적 지역으로, 덴마크와 독일 사이에서 영유권 분쟁이 이어졌던 공국이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1739],
+    [1744],
   ],
   [
     "world-940b8725c8da",
@@ -34176,7 +34211,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 독일 북부의 역사적 지역으로, 덴마크 국왕이 공작을 겸했던 공국이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1740],
+    [1745],
   ],
   [
     "world-2484fe774693",
@@ -34184,7 +34219,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "실레시아, 슐레지엔, 또는 실롱스크는 폴란드 영토 대부분, 그리고 체코 및 독일 일부에 걸쳐져 있는 역사적 지역이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가"],
-    [1741],
+    [1746],
   ],
   [
     "world-168da8edecda",
@@ -34192,7 +34227,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하노버는 라이네 강 중류에 위치한 독일 니더작센주의 주도이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1742],
+    [1747],
   ],
   [
     "world-2ee07aa0869d",
@@ -34200,7 +34235,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "작센 자유주는 독일 남동부에 위치한 주로 주도는 드레스덴이며 면적은 1만 8413km2, 인구는 2023년 1월 1일 기준 4,086,152명이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1743],
+    [1748],
   ],
   [
     "world-03747ca7b71e",
@@ -34208,7 +34243,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "롬바르디아주는 이탈리아 북부의 주로 주도는 밀라노이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1744],
+    [1749],
   ],
   [
     "world-09565a026625",
@@ -34216,7 +34251,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북아메리카 북서부의 지역으로, 러시아가 지배하다 1867년 미국에 매각한 땅이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1745],
+    [1750],
   ],
   [
     "world-bcd137861f32",
@@ -34224,7 +34259,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오리건주은 미국 서북부의 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1746],
+    [1751],
   ],
   [
     "world-dc74f63714d0",
@@ -34232,7 +34267,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캘리포니아주는 미국의 서부에 있는 주로, 미국의 서부 해안선의 반 정도를 차지하고 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1747],
+    [1752],
   ],
   [
     "world-916a17abd892",
@@ -34240,7 +34275,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "텍사스주는 미국 남부에 있는 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1748],
+    [1753],
   ],
   [
     "world-83b42e1eeb12",
@@ -34248,7 +34283,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "루이지애나주는 미국 남부의 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1749],
+    [1754],
   ],
   [
     "world-5031cfe8750b",
@@ -34256,7 +34291,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "플로리다주는 미국 남동부의 주이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1750],
+    [1755],
   ],
   [
     "world-f6175f1c152e",
@@ -34264,7 +34299,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태평양 폴리네시아의 섬들로, 독립 왕국이었다가 미국에 편입되어 오늘날 미국의 주가 되었다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1751],
+    [1756],
   ],
   [
     "world-53748f844c6a",
@@ -34272,7 +34307,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사모아 제도는 남태평양 중부 폴리네시아 서부에 있는 제도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1752],
+    [1757],
   ],
   [
     "world-2547d555b3a8",
@@ -34280,7 +34315,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서사하라 남부의 역사적 지역명으로, 19세기 말부터 스페인의 식민 지배를 받았다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1753],
+    [1758],
   ],
   [
     "world-537f12c85e71",
@@ -34288,7 +34323,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서사하라는 아프리카 서북부 대서양 연안에 있는 지역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1754],
+    [1759],
   ],
   [
     "world-93e586b480c2",
@@ -34296,7 +34331,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "팔레스타인, 또는 공식 명칭인 팔레스타인국은 서아시아 남부 레반트에 위치한 국가로 서아시아에서 요르단강 서안 지구와 가자 지구에 대한 주권을 주장하고 있는 부분적 승인 국가이다.",
     [],
     ["세계사", "고대 문명과 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1755],
+    [1760],
   ],
   [
     "world-e2f3f0786e50",
@@ -34304,7 +34339,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "체첸 공식적으로 체첸 공화국은 러시아의 공화국이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1756],
+    [1761],
   ],
   [
     "world-b1aea207534d",
@@ -34312,7 +34347,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다르푸르는 수단 서부의 지역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1757],
+    [1762],
   ],
   [
     "world-084525ed6a66",
@@ -34320,7 +34355,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아체주는 수마트라섬 북단에 있는 인도네시아의 특별 행정 구역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1758],
+    [1763],
   ],
   [
     "world-ab1bb41fcb10",
@@ -34328,7 +34363,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1922년부터 1991년까지 유라시아 북부에 존재한 사회주의 연방 국가로, 수도는 모스크바였다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [759],
+    [764],
   ],
   [
     "world-8fba006cdf73",
@@ -34336,7 +34371,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "독일 민주공화국 또는 동독은 서독과의 재통일이 이루어지기 전의 독일 동부지역 위치했던 공산주의 국가였다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1759],
+    [1764],
   ],
   [
     "world-eb04251319a2",
@@ -34344,7 +34379,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서독은 1949년 독일연방공화국의 정부 수립 이래 1990년 동독과의 재통일이 이루어지기 전까지의 독일연방공화국을 일컫는 이름이다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가", "세계 대전과 평화"],
-    [902],
+    [907],
   ],
   [
     "world-0295b39269b5",
@@ -34352,7 +34387,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 민주공화국 혹은 북베트남은 1945년부터 1976년까지 존재했던 동남아시아의 사회주의 국가로, 1954년 승인되었다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1760],
+    [1765],
   ],
   [
     "world-31720b3c9219",
@@ -34360,7 +34395,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 공화국, 약칭 남베트남은 1955년 10월 26일부터 1975년 4월 30일까지 북위 17도 베트남 군사분계선 이남에 존재했던 나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1761],
+    [1766],
   ],
   [
     "world-038da36b76cb",
@@ -34368,7 +34403,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동파키스탄은 파키스탄 자치령의 일부였던 행정 구역으로, 현재의 방글라데시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1762],
+    [1767],
   ],
   [
     "world-bbb9b9287d90",
@@ -34376,7 +34411,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "체코슬로바키아는 1918년부터 1992년까지 (제2차 세계 대전 기간을 제외하고) 중앙유럽에 있었던 공화국이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1763],
+    [1768],
   ],
   [
     "world-052137827f80",
@@ -34384,7 +34419,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유고슬라비아는 1918년부터 1992년까지 존재했던 동남유럽과 중앙유럽의 국가였다.",
     ["유고"],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1764],
+    [1769],
   ],
   [
     "world-e6d2bda98d15",
@@ -34392,7 +34427,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "만주국은 일본 제국이 만주사변 직후 동삼성을 강제로 점령하여 만주 지역에 세운 괴뢰국이자 식민지이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [616],
+    [621],
   ],
   [
     "world-4498732abf6b",
@@ -34400,7 +34435,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "삼각동맹 또는 아즈텍 제국, 메시카 제국은 세 개의 나와족 도시국가인 테노치티틀란, 텍스코코, 틀라코판이 연합해 만든 동맹국가이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1765],
+    [1770],
   ],
   [
     "world-b02f1d5d920d",
@@ -34408,7 +34443,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉카 제국은 콜럼버스 이전 시대의 아메리카에서 가장 거대한 제국이었다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [1766],
+    [1771],
   ],
   [
     "world-4af3e3ae890b",
@@ -34424,7 +34459,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 1767],
+    [0, 1772],
   ],
   [
     "world-d664cad55b6d",
@@ -34440,7 +34475,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 1768],
+    [0, 1773],
   ],
   [
     "world-f034321149eb",
@@ -34456,7 +34491,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 1769],
+    [0, 1774],
   ],
   [
     "world-2c93c776c3a8",
@@ -34464,7 +34499,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북극해는 세계 5대 대양 중 가장 작고 얕은 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1770],
+    [1775],
   ],
   [
     "world-fd8d34b891f1",
@@ -34472,7 +34507,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남극해는 남대양이라고도 불리며, 세계 대양의 최남단 해역으로 일반적으로 남위 60도 이남 바다를 가리키며 남극을 둘러싸고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1771],
+    [1776],
   ],
   [
     "world-d672dce026f6",
@@ -34520,7 +34555,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 1772],
+    [0, 1777],
   ],
   [
     "world-e6f3049fe4d5",
@@ -34536,7 +34571,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [1773],
+    [1778],
   ],
   [
     "world-2cecd4da469d",
@@ -34552,7 +34587,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1774],
+    [1779],
   ],
   [
     "world-cdc715dc1f12",
@@ -34566,7 +34601,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "종교와 지역 문화",
     ],
-    [1775],
+    [1780],
   ],
   [
     "world-bfd1be5f7369",
@@ -34582,7 +34617,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "세계 대전과 평화",
       "냉전과 현대 세계",
     ],
-    [0, 1776],
+    [0, 1781],
   ],
   [
     "world-284634c1c038",
@@ -34596,7 +34631,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "혁명과 국민 국가",
     ],
-    [0, 1776],
+    [0, 1781],
   ],
   [
     "world-f965876f357b",
@@ -34612,7 +34647,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [0, 1769],
+    [0, 1774],
   ],
   [
     "world-7e5d0f31abef",
@@ -34628,7 +34663,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "세계 대전과 평화",
     ],
-    [1777],
+    [1782],
   ],
   [
     "world-9e5449770b0b",
@@ -34643,7 +34678,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [1778],
+    [1783],
   ],
   [
     "world-03a37fdc974f",
@@ -34651,7 +34686,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 남부와 인도차이나반도·필리핀·보르네오섬 사이에 있는 서태평양의 바다다.",
     [],
     ["세계사", "냉전과 현대 세계", "지역 세계의 교류"],
-    [1779],
+    [1784],
   ],
   [
     "world-01e69cf55a72",
@@ -34659,7 +34694,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동중국해 또는 동지나해는 제주도 남쪽부터 대만에 걸쳐있는 서태평양의 연해이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1780],
+    [1785],
   ],
   [
     "world-43acb655fb8e",
@@ -34667,7 +34702,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아드리아해는 지중해 북쪽의 이탈리아반도와 발칸반도 사이에 있는 바다이다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1781],
+    [1786],
   ],
   [
     "world-0608a1298c33",
@@ -34675,7 +34710,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오호츠크해는 서태평양의 연해이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1782],
+    [1787],
   ],
   [
     "world-1195aa61ec6c",
@@ -34683,7 +34718,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베링해는 북태평양의 연해이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1783],
+    [1788],
   ],
   [
     "world-7717d1987f40",
@@ -34691,7 +34726,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베링 해협은 아시아 쪽의 데즈네프 곶과 북아메리카 쪽의 프린스오브웨일스 곶 사이의 해협이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1784],
+    [1789],
   ],
   [
     "world-996209bcabc8",
@@ -34699,7 +34734,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "축치해는 러시아와 미국 사이에 위치한 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1785],
+    [1790],
   ],
   [
     "world-8a3f28594742",
@@ -34707,7 +34742,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동시베리아해는 노보시비르스크 제도와 브란겔섬에 둘러싸인 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1786],
+    [1791],
   ],
   [
     "world-25c071da14cf",
@@ -34715,7 +34750,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알래스카와 캐나다 북쪽에 펼쳐진 북극해의 일부로, 일 년의 대부분이 얼음으로 덮인다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1787],
+    [1792],
   ],
   [
     "world-0d703b804628",
@@ -34723,7 +34758,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "배핀만은 북대서양과 북극해를 잇는 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1788],
+    [1793],
   ],
   [
     "world-7f2f2d9a3aaf",
@@ -34731,7 +34766,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "허드슨만은 캐나다 북동부에 있는 얕고 넓은 만이며, 넓이는 123 만 km2이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1789],
+    [1794],
   ],
   [
     "world-8e4885e51562",
@@ -34739,7 +34774,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "멕시코만은 북아메리카로 둘러싸인 대서양의 바다를 말한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1790],
+    [1795],
   ],
   [
     "world-099638d08ff4",
@@ -34747,7 +34782,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "드레이크 해협은 남아메리카 대륙의 남단인 칠레의 혼곶과 남극의 사우스셰틀랜드 제도 사이에 있는 수역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1791],
+    [1796],
   ],
   [
     "world-c0c1291a727e",
@@ -34755,7 +34790,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "허드슨 해협은 허드슨만과 대서양을 연결하는 해협이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1792],
+    [1797],
   ],
   [
     "world-98e13780d532",
@@ -34763,7 +34798,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "데이비스 해협은 그린란드와 캐나다의 배핀섬사이에 있는 해협이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1793],
+    [1798],
   ],
   [
     "world-02800054f86e",
@@ -34771,7 +34806,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알래스카만은 태평양 북부의 만이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1794],
+    [1799],
   ],
   [
     "world-7ee55392238e",
@@ -34779,7 +34814,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아문센해는 남극 대륙 서측의 마리버드랜드와 접한 남극해의 해역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1795],
+    [1800],
   ],
   [
     "world-e657af83b88c",
@@ -34787,7 +34822,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로스해는 남대양의 바다로 빅토리아랜드와 마리버드랜드 사이에 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1796],
+    [1801],
   ],
   [
     "world-2bcde9e0b601",
@@ -34795,7 +34830,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스트레일리아와 뉴질랜드 사이에 있는 남서태평양의 바다다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1797],
+    [1802],
   ],
   [
     "world-fec5bff1d9fd",
@@ -34803,7 +34838,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산호해 또는 코럴해는 오스트레일리아 북동부에 인접한 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1798],
+    [1803],
   ],
   [
     "world-dd2f152a55d2",
@@ -34811,7 +34846,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프리카 서부 해안과 대서양이 만나는 큰 만으로, 베냉만과 비아프라만을 포함한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1799],
+    [1804],
   ],
   [
     "world-71e146917580",
@@ -34819,7 +34854,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "랍테프해는 타이미르반도와 세베르나야제믈랴 제도 및 노보시비르스크 제도에 둘러싸인 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1800],
+    [1805],
   ],
   [
     "world-51ce86580b2e",
@@ -34827,7 +34862,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카라해는 러시아 북쪽에 접한 북극해의 일부로 노바야제믈랴 제도와 세베르나야제믈랴 제도의 사이에 있는 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1801],
+    [1806],
   ],
   [
     "world-7f058620e77f",
@@ -34835,7 +34870,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바렌츠해는 북극해의 연해로 노르웨이와 러시아 북부 해안 밖에 위치하며 노르웨이와 러시아의 영해로 나뉜다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1802],
+    [1807],
   ],
   [
     "world-742d431bd912",
@@ -34843,7 +34878,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "노르웨이 북서쪽의 북대서양에 있으며 북해와 그린란드해 사이에 놓인 바다다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1803],
+    [1808],
   ],
   [
     "world-ada31ea2da57",
@@ -34851,7 +34886,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "백해는 러시아의 북서쪽 해안에 있는 바렌츠해의 만이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1804],
+    [1809],
   ],
   [
     "world-a8c56e940e5f",
@@ -34859,7 +34894,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그린란드해는 북극해에 접한 북대서양의 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1805],
+    [1810],
   ],
   [
     "world-c7dbcb03189e",
@@ -34867,7 +34902,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아라푸라해는 오스트레일리아와 인도네시아령 뉴기니섬 사이의 대륙붕에 놓인 얕은 바다이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1806],
+    [1811],
   ],
   [
     "world-6b7cda1b3891",
@@ -34875,7 +34910,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아덴만은 아라비아 반도의 예멘과 동아프리카의 소말리아 사이의 만이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1807],
+    [1812],
   ],
   [
     "world-45a1542eee3c",
@@ -34883,7 +34918,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바이칼호는 러시아의 시베리아 남쪽에 있는 호수로, 북서쪽의 이르쿠츠크주와 남동쪽의 부랴트 공화국 사이에 자리 잡고 있다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [1808],
+    [1813],
   ],
   [
     "world-e844f45ae267",
@@ -34891,7 +34926,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아메리카를 가로질러 대서양으로 흐르는 강으로, 세계에서 유량이 가장 많은 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1809],
+    [1814],
   ],
   [
     "world-dfcca3fdbc35",
@@ -34899,7 +34934,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파라나강는 남아메리카의 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1810],
+    [1815],
   ],
   [
     "world-394c020cb8d2",
@@ -34907,7 +34942,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "매켄지강은 캐나다 노스웨스트 준주의 그레이트슬레이브호에서 발원하여 북극해로 흘러드는 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1811],
+    [1816],
   ],
   [
     "world-f3dbb14f1b88",
@@ -34915,7 +34950,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그레이트슬레이브 호는 캐나다의 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1812],
+    [1817],
   ],
   [
     "world-2fc2a7177705",
@@ -34923,7 +34958,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그레이트베어 호는 캐나다 내에서 가장 큰 호수로 북아메리카에서 세 번째, 세계에서 일곱 번째로 큰 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1813],
+    [1818],
   ],
   [
     "world-a6a850bff5ac",
@@ -34931,7 +34966,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "클론다이크의 금 발견 소식이 퍼지자 많은 사람이 유콘강을 따라 금광으로 향했다. 골드러시는 지역 인구와 교통을 바꾸었고, 원주민 공동체의 땅과 생활에도 큰 영향을 주었다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1814],
+    [0, 1819],
   ],
   [
     "world-7d1a19952e74",
@@ -34939,7 +34974,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 남서부와 멕시코 북서부를 지나 캘리포니아만으로 흐르며, 그랜드캐니언을 형성한 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1815],
+    [1820],
   ],
   [
     "world-6dc1b5ab0608",
@@ -34947,7 +34982,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "리오그란데강은 미국과 멕시코를 통과하는 강으로, 멕시코에서는 리오브라보 또는 리오브라보델노르테라 부르며, 길이는 3,051 km이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1816],
+    [1821],
   ],
   [
     "world-be499697ff1d",
@@ -34955,7 +34990,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미시시피강의 통제권은 남북전쟁의 수송과 보급에 중요했다. 북군은 빅스버그를 포위해 함락시키며 강을 장악하고 남부를 분리하는 데 결정적인 진전을 이루었다.",
     [],
     ["세계사", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1817],
+    [0, 1822],
   ],
   [
     "world-db6f7f3f91e1",
@@ -34963,7 +34998,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "위니펙 호수은 캐나다의 매니토바주에 위치한 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1818],
+    [1823],
   ],
   [
     "world-4f6735971726",
@@ -34971,7 +35006,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "슈피리어호는 북아메리카의 오대호 중 가장 큰 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1819],
+    [1824],
   ],
   [
     "world-5611b84b6a33",
@@ -34979,7 +35014,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미시간호는 오대호 중 하나로, 오대호 중 유일하게 호수 전체가 미국 영토에 포함된다.",
     [],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1820],
+    [1825],
   ],
   [
     "world-acdba4202158",
@@ -34987,7 +35022,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이리호는 오대호 중 한 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1821],
+    [1826],
   ],
   [
     "world-f0a3f33d207b",
@@ -34995,7 +35030,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국과 캐나다 사이에 있는 오대호 중 하나로, 세인트로렌스강을 통해 대서양으로 물이 빠져나간다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1822],
+    [1827],
   ],
   [
     "world-27b40a86117b",
@@ -35003,7 +35038,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북아메리카 오대호 중 면적이 두 번째로 큰 호수로, 가운데에 매니툴린섬이 있다.",
     [],
     ["세계사", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1823],
+    [1828],
   ],
   [
     "world-e1adc410bed1",
@@ -35011,7 +35046,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "예니세이강은 러시아의 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1824],
+    [1829],
   ],
   [
     "world-21e5ed1e2a79",
@@ -35019,7 +35054,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "레나강은 동시베리아를 흐르는 강으로 전체 길이 4400 km, 유역 면적은 242만 km2이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1825],
+    [1830],
   ],
   [
     "world-4f41f8fe7335",
@@ -35033,7 +35068,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "종교와 지역 문화",
     ],
-    [0, 1826],
+    [0, 1831],
   ],
   [
     "world-1b051d391ed8",
@@ -35041,7 +35076,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "히말라야에서 내려와 인도 북부의 평야를 흐르고 방글라데시를 거쳐 벵골만으로 이어지는 강이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "지역 세계의 교류"],
-    [0, 1827, 1828],
+    [0, 1832, 1833],
   ],
   [
     "world-5ca1981dec6b",
@@ -35056,7 +35091,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "냉전과 현대 세계",
     ],
-    [0, 683, 684, 685],
+    [0, 688, 689, 690],
   ],
   [
     "world-87d1fde40816",
@@ -35070,7 +35105,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "냉전과 현대 세계",
     ],
-    [0, 645, 646],
+    [0, 650, 651],
   ],
   [
     "world-c7a7391bf2b5",
@@ -35078,7 +35113,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "볼가강 기슭의 볼가르에서는 볼가 불가르인이 이슬람을 받아들였다. 이 강변 도시는 유목 사회와 도시 사회가 교류하고 유라시아의 여러 문화가 만난 거점이었다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
-    [0, 1829],
+    [0, 1834],
   ],
   [
     "world-048438ba3b71",
@@ -35086,7 +35121,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돈강은 러시아의 강 중 하나이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1830],
+    [1835],
   ],
   [
     "world-9db4e4297482",
@@ -35094,7 +35129,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빅토리아호는 아프리카 대호수 중 가장 큰 호수이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1831],
+    [1836],
   ],
   [
     "world-bdc041f6076e",
@@ -35102,7 +35137,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프리카 동북부를 북쪽으로 흘러 수단과 이집트를 지나 지중해로 들어가는 강이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 1832, 1833],
+    [0, 1837, 1838],
   ],
   [
     "world-9cb6583b9800",
@@ -35110,7 +35145,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콩고강은 아프리카 중서부에서 가장 긴 강이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1834],
+    [1839],
   ],
   [
     "world-e23017e5f507",
@@ -35118,7 +35153,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나이저강 수계의 젠네와 팀북투는 물길과 사하라 교역로를 통해 연결되었다. 강을 이용한 교통은 금·소금 등의 교역과 도시 성장을 뒷받침했다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [0, 1835, 1836],
+    [0, 1840, 1841],
   ],
   [
     "world-346644e1f9bf",
@@ -35126,7 +35161,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오비강은 서시베리아저지를 흐르는 강이지만, 지류인 이르티시강은 알타이산맥에서 발원을 한 다음, 카자흐스탄 영내를 지난다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1837],
+    [1842],
   ],
   [
     "world-198ae4b466bd",
@@ -35140,7 +35175,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "종교와 지역 문화",
     ],
-    [0, 1838, 1839],
+    [0, 1843, 1844],
   ],
   [
     "world-69e57f3ecae9",
@@ -35154,7 +35189,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "종교와 지역 문화",
     ],
-    [0, 1840, 1838],
+    [0, 1845, 1843],
   ],
   [
     "world-ad76fa8de999",
@@ -35162,7 +35197,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메콩강은 세계에서 12번째로 긴 강이며, 10번째로 유수량이 많은 강이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1841],
+    [1846],
   ],
   [
     "world-2406582c375c",
@@ -35170,7 +35205,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "화이허는 중화인민공화국의 강이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1842],
+    [1847],
   ],
   [
     "world-0bb56880383a",
@@ -35178,7 +35213,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아무르강 또는 헤이룽강은 러시아·중국의 유역에 걸쳐 있는 강이다.",
     ["아무르강"],
     ["세계사", "지역 세계의 교류"],
-    [1843],
+    [1848],
   ],
   [
     "world-3faf2050cd3b",
@@ -35186,7 +35221,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오하이오강은 크기에 의하여 미시시피강의 가장 큰 지류이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1844],
+    [1849],
   ],
   [
     "world-4966c2abef75",
@@ -35194,7 +35229,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다뉴브강 서부 구간은 로마 제국의 북쪽 국경을 이루었다. 강을 따라 요새와 감시초소가 이어졌으며, 평화로운 시기에는 강을 건너는 사람과 교역을 관리했다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1845],
+    [0, 1850],
   ],
   [
     "world-0f91877cb13d",
@@ -35202,7 +35237,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 남부를 흐르다가 론강으로 합류하는 강으로, 가르동강이라고도 한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1846],
+    [1851],
   ],
   [
     "world-995b1bd0184a",
@@ -35210,7 +35245,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대운하는 중국의 베이징과 항저우를 잇는 운하다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1847],
+    [1852],
   ],
   [
     "world-2f323ebac563",
@@ -35218,7 +35253,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "지중해와 홍해를 연결하여 유럽과 아시아 사이의 항로를 단축하고 제국주의 열강의 전략적 관심을 끌었다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계", "혁명과 국민 국가"],
-    [1848],
+    [1853],
   ],
   [
     "world-e6e29ec7dbcd",
@@ -35226,7 +35261,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 아대륙과 티베트 고원 사이에 솟은 거대한 산맥으로, 세계에서 가장 높은 산들이 모여 있다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [0, 1849, 1850],
+    [0, 1854, 1855],
   ],
   [
     "world-8403ad1bdb2c",
@@ -35234,7 +35269,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "우랄산맥은 카자흐스탄 북부에서 북극해까지 러시아를 남북으로 종단하는 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계", "고대 문명과 국가"],
-    [1851],
+    [1856],
   ],
   [
     "world-4d3d1971afbb",
@@ -35242,7 +35277,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "비단길은 톈산의 북쪽과 남쪽을 따라 이어지고 산길을 넘어 중앙아시아의 계곡으로 연결되었다. 이 길을 통해 상품뿐 아니라 불교를 비롯한 종교와 기술도 이동했다.",
     [],
     ["세계사", "고대 문명과 국가", "냉전과 현대 세계"],
-    [0, 1852],
+    [0, 1857],
   ],
   [
     "world-4cb39933e3e3",
@@ -35250,7 +35285,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잉카의 도로망 카팍냔은 안데스의 높은 산과 계곡, 해안을 연결했다. 15세기에 크게 확장된 이 길은 통신·교역·방어를 뒷받침하며 제국의 여러 지역을 이어 주었다.",
     [],
     ["세계사", "지역 세계의 교류", "냉전과 현대 세계"],
-    [0, 1853],
+    [0, 1858],
   ],
   [
     "world-2ca864e96198",
@@ -35258,7 +35293,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아틀라스 산맥은 북아프리카 서부에, 모로코 · 알제리 · 튀니지에 걸쳐 대략 동서로 뻗은 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1854],
+    [1859],
   ],
   [
     "world-92aea1dc053a",
@@ -35266,7 +35301,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베르호얀스크산맥은 시베리아 동부에 위치한 산맥이고 사하 공화국에 위치해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1855],
+    [1860],
   ],
   [
     "world-ad17c3a4dc5d",
@@ -35274,7 +35309,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜리마산맥 또는 콜리마 고원은 시베리아 북동부에 있는 산맥으로, 대부분 마가단주 내의 콜리마 지역에 있는 오호츠크해 해안을 따라 위치한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1856],
+    [1861],
   ],
   [
     "world-df9de943515e",
@@ -35282,7 +35317,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "야블로노비산맥은 러시아 동부, 자바이칼주에 속해있는 산맥으로 몽골의 북동부에서 바이칼 호수 동부를 통과하는 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1857],
+    [1862],
   ],
   [
     "world-c8b258343b16",
@@ -35290,7 +35325,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿤룬산맥은 아시아에서 가장 긴 산맥 중 하나로 3,000 km 이상 뻗어있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1858],
+    [1863],
   ],
   [
     "world-ab17f5a94829",
@@ -35298,7 +35333,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대싱안링산맥은 중국 북동부 네이멍구 지역의 화산 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1859],
+    [1864],
   ],
   [
     "world-d97c8c994ffc",
@@ -35306,7 +35341,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알타이산맥은 러시아와 몽골, 카자흐스탄, 중화인민공화국에 접해 있는 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1860],
+    [1865],
   ],
   [
     "world-b5cbe08488fa",
@@ -35314,7 +35349,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그레이트디바이딩산맥은 오스트레일리아 동부의 산맥으로 안데스산맥과 로키산맥에 이어 육상의 산맥으로는 세계에서 세 번째로 긴 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1861],
+    [1866],
   ],
   [
     "world-fed82d9d6012",
@@ -35322,7 +35357,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캐나다 서부에서 미국 뉴멕시코주까지 이어지는 북아메리카 서부의 큰 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1862],
+    [1867],
   ],
   [
     "world-2a0413a7b584",
@@ -35330,7 +35365,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 캘리포니아주 동부를 따라 뻗은 산맥으로, 서쪽 기슭은 19세기 골드러시의 무대였다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1863],
+    [1868],
   ],
   [
     "world-43133fdca851",
@@ -35338,7 +35373,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "애팔래치아산맥은 북아메리카의 산맥이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1864],
+    [1869],
   ],
   [
     "world-626081f0c472",
@@ -35346,7 +35381,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스에서 스위스·이탈리아·오스트리아를 거쳐 슬로베니아 쪽으로 이어지는 유럽의 큰 산맥이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 1865, 1866],
+    [0, 1870, 1871],
   ],
   [
     "world-79e0a5c47e8f",
@@ -35354,7 +35389,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산시성 시안 북동쪽의 산으로, 친링산맥의 일부이며 리산이라고도 한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1867],
+    [1872],
   ],
   [
     "world-fe0a1c74974c",
@@ -35362,7 +35397,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "태산은 중국 산둥성 타이안 북쪽에 있는, 중국 본토의 대표적인 산 가운데 하나이고, 산둥성에서 가장 높은 산이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1868],
+    [1873],
   ],
   [
     "world-7096f97791db",
@@ -35370,7 +35405,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로도스는 그리스 도데카니사 제도에서 가장 큰 섬으로 그 중심지이다.",
     ["로도스"],
     ["세계사", "고대 문명과 국가"],
-    [1869],
+    [1874],
   ],
   [
     "world-3c87cec8df7c",
@@ -35378,7 +35413,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "델로스섬은 에게해에서 대체로 동그라미 모양으로 모인 키클라데스 제도의 한 가운데에 떨어진 섬으로, 미코노스 섬과 가까우며, 그리스의 신화, 역사, 고고학에서 매우 중요한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1870],
+    [1875],
   ],
   [
     "world-9bf059a9e361",
@@ -35386,7 +35421,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "크레타는 그리스에서 가장 큰 섬이자, 지중해에서 다섯 번째로 큰 섬이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1871],
+    [1876],
   ],
   [
     "world-ff7d971d00f6",
@@ -35394,7 +35429,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시칠리아섬은 이탈리아 시칠리아주에 속하는 섬이다.",
     ["시칠리아"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1872],
+    [1877],
   ],
   [
     "world-605d42c25f6e",
@@ -35402,7 +35437,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "코르시카는 지중해에 위치한 프랑스의 섬이자 레지옹으로 중심 도시는 아작시오이며 면적은 8,680km2, 인구는 322,120명(2013년 기준)이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1873],
+    [1878],
   ],
   [
     "world-f9fd5cbb1ec9",
@@ -35410,7 +35445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사르데냐주는 이탈리아의 지역 이름이자 섬이다.",
     ["사르데냐"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "혁명과 국민 국가"],
-    [1874],
+    [1879],
   ],
   [
     "world-8ba6bd210d39",
@@ -35424,7 +35459,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "지역 세계의 교류",
     ],
-    [1875],
+    [1880],
   ],
   [
     "world-f04a8323f676",
@@ -35439,7 +35474,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "고대 문명과 국가",
     ],
-    [1876],
+    [1881],
   ],
   [
     "world-dc21cb120fce",
@@ -35447,7 +35482,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "술라웨시섬은 인도네시아의 섬이자 세계에서 11번째로 큰 섬이다.",
     [],
     ["세계사", "종교와 지역 문화", "혁명과 국민 국가", "지역 세계의 교류"],
-    [1877],
+    [1882],
   ],
   [
     "world-715c5ce1b826",
@@ -35463,7 +35498,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "냉전과 현대 세계",
       "지역 세계의 교류",
     ],
-    [1878],
+    [1883],
   ],
   [
     "world-fdf2e1969af4",
@@ -35471,7 +35506,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본에서 가장 큰 섬으로, 북쪽의 홋카이도와 남서쪽의 규슈 사이에 길게 뻗어 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1879],
+    [1884],
   ],
   [
     "world-05bf185a28a3",
@@ -35479,7 +35514,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 남서부에 있는 큰 섬으로, 혼슈·시코쿠·홋카이도와 함께 일본열도의 주요 섬을 이룬다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [531],
+    [533],
   ],
   [
     "world-e426b236ac3b",
@@ -35487,7 +35522,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시코쿠 또는 시꼬꾸는 혼슈, 규슈, 홋카이도와 함께 일본 열도를 구성하는 섬으로, 일본 남부에 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1880],
+    [1885],
   ],
   [
     "world-0569981b95e4",
@@ -35509,7 +35544,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중화인민공화국 홍콩 특별행정구 줄여서 홍콩은 중화인민공화국 화난 주강 삼각주 동쪽에 위치한 특별행정구이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [638],
+    [643],
   ],
   [
     "world-4e5a5629bb55",
@@ -35517,7 +35552,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산살바도르섬은 바하마 제도에 있는 섬으로 면적은 163km2, 인구는 930명(2010년 기준)이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1881],
+    [1886],
   ],
   [
     "world-36d953360933",
@@ -35525,7 +35560,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뉴기니섬은 오스트레일리아 북쪽에 있는 섬이자 그린란드에 이어 세계에서 두 번째로 큰 섬이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1882],
+    [1887],
   ],
   [
     "world-ae7750306be7",
@@ -35533,7 +35568,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미드웨이 환초, 또는 미드웨이 제도, 미드웨이섬은 태평양 한가운데에 있는 환초이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1883],
+    [1888],
   ],
   [
     "world-0746d1532791",
@@ -35541,7 +35576,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서태평양 마리아나 제도 남쪽의 섬으로, 차모로인의 고향이며 오늘날 미국의 해외 영토다.",
     ["괌"],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1884],
+    [1889],
   ],
   [
     "world-f3602b3e925a",
@@ -35549,7 +35584,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사이판은 전체 115.39 km2의 면적과 함께 서쪽의 태평양(15°10’51”N, 145°45’21”E)에 있는 마리아나 제도에 속하는 15개의 열대 섬이 하나로 늘어선, 북마리아나 제도의 가장 큰 섬이자 수도이다.",
     ["사이판"],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1885],
+    [1890],
   ],
   [
     "world-5171eb583eca",
@@ -35557,7 +35592,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사할린섬은 러시아의 섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1886],
+    [1891],
   ],
   [
     "world-88e17ce44710",
@@ -35565,7 +35600,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그린란드는 덴마크 왕국의 자치 구역이자 주권국인 덴마크 왕국에서 덴마크 본토와 페로 제도와 함께 이루는 세 구성 부분 중 육지 면적이 가장 큰 지역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1887],
+    [1892],
   ],
   [
     "world-0b39a0aa9d82",
@@ -35573,7 +35608,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "차고스 제도는 인도양에 있는 제도로, 2025년 5월 22일까지 영국령 인도양 지역에 속해 있었다가 모리셔스로 반환되었다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1888],
+    [1893],
   ],
   [
     "world-ca5b74738e45",
@@ -35581,7 +35616,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남인도양의 섬들로 이루어진 프랑스령 군도로, 과학 연구 기지가 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1889],
+    [1894],
   ],
   [
     "world-5138ea106951",
@@ -35589,7 +35624,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "크로제 제도는 인도양 남부의 작은 제도의 아남극 군도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1890],
+    [1895],
   ],
   [
     "world-010e5c348cb5",
@@ -35597,7 +35632,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마데이라 제도, 공식적으로 마데이라 자치구는 포르투갈의 자치구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1891],
+    [1896],
   ],
   [
     "world-908a542169fc",
@@ -35605,7 +35640,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스발바르 제도는 노르웨이의 영토이자 유럽 대륙 북부, 대서양에 위치한 군도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1892],
+    [1897],
   ],
   [
     "world-31839e8a32a6",
@@ -35613,7 +35648,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "노보시비르스크 제도는 동시베리아의 북쪽, 북극해에 위치한 제도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1893],
+    [1898],
   ],
   [
     "world-c4228fbd9cab",
@@ -35621,7 +35656,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "퀸엘리자베스 제도는 캐나다 북부 노스웨스트 준주와 누나부트 준주의 북쪽 북극해 연안의 섬무리이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1894],
+    [1899],
   ],
   [
     "world-0add32a7426c",
@@ -35629,7 +35664,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제믈랴 프란차-이오시파 제도 또는 프란츠-요제프 제도는 북극해에 있는 러시아의 군도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1895],
+    [1900],
   ],
   [
     "world-1aa08a7e3303",
@@ -35637,7 +35672,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포클랜드 제도 또는 아르헨티나 측 명칭 말비나스 제도는 남대서양 파타고니아 대륙붕에 있는 제도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1896],
+    [1901],
   ],
   [
     "world-9c4b54c310e4",
@@ -35645,7 +35680,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "갈라파고스 제도는 남아메리카로부터 서쪽으로 1,000 km 떨어진 적도 부근 태평양의 19개 화산섬과 주변 암초로 이뤄진 제도다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1897],
+    [1902],
   ],
   [
     "world-34ff9d75cc8e",
@@ -35653,7 +35688,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "버뮤다는 대서양에 있는 영국의 해외 영토이며, 버뮤다 삼각지대로 유명한 지역이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1898],
+    [1903],
   ],
   [
     "world-d5f1595d897c",
@@ -35661,7 +35696,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오클랜드 제도는 뉴질랜드의 군도로서, 남섬으로부터 남쪽으로 465킬로미터 떨어진 곳에 위치해 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1899],
+    [1904],
   ],
   [
     "world-11d208888fc2",
@@ -35669,7 +35704,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남태평양 프랑스령 폴리네시아의 오스트랄 제도를 이루는 섬 무리다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1900],
+    [1905],
   ],
   [
     "world-5c8ba1f5bfdb",
@@ -35677,7 +35712,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "투아모투 제도는 남태평양 프랑스령 폴리네시아에 있는 군도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1901],
+    [1906],
   ],
   [
     "world-2cbdfaf9a9e7",
@@ -35685,7 +35720,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿡 제도 또는 쿠키 아이라니는 뉴질랜드와 자유연합 관계에 있는 오세아니아의 섬나라이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1902],
+    [1907],
   ],
   [
     "world-2f2798bf0cff",
@@ -35693,7 +35728,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "채텀 제도는 뉴질랜드의 동남쪽에 있는 10개의 섬으로 이뤄진 제도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1903],
+    [1908],
   ],
   [
     "world-397fe1597c11",
@@ -35701,7 +35736,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "세베르나야제믈랴 제도는 북빙양의 섬으로, 면적은 약 3만 6712km2이고, 타이미르반도의 북쪽에 위치해 있고 그 사이에는 빌키츠키 해협이 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1904],
+    [1909],
   ],
   [
     "world-7d1f41e4a947",
@@ -35709,7 +35744,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캄차카 반도는 러시아 극동 지역에 위치한 길이 1250km, 면적 270,000 km2의 반도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1905],
+    [1910],
   ],
   [
     "world-3b60d2a4fd84",
@@ -35717,7 +35752,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알류샨 열도는 북태평양에 위치한 섬들로, 알래스카의 서남부, 알래스카반도의 끝에서 러시아의 캄차카반도에 걸쳐 길이 약 1930km의 화산 열도이다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [1906],
+    [1911],
   ],
   [
     "world-5fee1b8f49c1",
@@ -35725,7 +35760,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠릴 열도는 러시아의 캄차카반도에서 일본의 홋카이도까지 총 길이 약 1,300km에 걸쳐 뻗은 56개의 섬으로 구성되어 있는 일부도서군이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1907],
+    [1912],
   ],
   [
     "world-54c6eca6113c",
@@ -35733,7 +35768,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타이미르반도는 크라스노야르스크 지방 북쪽에 있는 반도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1908],
+    [1913],
   ],
   [
     "world-e47e11d24675",
@@ -35741,7 +35776,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "콜라반도는 러시아의 북쪽에 위치한 반도로 무르만스크주의 일부이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1909],
+    [1914],
   ],
   [
     "world-bf052ae29ec4",
@@ -35749,7 +35784,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "래브라도반도는 캐나다 동부의 반도이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1910],
+    [1915],
   ],
   [
     "world-5d0c3ca7723d",
@@ -35757,7 +35792,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남극반도는 남극에서 가장 북쪽으로 뻗은 반도로, 남극 대륙에서 남극권 바깥에 해당하는 유일한 부분이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1911],
+    [1916],
   ],
   [
     "world-73d8d5471a21",
@@ -35765,7 +35800,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스칸디나비아반도는 유럽의 북서쪽 끝에 위치하고 발트해를 낀 반도이다.",
     [],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
-    [1912],
+    [1917],
   ],
   [
     "world-ec0d15508365",
@@ -35773,7 +35808,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "러시아 북쪽 북극해에 있는 큰 군도로, 남섬과 북섬이 해협을 사이에 두고 나뉘어 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1913],
+    [1918],
   ],
   [
     "world-fae2db90a861",
@@ -35781,7 +35816,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빅토리아섬은 북극 제도에 속하는 큰 섬으로, 캐나다 누나부트 준주와 노스웨스트 준주에 걸쳐 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1914],
+    [1919],
   ],
   [
     "world-dc3130961d2f",
@@ -35789,7 +35824,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "엘즈미어섬은 캐나다 최북단에 위치한 섬이자 세 번째로 큰 섬이며, 세계에서 열 번째로 큰 섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1915],
+    [1920],
   ],
   [
     "world-22279bf26696",
@@ -35797,7 +35832,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "배핀섬은 캐나다 누나부트 준주에 위치한 섬으로 캐나다에서 가장 큰 섬이자 아메리카 대륙에서 두 번째, 세계에서 다섯 번째로 큰 섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1916],
+    [1921],
   ],
   [
     "world-4782dc11ba82",
@@ -35805,7 +35840,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "뉴펀들랜드섬은 캐나다의 섬으로 면적은 108,860 km2이고, 뉴펀들랜드래브라도주 인구의 대부분이 이 섬에 살고 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1917],
+    [1922],
   ],
   [
     "world-aee712efb81d",
@@ -35813,7 +35848,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하와이섬은 미국 하와이주를 이루고 있는 하와이 제도에서 가장 큰 섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1918],
+    [1923],
   ],
   [
     "world-cc46db6e72eb",
@@ -35821,7 +35856,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사우스조지아섬은 남대서양에 위치한 섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1919],
+    [1924],
   ],
   [
     "world-ef0436ac0671",
@@ -35829,7 +35864,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마젤란 해협 남쪽의 남아메리카 끝에 있는 섬으로, 칠레와 아르헨티나가 나누어 차지한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1920],
+    [1925],
   ],
   [
     "world-eab6bde96324",
@@ -35837,7 +35872,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타히티섬은 남태평양 프랑스령 폴리네시아에 속한 소시에테 제도에서 가장 큰 섬이다.",
     ["타이티 섬"],
     ["세계사", "냉전과 현대 세계"],
-    [1921],
+    [1926],
   ],
   [
     "world-431deb196d22",
@@ -35845,7 +35880,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남태평양 폴리네시아의 네 섬으로 이루어진 영국 해외 영토로, 바운티호 반란 선원들이 정착한 곳이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1922],
+    [1927],
   ],
   [
     "world-fc993a0538fc",
@@ -35853,7 +35888,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이스터섬 또는 파스쿠아섬은 오세아니아의 폴리네시아에 위치한 칠레 영토의 화산섬이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1923],
+    [1928],
   ],
   [
     "world-a20ed50a9050",
@@ -35861,7 +35896,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북섬은 뉴질랜드를 구성하는 두 섬 중 하나이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1924],
+    [1929],
   ],
   [
     "world-5bcd7473fe97",
@@ -35869,7 +35904,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남섬은 뉴질랜드를 이루는 두 섬 중 하나이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1925],
+    [1930],
   ],
   [
     "world-4bfb5d7ea4ff",
@@ -35884,7 +35919,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "고대 문명과 국가",
     ],
-    [1926],
+    [1931],
   ],
   [
     "world-6a03f19f1746",
@@ -35892,7 +35927,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "브라질고원은 브라질 중부와 동남부에 걸쳐 있는 고원이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1927],
+    [1932],
   ],
   [
     "world-99ede30a9ca1",
@@ -35900,7 +35935,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아마존 분지는 아마존강 유역에 위치한 남아메리카의 분지로 면적은 약 7,500,000km2이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1928],
+    [1933],
   ],
   [
     "world-9e21644b4935",
@@ -35908,7 +35943,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사하라의 교역로에는 낙타 대상이 쉬고 물자를 교환하는 도시들이 발달했다. 모리타니의 옛 교역 도시들은 사막을 가로지르는 상업과 이슬람 학문의 중심지였다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [0, 1929],
+    [0, 1934],
   ],
   [
     "world-767aab168ab8",
@@ -35924,7 +35959,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알류샨 해구 은 알류샨 열도에 따른 해구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1930],
+    [1935],
   ],
   [
     "world-c28a8dc35a20",
@@ -35932,7 +35967,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캄차카반도 남동쪽에서 쿠릴 열도를 따라 이어지는 북서태평양의 깊은 해저 골짜기다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1931],
+    [1936],
   ],
   [
     "world-8664035d6777",
@@ -35940,7 +35975,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠릴-캄차카 해구는 북서 태평양에 위치한 해구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1931],
+    [1936],
   ],
   [
     "world-74bf92bfa6fd",
@@ -35948,7 +35983,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 해구는 동일본 앞바다의 태평양 밑바닥에 해안선에 거의 병행하여 존재하는 해구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1932],
+    [1937],
   ],
   [
     "world-7d50065999b2",
@@ -35956,7 +35991,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마리아나 해구는 마리아나 제도에서 동쪽으로 약 200 킬로미터 (124 mi) 떨어진 서부 태평양에 위치한 해구로, 지구상에서 가장 깊은 해구이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1933],
+    [1938],
   ],
   [
     "world-796e5a99b9c8",
@@ -35964,7 +35999,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남서태평양의 깊은 해저 골짜기로, 태평양판이 다른 판 아래로 들어가는 경계에 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1934],
+    [1939],
   ],
   [
     "world-e50557c4ba6f",
@@ -35972,7 +36007,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아메리카 페루 앞바다에서 칠레 쪽으로 이어지는 깊은 해저 골짜기의 북쪽 부분이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1935],
+    [1940],
   ],
   [
     "world-4bd41104f817",
@@ -35980,7 +36015,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아메리카 칠레 앞바다에서 페루 쪽으로 이어지는 깊은 해저 골짜기의 남쪽 부분이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1935],
+    [1940],
   ],
   [
     "world-755a3565fb40",
@@ -35988,7 +36023,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카라쿰 사막은 중앙아시아에 있는 사막으로서 투르크메니스탄의 70% 정도를 차지한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [1936],
+    [1941],
   ],
   [
     "world-2167934c4fca",
@@ -35996,7 +36031,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바스티유 광장은 프랑스 파리에 있는 광장이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1937],
+    [1942],
   ],
   [
     "world-050ab257e98a",
@@ -36004,7 +36039,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유프라테스강과 티그리스강 사이 거의 중간쯤에 위치한 라가시; 현대의 텔 알히바는 수메르 시대와 그 후 바벨 왕국의 옛 도시들 중 하나이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1938],
+    [1943],
   ],
   [
     "world-626a5cc218d3",
@@ -36012,7 +36047,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 와르카로 알려진 고고학 유적지 우루크는 고대 근동에 위치한 도시로, 현재 유프라테스강의 옛 물줄기인 마른 수로에 자리 잡고 있으며, 이라크의 무탄나주에 위치해 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1939],
+    [1944],
   ],
   [
     "world-bed99b42ef92",
@@ -36020,7 +36055,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아수르는 고대 아시리아의 수도 가운데 하나였던 도시로, 구아시리아 제국·중아시리아 제국 당시 서울 노릇을 했으며 신아시리아 제국 대에 이르러서도 잠시 동안 수도였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1940],
+    [1945],
   ],
   [
     "world-0d3c650dad27",
@@ -36028,7 +36063,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이집트 룩소르 부근의 고대 유적지로, 초기 왕조 파라오들의 무덤이 세워진 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1941],
+    [1946],
   ],
   [
     "world-787c09bcea0b",
@@ -36036,7 +36071,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "란저우시는 서북지방 최대의 공업도시이자 간쑤성의 성도이며, 진청으로도 불린다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1942],
+    [1947],
   ],
   [
     "world-e7eb35422f77",
@@ -36044,7 +36079,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 중국 닝보의 옛 이름으로, 송나라 때 고려와 바닷길로 연결된 대외 교역의 중심지였다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [0, 1943],
+    [0, 1948],
   ],
   [
     "world-fe0c90d098ea",
@@ -36052,7 +36087,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산둥반도 북쪽 해안의 옛 항구 도시로, 오늘날 옌타이시 펑라이 일대에 해당한다.",
     ["덩저우"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1944],
+    [1949],
   ],
   [
     "world-692f9e70f034",
@@ -36060,7 +36095,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "칭저우시는 중화인민공화국 산둥성 웨이팡 시의 현급 행정구역이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1945],
+    [1950],
   ],
   [
     "world-db52cbc24a74",
@@ -36068,7 +36103,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 허난성 루난 일대의 옛 행정 구역으로, 몽골의 금 정복을 마무리하는 전투가 벌어진 곳이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1946],
+    [1951],
   ],
   [
     "world-72b8df331fc6",
@@ -36076,7 +36111,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미타카시는 일본 도쿄도에 있는 시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1947],
+    [1952],
   ],
   [
     "world-cf2c252d9421",
@@ -36084,7 +36119,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "룩소르는 이집트의 남부에 있는 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1948],
+    [1953],
   ],
   [
     "world-0a48798d2f40",
@@ -36092,7 +36127,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메이르선은 네덜란드 남동부 림뷔르흐주의 도시로 면적은 27.64km2, 높이는 57m, 인구는 19,170명(2014년 5월 기준), 인구 밀도는 706명/km2이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1949],
+    [1954],
   ],
   [
     "world-1c4b7d689632",
@@ -36100,7 +36135,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그라나다는 스페인 안달루시아 지방에 위치한 그라나다도의 도청 소재지이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1950],
+    [1955],
   ],
   [
     "world-07e5430318de",
@@ -36108,7 +36143,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "14세기에 교황청이 로마를 떠나 머물렀던 프랑스 남부의 도시이다. 거대한 교황궁은 교황권과 세속 권력의 관계가 달라지던 시기의 정치·종교 중심지였음을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 1951],
+    [0, 1956],
   ],
   [
     "world-ba901a12f323",
@@ -36116,7 +36151,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 남부의 도시로, 원형 경기장 등 로마 시대 유적이 잘 보존되어 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1952],
+    [1957],
   ],
   [
     "world-0087126c8947",
@@ -36124,7 +36159,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나치 독일은 점령한 폴란드의 오시비엥침에 아우슈비츠 수용소를 설치했다. 유대인 등을 강제 수용하고 대량 학살한 수용소는 홀로코스트의 참상을 증언한다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1953],
+    [1958],
   ],
   [
     "world-a730c371946e",
@@ -36132,7 +36167,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 허난성의 도시로, 부근 은허에 상 왕조 후기의 수도 유적이 남아 있다. 왕릉·궁전 터와 갑골문은 청동기 문화, 왕권, 제사와 문자의 발달을 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 1954],
+    [0, 1959],
   ],
   [
     "world-da2cc50b7f4d",
@@ -36140,7 +36175,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하얼빈은 부성급시이자 중국 헤이룽장성의 성도이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [756],
+    [761],
   ],
   [
     "world-ed074edaab7c",
@@ -36148,7 +36183,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청이 베이징으로 수도를 옮기기 전 정치 중심지로 삼았던 도시이다. 선양 고궁은 만주에서 성장한 청이 중국 중심부로 세력을 넓히던 과정을 보여 준다.",
     [],
     ["세계사", "지역 세계의 교류", "고대 문명과 국가"],
-    [0, 1955],
+    [0, 1960],
   ],
   [
     "world-fb7dc6132842",
@@ -36156,7 +36191,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "단둥시는 중화인민공화국 랴오닝성에 위치한 도시로, 같은 성에 속한 둥강시와 함께 북한과의 최서남단 접경지에 위치해 있는 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [755],
+    [760],
   ],
   [
     "world-b1a69c29b525",
@@ -36164,7 +36199,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다롄은 랴오닝 성의 도시로, 랴오둥반도 끝에 자리잡은 부동항이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [788],
+    [793],
   ],
   [
     "world-5c49a2731534",
@@ -36172,7 +36207,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "번시시는 중국 랴오닝성에 위치하는 지급시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1956],
+    [1961],
   ],
   [
     "world-f264380b68d2",
@@ -36180,7 +36215,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "원산시는 조선민주주의인민공화국 강원도 동해안 영흥만에 있는 시이자 강원도 인민위원회의 소재지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1957],
+    [1962],
   ],
   [
     "world-013f3691faf5",
@@ -36188,7 +36223,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "군산시는 대한민국 전북특별자치도 북서부 해안가에 있는 시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [429],
+    [431],
   ],
   [
     "world-aa778c35f854",
@@ -36196,7 +36231,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신의주시는 조선민주주의인민공화국 평안북도 서북부에 있는 시로, 평안북도청 소재지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1958],
+    [1963],
   ],
   [
     "world-446279412a7c",
@@ -36204,7 +36239,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "청진시는 조선민주주의인민공화국 함경북도 동해안에 있는 시이자 함경북도 도청 소재지이기도 하다.",
     [],
     ["세계사", "혁명과 국민 국가", "고대 문명과 국가"],
-    [621],
+    [626],
   ],
   [
     "world-2ba5ea9e2a31",
@@ -36212,7 +36247,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양양군은 대한민국 강원특별자치도 동해안 중부에 있는 군이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [642],
+    [647],
   ],
   [
     "world-49a8b82d8a71",
@@ -36220,7 +36255,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "제천시는 대한민국 충청북도 북동부의 시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [570],
+    [574],
   ],
   [
     "world-fbbe630ac76e",
@@ -36236,7 +36271,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덕천시는 평안남도에 속해 있는 시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1959],
+    [1964],
   ],
   [
     "world-c983de742b2a",
@@ -36244,7 +36279,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 북한 라선시 선봉구역에 해당하는 지역의 옛 이름이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1960],
+    [1965],
   ],
   [
     "world-608b7ba880ec",
@@ -36252,7 +36287,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "신포시는 함경남도의 동해안 중부에 위치한 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1961],
+    [1966],
   ],
   [
     "world-74ad959502c9",
@@ -36260,7 +36295,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북한의 지역으로, 구석기 유적인 검은모루 동굴이 있는 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1962],
+    [1967],
   ],
   [
     "world-23574ff547ec",
@@ -36268,7 +36303,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아프가니스탄 힌두쿠시산맥의 분지 도시로, 거대한 불상과 불교 유적으로 알려진 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1963],
+    [1968],
   ],
   [
     "world-9cf50511dfbb",
@@ -36284,7 +36319,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 네팔에 있는 불교 성지로, 석가모니가 태어난 곳으로 전해진다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1964],
+    [1969],
   ],
   [
     "world-bc8f11eb40ce",
@@ -36292,7 +36327,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바라나시, 바나라스 또는 카시는 인도 우타르프라데시주에 위치한 도시로 옛날 카시 왕국의 수도이자 동시에 힌두교의 최대 성지이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1965],
+    [1970],
   ],
   [
     "world-c3731fc7efec",
@@ -36300,7 +36335,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "배로인퍼니스는 잉글랜드 컴브리아주에 위치한 도시로 인구는 56,745명(2011년 기준)이다.",
     ["배로인"],
     ["세계사", "혁명과 국민 국가"],
-    [1966],
+    [1971],
   ],
   [
     "world-1b7ef5d260ad",
@@ -36308,7 +36343,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아루샤는 탄자니아의 도시로, 탕가니카 북동부와 동아프리카 지구대 고원 지대에 위치한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1967],
+    [1972],
   ],
   [
     "world-cd98948ba2f4",
@@ -36316,7 +36351,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에티오피아 북동부의 마을이자 유적으로, 아르디피테쿠스 등 초기 인류의 화석이 발견되었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1968],
+    [1973],
   ],
   [
     "world-f42a0b74f5ba",
@@ -36324,7 +36359,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "월지는 기원전 12세기부터 기원후 6세기까지 중국 간쑤성 서부의 메마른 초원지대에 살았던 유목민들로 중국 역사에 처음 기술된 고대 민족이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1670],
+    [1675],
   ],
   [
     "world-153c91651359",
@@ -36332,7 +36367,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남월은 옛 중국의 장군이었던 조타가 세운 고대 왕국으로, 기원전 111년 한 무제가 남월을 정복할 때까지 지속되었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1969],
+    [1974],
   ],
   [
     "world-dba535567525",
@@ -36354,7 +36389,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 북서부에서 서하를 세운 민족으로, 독자적인 언어와 문자를 사용하였다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [1970],
+    [1975],
   ],
   [
     "world-2b7f59bd0132",
@@ -36362,7 +36397,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 진·한 시대에 설치된 옛 행정 구역으로, 회계산에서 이름을 따왔다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1971],
+    [1976],
   ],
   [
     "world-4f030e10f1e6",
@@ -36370,7 +36405,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베이징 일대를 중심으로 중국 북방에 설치되었던 옛 행정 구역이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1972],
+    [1977],
   ],
   [
     "world-ccff7dfd215c",
@@ -36378,7 +36413,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 북부와 중국 남부 일대에 설치되었던 옛 행정 구역으로, 시대에 따라 범위가 달랐다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1973],
+    [1978],
   ],
   [
     "world-9eeae53bfaf6",
@@ -36386,7 +36421,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남북조 시대 중국 남부에 차례로 들어선 왕조들을 함께 부르는 이름이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1974],
+    [1979],
   ],
   [
     "world-fe25e26b52fe",
@@ -36394,7 +36429,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남북조 시대 중국 북부를 지배한 여러 왕조를 함께 부르는 이름이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1974],
+    [1979],
   ],
   [
     "world-29617a649501",
@@ -36410,7 +36445,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북흉노는 서기 48년 흉노의 제2차 분열로 인해 형성된 세력으로서, 한나라에 복속하여 오르도스 일대에 정착한 남흉노와 달리 몽골 고원을 중심으로 하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1975],
+    [1980],
   ],
   [
     "world-1e699c20aa40",
@@ -36418,7 +36453,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남흉노는 서기 48년 흉노의 제2차 분열로 인해 형성된 세력으로서, 몽골 고원에 계속 남아있었던 북흉노와 달리 한나라에 복속하여 오르도스 일대에 정착하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1976],
+    [1981],
   ],
   [
     "world-3c2abfe15f5d",
@@ -36426,7 +36461,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "돌궐 제국 또는 괵튀르크 카간국은 아사나 씨족의 수장 부민 카간과 그의 동생 이스테미 휘하의 괵튀르크인들이 중앙아시아 일대에 건설한 튀르크족 최초의 카간국이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [214],
+    [216],
   ],
   [
     "world-4c51052d4a44",
@@ -36434,7 +36469,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유럽인들이 인도와 동남아시아의 여러 지역을 가리키던 역사적 명칭으로, 식민지 무역과 관련해 널리 쓰였다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1977],
+    [1982],
   ],
   [
     "world-abcc8f9c105a",
@@ -36442,7 +36477,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "보스니아는 보스니아 헤르체고비나 북부에 위치한 지역이다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1978],
+    [1983],
   ],
   [
     "world-6a8aff6066f2",
@@ -36450,7 +36485,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남서아프리카는 1915년부터 1990년까지 현재의 나미비아에 존재했던 남아프리카 공화국의 위임통치령으로, 기존에는 독일 제국의 식민지인 독일령 남서아프리카로 존재하였다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [1979],
+    [1984],
   ],
   [
     "world-157b5deefe15",
@@ -36458,7 +36493,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아메리카는 아시아에 이어 두 번째로 큰 대륙이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "냉전과 현대 세계"],
-    [606],
+    [611],
   ],
   [
     "world-6ce418592ee5",
@@ -36466,7 +36501,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이란 남부의 지역으로, 페르시아인의 고향이며 페르시아라는 이름의 바탕이 된 곳이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [1980],
+    [1985],
   ],
   [
     "world-2005f69e3721",
@@ -36474,7 +36509,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인더스강 하류와 아라비아해 연안에 걸친 파키스탄 남부의 지역이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1981],
+    [1986],
   ],
   [
     "world-8c67496816a5",
@@ -36482,7 +36517,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 남서부의 지역으로, 같은 이름의 강에서 지명이 유래하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1982],
+    [1987],
   ],
   [
     "world-b857009efc09",
@@ -36490,7 +36525,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그랑테스트는 프랑스 북동부에 위치한 레지옹으로 중심 도시는 스트라스부르이며 면적은 57,433km2, 인구는 5,552,388명(2013년 기준)이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1983],
+    [1988],
   ],
   [
     "world-74f6ad18feac",
@@ -36498,7 +36533,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "효고현은 일본 긴키 지방에 있는 현으로, 현청 소재지는 고베시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1984],
+    [1989],
   ],
   [
     "world-4fdb2a5db8bb",
@@ -36506,7 +36541,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경상북도는 대한민국 남동부에 있는 도이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1985],
+    [1990],
   ],
   [
     "world-e7e69e5ad13c",
@@ -36514,7 +36549,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "강원도는 관동 지방에 해당하는 지역이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [459],
+    [461],
   ],
   [
     "world-b94e8e3ed858",
@@ -36522,7 +36557,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "와이오밍주는 미국 서부의 주이며, 50개 주 중에서 인구가 가장 적은 주이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1986],
+    [1991],
   ],
   [
     "world-6a2f596d3893",
@@ -36530,7 +36565,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일리지는 알제리 남동부에 위치한 도시로, 일리지 주의 주도이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1987],
+    [1992],
   ],
   [
     "world-93f671879da5",
@@ -36538,7 +36573,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니더외스터라이히주는 오스트리아 동북부에 있는 주이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1988],
+    [1993],
   ],
   [
     "world-ce6ccbbe0836",
@@ -36546,7 +36581,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카파도키아는 튀르키예 중앙아나톨리아 지역에 있는 지역이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1989],
+    [1994],
   ],
   [
     "world-5792a5d6b822",
@@ -36554,7 +36589,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테살리아는 그리스의 전통적인 지역 가운데 한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1990],
+    [1995],
   ],
   [
     "world-3d068f59a7b6",
@@ -36562,7 +36597,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이집트 기자에 있는 거대한 석상으로, 사람의 머리와 사자의 몸을 결합한 모습이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1991],
+    [1996],
   ],
   [
     "world-a7376660af60",
@@ -36570,7 +36605,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고대 메소포타미아에서 신을 모시기 위해 층층이 높게 쌓은 거대한 신전 건축물이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1992],
+    [1997],
   ],
   [
     "world-7bf15a96a32b",
@@ -36578,7 +36613,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 허난성의 신석기 유적으로, 황허 중류의 양사오 문화에 이름을 남긴 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1993],
+    [1998],
   ],
   [
     "world-ca542b3c5afd",
@@ -36586,7 +36621,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장강 중류 싼샤 일대의 신석기 유적으로, 따시 문화에 이름을 남긴 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1994],
+    [1999],
   ],
   [
     "world-548d464996d3",
@@ -36594,7 +36629,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 저장성 항저우만 남쪽의 신석기 유적으로, 허무두 문화의 이름이 유래한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1995],
+    [2000],
   ],
   [
     "world-9ca01e3be9a1",
@@ -36602,7 +36637,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산둥성의 마을로, 검은 토기가 특징인 신석기 후기 룽산 문화에 이름을 남겼다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1996],
+    [2001],
   ],
   [
     "world-9cf60ddb89ca",
@@ -36610,7 +36645,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 광시성 구이핑의 마을로, 1851년 태평천국 운동의 출발이 된 봉기가 일어난 곳이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1997],
+    [2002],
   ],
   [
     "world-6393e85b1cef",
@@ -36618,7 +36653,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "희망봉은 남아프리카 공화국의 대서양 해변에 있는 암석으로 이루어진 곶이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1998],
+    [2003],
   ],
   [
     "world-ae2876b88f77",
@@ -36626,7 +36661,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 교토시 사쿄구에 있는 신토 사당이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [1999],
+    [2004],
   ],
   [
     "world-aefbb091415a",
@@ -36634,7 +36669,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산둥성 취푸에 있는 공자의 사당으로, 역대 황제들이 증축하고 보수한 유교 유적이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2000],
+    [2005],
   ],
   [
     "world-78f243d2044b",
@@ -36642,7 +36677,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "다이센릉 고분은 오사카부 사카이시 사카이구 다이센정에 있는 고분, 천황릉이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2001],
+    [2006],
   ],
   [
     "world-3441614bbb90",
@@ -36650,7 +36685,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스페인 코르도바의 이슬람 대사원으로 건설되었으며, 뒤에 가톨릭 성당으로 바뀐 건축물이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2002],
+    [2007],
   ],
   [
     "world-38ab425c9090",
@@ -36658,7 +36693,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "쿠트브 미나르는 힌두교와 이슬람교의 양식이 혼합된 높이 73m의 5층 석탑이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2003],
+    [2008],
   ],
   [
     "world-bf6e55b112b2",
@@ -36666,7 +36701,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포룸 로마눔은 고대 로마 시대의 유적지이며, 이탈리아어로는 포로 로마노라고 부른다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2004],
+    [2009],
   ],
   [
     "world-0252e66ad3e6",
@@ -36674,7 +36709,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카타콤은 주로 종교적 목적, 특히 매장을 위해 사용된 인공적인 지하 통로이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2005],
+    [2010],
   ],
   [
     "world-57086925e3ce",
@@ -36682,7 +36717,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로마 공화정 때 만든 도로다. 부도는 배수로와 모래·자갈·돌을 층으로 쌓은 구조를 소개하며 로마의 토목 기술을 보여 준다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2006, 2007],
+    [0, 2011, 2012],
   ],
   [
     "world-4ced75d148b0",
@@ -36690,7 +36725,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "피렌체 대성당은 이탈리아의 피렌체에 있는 대성당이다.",
     ["산타마리아 델 피오레 성당"],
     ["세계사", "냉전과 현대 세계", "종교와 지역 문화"],
-    [2008],
+    [2013],
   ],
   [
     "world-b3e9fddd542d",
@@ -36698,7 +36733,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨기에 이프르의 추모문으로, 제1차 세계 대전에서 전사했으나 무덤이 확인되지 않은 병사들을 기린다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2009],
+    [2014],
   ],
   [
     "world-070ebde598d9",
@@ -36706,7 +36741,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "벨기에 이프르의 중세 직물 거래소로, 제1차 세계 대전 때 파괴된 뒤 복원되어 전쟁 박물관으로 쓰인다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2010],
+    [2015],
   ],
   [
     "world-b87f5ba20b3d",
@@ -36714,7 +36749,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 베르됭 전투의 전사자 유해를 모신 추모 시설로, 제1차 세계 대전의 희생을 기억하는 곳이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2011],
+    [2016],
   ],
   [
     "world-ef664ffc7c1b",
@@ -36722,7 +36757,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 난징에서 1937년 일본군의 학살로 희생된 사람들을 추모하는 장소다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2012],
+    [2017],
   ],
   [
     "world-e3684633c98f",
@@ -36730,7 +36765,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베를린 유대인 박물관은 독일 베를린에 위치한 유대인 박물관이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2013],
+    [2018],
   ],
   [
     "world-ca2f8bfaeda0",
@@ -36738,7 +36773,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "수에비 왕국은 게르만족의 일파인 수에비족이 이베리아반도 북부에 세운 왕국이다.",
     ["수에비"],
     ["세계사", "종교와 지역 문화"],
-    [2014],
+    [2019],
   ],
   [
     "world-99bec3bd12df",
@@ -36746,7 +36781,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서고트 왕국, 서고트 히스파니아 또는 고트 왕국은 5세기부터 8세기까지 현재의 프랑스 남서부와 이베리아반도를 점령했던 야만왕국이다.",
     ["서고트"],
     ["세계사", "종교와 지역 문화"],
-    [2015],
+    [2020],
   ],
   [
     "world-9a25cf731bea",
@@ -36754,7 +36789,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동고트 왕국은 493년 게르만족의 일파인 동고트족의 왕국으로, 정식 국호는 이탈리아 왕국이다.",
     ["동고트"],
     ["세계사", "종교와 지역 문화"],
-    [2016],
+    [2021],
   ],
   [
     "world-d5c69f01334c",
@@ -36762,7 +36797,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "게르만계 부르군트인들이 오늘날 스위스 서부와 프랑스 남동부에 세운 왕국으로, 뒤에 프랑크에 병합되었다.",
     ["부르군트"],
     ["세계사", "종교와 지역 문화"],
-    [2017],
+    [2022],
   ],
   [
     "world-bd11ee8b460f",
@@ -36770,7 +36805,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "랑고바르드 왕국(568년~774년)은 스칸디나비아에서 남하한 게르만계 랑고바르드족이 도나우강에 정착한 이후 6세기 말 알보이누스의 명령 아래 동로마 제국령 이탈리아를 침공하여 북이탈리아를 빼앗고 세운 왕국이다.",
     ["롬바르드"],
     ["세계사", "종교와 지역 문화"],
-    [2018],
+    [2023],
   ],
   [
     "world-3eb6a1dd12ca",
@@ -36778,7 +36813,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "반달 왕국은 게르만족의 일파인 반달족이 북아프리카에 세운 왕국이다.",
     ["반달"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [2019],
+    [2024],
   ],
   [
     "world-6ddb56015685",
@@ -36786,7 +36821,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "노르망디 공국은 노르만족의 지도자 롤로가 샤를 3세로부터 받은 봉읍인 루앙 백국을 기반으로 996년에 형성된 공국이다.",
     ["노르망디"],
     ["세계사", "종교와 지역 문화"],
-    [2020],
+    [2025],
   ],
   [
     "world-c6fc714a16be",
@@ -36794,7 +36829,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1066년 노르만 정복 이후 잉글랜드를 통치한 노르망디 가문의 왕조다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2021],
+    [2026],
   ],
   [
     "world-17329b7e7e7b",
@@ -36802,7 +36837,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오이라트는 몽골의 서부에 존재했던 옛 부족이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2022],
+    [2027],
   ],
   [
     "world-fb03b8615c94",
@@ -36810,7 +36845,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에게해는 그리스와 소아시아, 크레타섬에 둘러싸인 바다이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2023],
+    [2028],
   ],
   [
     "world-99caef8e620e",
@@ -36818,7 +36853,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "역사 사료의 발굴·보존과 역사 학습 자료의 유물·그림 소장처 또는 전시·연구 장소로 표기되어 있다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [0, 2024, 2025, 2026],
+    [0, 2029, 2030, 2031],
   ],
   [
     "world-7040f0fbdb66",
@@ -36826,7 +36861,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이집트 박물관은 이집트 카이로에 있는 박물관이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2027],
+    [2032],
   ],
   [
     "world-f511fd6f9bb1",
@@ -36834,7 +36869,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이란 국립박물관은 이란 테헤란에 있는 국립박물관이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [2028],
+    [2033],
   ],
   [
     "world-b01bafee9415",
@@ -36842,7 +36877,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메소포타미아·이집트·인도·중국의 고대 문명 자료의 유물·그림 소장처 또는 전시·연구 장소로 표기되어 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2025],
+    [0, 2030],
   ],
   [
     "world-936bc7cbfab4",
@@ -36850,7 +36885,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "국립중앙박물관은 대한민국 서울특별시 용산구 서빙고로 137번지에 위치한 국립박물관이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2029],
+    [2034],
   ],
   [
     "world-91b689203e6d",
@@ -36858,7 +36893,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도쿄 국립박물관은 일본과 동양의 고고 유물, 미술품 등의 문화재를 수집 보관, 전시 공개, 조사 연구, 보급 등의 목적으로 독립행정법인 국립문화재기구가 운영하는 박물관이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [2030],
+    [2035],
   ],
   [
     "world-90acadddd3a2",
@@ -36866,7 +36901,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "간송미술관은 대한민국 최초의 근대식 사립박물관이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [916],
+    [921],
   ],
   [
     "world-172c48d95c98",
@@ -36874,7 +36909,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "라호르 국립박물관은 파키스탄 라호르에 위치한 박물관이다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [2031],
+    [2036],
   ],
   [
     "world-63c4919a09a6",
@@ -36882,7 +36917,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 왕조와 불교·힌두교 문화의 전파 자료의 유물·그림 소장처 또는 전시·연구 장소로 표기되어 있다.",
     [],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 1620],
+    [0, 1625],
   ],
   [
     "world-9cfeb0ee4f89",
@@ -36890,7 +36925,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "산시 역사박물관은 산시성 시안시 남부의 샤오자이동루, 대안탑의 서북쪽에 위치한 박물관으로 1983년 시공하여, 1991년 6월 20일 개관한 중국 제일의 현대식 대형 국가급 박물관이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2032],
+    [2037],
   ],
   [
     "world-88c5a1e6c993",
@@ -36898,7 +36933,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빅토리아 앨버트 박물관은 영국 런던의 사우스켄싱턴에 있는 미술관이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [2033],
+    [2038],
   ],
   [
     "world-1bdfe785c9fc",
@@ -36906,7 +36941,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "메트로폴리탄 미술관은 미국 뉴욕주 뉴욕시에 위치한 세계적인 미술관이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [2034],
+    [2039],
   ],
   [
     "world-04c176b5e44a",
@@ -36914,7 +36949,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "톱카프 궁전은 15세기 중순부터 19세기 중순까지 약 400년 동안 오스만 제국의 군주가 거주한 튀르키예 이스탄불의 궁전이다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [2035],
+    [2040],
   ],
   [
     "world-b995b835e376",
@@ -36922,7 +36957,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옥스퍼드 대학교는 영국 사우스이스트잉글랜드 옥스퍼드셔주 옥스퍼드에 있는 세계 최상위 공립 대학이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2036],
+    [2041],
   ],
   [
     "world-b28c706d1e19",
@@ -36930,7 +36965,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프라도 미술관은 스페인 마드리드에 있는 세계적인 미술관 중 하나이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2037],
+    [2042],
   ],
   [
     "world-382adcb6a659",
@@ -36938,7 +36973,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바르젤로 미술관은 이탈리아 피렌체에 있는 미술관으로, 시뇨리아 광장 동쪽에 위치하고 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2038],
+    [2043],
   ],
   [
     "world-7db4ff8a0b00",
@@ -36946,7 +36981,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 런던 트라팔가 광장의 미술관으로, 르네상스부터 근대까지 유럽 회화를 소장하고 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2039],
+    [2044],
   ],
   [
     "world-1983212a5d01",
@@ -36954,7 +36989,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 국립도서관은 프랑스 파리시에 있는 국립도서관이다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "종교와 지역 문화"],
-    [882],
+    [887],
   ],
   [
     "world-685f04e72a64",
@@ -36962,7 +36997,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이집트 카이로에 있는 국립 도서관으로, 아랍어와 여러 동방 언어의 오래된 필사본을 소장한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2040],
+    [2045],
   ],
   [
     "world-9c1b77e8e7c3",
@@ -36970,7 +37005,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대영 도서관, 약칭 BL은 영국의 국립도서관이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2041],
+    [2046],
   ],
   [
     "world-1b4457b2f341",
@@ -36978,7 +37013,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나가사키역사 문화 박물관은 일본 나가사키현 나가사키시에 있는 박물관이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2042],
+    [2047],
   ],
   [
     "world-e1eb2f561b2f",
@@ -36986,7 +37021,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 혁명과 나폴레옹의 전쟁 자료의 유물·그림 소장처 또는 전시·연구 장소로 표기되어 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [0, 2043],
+    [0, 2048],
   ],
   [
     "world-60064b649d75",
@@ -36994,7 +37029,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "도호쿠 대학은 일본 미야기현 센다이시 아오바구 가타히라 2쵸메 1-1에 본부를 두고있는 일본의 최상위권 명문 국립 대학이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [929],
+    [934],
   ],
   [
     "world-0b5aaef85c9c",
@@ -37002,7 +37037,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베르사유궁전은 프랑스 파리 교외의 베르사유에 위치한 왕궁이다.",
     [],
     ["세계사", "지역 세계의 교류", "세계 대전과 평화", "혁명과 국민 국가"],
-    [2044],
+    [2049],
   ],
   [
     "world-ec081b56ea49",
@@ -37010,7 +37045,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카푸아는 이탈리아 캄파니아주 카세르타 지방에 위치한 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2045],
+    [2050],
   ],
   [
     "world-a6dc5f0de748",
@@ -37018,7 +37053,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "13~14세기 수코타이 왕국의 수도가 있던 지역이다. 불교 사원과 불상에는 주변 문화와 현지 전통을 받아들여 발전시킨 수코타이 양식이 남아 있다.",
     [],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [0, 2046],
+    [0, 2051],
   ],
   [
     "world-7c55087ba8b0",
@@ -37026,7 +37061,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "카사블랑카는 대서양에 위치한 모로코의 최대 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2047],
+    [2052],
   ],
   [
     "world-7714c79bc3a8",
@@ -37034,7 +37069,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 이즈반도 남부의 항구 도시로, 1854년 하코다테와 함께 일본이 처음 개항한 곳이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2048],
+    [2053],
   ],
   [
     "world-b43bdda051da",
@@ -37042,7 +37077,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당시 스탈린그라드에서 소련군이 독일군을 포위해 승리하면서 독소 전쟁의 흐름이 크게 바뀌었다.",
     ["스탈린그라드"],
     ["세계사", "세계 대전과 평화"],
-    [2049],
+    [2054],
   ],
   [
     "world-ee4a34fc45b6",
@@ -37050,7 +37085,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 로스앤젤레스의 한 지역으로, 영화 제작이 발달해 미국 영화 산업을 상징하는 이름이 되었다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2050],
+    [2055],
   ],
   [
     "world-613823748fd1",
@@ -37058,7 +37093,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국 런던 남서부의 지역으로, 윔블던 테니스 대회가 열리는 곳이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2051],
+    [2056],
   ],
   [
     "world-7a622355fb25",
@@ -37066,7 +37101,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 샌프란시스코만 동쪽의 도시로, 캘리포니아 대학교 버클리 캠퍼스가 있다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2052],
+    [2057],
   ],
   [
     "world-93e0d0fe7b2b",
@@ -37074,7 +37109,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알말리크는 중앙아시아 톈산 북로에 있던 옛 오아시스 도시이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2053],
+    [2058],
   ],
   [
     "world-254d1c32ae4b",
@@ -37082,7 +37117,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 중국 신장 지무사르의 고대 도시로, 당의 북정도호부가 있었고 뒤에는 위구르 세력의 수도로 쓰였다.",
     ["비슈발리크"],
     ["세계사", "지역 세계의 교류", "종교와 지역 문화"],
-    [2054],
+    [2059],
   ],
   [
     "world-f42f96d155a5",
@@ -37096,7 +37131,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "세계 대전과 평화",
     ],
-    [2055],
+    [2060],
   ],
   [
     "world-7589ffc5a3f3",
@@ -37104,7 +37139,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "초르노빌은 우크라이나 북부의 옛 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2056],
+    [2061],
   ],
   [
     "world-828b82553e1d",
@@ -37112,7 +37147,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "튀르키예 중앙아나톨리아에 있는 신석기 시대의 대규모 취락 유적이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2057],
+    [2062],
   ],
   [
     "world-d89538caa532",
@@ -37120,7 +37155,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "소아시아 북서부의 강으로, 기원전 334년 알렉산드로스가 페르시아군을 처음 크게 격파한 곳이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2058],
+    [2063],
   ],
   [
     "world-04320109cea7",
@@ -37128,7 +37163,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대진사는 중국에 전래된 경교의 사원의 일반적 명칭이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2059],
+    [2064],
   ],
   [
     "world-46bd08294e9f",
@@ -37136,7 +37171,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 하노이의 호안끼엠호 한가운데 있는 사당으로, 옥산사라고도 한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2060],
+    [2065],
   ],
   [
     "world-d37ac2007e4a",
@@ -37144,7 +37179,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1969년 미국 뉴욕주 베설에서 열린 음악 축제로, 당시 청년들의 반전·대항문화가 드러난 행사다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2061],
+    [2066],
   ],
   [
     "world-d9f7ef39a0f0",
@@ -37152,7 +37187,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "하와이 오아후섬의 미국 해군 기지로, 1941년 일본군의 공격이 미국의 제2차 세계 대전 참전을 불러왔다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2062],
+    [2067],
   ],
   [
     "world-7f8f3a881934",
@@ -37160,7 +37195,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "인도 바라나시 부근의 불교 성지로, 석가모니가 깨달음을 얻은 뒤 처음 설법한 곳으로 전해진다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2063],
+    [2068],
   ],
   [
     "world-e5f081252766",
@@ -37168,7 +37203,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국을 통일한 진 시황제의 무덤으로, 시안 린퉁구에 있으며 주변에 병마용 유적이 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2064],
+    [2069],
   ],
   [
     "world-21d125e24732",
@@ -37176,7 +37211,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로마 황제 트라야누스의 다키아 전쟁 승리를 기념한 기둥으로, 전쟁 장면을 나선형 부조에 담았다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2065],
+    [2070],
   ],
   [
     "world-4aa2e2423223",
@@ -37184,7 +37219,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "로마 시민들이 휴일과 축제일에 전차 경주를 관람하던 시설이다. 부도는 콜로세움과 함께 로마의 대중 오락 공간으로 소개한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2006, 2007],
+    [0, 2011, 2012],
   ],
   [
     "world-a4b35fc74a9a",
@@ -37192,7 +37227,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바이에른 자유주는 독일 남부에 위치한 주로 주도는 뮌헨이며 면적은 70,549.44km2, 인구 13,369,393명(2022년 12월 31일 기준)이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2066],
+    [2071],
   ],
   [
     "world-8025359b98e6",
@@ -37200,7 +37235,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "말레이반도는 동남아시아에서 남북으로 길게 뻗어 있는 반도이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [1716],
+    [1721],
   ],
   [
     "world-7bddbf9f743b",
@@ -37208,7 +37243,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "캐롤라인 제도는 2개의 지형으로 이루어져 있는 제도로, 정상 부분이 산호층으로 이루어진 동쪽의 화산군과 습곡작용과 압력을 받아 대양 표면으로 솟아오는 지각층에 해당하는 동쪽의 섬들로 나누어진다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [2067],
+    [2072],
   ],
   [
     "world-ace6f31010ea",
@@ -37216,7 +37251,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장강 하류 남쪽의 지역으로, 쑤저우·항저우 등 도시를 중심으로 상업과 경제가 발달했다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [1733],
+    [1738],
   ],
   [
     "world-eb03984f5b17",
@@ -37224,7 +37259,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "화베이는 중국의 6대 중국지리대구의 하나로서 중국 북부 지방이며, 화베이 평원이 그 중심이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [851],
+    [856],
   ],
   [
     "world-45f2fc738d22",
@@ -37232,7 +37267,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사하라 이남 아프리카는 사하라 사막의 남쪽에 있는 아프리카 대륙의 지역, 또는 전체/부분으로 사하라 남쪽에 위치한 아프리카 국가들을 가리키는 말이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2068],
+    [2073],
   ],
   [
     "world-f8592a7dda54",
@@ -37240,7 +37275,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국은 대공황기에 테네시강 유역 개발 공사(TVA)를 설립했다. 홍수 조절과 수운 개선, 전력 공급을 함께 추진한 지역 개발은 뉴딜 정책의 주요 사례이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [0, 2069],
+    [0, 2074],
   ],
   [
     "world-c95e85aaf327",
@@ -37248,7 +37283,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "박트라로 잘 알려져 있는 발흐는 한때 세계의 주요 도시였지만 몽골에 의해 완전히 파괴되었다.",
     ["박트라"],
     ["세계사", "고대 문명과 국가", "지역 세계의 교류", "종교와 지역 문화"],
-    [2070],
+    [2075],
   ],
   [
     "world-70ed25aa6908",
@@ -37264,7 +37299,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "타클라마칸 사막 남쪽 비단길의 오아시스 도시이자 불교 왕국으로, 옥과 비단 교역으로 알려졌다.",
     ["우전"],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [2071],
+    [2076],
   ],
   [
     "world-3822c8c80c1b",
@@ -37272,7 +37307,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "사라이는 킵차크 칸국의 옛 수도이다.",
     ["사리이"],
     ["세계사", "지역 세계의 교류"],
-    [2072],
+    [2077],
   ],
   [
     "world-109050d80e70",
@@ -37280,7 +37315,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 중국 내몽골에 남아 있는 몽골 제국과 원의 도읍으로, 뒤에는 여름 수도 역할을 했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2073],
+    [2078],
   ],
   [
     "world-2bad6a77ad9a",
@@ -37288,7 +37323,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "요나라의 수도였던 상경임황부로, 오늘날 중국 내몽골 바린좌기에 유적이 있다.",
     ["상경"],
     ["세계사", "지역 세계의 교류"],
-    [2074],
+    [2079],
   ],
   [
     "world-889b917c9a65",
@@ -37296,7 +37331,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황허가 크게 굽이치는 허타오 지역에 설치된 중국의 옛 군이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2075],
+    [2080],
   ],
   [
     "world-966f020e9ddd",
@@ -37304,7 +37339,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "린칭시는 중화인민공화국 산둥성 랴오청시의 북부에 위치한 현급시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2076],
+    [2081],
   ],
   [
     "world-a20326842266",
@@ -37312,7 +37347,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "퉁관은 중국 산시성 퉁관현 웨이허와 황하의 합류 남쪽에 위치한 산악지대의 요새이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2077],
+    [2082],
   ],
   [
     "world-740016a66488",
@@ -37320,7 +37355,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 베트남 북부 일대를 관할했던 중국의 옛 행정 구역이다.",
     ["자오찌"],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [2078],
+    [2083],
   ],
   [
     "world-0d014be8b131",
@@ -37328,7 +37363,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베트남 중북부에 한나라부터 당나라에 걸쳐 설치되었던 중국의 옛 행정 구역이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2079],
+    [2084],
   ],
   [
     "world-c20ace5a2e3e",
@@ -37336,7 +37371,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "옥에오는 베트남 남부 안장성의 토아이선현 옥에오 시진에 있는 유적지이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2080],
+    [2085],
   ],
   [
     "world-8efbcad44f14",
@@ -37344,7 +37379,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국의 옛 행정 구역으로, 농산의 서쪽에 있다는 뜻에서 이름이 붙었다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [2081],
+    [2086],
   ],
   [
     "world-4c81ce004a45",
@@ -37352,7 +37387,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국의 옛 행정 구역으로, 왕국이 설치된 시기에는 임강국이나 강릉국이라고도 불렸다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2082],
+    [2087],
   ],
   [
     "world-ccea4adf046b",
@@ -37360,7 +37395,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "운중군은 중국의 옛 군이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2083],
+    [2088],
   ],
   [
     "world-f1dd0b0cbb6e",
@@ -37368,7 +37403,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 진나라부터 당나라에 걸쳐 존재했던 남부 지역의 옛 행정 구역이다.",
     ["남해"],
     ["세계사", "고대 문명과 국가", "지역 세계의 교류", "종교와 지역 문화"],
-    [2084],
+    [2089],
   ],
   [
     "world-0302e711d14e",
@@ -37376,7 +37411,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 황허와 친링산맥 사이의 함곡관으로, 중원에서 진나라의 중심지 관중으로 들어가는 길을 지킨 관문이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2085],
+    [2090],
   ],
   [
     "world-5350ddf46cbb",
@@ -37384,7 +37419,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "선비족 탁발부가 중국 북방에 세운 왕조로, 남북조 시대 북조의 첫 왕조다.",
     ["북위(북조)"],
     ["세계사", "종교와 지역 문화", "냉전과 현대 세계"],
-    [797],
+    [802],
   ],
   [
     "world-2f46e3fdfb47",
@@ -37392,7 +37427,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "송(宋, 420년 ~ 479년)은 중국 남북조 시대 강남 지방에서 유유가 건국한 남조의 첫 번째 왕조다.",
     ["남조 송"],
     ["세계사", "종교와 지역 문화"],
-    [2086],
+    [2091],
   ],
   [
     "world-a6a9d2c0ff15",
@@ -37408,7 +37443,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "후한(後漢, 기원후 25년~220년)은 외척 왕망이 전한을 찬탈한 이후, 황실의 후예인 광무제 유수가 왕망을 타도하고 군웅들의 할거를 모두 평정해 한 왕조를 부흥시킨 국가이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화"],
-    [2087],
+    [2092],
   ],
   [
     "world-eddea29aaace",
@@ -37416,7 +37451,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진 멸망 뒤 유방이 중국을 다시 통일하여 세운 나라다. 무제 때 군현제와 유교 중심의 통치 질서를 강화하고 흉노·서역으로 진출하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2088, 2089, 2090, 944, 969, 2091, 2092, 2026, 2093],
+    [0, 2093, 2094, 2095, 949, 974, 2096, 2097, 2031, 2098],
   ],
   [
     "world-6c0fa4a15cd8",
@@ -37424,7 +37459,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "법가 사상을 바탕으로 중국을 처음 통일한 제국이다. 시황제는 군현제와 도량형·문자 통일을 추진하여 중앙의 지배력을 강화하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2094, 2095, 2092, 2026],
+    [0, 2099, 2100, 2097, 2031],
   ],
   [
     "world-752244cf84ad",
@@ -37432,7 +37467,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "상을 무너뜨리고 중국 중원을 지배한 고대 왕조로, 넓은 영역을 제후들에게 나누어 통치하였다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2096],
+    [2101],
   ],
   [
     "world-3299d0c5f4f3",
@@ -37440,7 +37475,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국의 고대 왕조로, 후기 수도가 은이었기 때문에 은나라라고도 한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2097],
+    [2102],
   ],
   [
     "world-c04eb2ef104c",
@@ -37448,7 +37483,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오랜 남북 분열을 끝내고 중국을 통일한 나라다. 과거제를 시행하고 대운하를 건설했으나, 무리한 토목 공사와 고구려 원정으로 약화되었다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 2098, 1004, 1005, 2099, 2100, 2101, 1012, 2102, 2103],
+    [0, 2103, 1009, 1010, 2104, 2105, 2106, 1017, 2107, 2108],
   ],
   [
     "world-f2e0675144d2",
@@ -37456,7 +37491,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당(唐, 618년 ~ 907년)은 수나라와 오대 십국 시대 사이 존재한 중국의 통일왕조다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [216],
+    [218],
   ],
   [
     "world-5a62fd50d243",
@@ -37464,7 +37499,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "주원장이 원을 몰아내고 세운 중국 왕조로, 1368년부터 1644년까지 존속했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [471],
+    [473],
   ],
   [
     "world-8ce2774dbf6d",
@@ -37472,7 +37507,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대청국(大淸國, 만주어: ᡩᠠᡳᠴᡳᠩᡤᡠᡵᡠᠨ 다이칭 구룬, 1636년 4월~ 1912년 2월 12일), 또는 대청제국, 청조, 대청, 약칭 청은 중국 역사상 최후의 통일 왕조이자, 만주족이 세운 마지막 황조였다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [524],
+    [526],
   ],
   [
     "world-60d9cdec28ff",
@@ -37480,7 +37515,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "누르하치가 세운 청나라의 전신으로, 12~13세기의 금나라와 구별해 후금이라고 부른다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [523],
+    [525],
   ],
   [
     "world-21ba070b23b6",
@@ -37488,7 +37523,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대원대몽골국, 대원 울루스 또는 대원국, 약칭 원은 13세기 중국 본토와 몽골 고원을 기반으로 한 몽골 제국의 카안 울루스였다.",
     ["카안 울루스"],
     ["세계사", "지역 세계의 교류"],
-    [418],
+    [420],
   ],
   [
     "world-2ea0d7b54e5f",
@@ -37496,7 +37531,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동주는 기원전 771년 견융의 침공으로 서주의 호경이 함락되고 유왕이 피살되는 사건이 발생하고 제후들이 평왕을 옹립하면서 평왕이 수도를 호경에서 낙읍으로 옮긴 이후의 주나라를 말한다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2104],
+    [2109],
   ],
   [
     "world-e8350c00f10a",
@@ -37542,7 +37577,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "발해, 발해국은 698년 대조영이 건국한 국가이다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류"],
-    [238],
+    [240],
   ],
   [
     "world-c75537fc787b",
@@ -37550,7 +37585,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고려는 918년부터 1392년까지 한반도에 존재했던 나라이다.",
     [],
     ["세계사", "고대 문명과 국가", "종교와 지역 문화", "지역 세계의 교류"],
-    [340],
+    [342],
   ],
   [
     "world-049670fa94f9",
@@ -37564,7 +37599,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "혁명과 국민 국가",
       "세계 대전과 평화",
     ],
-    [484],
+    [486],
   ],
   [
     "world-661ecabf0610",
@@ -37572,7 +37607,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 나라분지를 중심으로 유력 씨족들이 연합해 형성한 고대 정치 세력이다.",
     ["야마토 정권"],
     ["세계사", "종교와 지역 문화"],
-    [2105],
+    [2110],
   ],
   [
     "world-2cf034fd839f",
@@ -37580,7 +37615,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가마쿠라시는 일본 가나가와현 미우라반도 서쪽에 있는 시이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2106],
+    [2111],
   ],
   [
     "world-945dc597ab52",
@@ -37588,7 +37623,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아시카가 가문이 교토를 중심으로 일본을 통치한 무사 정권으로, 장군의 거처가 있던 무로마치에서 이름이 유래했다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2107],
+    [2112],
   ],
   [
     "world-c37db0f7a33c",
@@ -37596,7 +37631,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테베는 고대 이집트의 나일강 상류에 자리잡은 도시이다.",
     ["테베"],
     ["세계사", "고대 문명과 국가"],
-    [2108],
+    [2113],
   ],
   [
     "world-628117e528a4",
@@ -37604,7 +37639,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "테베 또는 티바는 아테네의 북서쪽, 보이오티아 평원 동쪽에 위치한 고대 그리스의 주요 도시 중의 하나였다.",
     ["테베"],
     ["세계사", "고대 문명과 국가"],
-    [2109],
+    [2114],
   ],
   [
     "world-c4b4c1ff8f62",
@@ -37612,7 +37647,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진에서 갈라져 나온 중국 전국 시대의 나라로, 전국 칠웅 가운데 하나였다.",
     ["한"],
     ["세계사", "고대 문명과 국가"],
-    [2110],
+    [2115],
   ],
   [
     "world-58298362ef7d",
@@ -37620,7 +37655,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "키예프 공국이 그리스 정교를 받아들인 뒤 세운 성당으로 소개된다. 이스탄불의 성 소피아 대성당과는 다른 건물이며, 비잔티움 양식이 러시아·슬라브 문화권에 전해진 사례다.",
     ["성 소피아 성당"],
     ["세계사", "종교와 지역 문화"],
-    [0, 2111],
+    [0, 2116],
   ],
   [
     "world-f491c34140f0",
@@ -37628,7 +37663,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "연(燕, 기원전 11세기~기원전 222년)은 중국 춘추 시대 주나라의 제후국이자, 전국 시대의 전국 칠웅 가운데 하나이다.",
     ["연"],
     ["세계사", "고대 문명과 국가"],
-    [2112],
+    [2117],
   ],
   [
     "world-eb1ffb70aded",
@@ -37636,7 +37671,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진에서 갈라져 나온 중국 전국 시대의 나라로, 한단을 도읍으로 삼았다.",
     ["조"],
     ["세계사", "고대 문명과 국가"],
-    [2113],
+    [2118],
   ],
   [
     "world-6d564dd3edc1",
@@ -37644,7 +37679,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "위(衞, 기원전 11세기? ~ 기원전 209년)는 중국 주나라의 제후국이자 춘추 전국 시대의 주요 국가들 중의 하나이다.",
     ["위"],
     ["세계사", "고대 문명과 국가"],
-    [2114],
+    [2119],
   ],
   [
     "world-62ab8148b680",
@@ -37652,7 +37687,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "초(중국어: 楚, 병음: Chu, ? ~ 기원전 223년)는 현재의 후베이성이 있는 장강 중류 지역에서 일어난 중국 춘추 전국 시대의 나라이며, 춘추오패와 전국칠웅 중의 하나이다.",
     ["초"],
     ["세계사", "고대 문명과 국가"],
-    [2115],
+    [2120],
   ],
   [
     "world-7fc89d715c44",
@@ -37660,7 +37695,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 산둥 지역을 중심으로 임치를 수도로 삼았던 춘추 전국 시대의 나라다.",
     ["제"],
     ["세계사", "고대 문명과 국가"],
-    [2116],
+    [2121],
   ],
   [
     "world-d27ffce66f43",
@@ -37668,7 +37703,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 취푸 일대의 주나라 제후국으로, 공자가 태어난 나라다.",
     ["노"],
     ["세계사", "고대 문명과 국가"],
-    [2117],
+    [2122],
   ],
   [
     "world-eb57b8c26c16",
@@ -37676,7 +37711,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "송은 주나라의 제후국이다.",
     ["송"],
     ["세계사", "고대 문명과 국가"],
-    [2118],
+    [2123],
   ],
   [
     "world-f9f92f660985",
@@ -37684,7 +37719,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 장강 하류 쑤저우 일대를 중심으로 성장한 춘추 시대의 나라로, 월과 경쟁하다 멸망하였다.",
     ["오"],
     ["세계사", "고대 문명과 국가"],
-    [2119],
+    [2124],
   ],
   [
     "world-925073c3fa06",
@@ -37692,7 +37727,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 저장성과 장쑤성 일대의 춘추 전국 시대 나라로, 회계를 도읍으로 삼고 오나라와 경쟁하였다.",
     ["월"],
     ["세계사", "고대 문명과 국가"],
-    [2120],
+    [2125],
   ],
   [
     "world-3a6c4b30010a",
@@ -37700,7 +37735,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "춘추 시대 제후국 진(晉)의 영역이다. 중국을 통일한 진(秦)과 구분한다.",
     ["진(晉)", "진(晋)"],
     ["세계사", "종교와 지역 문화", "고대 문명과 국가"],
-    [0, 2121, 2095, 2026],
+    [0, 2126, 2100, 2031],
   ],
   [
     "world-7f67a3d333e3",
@@ -37708,7 +37743,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "위는 220년 12월 11일부터 266년 2월 4일까지 존속한 국가로, 사서에서는 조위, 대위 또는 위국이라 불린다.",
     ["위"],
     ["세계사", "종교와 지역 문화"],
-    [2122],
+    [2127],
   ],
   [
     "world-8be4ecba13f9",
@@ -37716,7 +37751,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한 이후 중국이 분열된 삼국 시대의 촉를 가리킨다.",
     ["촉"],
     ["세계사", "종교와 지역 문화"],
-    [0, 2101, 2102],
+    [0, 2106, 2107],
   ],
   [
     "world-201cfb833a41",
@@ -37724,7 +37759,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "한 이후 중국이 분열된 삼국 시대의 오를 가리킨다.",
     ["오"],
     ["세계사", "종교와 지역 문화"],
-    [0, 2101, 2102],
+    [0, 2106, 2107],
   ],
   [
     "world-85bfb750108f",
@@ -37732,7 +37767,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서진 또는 사마진은 중세 중국 역사의 통일 왕조로, 혼란했던 난세인 삼국시대를 끝낸 국가이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2123],
+    [2128],
   ],
   [
     "world-30865a206a35",
@@ -37740,7 +37775,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 위진 남북조 시대의 국가 변천 도표에 나타나는 왕조다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 2101, 2102],
+    [0, 2106, 2107],
   ],
   [
     "world-3e3ae062c941",
@@ -37748,7 +37783,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서위(西魏, 535년 ~ 556년)는 중국 남북조 시대 북위가 분열하여 건국된 국가이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2124],
+    [2129],
   ],
   [
     "world-7d4527837803",
@@ -37756,7 +37791,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "동위(東魏, 534년 ~ 550년)는 중국 남북조 시대 북위가 분열하여 건국된 나라이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2125],
+    [2130],
   ],
   [
     "world-39ba85d45dd5",
@@ -37764,7 +37799,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북주(北周, 557년 ~ 581년)는 중국 남북조 시대 때 선비족 우문씨가 관중 지방을 중심으로 건국한 국가이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2126],
+    [2131],
   ],
   [
     "world-5e674ee3c07c",
@@ -37772,7 +37807,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북제(北齊, 550년 ~ 577년)는 중국 남북조 시대 북조의 국가이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2127],
+    [2132],
   ],
   [
     "world-004a9164f4b8",
@@ -37780,7 +37815,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "위진 남북조 시대 도표에서 남조의 왕조 제를 표시한다.",
     ["제"],
     ["세계사", "종교와 지역 문화"],
-    [0, 2098, 2101, 2102],
+    [0, 2103, 2106, 2107],
   ],
   [
     "world-ca40f87e0521",
@@ -37788,7 +37823,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "양(梁, 502년 ~ 557년)은 중국 남북조 시대 강남에 건국된 남조의 3번째 왕조이다.",
     ["양"],
     ["세계사", "종교와 지역 문화"],
-    [675],
+    [680],
   ],
   [
     "world-79b5561c2abc",
@@ -37796,7 +37831,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "진(陳, 557년 ~ 589년)은 중국 남북조 시대 강남 지방에 건국된 남조 최후의 왕조이다.",
     ["진"],
     ["세계사", "종교와 지역 문화"],
-    [676],
+    [681],
   ],
   [
     "world-2f0be0c1a3ac",
@@ -37804,7 +37839,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 오호 십육국 시대에 저족이 세운 나라로, 뒤에 등장한 후진과 구별하여 전진이라 부른다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2128],
+    [2133],
   ],
   [
     "world-504e991f0aa0",
@@ -37812,7 +37847,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "황허·이수·낙수의 세 강에서 이름을 딴 중국의 옛 군으로, 진나라에 편입된 뒤 한나라 때 하남군으로 바뀌었다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2129],
+    [2134],
   ],
   [
     "world-add6a706fa1d",
@@ -37820,7 +37855,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "익주는 현재의 쓰촨 분지와 한중 분지 일대에 존재한 중국 역사상의 옛 행정 구역이며, 후한 13주 중 한 지역이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2130],
+    [2135],
   ],
   [
     "world-0869eb1c8476",
@@ -37828,7 +37863,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중국 간쑤성과 산시성을 흐르는 황허의 큰 지류로, 고대 중국 문명의 발달과 연결되는 강이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2131],
+    [2136],
   ],
   [
     "world-ac87986c6b00",
@@ -37836,7 +37871,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "니혼바시역은 일본 도쿄도 주오구에 있는 철도역이다.",
     ["니혼바시"],
     ["세계사", "종교와 지역 문화"],
-    [2132],
+    [2137],
   ],
   [
     "world-75606971be45",
@@ -37844,7 +37879,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가야바초역은 일본 도쿄도 주오구에 있는 철도역이다.",
     ["가야바초"],
     ["세계사", "종교와 지역 문화"],
-    [2133],
+    [2138],
   ],
   [
     "world-e3b0b86cd546",
@@ -37852,7 +37887,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "일본 도쿄 지요다구의 지하철역으로, 여러 노선이 만나는 주요 교통 거점이다.",
     ["오테마치"],
     ["세계사", "종교와 지역 문화"],
-    [2134],
+    [2139],
   ],
   [
     "world-57f7519f8805",
@@ -37868,7 +37903,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "울산광역시는 대한민국 남동부에 있는 광역시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2135],
+    [2140],
   ],
   [
     "world-28dfd0944255",
@@ -37876,7 +37911,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에도의 매화 정원을 그린 히로시게의 1857년 우키요에 판화로, 뒤에 고흐가 이를 본떠 그렸다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2136],
+    [2141],
   ],
   [
     "world-2c922ffa2176",
@@ -37884,7 +37919,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "생라자르역은 프랑스 파리의 7대 주요 철도 종착역 중 하나로, 공식 명칭은 파리 생라자르역이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2137],
+    [2142],
   ],
   [
     "world-78218dd7abdc",
@@ -37892,7 +37927,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아산만은 충청남도 서북부과 경기도 서남부 사이 황해 연안에 위치한 만으로, 아산시, 당진시, 평택시 사이에 있다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [848],
+    [853],
   ],
   [
     "world-6ae4b960ece1",
@@ -37900,7 +37935,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "경기도 안산에 속한 서해의 섬으로, 1894년 청일 전쟁 초기의 해전이 부근에서 벌어졌다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2138],
+    [2143],
   ],
   [
     "world-695c35aa75af",
@@ -37908,7 +37943,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "성환읍은 천안시 서북구의 읍으로, 천안시 북부의 교통 요지이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2139],
+    [2144],
   ],
   [
     "world-6d2fff6baec5",
@@ -37916,7 +37951,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "스위스 제네바에 있는 국제기구의 본부로, 노동 기준을 세우고 노동자의 권리와 사회 정의를 증진하는 활동을 이끈다.",
     [],
     ["세계사", "세계 대전과 평화", "냉전과 현대 세계"],
-    [2140],
+    [2145],
   ],
   [
     "world-72e3b398c2ba",
@@ -37924,7 +37959,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고대 페르시아의 페르세폴리스에 있는 관문으로, 크세르크세스 1세의 명령으로 세워졌다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2141],
+    [2146],
   ],
   [
     "world-8848d510f147",
@@ -37932,7 +37967,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "중세 러시아 북서부 노브고로드를 중심으로 성장한 국가로, 한자 동맹과의 교역으로 번영하였다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2142],
+    [2147],
   ],
   [
     "world-fdf975ec61cd",
@@ -37940,7 +37975,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 벨기에와 프랑스 북동부의 북해 연안 지역으로, 중세에 직물 산업과 국제 교역으로 번영하였다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2143],
+    [2148],
   ],
   [
     "world-e4f984b2129d",
@@ -37948,7 +37983,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 북동부의 역사적 지역으로, 중세 정기시가 북유럽과 이탈리아의 상업을 연결하였다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2144],
+    [2149],
   ],
   [
     "world-3b28b0d7a7b5",
@@ -37956,7 +37991,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "독일 북부의 지역으로, 북해·발트해 연안과 함부르크·브레멘 등 도시를 포함한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2145],
+    [2150],
   ],
   [
     "world-ddc0539071f0",
@@ -37964,7 +37999,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "이탈리아 북부는 이탈리아반도의 북부 지역을 가리키는 말로, 북부, 북이탈리아, 상이탈리아 등으로 불리기도 한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2146],
+    [2151],
   ],
   [
     "world-167e4778c473",
@@ -37972,7 +38007,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "학살된 유럽 유대인을 위한 기념비, 또는 홀로코스트 기념비는 독일 베를린에 위치한 홀로코스트 희생 유대인들을 추모하기 위한 기념물이다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2147],
+    [2152],
   ],
   [
     "world-2ff45e60c6c9",
@@ -37980,7 +38015,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나치 수용소에서의 노동과 폭력을 다루는 증언에 등장한다. 아우슈비츠 수용소 체계의 한 장소다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [0, 2148, 2149],
+    [0, 2153, 2154],
   ],
   [
     "world-9d6a74a1d2fc",
@@ -37988,7 +38023,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "간디가 바닷가에서 소금을 만들며 영국의 소금 독점에 저항하여, 비폭력 시민 불복종 운동을 널리 알렸다.",
     ["단디"],
     ["세계사", "세계 대전과 평화"],
-    [2150],
+    [2155],
   ],
   [
     "world-a1d203deb3f3",
@@ -37996,7 +38031,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가나 아크라의 기념문으로, 꼭대기의 검은 별이 가나의 독립과 주권을 상징한다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2151],
+    [2156],
   ],
   [
     "world-adeb68158d71",
@@ -38004,7 +38039,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "에티오피아의 아프리카 연합 본부 사진으로 국가 간 협력의 확대를 보여 준다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [0, 2152],
+    [0, 2157],
   ],
   [
     "world-db007fa96e33",
@@ -38012,7 +38047,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "소베츠크(러시아어: Сове́тск, 1946년까지는 독일어: Tilsit 틸지트, 리투아니아어: Tilžė 틸제)는 네만강의 남쪽에 있는 칼리닌그라드주의 도시이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2153],
+    [2158],
   ],
   [
     "world-bb70adfe9542",
@@ -38020,7 +38055,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아미앵은 프랑스 솜주의 주도이다.",
     [],
     ["세계사", "혁명과 국민 국가", "고대 문명과 국가"],
-    [2154],
+    [2159],
   ],
   [
     "world-c2e4de45537b",
@@ -38028,7 +38063,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "멕시코 고원은 멕시코 북부와 중부 일대를 차지하는 고원이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2155],
+    [2160],
   ],
   [
     "world-f92ef86b568b",
@@ -38036,7 +38071,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "아메리카 원주민 문명과 유럽인의 진출을 설명하는 고원 지역이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 2156, 2157],
+    [0, 2161, 2162],
   ],
   [
     "world-521701365429",
@@ -38044,7 +38079,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "파노는 이탈리아 마르케주 페사로에우르비노현의 도시이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2158],
+    [2163],
   ],
   [
     "world-13c2900caa06",
@@ -38052,7 +38087,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미국 인디애나주 와바시강 유역의 뱅센스로, 1732년 프랑스 모피 상인들이 세운 교역 거점에서 발전했다.",
     ["빈센트", "Vincennes"],
     ["세계사", "혁명과 국민 국가", "지역 세계의 교류"],
-    [2159],
+    [2164],
   ],
   [
     "world-d8171368aa49",
@@ -38060,7 +38095,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "알렉산드로스가 인도 원정 중 히다스페스강 전투의 승리를 기념해 세운 도시로, 정확한 위치는 확정되지 않았다.",
     ["니케아"],
     ["세계사", "고대 문명과 국가"],
-    [2160],
+    [2165],
   ],
   [
     "world-78bcfd92e933",
@@ -38068,7 +38103,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대자은사는 중국 산시성의 고도, 시안시 남동쪽 교외에 있는 불교사원이며, 삼장법사 현장, 신라의 승려 원측과의 연고가 있는 사찰로 알려져 있다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2161],
+    [2166],
   ],
   [
     "world-c970a8be5f33",
@@ -38076,7 +38111,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당대 장안의 도시 구조를 설명하는 그림에 표시된 시장이다.",
     ["서시"],
     ["세계사", "종교와 지역 문화"],
-    [0, 2162, 951],
+    [0, 2167, 956],
   ],
   [
     "world-a0b511ad3fed",
@@ -38092,7 +38127,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
       "지역 세계의 교류",
       "혁명과 국민 국가",
     ],
-    [0, 2162],
+    [0, 2167],
   ],
   [
     "world-f9610281d9e1",
@@ -38100,7 +38135,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "페루 부왕령은 에스파냐 제국의 남아메리카 대부분을 아우르던 식민지 행정 단위였다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2163],
+    [2168],
   ],
   [
     "world-47ebf61bdf3b",
@@ -38108,7 +38143,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바다흐샨은 현재의 아프가니스탄 북동부와 타지키스탄 남동부에 위치한 역사적 지역이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [1735],
+    [1740],
   ],
   [
     "world-3e013f3f9161",
@@ -38116,7 +38151,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "튀르키스탄은 역사적으로 중앙아시아 지역을 부르던 말이다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2164],
+    [2169],
   ],
   [
     "world-2edf429694b8",
@@ -38124,7 +38159,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "티그리스강 서쪽에 있던 고대 아시리아의 수도로, 오늘날 이라크에 도시 유적이 남아 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1940],
+    [1945],
   ],
   [
     "world-489a2a93ab84",
@@ -38132,7 +38167,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "미케네는 그리스의 고고학적인 장소로 펠로폰네소스주 아르골리다현에 있다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2165],
+    [2170],
   ],
   [
     "world-de4c255e874d",
@@ -38140,7 +38175,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "그리스 남부의 반도로, 코린토스 지협을 통해 그리스 본토와 이어진다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [1646],
+    [1651],
   ],
   [
     "world-4f12969164aa",
@@ -38148,7 +38183,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "고대 그리스 북부의 도시로, 뒤에 테살로니키에 통합되었으며 정확한 유적 위치는 알려져 있지 않다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [2166],
+    [2171],
   ],
   [
     "world-5d807984ad16",
@@ -38156,7 +38191,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 이란 하마단주에 있는 도시로, 나하반드라고도 한다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2167],
+    [2172],
   ],
   [
     "world-5f9d3b8b301d",
@@ -38164,7 +38199,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "탕헤르는 모로코 북부 탕헤르테투안 지방에 있는 도시이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2168],
+    [2173],
   ],
   [
     "world-d66e8f796993",
@@ -38172,7 +38207,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스 오베르뉴의 중심 도시 클레르몽페랑의 옛 이름이다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [2169],
+    [2174],
   ],
   [
     "world-cfaf80b385d5",
@@ -38180,7 +38215,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나폴리 왕국은 시칠리아 왕국으로도 알려진 1282년에서 1816년 사이 이탈리아반도 남쪽의 교황령 일부를 통치한 국가였다.",
     [],
     ["세계사", "종교와 지역 문화", "지역 세계의 교류", "혁명과 국민 국가"],
-    [2170],
+    [2175],
   ],
   [
     "world-4a098c3a05e7",
@@ -38188,7 +38223,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "종교 문화의 특징을 비교하는 단원 정리의 사원 사진이다. 본문에 도시가 명시되지 않아 다른 동명 사원으로 위치를 대신하지 않는다.",
     [],
     ["세계사", "종교와 지역 문화"],
-    [0, 1619],
+    [0, 1624],
   ],
   [
     "world-1ead645ac66a",
@@ -38196,7 +38231,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오늘날 일본 시마네현 서부에 해당하는 옛 지방의 이름이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2171],
+    [2176],
   ],
   [
     "world-c227b68c415a",
@@ -38204,7 +38239,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "네르친스크는 러시아 자바이칼 지방에 위치한 도시로, 인구는 15,748명(2002년 기준)이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2172],
+    [2177],
   ],
   [
     "world-c53e5443385d",
@@ -38212,7 +38247,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "18세기 이란을 통치했던 잔드 왕조로, 카림 칸이 여러 지방 세력을 통합하여 세웠다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2173],
+    [2178],
   ],
   [
     "world-ed41d2617cc9",
@@ -38220,7 +38255,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "서인도 제도는 아메리카 대륙 카리브해와 대서양 연안 지역을 가리키는 말이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2174],
+    [2179],
   ],
   [
     "world-b3b00e9b1a86",
@@ -38228,7 +38263,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베르데곶은 세네갈에 위치한 반도로 아프리카 대륙의 극서단을 형성한다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [2175],
+    [2180],
   ],
   [
     "world-57436616cc72",
@@ -38236,7 +38271,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "마젤란 원정대가 대서양에서 태평양으로 이어지는 항로에 표시된 해협이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [0, 1077],
+    [0, 1082],
   ],
   [
     "world-e79d7d995f21",
@@ -38244,7 +38279,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "빅토리아 폭포는 잠비아와 짐바브웨 사이 잠베지강에 위치한 폭포이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2176],
+    [2181],
   ],
   [
     "world-85e3519fc38f",
@@ -38252,7 +38287,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "잠베지강은 아프리카에서 4번째로 긴 강이며, 아프리카로부터 인도양으로 흐르는 가장 큰 강이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2177],
+    [2182],
   ],
   [
     "world-933630211708",
@@ -38260,7 +38295,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "줄루 왕국, 때로는 줄루 제국은 남아프리카의 군주국이었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2178],
+    [2183],
   ],
   [
     "world-4f2a8625ea0d",
@@ -38268,7 +38303,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1907년 베트남 하노이에 독립운동가들이 세운 학교로, 교육을 통해 사회 개혁을 추진하였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2179],
+    [2184],
   ],
   [
     "world-ce30624a042e",
@@ -38276,7 +38311,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "가우룽은 홍콩의 가우룽반도 남단 도심 지역을 말하며, 면적은 47 km2이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2180],
+    [2185],
   ],
   [
     "world-513eeceed116",
@@ -38284,7 +38319,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1865년 중국 난징에 세워진 근대식 병기 제조소다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2181],
+    [2186],
   ],
   [
     "world-1243a16422b9",
@@ -38292,7 +38327,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "베네룩스는 유럽의 벨기에와 네덜란드, 룩셈부르크의 세 나라 지역을 통틀어 부르는 말이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2182],
+    [2187],
   ],
   [
     "world-23d8fb870454",
@@ -38300,7 +38335,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "트리에스테는 이탈리아 북동부의 항구 도시이다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [2183],
+    [2188],
   ],
   [
     "world-45b8c0b957b5",
@@ -38308,7 +38343,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "교과서 인용문에 발트해의 지명으로 적힌 표기다. 통상 알려진 슈데텐 산악지역과 일치하지 않아 원문 오기 여부와 지명 확인이 필요하다.",
     [],
     ["세계사", "냉전과 현대 세계"],
-    [0, 2184],
+    [0, 2189],
   ],
   [
     "world-766493cf38b2",
@@ -38316,7 +38351,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "조몬 토기의 출토지로 사진 설명에 표기된 일본의 지명이다. 다른 판본의 미타카 표기와 동일 장소인지 확인이 필요하다.",
     [],
     ["세계사", "고대 문명과 국가"],
-    [0, 2185],
+    [0, 2190],
   ],
   [
     "world-b9c3f6102ecd",
@@ -38324,7 +38359,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "시칠리아 왕국은 1130년 루제루 2세에 의해 건국된 이후 1816년까지 북아프리카와 이탈리아반도의 남쪽에 존재했던 국가였다.",
     [],
     ["세계사", "지역 세계의 교류", "혁명과 국민 국가", "종교와 지역 문화"],
-    [2186],
+    [2191],
   ],
   [
     "world-2a4c7cfc5588",
@@ -38332,7 +38367,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "바르샤바 공국은 1807년부터 1815년까지 지금의 폴란드 지역에 존속했던 국가이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2187],
+    [2192],
   ],
   [
     "world-d4a8d58d90a8",
@@ -38340,7 +38375,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "나폴레옹이 1805년 이탈리아 북부에 세운 왕국으로, 밀라노를 수도로 삼았으며 1814년 해체되었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2188],
+    [2193],
   ],
   [
     "world-c9e65336e40e",
@@ -38348,7 +38383,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프로이센 왕국, 통칭 프로이센은 호엔촐레른 가가 지배했던 독일 북부 지역에 위치한 왕국으로, 1701년 1월 18일부터 1918년 11월 9일까지 존재했다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2189],
+    [2194],
   ],
   [
     "world-e459b591fbce",
@@ -38356,7 +38391,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "덴마크와 노르웨이가 같은 군주 아래 결합한 왕국으로, 나폴레옹 전쟁 말기인 1814년 해체되었다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2190],
+    [2195],
   ],
   [
     "world-aad166ee40da",
@@ -38364,7 +38399,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1804년 나폴레옹 1세가 황제로 즉위하면서 성립한 프랑스의 제정 국가다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2191],
+    [2196],
   ],
   [
     "world-f192a1edf3ff",
@@ -38372,7 +38407,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "오스트리아 제국은 나폴레옹이 프랑스 제1제국을 선포하자 이에 맞서 프란츠 2세가 1804년 신성 로마 제국 내의 합스부르크가 영지를 통합하면서 선포한 제국이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2192],
+    [2197],
   ],
   [
     "world-9f2537e83fcd",
@@ -38380,7 +38415,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "러시아 제국은 1721년 11월에 선포된 이래로 1917년 3월에 해체될 때까지 북부 유라시아의 대부분에 걸쳐 있는 광대한 제국이었다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [2193],
+    [2198],
   ],
   [
     "world-5b55d5bfff60",
@@ -38388,7 +38423,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "북유럽 스칸디나비아반도 동부의 왕국으로, 수도는 스톡홀름이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1473],
+    [1478],
   ],
   [
     "world-078c3d7b1f27",
@@ -38396,7 +38431,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "유럽 이베리아반도의 왕국으로, 에스파냐는 스페인의 다른 이름이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [790],
+    [795],
   ],
   [
     "world-0fbf0c1a2230",
@@ -38404,7 +38439,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "포르투갈 왕국 또는 포르투갈-알가르브 왕국은 1139년부터 1910년까지 유럽에 존재한 옛 왕국이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2194],
+    [2199],
   ],
   [
     "world-0b31745aa4a8",
@@ -38412,7 +38447,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남서아프리카는 1915년부터 1990년까지 현재의 나미비아에 존재했던 남아프리카 공화국의 위임통치령으로, 기존에는 독일 제국의 식민지인 독일령 남서아프리카로 존재하였다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [1979],
+    [1984],
   ],
   [
     "world-0eadf4092864",
@@ -38420,7 +38455,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "남아프리카 연방 또는 남아프리카 연합은 1910년부터 1961년 사이 아프리카 대륙 남단부에 있던 나라로, 오늘날 남아프리카 공화국의 전신이다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2195],
+    [2200],
   ],
   [
     "world-4d89093432bd",
@@ -38428,7 +38463,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1908년부터 1960년까지 벨기에가 지배한 중앙아프리카 식민지로, 오늘날 콩고 민주 공화국에 해당한다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2196],
+    [2201],
   ],
   [
     "world-5a3cf1ff8e65",
@@ -38436,7 +38471,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "프랑스령 콩고 또는 중앙콩고는 프랑스령 적도 아프리카의 일부가 되는 프랑스 식민제국의 주요 구성 식민지 중 하나다.",
     [],
     ["세계사", "혁명과 국민 국가"],
-    [2197],
+    [2202],
   ],
   [
     "world-dc21e03b701a",
@@ -38444,7 +38479,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "1867년 오스트리아와 헝가리가 결합해 형성한 이중 군주국으로, 제1차 세계 대전 뒤 해체되었다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화", "냉전과 현대 세계"],
-    [2198],
+    [2203],
   ],
   [
     "world-3c8582675442",
@@ -38452,7 +38487,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "영국령 인도는 17세기부터 1948년까지 잉글랜드 왕국과 그 이후 대영제국이 직접 통치한 인도아대륙의 지역을 가리킨다.",
     [],
     ["세계사", "혁명과 국민 국가", "세계 대전과 평화"],
-    [2199],
+    [2204],
   ],
   [
     "world-55e0f986e7c1",
@@ -38460,7 +38495,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "몽골 인민공화국은 소비에트 사회주의 공화국 연방 다음으로 세워진 공산주의 국가였다.",
     [],
     ["세계사", "세계 대전과 평화"],
-    [2200],
+    [2205],
   ],
   [
     "world-f0cb2ac2faa3",
@@ -38468,7 +38503,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "당나라 때 오늘날 중국 윈난 지역의 여러 세력을 통합해 성장한 왕국이다.",
     ["남조"],
     ["세계사", "종교와 지역 문화"],
-    [2201],
+    [2206],
   ],
   [
     "world-e8762a25919b",
@@ -38476,7 +38511,7 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "대요, 약칭 요는 거란족이 중국 화북지역을 정복하고 세운 왕조이다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [369],
+    [371],
   ],
   [
     "world-cf5632c7ab52",
@@ -38484,6 +38519,6 @@ export const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [
     "여진족 아골타가 1115년 세운 왕조로, 요와 북송을 무너뜨리고 만주와 중국 북부를 지배하였다.",
     [],
     ["세계사", "지역 세계의 교류"],
-    [378],
+    [380],
   ],
 ];

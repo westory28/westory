@@ -46,6 +46,9 @@ const { getAtlasPlaceProfile } = load("src/lib/historyAtlasProfiles.ts");
 const { ATLAS_SUBJECT_BOUNDS } = load("src/lib/historyAtlas.ts");
 const {
   createAtlasProjection,
+  constrainAtlasTransform,
+  atlasViewportNeedsWorldGeometry,
+  zoomAtlasAt,
   fitAtlasSelection,
   fitAtlasRegionProjection,
   includeAtlasContextBounds,
@@ -61,6 +64,84 @@ const { atlasAreaCameraBounds, findAtlasRegionArea } = load(
 );
 const read = (file) =>
   JSON.parse(readFileSync(`src/data/atlas/${file}`, "utf8"));
+// Panning is independent of the initial viewport rectangle, in all directions.
+for (const scale of [0.5, 1, 2, 12]) {
+  for (const [x, y] of [
+    [3000, 4000],
+    [-3000, -4000],
+    [3000, -4000],
+    [-3000, 4000],
+  ]) {
+    const camera = constrainAtlasTransform({ scale, x, y }, 640, 480);
+    assert.equal(camera.x, x);
+    assert.equal(camera.y, y);
+    assert.equal(camera.scale, scale);
+    const zoomed = zoomAtlasAt(camera, 1.2, [320, 240], 640, 480);
+    assert(
+      Math.abs(
+        (320 - camera.x) / camera.scale - (320 - zoomed.x) / zoomed.scale,
+      ) < 1e-8,
+    );
+    assert(
+      Math.abs(
+        (240 - camera.y) / camera.scale - (240 - zoomed.y) / zoomed.scale,
+      ) < 1e-8,
+    );
+  }
+}
+const recovered = constrainAtlasTransform(
+  { scale: NaN, x: Infinity, y: -Infinity },
+  640,
+  480,
+);
+assert(Object.values(recovered).every(Number.isFinite));
+for (const width of [342, 920]) {
+  const projection = createAtlasProjection(
+    "korea",
+    ATLAS_SUBJECT_BOUNDS.korea,
+    width,
+    480,
+  );
+  const home = { x: 0, y: 0, scale: 1 };
+  assert.equal(
+    atlasViewportNeedsWorldGeometry("korea", projection, home, width, 480),
+    false,
+  );
+  const delhi = projection([77.2, 28.6]);
+  assert.equal(
+    atlasViewportNeedsWorldGeometry(
+      "korea",
+      projection,
+      { x: width / 2 - delhi[0], y: 240 - delhi[1], scale: 1 },
+      width,
+      480,
+    ),
+    true,
+  );
+  assert.equal(
+    atlasViewportNeedsWorldGeometry("korea", projection, home, width, 480),
+    false,
+    "Returning home restores detailed Korean geometry",
+  );
+  const foreignProjection = createAtlasProjection(
+    "korea",
+    [74, 25, 80, 31],
+    width,
+    480,
+  );
+  const seoul = foreignProjection([127, 37.5]);
+  assert.equal(
+    atlasViewportNeedsWorldGeometry(
+      "korea",
+      foreignProjection,
+      { x: width / 2 - seoul[0], y: 240 - seoul[1], scale: 1 },
+      width,
+      480,
+    ),
+    false,
+    "A foreign selection does not pin the viewport to world geometry",
+  );
+}
 // Default Korea framing includes the entire peninsula, Jeju and Dokdo at every
 // supported aspect ratio, while using substantially more of the map than before.
 const koreanLand = read("countries-world.json").countries.features.find(

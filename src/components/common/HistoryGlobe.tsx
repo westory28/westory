@@ -36,6 +36,7 @@ import {
   type GlobeView,
 } from "../../lib/historyGlobeMath";
 import { globeInteractionGeometry } from "../../lib/historyGlobeRendering";
+import { getAtlasMountainTexture } from "../../lib/historyAtlasTerrainTexture";
 import {
   loadAtlasTerrainGeometry,
   type AtlasTerrainCollection,
@@ -254,6 +255,7 @@ export default function HistoryGlobe({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const listHeadingRef = useRef<HTMLHeadingElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
   const pendingPanelFocus = useRef<"detail" | "list" | null>(null);
   const [wide, setWide] = useState(false);
   const [size, setSize] = useState({ width: 600, height: 400 });
@@ -404,6 +406,9 @@ export default function HistoryGlobe({
     currentPage * PAGE_SIZE,
     (currentPage + 1) * PAGE_SIZE,
   );
+  useEffect(() => {
+    if (rowsRef.current) rowsRef.current.scrollTop = 0;
+  }, [currentPage, filtered]);
   const mapItems = useMemo(() => {
     const result = filtered.filter((item) => item.place.coordinates);
     if (dokdoItem && !result.some((item) => item.place.id === ATLAS_DOKDO_ID))
@@ -709,33 +714,30 @@ export default function HistoryGlobe({
         tokens.getPropertyValue(token).trim() || fallback,
       ]),
     ) as Record<keyof typeof GLOBE_COLORS, string>;
-    const texture = (kind: "mountain" | "desert") => {
+    const desertPattern = () => {
       const tile = document.createElement("canvas");
       tile.width = tile.height = 8;
       const pen = tile.getContext("2d");
       if (!pen) return null;
-      if (kind === "desert") {
-        pen.fillStyle = palette["--atlas-terrain-sand"];
-        pen.beginPath();
-        pen.arc(2, 2, 0.7, 0, Math.PI * 2);
-        pen.fill();
-      } else {
-        pen.strokeStyle = palette["--atlas-terrain-ridge"];
-        pen.lineWidth = 0.6;
-        pen.beginPath();
-        pen.moveTo(1, 6);
-        pen.lineTo(4, 2);
-        pen.lineTo(7, 6);
-        pen.stroke();
-      }
+      pen.fillStyle = palette["--atlas-terrain-sand"];
+      pen.beginPath();
+      pen.arc(2, 2, 0.7, 0, Math.PI * 2);
+      pen.fill();
       return (
         canvasRef.current
           ?.getContext("2d", { alpha: false })
           ?.createPattern(tile, "repeat") || null
       );
     };
-    const mountainTexture = texture("mountain"),
-      desertTexture = texture("desert");
+    const mountainTile = getAtlasMountainTexture(
+      palette["--atlas-terrain-ridge"],
+    );
+    const mountainTexture = mountainTile
+      ? canvasRef.current
+          ?.getContext("2d", { alpha: false })
+          ?.createPattern(mountainTile.canvas, "repeat") || null
+      : null;
+    const desertTexture = desertPattern();
     drawRef.current = () => {
       const canvas = canvasRef.current,
         root = rootRef.current;
@@ -1775,7 +1777,7 @@ export default function HistoryGlobe({
         </div>
       ) : (
         <>
-          <div className="history-globe__rows">
+          <div className="history-globe__rows" ref={rowsRef}>
             {pageItems.map((item) => (
               <button
                 key={item.place.id}

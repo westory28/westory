@@ -404,17 +404,24 @@
   max-height: 640px;
   min-height: 0;
   min-width: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 12px;
   background: var(--ws-surface, #ffffff);
+}
+.history-globe__list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 .history-globe__panel-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
   padding: 16px;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
@@ -430,6 +437,10 @@
 .history-globe__rows {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 12px;
 }
 .history-globe__rows button {
@@ -439,6 +450,7 @@
   display: grid;
   gap: 4px;
   min-height: 44px;
+  flex-shrink: 0;
   padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -465,6 +477,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
   padding: 12px;
   font-size: 14px;
 }
@@ -557,8 +571,7 @@
   font-weight: 700;
 }
 .history-globe__dialog-body {
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   min-height: 0;
   flex: 1;
 }
@@ -578,7 +591,9 @@
   pointer-events: all;
   cursor: pointer;
 }
-.history-globe__labels [data-geography-kind="country"].is-active > rect:first-child {
+.history-globe__labels
+  [data-geography-kind="country"].is-active
+  > rect:first-child {
   fill: var(--ws-accent-soft, #fffbeb);
   stroke: var(--ws-accent-text, #92400e);
   stroke-opacity: 0.6;
