@@ -217,10 +217,10 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
   overflow: hidden;
   border-radius: 8px;
-  background: var(--ws-surface-subtle, #f8fafc);
+  background: var(--ws-surface, #fff);
   color: var(--ws-text-soft, #9ca3af);
   font-size: 32px;
 }
@@ -228,7 +228,7 @@
 .teacher-wis-shop__product-image img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 .teacher-wis-shop__product-main {
   min-width: 0;
@@ -404,17 +404,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1;
   overflow: hidden;
   border-radius: 8px;
-  background: var(--ws-surface-subtle, #f8fafc);
+  background: var(--ws-surface, #fff);
   color: var(--ws-text-soft, #9ca3af);
   font-size: 32px;
 }
 .teacher-wis-shop__image-preview img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 .teacher-wis-shop__fields {
   display: grid;
@@ -500,10 +500,106 @@
 }
 .teacher-wis-shop__editor-footer {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   justify-content: flex-end;
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-wis-shop__editor-footer > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.wis-product-crop {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.wis-product-crop__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.wis-product-crop__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  box-shadow: 0 0 0 1px var(--ws-border, #e5e7eb);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.wis-product-crop__stage:active {
+  cursor: grabbing;
+}
+.wis-product-crop__stage:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 4px;
+}
+.wis-product-crop__stage img {
+  position: absolute;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+}
+.wis-product-crop__guides {
+  position: absolute;
+  inset: 33.333%;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  box-shadow: 0 0 0 1px rgb(31 41 55 / 20%);
+  pointer-events: none;
+}
+.wis-product-crop > small {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.wis-product-crop .wis-product-crop__controls {
+  display: grid;
+  gap: 8px;
+}
+.wis-product-crop__controls label > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+.wis-product-crop__controls output {
+  color: var(--ws-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+.wis-product-crop__controls input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--ws-primary, #2563eb);
+  cursor: pointer;
+}
+.wis-product-crop__controls input:disabled {
+  cursor: default;
+}
+.wis-product-crop__error {
+  margin: 0;
+  color: var(--ws-danger-text, #b91c1c);
+  font-size: 14px;
+}
+.wis-product-crop__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wis-product-crop__actions .is-primary {
+  flex: 1 0 100%;
 }
 
 .teacher-wis-shop__queues {
@@ -813,6 +909,12 @@
   .teacher-wis-shop__image-editor {
     grid-template-columns: 96px minmax(0, 1fr);
     align-items: center;
+  }
+  .teacher-wis-shop__image-editor.is-cropping {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .teacher-wis-shop__image-editor > button {
+    grid-column: 1 / -1;
   }
   .teacher-wis-shop__editor-footer .teacher-wis-shop__button {
     width: 100%;

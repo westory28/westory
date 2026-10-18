@@ -19,7 +19,7 @@ const tailwindPath =
 const tailwind = await fs.readFile(tailwindPath, "utf8");
 
 const entry = String.raw`
-import React, {useState} from 'react';
+import React, {useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import StudentPointShopTab from './src/pages/student/components/points/StudentPointShopTab';
 import StudentPointOrdersTab from './src/pages/student/components/points/StudentPointOrdersTab';
@@ -27,6 +27,7 @@ import PointProductsTab from './src/pages/teacher/components/points/PointProduct
 import PointRequestsTab from './src/pages/teacher/components/points/PointRequestsTab';
 import {AppDialogProvider,useAppDialog} from './src/components/common/AppDialogProvider';
 import {optimizeProductImage, PRODUCT_IMAGE_LIMITS} from './src/lib/pointProductImages';
+import {cropProductImage} from './src/lib/pointProductCrop';
 import './src/assets/index.css';
 
 const params=new URLSearchParams(location.search);
@@ -71,6 +72,73 @@ function ImageQualityProbe(){
   }catch(cause){setError(String(cause))}finally{setBusy(false)}
  };
  return <section><h1 className="text-xl font-bold mb-4">상품 이미지 최적화 검증</h1><button type="button" className="rounded-lg bg-blue-600 px-5 py-3 text-white" disabled={busy} onClick={run}>{busy?'이미지 변환 중…':'실제 이미지 최적화 실행'}</button>{error&&<p role="alert">{error}</p>}{result&&<><p role="status" className="my-4 font-bold">{result.passed?'PASS':'FAIL'} · 원본 {result.input.width}×{result.input.height} / {result.input.bytes.toLocaleString()} bytes</p><dl>{['detail','preview','small'].map(key=><div key={key}><dt>{key}</dt><dd>{result[key].width}×{result[key].height} · {result[key].bytes.toLocaleString()} bytes · {result[key].type}</dd></div>)}</dl><p>이미지가 아닌 파일 거절: {String(result.invalidRejected)}</p><div className="grid gap-4 md:grid-cols-2 mt-4">{['detail','preview'].map(key=><figure key={key}><img src={result[key].url} alt={key+' 최적화 결과'} className="w-full"/><figcaption>{key}</figcaption></figure>)}</div></>}</section>;
+}
+function CropQualityProbe(){
+ const [rows,setRows]=useState([]);const [busy,setBusy]=useState(false);const [done,setDone]=useState(false);const runId=useRef(0);
+ useEffect(()=>()=>{runId.current+=1},[]);
+ const run=async()=>{
+  const id=++runId.current;const completed=[];setRows([]);setBusy(true);setDone(false);
+  const add=(label,passed,values)=>{completed.push({label,passed,...values});if(runId.current===id)setRows([...completed])};
+  const canvasFile=async(name,width,height,paint)=>{
+   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const context=canvas.getContext('2d');if(!context)throw new Error('검증 canvas 생성 실패');paint(context,width,height);
+   const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('검증 PNG 생성 실패')),'image/png'));return new File([blob],name,{type:'image/png'});
+  };
+  const measure=async(blob,samples=[])=>{
+   const url=URL.createObjectURL(blob);
+   try{
+    const img=new Image();img.src=url;await img.decode();const canvas=document.createElement('canvas');canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;const context=canvas.getContext('2d');if(!context)throw new Error('픽셀 검증 canvas 생성 실패');context.drawImage(img,0,0);
+    return {width:img.naturalWidth,height:img.naturalHeight,bytes:blob.size,type:blob.type,name:blob.name||'',pixels:samples.map(sample=>({at:[sample.x,sample.y],actual:Array.from(context.getImageData(sample.x,sample.y,1,1).data),expected:sample.color}))};
+   }finally{URL.revokeObjectURL(url)}
+  };
+  const red=[239,68,68,255],green=[22,163,74,255],blue=[37,99,235,255],amber=[245,158,11,255],white=[255,255,255,255];
+  const colors=['#ef4444','#16a34a','#2563eb'];const fill=(context,color,x,y,w,h)=>{context.fillStyle=color;context.fillRect(x,y,w,h)};
+  const cropCase=async(label,file,crop,size,samples=[])=>{
+   try{
+    const input=await measure(file);const cropped=await cropProductImage(file,crop);const measured=await measure(cropped,samples);
+    const passed=measured.width===size&&measured.height===size&&size<=1200&&measured.type==='image/png'&&measured.name===file.name.replace(/\.[^/.]+$/,'')+'-cropped.png'&&measured.pixels.every(pixel=>pixel.actual.every((value,index)=>value===pixel.expected[index]));
+    add(label,passed,{input,crop,expectedSize:size,...measured});return cropped;
+   }catch(error){add(label,false,{error:String(error)});return null}
+  };
+  try{
+   const landscape=await canvasFile('landscape.png',600,300,(context)=>colors.forEach((color,index)=>fill(context,color,index*200,0,200,300)));
+   await cropCase('가로 원본 중앙',landscape,{zoom:1,x:.5,y:.5},300,[{x:20,y:150,color:red},{x:150,y:150,color:green},{x:280,y:150,color:blue}]);
+   await cropCase('가로 원본 왼쪽 선택',landscape,{zoom:3,x:0,y:.5},100,[{x:50,y:50,color:red}]);
+   await cropCase('가로 원본 오른쪽 선택',landscape,{zoom:3,x:1,y:.5},100,[{x:50,y:50,color:blue}]);
+   const portrait=await canvasFile('portrait.png',300,600,(context)=>colors.forEach((color,index)=>fill(context,color,0,index*200,300,200)));
+   await cropCase('세로 원본 중앙',portrait,{zoom:1,x:.5,y:.5},300,[{x:150,y:20,color:red},{x:150,y:150,color:green},{x:150,y:280,color:blue}]);
+   await cropCase('세로 원본 위쪽 선택',portrait,{zoom:3,x:.5,y:0},100,[{x:50,y:50,color:red}]);
+   await cropCase('세로 원본 아래쪽 선택',portrait,{zoom:3,x:.5,y:1},100,[{x:50,y:50,color:blue}]);
+   const square=await canvasFile('square.png',400,400,(context)=>{fill(context,colors[0],0,0,200,200);fill(context,colors[1],200,0,200,200);fill(context,colors[2],0,200,200,200);fill(context,'#f59e0b',200,200,200,200)});
+   await cropCase('정사각형 원본 전체',square,{zoom:1,x:.5,y:.5},400,[{x:50,y:50,color:red},{x:350,y:50,color:green},{x:50,y:350,color:blue},{x:350,y:350,color:amber}]);
+   await cropCase('정사각형 오른쪽 아래 선택',square,{zoom:2,x:1,y:1},200,[{x:100,y:100,color:amber}]);
+   const transparent=await canvasFile('transparent.png',600,300,(context)=>{fill(context,colors[0],40,60,100,180);fill(context,colors[1],250,100,100,100);fill(context,colors[2],460,60,100,180)});
+   const transparentCrop=await cropCase('투명 배경을 흰색으로 합성',transparent,{zoom:1,x:.5,y:.5},300,[{x:10,y:10,color:white},{x:150,y:150,color:green},{x:290,y:290,color:white}]);
+   const small=await canvasFile('small.png',80,120,(context)=>fill(context,colors[2],0,0,80,120));
+   await cropCase('작은 원본 업스케일 방지',small,{zoom:1,x:.5,y:.5},80,[{x:40,y:40,color:blue}]);
+   const smallCrop=await cropCase('소수 크롭 영역 내림 및 업스케일 방지',small,{zoom:3,x:.5,y:.5},26,[{x:13,y:13,color:blue}]);
+   const large=await canvasFile('large-photo.png',2400,1800,(context,width,height)=>{
+    const pixels=context.createImageData(width,height);let seed=20261018;
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const offset=(y*width+x)*4;const noise=(seed>>>24)*.35;pixels.data[offset]=40+150*x/width+noise;pixels.data[offset+1]=30+150*y/height+noise;pixels.data[offset+2]=75+65*Math.sin(x/37)+noise;pixels.data[offset+3]=255}context.putImageData(pixels,0,0);
+   });
+   const largeCrop=await cropCase('큰 원본 정사각형 최대 1200px',large,{zoom:1,x:.5,y:.5},1200);
+   for(const [label,file,size] of [['큰 크롭',largeCrop,1200],['작은 크롭',smallCrop,26],['투명 원본 크롭',transparentCrop,300]]){
+    for(const variant of ['detail','preview']){
+     const limits=PRODUCT_IMAGE_LIMITS[variant];
+     try{
+      if(!file)throw new Error('앞선 크롭 실패');const value=await measure(await optimizeProductImage(file,variant),label==='투명 원본 크롭'?[{x:5,y:5,color:white}]:[]);
+      const passed=value.width===value.height&&value.width>0&&value.width<=Math.min(size,limits.maxSize)&&value.bytes<=limits.maxBytes&&['image/webp','image/jpeg'].includes(value.type)&&value.pixels.every(pixel=>pixel.actual.every((channel,index)=>Math.abs(channel-pixel.expected[index])<3));
+      add(label+' '+variant+' 최적화',passed,{...value,maximumSize:Math.min(size,limits.maxSize),maximumBytes:limits.maxBytes});
+     }catch(error){add(label+' '+variant+' 최적화',false,{error:String(error)})}
+    }
+   }
+   for(const [label,file] of [['이미지가 아닌 파일 거절',new File(['text'],'text.txt',{type:'text/plain'})],['손상된 이미지 거절',new File(['invalid png'],'broken.png',{type:'image/png'})]]){
+    let rejected=false;let message='';try{await cropProductImage(file,{zoom:1,x:.5,y:.5})}catch(error){rejected=true;message=String(error)}add(label,rejected,{rejected,message});
+   }
+  }catch(error){add('검증 준비',false,{error:String(error)})}
+  finally{if(runId.current===id){window.wisShopFixture.cropResult={passed:completed.length===20&&completed.every(row=>row.passed),rows:completed};setBusy(false);setDone(true)}}
+ };
+ const passed=done&&rows.length===20&&rows.every(row=>row.passed);
+ return <section aria-labelledby="crop-quality-title"><h1 id="crop-quality-title" className="text-xl font-bold mb-4">상품 사진 크롭 검증</h1><button type="button" className="rounded-lg bg-blue-600 px-5 py-3 text-white" disabled={busy} onClick={run}>{busy?'크롭·픽셀 검증 중…':'실제 크롭 검증 실행'}</button><p role="status" data-testid="crop-summary" className="my-4 font-bold">{done?(passed?'PASS':'FAIL'):busy?'RUNNING':'대기'} · {rows.filter(row=>row.passed).length}/{rows.length} 통과 · 예정 20건</p><ol>{rows.map((row,index)=><li key={index} className="border-b border-gray-200 py-3" data-testid={'crop-case-'+index}><p className="font-semibold">{row.passed?'PASS':'FAIL'} · {row.label}</p><pre className="text-xs whitespace-pre-wrap break-all mt-2">{JSON.stringify(row,null,2)}</pre></li>)}</ol></section>;
 }
 function App(){
  const {confirm}=useAppDialog();
@@ -139,10 +207,11 @@ function App(){
  };
  const changeView=value=>{setView(value);setSelectedProductId('');setOrderFilter('all');setSelectedOrderId('');setOrderFeedback('')};
  return <>
-  <nav className="fixture-toolbar" aria-label="합성 검증 화면 선택">{[['student-shop','학생 상점'],['student-orders','학생 주문'],['teacher-products','교사 상품'],['teacher-orders','교사 주문'],['image-quality','이미지 검증']].map(([key,label])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>changeView(key)}>{label}</button>)}<span>합성 데이터 · {scenario}{readOnly?' · 읽기 전용':''}</span></nav>
+  <nav className="fixture-toolbar" aria-label="합성 검증 화면 선택">{[['student-shop','학생 상점'],['student-orders','학생 주문'],['teacher-products','교사 상품'],['teacher-orders','교사 주문'],['image-quality','이미지 검증'],['crop-quality','크롭 검증']].map(([key,label])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>changeView(key)}>{label}</button>)}<span>합성 데이터 · {scenario}{readOnly?' · 읽기 전용':''}</span></nav>
   <main className={view.startsWith('teacher')?'fixture-main teacher-layout':'fixture-main student-layout'}>
    {scenario==='archive'&&<div className="fixture-archive" role="status">2025학년도 2학기 · 이전 학기 조회</div>}
    {view==='image-quality'&&<ImageQualityProbe/>}
+   {view==='crop-quality'&&<CropQualityProbe/>}
    {view==='student-shop'&&<StudentPointShopTab wallet={wallet} products={products.filter(p=>p.isActive)} selectedProduct={selectedProduct} purchaseMemo={memo} purchaseSubmitting={purchaseSubmitting} purchaseFeedback={purchaseFeedback} purchaseQuantity={purchaseQuantity} onPurchaseQuantityChange={setPurchaseQuantity} onSelectProduct={selectProduct} onPurchaseMemoChange={setMemo} onCloseRequest={()=>!purchaseSubmitting&&setSelectedProductId('')} onSubmitPurchaseRequest={submitPurchase} onOpenOrders={()=>changeView('student-orders')}/>}
    {view==='student-orders'&&<StudentPointOrdersTab orders={filteredOrders} orderFilter={orderFilter} onOrderFilterChange={setOrderFilter} onCancelOrder={readOnly?undefined:cancelOrder} cancellingOrderId={savingOrderId} feedback={orderFeedback} onOpenShop={()=>changeView('student-shop')}/>}
    {view==='teacher-products'&&<PointProductsTab products={products} productForm={productForm} productFeedback={productFeedback} canManage={!readOnly} readOnly={readOnly} productImagePreviewUrl={productImagePreviewUrl} productImageUploading={productSaving} productSaving={productSaving} productOrderDirty={false} productOrderSaving={false} productOrderFeedback="" onProductFormChange={setProductForm} onProductImageChange={file=>{if(file){setProductImagePreviewUrl(URL.createObjectURL(file));record('local-image',file.name)}}} onEditProduct={editProduct} onResetForm={()=>{setProductForm(emptyForm());setProductImagePreviewUrl('');setProductFeedback('')}} onToggleProduct={p=>{record('toggle',p.id);setProducts(list=>list.map(item=>item.id===p.id?{...item,isActive:!item.isActive}:item))}} onDeleteProduct={p=>{record('delete',p.id);setProducts(list=>list.filter(item=>item.id!==p.id))}} onReorderProducts={()=>{}} onSaveProductOrder={()=>{}} onSubmit={saveProduct}/>}
@@ -199,6 +268,12 @@ async function compileFixture() {
   };
 }
 let compiled = await compileFixture();
+if (process.argv.includes("--check")) {
+  console.log(
+    "Shop fixture bundle PASS; production services excluded; no server started.",
+  );
+  process.exit(0);
+}
 const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>위스 상점 · 합성 검증</title><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><style>body{margin:0;background:#f9fafb}#root{width:100%;min-width:0}.fixture-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #e5e7eb;background:white;font-size:12px}.fixture-toolbar button{min-height:44px;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px}.fixture-toolbar button[aria-pressed=true]{background:#eff6ff;color:#1e3a8a}.fixture-main{max-width:1280px;margin:auto;padding:24px!important;min-height:70vh}.fixture-archive{padding:12px 16px;background:#fffbeb;margin-bottom:16px;border:1px solid #fde68a}.fixture-metrics{margin:24px;font-size:12px}.fixture-metrics pre{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:639px){.fixture-main{padding:16px!important}}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>`;
 
 const server = http.createServer(async (req, res) => {
@@ -253,6 +328,7 @@ console.log(
       "teacher-products",
       "teacher-orders",
       "image-quality",
+      "crop-quality",
     ],
     scenarios: ["normal", "empty", "error", "loading", "readonly", "archive"],
     viewportWidths: [320, 390, 768, 1280, 1440],

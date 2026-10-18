@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import WisProductCard, {
@@ -8,6 +8,8 @@ import WisProductDetailModal from "../../../../components/common/WisProductDetai
 import { getPointFeedbackToneClass } from "../../../../constants/pointLabels";
 import { formatWisAmount } from "../../../../lib/pointFormatters";
 import { getProductCardImage } from "../../../../lib/pointProductImages";
+import type { ProductImageCrop } from "../../../../lib/pointProductCrop";
+import ProductImageCropper from "./ProductImageCropper";
 import type { PointProduct } from "../../../../types";
 import "./TeacherWisShop.css";
 
@@ -95,6 +97,37 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   const [editorOpen, setEditorOpen] = useState(false);
   const editorRef = useRef<HTMLFormElement>(null);
   const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const cropSession = useRef(0);
+  const [pendingCrop, setPendingCrop] = useState<{
+    file: File;
+    crop?: ProductImageCrop;
+    session: number;
+  } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{
+    file: File;
+    crop: ProductImageCrop;
+  } | null>(null);
+  const clearCrop = () => {
+    cropSession.current += 1;
+    setPendingCrop(null);
+    setSelectedImage(null);
+  };
+  useEffect(() => {
+    if (!canManage) clearCrop();
+  }, [canManage]);
+  useEffect(() => {
+    if (!productImagePreviewUrl) setSelectedImage(null);
+  }, [productImagePreviewUrl]);
+  const startCrop = (file: File, crop?: ProductImageCrop) => {
+    cropSession.current += 1;
+    setPendingCrop({ file, crop, session: cropSession.current });
+  };
+  const finishCrop = () => {
+    cropSession.current += 1;
+    setPendingCrop(null);
+    imageInputRef.current?.focus();
+  };
   const normalizedSearchQuery = normalizeSearchValue(searchQuery);
   const filteredProducts = useMemo(
     () =>
@@ -118,6 +151,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
     Number(editingProduct?.soldStock || 0);
 
   const openEditor = (trigger: HTMLButtonElement, product?: PointProduct) => {
+    clearCrop();
     editorTriggerRef.current = trigger;
     if (product) onEditProduct(product);
     else onResetForm();
@@ -133,6 +167,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
     });
   };
   const closeEditor = () => {
+    clearCrop();
     setEditorOpen(false);
     editorTriggerRef.current?.focus();
   };
@@ -444,7 +479,13 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
       {editorOpen && canManage && (
         <form
           ref={editorRef}
-          onSubmit={onSubmit}
+          onSubmit={(event) => {
+            if (pendingCrop || productImageUploading) {
+              event.preventDefault();
+              return;
+            }
+            onSubmit(event);
+          }}
           className="teacher-wis-shop__editor"
           aria-labelledby="wis-product-editor-title"
           aria-busy={productImageUploading}
@@ -464,28 +505,62 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
           </div>
           <fieldset disabled={productImageUploading}>
             <div className="teacher-wis-shop__editor-layout">
-              <div className="teacher-wis-shop__image-editor">
-                <div className="teacher-wis-shop__image-preview">
-                  {productImagePreviewUrl ? (
-                    <img
-                      src={productImagePreviewUrl}
-                      alt="선택한 상품 이미지"
-                    />
-                  ) : (
-                    <i className="fas fa-image" aria-hidden="true" />
-                  )}
-                </div>
+              <div
+                className={`teacher-wis-shop__image-editor${pendingCrop ? " is-cropping" : ""}`}
+              >
+                {pendingCrop ? (
+                  <ProductImageCropper
+                    key={pendingCrop.session}
+                    file={pendingCrop.file}
+                    initialCrop={pendingCrop.crop}
+                    onCancel={finishCrop}
+                    onApply={(file, crop) => {
+                      if (
+                        pendingCrop.session !== cropSession.current ||
+                        !canManage
+                      )
+                        return;
+                      onProductImageChange(file);
+                      setSelectedImage({ file: pendingCrop.file, crop });
+                      finishCrop();
+                    }}
+                  />
+                ) : (
+                  <div className="teacher-wis-shop__image-preview">
+                    {productImagePreviewUrl ? (
+                      <img
+                        src={productImagePreviewUrl}
+                        alt="선택한 상품 이미지"
+                      />
+                    ) : (
+                      <i className="fas fa-image" aria-hidden="true" />
+                    )}
+                  </div>
+                )}
                 <label className="teacher-wis-shop__field">
                   <span>상품 사진</span>
                   <input
+                    ref={imageInputRef}
                     type="file"
                     accept="image/*"
                     onChange={(event) => {
-                      onProductImageChange(event.target.files?.[0] || null);
+                      const file = event.target.files?.[0];
+                      if (file) startCrop(file);
                       event.target.value = "";
                     }}
                   />
                 </label>
+                {selectedImage && !pendingCrop && (
+                  <button
+                    type="button"
+                    className="teacher-wis-shop__button"
+                    onClick={() =>
+                      startCrop(selectedImage.file, selectedImage.crop)
+                    }
+                  >
+                    사진 다시 자르기
+                  </button>
+                )}
               </div>
               <div className="teacher-wis-shop__fields">
                 <label className="teacher-wis-shop__field">
@@ -592,10 +667,13 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
             </p>
           )}
           <div className="teacher-wis-shop__editor-footer">
+            {pendingCrop && (
+              <span role="status">사진 자르기를 적용하거나 취소해 주세요.</span>
+            )}
             <button
               type="submit"
               className="teacher-wis-shop__button is-primary"
-              disabled={productImageUploading}
+              disabled={productImageUploading || Boolean(pendingCrop)}
             >
               {productImageUploading ? "저장 중…" : "상품 저장"}
             </button>

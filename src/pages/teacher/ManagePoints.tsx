@@ -1469,7 +1469,7 @@ const ManagePoints: React.FC = () => {
 
   const handleSaveProductWithUpload = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canManage) return;
+    if (!canManage || productImageUploading) return;
     if (!productForm.name.trim()) {
       setProductFeedback("상품명을 입력해 주세요.");
       return;
