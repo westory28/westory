@@ -1,216 +1,56 @@
 .weplay-studio-intro {
-  --studio-ink: #171e24;
-  --studio-paper: #fff8e8;
-  --studio-gold: #d8ae66;
-  position: fixed;
-  inset: 0;
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  height: 100dvh;
-  max-width: none;
-  max-height: none;
-  margin: 0;
-  padding: 24px;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: var(--studio-ink);
-  color: var(--studio-paper);
-  font-family: "Noto Sans KR", sans-serif;
-}
-
-.weplay-studio-intro::backdrop {
-  background: var(--studio-ink);
-}
-
-.weplay-studio-intro[open] {
+  position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: clamp(440px, 64dvh, 560px);
+  padding: 24px 24px 80px;
+  overflow: hidden;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary, #2563eb);
+  font-family: "Noto Sans KR", sans-serif;
 }
-
-.weplay-studio-intro__composition {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-bottom: 24px;
-  animation: weplay-studio-depart 240ms ease-in 2160ms both;
-}
-
-.weplay-studio-intro__seal {
-  width: 160px;
-  height: 160px;
-  overflow: visible;
-}
-
-.weplay-studio-intro__frame {
-  stroke: var(--studio-gold);
-  stroke-width: 1.5;
-  animation: weplay-studio-frame 600ms ease-out both;
-  transform-origin: 80px 80px;
-}
-
-.weplay-studio-intro__mark {
-  stroke: var(--studio-paper);
-  stroke-width: 8;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: weplay-studio-inscribe 720ms cubic-bezier(0.4, 0, 0.2, 1) 160ms
-    forwards;
-}
-
-.weplay-studio-intro__spark {
-  stroke: var(--studio-gold);
-  stroke-width: 2;
-  transform-origin: 80px 42px;
-  animation: weplay-studio-spark 480ms ease-out 720ms both;
-}
-
-.weplay-studio-intro__origin {
-  margin: 16px 0 8px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
-  letter-spacing: 0.4em;
-  text-indent: 0.4em;
-  color: var(--studio-gold);
-  animation: weplay-studio-type 480ms ease-out 480ms both;
-}
-
-.weplay-studio-intro__title {
-  margin: 0;
-  font-size: clamp(32px, 7vw, 48px);
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: 0.2em;
-  text-indent: 0.2em;
-  animation: weplay-studio-type 480ms ease-out 600ms both;
-}
-
-.weplay-studio-intro__rule {
-  width: 32px;
-  height: 2px;
-  margin-top: 24px;
-  background: var(--studio-gold);
-  animation: weplay-studio-rule 600ms ease-out 800ms both;
-}
-
-.weplay-studio-intro__skip {
+.weplay-studio-intro__composition { display: grid; justify-items: center; width: 100%; }
+.weplay-studio-intro__art { width: min(288px, 100%); height: auto; opacity: var(--intro-art-opacity, 0); }
+.weplay-studio-intro__ocean { fill: var(--ws-primary-soft, #eff6ff); stroke: var(--ws-primary, #2563eb); stroke-opacity: .16; }
+.weplay-studio-intro__land { fill: var(--ws-surface, #fff); stroke: var(--ws-primary, #2563eb); stroke-opacity: .35; stroke-width: .8; }
+.weplay-studio-intro__grid { stroke: var(--ws-primary, #2563eb); stroke-opacity: .15; stroke-width: .8; }
+.weplay-studio-intro__orbit { stroke: var(--ws-accent, #f59e0b); stroke-width: 2; stroke-linecap: round; }
+.weplay-studio-intro__point { fill: var(--ws-accent, #f59e0b); }
+.weplay-studio-intro__controller { stroke: var(--ws-primary, #2563eb); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.weplay-studio-intro__controller path { stroke-dasharray: 1; }
+.weplay-studio-intro__controller circle { fill: var(--ws-accent, #f59e0b); stroke: none; }
+.weplay-studio-intro__wordmarks { display: grid; text-align: center; font-size: clamp(40px, 5vw, 64px); font-weight: 800; letter-spacing: -.025em; line-height: 1.25; }
+.weplay-studio-intro__wordmarks > div { grid-area: 1 / 1; opacity: 0; }
+.weplay-studio-intro__wordmarks span + span { color: var(--ws-accent, #f59e0b); }
+.weplay-studio-intro .weplay-studio-intro__skip {
   position: absolute;
-  right: max(24px, env(safe-area-inset-right));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  right: 24px;
+  bottom: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   min-height: 44px;
   padding: 8px 16px;
-  border: 1px solid #d8ae6680;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--studio-paper);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #1f2937);
   font: inherit;
   font-size: 14px;
   cursor: pointer;
 }
-
-.weplay-studio-intro__skip:hover {
-  border-color: var(--studio-gold);
-}
-
-.weplay-studio-intro__skip:focus-visible {
-  outline: 2px solid var(--studio-gold);
-  outline-offset: 4px;
-}
-
-.weplay-studio-intro--paused * {
-  animation-play-state: paused !important;
-}
-
-@keyframes weplay-studio-frame {
-  from {
-    opacity: 0;
-    transform: scale(0.86);
-  }
-  to {
-    opacity: 0.65;
-    transform: scale(1);
-  }
-}
-
-@keyframes weplay-studio-inscribe {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes weplay-studio-spark {
-  from {
-    opacity: 0;
-    transform: scale(0.4) rotate(-90deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0);
-  }
-}
-
-@keyframes weplay-studio-type {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes weplay-studio-rule {
-  from {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-}
-
-@keyframes weplay-studio-depart {
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .weplay-studio-intro * {
-    animation: none !important;
-  }
-
-  .weplay-studio-intro__mark {
-    stroke-dashoffset: 0;
-  }
-
-  .weplay-studio-intro__frame {
-    opacity: 0.65;
-  }
-}
-
-@media (max-height: 420px) {
-  .weplay-studio-intro__seal {
-    width: 96px;
-    height: 96px;
-  }
-
-  .weplay-studio-intro__composition {
-    padding-bottom: 44px;
-  }
-
-  .weplay-studio-intro__origin {
-    margin-top: 8px;
-  }
+.weplay-studio-intro__skip:hover { background: var(--ws-primary-soft, #eff6ff); }
+.weplay-studio-intro__skip:focus-visible { outline: 2px solid var(--ws-primary, #2563eb); outline-offset: 4px; }
+/* Explicitly requested: this short, skippable opening also runs with OS reduced motion.
+   RAF owns the sequence, so global animation-duration overrides cannot erase it. */
+@media (max-width: 767px) {
+  .weplay-studio-intro { padding-inline: 16px; }
+  .weplay-studio-intro .weplay-studio-intro__skip { right: 16px; bottom: 16px; }
 }

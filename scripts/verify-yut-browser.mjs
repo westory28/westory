@@ -268,11 +268,11 @@ async function capture(page, name) {
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
   const intro = await open(1280, "portal=student&uid=qa-intro");
-  await intro.getByRole("dialog", { name: "WEPLAY", exact: true }).waitFor();
+  await intro.locator("section.weplay-studio-intro").waitFor();
   assert.equal(await intro.evaluate(() => window.yutQA?.calls.length || 0), 0);
   await intro.waitForTimeout(1050);
   await capture(intro, "studio-intro");
-  await intro.keyboard.press("Escape");
+  await intro.getByRole("button", { name: /건너뛰기/ }).press("Escape");
   await intro
     .getByRole("button", { name: "새로운 판 만들기", exact: true })
     .waitFor();

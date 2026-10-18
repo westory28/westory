@@ -73,7 +73,7 @@ createRoot(document.getElementById('root')).render(<Fixture/>);
 const bundle = await build({
   stdin: { contents: harness, loader: 'tsx', resolveDir: root }, bundle: true, write: false,
   format: 'esm', platform: 'browser', target: 'es2022', outfile: path.join(os.tmpdir(), 'westory-title-qa.js'),
-  loader: { '.svg': 'dataurl' },
+  loader: { '.svg': 'dataurl', '.webp': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
   define: { 'process.env.NODE_ENV': '"production"' },
   plugins: [{ name: 'title-boundary-fixture', setup(plugin) {
     plugin.onResolve({ filter: /^fixture:|^firebase\/firestore$|^\.\/firebase$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/(firebase|siteSettings)$|(?:^|\/)components\/common\/AppToastProvider$/ }, () => ({ path: 'service', namespace: 'fixture' }));

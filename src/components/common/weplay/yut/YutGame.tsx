@@ -17,7 +17,7 @@ import {
   previewYutCommand,
   YUT_PREVIEW_UID,
 } from "../../../../lib/yutPreview";
-import useYutMusic from "../useYutMusic";
+import type useYutMusic from "../useYutMusic";
 import { PROFESSIONS, YutSprite, YutIcon } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
@@ -115,10 +115,12 @@ export default function YutGame({
   portal,
   preview = false,
   onBack,
+  music,
 }: {
   portal: "student" | "teacher";
   preview?: boolean;
   onBack: () => void;
+  music: ReturnType<typeof useYutMusic>;
 }) {
   const { config, currentUser } = useAuth();
   const [local, setLocal] = useState(preview);
@@ -146,7 +148,6 @@ export default function YutGame({
   const generation = useRef(0);
   const pendingRef = useRef(false);
   const mounted = useRef(true);
-  const music = useYutMusic();
   const uid = local ? YUT_PREVIEW_UID : currentUser?.uid || "";
   const identity = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}:${local}`;
   const identityRef = useRef(identity);
@@ -462,16 +463,6 @@ export default function YutGame({
       aria-label="사농공상 윷놀이"
     >
       <div className="yut-topbar">
-        <button
-          type="button"
-          className="yut-icon-button"
-          aria-label={room ? "방 나가기" : "전체 게임"}
-          title={room ? "방 나가기" : "전체 게임"}
-          onClick={back}
-          disabled={Boolean(pending)}
-        >
-          <YutIcon name="back" />
-        </button>
         <span className="yut-topbar-brand">
           WESTORY <b>·</b> WEPLAY
         </span>
@@ -484,6 +475,16 @@ export default function YutGame({
             onClick={() => setDialog("rules")}
           >
             <YutIcon name="info" />
+          </button>
+          <button
+            type="button"
+            className="yut-icon-button"
+            aria-label={room ? "방 나가기" : "전체 게임"}
+            title={room ? "방 나가기" : "전체 게임"}
+            onClick={back}
+            disabled={Boolean(pending)}
+          >
+            <YutIcon name="back" />
           </button>
           <button
             type="button"

@@ -1,12 +1,16 @@
-.teacher-weplay-content { color: var(--ws-text, #1f2937); }
+.teacher-weplay-content { color: var(--ws-text, #1f2937); container-type: inline-size; }
 .teacher-weplay-workspace.teacher-sub-workspace { grid-template-columns: minmax(0, 1fr); }
 .teacher-weplay-workspace.teacher-sub-workspace--page > .teacher-weplay-content,
 .teacher-weplay-workspace > .teacher-sub-workspace-footer { grid-column: 1; }
-.teacher-weplay-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.teacher-weplay-navigation, .teacher-weplay-header-actions { display: flex; align-items: center; gap: 8px; }
+.teacher-weplay-header-actions { margin-left: auto; }
+.teacher-weplay-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
 .teacher-weplay-title, .teacher-weplay-section-title, .teacher-weplay-actions, .teacher-weplay-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .teacher-weplay-title, .teacher-weplay-section-title { justify-content: space-between; margin-bottom: 16px; }
-.teacher-weplay-title h1 { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 24px; font-weight: 800; }
-.teacher-weplay-name-editor { margin-bottom: 24px; }
+.teacher-weplay-title h1 { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.teacher-weplay-management { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; }
+.teacher-weplay-management > * { min-width: 0; }
+.teacher-weplay-name-editor { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--ws-border, #e5e7eb); }
 .teacher-weplay-name-editor > label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 700; }
 .teacher-weplay-name-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .teacher-weplay-name-controls input { flex: 1 1 240px; width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); padding: 8px 12px; background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font: inherit; box-sizing: border-box; }
@@ -14,7 +18,8 @@
 .teacher-weplay-name-controls input[aria-invalid="true"] { border-color: var(--ws-danger-text, #b91c1c); }
 .teacher-weplay-content h2 { margin: 0; font-size: 18px; font-weight: 700; }
 .teacher-weplay-content p { line-height: 1.6; margin: 12px 0; overflow-wrap: anywhere; }
-.teacher-weplay-section { margin-bottom: 24px; padding: 24px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-lg, 12px); background: var(--ws-surface, #fff); }
+.teacher-weplay-section { padding: 16px; }
+.teacher-weplay-preview-art { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; margin-top: 16px; border-radius: var(--radius-md, 8px); }
 .teacher-weplay-button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; padding: 8px 16px; gap: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font-size: 14px; font-weight: 700; cursor: pointer; }
 .teacher-weplay-button.is-primary { background: var(--ws-primary, #2563eb); border-color: var(--ws-primary, #2563eb); color: var(--ws-surface, #fff); }
 .teacher-weplay-button:disabled { opacity: .6; cursor: not-allowed; }
@@ -32,7 +37,8 @@
 .teacher-weplay-difficulty button { flex: 1; }
 .teacher-weplay-difficulty button[aria-pressed="true"] { color: var(--ws-primary-text, #1e3a8a); border-color: var(--ws-primary, #2563eb); background: var(--ws-primary-soft, #eff6ff); }
 .teacher-weplay-preview .weplay-page { max-width: none; padding: 0; }
-@media (max-width: 767px) { .teacher-weplay-section { padding: 16px; } .teacher-weplay-title h1 { font-size: 20px; } .teacher-weplay-difficulty button { padding-inline: 8px; } }
+@media (max-width: 767px) { .teacher-weplay-section { padding: 16px; } .teacher-weplay-difficulty button { padding-inline: 8px; } }
+@container (min-width: 800px) { .teacher-weplay-management { grid-template-columns: minmax(0, 2fr) minmax(256px, 1fr); } }
 .teacher-weplay-pool { border-block: 1px solid var(--ws-border, #e5e7eb); margin-top: 16px; }
 .teacher-weplay-pool > summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-weight: 700; }
 .teacher-weplay-pool > summary > span { margin-right: 12px; }
@@ -53,7 +59,7 @@
 .teacher-weplay-words label { display: flex; align-items: center; gap: 8px; padding: 8px 0; min-height: 44px; min-width: 0; flex: 1; font-size: 14px; cursor: pointer; }
 .teacher-weplay-words .is-excluded strong { text-decoration: line-through; color: var(--ws-text-muted, #6b7280); }
 .teacher-weplay-button.is-danger { color: var(--ws-danger-text, #b91c1c); }
-.teacher-weplay-difficulty-settings { padding-top: 24px; }
+.teacher-weplay-difficulty-settings { padding-top: 16px; }
 .teacher-weplay-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 1023px) { .teacher-weplay-word-tools { grid-template-columns: 1fr; } }
 .teacher-weplay-difficulty-heading { display: flex; align-items: center; gap: 4px; }
@@ -67,17 +73,18 @@
 .teacher-weplay-help-popover { left: 0; right: auto; max-width: 100%; box-sizing: border-box; }
 
 .teacher-weplay-operation-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; }
-.teacher-weplay-table-scroll { overflow-x: auto; margin-top: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); }
+.teacher-weplay-table-scroll { overflow-x: auto; margin-top: 8px; border-block: 1px solid var(--ws-border, #e5e7eb); }
 .teacher-weplay-table-scroll:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
-.teacher-weplay-settings-table { width: 100%; min-width: 640px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-.teacher-weplay-settings-table th, .teacher-weplay-settings-table td { padding: 8px; text-align: center; border-bottom: 1px solid var(--ws-border, #e5e7eb); }
+.teacher-weplay-settings-table { width: 100%; min-width: 480px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.teacher-weplay-settings-table th, .teacher-weplay-settings-table td { padding: 4px; text-align: center; border-bottom: 1px solid var(--ws-border, #e5e7eb); }
+.teacher-weplay-settings-table thead th { padding-block: 8px; }
 .teacher-weplay-settings-table thead th { background: var(--ws-surface-muted, #f8fafc); font-weight: 700; }
-.teacher-weplay-settings-table thead th > span { font-weight: 400; white-space: nowrap; color: var(--ws-text-muted, #6b7280); }
+.teacher-weplay-settings-table th > span { font-weight: 400; white-space: nowrap; color: var(--ws-text-muted, #6b7280); }
 .teacher-weplay-settings-table thead tr:first-child th + th { border-left: 1px solid var(--ws-border, #e5e7eb); }
 .teacher-weplay-settings-table tbody td:nth-child(3), .teacher-weplay-settings-table tbody td:nth-child(6) { border-left: 1px solid var(--ws-border, #e5e7eb); }
 .teacher-weplay-settings-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--ws-surface, #fff); white-space: nowrap; border-right: 1px solid var(--ws-border, #e5e7eb); }
 .teacher-weplay-settings-table tbody tr:last-child > * { border-bottom: 0; }
-.teacher-weplay-settings-table input { display: block; width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); background: var(--ws-surface, #fff); font-size: 16px; color: var(--ws-text, #1f2937); text-align: center; box-sizing: border-box; }
+.teacher-weplay-settings-table input { display: block; width: 100%; max-width: 72px; min-width: 0; min-height: 44px; margin-inline: auto; padding: 8px 4px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: var(--radius-md, 8px); background: var(--ws-surface, #fff); font-size: 16px; color: var(--ws-text, #1f2937); text-align: center; box-sizing: border-box; }
 .teacher-weplay-settings-table input[aria-invalid="true"] { border-color: var(--ws-danger-text, #b91c1c); }
 .teacher-weplay-settings-table input:disabled { background: var(--ws-surface-muted, #f8fafc); color: var(--ws-text-muted, #6b7280); }
 .teacher-weplay-preview-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
