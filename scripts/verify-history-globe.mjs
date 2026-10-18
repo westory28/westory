@@ -1609,7 +1609,10 @@ assert.equal(
 nextCameraFrame(1060);
 nextCameraFrame(1180);
 nextCameraFrame(1360);
-equal(cameraView.current, { ...cameraTarget, longitude: 130 });
+const { zoom: finalCameraZoom, ...finalCameraPosition } = cameraView.current;
+equal(finalCameraPosition, { longitude: 130, latitude: 37, roll: 0 });
+// Geometric zoom interpolation can finish one floating-point ULP below its target.
+assert(Math.abs(finalCameraZoom - cameraTarget.zoom) < 1e-12);
 equal(projectionCenter.current, { x: 0.67, y: 0.6 });
 assert.equal(cameraCommits, 1);
 assert.equal(
