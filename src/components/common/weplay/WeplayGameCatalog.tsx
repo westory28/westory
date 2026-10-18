@@ -11,12 +11,12 @@ export default function WeplayGameCatalog({
 }) {
   return (
     <section className="weplay-catalog" aria-labelledby="weplay-catalog-title">
-      <header className="weplay-catalog-heading">
+      <div className="weplay-catalog-heading">
         <h1 id="weplay-catalog-title" tabIndex={-1}>
           {portal === "teacher" ? "위플레이 관리" : "위플레이"}
         </h1>
         <span>전체 게임 {WEPLAY_GAMES.length}</span>
-      </header>
+      </div>
       <ul className="weplay-catalog-grid">
         {WEPLAY_GAMES.map((game) => (
           <li key={game.id}>
