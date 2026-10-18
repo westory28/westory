@@ -793,6 +793,14 @@
   .teacher-wis-shop__products {
     gap: 16px;
   }
+  .teacher-wis-shop__product-title h3 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.5;
+  }
   .teacher-wis-shop__price {
     font-size: 18px;
   }

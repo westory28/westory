@@ -514,7 +514,13 @@
   }
   .wis-shop-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px 12px;
+    gap: 16px 12px;
+  }
+  .wis-product-card {
+    padding: 12px;
+  }
+  .wis-product-photo {
+    aspect-ratio: 1;
   }
   .wis-shop-toolbar {
     padding: 16px 0;
@@ -525,8 +531,29 @@
   .wis-product-info {
     padding-top: 12px;
   }
+  .wis-product-info h3 {
+    min-height: 42px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .wis-product-info h3,
+  .wis-product-info h3 button {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .wis-product-description {
+    display: none;
+  }
   .wis-product-price {
     font-size: 18px;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .wis-product-action {
+    margin-top: auto;
   }
   .wis-product-overlay {
     padding: 12px;
@@ -548,5 +575,11 @@
   }
   .wis-order-heading {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 359px) {
+  .wis-shop-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
