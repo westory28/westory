@@ -7,6 +7,7 @@ import {
   academicCalendarErrorMessage,
 } from "../../../lib/academicCalendar";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
@@ -51,6 +52,8 @@ const EventModal: React.FC<EventModalProps> = ({
   const { config } = useAuth();
   const { categories } = useScheduleCategories();
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
+  const deletePendingRef = useRef(false);
 
   const [title, setTitle] = useState("");
   const [labelColor, setLabelColor] = useState("");
@@ -403,10 +406,19 @@ const EventModal: React.FC<EventModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!eventData || !config || !confirm("이 일정을 삭제하시겠습니까?"))
-      return;
+    if (!eventData || !config || loading || deletePendingRef.current) return;
+    deletePendingRef.current = true;
     setLoading(true);
     try {
+      if (
+        !(await confirm({
+          title: "일정을 삭제하시겠습니까?",
+          message: `“${eventData.title}” 일정을 삭제합니다.`,
+          confirmLabel: "삭제",
+          tone: "danger",
+        }))
+      )
+        return;
       await mutateAcademicCalendar({
         action: "DELETE_EVENT",
         year: config.year,
@@ -428,6 +440,7 @@ const EventModal: React.FC<EventModalProps> = ({
         message: academicCalendarErrorMessage(error),
       });
     } finally {
+      deletePendingRef.current = false;
       setLoading(false);
     }
   };
