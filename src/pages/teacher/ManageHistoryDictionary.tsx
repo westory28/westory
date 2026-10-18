@@ -1169,7 +1169,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
                   <div
                     ref={termListRef}
-                    className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
+                    className="ws-surface mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto p-3"
                   >
                     {!visibleTerms.length &&
                       loadedPanels.terms &&
@@ -1292,7 +1292,7 @@ const ManageHistoryDictionary: React.FC = () => {
 
                   <div
                     ref={studentWordListRef}
-                    className="mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto pr-1"
+                    className="ws-surface mt-4 max-h-[calc(100vh-22rem)] min-h-[26rem] overflow-y-auto p-3"
                   >
                     {!visibleStudentWords.length &&
                       loadedPanels.studentWords &&

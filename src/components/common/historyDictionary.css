@@ -26,14 +26,16 @@
 }
 .history-dictionary-search-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 128px;
+  grid-template-columns: minmax(180px, 1.8fr) repeat(5, minmax(0, 1fr));
+  align-items: end;
   gap: 12px;
 }
-.history-dictionary-theme-filters {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+.history-dictionary-search-row .history-dictionary-field > span,
+.history-dictionary-search-row .history-dictionary-filter-label {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  white-space: nowrap;
 }
 
 .history-dictionary-filter-label {
@@ -43,7 +45,14 @@
   gap: 4px;
 }
 .history-dictionary-search-results {
-  scroll-margin-top: 96px;
+  scroll-margin-top: var(--history-dictionary-sticky-top, 80px);
+  padding: 12px 24px 24px;
+}
+.history-dictionary-results-heading {
+  min-height: 44px;
+}
+.history-dictionary-results-heading .history-dictionary-count {
+  margin: 0;
 }
 .history-dictionary-tags,
 .history-dictionary-active-filters {
@@ -53,10 +62,10 @@
   gap: 8px;
 }
 .history-dictionary-active-filters {
-  margin: 12px 0;
+  margin: 0 0 16px;
 }
 .history-dictionary-active-filters:empty {
-  margin: 16px 0 0;
+  display: none;
 }
 /* The visible badge follows its text, never the height of the surrounding row. */
 .history-dictionary-tag {
@@ -94,11 +103,6 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-@container dictionary-initial-region (max-width: 640px) {
-  .history-dictionary-theme-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 .history-dictionary-field {
   display: flex;
   flex-direction: column;
@@ -120,6 +124,25 @@
   padding: 8px 12px;
   font-size: 16px;
   font-weight: 400;
+}
+@container dictionary-initial-region (max-width: 759px) {
+  .history-dictionary-search-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .history-dictionary-query-field {
+    grid-column: span 3;
+  }
+  .history-dictionary-search-row select {
+    padding-inline: 4px;
+    text-overflow: ellipsis;
+  }
+  .history-dictionary-search-results {
+    padding: 8px 12px 16px;
+  }
+  .history-dictionary-results-heading {
+    gap: 4px;
+  }
 }
 .history-dictionary-field textarea {
   resize: vertical;
@@ -230,6 +253,9 @@
   max-height: 320px;
   overflow-y: auto;
   margin-top: 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
 }
 .history-dictionary-word {
   display: block;
@@ -363,6 +389,8 @@
   font-weight: 700;
 }
 .history-dictionary-dialog-body {
+  --history-dictionary-sticky-top: 8px;
+  --history-dictionary-rail-max-height: min(676px, calc(80dvh - 124px));
   padding: 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -390,14 +418,14 @@
   }
 }
 @media (max-width: 480px) {
-  .history-dictionary-search-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .history-dictionary-dialog {
     inset: auto 0 0;
     width: 100%;
     max-height: 90dvh;
     height: 90dvh;
     border-radius: 12px 12px 0 0;
+  }
+  .history-dictionary-dialog-body {
+    --history-dictionary-rail-max-height: calc(90dvh - 124px);
   }
 }

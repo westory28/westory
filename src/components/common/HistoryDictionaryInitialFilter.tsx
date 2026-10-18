@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { attachHistoryDictionaryInitialDrag } from "../../lib/historyDictionaryInitialDrag";
 import { HISTORY_DICTIONARY_HANGUL_INITIALS } from "../../lib/historyDictionaryInitials";
 import "./historyDictionaryInitialFilter.css";
 
@@ -23,12 +24,39 @@ export default function HistoryDictionaryInitialFilter({
   disabled = false,
 }: HistoryDictionaryInitialFilterProps) {
   const id = useId();
+  const railRef = useRef<HTMLElement>(null);
+  const dragRef =
+    useRef<ReturnType<typeof attachHistoryDictionaryInitialDrag>>();
   const [numbersOpen, setNumbersOpen] = useState(
     value === "0-9" || /^[0-9]$/.test(value),
   );
   const [lettersOpen, setLettersOpen] = useState(
     value === "a-z" || /^[a-z]$/.test(value),
   );
+  const dragOptions = useRef({ disabled, onChange });
+  dragOptions.current = { disabled, onChange };
+
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const controller = attachHistoryDictionaryInitialDrag(rail, {
+      isDisabled: () => dragOptions.current.disabled,
+      onSelect: (initial) => {
+        if (initial === "0-9") setNumbersOpen(true);
+        if (initial === "a-z") setLettersOpen(true);
+        dragOptions.current.onChange(initial);
+      },
+    });
+    dragRef.current = controller;
+    return () => {
+      controller.dispose();
+      dragRef.current = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (disabled) dragRef.current?.cancel();
+  }, [disabled]);
 
   useEffect(() => {
     if (!value) {
@@ -46,6 +74,8 @@ export default function HistoryDictionaryInitialFilter({
       key={initial}
       type="button"
       className="history-dictionary-initial-button"
+      data-history-initial={initial}
+      data-history-initial-character=""
       aria-label={accessibleLabel(initial)}
       title={accessibleLabel(initial)}
       aria-pressed={value === initial}
@@ -57,11 +87,16 @@ export default function HistoryDictionaryInitialFilter({
   );
 
   return (
-    <nav className="history-dictionary-initial-filter" aria-label={label}>
+    <nav
+      ref={railRef}
+      className="history-dictionary-initial-filter"
+      aria-label={label}
+    >
       <div className="history-dictionary-initial-items">
         <button
           type="button"
           className="history-dictionary-initial-button history-dictionary-initial-all"
+          data-history-initial=""
           aria-label={accessibleLabel("")}
           aria-pressed={!value}
           disabled={disabled}
@@ -73,6 +108,7 @@ export default function HistoryDictionaryInitialFilter({
           <button
             type="button"
             className="history-dictionary-initial-button history-dictionary-initial-group-button"
+            data-history-initial="0-9"
             aria-label={`${accessibleLabel("0-9")} · 숫자 ${numbersOpen ? "접기" : "펼치기"}`}
             aria-pressed={value === "0-9"}
             aria-expanded={numbersOpen}
@@ -98,6 +134,7 @@ export default function HistoryDictionaryInitialFilter({
           <button
             type="button"
             className="history-dictionary-initial-button history-dictionary-initial-group-button"
+            data-history-initial="a-z"
             aria-label={`${accessibleLabel("a-z")} · 영문 ${lettersOpen ? "접기" : "펼치기"}`}
             aria-pressed={value === "a-z"}
             aria-expanded={lettersOpen}

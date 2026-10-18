@@ -1,35 +1,49 @@
 .history-dictionary-initial-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   align-items: start;
-  gap: 16px;
+  gap: 8px;
   min-width: 0;
 }
 .history-dictionary-initial-content {
   min-width: 0;
 }
 .history-dictionary-initial-filter {
+  position: sticky;
+  top: var(--history-dictionary-sticky-top, 80px);
+  align-self: start;
+  width: 64px;
   min-width: 0;
-  max-height: min(480px, 65dvh);
+  max-height: min(
+    var(
+      --history-dictionary-rail-max-height,
+      calc(100dvh - var(--history-dictionary-sticky-top, 80px) - 16px)
+    ),
+    var(--history-dictionary-rail-visible-height, 100dvh)
+  );
+  box-sizing: border-box;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
+  touch-action: none;
+  user-select: none;
   padding: 4px;
   scrollbar-width: thin;
+  scroll-behavior: auto;
 }
 .history-dictionary-initial-items {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(44px, 1fr);
   align-content: start;
   gap: 4px;
 }
 .history-dictionary-initial-button {
   display: inline-flex;
-  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-  padding: 8px;
+  padding: 8px 4px;
   border: 1px solid transparent;
   border-radius: 8px;
   color: var(--ws-text, #1f2937);
@@ -42,7 +56,8 @@
 .history-dictionary-initial-button:hover:not(:disabled) {
   background: var(--ws-primary-soft, #eff6ff);
 }
-.history-dictionary-initial-button[aria-pressed="true"] {
+.history-dictionary-initial-button[aria-pressed="true"],
+.history-dictionary-initial-button[aria-pressed="true"]:hover:not(:disabled) {
   background: var(--ws-primary, #2563eb);
   color: #fff;
 }
@@ -58,38 +73,19 @@
   display: contents;
 }
 .history-dictionary-initial-group-button {
-  gap: 8px;
-  min-width: 64px;
+  gap: 2px;
+}
+.history-dictionary-initial-group-button span {
+  font-size: 12px;
 }
 .history-dictionary-initial-expanded {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-  flex: 0 0 100%;
+  grid-template-columns: minmax(44px, 1fr);
   gap: 4px;
-  padding: 4px 0 8px;
+  padding: 0 0 4px;
 }
 .history-dictionary-initial-expanded[hidden] {
   display: none;
-}
-@container dictionary-initial-region (min-width: 640px) {
-  .history-dictionary-initial-layout {
-    grid-template-columns: 104px minmax(0, 1fr);
-  }
-  .history-dictionary-initial-filter {
-    max-height: min(640px, 75dvh);
-  }
-  .history-dictionary-initial-items {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(44px, 1fr));
-  }
-  .history-dictionary-initial-all,
-  .history-dictionary-initial-group-button,
-  .history-dictionary-initial-expanded {
-    grid-column: 1 / -1;
-  }
-  .history-dictionary-initial-expanded {
-    grid-template-columns: repeat(2, minmax(44px, 1fr));
-  }
 }
 .history-dictionary-initial-region {
   container: dictionary-initial-region / inline-size;

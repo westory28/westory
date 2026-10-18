@@ -185,6 +185,29 @@ export default function HistoryDictionaryCatalogBrowser({
     setFilters(emptyHistoryDictionaryFilters());
     setVisibleCount(12);
   };
+  const browseInitial = (value: string) => {
+    changeFilter("initial", value);
+    requestAnimationFrame(() => {
+      const resultsElement = resultsRef.current;
+      if (!resultsElement) return;
+      const stickyTop =
+        Number.parseFloat(
+          getComputedStyle(resultsElement).getPropertyValue(
+            "--history-dictionary-sticky-top",
+          ),
+        ) || 80;
+      const scrollportTop =
+        resultsElement
+          .closest(".history-dictionary-dialog-body")
+          ?.getBoundingClientRect().top || 0;
+      if (
+        resultsElement.getBoundingClientRect().top <
+        scrollportTop + stickyTop
+      ) {
+        resultsElement.scrollIntoView({ block: "start", behavior: "instant" });
+      }
+    });
+  };
   const browseFacet = (facet: HistoryDictionaryFacet) => {
     setQuery("");
     setFilters(historyDictionaryFiltersForFacet(facet));
@@ -211,7 +234,10 @@ export default function HistoryDictionaryCatalogBrowser({
       aria-label="기본 사전"
     >
       <div className="ws-filter-bar history-dictionary-search-row">
-        <label className="history-dictionary-field" htmlFor={`${id}-search`}>
+        <label
+          className="history-dictionary-field history-dictionary-query-field"
+          htmlFor={`${id}-search`}
+        >
           <span>단어·지명 찾기</span>
           <input
             id={`${id}-search`}
@@ -225,7 +251,10 @@ export default function HistoryDictionaryCatalogBrowser({
             }}
           />
         </label>
-        <label className="history-dictionary-field" htmlFor={`${id}-kind`}>
+        <label
+          className="history-dictionary-field history-dictionary-kind-field"
+          htmlFor={`${id}-kind`}
+        >
           <span>종류</span>
           <select
             id={`${id}-kind`}
@@ -237,12 +266,12 @@ export default function HistoryDictionaryCatalogBrowser({
             <option value="place">지명</option>
           </select>
         </label>
-      </div>
-      <div className="ws-filter-bar history-dictionary-theme-filters">
         {facetGroups.map(({ group, label }) => (
           <div className="history-dictionary-field" key={group}>
             <div className="history-dictionary-filter-label">
-              <label htmlFor={`${id}-${group}`}>{label}</label>
+              <label htmlFor={`${id}-${group}`}>
+                {group === "era" ? "시대" : label}
+              </label>
               {group === "era" && (
                 <InfoHelp label="시대·지역 분류 기준">
                   {HISTORY_DICTIONARY_THEME_HELP}
@@ -251,6 +280,12 @@ export default function HistoryDictionaryCatalogBrowser({
             </div>
             <select
               id={`${id}-${group}`}
+              aria-label={label}
+              title={
+                filters[group]
+                  ? facetById.get(filters[group])?.label
+                  : `${label} 전체`
+              }
               value={filters[group]}
               disabled={
                 loading ||
@@ -259,9 +294,7 @@ export default function HistoryDictionaryCatalogBrowser({
               }
               onChange={(event) => changeFilter(group, event.target.value)}
             >
-              <option value="">
-                {group === "era" ? "모든 시대" : `모든 ${label}`}
-              </option>
+              <option value="">전체</option>
               {facets
                 .filter(
                   (facet) =>
@@ -319,34 +352,36 @@ export default function HistoryDictionaryCatalogBrowser({
                   <span aria-hidden="true">×</span>
                 </button>
               ))}
-            {hasFilters && (
-              <button
-                type="button"
-                className="history-dictionary-reset"
-                onClick={reset}
-              >
-                필터 초기화
-              </button>
-            )}
           </div>
           <div className="history-dictionary-initial-layout">
             <HistoryDictionaryInitialFilter
               value={filters.initial}
-              onChange={(value) => changeFilter("initial", value)}
+              onChange={browseInitial}
               counts={initialCounts}
               label="사전 첫 글자"
             />
             <div
-              className="history-dictionary-initial-content history-dictionary-search-results"
+              className="ws-surface history-dictionary-initial-content history-dictionary-search-results"
               ref={resultsRef}
               tabIndex={-1}
               role="region"
               aria-label="사전 검색 결과"
             >
-              <p className="history-dictionary-count" role="status">
-                {filters.initial ? `${filters.initial} · ` : ""}
-                {results.length.toLocaleString("ko-KR")}개
-              </p>
+              <div className="history-dictionary-row history-dictionary-results-heading">
+                <p className="history-dictionary-count" role="status">
+                  {filters.initial ? `${filters.initial} · ` : ""}
+                  {results.length.toLocaleString("ko-KR")}개
+                </p>
+                {hasFilters && (
+                  <button
+                    type="button"
+                    className="history-dictionary-reset"
+                    onClick={reset}
+                  >
+                    필터 초기화
+                  </button>
+                )}
+              </div>
               {!results.length && (
                 <div className="history-dictionary-empty">
                   <p>검색 결과가 없습니다.</p>

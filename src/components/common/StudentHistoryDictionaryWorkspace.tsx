@@ -52,6 +52,7 @@ export default function StudentHistoryDictionaryWorkspace() {
   const editorRef = useRef<HTMLElement>(null);
   const wordRef = useRef<HTMLInputElement>(null);
   const definitionRef = useRef<HTMLTextAreaElement>(null);
+  const wordListRef = useRef<HTMLDivElement>(null);
   const baseDraft = useRef({ word: "", definition: "" });
   const id = useId();
   const scopeKey = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
@@ -80,6 +81,10 @@ export default function StudentHistoryDictionaryWorkspace() {
       )
       .sort((a, b) => a.word.localeCompare(b.word, "ko-KR"));
   }, [initial, search, words]);
+
+  useEffect(() => {
+    wordListRef.current?.scrollTo({ top: 0 });
+  }, [initial, search]);
 
   useEffect(() => {
     // A new object also invalidates work from an earlier visit to this account
@@ -400,7 +405,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                       : "아직 저장한 단어가 없습니다."}
                   </p>
                 ) : null}
-                <div className="history-dictionary-word-list">
+                <div className="history-dictionary-word-list" ref={wordListRef}>
                   {visibleWords.map((item) => (
                     <button
                       key={item.id}

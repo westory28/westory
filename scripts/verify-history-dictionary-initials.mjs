@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import "./verify-history-dictionary-initial-drag.mjs";
 
 const require = createRequire(import.meta.url);
 const bundle = async (relativePath) => {
