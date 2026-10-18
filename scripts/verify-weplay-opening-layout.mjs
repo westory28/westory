@@ -1116,6 +1116,15 @@ async function verifyCommonGameFrame() {
         assert.equal(lobby.width, opening.width); assert.equal(lobby.height, opening.height);
         const inner = await page.locator(game === 'joseon-yut' ? '.yut-game' : '.weplay-launch').boundingBox();
         assert(Math.abs(inner.width-opening.width)<2, JSON.stringify({game,inner,opening}));
+        if(game === 'history-rain') {
+          await page.getByRole('region',{name:'게임 대기 화면',exact:true}).waitFor();
+          await page.locator('.weplay-launch-art > img').evaluate(image=>image.decode());
+          assert.equal(await page.locator('.weplay-launch-art > img').evaluate(image=>image.naturalWidth===1672 && image.naturalHeight===941 && image.src.includes('lobby-yi-sunsin.webp')),true);
+          assert.equal(await page.getByRole('heading',{name:'대기 화면 미리보기',exact:true}).count(),0);
+          if(portal==='teacher') assert.equal(await page.locator('.teacher-weplay-preview > .teacher-weplay-section-title').count(),0,'Removing the preview title also removes its row');
+          const menu = await page.locator('.weplay-launch-controls').boundingBox();
+          assert(menu.x>=inner.x-1 && menu.y>=inner.y-1 && menu.x+menu.width<=inner.x+inner.width+1 && menu.y+menu.height<=inner.y+inner.height+1,JSON.stringify({portal,width,inner,menu}));
+        }
         if(game === 'joseon-yut') await page.waitForFunction(()=>document.fonts.check('400 120px "Yut Brush"','도개걸윷모!'));
         if(game === 'joseon-yut' && width >= 1280) {
           if(portal === 'student') await page.getByRole('button',{name:/혼자서 시작/}).click();

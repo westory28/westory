@@ -298,6 +298,27 @@ function NavalWeplay() {
               : lobby.balance < lobby.policy.challengeCost
                 ? "도전에 필요한 위스가 부족합니다."
                 : "";
+  const recordsActions = lobby && (
+    <nav className="weplay-lobby-actions" aria-label="게임 기록">
+      <button
+        type="button"
+        disabled={starting}
+        aria-haspopup="dialog"
+        onClick={() => setRecordsView("ranking")}
+      >
+        <WeplayLobbyIcon name="ranking" />
+        우리 반 랭킹
+      </button>
+      <button
+        type="button"
+        disabled={starting}
+        aria-haspopup="dialog"
+        onClick={() => setRecordsView("history")}
+      >
+        <WeplayLobbyIcon name="history" />내 기록
+      </button>
+    </nav>
+  );
   if (!selectedGame && !session) {
     return (
       <main className="weplay-page">
@@ -450,29 +471,10 @@ function NavalWeplay() {
                 </section>
               )
             )}
-            {lobby && (
-              <nav className="weplay-lobby-actions" aria-label="게임 기록">
-                <button
-                  type="button"
-                  disabled={starting}
-                  aria-haspopup="dialog"
-                  onClick={() => setRecordsView("ranking")}
-                >
-                  <WeplayLobbyIcon name="ranking" />
-                  우리 반 랭킹
-                </button>
-                <button
-                  type="button"
-                  disabled={starting}
-                  aria-haspopup="dialog"
-                  onClick={() => setRecordsView("history")}
-                >
-                  <WeplayLobbyIcon name="history" />내 기록
-                </button>
-              </nav>
-            )}
+            {result && recordsActions}
             {lobby && !result && (
               <WeplayLaunchPanel
+                actions={recordsActions}
                 mode={mode}
                 difficulty={difficulty}
                 starting={starting}

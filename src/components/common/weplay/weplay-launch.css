@@ -1,65 +1,133 @@
-.weplay-page .weplay-launch {
+.weplay-page {
   --launch-ink: #171e24;
   --launch-parchment: #f4e5c5;
   --launch-gold: #d8ae66;
   --launch-sea: #163c4e;
   --launch-text: #fff8e8;
+}
+.weplay-page .weplay-launch {
+  position: relative;
+  isolation: isolate;
+  container: naval-lobby / inline-size;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: 100%;
   padding: 0;
   overflow: hidden;
+  color: var(--launch-text);
+  background: var(--launch-ink);
+  border: 1px solid var(--launch-gold);
 }
-.weplay-launch-art {
-  position: relative;
-  display: grid;
-  align-content: center;
-  min-width: 0;
+.weplay-launch .weplay-launch-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
   overflow: hidden;
   background: var(--launch-sea);
 }
-.weplay-launch-art::after {
-  content: "";
+.weplay-launch-art img,
+.weplay-launch-art .weplay-lobby-plume {
   position: absolute;
-  inset: 12px;
-  border: 1px solid transparent;
-  pointer-events: none;
-  transition:
-    border-color 240ms ease,
-    background 240ms ease;
-}
-.is-challenge .weplay-launch-art::after {
-  border-color: var(--launch-gold);
-  background: linear-gradient(
-    0deg,
-    color-mix(in srgb, var(--launch-ink) 40%, transparent),
-    transparent 48%
-  );
-}
-.is-challenge .weplay-launch-art img {
-  filter: brightness(0.8) contrast(1.12) saturate(0.8);
-}
-.weplay-launch-art img {
+  inset: 0;
   display: block;
   width: 100%;
-  height: auto;
-  aspect-ratio: 4 / 3;
-  object-fit: contain;
-  transition: filter 240ms ease;
+  height: 100%;
+  object-fit: cover;
+  object-position: left top;
+  pointer-events: none;
+  user-select: none;
 }
-.weplay-launch-controls {
+.weplay-launch-art .weplay-lobby-plume[data-motion="reduced"] {
+  visibility: hidden;
+}
+.weplay-launch::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 35%,
+    color-mix(in srgb, var(--launch-ink) 24%, transparent) 65%,
+    color-mix(in srgb, var(--launch-ink) 55%, transparent)
+  );
+}
+.weplay-launch .weplay-launch-actions {
+  grid-row: 1;
+  justify-self: end;
   min-width: 0;
+  max-width: calc(100% - 32px);
+  margin: 16px;
+}
+.weplay-launch .weplay-launch-actions > .weplay-lobby-actions {
+  flex-wrap: wrap;
+  margin: 0;
+}
+.weplay-page .weplay-launch-actions .weplay-lobby-actions button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--launch-gold);
+  border-radius: 4px;
+  color: var(--launch-text);
+  background: color-mix(in srgb, var(--launch-ink) 90%, transparent);
+}
+.weplay-page .weplay-launch-actions .weplay-lobby-actions button:hover {
+  color: var(--launch-ink);
+  background: var(--launch-parchment);
+}
+.weplay-page .weplay-launch-actions .weplay-lobby-actions button svg {
+  padding: 0;
+  border-radius: 0;
+  color: currentColor;
+  background: none;
+}
+.weplay-launch .weplay-launch-controls {
+  box-sizing: border-box;
+  grid-row: 2;
+  align-self: end;
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  width: min(400px, calc(100% - 48px));
+  margin: 24px;
   padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--launch-gold) 65%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--launch-ink) 92%, transparent);
+  box-shadow: inset 0 0 0 4px
+    color-mix(in srgb, var(--launch-sea) 70%, transparent);
 }
-.weplay-page .weplay-mode-choice {
-  gap: 12px;
-}
-.weplay-page .weplay-mode-choice button {
+.weplay-page .weplay-launch .weplay-mode {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+.weplay-page .weplay-launch .weplay-mode button {
   min-width: 0;
+  min-height: 44px;
+  border-color: color-mix(in srgb, var(--launch-gold) 70%, var(--launch-sea));
+  border-radius: 4px;
+  color: var(--launch-parchment);
+  background: var(--launch-sea);
+}
+.weplay-page .weplay-launch .weplay-mode button:hover:not(:disabled) {
+  border-color: var(--launch-text);
+}
+.weplay-page .weplay-launch .weplay-mode button[aria-pressed="true"] {
+  color: var(--launch-ink);
+  border-color: var(--launch-gold);
+  background: var(--launch-parchment);
+  box-shadow: inset 0 0 0 2px var(--launch-gold);
+}
+.weplay-page .weplay-launch .weplay-mode-choice button {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
   text-align: left;
-  padding: 16px;
-  border-width: 2px;
   font-weight: 400;
 }
 .weplay-choice-top {
@@ -69,60 +137,51 @@
   gap: 4px;
 }
 .weplay-choice-top strong {
+  font-family: "Noto Serif KR", serif;
   font-size: 18px;
+  line-height: 1.5;
 }
 .weplay-choice-mark {
   display: grid;
   place-items: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   border: 1px solid currentColor;
   border-radius: 50%;
+  font-size: 14px;
   font-weight: 800;
 }
 .weplay-choice-note {
   font-size: 14px;
-  white-space: nowrap;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
-.weplay-page .weplay-mode-choice .weplay-challenge-choice {
-  position: relative;
-  border-color: var(--launch-gold);
-  border-radius: 4px;
+.weplay-page .weplay-launch .weplay-selected-mode {
+  margin: 16px 0 8px;
+  color: var(--launch-parchment);
+  font-size: 16px;
+  line-height: 1.5;
 }
-.weplay-challenge-choice::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border: 1px solid var(--launch-gold);
-  pointer-events: none;
+.weplay-page .weplay-launch .weplay-difficulty {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0;
 }
-.weplay-launch-feedback {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
+.weplay-page .weplay-launch .weplay-difficulty button {
+  padding: 8px;
+  font-size: 16px;
+}
+.weplay-launch .weplay-launch-feedback {
+  color: var(--launch-text);
   font-size: 14px;
-  line-height: 24px;
+  line-height: 1.5;
 }
 .weplay-page .weplay-launch-feedback p {
-  margin: 0;
-}
-.weplay-page .is-practice .weplay-mode-choice button[aria-pressed="true"] {
-  color: var(--launch-text);
-  background: var(--launch-sea);
-  border-color: var(--launch-sea);
-}
-.weplay-page .is-challenge .weplay-mode-choice button[aria-pressed="true"] {
-  color: var(--launch-ink);
-  background: var(--launch-parchment);
-  border-color: var(--launch-gold);
-}
-.weplay-page .weplay-selected-mode {
-  margin: 24px 0 12px;
-  font-size: 20px;
-}
-.weplay-selected-mode + .weplay-difficulty {
-  margin-top: 0;
+  margin: 12px 0 0;
+  color: inherit;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .weplay-page .weplay-launch .weplay-start {
   position: relative;
@@ -133,11 +192,17 @@
   width: 100%;
   margin-top: 16px;
   min-height: 52px;
-  color: var(--launch-text);
-  border-color: var(--launch-gold);
-  background: var(--launch-sea);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--launch-gold) 35%, transparent);
+  padding: 12px 8px;
+  border: 1px solid var(--launch-gold);
+  border-radius: 4px;
+  color: var(--launch-ink);
+  background: var(--launch-parchment);
+  box-shadow: inset 0 0 0 3px var(--launch-gold);
+  font-family: "Noto Serif KR", serif;
+  font-size: 18px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   transition:
     transform 240ms ease,
     box-shadow 240ms ease;
@@ -146,23 +211,14 @@
   position: relative;
   z-index: 1;
 }
-.weplay-page .weplay-launch.is-challenge .weplay-start {
-  background: var(--launch-ink);
-  color: var(--launch-parchment);
-}
 .weplay-page .weplay-launch .weplay-start:hover:not(:disabled),
 .weplay-page .weplay-launch .weplay-start:focus-visible:not(:disabled) {
-  background: var(--launch-sea);
+  color: var(--launch-ink);
+  background: var(--launch-parchment);
   transform: translateY(-2px);
   box-shadow:
     0 4px 16px color-mix(in srgb, var(--launch-gold) 45%, transparent),
-    inset 0 0 0 1px var(--launch-gold);
-}
-.weplay-page .weplay-launch.is-challenge .weplay-start:hover:not(:disabled),
-.weplay-page
-  .weplay-launch.is-challenge
-  .weplay-start:focus-visible:not(:disabled) {
-  background: var(--launch-ink);
+    inset 0 0 0 3px var(--launch-gold);
 }
 .weplay-start::before {
   content: "";
@@ -172,7 +228,7 @@
   background: linear-gradient(
     110deg,
     transparent 20%,
-    color-mix(in srgb, var(--launch-gold) 30%, transparent) 48%,
+    color-mix(in srgb, var(--launch-text) 70%, transparent) 48%,
     transparent 75%
   );
   transform: translateX(-110%);
@@ -181,8 +237,12 @@
 .weplay-start:focus-visible:not(:disabled)::before {
   animation: weplay-start-shimmer 1600ms ease-in-out infinite;
 }
-.weplay-start:active:not(:disabled) {
+.weplay-page .weplay-launch .weplay-start:active:not(:disabled) {
   transform: translateY(0);
+}
+.weplay-page .weplay-launch button:focus-visible {
+  outline: 3px solid var(--launch-text);
+  outline-offset: 3px;
 }
 .weplay-battle-summary {
   display: flex;
@@ -197,32 +257,63 @@
     transform: translateX(110%);
   }
 }
-@media (max-width: 1023px) {
-  .weplay-page .weplay-launch {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0;
+@container naval-lobby (max-width: 900px) {
+  .weplay-launch .weplay-launch-art {
+    height: clamp(220px, 75cqw, 320px);
   }
-  .weplay-launch-art {
-    max-height: none;
+  .weplay-launch::before {
+    background: linear-gradient(
+      180deg,
+      transparent calc(clamp(220px, 75cqw, 320px) - 80px),
+      var(--launch-ink) clamp(220px, 75cqw, 320px),
+      var(--launch-ink)
+    );
   }
-  .weplay-launch-controls {
+  .weplay-launch .weplay-launch-actions {
+    margin: 8px;
+    max-width: calc(100% - 16px);
+  }
+  .weplay-page .weplay-launch-actions .weplay-lobby-actions button {
+    padding: 8px;
+    font-size: 14px;
+  }
+  .weplay-launch .weplay-launch-controls {
+    width: calc(100% - 24px);
+    margin: 200px 12px 12px;
     padding: 16px;
+    background: color-mix(in srgb, var(--launch-ink) 94%, transparent);
   }
-  .weplay-page .weplay-mode-choice {
-    gap: 8px;
-  }
-  .weplay-page .weplay-mode-choice button {
-    padding: 12px 8px;
+  .weplay-page .weplay-launch .weplay-mode-choice button {
+    padding: 8px;
+    gap: 4px;
   }
   .weplay-choice-top strong {
     font-size: 16px;
   }
+  .weplay-page .weplay-launch .weplay-start {
+    font-size: 16px;
+  }
+}
+@container naval-lobby (min-width: 701px) and (max-width: 900px) {
+  .weplay-launch .weplay-launch-art {
+    height: 400px;
+  }
+  .weplay-launch::before {
+    background: linear-gradient(
+      180deg,
+      transparent 320px,
+      var(--launch-ink) 400px,
+      var(--launch-ink)
+    );
+  }
+  .weplay-launch .weplay-launch-controls {
+    justify-self: center;
+    width: min(480px, calc(100% - 48px));
+    margin: 340px 24px 24px;
+    padding: 24px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .weplay-launch-art::after,
-  .weplay-launch-art img {
-    transition: none;
-  }
   .weplay-page .weplay-launch .weplay-start {
     transition: none;
   }
@@ -235,14 +326,3 @@
     animation: none;
   }
 }
-
-.weplay-page {
-  --launch-ink: #171e24;
-  --launch-parchment: #f4e5c5;
-  --launch-gold: #d8ae66;
-  --launch-sea: #163c4e;
-  --launch-text: #fff8e8;
-}
-
-.weplay-launch-controls { display: flex; flex-direction: column; justify-content: center; }
-.weplay-page .weplay-launch { border-color: color-mix(in srgb, var(--launch-sea) 24%, white); }

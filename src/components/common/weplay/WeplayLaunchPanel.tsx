@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import {
   WEPLAY_DIFFICULTY_LABELS,
   type WeplayDifficulty,
 } from "../../../lib/weplay";
+import WeplayLobbyScene from "./WeplayLobbyScene";
 import "./weplay-launch.css";
 
 type Mode = "practice" | "challenge";
@@ -13,6 +15,7 @@ interface Props {
   launchIssue?: string;
   challengeCost: number;
   preview?: boolean;
+  actions?: ReactNode;
   onModeChange: (mode: Mode) => void;
   onDifficultyChange: (difficulty: WeplayDifficulty) => void;
   onStart: () => void;
@@ -25,6 +28,7 @@ export default function WeplayLaunchPanel({
   launchIssue = "",
   challengeCost,
   preview = false,
+  actions,
   onModeChange,
   onDifficultyChange,
   onStart,
@@ -32,16 +36,10 @@ export default function WeplayLaunchPanel({
   return (
     <section
       className={`weplay-panel weplay-launch is-${mode}`}
-      aria-label={preview ? "게임 대기 화면 미리보기" : "게임 시작"}
+      aria-label="게임 대기 화면"
     >
-      <div className="weplay-launch-art">
-        <img
-          src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
-          alt="목재 덮개와 쇠못, 낮은 용머리와 노를 갖춘 거북선 재현 일러스트"
-          width={1200}
-          height={900}
-        />
-      </div>
+      <WeplayLobbyScene />
+      {actions && <div className="weplay-launch-actions">{actions}</div>}
       <div className="weplay-launch-controls">
         <div
           className="weplay-mode weplay-mode-choice"

@@ -37,10 +37,10 @@ export default function WeplayGameCatalog({
                 </div>
               ) : (
                 <img
-                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                  src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp`}
                   alt=""
-                  width={1200}
-                  height={900}
+                  width={960}
+                  height={720}
                 />
               )}
               <div className="weplay-game-card-body">

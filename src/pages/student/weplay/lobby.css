@@ -81,14 +81,6 @@
   border-color: var(--launch-sea);
   background: var(--ws-surface-subtle, #f8fafc);
 }
-.weplay-launch-controls {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.weplay-page .weplay-launch {
-  border-color: color-mix(in srgb, var(--launch-sea) 24%, white);
-}
 .weplay-page .weplay-records-dialog {
   position: fixed;
   inset: 0;

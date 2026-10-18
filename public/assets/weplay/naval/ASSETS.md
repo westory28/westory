@@ -1,5 +1,29 @@
 # 내가 충무공이라고?! 이미지 소재
 
+## 판옥선 위 이순신 대기 화면 (2026-10-18)
+
+- `lobby-yi-sunsin.webp`: 내장 `image_gen`으로 생성한 1672×941 대기 장면.
+- `catalog-yi-sunsin.webp`: 같은 이미지의 왼쪽 중심 4:3 크롭, 960×720 썸네일.
+- 윷놀이의 따뜻한 게임 일러스트를 화풍 기준으로 삼고, 투구와 어깨를 가까이 잡은 이순신의 뒷모습과 빽빽한 일본 함대를 표현했습니다. 생성 후 크롭·축소·WebP 압축만 적용했습니다.
+- 투구는 《노량》 공개 스틸의 길게 좁아지는 흑철·은색 형태를 참고해 금빛 왕관형 장식을 줄였습니다. 영화 의상은 고증과 창작을 함께 사용하므로 특정 실물·실제 착용 갑주의 정확한 복원으로 표시하지 않습니다.
+- 붉은 모자 깃 주변에만 약 3.8초 주기의 가시적인 국소 펄럭임을 적용합니다. 실제 HTML 메뉴·버튼을 유지하고 동작 감소 설정, 비활성 탭, 화면 밖에서는 모션이 멈춥니다.
+
+참고 자료(게임에는 원본 사진을 배포하지 않음):
+
+- [한국영상자료원 《명량》 의상 자료와 의상감독 인터뷰](https://www.koreafilm.or.kr/museum/theater/module/TI_00000013): 유물·논문을 바탕으로 영화적 창작을 더했다는 제작자 설명.
+- [《노량》 공개 스틸 보도](https://www.tenasia.co.kr/article/2023110938004): 투구의 실루엣·철색 표면 참고.
+- [권유진 의상감독 인터뷰](https://www.khan.co.kr/article/202104060600015): 《명량》·《한산》·《노량》의 의상 재현과 창작 구분.
+
+생성 방식: 기본 내장 이미지 생성 도구, 불투명 배경. 아래 두 프롬프트로 구도·화풍을 수정하고 투구를 보완했습니다. 이전 사실적 원안은 최종 자산에 사용하지 않습니다.
+
+구도·화풍 프롬프트:
+
+> Use case: style-transfer and historical-scene. Create a revised landscape 16:9 game-lobby artwork. INPUT 1 (Yut game characters) is the STRICT ART STYLE reference: warm inviting high-quality stylized 3D animated adventure-game illustration, softly rounded shapes, slightly simplified readable materials, rich warm colours, not gritty photorealism. INPUT 2 (Yi Sun-sin sea scene) is the COMPOSITION/SCENE reference to revise dramatically. Keep the view from BEHIND Admiral Yi Sun-sin standing on a Joseon panokseon wooden deck, watching Japanese warships at sea. Change to an EXTREME CLOSE over-the-shoulder BACK VIEW: his large helmet and broad shoulders fill the left 55 percent and lower half. Camera is much closer than input 2: crop the body at the upper back/shoulders, no waist, no legs, no hands. Helmet crown around x=31% y=14%, large black bronze Korean helmet from x=21% to x=41%; dark red and bronze shoulder armor should extend across the entire bottom-left. A very visible long scarlet red horsehair helmet plume streams freely toward the RIGHT across the upper-middle sky, slender separated strands and broad flowing shape from x=33% y=15% to x=60% y=35%, like a windswept crimson brush. The plume must be easy to animate later, floating in clear sky, not overlapping the helmet or ships at its free end. Keep subtle wood railing at bottom to establish panokseon deck. The ocean is CROWDED, TEEMING with dozens and dozens of 16th-century Japanese ships: many layers of small and medium wooden hulls, pale tan/grey square sails and restrained dark flags, packed densely across the middle-right and distant horizon, from foreground mid-distance to tiny silhouettes. Do not leave only a handful of large ships. Blue-teal sea, low Korean coastal islands, golden warm clouds. Match the friendly polished storybook/animated-game rendering quality and warm materials of INPUT 1, but Admiral remains HUMAN and heroic, not an animal, not comedic. Rightmost 30% somewhat quieter/darker for later HTML controls while still showing abundant ships through atmosphere. No drawn UI, text, title, logos, watermark, borders, speech bubbles, modern ships, firearms firing, battle violence or fantasy horns. Entirely original stylized artwork. Landscape 16:9.
+
+최종 투구 보완 프롬프트:
+
+> Use case: precise-object-edit. INPUT 1 is the EDIT TARGET, the close back-view game lobby scene. INPUT 2 is a costume reference from the film Noryang, specifically its helmet and restrained dark silver armour, NOT a subject/face/pose reference. INPUT 3 is the Yut game ART STYLE reference. Make one precise correction to INPUT 1: replace Admiral Yi Sun-sin's fantasy gold-domed helmet and lavish gold armour with a costume interpretation closely informed by Noryang and The Admiral: Roaring Currents (Myeongnyang). The HELMET must have the tall tapering pointed conical/spheroconical silhouette shown in INPUT 2, dark iron with aged silver engraved bands/raised restrained scroll details and a narrow straight top finial; NO rounded gold onion/crown stack, NO broad golden crown rim, NO fantasy Samurai horns. Show the rear of this helmet, tapering smoothly from broad lower shell to narrow pointed apex. Replace the huge flared gold-riveted bell neck shape with a protective dark iron lamellar neck drape and restrained dark fabric lining. Shoulders and back should be practical dark charcoal/silver lamellar armour with muted small metal accents and deep red cloth beneath, not giant golden dragon heads. Keep the stylized, warm polished 3D adventure-game illustration style matching INPUT 3, slightly softer and more simplified materials, not photorealistic. CRITICAL INVARIANTS: keep the exact camera position, EXTREME CLOSE BACK VIEW, character size and placement, horizon, crowded Japanese fleet, golden sky, blue sea, railing, overall 1672x941 landscape framing and ALL plume geometry from INPUT 1. The SCARLET HORSEHAIR PLUME must remain flowing RIGHT from approximately (460,85) to (1160,390), including its loose strands and open sky backdrop, because that precise region is animated by the application. Keep the crown tip within the top-left helmet region without clipping. Do not show face or copy an actor's likeness. Do not add text, labels, logos, UI or watermarks. The result is a film-informed original game illustration, not a claim of exact historical reconstruction. Change only the helmet/armour materials and silhouette as described; preserve the atmosphere, fleet count, scene layout and red plume position.
+
 사용자가 제공한 해전 화면과 투명 스프라이트 시트를 기준으로 제작했습니다.
 이미지는 내장 `image_gen`으로 생성했으며, 원본 그림을 바꾸지 않고 WebP로 변환·축소해 웹 전송량을 줄였습니다. 투명 이미지의 알파 채널을 유지했습니다.
 

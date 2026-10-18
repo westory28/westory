@@ -438,9 +438,9 @@ function NavalWeplayManagement() {
                   className="teacher-weplay-preview"
                   aria-label="교사 게임 체험"
                 >
-                  {introComplete && (
+                  {introComplete && preview && (
                     <div className="teacher-weplay-section-title">
-                      <h2>{preview ? "교사 체험" : "대기 화면 미리보기"}</h2>
+                      <h2>교사 체험</h2>
                       {preview && (
                         <button
                           className="teacher-weplay-button"
@@ -648,10 +648,10 @@ function NavalWeplayManagement() {
                     </div>
                     <img
                       className="teacher-weplay-preview-art"
-                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/lobby-turtle-ship.webp`}
+                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp`}
                       alt=""
-                      width={1200}
-                      height={900}
+                      width={960}
+                      height={720}
                     />
                     <p className="teacher-weplay-note">
                       위스·랭킹·학생 기록에 반영되지 않습니다.

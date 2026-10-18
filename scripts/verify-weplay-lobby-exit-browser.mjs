@@ -14,6 +14,7 @@ let playwright;
 try { playwright = require('playwright'); }
 catch { playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')); }
 const core = require(path.join(root, 'functions/weplayCore.js'));
+const motionOnly = process.argv.includes('--motion-only');
 const evidence = process.env.WEPLAY_QA_EVIDENCE_DIR
   ? path.resolve(process.env.WEPLAY_QA_EVIDENCE_DIR)
   : path.join(root, '.superloopy/sessions/weplay-lobby-exit-20260929/evidence');
@@ -174,6 +175,96 @@ async function skipStudioIntro(page) {
 async function capture(page, name) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${name}: horizontal overflow`);
   await page.screenshot({ path: path.join(evidence, name + '.png'), fullPage: !name.includes('keyboard-viewport') }); screenshots.push(name + '.png');
+  if (name.startsWith('lobby-practice-')) {
+    const stageName = name.replace('lobby-practice-', 'lobby-stage-') + '.png';
+    await page.locator('.weplay-launch').screenshot({ path: path.join(evidence, stageName) });
+    screenshots.push(stageName);
+  }
+}
+async function measureLobbyScene(page) {
+  const image = page.locator('.weplay-launch-art > img');
+  await image.waitFor();
+  await image.evaluate(element => element.decode());
+  return page.locator('.weplay-launch').evaluate(element => {
+    const rect = target => { const r = target.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+    const stage = rect(element), art = rect(element.querySelector('.weplay-launch-art'));
+    const raster = element.querySelector('.weplay-launch-art > img');
+    const rasterBox = rect(raster), rasterStyle = getComputedStyle(raster);
+    const scale = Math.max(rasterBox.width / raster.naturalWidth, rasterBox.height / raster.naturalHeight);
+    const [positionX, positionY] = rasterStyle.objectPosition.split(' ');
+    const offset = (position, available) => position.endsWith('%') ? parseFloat(position) / 100 * available : parseFloat(position);
+    const originX = rasterBox.left + offset(positionX, rasterBox.width - raster.naturalWidth * scale);
+    const originY = rasterBox.top + offset(positionY, rasterBox.height - raster.naturalHeight * scale);
+    const project = (left, top, right, bottom) => ({ left: originX + left * scale, right: originX + right * scale, top: originY + top * scale, bottom: originY + bottom * scale });
+    const menu = rect(element.querySelector('.weplay-launch-controls'));
+    const inside = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+    const overlaps = (a, b) => Math.min(a.right, b.right) > Math.max(a.left, b.left) && Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
+    // Landmarks come from the generated 1672x941 artwork, independently of the CSS layout.
+    const admiralHead = project(260, 180, 580, 540);
+    const enemySail = project(760, 460, 870, 570);
+    const visibleArt = { left: Math.max(stage.left, art.left), right: Math.min(stage.right, art.right), top: Math.max(stage.top, art.top), bottom: Math.min(stage.bottom, art.bottom) };
+    const visibleSail = { left: Math.max(enemySail.left, visibleArt.left), right: Math.min(enemySail.right, visibleArt.right), top: Math.max(enemySail.top, visibleArt.top), bottom: Math.min(enemySail.bottom, visibleArt.bottom) };
+    const area = box => Math.max(0, box.right - box.left) * Math.max(0, box.bottom - box.top);
+    const obscuredSail = { left: Math.max(visibleSail.left, menu.left), right: Math.min(visibleSail.right, menu.right), top: Math.max(visibleSail.top, menu.top), bottom: Math.min(visibleSail.bottom, menu.bottom) };
+    const plume = element.querySelector('.weplay-lobby-plume');
+    const controls = [...element.querySelectorAll('button,select')].map(control => ({ label: control.textContent || control.getAttribute('aria-label'), ...rect(control) }));
+    return {
+      stage, art, menu, admiralHead, enemySail,
+      imageLoaded: raster.complete && raster.naturalWidth === 1672 && raster.naturalHeight === 941 && raster.src.includes('lobby-yi-sunsin.webp'),
+      imageFit: rasterStyle.objectFit,
+      imageAnimation: rasterStyle.animationName,
+      menuInside: inside(menu, stage),
+      headVisible: inside(admiralHead, visibleArt),
+      headClearOfMenu: !overlaps(admiralHead, menu),
+      enemySailVisible: (area(visibleSail) - area(obscuredSail)) / area(enemySail) >= 0.5,
+      controls,
+      controlsInside: controls.every(control => inside(control, stage)),
+      textFits: [...element.querySelectorAll('h2,.weplay-choice-top strong,.weplay-choice-note')].every(text => text.scrollWidth <= text.clientWidth),
+      plumeMotion: plume?.getAttribute('data-motion'),
+      displacementScale: plume?.querySelector('feDisplacementMap')?.getAttribute('scale'),
+    };
+  });
+}
+function assertLobbyScene(geometry, label) {
+  assert.ok(geometry.imageLoaded, `${label}: generated Yi Sun-sin scene is decoded at its original dimensions`);
+  assert.equal(geometry.imageFit, 'cover', `${label}: scene fills the in-game stage`);
+  assert.equal(geometry.imageAnimation, 'none', `${label}: the full raster remains still while only the plume moves`);
+  assert.ok(geometry.menuInside && geometry.controlsInside, `${label}: in-game menu and controls stay inside the stage ${JSON.stringify(geometry)}`);
+  assert.ok(geometry.headVisible && geometry.headClearOfMenu, `${label}: admiral's rear-view helmet remains visible and clear of the menu ${JSON.stringify(geometry)}`);
+  assert.ok(geometry.enemySailVisible, `${label}: enemy fleet remains visible beside the admiral ${JSON.stringify(geometry)}`);
+  assert.ok(geometry.textFits && geometry.controls.every(control => control.width >= 44 && control.height >= 44), `${label}: labels fit and controls preserve 44px targets ${JSON.stringify(geometry.controls)}`);
+}
+async function verifyLobbyMotion() {
+  const animatedLobby = await open('lobby', 1280);
+  await animatedLobby.locator('.weplay-lobby-plume[data-motion="running"]').waitFor();
+  const geometry = await measureLobbyScene(animatedLobby);
+  const plumeScale = page => page.locator('.weplay-lobby-plume feDisplacementMap').getAttribute('scale');
+  const motionDirectory = path.join(evidence, 'motion');
+  await fs.mkdir(motionDirectory, { recursive: true });
+  const frames = [];
+  for (let index = 0; index < 24; index++) {
+    await animatedLobby.clock.runFor(160);
+    const name = `plume-${String(index).padStart(2, '0')}.png`;
+    await animatedLobby.locator('.weplay-launch-art').screenshot({ path: path.join(motionDirectory, name) });
+    frames.push({ name, scale: await plumeScale(animatedLobby) });
+  }
+  assert.ok(new Set(frames.map(frame => frame.scale)).size > 1, 'Wind changes the plume displacement without moving the scene');
+  await fs.writeFile(path.join(motionDirectory, 'frames.json'), JSON.stringify({ intervalMs: 160, geometry, frames }, null, 2));
+  await animatedLobby.emulateMedia({ reducedMotion: 'reduce' });
+  await animatedLobby.locator('.weplay-lobby-plume[data-motion="reduced"]').waitFor({ state: 'attached' });
+  const reducedScale = await plumeScale(animatedLobby);
+  await animatedLobby.clock.runFor(350);
+  assert.equal(await plumeScale(animatedLobby), reducedScale, 'Changing the OS preference stops the plume motion');
+  await animatedLobby.close();
+  const reducedLobby = await open('lobby', 390, '', { reducedMotion: 'reduce' });
+  await reducedLobby.locator('.weplay-lobby-plume[data-motion="reduced"]').waitFor({ state: 'attached' });
+  assertLobbyScene(await measureLobbyScene(reducedLobby), '390px reduced-motion lobby');
+  const stillScale = await plumeScale(reducedLobby);
+  await reducedLobby.clock.runFor(350);
+  assert.equal(await plumeScale(reducedLobby), stillScale, 'Reduced motion is respected on the first lobby render');
+  await capture(reducedLobby, 'lobby-reduced-motion-390');
+  await reducedLobby.close();
+  checks.push('Plume displacement changes in the normal lobby; 24 rendered frames capture one wind cycle; initial and live OS reduced-motion preferences stop it while the full scene and in-game menu stay still');
 }
 async function answerVisible(page, special = false) {
   const prompt = page.locator(special ? '.naval-special > strong' : '.naval-word > strong').first();
@@ -250,12 +341,17 @@ async function exitDialog(page) {
 }
 let failure = null;
 try {
+  if (motionOnly) await verifyLobbyMotion();
+  else {
   if (process.env.WEPLAY_QA_EXIT_ONLY !== '1') {
   for (const width of [390, 768, 1280]) {
     for (const view of ['lobby', 'management']) {
       const page = await open(view, width, 'catalog=1');
       const card = page.locator('.weplay-game-card[href*="game=history-rain"]');
       await card.waitFor();
+      await card.locator('img').waitFor();
+      await card.locator('img').evaluate(image => image.decode());
+      assert.equal(await card.locator('img').evaluate(image => image.naturalWidth === 960 && image.naturalHeight === 720 && image.src.includes('catalog-yi-sunsin.webp')), true, 'Both catalogues use the generated Yi Sun-sin rear-view thumbnail');
       assert.equal(await page.locator('.weplay-game-card').count(), 2);
       assert.equal(await page.locator('.teacher-sub-navigation:visible').count(), 0);
       assert.equal(await page.locator('.weplay-launch:visible').count(), 0);
@@ -270,7 +366,12 @@ try {
       } else {
         await page.getByRole('button', {name:'체험하기',exact:true}).click();
         await skipStudioIntro(page);
-        await page.getByRole('region', {name:'게임 대기 화면 미리보기'}).waitFor();
+        await page.getByRole('region', {name:'게임 대기 화면',exact:true}).waitFor();
+        assert.equal(await page.getByRole('heading', {name:'대기 화면 미리보기',exact:true}).count(), 0, 'Teacher lobby does not retain a redundant preview heading row');
+        assert.equal(await page.locator('.teacher-weplay-preview > .teacher-weplay-section-title').count(), 0, 'Teacher lobby leaves no empty preview title row');
+        const teacherGeometry = await measureLobbyScene(page);
+        assertLobbyScene(teacherGeometry, `${width}px teacher lobby`);
+        layoutMeasurements.push({ portal: 'teacher', width, ...teacherGeometry });
         assert.equal(await page.evaluate(() => window.navalQa.calls.filter(c => c.name==='previewWeplayGame').length),0);
         await page.getByRole('button', {name:'도전하기 체험 · 위스 변동 없음',exact:true}).click();
         await page.getByRole('button', {name:'매운맛',exact:true}).click();
@@ -296,7 +397,7 @@ try {
   await teacherDraft.getByRole('textbox',{name:'단어 입력'}).waitFor();
   assert.equal(await teacherDraft.evaluate(() => window.navalQa.calls.find(c => c.name==='previewWeplayGame').data.settings.difficulties.mild.durationSeconds),120);
   await teacherDraft.getByRole('button',{name:'체험 종료',exact:true}).click();
-  await teacherDraft.getByRole('region',{name:'게임 대기 화면 미리보기'}).waitFor();
+  await teacherDraft.getByRole('region',{name:'게임 대기 화면',exact:true}).waitFor();
   assert.equal(await teacherDraft.evaluate(() => window.navalQa.writes.length),0);
   assert.equal(await teacherDraft.evaluate(() => window.navalQa.calls.some(c => /^(start|submit|finish)Weplay/.test(c.name))),false);
   await teacherDraft.close();
@@ -313,7 +414,7 @@ try {
   await readonly.clock.runFor(100);
   await readonly.getByRole('button',{name:'체험하기',exact:true}).click();
   await skipStudioIntro(readonly);
-  await readonly.getByRole('region',{name:'게임 대기 화면 미리보기'}).waitFor();
+  await readonly.getByRole('region',{name:'게임 대기 화면',exact:true}).waitFor();
   assert.equal(await readonly.locator('.naval-game:visible').count(),0);
   assert.equal(await readonly.evaluate(() => window.navalQa.writes.length),0);
   await readonly.close();
@@ -333,13 +434,10 @@ try {
     assert.equal(await lobby.getByRole('dialog', { name: '내 기록', exact: true }).count(), 0);
     const help = lobby.getByRole('button', { name: '게임 안내', exact: true });
     assert.equal(await help.locator('svg').count(), 1, 'Guide icon uses a scalable, spaced SVG');
-    assert.equal(await lobby.locator('.weplay-start').evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(22, 60, 78)');
     assert.equal(await lobby.locator('.weplay-launch').evaluate(element => getComputedStyle(element).paddingTop), '0px');
-    await lobby.locator('.weplay-launch-art img').waitFor();
-    assert.equal(await lobby.locator('.weplay-launch-art img').evaluate(image => image.complete && image.naturalWidth === 1200 && image.naturalHeight === 900 && image.src.includes('lobby-turtle-ship.webp')), true);
-    const geometry = await lobby.locator('.weplay-launch').evaluate(element => ({ columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, controls: [...element.querySelectorAll('button,select')].map(control => { const r = control.getBoundingClientRect(); return { width: r.width, height: r.height }; }), textFits: [...element.querySelectorAll('h2,.weplay-choice-top strong,.weplay-choice-note')].every(text => text.scrollWidth <= text.clientWidth) }));
-    assert.ok(geometry.textFits && geometry.controls.every(control => control.width >= 44 && control.height >= 44), JSON.stringify(geometry));
-    assert.equal(geometry.columns, width < 1024 ? 1 : 2);
+    const geometry = await measureLobbyScene(lobby);
+    assertLobbyScene(geometry, `${width}px student lobby`);
+    assert.equal(geometry.plumeMotion, 'running', 'Plume animation is active by default');
     layoutMeasurements.push({ width, ...geometry });
     await capture(lobby, `lobby-practice-${width}`);
     if (width === 320) {
@@ -350,12 +448,12 @@ try {
     }
     await lobby.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '매운맛', exact: true }).click();
     const beforeMode = await lobby.locator('.weplay-launch').boundingBox();
-    const beforeStart = await lobby.locator('.weplay-start').boundingBox();
+    const beforeStart = await lobby.locator('.weplay-start').evaluate(element => element.offsetTop);
     await challenge.click();
     const afterMode = await lobby.locator('.weplay-launch').boundingBox();
-    const afterStart = await lobby.locator('.weplay-start').boundingBox();
+    const afterStart = await lobby.locator('.weplay-start').evaluate(element => element.offsetTop);
     assert.equal(afterMode.height, beforeMode.height, 'Mode must not resize launch panel');
-    assert.equal(afterStart.y, beforeStart.y, 'Mode must not move start button');
+    assert.equal(afterStart, beforeStart, 'Mode must not move start button layout; hover elevation is independent');
     assert.equal(await lobby.locator('.weplay-wis-coin').textContent().then(t=>t.trim()), 'Ws');
     assert.equal(await lobby.locator('.weplay-music-button').textContent(), '');
 
@@ -370,7 +468,7 @@ try {
     assert.equal(await lobby.getByRole('group', { name: '난이도', exact: true }).getByRole('button', { name: '매운맛', exact: true }).getAttribute('aria-pressed'), 'true');
     await lobby.evaluate(() => { window.navalQa.fail.startWeplayGame = 1; });
     await lobby.locator('.weplay-start').click();
-    await lobby.getByRole('alert').waitFor();
+    await lobby.locator('.weplay-error[role="alert"]').waitFor();
     assert.equal(await lobby.getByRole('combobox').count(), 0);
     await lobby.locator('.weplay-start').click();
     await lobby.getByRole('textbox', { name: '단어 입력' }).waitFor();
@@ -380,7 +478,9 @@ try {
     assert.equal(started[0].data.requestKey, started[1].data.requestKey, 'Failed start retries the same idempotency key');
     await lobby.close();
   }
-  checks.push('320/390/768/1280 lobby: full word pool without a student scope selector, no unitIds in start/retry payloads, Wis badge, spaced SVG help, closed secondary dialogs, mode cards, real turtle ship, responsive columns, 44px controls, retained difficulty and same-key failed-start retry');
+  checks.push('320/390/768/1280 lobby: generated Yi Sun-sin rear-view scene and visible enemy fleet, unobstructed helmet, scene-contained 44px menu, localized plume motion, no student scope selector or unitIds in start/retry, Wis badge, retained difficulty and same-key failed-start retry');
+
+  await verifyLobbyMotion();
 
   for (const width of [320, 390, 768, 1280]) {
     const page = await open('lobby', width, 'ranking=full&records=full');
@@ -665,6 +765,7 @@ try {
   assert.equal(await resumed.getByRole('button', { name: '도전하기 위스 획득·차감', exact: true }).getAttribute('aria-pressed'), 'true');
   await capture(resumed, 'lobby-restored-challenge-replay-390'); await resumed.close();
   checks.push('Restored challenge session keeps challenge mode after early result and Replay returns to lobby');
+  }
   }
   assert.deepEqual(errors, []); assert.deepEqual(requests, []);
 } catch (error) { failure = error.stack; process.exitCode = 1; }
