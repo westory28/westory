@@ -269,6 +269,9 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
             <div className="teacher-wis-shop__products">
               {filteredProducts.map((product) => {
                 const available = availableStock(product);
+                const hasStockLedger =
+                  typeof product.reservedStock === "number" &&
+                  typeof product.soldStock === "number";
                 const status =
                   product.isActive === false
                     ? "숨김"
@@ -321,33 +324,41 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
                       )}
                       <dl className="teacher-wis-shop__stock">
                         <div className={available <= 3 ? "is-low" : ""}>
-                          <dt>판매 가능</dt>
+                          <dt>
+                            {product.readOnly && !hasStockLedger
+                              ? "보관된 재고"
+                              : "판매 가능"}
+                          </dt>
                           <dd>
                             {available}
                             <span>개</span>
                           </dd>
                         </div>
-                        <div>
-                          <dt>주문 확보</dt>
-                          <dd>
-                            {product.reservedStock || 0}
-                            <span>개</span>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>지급 완료</dt>
-                          <dd>
-                            {product.soldStock || 0}
-                            <span>개</span>
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>총 입고</dt>
-                          <dd>
-                            {product.stock}
-                            <span>개</span>
-                          </dd>
-                        </div>
+                        {hasStockLedger && (
+                          <>
+                            <div>
+                              <dt>주문 확보</dt>
+                              <dd>
+                                {product.reservedStock}
+                                <span>개</span>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>지급 완료</dt>
+                              <dd>
+                                {product.soldStock}
+                                <span>개</span>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>총 입고</dt>
+                              <dd>
+                                {product.stock}
+                                <span>개</span>
+                              </dd>
+                            </div>
+                          </>
+                        )}
                       </dl>
                     </div>
                     {canManage && (
