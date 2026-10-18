@@ -31,6 +31,7 @@ const RankSettingsSidebar: React.FC<RankSettingsSidebarProps> = ({
 
   return (
     <TeacherSubNavigation
+      variant="tabs"
       title="등급 관리"
       activeLabel={activeItem?.label || "등급 관리"}
       open={menuOpen}

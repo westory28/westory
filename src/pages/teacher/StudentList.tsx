@@ -576,16 +576,16 @@ const StudentList: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <div
-        className={`mx-auto flex w-full max-w-6xl flex-1 animate-fadeIn flex-col px-3 py-6 ${!readOnly && selectedIds.size > 0 ? "teacher-floating-bar-space" : ""}`}
+        className={`ws-page flex flex-1 animate-fadeIn flex-col ${!readOnly && selectedIds.size > 0 ? "teacher-floating-bar-space" : ""}`}
       >
-        <div className="flex min-h-[600px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-col items-start justify-between gap-3 border-b bg-gray-50 p-5 md:flex-row md:items-center">
-            <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
+        <div className="flex min-h-[600px] min-w-0 flex-col">
+          <div className="ws-page-header">
+            <h1 className="whitespace-nowrap text-2xl font-extrabold text-gray-900">
               <i className="fas fa-users mr-2 text-blue-500"></i> 학생 명단
               <span className="ml-2 text-sm font-normal text-gray-500">
                 ({filteredStudents.length}명)
               </span>
-            </h2>
+            </h1>
             {!readOnly && (
               <button
                 type="button"
@@ -601,7 +601,7 @@ const StudentList: React.FC = () => {
             )}
           </div>
 
-          <div className="student-list-controls flex flex-col items-center gap-3 border-b border-gray-100">
+          <div className="ws-filter-bar mb-4 flex flex-col items-center gap-3">
             {readOnly && (
               <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
                 읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
@@ -739,7 +739,7 @@ const StudentList: React.FC = () => {
             </p>
           )}
 
-          <div className="flex-1 overflow-x-auto">
+          <div className="flex-1 overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>

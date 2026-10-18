@@ -2903,9 +2903,10 @@ const MyPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <PortalWorkspace
         as="main"
-        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+        className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs flex-1"
       >
         <PortalSubNavigation
+          variant="tabs"
           title="마이페이지"
           activeLabel={
             leftMenus.find((item) => item.key === menu)?.title || "메뉴 선택"
@@ -2938,11 +2939,11 @@ const MyPage: React.FC = () => {
           <div className="space-y-8">
             {menu === "profile" && (
               <div className="space-y-7">
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">
+                <h2 className="text-xl font-bold text-slate-900">
                   나의 기본 정보
                 </h2>
-                <div className="grid gap-5 xl:grid-cols-3">
-                  <div className="min-w-0 rounded-2xl border border-blue-200 bg-white p-6 shadow-[0_14px_32px_rgba(37,99,235,0.10)] md:p-7 xl:col-span-3">
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+                  <div className="min-w-0 border-b border-slate-200 pb-6 xl:col-span-3">
                     <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
                       <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-blue-50 text-5xl ring-1 ring-blue-100">
                         {displayProfileIcon}
@@ -2992,7 +2993,7 @@ const MyPage: React.FC = () => {
                       key={item.label}
                       type="button"
                       onClick={item.onClick}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.10)]"
+                      className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                     >
                       <div className="flex items-center gap-3">
                         <span
@@ -3011,7 +3012,7 @@ const MyPage: React.FC = () => {
                         </span>
                       </div>
                       <div
-                        className={`mt-8 text-4xl font-black ${
+                        className={`mt-4 text-3xl font-bold ${
                           item.color === "emerald"
                             ? "text-emerald-600"
                             : item.color === "violet"
@@ -3052,7 +3053,7 @@ const MyPage: React.FC = () => {
                           </h3>
                         </div>
                         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="px-1 py-2">
                             <div className="text-xs font-bold text-slate-400">
                               전체 평균
                             </div>
@@ -3062,7 +3063,7 @@ const MyPage: React.FC = () => {
                                 : "등록 점수 없음"}
                             </div>
                           </div>
-                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="px-1 py-2">
                             <div className="text-xs font-bold text-slate-400">
                               목표 달성
                             </div>
@@ -3070,7 +3071,7 @@ const MyPage: React.FC = () => {
                               {targetMetCount}개
                             </div>
                           </div>
-                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="px-1 py-2">
                             <div className="text-xs font-bold text-slate-400">
                               다음 확인
                             </div>
@@ -3111,11 +3112,11 @@ const MyPage: React.FC = () => {
 
             {menu === "score" && (
               <div className="space-y-7">
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">
+                <h2 className="text-xl font-bold text-slate-900">
                   나의 성적표
                 </h2>
 
-                <div className="grid gap-5 2xl:grid-cols-3">
+                <div className="grid gap-5 border-b border-slate-200 pb-5 md:grid-cols-3">
                   {[
                     {
                       icon: "fa-arrow-trend-up",
@@ -3138,10 +3139,10 @@ const MyPage: React.FC = () => {
                   ].map((item) => (
                     <section
                       key={item.label}
-                      className="flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]"
+                      className="flex min-w-0 items-center gap-3"
                     >
                       <span
-                        className={`inline-flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-3xl ${
+                        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg ${
                           item.tone === "emerald"
                             ? "bg-emerald-50 text-emerald-500"
                             : item.tone === "orange"
@@ -3156,7 +3157,7 @@ const MyPage: React.FC = () => {
                           {item.label}
                         </div>
                         <div
-                          className={`mt-3 text-4xl font-black ${
+                          className={`mt-2 text-2xl font-bold ${
                             item.tone === "emerald"
                               ? "text-emerald-600"
                               : item.tone === "orange"
@@ -3205,7 +3206,7 @@ const MyPage: React.FC = () => {
                       <i className="fas fa-chevron-right text-xs"></i>
                     </Link>
                   </div>
-                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                  <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
                     {performanceScoresLoading ? (
                       <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 lg:col-span-2">
                         수행평가 점수를 불러오는 중입니다.
@@ -3269,7 +3270,7 @@ const MyPage: React.FC = () => {
                   </div>
                 </section>
 
-                <div className="grid gap-5 xl:grid-cols-[1.25fr_0.9fr]">
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                     <h3 className="text-xl font-black text-slate-900">
                       과목별 성취 현황
@@ -3375,7 +3376,7 @@ const MyPage: React.FC = () => {
                   </section>
                 </div>
 
-                <div className="grid gap-5 xl:grid-cols-2">
+                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                     <h3 className="text-xl font-black text-slate-900">
                       추천 학습
@@ -3452,11 +3453,9 @@ const MyPage: React.FC = () => {
 
             {menu === "wrong_note" && (
               <div className="space-y-7">
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">
-                  오답 노트
-                </h2>
+                <h2 className="text-xl font-bold text-slate-900">오답 노트</h2>
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                <section className="ws-flat-section">
                   <div className="grid min-w-0 grid-cols-1 gap-4">
                     <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
                       <div className="flex items-center gap-2 text-sm font-black text-slate-500">
@@ -3465,15 +3464,11 @@ const MyPage: React.FC = () => {
                         </span>
                         평가 유형
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="ws-page-tabs" aria-label="평가 유형">
                         <button
                           type="button"
                           onClick={() => selectWrongNoteCategory("all")}
-                          className={`max-w-full min-h-11 truncate rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                            categoryTab === "all"
-                              ? "bg-blue-600 text-white"
-                              : "bg-slate-100 text-slate-600 hover:bg-blue-50"
-                          }`}
+                          aria-pressed={categoryTab === "all"}
                         >
                           전체
                         </button>
@@ -3482,11 +3477,7 @@ const MyPage: React.FC = () => {
                             key={tab.key}
                             type="button"
                             onClick={() => selectWrongNoteCategory(tab.key)}
-                            className={`max-w-full min-h-11 truncate rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                              categoryTab === tab.key
-                                ? "bg-blue-600 text-white"
-                                : "bg-slate-100 text-slate-600 hover:bg-blue-50"
-                            }`}
+                            aria-pressed={categoryTab === tab.key}
                           >
                             {tab.label}
                           </button>

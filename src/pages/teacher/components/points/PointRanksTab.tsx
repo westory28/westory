@@ -720,7 +720,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page">
+      <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs">
         <RankSettingsSidebar
           activePanel={activePanel}
           items={sidebarItems}
@@ -733,17 +733,10 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
               읽기 전용 권한으로 접속 중입니다.
             </div>
           )}
-          <div className="border-b border-gray-100 px-4 py-3 sm:px-6">
+          <div className="mb-4 border-b border-gray-200 pb-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 whitespace-nowrap">
-                <i
-                  className={`${activeSidebarItem.iconClassName} text-[11px]`}
-                  aria-hidden="true"
-                ></i>
-                {activeSidebarItem.label}
-              </span>
               {activeSidebarItem.meta && (
-                <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <span className="text-sm text-gray-600 whitespace-nowrap">
                   {activeSidebarItem.meta}
                 </span>
               )}
@@ -762,7 +755,7 @@ const PointRanksTab: React.FC<PointRanksTabProps> = ({
             </div>
           </div>
 
-          <div className="space-y-5 bg-gray-50/75 p-4 sm:space-y-6 sm:p-6">
+          <div className="space-y-5 sm:space-y-6">
             {activePanel === "theme_preview" && (
               <RankThemePreviewPanel
                 canManage={canManage}

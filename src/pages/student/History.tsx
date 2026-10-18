@@ -176,8 +176,8 @@ const StudentExamAnswer: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 mb-6 flex items-center justify-between">
+      <main className="ws-page ws-page--reading flex-1">
+        <div className="ws-page-header mb-6">
           <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
             <i className="fas fa-clipboard-check text-blue-500"></i>
             정기 시험 답안

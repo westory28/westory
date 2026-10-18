@@ -127,7 +127,7 @@ const QuizIndex: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-8">
+    <div className="ws-page ws-page--reading animate-fadeIn">
       {loadError && (
         <div
           role="alert"
@@ -143,7 +143,8 @@ const QuizIndex: React.FC = () => {
           </button>
         </div>
       )}
-      <div className="mb-5 flex justify-end">
+      <header className="ws-page-header mb-5">
+        <h1>퀴즈</h1>
         <button
           type="button"
           onClick={() => navigate("/student/mypage?menu=wrong_note")}
@@ -152,24 +153,15 @@ const QuizIndex: React.FC = () => {
           <i className="fas fa-book-open text-xs"></i>
           오답노트
         </button>
-      </div>
+      </header>
 
-      <section className="mb-10">
+      <section className="mb-6">
         <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
           <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
         </h2>
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-800 to-blue-500 p-6 text-white shadow-lg transition-transform duration-200">
-          <i className="fas fa-pen-fancy absolute -bottom-5 -right-5 text-8xl opacity-10 -rotate-15"></i>
-
-          <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div className="min-w-0">
-              <div className="mb-2 inline-block rounded bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm">
-                FINAL CHECK
-              </div>
-              <h3 className="mb-1 text-2xl font-black">모의고사 문제</h3>
-            </div>
-
-            <div className="grid min-w-[min(100%,18rem)] grid-cols-4 gap-2 md:min-w-[19rem]">
+        <div className="ws-flat-section">
+          <div className="flex flex-wrap gap-3">
+            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
               {mockExamRoundStates.map(({ round, visible }) => (
                 <button
                   key={round}
@@ -184,10 +176,10 @@ const QuizIndex: React.FC = () => {
                     )
                   }
                   disabled={!visible}
-                  className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-extrabold shadow-sm transition ${
+                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-bold transition ${
                     visible
-                      ? "bg-white text-blue-700 hover:bg-blue-50"
-                      : "cursor-not-allowed bg-white/25 text-white/70 ring-1 ring-white/20"
+                      ? "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                      : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"
                   }`}
                   aria-label={`${formatMockExamRoundLabel(round)} ${
                     visible ? "시작" : "잠김"

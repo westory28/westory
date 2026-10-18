@@ -98,8 +98,8 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.95fr]">
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="points-student-filter-header border-b border-gray-100 bg-gray-50">
+      <div className="min-w-0">
+        <div className="points-student-filter-header ws-flat-section mb-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-800">
@@ -163,7 +163,12 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
           )}
         </div>
 
-        <div className="hidden md:block">
+        <div
+          className="points-student-table overflow-x-auto rounded-xl border border-gray-200 bg-white"
+          role="region"
+          aria-label="위스 지급 및 환수 대상 목록"
+          tabIndex={0}
+        >
           <div className="grid grid-cols-[minmax(0,1.3fr)_140px_120px] gap-3 border-b border-gray-100 px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
             <div>학생</div>
             <div>소속 / 번호</div>

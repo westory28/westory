@@ -102,8 +102,8 @@ const Calendar = () => {
   };
 
   return (
-    <div className="student-calendar-page mx-auto w-full max-w-[1536px] px-4 py-4 md:px-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="student-calendar-page ws-page">
+      <div className="ws-page-header mb-4">
         <h1 className="text-xl font-extrabold text-gray-900">학사 일정</h1>
         {currentConfig && (
           <span className="text-sm text-gray-500">

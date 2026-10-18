@@ -51,10 +51,9 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({
         </button>
       )}
     </header>
-    <div className="wis-orders-filters" aria-label="주문 상태 필터">
+    <div className="ws-page-tabs" aria-label="주문 상태 필터">
       <button
         type="button"
-        className="wis-shop-button"
         aria-pressed={orderFilter === "all"}
         onClick={() => onOrderFilterChange("all")}
       >
@@ -65,7 +64,6 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({
           <button
             key={status}
             type="button"
-            className="wis-shop-button"
             aria-pressed={orderFilter === status}
             onClick={() => onOrderFilterChange(status)}
           >

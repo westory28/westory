@@ -25,6 +25,7 @@ const stubs = {
   "semesterArchive": { isSemesterArchive: false },
   "lazyWithRetry": { lazyWithRetry: () => () => null },
   "profileEmojis": { getDefaultProfileEmojiValue: () => "😀" },
+  "studentProfileEmoji": { resolveStudentProfileEmoji: () => ({ rank: null, allowedEmojiIds: ["smile"], entry: { id: "smile", emoji: "😀" } }) },
   "safeStorage": { readLocalOnly: () => null, removeStorage() {}, writeLocalOnly() {} },
   "browserTasks": {},
   "sessionActivity": {},

@@ -1,5 +1,6 @@
-import React, { useRef, useState } from "react";
-import Footer from "../../components/common/Footer";
+import React, { useState } from "react";
+import PortalWorkspace from "../../components/common/PortalWorkspace";
+import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import TeacherNavigationIcon, {
   type TeacherIconName,
 } from "../../components/layout/TeacherNavigationIcon";
@@ -30,66 +31,36 @@ type SettingSection = (typeof settingSections)[number]["id"];
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingSection>("general");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuToggleRef = useRef<HTMLButtonElement>(null);
   const activeSection = settingSections.find(({ id }) => id === activeTab)!;
   const selectSection = (section: SettingSection) => {
     setActiveTab(section);
-    setMenuOpen(false);
-    if (menuOpen) menuToggleRef.current?.focus();
   };
 
   return (
-    <div className="teacher-settings-workspace">
-      <aside className="teacher-settings-navigation" aria-label="관리자 설정">
-        <div className="teacher-settings-navigation-inner">
-          <div className="teacher-settings-heading">
-            <h1>관리자 설정</h1>
-            <p>설정 메뉴</p>
-          </div>
+    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs">
+      <TeacherSubNavigation
+        variant="tabs"
+        title="관리자 설정"
+        activeLabel={activeSection.label}
+      >
+        {settingSections.map(({ id, label, icon }) => (
           <button
-            ref={menuToggleRef}
+            key={id}
             type="button"
-            className="teacher-settings-menu-toggle"
-            aria-expanded={menuOpen}
-            aria-controls="teacher-settings-sections"
-            onClick={() => setMenuOpen((previous) => !previous)}
+            className={`teacher-settings-section${activeTab === id ? " is-active" : ""}`}
+            aria-current={activeTab === id ? "page" : undefined}
+            aria-controls="teacher-settings-content"
+            onClick={() => selectSection(id)}
           >
-            <TeacherNavigationIcon name={activeSection.icon} />
-            <span title={activeSection.label}>{activeSection.label}</span>
-            <TeacherNavigationIcon
-              name="chevron"
-              className={menuOpen ? "is-open" : ""}
-            />
-            <span className="sr-only">
-              설정 메뉴 {menuOpen ? "접기" : "펼치기"}
-            </span>
+            <TeacherNavigationIcon name={icon} />
+            <span title={label}>{label}</span>
           </button>
-          <nav
-            id="teacher-settings-sections"
-            className={`teacher-settings-sections${menuOpen ? " is-open" : ""}`}
-            aria-label="설정 메뉴"
-          >
-            {settingSections.map(({ id, label, icon }) => (
-              <button
-                key={id}
-                type="button"
-                className={`teacher-settings-section${activeTab === id ? " is-active" : ""}`}
-                aria-current={activeTab === id ? "page" : undefined}
-                aria-controls="teacher-settings-content"
-                onClick={() => selectSection(id)}
-              >
-                <TeacherNavigationIcon name={icon} />
-                <span title={label}>{label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
-      </aside>
+        ))}
+      </TeacherSubNavigation>
 
       <section
         id="teacher-settings-content"
-        className="teacher-settings-content"
+        className="teacher-sub-content teacher-settings-content"
         aria-label={activeSection.label}
       >
         {activeTab === "general" && (
@@ -102,10 +73,7 @@ const Settings: React.FC = () => {
         {activeTab === "notifications" && <SettingsNotifications />}
         {activeTab === "privacy" && <SettingsPrivacy />}
       </section>
-      <div className="teacher-settings-footer">
-        <Footer teacher />
-      </div>
-    </div>
+    </PortalWorkspace>
   );
 };
 

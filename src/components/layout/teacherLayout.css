@@ -375,7 +375,7 @@
 }
 @media (min-width: 1024px) {
   :is(.teacher-layout, .student-layout) {
-    --teacher-account-top-space: 24px;
+    --teacher-account-top-space: 8px;
   }
   :is(.teacher-layout, .student-layout) .teacher-account-header {
     height: var(--teacher-account-height);

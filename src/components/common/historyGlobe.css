@@ -3,7 +3,7 @@
   width: 100%;
   max-width: 1536px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 8px 24px 24px;
   min-width: 0;
 }
 .history-globe {
@@ -44,7 +44,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 .history-globe__header .ws-info-help__button {
   justify-content: flex-start;
@@ -57,7 +57,7 @@
   line-height: 1.25;
 }
 .history-globe__filters {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .history-globe__filters label {
   display: grid;
@@ -116,7 +116,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--ws-surface-subtle, #f8fafc);
 }
 .history-globe.is-wide .history-globe__map-shell {

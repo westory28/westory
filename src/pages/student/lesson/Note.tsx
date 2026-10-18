@@ -31,9 +31,7 @@ const Note: React.FC = () => {
         />
 
         <main className="teacher-sub-content">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
-            <LessonContent unitId={unitId} fallbackTitle={title} />
-          </div>
+          <LessonContent unitId={unitId} fallbackTitle={title} />
         </main>
       </PortalWorkspace>
     </div>

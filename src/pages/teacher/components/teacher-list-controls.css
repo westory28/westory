@@ -3,6 +3,15 @@
   padding-bottom: 8px;
 }
 
+.points-student-table > div {
+  min-width: 680px;
+}
+
+.points-student-table:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
 @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
   .student-list-row .student-list-row__action {
     min-height: 32px;
@@ -12,6 +21,10 @@
 .student-list-controls,
 .points-student-filter-header {
   padding: 20px;
+}
+
+.points-student-filter-header.ws-flat-section {
+  padding: 0;
 }
 
 .student-list-toolbar {

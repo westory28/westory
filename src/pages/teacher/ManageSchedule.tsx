@@ -167,11 +167,11 @@ const ManageSchedule = () => {
 
   return (
     <div
-      className="mx-auto w-full max-w-[1536px] px-4 py-4 md:px-6"
+      className="ws-page"
       data-patch-target="teacher-schedule"
       data-patch-label="학사 일정 관리"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div className="ws-page-header">
         <h1 className="text-xl font-extrabold text-gray-900">학사 일정 관리</h1>
         {scopeReady && (
           <span className="text-sm text-gray-500">

@@ -10,9 +10,10 @@ interface PortalSubNavigationProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
+  variant?: "tree" | "tabs";
 }
 
-/** The settings navigation pattern, shared by student and teacher workspaces. */
+/** Flat page choices or a hierarchical content tree, shared by both portals. */
 const PortalSubNavigation: React.FC<PortalSubNavigationProps> = ({
   title,
   activeLabel,
@@ -21,6 +22,7 @@ const PortalSubNavigation: React.FC<PortalSubNavigationProps> = ({
   open,
   onOpenChange,
   className = "",
+  variant = "tree",
 }) => {
   const [localOpen, setLocalOpen] = useState(false);
   const expanded = open ?? localOpen;
@@ -45,9 +47,25 @@ const PortalSubNavigation: React.FC<PortalSubNavigationProps> = ({
     previousOpen.current = expanded;
   }, [expanded]);
 
+  useEffect(() => {
+    if (variant !== "tabs") return;
+    const menu = menuRef.current;
+    const selected = menu?.querySelector<HTMLElement>(
+      '.is-active, [aria-current="page"], [aria-pressed="true"], [aria-selected="true"]',
+    );
+    if (!menu || !selected) return;
+    const menuBox = menu.getBoundingClientRect();
+    const selectedBox = selected.getBoundingClientRect();
+    if (selectedBox.left < menuBox.left) {
+      menu.scrollLeft -= menuBox.left - selectedBox.left;
+    } else if (selectedBox.right > menuBox.right) {
+      menu.scrollLeft += selectedBox.right - menuBox.right;
+    }
+  }, [activeLabel, variant]);
+
   return (
     <aside
-      className={`teacher-settings-navigation teacher-sub-navigation ${className}`}
+      className={`teacher-settings-navigation teacher-sub-navigation${variant === "tabs" ? " teacher-sub-navigation--tabs" : ""} ${className}`}
       aria-label={title}
       onKeyDown={(event) => {
         if (event.key === "Escape" && expanded) {
@@ -61,32 +79,34 @@ const PortalSubNavigation: React.FC<PortalSubNavigationProps> = ({
     >
       <div className="teacher-settings-navigation-inner">
         <div className="teacher-settings-heading">
-          <h2>{title}</h2>
+          {variant === "tabs" ? <h1>{title}</h1> : <h2>{title}</h2>}
           {actions && (
             <div className="teacher-sub-navigation-actions">{actions}</div>
           )}
         </div>
-        <button
-          ref={toggleRef}
-          type="button"
-          className="teacher-settings-menu-toggle"
-          aria-expanded={expanded}
-          aria-controls={menuId}
-          onClick={() => setOpen(!expanded)}
-        >
-          <span title={activeLabel}>{activeLabel}</span>
-          <TeacherNavigationIcon
-            name="chevron"
-            className={expanded ? "is-open" : ""}
-          />
-          <span className="sr-only">
-            {title} 메뉴 {expanded ? "접기" : "펼치기"}
-          </span>
-        </button>
+        {variant === "tree" && (
+          <button
+            ref={toggleRef}
+            type="button"
+            className="teacher-settings-menu-toggle"
+            aria-expanded={expanded}
+            aria-controls={menuId}
+            onClick={() => setOpen(!expanded)}
+          >
+            <span title={activeLabel}>{activeLabel}</span>
+            <TeacherNavigationIcon
+              name="chevron"
+              className={expanded ? "is-open" : ""}
+            />
+            <span className="sr-only">
+              {title} 메뉴 {expanded ? "접기" : "펼치기"}
+            </span>
+          </button>
+        )}
         <nav
           ref={menuRef}
           id={menuId}
-          className={`teacher-settings-sections${expanded ? " is-open" : ""}`}
+          className={`teacher-settings-sections${expanded ? " is-open" : ""}${variant === "tabs" ? " ws-page-tabs" : ""}`}
           aria-label={`${title} 메뉴`}
         >
           {children}

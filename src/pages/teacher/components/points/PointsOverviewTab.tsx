@@ -152,8 +152,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.92fr)]">
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="points-student-filter-header border-b border-gray-100 bg-gray-50">
+      <div className="min-w-0">
+        <div className="points-student-filter-header ws-flat-section mb-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-800">
@@ -208,7 +208,12 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
           </div>
         </div>
 
-        <div className="hidden md:block">
+        <div
+          className="points-student-table overflow-x-auto rounded-xl border border-gray-200 bg-white"
+          role="region"
+          aria-label="학생별 위스 목록"
+          tabIndex={0}
+        >
           <div className="grid grid-cols-[minmax(220px,1.65fr)_minmax(108px,0.95fr)_114px_124px_124px] gap-3 border-b border-gray-100 px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
             <div>학생</div>
             <div>

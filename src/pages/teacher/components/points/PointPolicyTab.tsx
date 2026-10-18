@@ -305,9 +305,10 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     >
       <PortalWorkspace
         footerActive={active}
-        className="teacher-sub-workspace teacher-sub-workspace--page"
+        className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs"
       >
         <TeacherSubNavigation
+          variant="tabs"
           title="위스 운영 정책"
           activeLabel={activeSection.label}
           open={menuOpen}
@@ -339,12 +340,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
               읽기 전용 권한으로 접속 중입니다.
             </div>
           )}
-          <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-extrabold tracking-normal text-slate-900">
-                위스 운영 정책
-              </h2>
-            </div>
+          <div className="ws-page-header">
             <div
               className={
                 isWeplaySection

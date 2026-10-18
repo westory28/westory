@@ -495,7 +495,10 @@ const ScoreDashboard: React.FC = () => {
     return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 animate-fadeIn">
+    <div className="ws-page ws-page--reading animate-fadeIn">
+      <header className="ws-page-header mb-4">
+        <h1>성적 계산기</h1>
+      </header>
       {/* Warning Modal Overlay */}
       {hasHydratedUserDoc && showWarning && (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center backdrop-blur-sm p-4">
@@ -538,46 +541,46 @@ const ScoreDashboard: React.FC = () => {
       )}
 
       {/* Controls */}
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-center">
-        <div className="flex items-center gap-2">
+      <div className="ws-filter-bar mb-6">
+        <label className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-600">학기</span>
           <select
             value={semester}
             onChange={(e) => setSemester(e.target.value)}
-            className="p-2 border border-gray-300 rounded text-sm min-w-[100px]"
+            className="min-h-11 p-2 border border-gray-300 bg-white rounded-lg text-sm min-w-[100px]"
           >
             <option value="1">1학기</option>
             <option value="2">2학기</option>
           </select>
-        </div>
-        <div className="flex items-center gap-2">
+        </label>
+        <label className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-600">학년</span>
           <select
             value={grade}
             onChange={(e) => setGrade(e.target.value)}
-            className="p-2 border border-gray-300 rounded text-sm min-w-[100px]"
+            className="min-h-11 p-2 border border-gray-300 bg-white rounded-lg text-sm min-w-[100px]"
           >
             <option value="1">1학년</option>
             <option value="2">2학년</option>
             <option value="3">3학년</option>
           </select>
-        </div>
-        <div className="flex items-center gap-2 ml-auto">
+        </label>
+        <label className="flex min-w-0 items-center gap-2 sm:ml-auto">
           <span className="text-sm font-bold text-gray-600">정렬</span>
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
-            className="p-2 border border-gray-300 rounded text-sm min-w-[120px]"
+            className="min-h-11 min-w-0 max-w-full p-2 border border-gray-300 bg-white rounded-lg text-sm"
           >
             <option value="latest">등록순 (최신)</option>
             <option value="name">과목명 (가나다)</option>
             <option value="importance">중요도순 (국어·수학·사회…)</option>
           </select>
-        </div>
+        </label>
         <button
           onClick={handleManualSave}
           disabled={saving || showWarning || !!loadError}
-          className={`px-4 py-2 rounded text-sm font-bold transition ${saving || showWarning || loadError ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+          className={`min-h-11 px-4 py-2 rounded-lg text-sm font-bold transition ${saving || showWarning || loadError ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
         >
           저장
         </button>

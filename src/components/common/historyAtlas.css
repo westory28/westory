@@ -6,7 +6,7 @@
   max-width: 1536px;
   min-width: 0;
   margin: 0 auto;
-  padding: 24px;
+  padding: 8px 24px 24px;
 }
 .history-atlas-page > .teacher-sub-workspace-footer {
   width: 100%;
@@ -72,12 +72,13 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 .history-atlas__heading h1 {
   color: var(--ws-text-strong, #111827);
   font-size: 28px;
   font-weight: 800;
+  line-height: 1.25;
 }
 .history-atlas__heading-title {
   gap: 4px;
@@ -104,7 +105,7 @@
 .history-atlas__subjects {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .history-atlas__subjects button {
@@ -128,7 +129,7 @@
   align-items: end;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .history-atlas label {
   display: flex;

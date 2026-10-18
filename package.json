@@ -26,6 +26,7 @@
     "verify:quiz-score-comparison": "node scripts/verify-quiz-score-comparison.mjs",
     "verify:think-cloud-lifecycle": "node scripts/verify-think-cloud-lifecycle.mjs",
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
+    "verify:portal-design": "node scripts/verify-portal-design.mjs",
     "verify:page-scroll-lock": "node scripts/verify-page-scroll-lock.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",

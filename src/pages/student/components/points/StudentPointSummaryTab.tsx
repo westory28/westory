@@ -111,12 +111,12 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        <div className="border-b border-gray-100 px-5 py-4">
+      <section>
+        <div className="mb-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-bold text-gray-900">위스 기록</h2>
-              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+              <span className="text-sm text-gray-500">
                 {transactions.length}건
               </span>
               {historyLoading && (
@@ -126,17 +126,13 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
               )}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="inline-flex rounded-full bg-gray-100 p-1">
+              <div className="ws-page-tabs" aria-label="위스 기록 유형">
                 {QUICK_HISTORY_FILTERS.map((filterKey) => (
                   <button
                     key={filterKey}
                     type="button"
                     onClick={() => onHistoryFilterChange(filterKey)}
-                    className={`min-h-9 flex-1 rounded-full px-3 text-xs font-bold transition sm:flex-none ${
-                      historyFilter === filterKey
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-gray-600 hover:bg-white hover:text-gray-900"
-                    }`}
+                    aria-pressed={historyFilter === filterKey}
                   >
                     {POINT_HISTORY_FILTER_LABELS[filterKey]}
                   </button>
@@ -150,7 +146,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
                   )
                 }
                 aria-label="위스 상세 유형"
-                className="min-h-10 rounded-full border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="min-h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               >
                 <option value="">상세 유형</option>
                 {DETAIL_HISTORY_FILTERS.map((filterKey) => (
@@ -169,7 +165,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
           </div>
         )}
 
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
           {!historyErrorMessage && transactions.length === 0 && (
             <div className="px-5 py-12 text-center text-sm text-gray-500">
               조건에 맞는 위스 기록이 없습니다.

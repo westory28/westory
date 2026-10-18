@@ -7,6 +7,7 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
+import { useMapViewportHeight } from "./useMapViewportHeight";
 import {
   geoCentroid,
   geoGraticule10,
@@ -234,6 +235,7 @@ export default function HistoryGlobe({
   const pendingPanelFocus = useRef<"detail" | "list" | null>(null);
   const [wide, setWide] = useState(false);
   const [size, setSize] = useState({ width: 600, height: 400 });
+  const mapHeight = useMapViewportHeight(rootRef, mapRef, 480);
   const [popupSize, setPopupSize] = useState({ width: 0, height: 0 });
   const [subject, setSubject] = useState<GlobeSubject>(initialSubject);
   const [unitId, setUnitId] = useState("");
@@ -1904,6 +1906,7 @@ export default function HistoryGlobe({
         <div
           className={`history-globe__map-shell${!wide || size.width < 650 ? " is-compact" : ""}`}
           ref={mapRef}
+          style={{ height: mapHeight }}
         >
           <canvas
             ref={canvasRef}
@@ -2153,6 +2156,7 @@ export default function HistoryGlobe({
         {wide && (
           <aside
             className="history-globe__sidebar"
+            style={{ height: mapHeight, maxHeight: mapHeight }}
             aria-label="지구본 장소 탐색"
           >
             {list}

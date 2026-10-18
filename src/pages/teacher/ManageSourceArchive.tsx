@@ -517,7 +517,7 @@ const ManageSourceArchive: React.FC = () => {
 
   if (!canRead) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="ws-page">
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
           <h1 className="text-2xl font-extrabold">{UI.title}</h1>
           <p className="mt-2 text-sm">{UI.noAccess}</p>
@@ -530,21 +530,20 @@ const ManageSourceArchive: React.FC = () => {
   const showingFilteredResult = filteredAssets.length !== assets.length;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="ws-page">
+      <div className="ws-page-header">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">{UI.title}</h1>
-          <p className="mt-2 text-sm text-gray-500">{UI.listHint}</p>
+          <h1 className="text-2xl font-extrabold text-gray-900">{UI.title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+          <span className="text-sm font-semibold text-gray-500">
             전체 {assets.length}건
           </span>
           {canWrite && (
             <button
               type="button"
               onClick={openCreate}
-              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
               사료 등록
             </button>
@@ -570,7 +569,7 @@ const ManageSourceArchive: React.FC = () => {
         </div>
       )}
 
-      <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="ws-flat-section mt-4">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           <label className="space-y-1">
             <span className="block text-xs font-semibold text-gray-500">
@@ -680,7 +679,7 @@ const ManageSourceArchive: React.FC = () => {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-        <section className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+        <section className="min-w-0">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-lg font-extrabold text-gray-900">사료 목록</h2>
             <span className="text-sm text-gray-500">

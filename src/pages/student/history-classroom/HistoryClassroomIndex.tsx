@@ -915,34 +915,31 @@ const HistoryClassroomIndex: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <section className="mb-6 rounded-[28px] border border-slate-200 bg-white px-6 py-7 shadow-sm">
+    <div className="ws-page ws-page--reading">
+      <section className="ws-flat-section mb-4">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="text-sm font-bold text-orange-500">
-              학습 &gt; 역사교실
-            </div>
-            <h1 className="mt-2 text-3xl font-black text-slate-950">
-              역사교실
-            </h1>
-            <div className="mt-3 inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+            <header className="ws-page-header">
+              <h1>역사교실</h1>
+            </header>
+            <div className="mt-2 text-sm text-slate-600">
               면제권 {summary.availableExemptions}장 보유
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-2 text-center">
-            <div className="min-w-20 rounded-xl bg-white px-3 py-2 shadow-sm">
+          <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
+            <div className="min-w-20 px-4 py-2">
               <div className="text-[11px] font-bold text-slate-500">전체</div>
               <div className="text-lg font-black text-slate-950">
                 {summary.total}
               </div>
             </div>
-            <div className="min-w-20 rounded-xl bg-white px-3 py-2 shadow-sm">
+            <div className="min-w-20 px-4 py-2">
               <div className="text-[11px] font-bold text-blue-600">진행</div>
               <div className="text-lg font-black text-blue-700">
                 {summary.active}
               </div>
             </div>
-            <div className="min-w-20 rounded-xl bg-white px-3 py-2 shadow-sm">
+            <div className="min-w-20 px-4 py-2">
               <div className="text-[11px] font-bold text-emerald-600">통과</div>
               <div className="text-lg font-black text-emerald-700">
                 {summary.passed}

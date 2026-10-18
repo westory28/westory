@@ -10,6 +10,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { geoArea, geoCentroid, geoPath } from "d3-geo";
+import { useMapViewportHeight } from "./useMapViewportHeight";
 import {
   ATLAS_COUNTRY_HELP,
   ATLAS_COUNTRY_LICENSE_URL,
@@ -505,7 +506,7 @@ export default function HistoryAtlas({
     pointerId: number;
   } | null>(null);
   const wide = containerWidth >= 900;
-  const mapHeight = wide ? 640 : 480;
+  const mapHeight = useMapViewportHeight(rootRef, mapRef, wide ? 640 : 480);
   const placesById = useMemo(
     () => new Map(dataset.places.map((place) => [place.id, place])),
     [dataset.places],
@@ -2446,7 +2447,11 @@ export default function HistoryAtlas({
           </div>
         </div>
         {wide && (
-          <aside className="history-atlas__side-panel" aria-label="장소 탐색">
+          <aside
+            className="history-atlas__side-panel"
+            aria-label="장소 탐색"
+            style={{ height: mapHeight + 2 }}
+          >
             {placeList}
           </aside>
         )}

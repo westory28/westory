@@ -3422,7 +3422,7 @@ const ManageLesson: React.FC = () => {
         )}
       />
       <main className="teacher-sub-content">
-        <div className="mb-4 flex items-center">
+        <div className="ws-page-header">
           <h1 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리
           </h1>
@@ -3456,14 +3456,18 @@ const ManageLesson: React.FC = () => {
                   onToggleVisible={setLessonVisibleToStudents}
                   onSave={() => void saveLesson({ source: "header" })}
                 />
-                <div className="border-b border-gray-200 bg-white px-4 py-2">
-                  <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
+                <div className="px-4">
+                  <div
+                    className="ws-page-tabs"
+                    aria-label="수업 자료 편집 보기"
+                  >
                     {TABS.map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
+                        aria-pressed={editorTab === tab.id}
                         onClick={() => handleEditorTabChange(tab.id)}
-                        className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${editorTab === tab.id ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"}`}
+                        className={editorTab === tab.id ? "is-active" : ""}
                       >
                         <i className={`fas ${tab.icon} mr-2 text-xs`}></i>
                         {tab.label}

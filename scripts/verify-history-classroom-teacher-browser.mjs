@@ -408,7 +408,11 @@ const bundle = await build({
 });
 const css = (
   await Promise.all(
-    ["assets/css/style.css", "src/assets/index.css"].map((file) =>
+    [
+      "assets/css/style.css",
+      "src/assets/index.css",
+      "src/components/common/portalPage.css",
+    ].map((file) =>
       fs.readFile(path.join(root, file), "utf8"),
     ),
   )
@@ -1218,11 +1222,19 @@ try {
       JSON.stringify(statusGeometry),
     );
     for (const button of await panel.getByRole("button").all()) {
-      if (await button.isVisible())
-        assert(
-          (await button.boundingBox()).height >= 44,
-          "tablet touch controls remain at least 44px",
-        );
+      if (!(await button.isVisible())) continue;
+      const denseAttemptAction = await button.evaluate((element) =>
+        element.matches(".history-attempt-actions .history-action-button"),
+      );
+      const buttonBox = await button.boundingBox();
+      // DESIGN.md (2026-10-15): only the attempt table's management actions
+      // use 28px controls. Source selection and other controls still use 44px.
+      assert(
+        buttonBox.height >= (denseAttemptAction ? 28 : 44),
+        denseAttemptAction
+          ? "attempt table actions preserve the explicit 28px minimum"
+          : "other touch controls remain at least 44px",
+      );
     }
     await panel.locator("table").evaluate((table) => {
       table.parentElement.scrollLeft = 0;

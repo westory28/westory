@@ -1,0 +1,146 @@
+/* DESIGN.md: one flat page hierarchy for both Westory portals. */
+.ws-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1536px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 16px 24px 24px;
+}
+
+.ws-page--reading { max-width: 1152px; }
+
+.ws-page-header {
+  position: static;
+  top: auto;
+  z-index: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  margin-bottom: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ws-page-header :is(h1, h2) {
+  margin: 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: var(--ws-type-page-title, 1.75rem);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.ws-page-tabs {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 16px;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  scrollbar-width: thin;
+  scroll-padding-inline: 4px;
+}
+
+.ws-page-tabs > :is(button, a),
+.ws-page-tabs > div > :is(button, a) {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  min-height: 48px;
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ws-page-tabs > :is(button, a):hover,
+.ws-page-tabs > div > :is(button, a):hover {
+  color: var(--ws-primary, #2563eb);
+  background: transparent;
+}
+
+.ws-page-tabs > :is(button, a):is(.is-active, [aria-current="page"], [aria-pressed="true"], [aria-selected="true"]),
+.ws-page-tabs > div > :is(button, a):is(.is-active, [aria-current="page"], [aria-pressed="true"], [aria-selected="true"]) {
+  border-bottom-color: var(--ws-primary, #2563eb);
+  background: transparent;
+  color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+
+.ws-page-tabs :is(button, a):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -3px;
+}
+
+.ws-page-tabs :is(button, a):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ws-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ws-filter-bar > * { min-width: 0; }
+
+.ws-flat-section {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.ws-surface {
+  min-width: 0;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #ffffff);
+}
+
+@media (max-width: 639px) {
+  .ws-page-tabs { gap: 4px; }
+  .ws-page-tabs > :is(button, a),
+  .ws-page-tabs > div > :is(button, a) { padding-inline: 12px; }
+}
+
+@media (max-width: 767px) {
+  .ws-page { padding-inline: 16px; }
+}

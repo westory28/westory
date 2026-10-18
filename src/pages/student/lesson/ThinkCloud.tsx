@@ -236,9 +236,10 @@ const ThinkCloud: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <PortalWorkspace
         as="main"
-        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
+        className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs flex-1"
       >
         <PortalSubNavigation
+          variant="tabs"
           title="생각모아"
           activeLabel={selectedSession?.title || "주제 선택"}
           open={menuOpen}
@@ -279,9 +280,6 @@ const ThinkCloud: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 truncate">
-                    {session.description || "설명 없음"}
-                  </p>
                 </div>
               </button>
             );
@@ -297,7 +295,7 @@ const ThinkCloud: React.FC = () => {
 
           {selectedSession && (
             <>
-              <section className="bg-white border border-gray-200 rounded-2xl p-5">
+              <section className="ws-flat-section">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-extrabold text-gray-900">
@@ -320,8 +318,8 @@ const ThinkCloud: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                  <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-600">
+                  <span>
                     대상{" "}
                     {formatGradeLabel(
                       selectedSession.targetGrade,
@@ -332,20 +330,18 @@ const ThinkCloud: React.FC = () => {
                       selectedSession.targetClassLabel,
                     )}
                   </span>
-                  <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  <span>
                     {options.inputMode === "word"
                       ? "단어 1개 입력"
                       : "짧은 문장 입력"}
                   </span>
-                  <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    최대 {options.maxLength}자
-                  </span>
-                  <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                  <span>최대 {options.maxLength}자</span>
+                  <span>
                     {options.allowDuplicateWord
                       ? "중복 단어 제출 허용"
                       : "중복 단어 제출 제한"}
                   </span>
-                  <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+                  <span>
                     {options.allowDuplicateByStudent
                       ? "동일 학생 중복 제출 허용"
                       : "동일 학생 중복 제출 제한"}

@@ -382,17 +382,14 @@ const ManageThinkCloud: React.FC = () => {
   };
 
   const renderCreatePanel = () => (
-    <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-      <div className="border-b border-gray-100 pb-4 mb-6">
+    <section className="min-w-0">
+      <div className="ws-page-header">
         <h2 className="text-lg font-extrabold text-gray-900">
           새 생각모아 주제
         </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          주제와 옵션을 설정한 뒤 세션을 시작하세요.
-        </p>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             주제
@@ -578,8 +575,8 @@ const ManageThinkCloud: React.FC = () => {
     const isPaused = selectedSession.status === "paused";
 
     return (
-      <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="border-b border-gray-100 pb-4 mb-6 flex items-start justify-between gap-3">
+      <section className="min-w-0">
+        <div className="ws-page-header">
           <div>
             <h2 className="text-lg font-extrabold text-gray-900">
               {selectedSession.title}

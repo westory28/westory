@@ -372,8 +372,11 @@ const ScoreReport: React.FC = () => {
     return <PageLoading message="성적 리포트를 불러오는 중입니다." />;
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6">
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="ws-page">
+      <header className="ws-page-header mb-4">
+        <h1>성적 리포트</h1>
+      </header>
+      <div className="ws-flat-section mb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
           <label className="flex items-center gap-3 text-sm font-extrabold text-slate-600">
             학기
@@ -430,13 +433,9 @@ const ScoreReport: React.FC = () => {
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:p-6">
           <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h1 className="text-2xl font-black text-slate-900">
+              <h2 className="text-xl font-bold text-slate-900">
                 교과별 성적 분석
-              </h1>
-              <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                정기시험과 수행평가의 반영 비율을 한눈에 비교하고, 과목별 현재
-                점수를 확인하세요.
-              </p>
+              </h2>
             </div>
             <div className="flex flex-wrap gap-3">
               {scoreTypes.map((type) => (

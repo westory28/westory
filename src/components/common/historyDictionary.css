@@ -1,3 +1,5 @@
+@import "./portalPage.css";
+
 .history-dictionary-workspace,
 .history-dictionary-catalog {
   color: var(--ws-text, #1f2937);
@@ -7,23 +9,6 @@
 }
 .history-dictionary-workspace {
   container-type: inline-size;
-}
-.history-dictionary-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
-}
-.history-dictionary-tabs button {
-  min-height: 44px;
-  padding: 8px 16px;
-  border-bottom: 2px solid transparent;
-  color: var(--ws-text-muted, #6b7280);
-  font-weight: 700;
-}
-.history-dictionary-tabs button[aria-pressed="true"] {
-  border-color: var(--ws-primary, #2563eb);
-  color: var(--ws-primary, #2563eb);
 }
 .history-dictionary-row {
   display: flex;

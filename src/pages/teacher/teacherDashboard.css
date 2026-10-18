@@ -61,6 +61,20 @@
   margin-bottom: 4px;
 }
 
+.teacher-layout .teacher-week-schedule {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.teacher-layout .teacher-week-events {
+  padding-inline: 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  background: var(--ws-surface, #fff);
+}
+
 .teacher-week-schedule__heading h2 {
   display: flex;
   align-items: center;

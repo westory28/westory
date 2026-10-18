@@ -2485,15 +2485,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     </PortalSubNavigation>
   ) : null;
   const scoreHeader = (
-    <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="ws-flat-section mb-5">
+      <div className="ws-page-header">
         <div className="min-w-0 break-keep">
           <h1 className="text-2xl font-black text-slate-900">
             {resolvedCopy.pageTitle}
           </h1>
           <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-            {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
-            {resolvedCopy.pageDescription}
+            {year}학년도 {semester}학기
           </p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">

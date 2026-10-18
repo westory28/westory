@@ -26,19 +26,17 @@ const ManageExam: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main
-        className={`${activeTab === "preview" ? "grading-page" : ""} w-full ${
-          activeTab === "performance" || activeTab === "written-essay"
-            ? "max-w-[1500px]"
-            : activeTab === "preview"
-              ? ""
-              : "max-w-7xl"
-        } mx-auto px-4 py-6 flex-1 flex flex-col`}
+        className={
+          activeTab === "preview"
+            ? "grading-page mx-auto flex w-full flex-1 flex-col px-4 py-6"
+            : "ws-page flex flex-1 flex-col"
+        }
       >
         <div
           className={
             activeTab === "preview"
               ? "relative min-h-[500px] flex-1 min-w-0"
-              : "relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6"
+              : "relative min-h-[500px] min-w-0 flex-1"
           }
         >
           {activeTab === "preview" && <ExamGradingPlan />}

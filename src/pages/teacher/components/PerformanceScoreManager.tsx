@@ -13611,14 +13611,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       )}
 
       <section className="min-w-0">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="ws-page-header">
           <div>
             <h2 className="text-xl font-black text-slate-900">
               {managerCopy.pageTitle}
             </h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-              {managerCopy.pageDescription}
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -13728,7 +13725,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           </div>
         ) : (
           <div className="mt-5 space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="ws-flat-section">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(8rem,0.65fr)_minmax(8rem,0.65fr)] xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">

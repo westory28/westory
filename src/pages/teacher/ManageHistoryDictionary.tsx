@@ -1222,14 +1222,18 @@ const ManageHistoryDictionary: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen bg-slate-50">
+      <div className="ws-page">
         {activePanel === "terms" && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-extrabold text-slate-900">
-              역사 사전
-            </h1>
-            <div className="flex gap-2" role="group" aria-label="사전 보기">
+          <div className="mb-4">
+            <div className="ws-page-header">
+              <h1>역사 사전</h1>
+            </div>
+            <div
+              className="ws-page-tabs mt-4"
+              role="group"
+              aria-label="사전 보기"
+            >
               {(
                 [
                   { id: "catalog", label: "기본 사전" },
@@ -1241,7 +1245,7 @@ const ManageHistoryDictionary: React.FC = () => {
                   type="button"
                   aria-pressed={termsView === view.id}
                   onClick={() => setTermsView(view.id)}
-                  className={`min-h-11 rounded-lg border px-4 text-sm font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 ${termsView === view.id ? "border-blue-200 bg-blue-50 text-blue-900" : "border-slate-200 bg-white text-slate-700"}`}
+                  className={termsView === view.id ? "is-active" : ""}
                 >
                   {view.label}
                 </button>
@@ -1280,7 +1284,7 @@ const ManageHistoryDictionary: React.FC = () => {
           className={`${showCatalog ? "hidden" : "grid"} gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.95fr)]`}
         >
           {activePanel === "terms" ? (
-            <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <aside className="min-w-0">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-slate-950">
                   등록된 단어
@@ -1437,7 +1441,7 @@ const ManageHistoryDictionary: React.FC = () => {
               </div>
             </aside>
           ) : activePanel === "studentWords" ? (
-            <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <aside className="min-w-0">
               <div>
                 <h2 className="text-lg font-extrabold text-slate-950">
                   학생 등록 단어
@@ -1580,15 +1584,12 @@ const ManageHistoryDictionary: React.FC = () => {
               </div>
             </aside>
           ) : activePanel === "requests" ? (
-            <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <aside className="min-w-0">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-extrabold text-slate-950">
                     학생 요청 단어
                   </h2>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    요청 맥락을 확인한 뒤 풀이를 작성해 배포합니다.
-                  </p>
                 </div>
               </div>
 

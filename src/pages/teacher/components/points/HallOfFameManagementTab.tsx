@@ -856,21 +856,17 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="ws-page-header">
         <div>
           <h2 className="text-2xl font-black text-slate-950">
             명예의 전당 관리
           </h2>
-          <p className="mt-1 text-sm font-semibold text-slate-500 break-keep">
-            학생에게 공개되는 시상대, 공개 랭킹, 팝업과 반영 상태를 한 화면에서
-            관리합니다.
-          </p>
         </div>
         <button
           type="button"
           onClick={() => void handleSaveAllChanges()}
           disabled={!canManage || !hasUnsavedChanges || savingChanges}
-          className="inline-flex min-h-12 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-6 text-sm font-black text-white shadow-[0_12px_26px_rgba(15,23,42,0.18)] transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+          className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-4 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           {savingChanges ? "저장 중..." : "변경사항 저장"}
         </button>

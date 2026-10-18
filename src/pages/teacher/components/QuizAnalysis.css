@@ -34,10 +34,9 @@
   flex-wrap: wrap;
 }
 .qa-filterbar {
-  padding: 16px;
-  background: var(--ws-surface, #ffffff);
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 .qa-filterbar label {
   display: flex;
@@ -528,7 +527,6 @@
 }
 @media (max-width: 639px) {
   .qa-filterbar {
-    padding: 12px;
     gap: 12px;
   }
   .qa-filterbar .qa-unit-filter,

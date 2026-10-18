@@ -291,7 +291,7 @@ export default function StudentHistoryDictionaryWorkspace() {
 
   return (
     <div className="history-dictionary-workspace">
-      <div className="history-dictionary-tabs" aria-label="사전 보기">
+      <div className="ws-page-tabs" role="group" aria-label="사전 보기">
         <button
           type="button"
           aria-pressed={view === "catalog"}

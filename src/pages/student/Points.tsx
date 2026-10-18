@@ -541,36 +541,31 @@ const Points: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
-        className={`mx-auto w-full flex-1 px-4 py-8 ${
-          isHallOfFameTab ? "max-w-7xl" : "max-w-6xl"
+        className={`ws-page flex-1 ${
+          isHallOfFameTab ? "" : "ws-page--reading"
         }`}
       >
-        <div className="mb-4 overflow-x-auto rounded-t-lg bg-white border-b border-gray-200">
-          <div className="flex min-w-max gap-2 px-2">
+        <header className="ws-page-header mb-4">
+          <h1>위스</h1>
+        </header>
+        <div className="mb-6 overflow-x-auto">
+          <nav className="ws-page-tabs" aria-label="위스 메뉴">
             {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map(
               (tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => handleTabChange(tab)}
-                  className={`border-b-2 px-5 py-4 text-sm font-bold transition whitespace-nowrap ${
-                    activeTab === tab
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-600 hover:text-gray-800"
-                  }`}
+                  aria-current={activeTab === tab ? "page" : undefined}
                 >
                   {STUDENT_POINT_TAB_LABELS[tab]}
                 </button>
               ),
             )}
-          </div>
+          </nav>
         </div>
 
-        <div
-          className={`rounded-2xl border border-gray-200 bg-white shadow-sm ${
-            isHallOfFameTab ? "p-4 sm:p-5 xl:p-6" : "p-6"
-          }`}
-        >
+        <div className="min-w-0">
           {loading && (
             <InlineLoading
               message="위스 정보를 불러오는 중입니다."

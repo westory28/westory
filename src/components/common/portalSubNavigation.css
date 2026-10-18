@@ -1,3 +1,5 @@
+@import "./portalPage.css";
+
 .teacher-settings-workspace {
   display: grid;
   grid-template-columns: 228px minmax(0, 1fr);
@@ -409,4 +411,77 @@
   .teacher-settings-content {
     padding: 24px 16px;
   }
+}
+
+/* Flat page choices share the atlas hierarchy; content trees keep the rail. */
+.teacher-sub-workspace--tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1536px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 16px 24px 0;
+}
+
+.teacher-sub-workspace--tabs > :is(.teacher-sub-content, .teacher-settings-content) {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+.teacher-sub-workspace--tabs > :is(.teacher-sub-workspace-footer, .teacher-settings-footer) {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+.teacher-sub-navigation--tabs.teacher-settings-navigation,
+:is(.teacher-layout, .student-layout) .teacher-sub-navigation.teacher-sub-navigation--tabs.teacher-settings-navigation {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+.teacher-sub-navigation--tabs .teacher-settings-navigation-inner {
+  position: static;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.teacher-sub-navigation--tabs .teacher-settings-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 16px;
+}
+
+.teacher-sub-navigation--tabs .teacher-settings-heading h1 {
+  font-size: var(--ws-type-page-title, 1.75rem);
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.teacher-sub-navigation--tabs .teacher-sub-navigation-actions { margin: 0; }
+
+.teacher-sub-navigation.teacher-sub-navigation--tabs .teacher-settings-sections {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 0;
+}
+
+.teacher-sub-navigation--tabs .teacher-settings-section::before { display: none; }
+
+.teacher-sub-navigation--tabs .teacher-settings-section > span:not(.sr-only) {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+@media (max-width: 767px) {
+  .teacher-sub-workspace--tabs { padding: 16px 16px 0; }
 }

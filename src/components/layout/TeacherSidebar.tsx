@@ -92,19 +92,27 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       isChildActive(child.resolvedUrl, allChildren),
     ),
   )?.id;
-  const [openGroup, setOpenGroup] = useState<string | null>(
-    activeGroup || null,
-  );
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [animatingGroups, setAnimatingGroups] = useState<string[]>([]);
   const menuAnimationTimer = useRef<number | undefined>(undefined);
   const panelRef = useRef<HTMLElement>(null);
   const previousMobileOpen = useRef(false);
 
   useEffect(() => {
-    setOpenGroup(activeGroup || null);
+    const focusedChild = panelRef.current?.contains(document.activeElement)
+      ? document.activeElement?.closest(".teacher-sidebar-submenu")
+      : null;
+    if (focusedChild?.id) {
+      panelRef.current
+        ?.querySelector<HTMLButtonElement>(
+          `button[aria-controls="${focusedChild.id}"]`,
+        )
+        ?.focus();
+    }
+    setOpenGroup(null);
     setAnimatingGroups([]);
     window.clearTimeout(menuAnimationTimer.current);
-  }, [location.pathname, location.search, activeGroup]);
+  }, [location.pathname, location.search]);
 
   useEffect(() => () => window.clearTimeout(menuAnimationTimer.current), []);
 

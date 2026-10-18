@@ -136,15 +136,11 @@ const ManageQuiz: React.FC = () => {
         </TeacherSubNavigation>
       )}
       <main
-        className={
-          isManageTab && canWrite
-            ? "teacher-sub-content"
-            : "w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 pb-8"
-        }
+        className={isManageTab && canWrite ? "teacher-sub-content" : "ws-page"}
       >
         <header className="quiz-workspace-header">
           <h1 className="text-2xl font-extrabold text-gray-900">평가 관리</h1>
-          <nav className="quiz-workspace-tabs" aria-label="평가 관리 보기">
+          <nav className="ws-page-tabs mt-4" aria-label="평가 관리 보기">
             {[
               ...(canWrite
                 ? [
@@ -161,7 +157,7 @@ const ManageQuiz: React.FC = () => {
                 key={tab.id}
                 type="button"
                 aria-current={activeTab === tab.id ? "page" : undefined}
-                className={`quiz-workspace-tab${activeTab === tab.id ? " is-active" : ""}`}
+                className={activeTab === tab.id ? "is-active" : ""}
                 onClick={() => {
                   setSourceQuestion(null);
                   setSearchParams({ tab: tab.id });

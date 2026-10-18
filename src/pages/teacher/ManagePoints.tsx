@@ -1775,7 +1775,7 @@ const ManagePoints: React.FC = () => {
   if (!canRead) {
     return (
       <div className="flex min-h-screen flex-col bg-gray-50">
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+        <main className="ws-page flex-1">
           <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
             위스 관리 화면을 볼 권한이 없습니다.
           </div>
@@ -1784,23 +1784,13 @@ const ManagePoints: React.FC = () => {
     );
   }
 
-  const usesSharedPanelFrame =
-    activeTab !== "policy" &&
-    activeTab !== "ranks" &&
-    activeTab !== "hall-of-fame";
-
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
         className={
           activeTab === "policy" || activeTab === "ranks"
             ? "flex w-full flex-1 flex-col"
-            : [
-                "mx-auto flex w-full flex-1 flex-col px-4 py-6",
-                activeTab === "hall-of-fame"
-                  ? "max-w-[96rem] 2xl:px-6"
-                  : "max-w-7xl",
-              ].join(" ")
+            : "ws-page flex flex-1 flex-col"
         }
       >
         {!canManage && activeTab !== "policy" && activeTab !== "ranks" && (
@@ -1809,13 +1799,7 @@ const ManagePoints: React.FC = () => {
           </div>
         )}
 
-        <div
-          className={
-            usesSharedPanelFrame
-              ? "rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6"
-              : ""
-          }
-        >
+        <div className="min-w-0">
           {loading && (
             <InlineLoading
               message="위스 정보를 불러오는 중입니다."

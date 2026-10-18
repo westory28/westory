@@ -335,7 +335,7 @@ export default function ManageWeplay() {
               </Link>
             )}
           </nav>
-          <div className="teacher-weplay-title">
+          <div className="teacher-weplay-title ws-page-header">
             <h1>{gameTitle}</h1>
             <button
               type="button"

@@ -120,6 +120,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 
 .teacher-wis-shop__filters button {
@@ -128,7 +129,8 @@
   gap: 8px;
   min-height: 44px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   color: var(--ws-text-muted, #6b7280);
   background: transparent;
   font-weight: 700;
@@ -136,7 +138,8 @@
 
 .teacher-wis-shop__filters button[aria-pressed="true"] {
   color: var(--ws-primary-text, #1e3a8a);
-  background: var(--ws-primary-soft, #eff6ff);
+  border-bottom-color: var(--ws-primary, #2563eb);
+  background: transparent;
 }
 .teacher-wis-shop__filters button span {
   font-size: 12px;

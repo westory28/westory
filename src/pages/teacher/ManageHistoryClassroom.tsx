@@ -4113,18 +4113,15 @@ const ManageHistoryClassroom: React.FC = () => {
   }, [activeModalId]);
 
   return (
-    <div className="history-classroom mx-auto max-w-7xl px-4 py-5 sm:py-8">
+    <div className="history-classroom ws-page">
       <datalist id="history-assignment-reasons">
         {ASSIGNMENT_REASONS.map((reason) => (
           <option key={reason} value={reason} />
         ))}
       </datalist>
-      <section className="history-dashboard mb-5 px-1 py-2">
-        <div className="history-heading flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="history-dashboard mb-4">
+        <div className="history-heading ws-page-header">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
-              <DashboardIcon name="calendar" className="h-6 w-6" />
-            </div>
             <div>
               <h1 className="text-2xl font-black text-gray-900">
                 역사교실 제출 현황 대시보드
@@ -4157,7 +4154,7 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="history-dashboard mb-5 rounded-3xl border border-gray-200 bg-white p-3 shadow-sm xl:p-3.5">
+      <section className="history-dashboard ws-flat-section mb-5">
         <div className="history-filters">
           <div className="history-date-label flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
