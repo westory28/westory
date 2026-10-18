@@ -10,24 +10,33 @@
 
 .history-atlas .atlas-terrain-toggle,
 .history-globe .atlas-terrain-toggle {
-  display: flex;
-  flex-direction: row;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   min-height: 44px;
-  padding: 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-muted, #6b7280);
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
 }
-.history-atlas .atlas-terrain-toggle input,
-.history-globe .atlas-terrain-toggle input {
-  width: 18px;
-  height: 18px;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--ws-primary, #2563eb);
-  cursor: pointer;
+.history-atlas .atlas-terrain-toggle[aria-pressed="true"],
+.history-globe .atlas-terrain-toggle[aria-pressed="true"] {
+  color: var(--ws-primary, #2563eb);
+  border-color: var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.history-atlas .atlas-terrain-toggle:hover,
+.history-globe .atlas-terrain-toggle:hover {
+  border-color: var(--ws-primary, #2563eb);
+}
+.atlas-terrain-toggle svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }

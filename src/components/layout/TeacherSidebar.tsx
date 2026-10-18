@@ -87,12 +87,17 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
       location.pathname.startsWith(`${bottomLink.url.split("?")[0]}/`)
     : false;
   const allChildren = groups.flatMap((group) => group.children);
-  const activeGroup = groups.find((group) =>
+  const activeMenuGroup = groups.find((group) =>
     group.children.some((child) =>
       isChildActive(child.resolvedUrl, allChildren),
     ),
-  )?.id;
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  );
+  const activeGroup = activeMenuGroup?.id;
+  const activeAccordionGroup =
+    activeMenuGroup && !activeMenuGroup.directUrl ? activeMenuGroup.id : null;
+  const [openGroup, setOpenGroup] = useState<string | null>(
+    activeAccordionGroup,
+  );
   const [animatingGroups, setAnimatingGroups] = useState<string[]>([]);
   const menuAnimationTimer = useRef<number | undefined>(undefined);
   const panelRef = useRef<HTMLElement>(null);
@@ -102,17 +107,28 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
     const focusedChild = panelRef.current?.contains(document.activeElement)
       ? document.activeElement?.closest(".teacher-sidebar-submenu")
       : null;
-    if (focusedChild?.id) {
+    if (
+      focusedChild?.id &&
+      focusedChild.id !== `${portal}-menu-${activeAccordionGroup}`
+    ) {
       panelRef.current
         ?.querySelector<HTMLButtonElement>(
           `button[aria-controls="${focusedChild.id}"]`,
         )
         ?.focus();
     }
-    setOpenGroup(null);
+    // Navigation reveals the selected group without moving focus from a child
+    // that remains visible. A manual fold survives ordinary page rerenders.
+    setOpenGroup(activeAccordionGroup);
     setAnimatingGroups([]);
     window.clearTimeout(menuAnimationTimer.current);
-  }, [location.pathname, location.search]);
+  }, [
+    location.pathname,
+    location.search,
+    activeGroup,
+    activeAccordionGroup,
+    portal,
+  ]);
 
   useEffect(() => () => window.clearTimeout(menuAnimationTimer.current), []);
 
