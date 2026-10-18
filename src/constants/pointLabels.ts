@@ -167,8 +167,9 @@ export const STUDENT_POINT_TAB_LABELS = {
 } as const;
 
 export const POINT_ORDER_STATUS_LABELS: Record<PointOrderStatus, string> = {
-  requested: "요청 접수",
+  requested: "주문 접수",
   approved: "승인 완료",
+  ready: "수령 준비",
   rejected: "반려",
   fulfilled: "지급 완료",
   cancelled: "취소",

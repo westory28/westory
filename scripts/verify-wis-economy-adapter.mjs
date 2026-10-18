@@ -133,8 +133,11 @@ function harness(service = async () => state(), sharedStorage = new Map()) {
       },
     },
     "./semesterScope": { getYearSemester: (input) => input || config },
+    "./semesterArchive": { isSemesterArchive: false },
     "./points": {
-      getPointPolicy: async () => ({ rankPolicy: {} }),
+      getPointPolicy: async () => ({
+        rankPolicy: { emojiPolicy: { defaultEmojiId: "smile" } },
+      }),
       getPointRankManualAdjustEarnedPointsByUid: async () => {
         throw Error("Legacy rank fallback must not run");
       },
@@ -142,6 +145,11 @@ function harness(service = async () => state(), sharedStorage = new Map()) {
     "./pointRanks": {
       needsPointRankLegacyFallback: () => false,
       getPointRankDisplay: ({ wallet }) => ({ balance: wallet?.balance }),
+      getPointRankAllowedEmojiIds: () => ["smile"],
+      getPointRankEmojiEntryById: (_policy, id) =>
+        id === "smile" ? { id: "smile", emoji: "😀" } : null,
+      getPointRankEmojiEntryByValue: (_policy, value) =>
+        value === "😀" ? { id: "smile", emoji: "😀" } : null,
     },
     "./sensitiveOperation": {
       ensureSensitiveOperation: async () =>
@@ -549,11 +557,15 @@ await test("Hall query converts ISO timestamps and keeps canonical masked identi
     snapshotVersion: 7,
     updatedAt: "2026-10-08T04:00:00.000Z",
     gradeTop3ByGrade: { 1: [{ uid: "wispublic_masked" }] },
+    classTop3ByClassKey: {},
+    gradeLeaderboardByGrade: {},
+    classLeaderboardByClassKey: {},
   };
   const h = harness(async () => state({ hallOfFame: snapshot }));
   const result = await h.student.getStudentPointHallOfFame(config);
   assert.equal(result.updatedAt.toMillis(), Date.parse(snapshot.updatedAt));
   assert.equal(result.gradeTop3ByGrade["1"][0].uid, "wispublic_masked");
+  assert.equal(result.gradeTop3ByGrade["1"][0].profileIcon, "😀");
 });
 await test("Hall config command uses protected session and exact canonical revisions", async () => {
   const h = harness(async (name, payload) =>

@@ -145,6 +145,7 @@ export type PointTransactionType =
 export type PointOrderStatus =
   | "requested"
   | "approved"
+  | "ready"
   | "rejected"
   | "fulfilled"
   | "cancelled";
@@ -192,6 +193,10 @@ export interface PointProduct {
   description: string;
   price: number;
   stock: number;
+  availableStock?: number;
+  reservedStock?: number;
+  soldStock?: number;
+  readOnly?: boolean;
   isActive: boolean;
   sortOrder: number;
   imageUrl: string;
@@ -212,6 +217,15 @@ export interface PointOrder {
   productId: string;
   productName: string;
   priceSnapshot: number;
+  quantity?: number;
+  unitPrice?: number;
+  productImageUrl?: string;
+  reviewReason?: string;
+  approvedAt?: any;
+  readyAt?: any;
+  fulfilledAt?: any;
+  cancelledAt?: any;
+  readOnly?: boolean;
   status: PointOrderStatus;
   stockDeducted?: boolean;
   requestedAt?: any;

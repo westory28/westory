@@ -380,8 +380,12 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "42c27ba55ba8e724b00b126956ed169bf915ce5e251b7d9679f277b47346e290",
-      "changes": []
+      "sha256": "1e7843819ecc98c00fcce51b3f20200a005a4896fa88afffb829d97d0b4be3f6",
+      "changes": [
+        "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
+        "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
+        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs."
+      ]
     },
     {
       "sourceFile": "wisInitialOpeningApproval.js",
@@ -412,14 +416,18 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "d6b7064e7ada429c8ab3917c311bc2c2e91373a76b610fd8e0eb8992334a92a2",
+      "sha256": "fc20dd628d69b36f2fe721052711c644c3840e491ec5c86f2659ddec90f21979",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
         "Keep unranked student viewers scoped by their canonical account enrollment.",
         "Exclude exact normalized Bang Test operator identities before public hall ranking; keep management accounts and personal wallets unchanged.",
         "Fill sparse public leaderboards up to five entries with canonically active zero-score accounts within configured public limits; preserve positive-score ties, test exclusions and positive-only podiums.",
-        "Batch hall roster slot, enrollment and class hints in one read; preserve canonical membership checks, stale-hint fallback and existing non-hall/archive behavior."
+        "Batch hall roster slot, enrollment and class hints in one read; preserve canonical membership checks, stale-hint fallback and existing non-hall/archive behavior.",
+        "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
+        "2026-10-18: Authorized historical teacher catalog/order queries use bounded read-only legacy fallback; semester inventory drives canonical archive catalog and retains product snapshots.",
+        "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
+        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs."
       ]
     },
     {

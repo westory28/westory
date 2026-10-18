@@ -2,6 +2,7 @@ import { Timestamp } from "firebase/firestore";
 import { auth } from "./firebase";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import { getYearSemester } from "./semesterScope";
+import { isSemesterArchive } from "./semesterArchive";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { readStorage, writeStorage, removeStorage } from "./safeStorage";
 import type {
@@ -110,7 +111,8 @@ export const queryWisState = async (
   const data = await callWisService<WisState>("getWisEconomyState", {
     audience,
     semesterId,
-    source: "CURRENT",
+    source:
+      audience === "teacher" && isSemesterArchive ? "EXPLICIT" : "CURRENT",
     projection,
     limit: 200,
     ...extra,
@@ -244,42 +246,61 @@ export const wisProducts = (
   state: WisState,
   activeOnly: boolean,
 ): PointProduct[] =>
-  (state.products || []).flatMap((product) => {
-    const stock = (state.inventory || []).find(
-      (item) => item.productId === product.productId,
+  (state.products || [])
+    .flatMap((product) => {
+      const stock = (state.inventory || []).find(
+        (item) => item.productId === product.productId,
+      );
+      if (!stock || (activeOnly && (!product.active || !stock.active)))
+        return [];
+      return [
+        {
+          id: product.productId,
+          name: product.name,
+          description: product.description || "",
+          price: Number(stock.price || 0),
+          stock: Number(activeOnly ? stock.available : stock.stock),
+          availableStock: Number(stock.available || 0),
+          reservedStock: Number(stock.reserved || 0),
+          soldStock: Number(stock.sold || 0),
+          readOnly: state.readOnly || product.readOnly === true,
+          isActive: product.active === true && stock.active === true,
+          sortOrder: Number(product.sortOrder || 0),
+          imageUrl: product.imageUrl || "",
+          previewImageUrl: product.previewImageUrl || "",
+        },
+      ];
+    })
+    .sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "ko"),
     );
-    if (!stock || (activeOnly && (!product.active || !stock.active))) return [];
-    return [
-      {
-        id: product.productId,
-        name: product.name,
-        description: product.description || "",
-        price: Number(stock.price || 0),
-        stock: Number(activeOnly ? stock.available : stock.stock),
-        isActive: product.active === true && stock.active === true,
-        sortOrder: 0,
-        imageUrl: product.imageUrl || "",
-      },
-    ];
-  });
 export const wisOrder = (
   order: WisRow,
   account?: WisRow | null,
 ): PointOrder => ({
   id: order.orderId,
   uid: account?.studentUid || order.studentUid || "",
-  studentName: account?.displayName || "",
-  grade: account?.grade || "",
-  class: account?.classNumber || "",
-  number: account?.studentNumber || "",
+  studentName: account?.displayName || order.studentName || "",
+  grade: account?.grade || order.grade || "",
+  class: account?.classNumber || order.class || "",
+  number: account?.studentNumber || order.number || "",
   productId: order.productId,
   productName: order.productName,
   priceSnapshot: Number(order.totalPrice || 0),
+  quantity: Number(order.quantity || 1),
+  unitPrice: Number(order.unitPrice || order.totalPrice || 0),
+  productImageUrl: order.productImageUrl || "",
+  reviewReason: order.reviewReason || "",
+  approvedAt: wisTimestamp(order.approvedAt),
+  readyAt: wisTimestamp(order.readyAt),
+  fulfilledAt: wisTimestamp(order.fulfilledAt),
+  cancelledAt: wisTimestamp(order.cancelledAt),
+  readOnly: order.readOnly === true,
   status: String(order.status).toLowerCase() as PointOrder["status"],
   requestedAt: wisTimestamp(order.createdAt),
   reviewedAt: wisTimestamp(order.reviewedAt),
   reviewedBy: order.reviewedBy || "",
-  memo: order.reviewReason || order.memo || "",
+  memo: order.memo || "",
 });
 
 export const wisRevisionScope = (state: WisState) => {

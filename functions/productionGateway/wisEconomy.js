@@ -49,11 +49,12 @@ const WIS_COMMAND_TYPES = Object.freeze({
   UPSERT_WIS_PRODUCT: "upsertWisProduct",
   UPSERT_WIS_INVENTORY: "upsertWisInventory",
   PLACE_WIS_ORDER: "placeWisOrder",
+  CANCEL_WIS_ORDER: "cancelWisOrder",
   REVIEW_WIS_ORDER: "reviewWisOrder",
   SAVE_WIS_HALL_OF_FAME_CONFIG: "saveWisHallOfFameConfig",
 });
 
-const STUDENT_COMMAND_TYPES = new Set([WIS_COMMAND_TYPES.PLACE_WIS_ORDER]);
+const STUDENT_COMMAND_TYPES = new Set([WIS_COMMAND_TYPES.PLACE_WIS_ORDER, WIS_COMMAND_TYPES.CANCEL_WIS_ORDER]);
 const HIGH_RISK_COMMAND_TYPES = new Set(
   Object.values(WIS_COMMAND_TYPES).filter(
     (type) => !STUDENT_COMMAND_TYPES.has(type),
@@ -116,6 +117,24 @@ const optionalText = (value, label, max = 500) =>
   value === undefined || value === null || value === ""
     ? ""
     : text(value, label, max);
+const normalizeProductDescription = (value) => {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value !== value.trim() || value.length > 1000)
+    fail("invalid-argument", "상품 설명은 1,000자 이내로 입력해 주세요.", "WIS_PAYLOAD_INVALID", { field: "description" });
+  return value;
+};
+const normalizeProductImageUrl = (value, label) => {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value !== value.trim() || value.length > 2000)
+    fail("invalid-argument", "상품 사진 주소를 확인해 주세요.", "WIS_PAYLOAD_INVALID", { field: label });
+  let url;
+  try { url = new URL(value); } catch (_error) {
+    fail("invalid-argument", "상품 사진 주소를 확인해 주세요.", "WIS_PAYLOAD_INVALID", { field: label });
+  }
+  if (url.protocol !== "https:" || url.username || url.password)
+    fail("invalid-argument", "HTTPS 사진 주소를 입력해 주세요.", "WIS_PAYLOAD_INVALID", { field: label });
+  return value;
+};
 const normalizeOrderMemo = (value) => {
   if (value === undefined) return "";
   if (typeof value !== "string" || value.trim().length > 500)
@@ -700,6 +719,8 @@ const normalizeWisPayload = (commandType, raw) => {
         "name",
         "description",
         "imageUrl",
+        "previewImageUrl",
+        "sortOrder",
         "active",
         "reason",
       ],
@@ -726,8 +747,12 @@ const normalizeWisPayload = (commandType, raw) => {
         "expectedProductRevision",
       ),
       name,
-      description: optionalText(payload.description, "description", 1000),
-      imageUrl: optionalText(payload.imageUrl, "imageUrl", 1000),
+      ...(payload.sortOrder === undefined ? {} : { sortOrder: integer(payload.sortOrder, "sortOrder") }),
+      description: normalizeProductDescription(payload.description),
+      imageUrl: normalizeProductImageUrl(payload.imageUrl, "imageUrl"),
+      ...(payload.previewImageUrl === undefined ? {} : {
+        previewImageUrl: normalizeProductImageUrl(payload.previewImageUrl, "previewImageUrl"),
+      }),
       active: payload.active,
       reason: text(payload.reason, "reason", 500),
     };
@@ -813,6 +838,17 @@ const normalizeWisPayload = (commandType, raw) => {
         : { memo: normalizeOrderMemo(payload.memo) }),
     };
   }
+  if (commandType === WIS_COMMAND_TYPES.CANCEL_WIS_ORDER) {
+    allowed(payload, [...common, "expectedEconomyRevision", "orderId", "expectedOrderRevision", "reason"], "cancelWisOrder payload");
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"),
+      expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"),
+      orderId: text(payload.orderId, "orderId", 80),
+      expectedOrderRevision: revision(payload.expectedOrderRevision, "expectedOrderRevision"),
+      reason: text(payload.reason, "reason", 500),
+    };
+  }
   if (commandType === WIS_COMMAND_TYPES.REVIEW_WIS_ORDER) {
     allowed(
       payload,
@@ -826,7 +862,7 @@ const normalizeWisPayload = (commandType, raw) => {
       ],
       "reviewWisOrder payload",
     );
-    if (!["APPROVE", "REJECT", "FULFILL"].includes(payload.action))
+    if (!["APPROVE", "REJECT", "READY", "FULFILL", "CANCEL"].includes(payload.action))
       fail("invalid-argument", "action is invalid.", "WIS_PAYLOAD_INVALID");
     return {
       semesterId: semesterId(payload.semesterId),
@@ -887,6 +923,14 @@ const normalizeWisPayload = (commandType, raw) => {
   );
 };
 
+// stock is the semester total: units available + held for orders + handed over.
+const assertInventoryIntegrity = (inventory) => {
+  if (!["stock", "available", "reserved", "sold"].every((key) =>
+    Number.isSafeInteger(Number(inventory[key] || 0)) && Number(inventory[key] || 0) >= 0) ||
+    Number(inventory.stock || 0) !== Number(inventory.available || 0) + Number(inventory.reserved || 0) + Number(inventory.sold || 0)) {
+    fail("failed-precondition", "재고 수량이 일치하지 않습니다. 교사가 총 재고를 확인해 주세요.", "WIS_INVENTORY_INCONSISTENT");
+  }
+};
 const assertTeacher = (actor) => {
   if (!actor?.actorUid || !["teacher", "admin"].includes(actor.actorRole))
     fail(
@@ -919,6 +963,12 @@ const assertManifest = async (
       "Semester Manifest does not exist.",
       "SEMESTER_NOT_FOUND",
     );
+  if ([WIS_COMMAND_TYPES.UPSERT_WIS_PRODUCT, WIS_COMMAND_TYPES.UPSERT_WIS_INVENTORY,
+    WIS_COMMAND_TYPES.PLACE_WIS_ORDER, WIS_COMMAND_TYPES.REVIEW_WIS_ORDER, WIS_COMMAND_TYPES.CANCEL_WIS_ORDER].includes(commandType)) {
+    const activePointer = await transaction.get("site_settings/semester_active");
+    if (activePointer.exists && activePointer.data?.semesterId !== payload.semesterId)
+      fail("failed-precondition", "이전 학기 상점은 조회만 가능합니다.", "SEMESTER_ARCHIVED_WRITE_FORBIDDEN");
+  }
   if (Number(manifest.revision || 0) !== payload.expectedSemesterRevision)
     fail("aborted", "Semester revision changed.", "SEMESTER_REVISION_CONFLICT");
   if (manifest.status !== "ACTIVE") {
@@ -2022,6 +2072,8 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           name: payload.name,
           description: payload.description,
           imageUrl: payload.imageUrl,
+          ...(payload.sortOrder === undefined ? {} : { sortOrder: payload.sortOrder }),
+          ...(payload.previewImageUrl === undefined ? {} : { previewImageUrl: payload.previewImageUrl }),
           active: payload.active,
           updatedAt: timestamp,
           updatedBy: actor.actorUid,
@@ -2041,6 +2093,10 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           linkedInventoryPath,
           {
             productName: payload.name,
+            productDescription: payload.description,
+            ...(payload.sortOrder === undefined ? {} : { productSortOrder: payload.sortOrder }),
+            productImageUrl: payload.imageUrl,
+            ...(payload.previewImageUrl === undefined ? {} : { productPreviewImageUrl: payload.previewImageUrl }),
             productRevision: nextRevision,
             revision: inventoryRevision,
             updatedAt: timestamp,
@@ -2087,10 +2143,13 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           "WIS_INVENTORY_REVISION_CONFLICT",
         );
       const reserved = Number(existing.data?.reserved || 0);
-      if (payload.stock < reserved)
+      const sold = Number(existing.data?.sold || 0);
+      if (![reserved, sold].every((value) => Number.isSafeInteger(value) && value >= 0))
+        fail("failed-precondition", "예약·전달 재고를 확인해 주세요.", "WIS_INVENTORY_INCONSISTENT");
+      if (payload.stock < reserved + sold)
         fail(
           "failed-precondition",
-          "Stock cannot be below reserved quantity.",
+          "총 재고는 예약 수량과 전달 완료 수량의 합보다 적을 수 없습니다.",
           "WIS_INVENTORY_RESERVED_CONFLICT",
         );
       const nextRevision = currentRevision + 1;
@@ -2104,10 +2163,14 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           productId: payload.productId,
           productRevision: product.data?.revision,
           productName: product.data?.name,
+          productDescription: product.data?.description || "",
+          productSortOrder: Number(product.data?.sortOrder || 0),
+          productImageUrl: product.data?.imageUrl || "",
+          productPreviewImageUrl: product.data?.previewImageUrl || "",
           revision: nextRevision,
           price: payload.price,
           stock: payload.stock,
-          available: payload.stock - reserved,
+          available: payload.stock - reserved - sold,
           reserved,
           sold: Number(existing.data?.sold || 0),
           active: payload.active,
@@ -2140,8 +2203,9 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         result: {
           inventoryId: payload.inventoryId,
           revision: nextRevision,
-          available: payload.stock - reserved,
+          available: payload.stock - reserved - sold,
           reserved,
+          sold,
         },
       };
     }
@@ -2208,6 +2272,9 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           "Product is not available for ordering.",
           "WIS_PRODUCT_UNAVAILABLE",
         );
+      assertInventoryIntegrity(inventory);
+      if (!Number.isSafeInteger(inventory.price) || inventory.price < 1)
+        fail("failed-precondition", "상품 가격을 확인해 주세요.", "WIS_PRODUCT_UNAVAILABLE");
       if (Number(inventory.available || 0) < payload.quantity)
         fail(
           "failed-precondition",
@@ -2251,11 +2318,17 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         semesterId: payload.semesterId,
         accountId,
         studentUid: actor.actorUid,
-        enrollmentId: account.enrollmentId,
-        classId: account.classId,
+        studentName: String(activeEnrollment.displayName || activeEnrollment.studentName || activeEnrollment.snapshot?.displayName || account.displayName || "학생"),
+        grade: String(activeEnrollment.snapshot?.grade || activeEnrollment.grade || account.grade || ""),
+        class: String(activeEnrollment.snapshot?.classNumber || activeEnrollment.classNumber || account.classNumber || ""),
+        number: String(activeEnrollment.studentNumber || activeEnrollment.snapshot?.studentNumber || account.studentNumber || ""),
+        enrollmentId: activeEnrollment.enrollmentId,
+        classId: activeEnrollment.classId,
         inventoryId: payload.inventoryId,
         productId: inventory.productId,
         productName: inventory.productName,
+        productImageUrl: product.imageUrl || "",
+        productPreviewImageUrl: product.previewImageUrl || "",
         quantity: payload.quantity,
         unitPrice: inventory.price,
         totalPrice,
@@ -2304,127 +2377,84 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         },
       };
     }
-    if (commandType === WIS_COMMAND_TYPES.REVIEW_WIS_ORDER) {
-      assertTeacher(actor);
+    if ([WIS_COMMAND_TYPES.REVIEW_WIS_ORDER, WIS_COMMAND_TYPES.CANCEL_WIS_ORDER].includes(commandType)) {
+      const studentCancellation = commandType === WIS_COMMAND_TYPES.CANCEL_WIS_ORDER;
+      if (studentCancellation) assertStudent(actor); else assertTeacher(actor);
+      const action = studentCancellation ? "CANCEL" : payload.action;
       const orderSnapshot = await transaction.get(orderPath(payload.orderId));
       const order = orderSnapshot.data || {};
-      if (!orderSnapshot.exists || order.semesterId !== payload.semesterId)
-        fail("not-found", "Order was not found.", "WIS_ORDER_NOT_FOUND");
+      if (!orderSnapshot.exists || order.semesterId !== payload.semesterId ||
+        (studentCancellation && (order.studentUid !== actor.actorUid ||
+          order.accountId !== accountIdFor(payload.semesterId, actor.actorUid))))
+        fail("not-found", "주문을 찾을 수 없습니다.", "WIS_ORDER_NOT_FOUND");
       if (Number(order.revision || 0) !== payload.expectedOrderRevision)
-        fail(
-          "aborted",
-          "Order revision changed.",
-          "WIS_ORDER_REVISION_CONFLICT",
-        );
-      const nextStatus =
-        payload.action === "APPROVE"
-          ? "APPROVED"
-          : payload.action === "FULFILL"
-            ? "FULFILLED"
-            : "REJECTED";
-      const allowedStatus =
-        payload.action === "APPROVE" || payload.action === "REJECT"
-          ? "REQUESTED"
-          : "APPROVED";
-      if (order.status !== allowedStatus)
-        fail(
-          "failed-precondition",
-          "Order state is invalid.",
-          "WIS_ORDER_STATE_INVALID",
-        );
-      const refs = [orderPath(payload.orderId)];
-      const result = {
-        orderId: payload.orderId,
-        status: nextStatus,
-        orderRevision: payload.expectedOrderRevision + 1,
+        fail("aborted", "주문 상태가 바뀌었습니다. 다시 확인해 주세요.", "WIS_ORDER_REVISION_CONFLICT");
+      const transitions = {
+        APPROVE: { from: ["REQUESTED"], to: "APPROVED", time: "approvedAt" },
+        REJECT: { from: ["REQUESTED"], to: "REJECTED", time: "rejectedAt" },
+        READY: { from: ["APPROVED"], to: "READY", time: "readyAt" },
+        FULFILL: { from: ["APPROVED", "READY"], to: "FULFILLED", time: "fulfilledAt" },
+        CANCEL: { from: studentCancellation ? ["REQUESTED"] : ["REQUESTED", "APPROVED", "READY"], to: "CANCELLED", time: "cancelledAt" },
       };
-      if (payload.action === "REJECT") {
-        const [inventorySnapshot, accountSnapshot] = await transaction.getAll([
-          inventoryPath(order.inventoryId),
-          accountPath(order.accountId),
-        ]);
-        const inventory = inventorySnapshot.data || {};
+      const transition = transitions[action];
+      if (!transition || !transition.from.includes(order.status))
+        fail("failed-precondition", "현재 주문 상태에서는 처리할 수 없습니다.", "WIS_ORDER_STATE_INVALID");
+      if (studentCancellation && !await readCanonicalActiveEnrollment(transaction, payload.semesterId, actor.actorUid))
+        fail("failed-precondition", "현재 학기 학생 정보가 필요합니다.", "WIS_ACTIVE_ENROLLMENT_REQUIRED");
+      const refund = action === "REJECT" || action === "CANCEL";
+      const [inventorySnapshot, accountSnapshot, debitSnapshot] = await transaction.getAll([
+        inventoryPath(order.inventoryId),
+        ...(refund ? [accountPath(order.accountId), ledgerPath(order.debitLedgerEntryId)] : []),
+      ]);
+      const inventory = inventorySnapshot.data || {};
+      if (!inventorySnapshot.exists || inventory.semesterId !== payload.semesterId ||
+        inventory.productId !== order.productId || !Number.isSafeInteger(order.quantity) || order.quantity < 1 ||
+        !Number.isSafeInteger(order.totalPrice) || order.totalPrice < 1 || Number(inventory.reserved || 0) < order.quantity)
+        fail("failed-precondition", "주문과 예약 재고를 확인해 주세요.", "WIS_ORDER_DEPENDENCY_INVALID");
+      assertInventoryIntegrity(inventory);
+      const refs = [orderPath(payload.orderId), inventoryPath(order.inventoryId)];
+      const result = { orderId: payload.orderId, status: transition.to, orderRevision: payload.expectedOrderRevision + 1 };
+      let refundLedgerEntryId = "";
+      if (refund) {
         const account = accountSnapshot.data || {};
-        if (!inventorySnapshot.exists || !accountSnapshot.exists)
-          fail(
-            "failed-precondition",
-            "Order dependencies are missing.",
-            "WIS_ORDER_DEPENDENCY_INVALID",
-          );
-        const posted = await postLedger({
-          transaction,
-          account,
-          economy,
-          delta: Number(order.totalPrice || 0),
-          type: "ORDER_REFUND",
-          sourceId: payload.orderId,
-          reason: payload.reason,
-          commandId,
-          receiptId,
-          timestamp: projectionTimestamp,
-          actor,
-        });
-        transaction.set(
-          inventoryPath(order.inventoryId),
-          {
-            revision: Number(inventory.revision || 0) + 1,
-            available: Number(inventory.available || 0) + order.quantity,
-            reserved: Number(inventory.reserved || 0) - order.quantity,
-            updatedAt: timestamp,
-          },
-          { merge: true },
-        );
-        Object.assign(result, {
-          refundLedgerEntryId: posted.ledgerEntryId,
-          balance: posted.balance,
-        });
-        refs.push(
-          inventoryPath(order.inventoryId),
-          ledgerPath(posted.ledgerEntryId),
-          accountPath(order.accountId),
-        );
-      } else if (payload.action === "FULFILL") {
-        const inventorySnapshot = await transaction.get(
-          inventoryPath(order.inventoryId),
-        );
-        const inventory = inventorySnapshot.data || {};
-        if (
-          !inventorySnapshot.exists ||
-          Number(inventory.reserved || 0) < order.quantity
-        )
-          fail(
-            "failed-precondition",
-            "Reserved inventory is inconsistent.",
-            "WIS_ORDER_DEPENDENCY_INVALID",
-          );
-        transaction.set(
-          inventoryPath(order.inventoryId),
-          {
-            revision: Number(inventory.revision || 0) + 1,
-            reserved: inventory.reserved - order.quantity,
-            sold: Number(inventory.sold || 0) + order.quantity,
-            updatedAt: timestamp,
-          },
-          { merge: true },
-        );
-        refs.push(inventoryPath(order.inventoryId));
-      }
-      transaction.set(
-        orderPath(payload.orderId),
-        {
-          revision: payload.expectedOrderRevision + 1,
-          status: nextStatus,
-          reviewReason: payload.reason,
-          reviewedBy: actor.actorUid,
-          reviewedAt: timestamp,
+        const debit = debitSnapshot.data || {};
+        if (!accountSnapshot.exists || account.accountId !== order.accountId || account.semesterId !== payload.semesterId || account.studentUid !== order.studentUid ||
+          !debitSnapshot.exists || debit.semesterId !== payload.semesterId || debit.accountId !== order.accountId ||
+          debit.type !== "ORDER_DEBIT" || debit.studentUid !== order.studentUid || debit.sourceId !== payload.orderId || debit.delta !== -order.totalPrice)
+          fail("failed-precondition", "주문 결제 내역을 확인해 주세요.", "WIS_ORDER_DEPENDENCY_INVALID");
+        const posted = await postLedger({ transaction, account, economy,
+          delta: order.totalPrice, type: "ORDER_REFUND", sourceId: payload.orderId,
+          reason: payload.reason, commandId, receiptId, timestamp: projectionTimestamp, actor });
+        refundLedgerEntryId = posted.ledgerEntryId;
+        transaction.set(inventoryPath(order.inventoryId), {
+          revision: Number(inventory.revision || 0) + 1,
+          available: Number(inventory.available || 0) + order.quantity,
+          reserved: Number(inventory.reserved || 0) - order.quantity,
           updatedAt: timestamp,
-        },
-        { merge: true },
-      );
+        }, { merge: true });
+        Object.assign(result, { refundLedgerEntryId, balance: posted.balance, accountRevision: posted.accountRevision });
+        refs.push(ledgerPath(refundLedgerEntryId), accountPath(order.accountId));
+      } else if (action === "FULFILL") {
+        transaction.set(inventoryPath(order.inventoryId), {
+          revision: Number(inventory.revision || 0) + 1,
+          reserved: Number(inventory.reserved || 0) - order.quantity,
+          sold: Number(inventory.sold || 0) + order.quantity,
+          updatedAt: timestamp,
+        }, { merge: true });
+      }
+      transaction.set(orderPath(payload.orderId), {
+        revision: payload.expectedOrderRevision + 1,
+        status: transition.to,
+        reviewReason: payload.reason,
+        reviewedBy: actor.actorUid,
+        reviewedAt: timestamp,
+        [transition.time]: timestamp,
+        ...(refund ? { refundLedgerEntryId, cancellationReason: payload.reason } : {}),
+        updatedAt: timestamp,
+      }, { merge: true });
       return {
         target: { kind: "wis-order-review", id: payload.orderId, refs },
-        sourceHash: sha256(`${payload.orderId}\n${payload.action}`),
-        result,
+        sourceHash: sha256(payload.orderId + "\n" + action), result,
       };
     }
     if (commandType === WIS_COMMAND_TYPES.SAVE_WIS_HALL_OF_FAME_CONFIG) {
@@ -2775,9 +2805,15 @@ const projectStudentLedgerEntry = (entry) => ({
 
 const projectStudentOrder = (order) => ({
   orderId: String(order?.orderId || ""),
+  studentName: String(order?.studentName || ""),
+  grade: String(order?.grade || ""),
+  class: String(order?.class || ""),
+  number: String(order?.number || ""),
   inventoryId: String(order?.inventoryId || ""),
   productId: String(order?.productId || ""),
   productName: String(order?.productName || ""),
+  productImageUrl: String(order?.productImageUrl || ""),
+  productPreviewImageUrl: String(order?.productPreviewImageUrl || ""),
   quantity: Number(order?.quantity || 0),
   unitPrice: Number(order?.unitPrice || 0),
   totalPrice: Number(order?.totalPrice || 0),
@@ -2787,6 +2823,12 @@ const projectStudentOrder = (order) => ({
   memo: String(order?.memo || ""),
   createdAt: order?.createdAt || null,
   reviewedAt: order?.reviewedAt || null,
+  approvedAt: order?.approvedAt || null,
+  readyAt: order?.readyAt || null,
+  fulfilledAt: order?.fulfilledAt || null,
+  cancelledAt: order?.cancelledAt || null,
+  rejectedAt: order?.rejectedAt || null,
+  cancellationReason: String(order?.cancellationReason || ""),
   updatedAt: order?.updatedAt || null,
 });
 
@@ -2796,6 +2838,8 @@ const projectStudentProduct = (product) => ({
   name: String(product?.name || ""),
   description: String(product?.description || ""),
   imageUrl: String(product?.imageUrl || ""),
+  previewImageUrl: String(product?.previewImageUrl || ""),
+  sortOrder: Number(product?.sortOrder || 0),
   active: product?.active === true,
 });
 
