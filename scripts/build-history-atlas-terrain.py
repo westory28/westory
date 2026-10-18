@@ -232,7 +232,7 @@ for rid, name, geometry, note, url in [
 terrain.sort(key=lambda f: ({"plain": 0, "basin": 1, "desert": 2, "plateau": 3, "mountain": 4}[f["properties"]["kind"]], f["properties"]["id"]))
 for filename, features in [("terrain.json", terrain), ("traditional-region-splits.json", split_features)]:
     payload = json.dumps({"type": "FeatureCollection", "features": features}, ensure_ascii=False, separators=(",", ":")) + "\n"
-    (OUTPUT / filename).write_text(payload, encoding="utf8")
+    (OUTPUT / filename).write_text(payload, encoding="utf8", newline="\n")
     print(filename, len(features), len(payload.encode("utf8")), "bytes")
 
 metadata = {
@@ -245,4 +245,4 @@ metadata = {
 }
 metadata["naturalEarth"]["labelEdits"] = label_changes
 metadata["naturalEarth"]["labelPolicy"] = "Source NAME_KO is retained except the explicitly recorded Korean classroom-name aliases and translations of generic English landform words (mountains/range, plateau, plain, desert, basin). Proper-name changes are listed per source ID. Duplicate NE_ID records are dissolved into one multipart feature."
-(OUTPUT / "terrain.sources.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
+(OUTPUT / "terrain.sources.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf8", newline="\n")

@@ -3,8 +3,8 @@
   "buildScript": "scripts/build-history-atlas-terrain.py",
   "snapshotDate": "2026-10-18",
   "assets": {
-    "terrain.json": "4a2fda5d1fd82d66876c5a8134f26ea3bf56a53b2046ccdebe18b8f130554629",
-    "traditional-region-splits.json": "a674b766127b5dccf3c1b416b8a2e00681c8bdcedf9dac4d64fbe45b0a86a053"
+    "terrain.json": "04f5e8943bf6411f5fc2f6f2baca19b134bfc01a4037aeffaaa185d803edf602",
+    "traditional-region-splits.json": "a8a1a7d3260badc80cc5279de0fe28fa0b75b33c57adc365518c73c5a50092d0"
   },
   "naturalEarth": {
     "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_geography_regions_polys.geojson",
