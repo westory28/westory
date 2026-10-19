@@ -744,6 +744,21 @@ try {
           .evaluate((body) => body.scrollWidth <= body.clientWidth + 1),
         "Compact validation error stays inside the narrow dialog",
       );
+      assert.ok(
+        await number(page, "재응시 대기 시간 (분)").evaluate((input) => {
+          const field = input.closest(".quiz-settings-option");
+          const label = field
+            .querySelector(".quiz-settings-switch")
+            .getBoundingClientRect();
+          const control = input.getBoundingClientRect();
+          return (
+            Math.abs(
+              (label.top + label.bottom - control.top - control.bottom) / 2,
+            ) <= 1
+          );
+        }),
+        "Validation keeps the toggle and input aligned on their original row",
+      );
       await capture(page, "settings-320-validation");
     }
     assert.equal(
