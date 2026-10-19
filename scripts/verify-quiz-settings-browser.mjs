@@ -56,7 +56,8 @@ export const getHistoryDictionaryCallable=async name=>{
   if(name!=='getAssessmentState')throw new Error('Unexpected callable: '+name);
   return async({semesterId})=>{
     qa.reads.push('getAssessmentState:'+semesterId);
-    return {data:{semesterId,classes:[1,2,3,4].map(value=>({classId:'class_'+value,grade:'3',classNumber:String(value)}))}};
+    const classCount=new URLSearchParams(location.search).has('ten-classes')?10:4;
+    return {data:{semesterId,classes:Array.from({length:classCount},(_,index)=>({classId:'class_'+(index+1),grade:'3',classNumber:String(index+1)}))}};
   };
 };
 const forbidden=(...args)=>{qa.forbidden.push(args);throw new Error('Unexpected server operation');};
@@ -615,7 +616,7 @@ try {
   );
 
   for (const width of [320, 390, 768, 1280, 1366]) {
-    const page = await open("", width);
+    const page = await open("ten-classes", width);
     const layout = await page.evaluate(() => {
       const dialog = document.querySelector(".quiz-settings-dialog");
       const body = document.querySelector(".quiz-settings-body");
@@ -632,7 +633,37 @@ try {
         dialogBottom: r.bottom,
         bodyScrollWidth: body.scrollWidth,
         bodyClientWidth: body.clientWidth,
+        bodyScrollHeight: body.scrollHeight,
+        bodyClientHeight: body.clientHeight,
         footerBottom: f.bottom,
+        fields: [...document.querySelectorAll(".quiz-settings-field")].map(
+          (field) => {
+            const control = field
+              .querySelector("input,select")
+              .getBoundingClientRect();
+            const label = field.classList.contains(
+              "quiz-settings-field--compact",
+            )
+              ? field.parentElement
+                  .querySelector(".quiz-settings-switch")
+                  .getBoundingClientRect()
+              : field.querySelector("span").getBoundingClientRect();
+            return {
+              name:
+                field
+                  .querySelector("input,select")
+                  .getAttribute("aria-label") ||
+                field.querySelector("span").textContent,
+              labelRight: label.right,
+              controlLeft: control.left,
+              controlWidth: control.width,
+              controlHeight: control.height,
+              centerDifference: Math.abs(
+                (label.top + label.bottom - control.top - control.bottom) / 2,
+              ),
+            };
+          },
+        ),
         separators: [
           ...document.querySelectorAll(
             ".quiz-settings-option + .quiz-settings-option",
@@ -672,12 +703,49 @@ try {
       ),
     );
     assert.equal(layout.columnBorder, "1px");
+    for (const field of layout.fields) {
+      assert.ok(
+        field.controlLeft >= field.labelRight,
+        `Input sits beside label: ${width} ${field.name}`,
+      );
+      assert.ok(
+        field.centerDifference <= 1,
+        `Label and input share a row: ${width} ${field.name}`,
+      );
+      assert.ok(
+        field.controlHeight >= 44,
+        `Input keeps touch target: ${width} ${field.name}`,
+      );
+    }
+    if (width >= 1280)
+      assert.ok(
+        layout.bodyScrollHeight <= layout.bodyClientHeight + 1,
+        `Ten-class settings fit without body scrolling: ${width}`,
+      );
     await capture(page, `settings-${width}-top`);
     await page.locator(".quiz-settings-body").evaluate((el) => {
       el.scrollTop = el.scrollHeight;
     });
     await capture(page, `settings-${width}-options`);
     layouts.push(layout);
+    if (width === 320) {
+      await number(page, "재응시 대기 시간 (분)").fill("");
+      assert.equal(await saveButton(page).isDisabled(), true);
+      assert.ok(
+        await page
+          .getByText("대기 시간은 0~43200 사이의 정수로 입력해 주세요.", {
+            exact: true,
+          })
+          .isVisible(),
+      );
+      assert.ok(
+        await page
+          .locator(".quiz-settings-body")
+          .evaluate((body) => body.scrollWidth <= body.clientWidth + 1),
+        "Compact validation error stays inside the narrow dialog",
+      );
+      await capture(page, "settings-320-validation");
+    }
     assert.equal(
       await page.evaluate(() => window.quizSettingsQa.forbidden.length),
       0,
@@ -685,7 +753,7 @@ try {
     await page.close();
   }
   checks.push(
-    "320/390/768/1280/1366px screenshots: no horizontal overflow, visible footer, option separators and responsive column border.",
+    "320/390/768/1280/1366px: all labels and inputs share rows, 44px controls, no horizontal overflow; ten classes and all options fit without scrolling at 1280x900 and 1366x768.",
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);

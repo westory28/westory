@@ -636,9 +636,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     min: number,
     max: number,
     disabled = false,
+    unit?: "회" | "분",
   ) => (
-    <label className="quiz-settings-field">
-      <span>{label}</span>
+    <label
+      className={`quiz-settings-field${unit ? " quiz-settings-field--compact" : ""}`}
+    >
+      <span className={unit ? "sr-only" : undefined}>{label}</span>
       <NumericInput
         allowEmpty
         min={min}
@@ -657,6 +660,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           })
         }
       />
+      {unit && (
+        <span aria-hidden="true" className="quiz-settings-unit">
+          {unit === "분" ? "분 대기" : unit}
+        </span>
+      )}
       {fieldErrors[name] && (
         <span
           id={`quiz-settings-${name}-error`}
@@ -947,7 +955,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   <section className="quiz-settings-section">
                     <h3>{isMockExam ? "재응시" : "힌트·재응시"}</h3>
                     {!isMockExam && (
-                      <div className="quiz-settings-option">
+                      <div className="quiz-settings-option quiz-settings-option--toggle">
                         <label className="quiz-settings-switch">
                           <input
                             type="checkbox"
@@ -967,10 +975,13 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           0,
                           200,
                           !hintsEnabled,
+                          "회",
                         )}
                       </div>
                     )}
-                    <div className="quiz-settings-option">
+                    <div
+                      className={`quiz-settings-option${!isMockExam ? " quiz-settings-option--toggle" : ""}`}
+                    >
                       {!isMockExam && (
                         <label className="quiz-settings-switch">
                           <input
@@ -1000,6 +1011,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                           0,
                           43200,
                           !settings.allowRetake,
+                          !isMockExam ? "분" : undefined,
                         )}
                     </div>
                   </section>
