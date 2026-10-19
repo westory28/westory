@@ -25,9 +25,13 @@ const motionAuditOnly = process.env.YUT_MOVEMENT_QA_SECTION === "motion-audit";
 const mobileViewportOnly =
   process.env.YUT_MOVEMENT_QA_SECTION === "mobile-viewport";
 const readabilityOnly = process.env.YUT_MOVEMENT_QA_SECTION === "mobile-readability";
+const finishSelectionOnly =
+  process.env.YUT_MOVEMENT_QA_SECTION === "finish-selection";
 const evidence = path.join(
   root,
-  mobileViewportOnly || readabilityOnly
+  finishSelectionOnly
+    ? "output/yut-finish-selection-20261019"
+    : mobileViewportOnly || readabilityOnly
     ? "output/yut-mobile-viewport-20261019"
     : motionAuditOnly
       ? "output/yut-motion-complete-20261018"
@@ -64,8 +68,17 @@ function seed(kind){
     own.forEach(piece=>Object.assign(piece,{node:'o5',stackId:'qa-stack'}));
     room.players.slice(1,3).forEach(player=>player.pieces.forEach(piece=>Object.assign(piece,{node:'a5',lane:'a',stackId:player.uid+'-stack'})));
   }
-  const value=['two-home','two-choice','two-group'].includes(kind)?2:kind.startsWith('finish')||['corner','vertical'].includes(kind)?3:5;
-  room=core.throwYut(room,'qa',sticks(value),Date.now()-4000);room.turnDeadlineMs=Date.now()+room.moveSeconds*1000;
+  if(kind.startsWith('arrival-')){
+    own[0].node=kind==='arrival-overshoot'?'o18':kind==='arrival-diagonal'?'b5':'o19';own[0].lane=kind==='arrival-diagonal'?'b':'outer';
+    if(kind==='arrival-center')Object.assign(own[0],{node:'center',lane:'a'});
+    own[1].node=['arrival-two','arrival-delay','arrival-repeat-choice'].includes(kind)?'o3':'home';
+    if(kind==='arrival-second'){own[0].node='finish';own[1].node='o19';}
+    if(kind==='arrival-second-home'){own[0].node='home';own[1].node='o19';}
+    if(kind==='arrival-stack')own.forEach(piece=>Object.assign(piece,{node:'o19',stackId:'arrival-stack'}));
+  }
+  const value=kind.startsWith('arrival-')?(kind==='arrival-overshoot'?5:kind==='arrival-center'?3:1):['two-home','two-choice','two-group'].includes(kind)?2:kind.startsWith('finish')||['corner','vertical'].includes(kind)?3:5;
+  if(kind==='arrival-settling'||kind==='arrival-dialog')room.turnDeadlineMs=Date.now()+25000;
+  room=core.throwYut(room,'qa',sticks(value),Date.now()-(kind==='arrival-settling'||kind==='arrival-dialog'?0:4000));room.turnDeadlineMs=Date.now()+room.moveSeconds*1000;
   if(kind==='capture-initial')room=core.moveYut(room,'qa','1','a',Date.now());return room;
 }
 const qa=window.qa={room:seed(params.get('scenario')||'finish'),delay:0,fail:false,throwValue:1,claimPaid:false,calls:[],motion:[],frames:[],steps:[]};
@@ -73,6 +86,7 @@ qa.emit=room=>{qa.room=room;listeners.forEach(listener=>listener(room));};
 qa.move=(route='a',pieceId='1',stack=false)=>{const room=core.moveYut(qa.room,'qa',pieceId,route,Date.now(),stack);if(room.status==='finished')room.reward={status:'pending',uid:'qa',amount:7,policyVersion:1,reason:'account-unavailable'};qa.emit(room)};
 qa.bump=()=>qa.emit({...qa.room,revision:qa.room.revision+1,syncRevision:qa.room.syncRevision+1,lastEvent:{kind:'leave',atMs:Date.now(),text:'연결 상태 갱신'}});
 qa.repeat=()=>qa.emit({...qa.room,syncRevision:qa.room.syncRevision+1});
+qa.emote=()=>qa.emit({...qa.room,syncRevision:qa.room.syncRevision+1,emotes:{qa:{kind:'hello',atMs:Date.now(),eventId:'finish-qa-emote'}}});
 qa.prepareThrow=value=>{const room={...qa.room,turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000};qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 qa.preparePiece=(pieceId,node,value)=>{const room=JSON.parse(JSON.stringify(qa.room));if(node)room.players[0].pieces.find(piece=>piece.id===pieceId).node=node;Object.assign(room,{turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000});qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 export const getYutLobby=async()=>{if(params.has('hold-lobby')&&!qa.lobbyReleased)await new Promise(resolve=>qa.resolveLobby=()=>{qa.lobbyReleased=true;resolve()});if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
@@ -182,7 +196,7 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: readabilityOnly ? "mobile-readability" : mobileViewportOnly
+  section: finishSelectionOnly ? "finish-selection" : readabilityOnly ? "mobile-readability" : mobileViewportOnly
     ? "mobile-viewport"
     : motionAuditOnly
       ? "motion-audit"
@@ -227,6 +241,11 @@ async function open(
   });
   page.on("pageerror", (error) => report.errors.push(error.message));
   await page.addInitScript(() => {
+    if (new URLSearchParams(location.search).has("start-hidden"))
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => true,
+      });
     if (new URLSearchParams(location.search).has("save-data"))
       Object.defineProperty(navigator, "connection", {
         configurable: true,
@@ -537,6 +556,9 @@ async function openStackDialog(page) {
   await page
     .getByRole("progressbar", { name: "말 이동 남은 시간", exact: true })
     .waitFor();
+  await page
+    .locator('.yut-board-piece[aria-label^="검증 학생"][data-piece-ids="1"]')
+    .click();
   await page.locator(".yut-isometric-destination").first().press("Enter");
   await page.getByRole("button", { name: "결정", exact: true }).click();
   const dialog = page.getByRole("dialog", {
@@ -1672,7 +1694,17 @@ async function verifyTwoChoices(reducedMotion = "no-preference") {
         exact: true,
       })
       .press("Enter");
-    await page.evaluate(() => (window.qa.delay = 800));
+    await page.evaluate(() => {
+      window.qa.delay = 800;
+      window.qa.boardingTiming = {};
+      let visible = false;
+      new MutationObserver(() => {
+        const active = Boolean(document.querySelector('.yut-pawn-art[data-boarding="true"]'));
+        if (active && !visible) window.qa.boardingTiming.startedAt = performance.now();
+        if (!active && visible) window.qa.boardingTiming.endedAt = performance.now();
+        visible = active;
+      }).observe(document.getElementById("root"), { childList: true, attributes: true, subtree: true });
+    });
     await dialog
       .getByRole("button", { name: "결정", exact: true })
       .press("Enter");
@@ -1704,7 +1736,7 @@ async function verifyTwoChoices(reducedMotion = "no-preference") {
         .locator('.yut-pawn-art[data-boarding="true"]')
         .waitFor({ state: "attached" });
       const boarding = await page.evaluate(() => ({
-        at: performance.now(),
+        at: window.qa.boardingTiming.startedAt,
         number: document.querySelector(".is-moving .yut-pawn-number")
           ?.textContent,
         phaseStart: window.qa.room.phaseStartsAtMs,
@@ -1722,7 +1754,7 @@ async function verifyTwoChoices(reducedMotion = "no-preference") {
       await page
         .locator('.yut-pawn-art[data-boarding="true"]')
         .waitFor({ state: "detached" });
-      const boardingEnd = await page.evaluate(() => performance.now());
+      const boardingEnd = await page.evaluate(() => window.qa.boardingTiming.endedAt);
       assert.ok(
         boardingEnd - boarding.at >= 600,
         "New group keeps the boarding scene for about 700ms",
@@ -1804,6 +1836,10 @@ async function verifyTwoChoices(reducedMotion = "no-preference") {
   );
 }
 async function verifyTwoPieces() {
+  if (process.env.YUT_TWO_QA_PHASE === "finish") {
+    await verifyTwoGroupAndFinish();
+    return;
+  }
   if (process.env.YUT_TWO_QA_PHASE === "viewports") {
     await verifyTwoViewports();
     return;
@@ -1892,6 +1928,119 @@ async function verifySelectedPiece() {
     "Changing from piece 1 to piece 2 clears the old destination, disables commit, and sends only a newly selected piece 2 move",
   );
   await page.close();
+}
+async function verifyFinishSelection() {
+  const moveCalls = (page) =>
+    page.evaluate(() => window.qa.calls.filter((call) => call.action === "move"));
+  const ownPiece = (page, pieceId) =>
+    page.locator(
+      `.yut-board-piece[aria-label^="검증 학생"][data-piece-ids="${pieceId}"]`,
+    );
+  for (const [scenario, portal, width, height, pieces] of [
+    ["arrival-exact", "student", 844, 390, ["finish", "home"]],
+    ["arrival-overshoot", "teacher", 1024, 768, ["finish", "home"]],
+    ["arrival-diagonal", "student", 1280, 800, ["finish", "home"]],
+    ["arrival-center", "student", 844, 390, ["finish", "home"]],
+    ["arrival-second", "student", 844, 390, ["finish", "finish"]],
+    ["arrival-second-home", "teacher", 844, 390, ["home", "finish"]],
+    ["arrival-stack", "teacher", 1024, 768, ["finish", "finish"]],
+  ]) {
+    const page = await open(`scenario=${scenario}&portal=${portal}`, "no-preference", width, height);
+    await page.waitForFunction(
+      (expected) => window.qa.room.players[0].pieces.every((piece, index) => piece.node === expected[index]),
+      pieces,
+    );
+    const result = await page.evaluate(() => ({
+      pieces: window.qa.room.players[0].pieces,
+      status: window.qa.room.status,
+      path: window.qa.room.lastEvent.move.path,
+    }));
+    assert.equal((await moveCalls(page)).length, 1, `${scenario}: one move without selecting a destination or confirmation`);
+    assert.equal(result.status, pieces.every((node) => node === "finish") ? "finished" : "playing");
+    assert.equal(result.path.at(-1), "finish");
+    assert.equal(result.path.filter((node) => node === "o20").length, 1);
+    if (scenario.startsWith("arrival-second")) assert.equal((await moveCalls(page))[0].pieceId, "2");
+    if (scenario === "arrival-stack") assert.ok(result.pieces.every((piece) => !piece.stackId));
+    report.paths[scenario] = result;
+    await page.close();
+  }
+  report.checks.push("Exact outer arrival, overshoot and diagonal arrival auto-complete without destination/confirm; a finished first pawn selects the remaining pawn; a carried pair wins together (student/teacher, phone/tablet/desktop)");
+
+  for (const [width, height] of [[844, 390], [568, 320], [390, 844]]) {
+  const choice = await open("scenario=arrival-two", "no-preference", width, height);
+  await choice.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
+  await choice.getByRole("button", { name: height > width ? "전체 화면으로 열기" : "게임 전체 화면", exact: true }).click();
+  await choice.getByRole("progressbar", { name: "말 이동 남은 시간", exact: true }).waitFor();
+  assert.equal(await choice.locator(".yut-piece-choice[aria-pressed=true]").count(), 0);
+  assert.equal(await choice.locator(".yut-isometric-destination").count(), 0);
+  const hintClearance = await choice.evaluate(() => {
+    const node = document.querySelector(".yut-move-hint");
+    if (!node) return 0;
+    const hint = node.getBoundingClientRect(), gauge = document.querySelector(".yut-turn-gauge").getBoundingClientRect();
+    return Math.max(0, Math.min(hint.right, gauge.right) - Math.max(hint.left, gauge.left)) * Math.max(0, Math.min(hint.bottom, gauge.bottom) - Math.max(hint.top, gauge.top));
+  });
+  assert.equal(hintClearance, 0, "The pawn selection hint leaves the mobile turn gauge clear");
+  const controlsFit = await choice.locator(".yut-move-controls button").evaluateAll((nodes) => nodes.every((node) => {
+    const box = node.getBoundingClientRect(), game = node.closest(".yut-game").getBoundingClientRect();
+    return box.width >= 44 && box.height >= 44 && box.left >= game.left && box.right <= game.right && box.top >= game.top && box.bottom <= game.bottom;
+  }));
+  assert.ok(controlsFit, `${width}x${height}: pawn choice and confirmation touch targets fit inside the game`);
+  await choice.screenshot({ path: path.join(evidence, `two-pawns-choice-${width}-${height}.png`) });
+  await choice.waitForTimeout(300);
+  assert.equal((await moveCalls(choice)).length, 0, "Two independent pawns outside require an explicit pawn choice");
+  await ownPiece(choice, "2").click();
+  assert.ok(await choice.locator(".yut-isometric-destination").count());
+  assert.equal((await moveCalls(choice)).length, 0, "Choosing a non-finishing pawn still waits for its destination");
+  await ownPiece(choice, "1").click();
+  await choice.waitForFunction(() => window.qa.room.players[0].pieces[0].node === "finish");
+  assert.deepEqual((await moveCalls(choice)).map((call) => call.pieceId), ["1"]);
+  assert.equal(await choice.evaluate(() => window.qa.room.players[0].pieces[1].node), "o3");
+  await choice.close();
+  }
+  report.checks.push("Two independent outside pawns start unselected; selecting the finishing pawn auto-completes only that pawn; selection hints clear the gauge in 320px, 390px and rotated mobile views");
+
+  const pending = await open("scenario=arrival-delay", "no-preference", 1024, 768);
+  await pending.getByRole("progressbar", { name: "말 이동 남은 시간", exact: true }).waitFor();
+  await pending.evaluate(() => (window.qa.delay = 900));
+  await ownPiece(pending, "1").click();
+  await pending.waitForFunction(() => window.qa.calls.some((call) => call.action === "move"));
+  await pending.evaluate(() => {
+    window.qa.repeat(); window.qa.emote(); window.qa.bump(); window.qa.repeat();
+  });
+  await pending.waitForTimeout(200);
+  assert.equal((await moveCalls(pending)).length, 1);
+  assert.equal(await pending.evaluate(() => window.qa.room.players[0].pieces[0].node), "o19", "No optimistic finish while the authoritative command is pending");
+  await pending.waitForFunction(() => window.qa.room.players[0].pieces[0].node === "finish");
+  await pending.waitForTimeout(200);
+  assert.equal((await moveCalls(pending)).length, 1, "Repeated renders, sync revisions and emotes never duplicate the auto-finish command");
+  report.checks.push("One authoritative auto-finish command survives delayed response, repeated renders, sync revisions and emotes");
+  await pending.close();
+
+  const settling = await open("scenario=arrival-settling", "no-preference", 844, 390);
+  await settling.waitForTimeout(350);
+  assert.equal((await moveCalls(settling)).length, 0, "The fresh throw must land before automatic completion");
+  await settling.waitForFunction(() => window.qa.room.players[0].pieces[0].node === "finish");
+  assert.equal((await moveCalls(settling)).length, 1);
+  await settling.close();
+
+  const hidden = await open("scenario=arrival-exact&start-hidden=1", "no-preference", 844, 390);
+  await hidden.waitForTimeout(400);
+  assert.equal((await moveCalls(hidden)).length, 0, "A hidden game never automatically submits completion");
+  await hidePage(hidden, false);
+  await hidden.waitForFunction(() => window.qa.room.players[0].pieces[0].node === "finish");
+  assert.equal((await moveCalls(hidden)).length, 1);
+  await hidden.close();
+
+  const rules = await open("scenario=arrival-dialog", "no-preference", 1024, 768);
+  await rules.getByRole("button", { name: "게임 규칙 보기", exact: true }).click();
+  await rules.locator("dialog[open]").waitFor();
+  await rules.waitForTimeout(4000);
+  assert.equal((await moveCalls(rules)).length, 0, "An open rules dialog holds automatic completion");
+  await rules.keyboard.press("Escape");
+  await rules.waitForFunction(() => window.qa.room.players[0].pieces[0].node === "finish");
+  assert.equal((await moveCalls(rules)).length, 1);
+  await rules.close();
+  report.checks.push("Automatic completion waits for throw landing, visible document and closed rules dialog");
 }
 async function verifyTwoGroupAndFinish() {
   for (const scenario of ["two-group", "two-capture-many"]) {
@@ -2018,9 +2167,6 @@ async function verifyTwoGroupAndFinish() {
     844,
     390,
   );
-  await game.locator(".yut-isometric-destination").first().waitFor();
-  await game.locator(".yut-isometric-destination").first().click();
-  await game.getByRole("button", { name: "결정", exact: true }).click();
   await game.waitForFunction(
     () => window.qa.room.players[0].pieces[0].node === "finish",
   );
@@ -2031,14 +2177,6 @@ async function verifyTwoGroupAndFinish() {
     "First piece completion never ends the game",
   );
   await game.evaluate(() => window.qa.preparePiece("2", "o18", 5));
-  await game
-    .getByRole("progressbar", { name: "말 이동 남은 시간", exact: true })
-    .waitFor();
-  await game
-    .locator('.yut-board-piece[aria-label^="검증 학생"][data-piece-ids="2"]')
-    .click();
-  await game.locator(".yut-isometric-destination").first().click();
-  await game.getByRole("button", { name: "결정", exact: true }).click();
   await game.locator(".is-moving").waitFor();
   assert.equal(
     await game.locator(".yut-victory").count(),
@@ -2325,8 +2463,6 @@ async function verifyMotionFeedback(reducedMotion) {
   };
   await page.close();
   const game = await open("scenario=finish-four", reducedMotion, 844, 390);
-  await game.locator(".yut-isometric-destination").first().click();
-  await game.getByRole("button", { name: "결정", exact: true }).click();
   await game.locator(".yut-victory").waitFor();
   const winner = await inspectSpriteFrames(
     game.locator(".yut-victory .yut-frame-sprite"),
@@ -2780,7 +2916,9 @@ async function verifyMobileViewport() {
   }
 }
 try {
-  if (readabilityOnly) {
+  if (finishSelectionOnly) {
+    await verifyFinishSelection();
+  } else if (readabilityOnly) {
     await verifyMobileReadability();
   } else if (mobileViewportOnly) {
     await verifyMobileViewport();
@@ -3327,16 +3465,6 @@ try {
           reduced === "reduce" ? 844 : 1280,
           reduced === "reduce" ? 390 : 800,
         );
-        await page.locator(".yut-isometric-destination").first().waitFor();
-        await page
-          .getByRole("progressbar", { name: "말 이동 남은 시간", exact: true })
-          .waitFor();
-        assert.equal(
-          await page.getByRole("progressbar").getAttribute("aria-valuemax"),
-          "25",
-        );
-        await page.locator(".yut-isometric-destination").first().click();
-        await page.getByRole("button", { name: "결정", exact: true }).click();
         await page.locator('[data-motion="win"]').waitFor();
         assert.equal(
           await page.locator(".yut-turn-gauge").count(),

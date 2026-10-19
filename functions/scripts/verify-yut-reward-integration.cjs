@@ -61,10 +61,10 @@ async function start(winner = 'a', opponent = 'b') {
   room = (await inRoom(opponent, room, 'ready', { ready: true })).room;
   return (await inRoom(winner, room, 'start')).room;
 }
-async function nearFinish(room, winner = 'a') {
+async function nearFinish(room, winner = 'a', arrivalNode = 'o19') {
   // Synthetic persisted board, never a client-supplied score. The actual exported
   // callable still validates the turn, route, deadline, completion and reward.
-  const players = room.players.map(p => ({ ...p, pieces: p.pieces.map((piece, index) => ({ id: piece.id, node: p.uid === winner ? (index ? 'finish' : 'o20') : 'o19', lane: 'outer' })) }));
+  const players = room.players.map(p => ({ ...p, pieces: p.pieces.map((piece, index) => ({ id: piece.id, node: p.uid === winner ? (index ? 'finish' : arrivalNode) : 'o19', lane: 'outer' })) }));
   await patch(roomPath(room), { players, turnUid: winner, phase: 'move', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, pendingThrow: { value: 1, label: '도', sticks: [true, false, false, false] } });
   return get(roomPath(room));
 }
@@ -103,6 +103,7 @@ async function test(name, run) { await seed(); await run(); groups += 1; console
     await patch(roomPath(room), { players: room.players });
     room = (await finish(room)).room;
     assert.equal(room.status, 'playing'); assert.equal(room.winnerUid, null);
+    assert.equal(room.players[0].pieces[0].node, 'finish', 'exact arrival completes the selected piece immediately');
     assert.equal(room.reward, undefined);
     await noMoney();
     room = await nearFinish(room);
@@ -119,6 +120,8 @@ async function test(name, run) { await seed(); await run(); groups += 1; console
     const responses = await Promise.all([api.commandYutRoom.run(win), api.commandYutRoom.run(win), api.commandYutRoom.run(win)]);
     room = responses[0].room;
     assert.equal(room.status, 'finished'); assert.equal(room.finishReason, 'completion'); assert.equal(room.winnerUid, 'a');
+    assert.deepEqual(room.lastEvent.move.path, ['o20', 'finish'], 'a one-step exact arrival keeps its pad in the movement animation');
+    assert.equal(responses.every(response => response.room.revision === room.revision), true, 'retried exact-arrival commands complete the game only once');
     assert.equal(room.turnUid, null); assert.equal(room.turnDeadlineMs, 0);
     assert.deepEqual(room.reward, { uid: 'a', amount: 7, policyVersion: 1, status: 'paid', settledAtMs: room.reward.settledAtMs });
     assert.equal(JSON.stringify(room).includes('balanceAfter'), false); assert.equal(JSON.stringify(room).includes('wisacct_'), false);
@@ -136,6 +139,19 @@ async function test(name, run) { await seed(); await run(); groups += 1; console
     const otherKey = { ...win, data: { ...win.data, requestKey: randomUUID() } };
     await denied(api.commandYutRoom.run(otherKey), ['aborted', 'resource-exhausted']);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 1);
+  });
+  await test('a piece stored on the legacy arrival pad can still finish and settle only once', async () => {
+    await policy({ yutWinnerReward: { enabled: true, amount: 7 } });
+    let room = await nearFinish(await start(), 'a', 'o20');
+    const requestKey = randomUUID();
+    const responses = await Promise.all([inRoom('a', room, 'move', { pieceId: '1', route: 'outer', requestKey }), inRoom('a', room, 'move', { pieceId: '1', route: 'outer', requestKey })]);
+    room = responses[0].room;
+    assert.equal(room.status, 'finished'); assert.equal(room.winnerUid, 'a');
+    assert.deepEqual(room.lastEvent.move.path, ['finish']);
+    assert.equal(room.reward.status, 'paid'); assert.equal((await get(accountPath('a'))).balance, 107);
+    assert.equal((await db.collection('semester_wis_ledger').get()).size, 1);
+    assert.equal((await db.collection(`${base}/point_transactions`).get()).size, 1);
+    assert.equal(responses[1].room.revision, room.revision);
   });
   await test('a started match keeps its reward snapshot; a disabled match can never be paid retroactively', async () => {
     await policy({ yutWinnerReward: { enabled: true, amount: 7 } });

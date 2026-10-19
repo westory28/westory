@@ -166,6 +166,9 @@ function advance(piece, steps, route) {
       lane = 'outer';
     }
     path.push(node);
+    // The shared start/arrival pad completes the lap as soon as it is reached.
+    // Keep the pad in the animation path without charging an extra throw step.
+    if (node === 'o20') { node = 'finish'; path.push(node); }
   }
   return { node, lane, path };
 }

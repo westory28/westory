@@ -4,6 +4,7 @@ import { build } from "esbuild";
 import {
   addYutEmote,
   getLegalYutMoves,
+  throwYut,
   YUT_EMOTE_COOLDOWN_MS,
 } from "../functions/yutCore.mjs";
 
@@ -223,3 +224,31 @@ assert.equal(
 console.log(
   "PASS: power uses shared weighted outcomes and exact result faces; seventh angry emote.",
 );
+
+for (const [node, lane, value, completedFirst, stacked] of [
+  ["o19", "outer", 1, false, false],
+  ["o18", "outer", 5, false, false],
+  ["b5", "b", 1, false, false],
+  ["o19", "outer", 1, true, false],
+  ["o19", "outer", 1, false, true],
+]) {
+  const fixture = createYutPreview({ mode: "single", playerCount: 2, nowMs: 700000, random: randomFor(1) });
+  const own = fixture.players[0].pieces;
+  Object.assign(own[completedFirst ? 1 : 0], { node, lane });
+  if (completedFirst) own[0].node = "finish";
+  if (stacked) own.forEach((piece) => Object.assign(piece, { node, lane, stackId: "finish-pair" }));
+  const before = JSON.stringify(fixture);
+  const rolled = throwYut(fixture, YUT_PREVIEW_UID, Array.from({ length: 4 }, (_, index) => value !== 5 && index < value), fixture.phaseStartsAtMs + 1);
+  const legal = getLegalYutMoves(rolled, YUT_PREVIEW_UID);
+  const finish = legal.find((move) => move.pieceId === (completedFirst ? "2" : "1") && move.targetNode === "finish");
+  assert.ok(finish, `${node} + ${value} produces a local finish move`);
+  assert.equal(finish.canStack, false, "the arrival pad never opens a stack choice");
+  const result = previewYutCommand(rolled, { action: "move", ...finish }, YUT_PREVIEW_UID, randomFor(2), rolled.phaseStartsAtMs + 1);
+  assert.equal(JSON.stringify(fixture), before, "local completion keeps the source room immutable");
+  assert.equal(result.players[0].pieces[completedFirst ? 1 : 0].node, "finish");
+  assert.equal(result.lastEvent.move.path.at(-1), "finish");
+  assert.equal(result.status, completedFirst || stacked ? "finished" : "playing");
+  if (completedFirst || stacked) assert.ok(result.players[0].pieces.every((piece) => piece.node === "finish" && !piece.stackId));
+  assert.ok(!getLegalYutMoves(result, YUT_PREVIEW_UID).some((move) => result.players[0].pieces.find((piece) => piece.id === move.pieceId).node === "finish"));
+}
+console.log("PASS: local exact arrival, overshoot and diagonal completion; first completion preserves the match, the remaining pawn and carried pair finish with shared production rules.");

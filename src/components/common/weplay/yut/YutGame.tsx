@@ -643,7 +643,8 @@ export default function YutGame({
   const [needsSync, setNeedsSync] = useState(false);
   const [retry, setRetry] = useState(0);
   const [code, setCode] = useState("");
-  const [selectedPiece, setSelectedPiece] = useState("1");
+  const [selectedPiece, setSelectedPiece] = useState("");
+  const [pieceSelectionKey, setPieceSelectionKey] = useState("");
   const [dialog, setDialog] = useState<"rules" | "leave" | "create" | null>(
     null,
   );
@@ -1610,22 +1611,54 @@ export default function YutGame({
         }));
     }
   }, [toss]);
-  const selectPiece = useCallback((pieceId: string) => {
-    setSelectedPiece(pieceId);
-    setSelectedMove(null);
-    setStackChoice(null);
-  }, []);
+  const moveSelectionKey =
+    room?.phase === "move" && myTurn && room.pendingThrow
+      ? `${accountScope}:${room.id}:${uid}:${room.phaseStartsAtMs}:${room.pendingThrow.value}`
+      : "";
+  const selectPiece = useCallback(
+    (pieceId: string) => {
+      setSelectedPiece(pieceId);
+      setPieceSelectionKey(moveSelectionKey);
+      setSelectedMove(null);
+      setStackChoice(null);
+    },
+    [moveSelectionKey],
+  );
   useEffect(() => {
-    if (moves.length && !moves.some((move) => move.pieceId === selectedPiece))
-      selectPiece(moves[0].pieceId);
-  }, [room?.revision, uid, selectedPiece, selectPiece]);
+    if (pieceSelectionKey === moveSelectionKey) return;
+    const available =
+      player?.pieces.filter((piece) =>
+        moves.some((move) => move.pieceId === piece.id),
+      ) || [];
+    const outside = available.filter((piece) => piece.node !== "home");
+    const together =
+      outside.length > 1 &&
+      outside.every(
+        (piece) =>
+          piece.node === outside[0].node &&
+          (rulesVersion === 1 ||
+            (piece.stackId && piece.stackId === outside[0].stackId)),
+      );
+    selectPiece(
+      outside.length > 1 && !together
+        ? ""
+        : outside[0]?.id || available[0]?.id || "",
+    );
+  }, [
+    moveSelectionKey,
+    pieceSelectionKey,
+    player,
+    moves,
+    rulesVersion,
+    selectPiece,
+  ]);
   const movePiece = (move: YutMove) => {
     if (move.pieceId === selectedPiece) setSelectedMove(move);
   };
   useEffect(() => {
     setSelectedMove(null);
     setStackChoice(null);
-  }, [room?.id, room?.revision, uid, selectedPiece]);
+  }, [moveSelectionKey, selectedPiece]);
   useEffect(() => {
     if (seconds === 0 || portrait || hidden || busy) setStackChoice(null);
   }, [seconds, portrait, hidden, busy]);
@@ -1662,6 +1695,49 @@ export default function YutGame({
       ...(stack !== undefined ? { stack } : {}),
     });
   };
+  const autoFinishAttempt = useRef("");
+  useEffect(() => {
+    if (
+      !moveSelectionKey ||
+      pieceSelectionKey !== moveSelectionKey ||
+      !selectedPiece ||
+      !resultVisible ||
+      settling ||
+      moving ||
+      phaseWaiting ||
+      busy ||
+      seconds === 0 ||
+      portrait ||
+      hidden ||
+      dialog ||
+      stackChoice
+    )
+      return;
+    const finish = moves.find(
+      (move) => move.pieceId === selectedPiece && move.targetNode === "finish",
+    );
+    if (!finish) return;
+    const key = `${moveSelectionKey}:${selectedPiece}`;
+    if (autoFinishAttempt.current === key) return;
+    autoFinishAttempt.current = key;
+    setSelectedMove(finish);
+    confirmMove(finish);
+  }, [
+    moveSelectionKey,
+    pieceSelectionKey,
+    selectedPiece,
+    resultVisible,
+    settling,
+    moving,
+    phaseWaiting,
+    busy,
+    seconds,
+    portrait,
+    hidden,
+    dialog,
+    stackChoice,
+    moves,
+  ]);
   const beginLocal = (mode: YutLocalMode) => {
     music.start();
     if (
@@ -2366,6 +2442,18 @@ export default function YutGame({
                         phase={room.phase}
                       />
                     )}
+                  {room.status === "playing" &&
+                    myTurn &&
+                    room.phase === "move" &&
+                    resultVisible && (
+                      <span className="yut-move-hint" aria-live="polite">
+                        {selectedMove
+                          ? `${yutNodeLabel(selectedMove.targetNode)}까지`
+                          : selectedPiece
+                            ? "빛나는 발판 선택"
+                            : "이동할 말 선택"}
+                      </span>
+                    )}
                 </div>
                 {primaryAction === "again" && !settling && !finishing ? (
                   <button
@@ -2471,11 +2559,6 @@ export default function YutGame({
                       })}
                     </div>
                     <div className="yut-move-confirm">
-                      <span className="yut-move-hint" aria-live="polite">
-                        {selectedMove
-                          ? `${yutNodeLabel(selectedMove.targetNode)}까지`
-                          : "빛나는 발판 선택"}
-                      </span>
                       <button
                         type="button"
                         className="yut-button yut-button--primary"

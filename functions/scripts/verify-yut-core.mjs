@@ -253,8 +253,8 @@ test('diagonals only chosen from exact corners; center can choose either exit', 
   assert.deepEqual(room.lastEvent.move.path, ['a1', 'a2', 'center']);
   room.turnUid = 'a'; room.phase = 'throw';
   room = roll(room, 3);
-  assert.deepEqual(getLegalYutMoves(room, 'a').filter((move) => move.pieceId === '1').map((move) => move.targetNode), ['o15', 'o20']);
-  assert.deepEqual(getLegalYutMoves(room, 'a').find((move) => move.route === 'b').path, ['b4', 'b5', 'o20']);
+  assert.deepEqual(getLegalYutMoves(room, 'a').filter((move) => move.pieceId === '1').map((move) => move.targetNode), ['o15', 'finish']);
+  assert.deepEqual(getLegalYutMoves(room, 'a').find((move) => move.route === 'b').path, ['b4', 'b5', 'o20', 'finish']);
 });
 test('stack moves and captures all opposing stacked pieces; yut plus capture gives two bonus throws', () => {
   let room = game(2, 2);
@@ -271,21 +271,117 @@ test('stack moves and captures all opposing stacked pieces; yut plus capture giv
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 4);
   assert.equal(room.turnUid, 'b');
 });
-test('home pieces do not stack; exact final corner requires one extra step', () => {
+test('home pieces do not stack; exact final corner completes without an extra step', () => {
   let room = moveYut(roll(game(2, 2), 1), 'a', '1', 'outer', now + 2);
   assert.deepEqual(room.players[0].pieces.map((piece) => piece.node), ['o1', 'home']);
   room = game(); room.players[0].pieces.forEach((piece) => { piece.node = 'o19'; });
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 2);
-  assert.equal(room.status, 'playing');
-  room.turnUid = 'a'; room.phase = 'throw';
-  room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 3);
   assert.equal(room.status, 'finished'); assert.equal(room.winnerUid, 'a');
   assert.equal(room.finishReason, 'completion');
-  assert.deepEqual(room.lastEvent.move.path, ['finish']);
+  assert.deepEqual(room.lastEvent.move.path, ['o20', 'finish']);
   assert.throws(() => throwYut(room, 'b', [true, false, false, false], now + 4));
   assert.throws(() => coreMoveYut(room, 'b', '1', 'outer', now + 4));
   assert.throws(() => skipYutTurn(room, now + 4));
 });
+test('every final approach completes on exact distance or overshoot for either independent piece and rules version', () => {
+  // Independent board-route oracle: o20 is the arrival pad, not another step
+  // before completion. Both incoming corridors cover remaining distances 1–5.
+  const corridors = [
+    { route: 'outer', nodes: ['o15', 'o16', 'o17', 'o18', 'o19', 'o20'] },
+    { route: 'b', nodes: ['b1', 'b2', 'center', 'b4', 'b5', 'o20'] },
+  ];
+  for (const version of [1, 2]) for (const { route, nodes } of corridors) {
+    for (let start = 0; start < nodes.length - 1; start += 1) for (let value = 1; value <= 5; value += 1) {
+      for (const pieceIndex of [0, 1]) for (const otherNode of ['home', 'o2', 'finish']) {
+        const source = game(2, 2, version);
+        Object.assign(source.players[0].pieces[pieceIndex], { node: nodes[start], lane: route });
+        source.players[0].pieces[1 - pieceIndex].node = otherNode;
+        const thrown = roll(source, value), snapshot = JSON.stringify(thrown);
+        const pieceId = String(pieceIndex + 1), remaining = nodes.length - 1 - start;
+        const completes = value >= remaining;
+        const expectedPath = nodes.slice(start + 1, Math.min(start + value + 1, nodes.length));
+        if (completes) expectedPath.push('finish');
+        const targetNode = completes ? 'finish' : nodes[start + value];
+        const legal = getLegalYutMoves(thrown, 'a').find(move => move.pieceId === pieceId && move.route === route);
+        const context = `v${version} ${nodes[start]} ${route} +${value} piece ${pieceId}, other ${otherNode}`;
+        assert.equal(legal.targetNode, targetNode, context);
+        assert.deepEqual(legal.path, expectedPath, context);
+        assert.equal(legal.canStack === true, false, context);
+        const moved = coreMoveYut(thrown, 'a', pieceId, route, thrown.phaseStartsAtMs);
+        assert.equal(moved.players[0].pieces[pieceIndex].node, targetNode, context);
+        assert.equal(moved.players[0].pieces[1 - pieceIndex].node, otherNode, context);
+        assert.deepEqual(moved.lastEvent.move.path, expectedPath, context);
+        assert.deepEqual(moved.lastEvent.move.capturedUids, [], context);
+        assert.equal(moved.pendingThrow, null, context);
+        assert.equal(JSON.stringify(thrown), snapshot, `source immutable: ${context}`);
+        if (completes && otherNode === 'finish') {
+          assert.equal(moved.status, 'finished', context);
+          assert.equal(moved.winnerUid, 'a', context);
+          assert.equal(moved.turnUid, null, context);
+          assert.equal(moved.turnDeadlineMs, 0, context);
+          assert.equal(moved.extraThrows, 0, context);
+          assert.equal(moved.finishReason, 'completion', context);
+        } else {
+          assert.equal(moved.status, 'playing', context);
+          assert.equal(moved.winnerUid, null, context);
+          assert.equal(moved.turnUid, value >= 4 ? 'a' : 'b', context);
+          assert.equal(moved.phase, 'throw', context);
+          assert.equal(moved.extraThrows, 0, context);
+          assert.equal(moved.phaseStartsAtMs, thrown.phaseStartsAtMs + 1500, context);
+          assert.equal(moved.turnDeadlineMs, moved.phaseStartsAtMs + 5000, context);
+        }
+      }
+    }
+  }
+});
+
+test('exact finishing stacks complete together and never capture or stack at the arrival pad', () => {
+  for (const version of [1, 2]) for (const route of ['outer', 'b']) {
+    for (let value = 1; value <= 5; value += 1) {
+      const source = game(2, 2, version);
+      source.players[0].pieces.forEach(piece => Object.assign(piece, {
+        node: route === 'outer' ? `o${20 - value}` : ['b5', 'b4', 'center', 'b2', 'b1'][value - 1],
+        lane: route, ...(version === 2 ? { stackId: 'stack-1-2' } : {}),
+      }));
+      source.players[1].pieces[0].node = 'o20';
+      const thrown = roll(source, value);
+      const legal = getLegalYutMoves(thrown, 'a').find(move => move.pieceId === '2' && move.route === route);
+      assert.equal(legal.targetNode, 'finish');
+      assert.equal(legal.stackSize, 2);
+      assert.equal(legal.canStack === true, false);
+      const moved = coreMoveYut(thrown, 'a', '2', route, thrown.phaseStartsAtMs);
+      assert.equal(moved.status, 'finished');
+      assert.equal(moved.players[0].pieces.every(piece => piece.node === 'finish' && !piece.stackId), true);
+      assert.equal(moved.players[1].pieces[0].node, 'o20', 'completion cannot capture a legacy arrival-pad occupant');
+      assert.deepEqual(moved.lastEvent.move.capturedUids, []);
+      assert.equal(moved.extraThrows, 0);
+      if (version === 2) {
+        assert.deepEqual(moved.lastEvent.move.movingPieceIds, ['1', '2']);
+        assert.deepEqual(moved.lastEvent.move.capturedPieces, []);
+        assert.equal(moved.lastEvent.move.stacked, false);
+        assert.throws(() => coreMoveYut(thrown, 'a', '2', route, thrown.phaseStartsAtMs, true), /업을 말/);
+      }
+    }
+  }
+});
+
+test('legacy arrival-pad pieces remain finishable and an expired finish choice still cannot bypass turn expiry', () => {
+  for (const version of [1, 2]) for (let value = 1; value <= 5; value += 1) {
+    const source = game(2, 2, version);
+    source.players[0].pieces[0].node = 'o20';
+    const thrown = roll(source, value);
+    assert.deepEqual(getLegalYutMoves(thrown, 'a').find(move => move.pieceId === '1').path, ['finish']);
+    const moved = coreMoveYut(thrown, 'a', '1', 'outer', thrown.phaseStartsAtMs);
+    assert.equal(moved.players[0].pieces[0].node, 'finish');
+    assert.equal(moved.players[0].pieces[1].node, 'home');
+    assert.throws(() => coreMoveYut(thrown, 'a', '1', 'outer', thrown.turnDeadlineMs), /시간/);
+    const skipped = skipYutTurn(thrown, thrown.turnDeadlineMs);
+    assert.equal(skipped.players[0].pieces[0].node, 'o20');
+    assert.equal(skipped.pendingThrow, null);
+    assert.equal(skipped.turnUid, 'b');
+  }
+});
+
 test('invalid turn, phase, route and expiry cannot mutate the game', () => {
   const room = game();
   assert.throws(() => throwYut(room, 'b', [true, false, false, false], now + 1));
