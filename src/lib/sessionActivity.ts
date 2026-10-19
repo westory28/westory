@@ -8,6 +8,7 @@ const SESSION_CLICK_ACTIVITY_SELECTOR = [
   "input",
   "select",
   "textarea",
+  "canvas",
   "label",
   "summary",
   '[role="button"]',
@@ -20,6 +21,10 @@ const SESSION_CLICK_ACTIVITY_SELECTOR = [
   '[contenteditable="plaintext-only"]',
 ].join(",");
 const SESSION_CHANGE_ACTIVITY_SELECTOR = [
+  "textarea",
+  'input:not([type="hidden"])',
+  '[contenteditable="true"]',
+  '[contenteditable="plaintext-only"]',
   "select",
   'input[type="checkbox"]',
   'input[type="radio"]',

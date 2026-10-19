@@ -135,6 +135,10 @@ function fixture(options = {}) {
         if (specifier === "./firebase") return firebase;
         if (specifier === "./semesterScope")
           return { getYearSemester: (value) => value };
+        if (specifier === "./semesterArchive")
+          return { isSemesterArchive: false };
+        if (specifier === "./applicationSession")
+          return load("applicationSession");
         if (specifier === "./studentProfileCommands")
           return load("studentProfileCommands");
         throw new Error(`Unexpected dependency ${specifier}`);

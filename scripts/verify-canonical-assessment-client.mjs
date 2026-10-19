@@ -91,7 +91,7 @@ assert.equal(sensitive, 0);
 sensitiveFailure = new Error('운영 인증 설정을 확인해야 합니다.');
 const grantPayload = { semesterId: '2026-2', recipientUids: ['student-a'], reason: '학급 활동' };
 const routineClassroomCommands = ['grantHistoryClassroomExemptions', 'revokeHistoryClassroomExemptions', 'reviewHistoryClassroomExemptionRequest',
-  'upsertHistoryClassroomSource', 'saveHistoryClassroomAssignment', 'applyHistoryClassroomExemption', 'createAssessmentDefinition', 'updateAssessmentDefinition', 'transitionAssessmentDefinition'];
+  'upsertHistoryClassroomSource', 'saveHistoryClassroomAssignment', 'applyHistoryClassroomExemption', 'createAssessmentDefinition', 'updateAssessmentDefinition', 'transitionAssessmentDefinition', 'saveQuizAssessmentSettings', 'upsertQuizQuestion'];
 const serverRoutine = JSON.parse(readFileSync('functions/productionGateway/routineContentWrites.json', 'utf8')).commands;
 for (const commandType of routineClassroomCommands) {
   assert.ok(serverRoutine.includes(commandType), `${commandType} must have the same general-session server policy`);

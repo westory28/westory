@@ -17,7 +17,11 @@ import {
   type MenuConfig,
 } from "../constants/menus";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
-import { prepareApplicationSession } from "../lib/applicationSession";
+import {
+  invalidateApplicationSession,
+  prepareApplicationSession,
+} from "../lib/applicationSession";
+import { clearDeviceSession } from "../lib/deviceSession";
 import {
   AuthStartupController,
   type AuthPhase,
@@ -114,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const startupControllerRef = useRef<AuthStartupController | null>(null);
   const authGenerationRef = useRef(0);
   const authPhaseRef = useRef<AuthPhase>("resolving");
+  const readyUserRef = useRef<User | null>(null);
   const perfPhasesRef = useRef(new Set<string>());
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [configReady, setConfigReady] = useState(false);
@@ -267,9 +272,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             error,
           ),
         change: (state) => {
+          const retainedReadyUser =
+            state.phase === "ready" &&
+            state.currentUser !== null &&
+            readyUserRef.current === state.currentUser;
           const lostReadyProfile =
             authPhaseRef.current === "ready" && state.phase !== "ready";
           authPhaseRef.current = state.phase;
+          readyUserRef.current =
+            state.phase === "ready" ? state.currentUser : null;
           if (
             authGenerationRef.current !== state.generation ||
             lostReadyProfile
@@ -278,12 +289,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             perfPhasesRef.current.clear();
             systemConfigLoadRef.current = null;
             menuConfigLoadRef.current = null;
-            setConfig(null);
-            setConfigReady(false);
-            setConfigLoadedAt(0);
-            setMenuConfig(null);
-            setMenuConfigReady(false);
-            setMenuConfigLoadedAt(0);
+            if (!retainedReadyUser) {
+              setConfig(null);
+              setConfigReady(false);
+              setConfigLoadedAt(0);
+              setMenuConfig(null);
+              setMenuConfigReady(false);
+              setMenuConfigLoadedAt(0);
+            }
           }
           setStartup(state);
         },
@@ -333,9 +346,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     );
     startupControllerRef.current = controller;
     void authPersistenceReady.catch(() => undefined);
+    let observedUser: User | null = null;
     const unsubscribe = onIdTokenChanged(
       auth,
       (user) => {
+        if (observedUser && observedUser !== user)
+          invalidateApplicationSession(observedUser);
+        observedUser = user;
         markLoginPerf("westory-auth-current-user-resolved", {
           hasUser: !!user,
         });
@@ -402,6 +419,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const logout = async () => {
+    const user = auth.currentUser;
+    if (user) clearDeviceSession(user.uid);
+    invalidateApplicationSession(user);
     startupControllerRef.current?.invalidate();
     await signOut(auth);
   };

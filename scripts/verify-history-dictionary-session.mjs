@@ -6,10 +6,16 @@ const source=fs.readFileSync('src/lib/historyDictionarySession.ts','utf8');
 const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const epoch=1700000000;
 function fixture(){
- const user={uid:'teacher-test'}; const auth={currentUser:user};const calls=[];
+ const user={uid:'teacher-test',getIdTokenResult:async()=>({claims:{auth_time:state.epoch}})}; const auth={currentUser:user};const calls=[];
  const state={epoch,hold:null,fail:null,revision:'a'.repeat(64)};
+ const modules=new Map();
+ function load(file){
  const module={exports:{}};
- vm.runInNewContext(js,{exports:module.exports,module,require(name){
+ modules.set(file,module.exports);
+ const code=file==='historyDictionarySession'?js:ts.transpileModule(fs.readFileSync(`src/lib/${file}.ts`,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+ vm.runInNewContext(code,{exports:module.exports,module,require(name){
+  if(name==='./applicationSession')return modules.get('applicationSession')||load('applicationSession');
+  if(name==='./semesterArchive')return {isSemesterArchive:false};
   if(name==='firebase/auth')return {getIdTokenResult:async()=>({authTime:new Date(state.epoch*1000).toISOString()})};
   if(name==='./firebase')return {auth,getHttpsCallable:async name=>async data=>{
    calls.push({name,data});if(name==='openApplicationSession'){
@@ -20,7 +26,9 @@ function fixture(){
   }};
   throw Error(name);
  },Map,Promise,Date,Number,Error,Object,RegExp});
- return {api:module.exports,auth,user,calls,state};
+ return module.exports;
+ }
+ return {api:load('historyDictionarySession'),auth,user,calls,state};
 }
 {
  const f=fixture();let release;f.state.hold=new Promise(r=>release=r);
@@ -56,7 +64,7 @@ for(const change of ['identity','epoch','invalid','closed']){
  assert.equal(f.calls.filter(c=>c.name==='submitWeplayAnswer').length,3,'Denied command is never replayed');
  f.state.commandFail=null;await call({eventId:'manual-retry'});
  assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,2,'A later explicit retry refreshes proof');
- f.auth.currentUser={uid:f.user.uid};await call({eventId:'new-login'});
+ f.auth.currentUser={...f.user};await call({eventId:'new-login'});
  assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,3,'A new auth object never reuses another login proof');
 }
 for (const change of ['identity','same-uid-identity','epoch']) {

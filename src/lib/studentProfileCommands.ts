@@ -1,15 +1,9 @@
-import { auth, getHttpsCallable } from "./firebase";
+import { auth } from "./firebase";
+import { callWithApplicationSession } from "./applicationSession";
 import { getYearSemester } from "./semesterScope";
 
-const SESSION_GENERATION = "w1r2-2026-08-09";
 const COMMAND_TYPE = "updateStudentEnrollmentProfile";
 type ConfigLike = Parameters<typeof getYearSemester>[0];
-type SessionProof = {
-  authorityGeneration: string;
-  protocolVersion: number;
-  revision: string;
-};
-type Session = SessionProof & { status: string; authTime: number };
 export type StudentProfileOperation =
   | "EDIT_PROFILE"
   | "MOVE_CLASS"
@@ -71,55 +65,12 @@ export const callStudentDataService = async <Request extends object, Response>(
   ownerUid = auth.currentUser?.uid || "",
 ): Promise<Response> => {
   assertOwner(ownerUid);
-  const user = auth.currentUser!;
-  const assertSameUser = () => {
-    assertOwner(ownerUid);
-    if (auth.currentUser !== user)
-      throw new Error("로그인 계정이 바뀌었습니다. 다시 저장해 주세요.");
-  };
-  const token = await user.getIdTokenResult();
-  assertSameUser();
-  const open = await getHttpsCallable<
-    { authorityGeneration: string; protocolVersion: number },
-    Session
-  >("openApplicationSession");
-  const { data: session } = await open({
-    authorityGeneration: SESSION_GENERATION,
-    protocolVersion: 2,
-  });
-  assertSameUser();
-  if (
-    session.status !== "active" ||
-    session.authTime !== Number(token.claims.auth_time) ||
-    session.authorityGeneration !== SESSION_GENERATION ||
-    !Number.isInteger(session.protocolVersion) ||
-    session.protocolVersion < 2 ||
-    !/^[a-f0-9]{64}$/.test(session.revision)
-  ) {
-    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
-  }
-  const callable = await getHttpsCallable<
-    Request & { _session: SessionProof },
-    Response
-  >(name);
-  const currentToken = await user.getIdTokenResult();
-  assertSameUser();
-  if (currentToken.claims.auth_time !== token.claims.auth_time)
-    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
-  const result = await callable({
-    ...input,
-    _session: {
-      authorityGeneration: session.authorityGeneration,
-      protocolVersion: session.protocolVersion,
-      revision: session.revision,
-    },
-  });
-  assertSameUser();
-  if (
-    (await user.getIdTokenResult()).claims.auth_time !== token.claims.auth_time
-  )
-    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
-  assertSameUser();
+  const result = await callWithApplicationSession<Request, Response>(
+    name,
+    input,
+    auth.currentUser,
+  );
+  assertOwner(ownerUid);
   return result.data;
 };
 
@@ -244,7 +195,12 @@ export const updateCanonicalStudentProfile = (
       pending.delete(key);
       return true;
     } catch (error) {
-      if (!ambiguous(error)) pending.delete(key);
+      if (
+        !ambiguous(error) &&
+        !(error as { applicationSessionResponseReceived?: boolean })
+          ?.applicationSessionResponseReceived
+      )
+        pending.delete(key);
       throw error;
     }
   })().finally(() => flights.delete(key));

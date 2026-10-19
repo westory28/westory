@@ -752,7 +752,8 @@ await check(
     account.epoch++;
     await h.observe(account);
     assert.equal(h.sessions.length, 2);
-    assert.equal(h.state.currentUser, null);
+    assert.equal(h.state.currentUser, account);
+    assert.equal(h.state.phase, "ready");
     assert.equal(h.snapshots[0].stopped, true);
     h.controller.dispose();
   },
@@ -1092,7 +1093,7 @@ await check(
     account.epoch++;
     await h.observe(account);
     assert.equal(h.controller.isLoginFlowCurrent(flow), false);
-    assert.equal(h.state.currentUser, null);
+    assert.equal(h.state.currentUser, account);
     assert.equal(h.snapshots[0].stopped, true);
     await h.finishSession();
     h.profile({ role: "student" });
@@ -1103,7 +1104,7 @@ await check(
   },
 );
 await check(
-  "Freshness assertion withdraws old ready identity and starts fresh authority",
+  "Freshness assertion fences old operations while preserving the same-account view",
   async () => {
     const h = startupHarness(),
       account = user("synthetic-assert-refresh");
@@ -1116,8 +1117,8 @@ await check(
     await assert.rejects(h.controller.assertCurrent(generation, account), {
       code: "auth/stale-attempt",
     });
-    assert.equal(h.state.currentUser, null);
-    assert.equal(h.state.userData, null);
+    assert.equal(h.state.currentUser, account);
+    assert.equal(h.state.userData.role, "teacher");
     assert.equal(h.controller.isLoginFlowCurrent(flow), false);
     assert.equal(h.snapshots[0].stopped, true);
     await flush();
@@ -1326,6 +1327,7 @@ function providerHarness({ readSetting } = {}) {
         archiveScope: null,
       },
       "../lib/applicationSession": {
+        invalidateApplicationSession: noop,
         prepareApplicationSession: (account, options) => {
           const gate = deferred();
           sessions.push({ account, options, gate });
@@ -1333,6 +1335,7 @@ function providerHarness({ readSetting } = {}) {
         },
       },
       "../lib/authStartup": startup,
+      "../lib/deviceSession": { clearDeviceSession: noop },
       "../constants/menus": {
         cloneDefaultMenus: () => ({}),
         sanitizeMenuConfig: (data) => data,
@@ -1846,6 +1849,102 @@ await check(
     api.markLoginPerf("westory-auth-ready");
     api.measureLoginPerf("westory-auth-bootstrap", "start", "end");
     assert.equal(called, false);
+  },
+);
+await check(
+  "Same-account reauthentication keeps the mounted view and confirmed settings",
+  async () => {
+    const h = providerHarness();
+    await h.render();
+    const account = user("synthetic-renewal");
+    await h.observe(account);
+    h.sessions[0].gate.resolve();
+    h.profile({ role: "teacher" });
+    await h.render();
+    const generation = h.value.authGeneration;
+    assert.equal(h.value.configReady, true);
+    account.epoch++;
+    await h.observe(account);
+    assert.ok(h.value.authGeneration > generation);
+    assert.equal(h.value.currentUser, account);
+    assert.equal(h.value.authPhase, "ready");
+    assert.equal(h.value.loading, false);
+    assert.equal(h.value.configReady, true);
+    assert.equal(h.value.menuConfigReady, true);
+    h.profile({ role: "teacher" });
+    await h.render();
+    assert.equal(h.value.authPhase, "ready");
+    h.sessions[1].gate.resolve();
+    await h.render();
+    assert.equal(h.value.authPhase, "ready");
+    h.unmount();
+  },
+);
+for (const denied of [
+  null,
+  { role: "student" },
+  { role: "teacher", teacherPortalEnabled: true },
+]) {
+  await check(
+    "Changed server access profile withdraws the retained view before renewal finishes",
+    async () => {
+      const h = startupHarness(),
+        account = user("synthetic-renewal-revocation");
+      await h.observe(account);
+      h.profile({ role: "teacher" });
+      await h.finishSession();
+      account.epoch++;
+      await h.observe(account);
+      assert.equal(h.state.phase, "ready");
+      h.profile(denied);
+      assert.equal(h.state.currentUser, null);
+      assert.equal(h.state.userData, null);
+      h.controller.dispose();
+    },
+  );
+}
+for (const failure of ["permission", "timeout", "signout", "switch"]) {
+  await check(`Retained renewal view fails closed on ${failure}`, async () => {
+    const h = startupHarness(),
+      account = user("synthetic-renewal-failure");
+    await h.observe(account);
+    h.profile({ role: "teacher" });
+    await h.finishSession();
+    account.epoch++;
+    await h.observe(account);
+    if (failure === "permission")
+      h.snapshots.at(-1).error({ code: "permission-denied" });
+    if (failure === "timeout")
+      h.timer.advance(startup.AUTH_STARTUP_DEADLINE_MS);
+    if (failure === "signout") await h.observe(null);
+    if (failure === "switch") await h.observe(user("other-account"));
+    assert.equal(h.state.currentUser, null);
+    assert.equal(h.state.userData, null);
+    h.sessions[1].gate.resolve();
+    await flush();
+    h.profile({ role: "teacher" }, {}, 1);
+    assert.equal(
+      h.state.currentUser,
+      null,
+      "Late renewal cannot revive old access",
+    );
+    h.controller.dispose();
+  });
+}
+await check(
+  "App Check failure offers retry, while revoked credentials require sign-in",
+  async () => {
+    assert.equal(
+      startup.authStartupFailure({
+        code: "functions/unauthenticated",
+        details: { reason: "APP_CHECK_REQUIRED" },
+      }).retryable,
+      true,
+    );
+    assert.equal(
+      startup.authStartupFailure({ code: "auth/user-token-expired" }).retryable,
+      false,
+    );
   },
 );
 console.log(

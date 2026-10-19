@@ -726,8 +726,10 @@ try {
     await popup.waitForFunction(() =>
       window.authQa.events.includes("login-flow-failed"),
     );
-    await popup.getByRole("status").first().waitFor({ state: "hidden" });
-    assert.equal(await popup.getByRole("status").count(), 0);
+    // The public map has its own independent loading status.
+    const loginStatus = popup.getByRole("status").filter({ hasText: /로그인/ });
+    await loginStatus.waitFor({ state: "hidden" });
+    assert.equal(await loginStatus.count(), 0);
     assert.equal(
       await popup
         .getByRole("button", { name: /학생 로그인/ })
@@ -743,9 +745,9 @@ try {
   for (const width of [320, 390, 768, 1280]) {
     const entry = await newPage(width, "signed-out");
     await entry.locator(".public-entry").waitFor();
-    await entry.locator(".entry-hero-screen img").waitFor();
+    await entry.locator(".entry-opening-screen img").waitFor();
     await entry.waitForFunction(() => {
-      const image = document.querySelector(".entry-hero-screen img");
+      const image = document.querySelector(".entry-opening-screen img");
       return image?.complete && image.naturalWidth > 0;
     });
     assert.equal(
@@ -768,7 +770,7 @@ try {
     check("public-local-screen-assets-loaded", {
       width,
       heroNaturalWidth: await entry
-        .locator(".entry-hero-screen img")
+        .locator(".entry-opening-screen img")
         .evaluate((image) => image.naturalWidth),
     });
     await entry.close();
@@ -871,7 +873,13 @@ try {
       .isEnabled(),
     true,
   );
-  assert.equal(await redirectPage.getByRole("status").count(), 0);
+  assert.equal(
+    await redirectPage
+      .getByRole("status")
+      .filter({ hasText: /로그인/ })
+      .count(),
+    0,
+  );
   await noProtected(redirectPage);
   check("redirect-acquisition-real-15-second-deadline-restores-actions", {
     width: 390,

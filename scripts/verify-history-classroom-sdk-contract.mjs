@@ -97,20 +97,22 @@ const server = http.createServer(async (request, response) => {
     );
     const data = body.data;
     requests.push({ name, data: structuredClone(data) });
+    // Production validates the live session on every command, even when the
+    // client reuses a previously verified protocol proof.
+    if (rejectSession) {
+      return reply(response, 401, {
+        error: {
+          status: "UNAUTHENTICATED",
+          message: "합성 세션 만료",
+          details: { reason: "SESSION_REAUTH_REQUIRED" },
+        },
+      });
+    }
     if (name === "openApplicationSession") {
       assert.deepEqual(data, {
         authorityGeneration: generation,
         protocolVersion: 2,
       });
-      if (rejectSession) {
-        return reply(response, 401, {
-          error: {
-            status: "UNAUTHENTICATED",
-            message: "합성 세션 만료",
-            details: { reason: "SESSION_REAUTH_REQUIRED" },
-          },
-        });
-      }
       return reply(response, 200, { result: session });
     }
     assert.deepEqual(
@@ -357,13 +359,8 @@ try {
   assert.equal(recovered.createdCount, 32);
   assert.equal(ticketWrites, 64);
   assert.deepEqual(
-    requests.slice(-4).map(({ name }) => name),
-    [
-      "openApplicationSession",
-      "executeCommand",
-      "openApplicationSession",
-      "getCommandStatus",
-    ],
+    requests.slice(-2).map(({ name }) => name),
+    ["executeCommand", "getCommandStatus"],
   );
 
   dropGrantResponse = true;
@@ -404,7 +401,7 @@ try {
   assert.equal(api.toAssessmentHistorySource(sourcePayload).publishedAt, "2099-01-01T00:00:00.000Z");
   const beforeSave = requests.length;
   const saved = await api.saveHistoryAssessmentSource(config, "sdk-source", sourcePayload, 0);
-  assert.deepEqual(requests.slice(beforeSave).map(({ name }) => name), ["openApplicationSession", "executeCommand"]);
+  assert.deepEqual(requests.slice(beforeSave).map(({ name }) => name), ["executeCommand"]);
   assert.equal(saved.contentRevision, 1);
   assert.equal(saved.publicationWindow.publishedAt, "2099-01-01T00:00:00.000Z");
   assert.equal(saved.publicationWindow.dueAt, "2099-01-02T00:00:00.000Z");
@@ -437,6 +434,7 @@ try {
   assert.equal(requests.some(({ name }) => name === "beginApplicationSessionReauthentication"), false);
 
   rejectSession = true;
+  const previousTicketWrites = ticketWrites;
   const previousGrants = requests.filter(
     ({ name }) => name === "executeCommand",
   ).length;
@@ -445,8 +443,10 @@ try {
   });
   assert.equal(
     requests.filter(({ name }) => name === "executeCommand").length,
-    previousGrants,
+    previousGrants + 1,
+    "Denied command is sent once and never replayed",
   );
+  assert.equal(ticketWrites, previousTicketWrites, "Revoked session cannot write tickets");
   assert.deepEqual(
     forbiddenRequests,
     [],

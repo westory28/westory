@@ -1,6 +1,7 @@
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDocFromServer, onSnapshot } from "firebase/firestore";
-import { auth, db, getHttpsCallable } from "./firebase";
+import { auth, db } from "./firebase";
+import { callWithApplicationSession } from "./applicationSession";
 import { ensureWestoryAppCheck as ensureUploadAppCheck } from "./appCheck";
 import type { SystemConfig } from "../types";
 import type { LessonData } from "./lessonData";
@@ -25,12 +26,6 @@ type LessonCommand =
   | "saveLessonTree"
   | "prepareLessonAssetUpload";
 type CommandResponse<T> = { status: string; result: T };
-type SessionProof = {
-  authorityGeneration: string;
-  protocolVersion: number;
-  revision: string;
-};
-type Session = SessionProof & { status: string; authTime: number };
 type SavedLesson = {
   unitId: string;
   contentRevision: number;
@@ -43,7 +38,6 @@ type UploadedAsset = {
   url: string;
   pdfProcessing?: LessonPdfProcessingMeta;
 };
-const generation = "w1r2-2026-08-09";
 const pendingCommands = new Map<string, string>();
 const commandFlights = new Map<string, Promise<unknown>>();
 const assetFlights = new Map<string, Promise<UploadedAsset>>();
@@ -69,41 +63,11 @@ const withLessonSession = async <T>(
   ownerUid: string,
 ): Promise<T> => {
   assertOwner(ownerUid);
-  const user = auth.currentUser!;
-  const token = await user.getIdTokenResult();
-  assertOwner(ownerUid);
-  const open = await getHttpsCallable<
-    { authorityGeneration: string; protocolVersion: number },
-    Session
-  >("openApplicationSession");
-  assertOwner(ownerUid);
-  const { data: session } = await open({
-    authorityGeneration: generation,
-    protocolVersion: 2,
-  });
-  assertOwner(ownerUid);
-  if (
-    session.status !== "active" ||
-    session.authTime !== Number(token.claims.auth_time) ||
-    session.authorityGeneration !== generation ||
-    !Number.isInteger(session.protocolVersion) ||
-    session.protocolVersion < 2 ||
-    !/^[a-f0-9]{64}$/.test(session.revision)
-  )
-    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
-  const call = await getHttpsCallable<Record<string, unknown>, T>(name);
-  const currentToken = await user.getIdTokenResult();
-  assertOwner(ownerUid);
-  if (currentToken.claims.auth_time !== token.claims.auth_time)
-    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
-  const response = await call({
-    ...input,
-    _session: {
-      authorityGeneration: session.authorityGeneration,
-      protocolVersion: session.protocolVersion,
-      revision: session.revision,
-    },
-  });
+  const response = await callWithApplicationSession<Record<string, unknown>, T>(
+    name,
+    input,
+    auth.currentUser,
+  );
   assertOwner(ownerUid);
   return response.data;
 };
@@ -151,7 +115,12 @@ const executeLessonCommand = async <T>(
       pendingCommands.delete(key);
       return response.result;
     } catch (error) {
-      if (!isAmbiguous(error)) pendingCommands.delete(key);
+      if (
+        !isAmbiguous(error) &&
+        !(error as { applicationSessionResponseReceived?: boolean })
+          ?.applicationSessionResponseReceived
+      )
+        pendingCommands.delete(key);
       throw error;
     } finally {
       commandFlights.delete(key);

@@ -23,7 +23,10 @@ const imp = (file) =>
 const service = `
 import {MENUS} from ${imp("src/constants/menus.ts")};
 export const config={year:"2026",semester:"2",showLesson:true,showQuiz:true,showScore:true,availableSemesters:[{year:"2026",semester:"1"},{year:"2026",semester:"2"}]};
-export const useAuth=()=>{const student=location.hash.startsWith("#/student");return {currentUser:{uid:"portal-design-fixture",email:"fixture@example.invalid"},userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":"검증교사",staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
+const fixtureAuthTime=Math.floor(Date.now()/1000);
+const fixtureUser={uid:"portal-design-fixture",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{auth_time:fixtureAuthTime}})};
+export const auth={currentUser:fixtureUser};
+export const useAuth=()=>{const student=location.hash.startsWith("#/student");return {currentUser:fixtureUser,authGeneration:1,userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":"검증교사",staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
 export const getDoc=async(ref)=>({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
@@ -320,6 +323,18 @@ async function sidebarChecks(page, portal, width) {
     await checkMobileReturn();
   };
   await openMobile();
+  const sessionLabel = page.locator(
+    mobile ? ".mobile-account-session > span" : ".teacher-account-countdown",
+  );
+  assert.equal(await sessionLabel.textContent(), "30일");
+  assert.equal(
+    await sessionLabel.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    ),
+    true,
+    "The login retention label fits on desktop and mobile",
+  );
+  await noOverflow(page, `${portal}-session-${width}`);
   await expanded(group, true, "An initial deep link opens its selected group");
   assert.equal(
     await sidebar.getByRole("link", { name: "역사 지도", exact: true }).count(),

@@ -89,8 +89,8 @@ const authPersistenceReady =
         const persistenceOrder = isMobileBrowser()
           ? [
               browserLocalPersistence,
-              browserSessionPersistence,
               indexedDBLocalPersistence,
+              browserSessionPersistence,
               inMemoryPersistence,
             ]
           : [

@@ -6,7 +6,9 @@ import ts from "typescript";
 
 // A reproducible source-driven scheduling experiment, not a live latency claim.
 // SDK persistence/OAuth/backend cold starts are outside this synthetic model.
-const BASELINE = "9e8af51065a3eb49074f0ec4cbe7d9465fb92758";
+const BASELINE =
+  process.env.LOGIN_BENCHMARK_BASELINE ||
+  "9e8af51065a3eb49074f0ec4cbe7d9465fb92758";
 const oldSource = (path) =>
   execFileSync("git", ["show", `${BASELINE}:${path}`], { encoding: "utf8" });
 const newSource = (path) =>
@@ -179,7 +181,10 @@ for (const delays of [
     assert.equal(result.rpcCount, 1);
     assert.equal(result.profileConsumerCount, 1);
   }
-  assert.equal(before.providerReadyMs, delays.sessionMs + delays.profileMs);
+  assert.ok(
+    after.providerReadyMs <= before.providerReadyMs,
+    "Login bootstrap must not get slower",
+  );
   assert.equal(
     after.providerReadyMs,
     Math.max(delays.sessionMs, delays.profileMs),
@@ -191,6 +196,10 @@ for (const delays of [
   assert.equal(
     after.routeReadyMs,
     Math.max(after.providerReadyMs, delays.loginStartsAtMs),
+  );
+  assert.ok(
+    after.routeReadyMs <= before.routeReadyMs,
+    "First route must not get slower",
   );
   experiments.push({ syntheticDelaysMs: delays, before, after });
 }

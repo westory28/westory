@@ -1,4 +1,5 @@
-import { auth, getHttpsCallable } from "./firebase";
+import { auth } from "./firebase";
+import { callWithApplicationSession } from "./applicationSession";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import type { CalendarEvent } from "../types";
 import type { ScheduleCategory } from "./scheduleCategories";
@@ -45,7 +46,6 @@ type CalendarOperation = Scope &
       }
   );
 
-const generation = "w1r2-2026-08-09";
 const pendingRequestIds = new Map<string, string>();
 const isRetryable = (error: unknown) =>
   /(?:unavailable|deadline-exceeded|internal|network-request-failed)$/.test(
@@ -87,33 +87,6 @@ export const mutateAcademicCalendar = async <
         "로그인 상태가 바뀌었습니다. 입력을 확인한 뒤 다시 저장해 주세요.",
       );
   };
-  const open = await getHttpsCallable<
-    { authorityGeneration: string; protocolVersion: number },
-    {
-      authorityGeneration: string;
-      protocolVersion: number;
-      revision: string;
-      authTime: number;
-      status: string;
-    }
-  >("openApplicationSession");
-  assertSameUser();
-  const handshake = {
-    authorityGeneration: generation,
-    protocolVersion: 2,
-  };
-  const { data: session } = await open(handshake);
-  await assertSameSession();
-  if (
-    session.status !== "active" ||
-    session.authTime !== authTime ||
-    session.authorityGeneration !== generation ||
-    !Number.isInteger(session.protocolVersion) ||
-    session.protocolVersion < 2 ||
-    !/^[a-f0-9]{64}$/.test(session.revision)
-  ) {
-    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
-  }
   // Removing undefined also keeps optional legacy fields unchanged in a merge.
   const body = JSON.parse(
     JSON.stringify({
@@ -128,23 +101,23 @@ export const mutateAcademicCalendar = async <
   const payload = {
     ...body,
     requestId,
-    _session: {
-      authorityGeneration: session.authorityGeneration,
-      protocolVersion: session.protocolVersion,
-      revision: session.revision,
-    },
   };
-  const call = await getHttpsCallable<typeof payload, Result>(
-    "manageAcademicCalendar",
-  );
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await assertSameSession();
     let response;
     try {
-      response = await call(payload);
+      response = await callWithApplicationSession<typeof payload, Result>(
+        "manageAcademicCalendar",
+        payload,
+        user,
+      );
     } catch (error) {
       if (!isRetryable(error)) {
-        pendingRequestIds.delete(key);
+        if (
+          !(error as { applicationSessionResponseReceived?: boolean })
+            ?.applicationSessionResponseReceived
+        )
+          pendingRequestIds.delete(key);
         throw error;
       }
       if (attempt === 1) throw error;
@@ -171,6 +144,8 @@ export const academicCalendarErrorMessage = (error: unknown) => {
   if (/user-mismatch/.test(code))
     return "현재 로그인한 관리자 계정으로 인증해 주세요. 입력 내용은 유지됩니다.";
   const reason = (error as { details?: { reason?: string } })?.details?.reason;
+  if (reason === "APP_CHECK_REQUIRED")
+    return "요청을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 저장해 주세요. 입력 내용은 유지됩니다.";
   if (reason === "RECENT_AUTH_REQUIRED")
     return "일정을 삭제하려면 현재 계정으로 다시 인증해 주세요.";
   if (/unauthenticated/.test(code))

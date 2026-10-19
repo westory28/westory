@@ -1,5 +1,6 @@
 import type { User } from "firebase/auth";
-import { auth, getHttpsCallable } from "./firebase";
+import { auth } from "./firebase";
+import { callWithApplicationSession } from "./applicationSession";
 import type { SystemConfig } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -73,14 +74,6 @@ const getNoticeImageScope = (config: ConfigLike, noticeId: string) => {
   return { year, semester, noticeId: safeNoticeId };
 };
 
-type NoticeSession = {
-  status: string;
-  authTime: number;
-  authorityGeneration: string;
-  protocolVersion: number;
-  revision: string;
-};
-
 // Notice uploads use the server's existing session and permission guards.
 // Storage rules cannot fit session, maintenance and profile reads in one write.
 const callNoticeImageService = async <Response>(
@@ -94,44 +87,10 @@ const callNoticeImageService = async <Response>(
     }
   };
   assertOwner();
-  const token = await user!.getIdTokenResult();
-  assertOwner();
-  const open = await getHttpsCallable<
-    { authorityGeneration: string; protocolVersion: number },
-    NoticeSession
-  >("openApplicationSession");
-  assertOwner();
-  const { data: session } = await open({
-    authorityGeneration: "w1r2-2026-08-09",
-    protocolVersion: 2,
-  });
-  assertOwner();
-  if (
-    session.status !== "active" ||
-    session.authTime !== Number(token.claims.auth_time) ||
-    session.authorityGeneration !== "w1r2-2026-08-09" ||
-    !Number.isInteger(session.protocolVersion) ||
-    session.protocolVersion < 2 ||
-    !/^[a-f0-9]{64}$/.test(session.revision)
-  ) {
-    throw new Error("로그인 세션을 확인하지 못했습니다. 다시 로그인해 주세요.");
-  }
-  const callable = await getHttpsCallable<Record<string, unknown>, Response>(
-    name,
-  );
-  const currentToken = await user!.getIdTokenResult();
-  assertOwner();
-  if (currentToken.claims.auth_time !== token.claims.auth_time) {
-    throw new Error("로그인 상태가 바뀌었습니다. 다시 저장해 주세요.");
-  }
-  const result = await callable({
-    ...input,
-    _session: {
-      authorityGeneration: session.authorityGeneration,
-      protocolVersion: session.protocolVersion,
-      revision: session.revision,
-    },
-  });
+  const result = await callWithApplicationSession<
+    Record<string, unknown>,
+    Response
+  >(name, input, user);
   assertOwner();
   return result.data;
 };

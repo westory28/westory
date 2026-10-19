@@ -27,11 +27,19 @@ import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import type { PointRankPolicy } from "../../types";
 import { resolveStudentProfileEmoji } from "../../lib/studentProfileEmoji";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
+import { auth } from "../../lib/firebase";
+import { removeStorage } from "../../lib/safeStorage";
 import {
-  readLocalOnly,
-  removeStorage,
-  writeLocalOnly,
-} from "../../lib/safeStorage";
+  clearDeviceSession,
+  DEVICE_SESSION_ACTIVITY_THROTTLE_MS,
+  DEVICE_SESSION_CHECK_MS,
+  DEVICE_SESSION_DURATION_MS,
+  extendDeviceSession,
+  formatDeviceSessionRemaining,
+  getDeviceSessionKey,
+  initializeDeviceSession,
+  readDeviceSession,
+} from "../../lib/deviceSession";
 import {
   getSessionChangeActivityTarget,
   getSessionActivityTarget,
@@ -51,23 +59,12 @@ import {
   getDefaultTeacherRoute,
 } from "../../lib/permissions";
 
-const SESSION_DURATION_SECONDS = 60 * 60;
-const SESSION_DURATION_MS = SESSION_DURATION_SECONDS * 1000;
-const SESSION_ACTIVITY_THROTTLE_MS = 30 * 1000;
-const SESSION_EXPIRY_KEY = "sessionExpiry";
 const ROLE_SESSION_KEY = "westoryPortalRole";
 
 const NotificationBell = lazyWithRetry(
   () => import("./NotificationBell"),
   "notification-bell",
 );
-
-const formatCountdown = (seconds: number) => {
-  const safe = Math.max(0, seconds);
-  const minutes = Math.floor(safe / 60);
-  const remain = safe % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remain).padStart(2, "0")}`;
-};
 
 const resolveMenuTarget = (url: string, portal: "student" | "teacher") => {
   const normalized = (url || "").trim();
@@ -146,6 +143,7 @@ const Header: React.FC<{
     configReady,
     menuConfig,
     menuConfigReady,
+    authGeneration,
   } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
@@ -155,9 +153,8 @@ const Header: React.FC<{
     () => window.matchMedia("(max-width: 1023px)").matches,
   );
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
-  const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(
-    SESSION_DURATION_SECONDS,
+    DEVICE_SESSION_DURATION_MS / 1000,
   );
   const [studentEmojiPolicy, setStudentEmojiPolicy] =
     useState<PointRankPolicy | null>(null);
@@ -175,9 +172,10 @@ const Header: React.FC<{
     getDefaultProfileEmojiValue(),
   );
   const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
-  const timeoutHandledRef = useRef(false);
-  const sessionExpiryRef = useRef<number | null>(null);
-  const lastSessionExtendAtRef = useRef(0);
+  const extendSessionRef = useRef<() => void>(() => {});
+  const logoutRef = useRef<(isTimeout: boolean) => Promise<void>>(
+    async () => {},
+  );
 
   const isReady = !!currentUser;
   const isTeacherUser = canAccessTeacherPortal(
@@ -540,7 +538,7 @@ const Header: React.FC<{
       return;
     }
     try {
-      removeStorage(SESSION_EXPIRY_KEY);
+      if (currentUser) clearDeviceSession(currentUser.uid);
       removeStorage(ROLE_SESSION_KEY);
       if (isTimeout) {
         showToast({
@@ -560,28 +558,8 @@ const Header: React.FC<{
     await performLogout(false);
   };
 
-  const extendSession = (options?: { force?: boolean }) => {
-    const now = Date.now();
-    const currentExpiry = sessionExpiryRef.current;
-    const alreadyFresh =
-      currentExpiry !== null &&
-      currentExpiry - now > SESSION_DURATION_MS - SESSION_ACTIVITY_THROTTLE_MS;
-    if (
-      !options?.force &&
-      alreadyFresh &&
-      now - lastSessionExtendAtRef.current < SESSION_ACTIVITY_THROTTLE_MS
-    ) {
-      return;
-    }
-
-    const expiry = now + SESSION_DURATION_MS;
-    sessionExpiryRef.current = expiry;
-    lastSessionExtendAtRef.current = now;
-    writeLocalOnly(SESSION_EXPIRY_KEY, String(expiry));
-    setSessionExpiry(expiry);
-    setRemainingSeconds(SESSION_DURATION_SECONDS);
-    timeoutHandledRef.current = false;
-  };
+  logoutRef.current = performLogout;
+  const extendSession = () => extendSessionRef.current();
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -605,74 +583,146 @@ const Header: React.FC<{
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!currentUser) return;
-    timeoutHandledRef.current = false;
-    const now = Date.now();
-    const saved = Number(readLocalOnly(SESSION_EXPIRY_KEY));
-    const nextExpiry =
-      Number.isFinite(saved) && saved > now ? saved : now + SESSION_DURATION_MS;
-    sessionExpiryRef.current = nextExpiry;
-    lastSessionExtendAtRef.current = now;
-    writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
-    setSessionExpiry(nextExpiry);
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (!sessionExpiry || !currentUser) return;
-
-    const tick = () => {
-      const diffMs = sessionExpiry - Date.now();
-      if (diffMs <= 0) {
-        setRemainingSeconds(0);
-        if (!timeoutHandledRef.current) {
-          timeoutHandledRef.current = true;
-          void performLogout(true);
-        }
+    if (!currentUser || isSemesterArchive) return;
+    const owner = currentUser;
+    let disposed = false;
+    let authTime: number | null = null;
+    let initializing = false;
+    let checkingExpiry = false;
+    let timeoutHandled = false;
+    let nextActivityAt = 0;
+    const isCurrent = () => !disposed && auth.currentUser === owner;
+    const updateRemaining = (expiresAt: number) => {
+      // The label uses days/hours/minutes; no whole-header render every second.
+      setRemainingSeconds(
+        Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000) * 60),
+      );
+    };
+    const checkSession = () => {
+      if (!isCurrent() || document.hidden) return;
+      if (authTime === null) {
+        initializeSession();
         return;
       }
-      setRemainingSeconds(Math.ceil(diffMs / 1000));
+      // Always read the shared expiry. A sleeping tab may have missed another
+      // tab's activity and must not log every tab out with an old deadline.
+      const saved = readDeviceSession(owner.uid, authTime);
+      if (!saved) return;
+      updateRemaining(saved.expiresAt);
+      if (saved.expiresAt > Date.now() || checkingExpiry || timeoutHandled)
+        return;
+      checkingExpiry = true;
+      void owner
+        .getIdTokenResult()
+        .then((token) => {
+          if (
+            !isCurrent() ||
+            Number(token.claims.auth_time) !== authTime ||
+            document.hidden
+          )
+            return;
+          const latest = readDeviceSession(owner.uid, authTime!);
+          if (!latest || latest.expiresAt > Date.now()) return;
+          timeoutHandled = true;
+          void logoutRef.current(true);
+        })
+        .catch(() => {
+          // A transient token/network error is not evidence of idle expiry.
+          // The next foreground check retries; server authorization still runs.
+        })
+        .finally(() => {
+          checkingExpiry = false;
+        });
     };
-
-    tick();
-    const timerId = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timerId);
-  }, [currentUser, sessionExpiry]);
-
-  useEffect(() => {
-    if (!currentUser) return;
+    const initializeSession = () => {
+      if (!isCurrent() || initializing) return;
+      initializing = true;
+      // Firebase returns its cached token here; do not force a refresh or block
+      // auth startup with another network call just to initialize a local timer.
+      void owner
+        .getIdTokenResult()
+        .then((token) => {
+          if (!isCurrent()) return;
+          const epoch = Number(token.claims.auth_time);
+          if (!Number.isFinite(epoch) || epoch <= 0) return;
+          authTime = epoch;
+          initializeDeviceSession(owner.uid, epoch);
+          checkSession();
+        })
+        .catch(() => {})
+        .finally(() => {
+          initializing = false;
+        });
+    };
+    const recordActivity = () => {
+      if (!isCurrent() || authTime === null || document.hidden) return;
+      const now = Date.now();
+      if (now < nextActivityAt) return;
+      nextActivityAt = now + DEVICE_SESSION_ACTIVITY_THROTTLE_MS;
+      const saved = extendDeviceSession(owner.uid, authTime);
+      if (saved) updateRemaining(saved.expiresAt);
+      if (saved && saved.expiresAt <= Date.now()) checkSession();
+    };
+    extendSessionRef.current = recordActivity;
+    initializeSession();
 
     const handleMeaningfulClick = (event: MouseEvent) => {
-      if (getSessionActivityTarget(event.target)) {
-        extendSession();
+      if (event.isTrusted && getSessionActivityTarget(event.target)) {
+        recordActivity();
       }
     };
 
     const handleMeaningfulChange = (event: Event) => {
-      if (getSessionChangeActivityTarget(event.target)) {
-        extendSession();
+      if (event.isTrusted && getSessionChangeActivityTarget(event.target)) {
+        recordActivity();
       }
     };
 
     const handleSubmit = (event: Event) => {
       if (isSessionActivityIgnored(event.target)) return;
-      extendSession();
+      recordActivity();
     };
-
-    const handleSessionActivity = () => {
-      extendSession({ force: true });
+    const handlePointerActivity = (event: PointerEvent) => {
+      if (
+        event.isTrusted &&
+        event.buttons !== 0 &&
+        !isSessionActivityIgnored(event.target)
+      )
+        recordActivity();
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== getDeviceSessionKey(owner.uid) && event.key !== null)
+        return;
+      checkSession();
     };
 
     document.addEventListener("click", handleMeaningfulClick, true);
+    document.addEventListener("input", handleMeaningfulChange, true);
     document.addEventListener("change", handleMeaningfulChange, true);
     document.addEventListener("submit", handleSubmit, true);
-    window.addEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
+    document.addEventListener("pointerdown", handlePointerActivity, true);
+    document.addEventListener("pointermove", handlePointerActivity, true);
+    document.addEventListener("visibilitychange", checkSession);
+    window.addEventListener("pageshow", checkSession);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(SESSION_ACTIVITY_EVENT, recordActivity);
+    const timerId = window.setInterval(checkSession, DEVICE_SESSION_CHECK_MS);
     return () => {
+      disposed = true;
+      extendSessionRef.current = () => {};
+      window.clearInterval(timerId);
       document.removeEventListener("click", handleMeaningfulClick, true);
+      document.removeEventListener("input", handleMeaningfulChange, true);
       document.removeEventListener("change", handleMeaningfulChange, true);
       document.removeEventListener("submit", handleSubmit, true);
-      window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
+      document.removeEventListener("pointerdown", handlePointerActivity, true);
+      document.removeEventListener("pointermove", handlePointerActivity, true);
+      document.removeEventListener("visibilitychange", checkSession);
+      window.removeEventListener("pageshow", checkSession);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(SESSION_ACTIVITY_EVENT, recordActivity);
     };
-  }, [currentUser]);
+  }, [currentUser, authGeneration]);
 
   useEffect(() => {
     let cancelled = false;
@@ -823,14 +873,14 @@ const Header: React.FC<{
         {mobile ? (
           <button
             type="button"
-            onClick={() => extendSession({ force: true })}
+            onClick={extendSession}
             data-session-ignore="true"
             className={`mobile-account-session ${remainingSeconds < 300 ? "is-warning" : ""}`}
-            title="시간 연장"
-            aria-label={`남은 시간 ${formatCountdown(remainingSeconds)}, 시간 연장`}
+            title="로그인 유지 기간 연장"
+            aria-label={`로그인 유지 ${formatDeviceSessionRemaining(remainingSeconds)} 남음, 기간 연장`}
           >
             <i className="fas fa-stopwatch" aria-hidden="true" />
-            <span>{formatCountdown(remainingSeconds)}</span>
+            <span>{formatDeviceSessionRemaining(remainingSeconds)}</span>
             <i className="fas fa-redo-alt" aria-hidden="true" />
           </button>
         ) : (
@@ -839,16 +889,17 @@ const Header: React.FC<{
           >
             <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
             <span
-              className={`${usePortalSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+              className={`${usePortalSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm min-w-[42px] whitespace-nowrap text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+              aria-label={`로그인 유지 ${formatDeviceSessionRemaining(remainingSeconds)} 남음`}
             >
-              {formatCountdown(remainingSeconds)}
+              {formatDeviceSessionRemaining(remainingSeconds)}
             </span>
             <button
-              onClick={() => extendSession({ force: true })}
+              onClick={extendSession}
               data-session-ignore="true"
               className="text-stone-400 hover:text-blue-600 transition p-1"
-              title="시간 연장"
-              aria-label="시간 연장"
+              title="로그인 유지 기간 연장"
+              aria-label="로그인 유지 기간 연장"
             >
               <i className="fas fa-redo-alt text-xs"></i>
             </button>

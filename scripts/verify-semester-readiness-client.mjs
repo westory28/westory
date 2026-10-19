@@ -11,7 +11,7 @@ const {
   createCommandGatewayCore,
 } = require("./productionGateway/commandGateway.js");
 let epoch = 1800000000;
-const owner = { uid: "admin", email: "westoria28@gmail.com" };
+const owner = { uid: "admin", email: "westoria28@gmail.com", getIdTokenResult: async () => ({ claims: { auth_time: epoch } }) };
 const auth = { currentUser: owner };
 const proof = {
   authorityGeneration: "w1r2-2026-08-09",
@@ -61,7 +61,8 @@ const compile = (file, imports) => {
   });
   return exports;
 };
-const session = compile("src/lib/historyDictionarySession.ts", {
+const applicationSession = compile("src/lib/applicationSession.ts", {
+  "./semesterArchive": { isSemesterArchive: false },
   "firebase/auth": {
     getIdTokenResult: async () => ({
       authTime: new Date(epoch * 1000).toISOString(),
@@ -86,6 +87,9 @@ const session = compile("src/lib/historyDictionarySession.ts", {
       };
     },
   },
+});
+const session = compile("src/lib/historyDictionarySession.ts", {
+  "./applicationSession": applicationSession,
 });
 const client = compile("src/lib/semesterReadiness.ts", {
   "./firebase": { auth },
@@ -198,7 +202,7 @@ epoch++;
 release();
 await assert.rejects(flight, /로그인/);
 pending = null;
-auth.currentUser = { uid: "student", email: "student@yongshin-ms.ms.kr" };
+auth.currentUser = { ...owner, uid: "student", email: "student@yongshin-ms.ms.kr" };
 await assert.rejects(read(), (error) => error.code === "permission-denied");
 console.log(
   "PASS stale owner/auth epoch discard and actual gateway administrator-only authorization",

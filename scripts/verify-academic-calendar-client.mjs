@@ -166,6 +166,7 @@ function harness(options = {}) {
     }
   }
   const context = vm.createContext({
+    URLSearchParams,
     module: { exports: {} },
     crypto: { randomUUID },
     Date: Clock,
@@ -253,8 +254,8 @@ test("a user retry after two uncertain failures keeps the request ID", async () 
   await client.mutateAcademicCalendar(operation());
   assert.equal(
     client.calls.open.length,
-    2,
-    "User retry must validate the session again",
+    1,
+    "Explicit retry reuses proof; the command still validates the live session",
   );
   assert.deepEqual(
     client.calls.manage.map((call) => call.requestId),
@@ -365,8 +366,8 @@ test("15-, 30- and 50-minute-old authentication permits repeated ordinary mutati
     assert.equal(client.calls.manage.length, 9);
     assert.equal(
       client.calls.open.length,
-      9,
-      "Every mutation must validate its session",
+      1,
+      "Repeated edits reuse proof; every server mutation validates the session",
     );
     assert.equal(client.calls.sensitive.length, 0);
     assert.equal(client.calls.reauth.length, 0);

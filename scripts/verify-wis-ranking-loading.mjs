@@ -29,11 +29,13 @@ const sdk = { auth, getHttpsCallable: async name => async data => {
   if (name === 'openApplicationSession') return { data: { status: 'active', authTime: epoch, authorityGeneration: 'w1r2-2026-08-09', protocolVersion: 2, revision: 'a'.repeat(64) } };
   return { data: { semesterId: data.semesterId, ok: true } };
 } };
+const applicationSession = load(await compile('src/lib/applicationSession.ts'), { './firebase': sdk, './semesterArchive': { isSemesterArchive: false } });
 const session = load(await compile('src/lib/historyDictionarySession.ts'), {
+  './applicationSession': applicationSession,
   './firebase': sdk, 'firebase/auth': { getIdTokenResult: async () => ({ authTime: new Date(epoch * 1000).toISOString() }) },
 });
 const client = load(await compile('src/lib/wisEconomyClient.ts'), {
-  './firebase': sdk, './historyDictionarySession': session,
+  './firebase': sdk, './historyDictionarySession': session, './semesterArchive': { isSemesterArchive: false },
   'firebase/firestore': { Timestamp: class {} },
   './semesterScope': { getYearSemester: value => value },
   './sensitiveOperation': { ensureSensitiveOperation: async () => {} },
@@ -46,21 +48,21 @@ assert.equal(opens(), 1, 'Sequential ranking reads reuse an established session 
 assert(calls.filter(call => call.name === 'getWisEconomyState').every(call => call.data._session.revision === 'a'.repeat(64)), 'Every read still sends the server proof');
 await client.callWisService('executeCommand', { commandId: 'one' });
 await client.callWisService('executeCommand', { commandId: 'two' });
-assert.equal(opens(), 3, 'Each mutation opens/validates its session rather than reusing a read proof');
+assert.equal(opens(), 1, 'Mutations reuse proof and retain server session validation');
 await client.callWisService('getCommandStatus', { commandId: 'one' });
-assert.equal(opens(), 4, 'Receipt lookup is outside the read-proof allowlist');
+assert.equal(opens(), 1, 'Receipt lookup shares the same verified proof');
 auth.currentUser = { ...user };
 await client.queryWisState({ year: '2026', semester: '2' }, 'teacher', 'hall-of-fame');
-assert.equal(opens(), 5, 'Same UID with a new login object obtains a new session proof');
+assert.equal(opens(), 2, 'Same UID with a new login object obtains a new session proof');
 epoch++;
 await client.queryWisState({ year: '2026', semester: '2' }, 'teacher', 'hall-of-fame');
-assert.equal(opens(), 6, 'A changed auth epoch obtains a new session proof');
+assert.equal(opens(), 3, 'A changed auth epoch obtains a new session proof');
 auth.currentUser = null;
 await assert.rejects(client.queryWisState({ year: '2026', semester: '2' }, 'student', 'hall-of-fame'));
 const regressions = ['verify-history-dictionary-session.mjs', 'verify-application-session-startup.mjs'].map(file => ({
   file, output: execFileSync(process.execPath, [path.join(root, 'scripts', file)], { cwd: root, encoding: 'utf8' }).trim(),
 }));
-const result = { status: 'PASS', checks: ['ranking reads reuse proof', 'every read sends proof', 'mutations never reuse proof', 'receipt lookup never reuses proof', 'login identity isolation', 'auth epoch isolation', 'logout rejects reads'], regressions };
+const result = { status: 'PASS', checks: ['ranking reads reuse proof', 'every read sends proof', 'mutations reuse verified proof', 'receipt lookup reuses verified proof', 'login identity isolation', 'auth epoch isolation', 'logout rejects reads'], regressions };
 await fs.writeFile(path.join(evidence, 'node-result.json'), JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));
 if (!process.argv.includes('--serve')) process.exit(0);

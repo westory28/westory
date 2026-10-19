@@ -242,6 +242,7 @@ function harness(options = {}) {
     }
   }
   const context = vm.createContext({
+    URLSearchParams,
     module: { exports: {} },
     crypto: { randomUUID, subtle: webcrypto.subtle },
     Date: Clock,

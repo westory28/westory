@@ -65,14 +65,29 @@ interface Attempt {
   promise: Promise<LoginBootstrap>;
   resolve: (result: LoginBootstrap) => void;
   reject: (error: Error) => void;
+  retainedState: AuthStartupState | null;
 }
 
 export const authStartupFailure = (error: unknown): AuthStartupError => {
   const failure = error as { code?: string; details?: { reason?: string } };
   const code = String(failure?.code || "auth/startup-failed");
   const reason = String(failure?.details?.reason || "");
+  if (reason === "APP_CHECK_REQUIRED") {
+    return {
+      code,
+      message:
+        "접속 환경을 확인하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+      retryable: true,
+    };
+  }
   if (
     code.includes("unauthenticated") ||
+    [
+      "auth/user-disabled",
+      "auth/user-token-expired",
+      "auth/invalid-user-token",
+      "auth/user-not-found",
+    ].includes(code) ||
     reason.startsWith("SESSION_") ||
     reason === "RECENT_AUTH_REQUIRED"
   ) {
@@ -214,7 +229,7 @@ export class AuthStartupController {
     if (Number(token.claims.auth_time) !== this.attempt?.authTime) {
       this.flow += 1;
       this.enrolledFlow = null;
-      this.start(user, true);
+      this.start(user, true, true);
       throw staleError();
     }
   };
@@ -258,7 +273,7 @@ export class AuthStartupController {
       if (authTime !== attempt.authTime) {
         this.flow += 1;
         this.enrolledFlow = null;
-        this.start(user, true);
+        this.start(user, true, true);
       }
     } catch (error) {
       if (observation === this.observation) this.fail(this.generation, error);
@@ -406,7 +421,16 @@ export class AuthStartupController {
     this.active = false;
   };
 
-  private start(user: User, fresh: boolean): Attempt {
+  private start(user: User, fresh: boolean, retainReady = false): Attempt {
+    // A same-account reauthentication changes auth_time, not the mounted work.
+    // Keep only an already server-verified view while opening the new epoch.
+    // The deadline, profile listener and every server command still fail closed.
+    const retainedState =
+      retainReady &&
+      this.state.phase === "ready" &&
+      this.state.currentUser === user
+        ? this.state
+        : null;
     this.supersede();
     this.locked = false;
     let resolve!: Attempt["resolve"];
@@ -429,9 +453,14 @@ export class AuthStartupController {
       promise,
       resolve,
       reject,
+      retainedState,
     };
     this.attempt = attempt;
-    this.publish(this.empty("resolving"));
+    this.publish(
+      retainedState
+        ? { ...retainedState, generation: this.generation }
+        : this.empty("resolving"),
+    );
     this.armDeadline(attempt.generation);
     void this.run(attempt, fresh);
     return attempt;
@@ -446,7 +475,7 @@ export class AuthStartupController {
       const authTime = Number(token.claims.auth_time);
       if (!Number.isFinite(authTime)) throw staleError();
       attempt.authTime = authTime;
-      this.publish(this.empty("opening-session"));
+      if (!attempt.retainedState) this.publish(this.empty("opening-session"));
       let sessionReady = false;
       let settingsStarted = false;
       let verifiedSnapshot: ProfileSnapshot | null = null;
@@ -472,6 +501,7 @@ export class AuthStartupController {
                 } as UserData)
               : null;
           const registrationPending = isStudentRegistrationPending(profile);
+          attempt.retainedState = null;
           this.clearDeadline();
           this.publish({
             phase: registrationPending
@@ -511,6 +541,25 @@ export class AuthStartupController {
             return;
           }
           verifiedSnapshot = snapshot;
+          // A changed access profile must not wait for a slow session RPC to
+          // remove an old portal. Cached or pending writes never grant access.
+          const retained = attempt.retainedState?.userData;
+          const next = snapshot.data;
+          if (
+            retained &&
+            (!snapshot.exists ||
+              !next ||
+              next.role !== retained.role ||
+              (next.teacherPortalEnabled === true) !==
+                retained.teacherPortalEnabled ||
+              JSON.stringify(
+                normalizeStaffPermissions(next.staffPermissions),
+              ) !== JSON.stringify(retained.staffPermissions) ||
+              isStudentRegistrationPending(next as UserData))
+          ) {
+            attempt.retainedState = null;
+            this.publish(this.empty("loading-profile"));
+          }
           publishProfile();
         },
         (error) => this.fail(generation, error),
@@ -523,7 +572,7 @@ export class AuthStartupController {
       await this.deps.prepareSession(user, { fresh, isCurrent: current });
       await this.assertCurrent(generation, user);
       if (!current()) return;
-      this.publish(this.empty("loading-profile"));
+      if (!attempt.retainedState) this.publish(this.empty("loading-profile"));
       sessionReady = true;
       publishProfile();
     } catch (error) {
