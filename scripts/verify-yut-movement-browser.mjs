@@ -1369,6 +1369,71 @@ async function verifyEntryArtwork() {
 }
 async function verifyEntryStickFlight(scene, label, reduced) {
   const page = scene.page();
+  const sourceBounds = await scene
+    .locator(".yut-entry-stick > svg")
+    .evaluateAll(async (nodes) => {
+      const image = new Image();
+      image.src = nodes[0].querySelector("image").href.baseVal;
+      await image.decode();
+      const canvas = document.createElement("canvas"),
+        context = canvas.getContext("2d", { willReadFrequently: true });
+      return nodes.map((node, index) => {
+        const view = node.viewBox.baseVal,
+          [x, y, width, height] = [view.x, view.y, view.width, view.height],
+          rendered = node.querySelector("image"),
+          clip = node.querySelector("clipPath rect");
+        canvas.width = width;
+        canvas.height = height;
+        context.clearRect(0, 0, width, height);
+        context.drawImage(image, x, y, width, height, 0, 0, width, height);
+        const pixels = context.getImageData(0, 0, width, height).data;
+        let minX = width,
+          minY = height,
+          maxX = -1,
+          maxY = -1,
+          boundaryPixels = 0;
+        for (let py = 0; py < height; py++)
+          for (let px = 0; px < width; px++) {
+            if (pixels[(py * width + px) * 4 + 3] <= 32) continue;
+            minX = Math.min(minX, px);
+            minY = Math.min(minY, py);
+            maxX = Math.max(maxX, px);
+            maxY = Math.max(maxY, py);
+            if (px === 0 || py === 0 || px === width - 1 || py === height - 1)
+              boundaryPixels++;
+          }
+        return {
+          index,
+          source: [x, y, width, height],
+          minX,
+          minY,
+          maxX,
+          maxY,
+          boundaryPixels,
+          clipMatches:
+            !!clip &&
+            rendered.getAttribute("clip-path") ===
+              `url(#${clip.parentElement.id})` &&
+            ["x", "y", "width", "height"].every(
+              (key) => Number(clip.getAttribute(key)) === view[key],
+            ),
+        };
+      });
+    });
+  for (const source of sourceBounds) {
+    assert.ok(
+      source.minX >= 12 &&
+        source.minY >= 12 &&
+        source.maxX < source.source[2] - 12 &&
+        source.maxY < source.source[3] - 12,
+      `${label}: each full wooden stick has at least twelve source pixels of transparent padding ${JSON.stringify(source)}`,
+    );
+    assert.equal(source.boundaryPixels, 0);
+    assert.ok(
+      source.clipMatches,
+      `${label}: stick ${source.index + 1} is clipped to its complete source rectangle`,
+    );
+  }
   const live = await scene.locator(".yut-entry-stick").evaluateAll((nodes) =>
     nodes.map((node) => {
       const animation = node.getAnimations()[0],
@@ -1531,7 +1596,7 @@ async function verifyEntryStickFlight(scene, label, reduced) {
     });
     delete node.qaAnimationRestore;
   });
-  return { live, samples, measured: flight };
+  return { sourceBounds, live, samples, measured: flight };
 }
 async function assertEntryAnimationState(scene, state) {
   await scene.page().waitForFunction((state) => {

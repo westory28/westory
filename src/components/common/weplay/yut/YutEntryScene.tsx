@@ -226,37 +226,58 @@ export function YutEntryScene() {
               height="1086"
               clipPath={`url(#${sceneId}-foreground)`}
             />
-            {STICKS.map((stick, index) => (
-              <g
-                key={index}
-                className="yut-entry-stick"
-                style={
-                  {
-                    "--stick-delay": `${stick.delay}ms`,
-                    "--stick-duration": `${stick.period}ms`,
-                    "--stick-flight-x": `${stick.flightX}px`,
-                    "--stick-flight-y": `${stick.flightY}px`,
-                    "--stick-tilt": `${stick.tilt}deg`,
-                    "--stick-origin-x": `${stick.x + stick.size / 2}px`,
-                    "--stick-origin-y": `${stick.y + stick.size / 2}px`,
-                  } as React.CSSProperties
-                }
-              >
-                <svg
-                  x={stick.x}
-                  y={stick.y}
-                  width={stick.size}
-                  height={stick.size}
-                  viewBox={`${stick.col * 627} ${stick.row * 627} 627 627`}
+            {STICKS.map((stick, index) => {
+              // The upper sticks extend past the nominal square cell boundary.
+              // Keep their source scale/placement while revealing the whole end.
+              const sourceY = stick.row === 0 ? 0 : 720;
+              const sourceHeight = stick.row === 0 ? 720 : 534;
+              const scale = stick.size / 627;
+              const y = stick.y + (sourceY - stick.row * 627) * scale;
+              const height = sourceHeight * scale;
+              const clipId = `${sceneId}-stick-${index}`;
+              return (
+                <g
+                  key={index}
+                  className="yut-entry-stick"
+                  style={
+                    {
+                      "--stick-delay": `${stick.delay}ms`,
+                      "--stick-duration": `${stick.period}ms`,
+                      "--stick-flight-x": `${stick.flightX}px`,
+                      "--stick-flight-y": `${stick.flightY}px`,
+                      "--stick-tilt": `${stick.tilt}deg`,
+                      "--stick-origin-x": `${stick.x + stick.size / 2}px`,
+                      "--stick-origin-y": `${y + height / 2}px`,
+                    } as React.CSSProperties
+                  }
                 >
-                  <image
-                    href={asset("entry-sticks.webp")}
-                    width="1254"
-                    height="1254"
-                  />
-                </svg>
-              </g>
-            ))}
+                  <svg
+                    x={stick.x}
+                    y={y}
+                    width={stick.size}
+                    height={height}
+                    viewBox={`${stick.col * 627} ${sourceY} 627 ${sourceHeight}`}
+                  >
+                    <defs>
+                      <clipPath id={clipId}>
+                        <rect
+                          x={stick.col * 627}
+                          y={sourceY}
+                          width="627"
+                          height={sourceHeight}
+                        />
+                      </clipPath>
+                    </defs>
+                    <image
+                      href={asset("entry-sticks.webp")}
+                      width="1254"
+                      height="1254"
+                      clipPath={`url(#${clipId})`}
+                    />
+                  </svg>
+                </g>
+              );
+            })}
           </svg>
         )}
       </div>
