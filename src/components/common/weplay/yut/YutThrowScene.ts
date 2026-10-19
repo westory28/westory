@@ -661,7 +661,8 @@ export class YutThrowScene {
 
   private resize = () => {
     if (this.disposed) return;
-    const { width, height } = this.host.getBoundingClientRect();
+    const width = this.host.clientWidth,
+      height = this.host.clientHeight;
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;

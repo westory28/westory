@@ -392,8 +392,7 @@
   max-width: none;
   height: var(--yut-fullscreen-height);
   margin: 0;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: 0;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -404,10 +403,10 @@
   .yut-floating-fullscreen {
   position: absolute;
   z-index: 201;
-  top: max(12px, env(safe-area-inset-top));
+  top: max(12px, var(--yut-safe-top, env(safe-area-inset-top)));
   right: auto;
   bottom: auto;
-  left: max(12px, env(safe-area-inset-left));
+  left: max(12px, var(--yut-safe-left, env(safe-area-inset-left)));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -422,75 +421,421 @@
 .yut-game--fullscreen .yut-floating-fullscreen span {
   display: none;
 }
-.yut-game--portrait-fullscreen .yut-entry {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(120px, 1fr) auto;
-  gap: 16px;
-  padding: 76px 16px 64px;
+.yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
+  top: auto;
+  left: calc(
+    max(16px, var(--yut-safe-left, env(safe-area-inset-left))) +
+      var(--yut-toolbar-width, 200px) + 8px
+  );
+  right: auto;
+  bottom: max(12px, var(--yut-safe-bottom, env(safe-area-inset-bottom)));
 }
-.yut-game--portrait-fullscreen .yut-entry-title {
-  padding: 0;
+@media (orientation: landscape) and (max-width: 820px) {
+  .yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
+    top: max(4px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    bottom: auto;
+  }
 }
-.yut-game--portrait-fullscreen .yut-entry-title h1,
-.yut-game--portrait-fullscreen .yut-entry-title h1 span {
-  font-size: clamp(48px, 10vw, 84px);
+@media (orientation: portrait) and (min-width: 1024px) {
+  .yut-game:not(.yut-game--fullscreen) .yut-floating-fullscreen {
+    position: absolute;
+    top: 12px;
+    right: 68px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #d3b477;
+    border-radius: 6px;
+    background: #251c14ed;
+    color: #fff1d2;
+    font-size: 12px;
+  }
 }
-.yut-game--portrait-fullscreen .yut-entry-menu {
-  max-height: none;
-  overflow: visible;
+
+.yut-game--fullscreen .yut-game-content {
+  container: yut-canvas / size;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--yut-canvas-width);
+  height: var(--yut-canvas-height);
+  flex: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
 }
-.yut-game--portrait-fullscreen .yut-waiting {
-  padding: 76px 16px 64px;
+.yut-game--rotated-fullscreen {
+  --yut-safe-top: env(safe-area-inset-right);
+  --yut-safe-right: env(safe-area-inset-bottom);
+  --yut-safe-bottom: env(safe-area-inset-left);
+  --yut-safe-left: env(safe-area-inset-top);
 }
-.yut-game--portrait-fullscreen .yut-waiting-heading,
-.yut-game--portrait-fullscreen .yut-waiting-footer {
-  flex-wrap: wrap;
-}
-.yut-game--portrait-fullscreen .yut-waiting-seats {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.yut-game--portrait-fullscreen .yut-seat {
-  min-height: 0;
-  padding: 12px;
-}
-.yut-game--portrait-fullscreen .yut-match {
-  padding: 76px 12px 64px;
-  overflow: auto;
-}
-.yut-game--portrait-fullscreen .yut-match .yut-players {
-  position: relative;
+.yut-game--rotated-fullscreen .yut-game-content,
+.yut-game--rotated-fullscreen > .weplay-game-loading {
   inset: auto;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0 0 16px;
+  top: 0;
+  left: 100%;
+  width: var(--yut-canvas-width);
+  height: var(--yut-canvas-height);
+  transform: rotate(90deg);
+  transform-origin: top left;
+  padding: var(--yut-safe-top) var(--yut-safe-right) var(--yut-safe-bottom)
+    var(--yut-safe-left);
 }
-.yut-game--portrait-fullscreen .yut-match .yut-player {
-  position: relative;
-  inset: auto;
-  width: auto;
-  min-height: 68px;
+.yut-game--rotated-fullscreen .yut-floating-controls {
+  top: max(12px, var(--yut-safe-top));
+  right: max(16px, var(--yut-safe-right));
+}
+.yut-game--rotated-fullscreen .yut-isometric-board .yut-isometric-piece {
+  width: clamp(44px, 8.2%, 66px);
   height: auto;
 }
-.yut-game--portrait-fullscreen .yut-board-area {
-  --yut-board-ratio: 9 / 7;
-  width: min(100%, var(--yut-board-max-width));
-  max-width: 100%;
+.yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
+  top: auto;
+  right: auto;
+  bottom: max(12px, var(--yut-safe-bottom));
+  left: max(16px, var(--yut-safe-left));
 }
-.yut-game--portrait-fullscreen .yut-match .yut-action-dock {
-  height: auto;
-  min-height: 128px;
-  margin-top: 16px;
-  gap: 8px;
+/* Native dialogs leave the rotated canvas for the browser's top layer. */
+.yut-game--rotated-fullscreen .yut-dialog[open] {
+  position: fixed;
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: min(560px, calc(var(--yut-canvas-width) - 32px));
+  max-width: none;
+  max-height: calc(var(--yut-canvas-height) - 32px);
+  margin: 0;
+  transform: translate(-50%, -50%) rotate(90deg);
 }
-.yut-game--portrait-fullscreen .yut-move-controls {
-  flex-direction: column;
-  gap: 24px;
+.yut-game--rotated-fullscreen .yut-dialog.yut-stack-choice[open] {
+  width: min(440px, calc(var(--yut-canvas-width) - 32px));
+  padding: 12px 16px;
 }
-.yut-game--portrait-fullscreen .yut-floating-controls {
-  top: max(12px, env(safe-area-inset-top));
-  right: max(16px, env(safe-area-inset-right));
-  bottom: auto;
-  left: auto;
-  transform: none;
+
+/* Physical portrait screens use the same short landscape scene and controls. */
+@container yut-canvas (max-height: 560px) {
+  .yut-game--rotated-fullscreen .yut-entry {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 34%);
+    gap: 16px;
+    padding: 52px 12px 8px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry-title {
+    padding: 0 0 16px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry-title h1,
+  .yut-game--rotated-fullscreen .yut-entry-title h1 span {
+    font-size: clamp(40px, 6cqw, 60px);
+  }
+  .yut-game--rotated-fullscreen .yut-entry-menu {
+    padding: 8px 12px;
+  }
+  .yut-game--rotated-fullscreen
+    .yut-entry-menu
+    > .yut-button:not(.yut-single-start) {
+    width: calc(50% - 3px);
+    padding-inline: 6px;
+    gap: 5px;
+    font-size: 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-create-start {
+    margin-top: 0;
+    margin-left: 6px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry-scene {
+    right: calc(max(280px, 34%) + 20px);
+  }
+  .yut-game--rotated-fullscreen .yut-entry-scene-still {
+    object-fit: cover;
+  }
+  .yut-game--rotated-fullscreen .yut-entry-window {
+    width: calc(max(280px, 34%) + 20px);
+    padding: 8px;
+    gap: 4px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry-motion-toggle {
+    right: calc(max(280px, 34%) + 32px);
+    bottom: 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-single-options {
+    gap: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .yut-game--rotated-fullscreen .yut-single-count {
+    margin-bottom: 6px;
+    gap: 4px;
+  }
+  .yut-game--rotated-fullscreen .yut-single-count legend {
+    font-size: 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry .yut-join {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+    margin: 8px 0 4px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry .yut-join .yut-label {
+    margin: 0;
+    font-size: 11px;
+  }
+  .yut-game--rotated-fullscreen .yut-entry .yut-join input {
+    font-size: 14px;
+    padding-inline: 8px;
+  }
+  .yut-game--rotated-fullscreen .yut-waiting {
+    padding: 64px 20px 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-waiting-heading {
+    padding: 4px 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-waiting-heading h1 {
+    font-size: 20px;
+    margin-top: 0;
+  }
+  .yut-game--rotated-fullscreen .yut-waiting-seats {
+    gap: 12px;
+    margin: 10px 0;
+  }
+  .yut-game--rotated-fullscreen .yut-seat {
+    min-height: 150px;
+    gap: 1px;
+    padding: 6px;
+  }
+  .yut-game--rotated-fullscreen .yut-seat-job {
+    font-size: 16px;
+    gap: 4px;
+  }
+  .yut-game--rotated-fullscreen .yut-seat .yut-sprite {
+    width: 74px;
+    height: 74px;
+  }
+  .yut-game--rotated-fullscreen .yut-seat > strong {
+    font-size: 13px;
+  }
+  .yut-game--rotated-fullscreen .yut-seat-status {
+    font-size: 11px;
+  }
+  .yut-game--rotated-fullscreen .yut-match {
+    display: block;
+    padding: 4px 14px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-match-stage {
+    margin-top: 0;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-players {
+    inset: 6px 0 76px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-player {
+    width: 134px;
+    min-height: 68px;
+    height: 68px;
+    padding-right: 5px;
+    gap: 0;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-player strong {
+    font-size: 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-player .yut-sprite {
+    width: 50px;
+    height: 64px;
+  }
+  .yut-game--rotated-fullscreen .yut-portrait {
+    width: 50px;
+    height: 50px;
+    flex-basis: 50px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-player-details > span,
+  .yut-game--rotated-fullscreen
+    .yut-match
+    .yut-player-details
+    .yut-player-status {
+    font-size: 10px;
+  }
+  .yut-game--rotated-fullscreen .yut-board-area {
+    --yut-board-ratio: 3 / 1;
+    max-width: calc(100% - 32px);
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-action-dock {
+    min-height: 76px;
+    height: 76px;
+    margin-top: -12px;
+    gap: 2px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-throw-result {
+    min-height: 20px;
+    padding: 1px 8px;
+    line-height: 18px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-throw-result:empty {
+    display: none;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-throw-result > span {
+    font-size: 11px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-throw-button {
+    min-height: 44px;
+    padding: 6px 16px;
+    font-size: 18px;
+  }
+  .yut-game--rotated-fullscreen .yut-power-control {
+    width: 230px;
+    gap: 3px;
+  }
+  .yut-game--rotated-fullscreen .yut-power-meter {
+    height: 8px;
+  }
+  .yut-game--rotated-fullscreen .yut-match .yut-event {
+    min-height: 16px;
+    height: 16px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+  .yut-game--rotated-fullscreen .yut-piece-choice {
+    min-width: 124px;
+    min-height: 44px;
+    padding: 4px 8px;
+    font-size: 18px;
+  }
+  .yut-game--rotated-fullscreen .yut-move-controls,
+  .yut-game--rotated-fullscreen .yut-piece-choices {
+    gap: 6px;
+  }
+  .yut-game--rotated-fullscreen
+    .yut-move-controls
+    .yut-move-confirm
+    .yut-button {
+    min-width: 88px;
+    padding-inline: 12px;
+  }
+  .yut-game--rotated-fullscreen .yut-floating-controls {
+    gap: 4px;
+    top: max(8px, var(--yut-safe-top));
+    right: max(12px, var(--yut-safe-right));
+  }
+  .yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
+    bottom: max(8px, var(--yut-safe-bottom));
+    left: max(12px, var(--yut-safe-left));
+  }
+  .yut-game--rotated-fullscreen.yut-game--match .yut-floating-fullscreen {
+    left: calc(
+      max(12px, var(--yut-safe-left)) + var(--yut-toolbar-width, 200px) + 8px
+    );
+    bottom: max(8px, var(--yut-safe-bottom));
+  }
+  .yut-game--rotated-fullscreen .yut-capture-reaction {
+    width: 200px;
+    max-width: 40%;
+  }
+  .yut-game--rotated-fullscreen .yut-capture-burst > strong {
+    font-size: 52px;
+  }
+  .yut-game--rotated-fullscreen .yut-turn-gauge {
+    width: 200px;
+    padding: 5px 10px 8px;
+  }
+  .yut-game--rotated-fullscreen .yut-victory {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: 8px;
+    width: min(440px, 80%);
+    top: 50%;
+    padding: 6px 12px 9px;
+    gap: 1px;
+  }
+  .yut-game--rotated-fullscreen .yut-victory > .yut-victory-cast {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    margin: 0;
+    height: 150px;
+  }
+  .yut-game--rotated-fullscreen .yut-victory-cast-winner .yut-frame-sprite {
+    width: 150px;
+  }
+  .yut-game--rotated-fullscreen .yut-victory-ribbon,
+  .yut-game--rotated-fullscreen .yut-victory h2,
+  .yut-game--rotated-fullscreen .yut-victory-congratulation {
+    grid-column: 2;
+  }
+  .yut-game--rotated-fullscreen .yut-victory h2 {
+    font-size: 22px;
+  }
+  .yut-game--rotated-fullscreen .yut-reward-receipt {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 3px;
+    padding-top: 4px;
+    font-size: 11px;
+  }
+}
+@container yut-canvas (max-width: 820px) and (max-height: 560px) {
+  .yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
+    top: max(4px, var(--yut-safe-top));
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .yut-game--rotated-fullscreen.yut-game--match .yut-match {
+    padding-top: 52px;
+  }
+  .yut-game--rotated-fullscreen.yut-game--match .yut-floating-fullscreen {
+    top: max(4px, var(--yut-safe-top));
+    bottom: auto;
+    left: max(12px, var(--yut-safe-left));
+  }
+  .yut-game--rotated-fullscreen.yut-game--match
+    .yut-floating-controls
+    .yut-emote-menu {
+    top: 48px;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-25%);
+  }
+}
+
+.yut-orientation-animation :is(.yut-orientation-arrow, .yut-orientation-phone) {
+  transform-origin: 36px 36px;
+  transform-box: view-box;
+  animation: yut-orientation-arrow 3200ms ease-in-out infinite;
+}
+.yut-orientation-animation .yut-orientation-phone {
+  animation-name: yut-orientation-phone;
+}
+.yut-game[data-motion-paused="true"]
+  .yut-orientation-animation[data-paused="false"]
+  :is(.yut-orientation-arrow, .yut-orientation-phone) {
+  animation-play-state: running !important;
+}
+.yut-orientation-animation[data-paused="true"]
+  :is(.yut-orientation-arrow, .yut-orientation-phone) {
+  animation-play-state: paused !important;
+}
+@keyframes yut-orientation-arrow {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  28%,
+  82% {
+    transform: rotate(90deg);
+  }
+}
+@keyframes yut-orientation-phone {
+  0%,
+  36%,
+  100% {
+    transform: rotate(0deg);
+  }
+  60%,
+  82% {
+    transform: rotate(90deg);
+  }
 }

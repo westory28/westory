@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import frameAtlases from "./yutCharacterFrames.json";
 import "./yut-character.css";
 
@@ -165,6 +165,48 @@ export function YutPortrait({
     <span className="yut-portrait" aria-hidden="true">
       <YutSprite role={role} pose="idle" />
     </span>
+  );
+}
+
+export function YutOrientationGuide() {
+  const ref = useRef<SVGSVGElement>(null);
+  const [hidden, setHidden] = useState(() => document.hidden);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const visibility = () => setHidden(document.hidden);
+    document.addEventListener("visibilitychange", visibility);
+    const observer = new IntersectionObserver(([entry]) =>
+      setVisible(entry.isIntersecting),
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => {
+      document.removeEventListener("visibilitychange", visibility);
+      observer.disconnect();
+    };
+  }, []);
+  return (
+    <svg
+      ref={ref}
+      className="yut-orientation-animation"
+      data-paused={hidden || !visible}
+      width="72"
+      height="72"
+      viewBox="0 0 72 72"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <g className="yut-orientation-arrow">
+        <path d="M36 6a30 30 0 0 1 30 30m-5-5 5 5 5-5" />
+      </g>
+      <g className="yut-orientation-phone">
+        <rect x="26" y="19" width="20" height="34" rx="3" />
+        <path d="M32 23h8M34 48h4" />
+      </g>
+    </svg>
   );
 }
 

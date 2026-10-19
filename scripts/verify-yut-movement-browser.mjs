@@ -2418,6 +2418,36 @@ async function verifyMotionAudit() {
   );
 }
 async function verifyMobileViewport() {
+  for (const reduced of ["no-preference", "reduce"]) {
+    const page = await open("scenario=entry", reduced, 390, 844);
+    const guide = page.locator(".yut-orientation-animation");
+    await guide.waitFor();
+    await page.waitForFunction(() => document.querySelector('.yut-orientation-animation')?.dataset.paused === 'false');
+    const sample = time => guide.evaluate((node, time) => {
+      const read = selector => {const child = node.querySelector(selector); const animation = child.getAnimations()[0]; animation.currentTime = time; const matrix = new DOMMatrixReadOnly(getComputedStyle(child).transform); return Math.atan2(matrix.b,matrix.a)*180/Math.PI;};
+      return {arrow:read('.yut-orientation-arrow'),phone:read('.yut-orientation-phone')};
+    }, time);
+    const leading = await sample(1000), turned = await sample(2000);
+    assert.ok(Math.abs(leading.arrow-90)<.1 && Math.abs(leading.phone)<.1,`${reduced}: arrow turns before phone`);
+    assert.ok(Math.abs(turned.arrow-90)<.1 && Math.abs(turned.phone-90)<.1,`${reduced}: phone follows clockwise into landscape`);
+    await hidePage(page,true);
+    await page.waitForFunction(() => document.querySelector('.yut-orientation-animation')?.dataset.paused === 'true');
+    assert.ok(await guide.evaluate(node=>node.getAnimations({subtree:true}).every(animation=>animation.playState==='paused')));
+    await hidePage(page,false);
+    await page.locator('.weplay-game-frame').evaluate(node=>node.style.marginTop='2000px');
+    await page.waitForFunction(() => document.querySelector('.yut-orientation-animation')?.dataset.paused === 'true');
+    assert.ok(await guide.evaluate(node=>node.getAnimations({subtree:true}).every(animation=>animation.playState==='paused')));
+    await page.locator('.weplay-game-frame').evaluate(node=>node.style.marginTop='24px');
+    await page.waitForFunction(() => document.querySelector('.yut-orientation-animation')?.dataset.paused === 'false');
+    await guide.evaluate(node=>node.getAnimations({subtree:true}).forEach(animation=>animation.pause()));
+    await sample(1000);
+    await page.screenshot({path:path.join(evidence,`orientation-arrow-leading-${reduced}.png`)});
+    await sample(2000);
+    await page.screenshot({path:path.join(evidence,`orientation-turned-${reduced}.png`)});
+    report.paths[`orientation-${reduced}`]={leading,turned};
+    await page.close();
+    report.checks.push(`${reduced}: clockwise arrow leads phone, both reach 90 degrees, and hidden/offscreen guide pauses`);
+  }
   for (const [width, height] of [
     [320, 568],
     [390, 844],
@@ -2456,7 +2486,9 @@ async function verifyMobileViewport() {
     await page
       .getByRole("button", { name: "전체 화면으로 열기", exact: true })
       .click();
-    await page.locator(".yut-game--portrait-fullscreen .yut-entry").waitFor();
+    await page.locator(".yut-game--rotated-fullscreen .yut-entry").waitFor();
+    const canvas = await page.locator('.yut-game-content').evaluate(node=>({width:node.offsetWidth,height:node.offsetHeight,rotation:new DOMMatrixReadOnly(getComputedStyle(node).transform).b}));
+    assert.deepEqual(canvas,{width:height,height:width,rotation:1},'Portrait fullscreen uses a fixed rotated landscape canvas');
     assert.equal(await page.locator(".yut-orientation-gate").count(), 0);
     assert.equal(
       await page
@@ -2575,13 +2607,22 @@ async function verifyMobileViewport() {
       `${width}: game start stays in frame and scrolling preserves board scale`,
     );
   }
+  const tablet = await open("scenario=entry", "no-preference", 1024, 1366);
+  await tablet.evaluate(()=>{Element.prototype.requestFullscreen=undefined;});
+  await tablet.getByRole('button',{name:'게임 전체 화면',exact:true}).click();
+  await tablet.locator('.yut-game--rotated-fullscreen').waitFor();
+  assert.deepEqual(await tablet.locator('.yut-game-content').evaluate(node=>({width:node.offsetWidth,height:node.offsetHeight})),{width:1366,height:1024},'Wide portrait tablet also gets a landscape canvas');
+  await tablet.getByRole('button',{name:'전체 화면 나가기',exact:true}).click();
+  await tablet.close();
+  report.checks.push('1024×1366 portrait tablet exposes fullscreen and rotates its logical landscape canvas');
   const native = await open("scenario=entry", "no-preference", 390, 844);
   await native
     .getByRole("button", { name: "전체 화면으로 열기", exact: true })
     .click();
   await native
-    .locator(".yut-game:fullscreen.yut-game--portrait-fullscreen")
+    .locator(".yut-game:fullscreen.yut-game--rotated-fullscreen")
     .waitFor();
+  assert.deepEqual(await native.locator('.yut-game-content').evaluate(node=>({width:node.offsetWidth,height:node.offsetHeight,rotation:new DOMMatrixReadOnly(getComputedStyle(node).transform).b})),{width:844,height:390,rotation:1},'Native fullscreen keeps its landscape inner canvas');
   await native
     .getByRole("button", { name: "전체 화면 나가기", exact: true })
     .click();
@@ -2603,7 +2644,7 @@ async function verifyMobileViewport() {
     await page
       .getByRole("button", { name: "전체 화면으로 열기", exact: true })
       .click();
-    await page.locator(".yut-game--portrait-fullscreen .yut-match").waitFor();
+    await page.locator(".yut-game--rotated-fullscreen .yut-match").waitFor();
     assert.equal(await page.locator(".yut-player").count(), 4);
     await page.locator(".yut-piece-choice").first().waitFor();
     await page.screenshot({

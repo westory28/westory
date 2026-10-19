@@ -36,6 +36,7 @@ import {
   YutSprite,
   YutPortrait,
   YutIcon,
+  YutOrientationGuide,
 } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
@@ -594,7 +595,15 @@ export default function YutGame({
     width: window.innerWidth,
     height: window.innerHeight,
   });
-  const [fullscreenHeight, setFullscreenHeight] = useState(window.innerHeight);
+  const [fullscreenSize, setFullscreenSize] = useState(viewport.current);
+  const rotatedFullscreen =
+    fullscreen && fullscreenSize.height > fullscreenSize.width;
+  const canvasWidth = fullscreen
+    ? Math.max(fullscreenSize.width, fullscreenSize.height)
+    : viewport.current.width;
+  const canvasHeight = fullscreen
+    ? Math.min(fullscreenSize.width, fullscreenSize.height)
+    : viewport.current.height;
   const [moving, setMoving] = useState(false);
   const [selectedMove, setSelectedMove] = useState<YutMove | null>(null);
   const [stackChoice, setStackChoice] = useState<{
@@ -817,17 +826,19 @@ export default function YutGame({
 
   useEffect(() => {
     const measure = () => {
-      const compact =
-        viewport.current.width > viewport.current.height &&
-        viewport.current.height <= 560;
-      const portraitFullscreen = fullscreen && portraitDevice;
+      const compact = canvasWidth > canvasHeight && canvasHeight <= 560;
+      shellRef.current?.style.setProperty(
+        "--yut-toolbar-width",
+        `${shellRef.current.querySelector<HTMLElement>(".yut-floating-controls")?.offsetWidth || 200}px`,
+      );
       // The board belongs to its frame. Page scrolling and browser chrome must
       // never change its scale while a player is choosing or moving a piece.
       const available =
-        shellRef.current?.clientHeight || viewport.current.height;
+        shellRef.current?.querySelector<HTMLElement>(".yut-game-content")
+          ?.clientHeight || canvasHeight;
       const height = (selector: string) =>
-        shellRef.current?.querySelector(selector)?.getBoundingClientRect()
-          .height || 0;
+        shellRef.current?.querySelector<HTMLElement>(selector)?.offsetHeight ||
+        0;
       const style = (selector: string) => {
         const node = shellRef.current?.querySelector(selector);
         return node ? getComputedStyle(node) : null;
@@ -835,8 +846,7 @@ export default function YutGame({
       const value = (input?: string) => parseFloat(input || "0") || 0;
       const matchStyle = style(".yut-match"),
         boardStyle = style(".yut-isometric-board-wrap"),
-        dockStyle = style(".yut-action-dock"),
-        playersStyle = style(".yut-players");
+        dockStyle = style(".yut-action-dock");
       const shellStyle = shellRef.current
         ? getComputedStyle(shellRef.current)
         : null;
@@ -849,15 +859,11 @@ export default function YutGame({
         value(dockStyle?.marginTop) +
         value(shellStyle?.borderTopWidth) +
         value(shellStyle?.borderBottomWidth) +
-        (portraitFullscreen
-          ? height(".yut-players") + value(playersStyle?.marginBottom)
-          : 0) +
         8;
       setBoardMaxWidth(
         Math.max(
           compact ? 260 : 320,
-          (available - overhead - 6) *
-            (portraitFullscreen ? 9 / 7 : compact ? 3 : 5 / 2),
+          (available - overhead - 6) * (compact ? 3 : 5 / 2),
         ),
       );
     };
@@ -883,7 +889,7 @@ export default function YutGame({
         height: window.innerHeight,
       };
       setPortraitDevice(portraitViewport());
-      setFullscreenHeight(viewport.current.height);
+      setFullscreenSize(viewport.current);
       measure();
     };
     window.addEventListener("resize", resize);
@@ -892,7 +898,7 @@ export default function YutGame({
       observer.disconnect();
       window.removeEventListener("resize", resize);
     };
-  }, [room?.status, portrait, portraitDevice, fullscreen, fullscreenHeight]);
+  }, [room?.status, portrait, fullscreen, canvasWidth, canvasHeight]);
   useEffect(() => {
     const visibility = () => setHidden(document.hidden);
     const onFullscreen = () => {
@@ -902,7 +908,7 @@ export default function YutGame({
           width: window.innerWidth,
           height: window.innerHeight,
         };
-        setFullscreenHeight(viewport.current.height);
+        setFullscreenSize(viewport.current);
       }
       setFullscreenMode(active ? "native" : null);
     };
@@ -1006,7 +1012,7 @@ export default function YutGame({
   }, [emoteOpen]);
   const requestGameFullscreen = async () => {
     viewport.current = { width: window.innerWidth, height: window.innerHeight };
-    setFullscreenHeight(viewport.current.height);
+    setFullscreenSize(viewport.current);
     try {
       if (shellRef.current?.requestFullscreen) {
         await shellRef.current.requestFullscreen();
@@ -1672,11 +1678,13 @@ export default function YutGame({
   return (
     <section
       ref={shellRef}
-      className={`yut-game ${room ? "yut-game--in-room" : ""} ${room && room.status !== "waiting" && !portrait ? "yut-game--match" : ""} ${fullscreen ? "yut-game--fullscreen" : ""} ${fullscreen && portraitDevice ? "yut-game--portrait-fullscreen" : ""}`}
+      className={`yut-game ${room ? "yut-game--in-room" : ""} ${room && room.status !== "waiting" && !portrait ? "yut-game--match" : ""} ${fullscreen ? "yut-game--fullscreen" : ""} ${rotatedFullscreen ? "yut-game--rotated-fullscreen" : ""}`}
       style={
         {
           "--yut-board-max-width": `${boardMaxWidth}px`,
-          "--yut-fullscreen-height": `${fullscreenHeight}px`,
+          "--yut-fullscreen-height": `${fullscreenSize.height}px`,
+          "--yut-canvas-width": `${canvasWidth}px`,
+          "--yut-canvas-height": `${canvasHeight}px`,
         } as React.CSSProperties
       }
       data-floating-launcher-obstacle={fullscreen || undefined}
@@ -1818,7 +1826,7 @@ export default function YutGame({
         )}
         {portrait ? (
           <div className="yut-orientation-gate" role="status">
-            <YutIcon name="rotate" />
+            <YutOrientationGuide />
             <h1>마우저구 윷놀이</h1>
             <p>가로로 돌리거나 전체 화면으로 시작하세요.</p>
             <button
