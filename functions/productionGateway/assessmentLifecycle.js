@@ -523,12 +523,16 @@ const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) =>
     operator: "==",
     value: semesterId,
   });
-  const activeClasses = classes.filter((document) => document.data?.status === "ACTIVE");
+  const activeClasses = classes.filter((document) =>
+    document.data?.status === "ACTIVE" && document.data?.readOnly !== true);
+  const classNotFound = (classId) => fail("not-found",
+    `현재 학기에서 공개할 수 없는 학급입니다: ${classId}. 학급 목록을 다시 확인해 주세요.`,
+    "ASSESSMENT_CLASS_NOT_FOUND", { semesterId, classId });
   const resolved = requestedIds.map((requestedId) => {
     if (requestedId.startsWith("class_")) {
       const exact = activeClasses.find((document) =>
         String(document.data?.classId || document.path.split("/").at(-1)) === requestedId);
-      if (!exact) fail("not-found", "The active semester class was not found.", "ASSESSMENT_CLASS_NOT_FOUND");
+      if (!exact) classNotFound(requestedId);
       return requestedId;
     }
     const match = requestedId.match(/^(.+?)-(.+)$/);
@@ -537,7 +541,7 @@ const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) =>
     const target = activeClasses.find((document) =>
       String(document.data?.grade || "") === grade
       && String(document.data?.classNumber || "") === classNumber);
-    if (!target) fail("not-found", "The active semester class was not found.", "ASSESSMENT_CLASS_NOT_FOUND");
+    if (!target) classNotFound(requestedId);
     return String(target.data?.classId || target.path.split("/").at(-1));
   });
   return [...new Set(resolved)];
@@ -849,7 +853,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }
       const assignedClassIds = published
         ? await resolveAssignedClassIds(transaction, payload.semesterId, payload.assignedClassIds)
-        : current.assignedClassIds || [];
+        : payload.assignedClassIds.length ? current.assignedClassIds || [] : [];
       const { expectedRevision, expectedSourceHash: _expectedSourceHash, reason, ...definitionPayload } = payload;
       const definition = {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION, policyVersion: ASSESSMENT_POLICY_VERSION,
@@ -1307,6 +1311,10 @@ const normalizeSaveRequest = (data, projectId) => {
 const normalizeQueryRequest = (data) => {
   const payload = { ...(data || {}) };
   delete payload._session;
+  if ("semesterId" in payload) {
+    assertAllowedKeys(payload, ["semesterId"], "getAssessmentState class query payload");
+    return { semesterId: semesterCore.normalizeSemesterId(payload.semesterId) };
+  }
   assertAllowedKeys(payload, ["definitionId", "attemptId"], "getAssessmentState payload");
   if (!payload.definitionId && !payload.attemptId) fail("invalid-argument", "definitionId or attemptId is required.", "ASSESSMENT_QUERY_INVALID");
   return {
@@ -1322,12 +1330,36 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
     const uid = String(identity?.uid || request.auth?.uid || "").trim();
     if (!uid || uid !== String(request.auth?.uid || "").trim()) fail("permission-denied", "Authenticated actor mismatch.", "COMMAND_ACTOR_MISMATCH");
     const profile = await store.get(`users/${uid}`);
-    return { uid, role: String(profile.data?.role || "student"), teacherPortalEnabled: profile.data?.teacherPortalEnabled === true };
+    const role = String(profile.data?.role || "student");
+    const teacherPortalEnabled = profile.data?.teacherPortalEnabled === true;
+    const canReadQuizManagement = ["teacher", "admin"].includes(role)
+      || (teacherPortalEnabled && Array.isArray(profile.data?.staffPermissions) && profile.data.staffPermissions.includes("quiz_read"));
+    return { uid, role, teacherPortalEnabled, canReadQuizManagement };
   };
 
   const getAssessmentState = async (request) => {
     const actor = await actorFor(request);
     const query = normalizeQueryRequest(request.data || {});
+    if (query.semesterId) {
+      if (!actor.canReadQuizManagement) fail("permission-denied", "Assessment management permission is required.", "ASSESSMENT_MANAGE_REQUIRED");
+      return store.runTransaction(async (transaction) => {
+        await assertAssessmentSemesterWritable(transaction, query.semesterId);
+        const documents = await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
+          field: "semesterId", operator: "==", value: query.semesterId,
+        });
+        const classes = documents
+          .filter((document) => document.data?.status === "ACTIVE" && document.data?.readOnly !== true)
+          .map((document) => ({
+            classId: String(document.data?.classId || document.path.split("/").at(-1) || "").trim(),
+            grade: String(document.data?.grade || "").trim(),
+            classNumber: String(document.data?.classNumber || "").trim(),
+          }))
+          .filter((entry) => entry.classId && entry.grade && entry.classNumber)
+          .sort((left, right) => left.grade.localeCompare(right.grade, "ko", { numeric: true })
+            || left.classNumber.localeCompare(right.classNumber, "ko", { numeric: true }) || left.classId.localeCompare(right.classId));
+        return { semesterId: query.semesterId, classes };
+      });
+    }
     return store.runTransaction(async (transaction) => {
       const attemptSnapshot = query.attemptId ? await transaction.get(attemptPath(query.attemptId)) : null;
       if (attemptSnapshot?.exists && attemptSnapshot.data?.studentUid !== actor.uid && !actor.teacherPortalEnabled && actor.role !== "admin") fail("permission-denied", "Assessment attempt is not visible.", "ASSESSMENT_ATTEMPT_FORBIDDEN");

@@ -50,11 +50,18 @@ export const getDoc=async reference=>{
 };
 export const readSiteSettingDoc=async name=>{
   if(name!=='school_config')throw new Error('Unexpected site setting: '+name);
-  return {grades:[{value:'3',label:'3학년'}],classes:[1,2,3,4].map(value=>({value:String(value),label:value+'반'}))};
+  return {grades:[{value:'3',label:'3학년'},{value:'test',label:'테스트'}],classes:[1,2,3,4,5].map(value=>({value:String(value),label:value+'반'}))};
+};
+export const getHistoryDictionaryCallable=async name=>{
+  if(name!=='getAssessmentState')throw new Error('Unexpected callable: '+name);
+  return async({semesterId})=>{
+    qa.reads.push('getAssessmentState:'+semesterId);
+    return {data:{semesterId,classes:[1,2,3,4].map(value=>({classId:'class_'+value,grade:'3',classNumber:String(value)}))}};
+  };
 };
 const forbidden=(...args)=>{qa.forbidden.push(args);throw new Error('Unexpected server operation');};
 export const setDoc=forbidden,updateDoc=forbidden,deleteDoc=forbidden,addDoc=forbidden,runTransaction=forbidden;
-export const getHttpsCallable=forbidden,getHistoryDictionaryCallable=forbidden,ensureSensitiveOperation=forbidden,getIdTokenResult=forbidden;
+export const getHttpsCallable=forbidden,ensureSensitiveOperation=forbidden,getIdTokenResult=forbidden;
 export const getAssessmentSemesterId=scope=>scope.year+'-'+scope.semester;
 export const saveQuizAssessmentSettings=async(scope,nodeId,category,round,title,key,payload,expectedRevision)=>{
   qa.saves.push(structuredClone({scope,nodeId,category,round,title,key,payload,expectedRevision}));
@@ -86,6 +93,8 @@ qa.definitionId=(scope,nodeId,category,round)=>buildAssessmentDefinitionId(scope
 const stored={active:true,questionCount:7,questionOrder:'created',randomOrder:false,timeLimit:1380,allowRetake:true,cooldown:17,hintLimit:5,visibleClassIds:['3-2'],visibilityVersion:2};
 if(params.has('stored'))qa.settings[key]=stored;
 if(params.has('canonical'))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,round)]={status:'PUBLISHED',revision:8,questionCount:7,durationSeconds:1380,maxAttempts:99,cooldownMinutes:17,presentationSettings:stored};
+if(params.has('stale-class'))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,round)].presentationSettings={...stored,visibleClassIds:['3-2','3-5']};
+if(params.has('paused'))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,round)]={status:'PAUSED',revision:8,questionCount:7,durationSeconds:1380,maxAttempts:99,cooldownMinutes:17,presentationSettings:{...stored,active:false}};
 if(params.has('legacy-active'))qa.legacyStatus={[key]:true};
 function Fixture(){
   const [open,setOpen]=useState(true);
@@ -206,10 +215,8 @@ const saveButton = (page) =>
   page.getByRole("button", { name: "설정 저장", exact: true });
 const number = (page, name) =>
   page.getByRole("spinbutton", { name, exact: true });
-const publicRadio = (page) =>
-  page.getByRole("radio", { name: "선택 학급 학생에게 공개", exact: true });
-const privateRadio = (page) =>
-  page.getByRole("radio", { name: "모든 학생에게 비공개", exact: true });
+const selectedClasses = (page) =>
+  page.locator(".quiz-settings-classes input:checked");
 async function ready(page) {
   await page.locator('.quiz-settings-dialog[aria-busy="false"]').waitFor();
   await number(page, "출제 문항 수").waitFor();
@@ -282,7 +289,18 @@ try {
       retake: true,
       cooldown: "5",
     });
-    assert.equal(await privateRadio(page).isChecked(), true);
+    assert.equal(await page.getByRole("radio").count(), 0);
+    assert.equal(await selectedClasses(page).count(), 0);
+    assert.equal(
+      await page
+        .getByRole("checkbox", { name: "3학년 5반 공개 대상", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: /테스트.*펼치기/ }).count(),
+      0,
+    );
     assert.equal(await saveButton(page).isEnabled(), true);
     await page
       .getByRole("checkbox", { name: "힌트 사용", exact: true })
@@ -322,7 +340,6 @@ try {
       retake: true,
       cooldown: "17",
     });
-    assert.equal(await publicRadio(page).isChecked(), true);
     assert.equal(
       await page
         .getByRole("checkbox", { name: "3학년 2반 공개 대상", exact: true })
@@ -349,7 +366,6 @@ try {
     retake: true,
     cooldown: "0",
   });
-  assert.equal(await publicRadio(legacy).isChecked(), true);
   assert.equal(
     await legacy.locator(".quiz-settings-classes input:checked").count(),
     4,
@@ -361,12 +377,6 @@ try {
   );
 
   const publish = await open();
-  await publicRadio(publish).check();
-  assert.match(
-    await publish.locator(".quiz-settings-error").textContent(),
-    /공개할 학급을 한 곳 이상/,
-  );
-  assert.equal(await saveButton(publish).isDisabled(), true);
   for (const classNumber of [1, 2])
     await publish
       .getByRole("checkbox", {
@@ -396,10 +406,16 @@ try {
     window.quizSettingsQa.release();
   });
   await closeAfterSave(publish, "선택한 2개 학급의 학생에게 공개");
+  assert.equal(
+    await publish.evaluate(() => window.quizSettingsQa.saves[0].payload.active),
+    true,
+  );
   await capture(publish, "published-toast-1280");
   await reopen(publish);
-  await publicRadio(publish).and(publish.locator("input:checked")).waitFor();
-  assert.equal(await publicRadio(publish).isChecked(), true);
+  await publish
+    .getByRole("checkbox", { name: "3학년 1반 공개 대상", exact: true })
+    .and(publish.locator("input:checked"))
+    .waitFor();
   assert.equal(
     await publish
       .getByRole("checkbox", { name: "3학년 1반 공개 대상", exact: true })
@@ -408,9 +424,21 @@ try {
   );
   assert.equal(await number(publish, "출제 문항 수").inputValue(), "20");
   assert.equal(await saveButton(publish).isDisabled(), true);
+  await publish.getByRole("button", { name: "선택 해제", exact: true }).click();
+  await saveButton(publish).click();
+  await publish.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.deepEqual(
+    await publish.evaluate(() => ({
+      active: window.quizSettingsQa.saves[1].payload.active,
+      classes: window.quizSettingsQa.saves[1].payload.visibleClassIds,
+    })),
+    { active: false, classes: [] },
+  );
+  await reopen(publish);
+  assert.equal(await selectedClasses(publish).count(), 0);
   await publish.close();
   checks.push(
-    "Zero-class validation, no premature toast, duplicate-save prevention, published class count, automatic close, and persisted reopen.",
+    "Selecting classes publishes automatically; clearing all pauses. No premature toast, duplicate saves, or lost selection on reopen.",
   );
 
   const retry = await open("canonical");
@@ -449,19 +477,60 @@ try {
   await saveButton(authoritative).click();
   await closeAfterSave(authoritative, "모든 학생에게 비공개");
   await reopen(authoritative);
-  await privateRadio(authoritative)
-    .and(authoritative.locator("input:checked"))
+  await authoritative
+    .getByText("저장된 상태 · 학생 비공개", { exact: true })
     .waitFor();
-  assert.equal(await privateRadio(authoritative).isChecked(), true);
   assert.equal(
     await authoritative
       .getByRole("checkbox", { name: "3학년 2반 공개 대상", exact: true })
       .isChecked(),
-    true,
+    false,
   );
   await authoritative.close();
   checks.push(
-    "Success feedback follows the returned PAUSED status even when the request was public; saved class selection survives reopening.",
+    "Success follows the returned PAUSED status and clears retained targets on reopening.",
+  );
+
+  const paused = await open("paused");
+  assert.equal(await selectedClasses(paused).count(), 0);
+  await number(paused, "출제 문항 수").fill("8");
+  await saveButton(paused).click();
+  await closeAfterSave(paused, "모든 학생에게 비공개");
+  assert.equal(
+    await paused.evaluate(() => window.quizSettingsQa.saves[0].payload.active),
+    false,
+  );
+  await reopen(paused);
+  await paused
+    .getByRole("checkbox", { name: "3학년 2반 공개 대상", exact: true })
+    .check();
+  await saveButton(paused).click();
+  await paused.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(
+    await paused.evaluate(() => window.quizSettingsQa.saves[1].payload.active),
+    true,
+  );
+  await paused.close();
+  checks.push(
+    "Paused legacy targets stay private during unrelated edits; selecting a class explicitly republishes.",
+  );
+
+  const stale = await open("canonical&stale-class");
+  await number(stale, "출제 문항 수").fill("8");
+  assert.equal(await saveButton(stale).isDisabled(), true);
+  await stale.getByRole("button", { name: "모두 선택", exact: true }).click();
+  assert.equal(await selectedClasses(stale).count(), 4);
+  await saveButton(stale).click();
+  await closeAfterSave(stale, "선택한 4개 학급의 학생에게 공개");
+  assert.deepEqual(
+    await stale.evaluate(
+      () => window.quizSettingsQa.saves[0].payload.visibleClassIds,
+    ),
+    ["3-1", "3-2", "3-3", "3-4"],
+  );
+  await stale.close();
+  checks.push(
+    "Stale published class targets block saving until removed; select-all uses only current canonical classes.",
   );
 
   const discard = await open();
@@ -497,7 +566,6 @@ try {
   const readonly = await open("canonical&readonly", 390);
   assert.equal(await saveButton(readonly).count(), 0);
   assert.equal(await number(readonly, "출제 문항 수").isDisabled(), true);
-  assert.equal(await publicRadio(readonly).isDisabled(), true);
   assert.equal(
     await readonly
       .getByRole("checkbox", { name: "3학년 1반 공개 대상", exact: true })

@@ -42,7 +42,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "9725d2c82cdc3077249f0cd759c2680b599be6cc232ca13358a903fbd6a7c302",
+      "sha256": "1d4992fa5fb8956520d18e079f1b358f18cc5832f540d00b5b39a7cacb41d20b",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
@@ -53,7 +53,8 @@
         "2026-10-15: Guard History Classroom definition create/update/publication with the committed source revision and retain the prepared revision for concurrent-edit safety.",
         "2026-10-15: atomic History Classroom save and audited teacher-direct exemption.",
         "2026-10-16: atomic quiz settings/publication, student-scoped attempt reads and revision-checked answer-free presentation recovery.",
-        "2026-10-16: Readiness permits only inactive QUIZ DRAFT definitions with an explicit empty source snapshot; published, paused, closed and History Classroom guards remain strict."
+        "2026-10-16: Readiness permits only inactive QUIZ DRAFT definitions with an explicit empty source snapshot; published, paused, closed and History Classroom guards remain strict.",
+        "2026-10-19: Expose canonical active writable class options through a session- and quiz-management-gated read; identify invalid publication classes and clear canonical assignments when the teacher clears all publication classes."
       ]
     },
     {

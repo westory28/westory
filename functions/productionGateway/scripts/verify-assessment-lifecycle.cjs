@@ -224,6 +224,81 @@ const definitionPayload = (kind) => ({
   assignedClassIds: kind === "QUIZ" ? ["3-1"] : [],
 });
 
+const runClassVisibilityCommands = async () => {
+  const classStore = new MemoryStore({
+    ...seed,
+    "users/teacher-uid": { role: "teacher" },
+    "users/staff-uid": { role: "staff", teacherPortalEnabled: true, staffPermissions: ["quiz_read"] },
+    "users/other-staff-uid": { role: "staff", teacherPortalEnabled: true, staffPermissions: ["lesson_read"] },
+    "semester_classes/class_two": { classId: "class_two", semesterId, grade: "3", classNumber: "2", status: "ACTIVE", homeroomTeacherUid: "private-teacher-uid" },
+    "semester_classes/class_ten": { classId: "class_ten", semesterId, grade: "3", classNumber: "10", status: "ACTIVE" },
+    "semester_classes/class_closed": { classId: "class_closed", semesterId, grade: "3", classNumber: "11", status: "CLOSED" },
+    "semester_classes/class_read_only": { classId: "class_read_only", semesterId, grade: "test", classNumber: "1", status: "ACTIVE", readOnly: true },
+    "semester_classes/class_prior": { classId: "class_prior", semesterId: "2026-1", grade: "test", classNumber: "2", status: "ACTIVE" },
+  });
+  let sessionChecks = 0;
+  const queryCore = assessment.createAssessmentQueryCore({
+    store: classStore,
+    assertSession: async (request, options) => {
+      sessionChecks += 1;
+      assert.deepEqual(options, { recentAuth: false, highRisk: false });
+      return { uid: request.auth.uid };
+    },
+  });
+  const expectedClasses = [
+    { classId: "class_one", grade: "3", classNumber: "1" },
+    { classId: "class_two", grade: "3", classNumber: "2" },
+    { classId: "class_ten", grade: "3", classNumber: "10" },
+  ];
+  for (const uid of [admin.uid, "teacher-uid", "staff-uid"]) {
+    const result = await queryCore.getAssessmentState({ auth: { uid }, data: { semesterId, _session: { ignoredByPayloadNormalization: true } } });
+    assert.deepEqual(result, { semesterId, classes: expectedClasses });
+    assert.equal(classStore.writeCount, 0, "Class options are read-only and contain no staff or student profiles");
+  }
+  for (const uid of [student.uid, "other-staff-uid", "unknown-uid"]) {
+    await assert.rejects(queryCore.getAssessmentState({ auth: { uid }, data: { semesterId } }),
+      (error) => error?.details?.reason === "ASSESSMENT_MANAGE_REQUIRED");
+  }
+  await assert.rejects(queryCore.getAssessmentState({ auth: admin, data: { semesterId, definitionId: definitionPayload("QUIZ").definitionId } }),
+    (error) => error?.details?.reason === "ASSESSMENT_PAYLOAD_INVALID");
+  await assert.rejects(queryCore.getAssessmentState({ auth: admin, data: { semesterId: "2026-1" } }),
+    (error) => error?.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+  classStore.documents.set(`semester_manifests/${semesterId}`, { ...manifest, revision: 8 });
+  await assert.rejects(queryCore.getAssessmentState({ auth: admin, data: { semesterId } }),
+    (error) => error?.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+  classStore.documents.set(`semester_manifests/${semesterId}`, manifest);
+  classStore.documents.set("users/staff-uid", { role: "staff", teacherPortalEnabled: false, staffPermissions: ["quiz_read"] });
+  await assert.rejects(queryCore.getAssessmentState({ auth: { uid: "staff-uid" }, data: { semesterId } }),
+    (error) => error?.details?.reason === "ASSESSMENT_MANAGE_REQUIRED");
+  assert.equal(sessionChecks, 10, "Every class query keeps the normal application session gate");
+  const deniedSessionCore = assessment.createAssessmentQueryCore({ store: classStore, assertSession: async () => { throw new Error("session denied"); } });
+  await assert.rejects(deniedSessionCore.getAssessmentState({ auth: admin, data: { semesterId } }), /session denied/);
+  assert.equal(classStore.writeCount, 0);
+
+  const base = {
+    ...definitionPayload("QUIZ"), maxAttempts: 20, expectedRevision: 0, reason: "Class publication regression",
+  };
+  const save = (payload) => classStore.runTransaction((transaction) => adapter.apply({
+    transaction, actor: { actorUid: admin.uid, actorRole: "admin" }, commandId: commandId(),
+    commandType: "saveQuizAssessmentSettings",
+    payload: assessment.normalizeAssessmentPayload("saveQuizAssessmentSettings", payload), timestamp: { __serverTimestamp: nowMs },
+  }));
+  for (const invalidId of ["3-11", "test-1", "test-2", "class_read_only", "class_prior"]) {
+    await assert.rejects(save({ ...base, assignedClassIds: [invalidId], presentationSettings: { ...base.presentationSettings, visibleClassIds: [invalidId] } }),
+      (error) => error?.details?.reason === "ASSESSMENT_CLASS_NOT_FOUND" && error.details.classId === invalidId && error.details.semesterId === semesterId);
+    assert.equal(classStore.writeCount, 0, "Missing, inactive, read-only and foreign-semester classes must reject atomically");
+  }
+  await save(base);
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${base.definitionId}`;
+  assert.deepEqual(classStore.snapshot(definitionPath).data.assignedClassIds, ["class_one"]);
+  await save({ ...base, expectedRevision: 1, assignedClassIds: [], presentationSettings: { ...base.presentationSettings, active: false, visibleClassIds: [] } });
+  const privateDefinition = classStore.snapshot(definitionPath).data;
+  assert.equal(privateDefinition.status, "PAUSED");
+  assert.deepEqual(privateDefinition.assignedClassIds, [], "Clearing publication classes also clears canonical assignments");
+  assert.deepEqual(privateDefinition.presentationSettings.visibleClassIds, []);
+  assert.equal(privateDefinition.presentationSettings.active, false);
+};
+
 const runManagementContentCommands = async () => {
   await assert.rejects(
     execute(admin, "createAssessmentDefinition", {
@@ -637,6 +712,7 @@ const runKind = async (kind) => {
 };
 
 (async () => {
+  await runClassVisibilityCommands();
   await runManagementContentCommands();
   await runKind("QUIZ");
   await runKind("HISTORY_CLASSROOM");
@@ -796,6 +872,8 @@ const runKind = async (kind) => {
       "CONCURRENT_SUBMIT_EFFECT_ONCE",
       "SAME_UID_RELOGIN_RECOVERY",
       "TEACHER_CONTENT_COMMAND_CAS_AND_AUDIT_BOUNDARY",
+      "TEACHER_CANONICAL_ACTIVE_CLASS_QUERY_SESSION_AND_PERMISSION",
+      "QUIZ_CLASS_PUBLICATION_ATOMIC_VALIDATION_AND_CLEAR",
       "ARCHIVE_SOURCE_AND_DEFINITION_WRITE_FENCE",
       "INACTIVE_SEMESTER_STUDENT_QUERY_SAVE_SUBMIT_RESET_DENIED_BOTH_KINDS",
       "TEACHER_ARCHIVE_QUERY_PRESERVED",

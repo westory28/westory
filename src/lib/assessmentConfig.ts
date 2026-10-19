@@ -9,6 +9,7 @@ import {
 import { db, getHttpsCallable } from "./firebase";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import { readSiteSettingDoc } from "./siteSettings";
+import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import type { SystemConfig, UserData } from "../types";
 import {
   DEFAULT_MOCK_EXAM_ROUND,
@@ -536,6 +537,67 @@ export const getAssessmentVisibilityOptionsFromSchoolConfig =
       ],
     };
   };
+
+// Publication uses canonical current-semester classes, not the school-wide
+// class templates or legacy profiles (which may include unregistered test rooms).
+export const getActiveAssessmentVisibilityOptions = async (
+  config: ConfigLike,
+): Promise<AssessmentVisibilityOptions> => {
+  const { year, semester } = getYearSemester(config);
+  const semesterId = `${year}-${semester}`;
+  const readClasses = await getHistoryDictionaryCallable<
+    { semesterId: string },
+    {
+      semesterId: string;
+      classes: Array<{ classId: string; grade: string; classNumber: string }>;
+    }
+  >("getAssessmentState");
+  const [{ data }, schoolConfig] = await Promise.all([
+    readClasses({ semesterId }),
+    readSiteSettingDoc<SchoolConfigShape>("school_config"),
+  ]);
+  if (data?.semesterId !== semesterId || !Array.isArray(data.classes))
+    throw new Error("현재 학기의 공개 대상 학급을 확인하지 못했습니다.");
+  const grades = normalizeSchoolOptions(schoolConfig?.grades, "grade");
+  const classes = normalizeSchoolOptions(schoolConfig?.classes, "class");
+  const gradeValues = new Set(["3", ...data.classes.map((item) => item.grade)]);
+  const groups = [...gradeValues]
+    .sort(compareSchoolTokens)
+    .map((gradeValue) => {
+      const gradeLabel =
+        grades.find((item) => item.value === gradeValue)?.label ||
+        formatGradeLabel(gradeValue);
+      const classValues = [
+        ...new Set(
+          data.classes
+            .filter((item) => item.grade === gradeValue)
+            .map((item) => item.classNumber),
+        ),
+      ];
+      return buildVisibilityGroup({
+        gradeValue,
+        gradeLabel,
+        classOptions: classValues.map((value) => ({
+          value,
+          label:
+            classes.find((item) => item.value === value)?.label ||
+            formatClassLabel(value),
+        })),
+        rosterClassIds: [],
+        isDefaultGrade: gradeValue === "3",
+        isTestGrade: isTestOption(gradeValue, gradeLabel),
+      });
+    });
+  const defaultGroup = groups.find((group) => group.isDefaultGrade)!;
+  const extraGroups = groups.filter(
+    (group) => !group.isDefaultGrade && group.targets.length,
+  );
+  return {
+    defaultGroup,
+    extraGroups,
+    allTargets: groups.flatMap((group) => group.targets),
+  };
+};
 
 export const normalizeAssessmentConfigEntry = (
   value: unknown,

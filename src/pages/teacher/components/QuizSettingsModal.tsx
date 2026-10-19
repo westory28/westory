@@ -10,7 +10,7 @@ import {
   type AssessmentVisibilityGroup,
   type AssessmentVisibilityTarget,
   getAssessmentConfigKey,
-  getAssessmentVisibilityOptionsFromSchoolConfig,
+  getActiveAssessmentVisibilityOptions,
   normalizeAssessmentClassId,
   normalizeAssessmentConfigEntry,
 } from "../../../lib/assessmentConfig";
@@ -49,7 +49,6 @@ interface QuizSettingsModalProps {
   canEdit: boolean;
 }
 interface QuizSettingsFormState {
-  active: boolean;
   questionCount: number | "";
   questionOrder: AssessmentQuestionOrder;
   timeLimitMinutes: number | "";
@@ -72,7 +71,6 @@ const QUESTION_ORDER_OPTIONS: Array<{
   { value: "unit", label: "단원 순서" },
 ];
 const createDefaultFormState = (): QuizSettingsFormState => ({
-  active: false,
   questionCount: 20,
   questionOrder: "unit",
   timeLimitMinutes: 15,
@@ -246,12 +244,10 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       isMockExam || validInteger(settings.hintLimit, 0, 200)
         ? ""
         : "힌트 횟수는 0~200 사이의 정수로 입력해 주세요.",
-    visibility:
-      settings.active && !normalizedSelectedClassIds.length
-        ? "공개할 학급을 한 곳 이상 선택해 주세요."
-        : "",
   };
-  const hasValidationError = Object.values(fieldErrors).some(Boolean);
+  const hasValidationError =
+    Object.values(fieldErrors).some(Boolean) ||
+    unknownSelectedClassIds.length > 0;
 
   useEffect(() => {
     if (!isOpen || !nodeId) return;
@@ -266,7 +262,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       try {
         const [visibilityOptions, settingsSnap, legacyStatusSnap] =
           await Promise.all([
-            getAssessmentVisibilityOptionsFromSchoolConfig(),
+            getActiveAssessmentVisibilityOptions(scope),
             getDoc(
               doc(
                 db,
@@ -413,14 +409,15 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       };
     const entry = normalizeAssessmentConfigEntry(raw, defaultClassIds);
     const next: QuizSettingsFormState = {
-      active: entry.active,
       questionCount: entry.questionCount,
       questionOrder: entry.questionOrder,
       timeLimitMinutes: entry.timeLimit / 60,
       allowRetake: isMockExam ? isRetakableMockExam : entry.allowRetake,
       cooldown: entry.cooldown,
       hintLimit: isMockExam ? 0 : entry.hintLimit,
-      visibleClassIds: entry.visibleClassIds,
+      // Paused assessments may retain old targets. They must be selected again
+      // before this form can publish them, including when only timing is edited.
+      visibleClassIds: entry.active ? entry.visibleClassIds : [],
     };
     setSettings(next);
     setSavedFingerprint(formFingerprint(next));
@@ -473,7 +470,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       isMockExam ? selectedExamRound : undefined,
     );
     const payload = {
-      active: settings.active,
+      active: normalizedSelectedClassIds.length > 0,
       questionCount: Number(settings.questionCount),
       randomOrder: settings.questionOrder === "random",
       questionOrder: settings.questionOrder,
@@ -503,7 +500,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         revision: Number(saved.revision),
         settings: savedPayload,
       });
-      setSavedFingerprint(formFingerprint({ ...settings, active: published }));
+      setSavedFingerprint(formFingerprint(settings));
       // Round changes use the returned local state without fetching all settings again.
       setAssessmentSettingsMap((prev) => ({ ...prev, [key]: savedPayload }));
       showToast({
@@ -511,7 +508,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         title: "평가 설정 저장",
         message: published
           ? `선택한 ${normalizedSelectedClassIds.length}개 학급의 학생에게 공개하고 응시 설정을 저장했습니다.`
-          : "모든 학생에게 비공개로 저장했습니다. 선택한 학급은 유지됩니다.",
+          : "모든 학생에게 비공개로 저장했습니다.",
       });
       onClose();
     } catch (error) {
@@ -766,54 +763,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 )}
                 <section className="quiz-settings-section">
                   <div className="quiz-settings-section-heading">
-                    <h3>학생 공개</h3>
+                    <h3>공개 대상 학급</h3>
                     <InfoHelp label="학생 공개 도움말">
-                      변경한 내용은 저장 후 학생에게 반영됩니다. 비공개로
-                      전환해도 학급 선택은 유지됩니다. 응시 중인 학생의 처리에는
-                      기존 평가 규칙이 적용됩니다.
-                    </InfoHelp>
-                  </div>
-                  <div
-                    className="quiz-settings-visibility"
-                    role="radiogroup"
-                    aria-label="학생 공개"
-                    aria-describedby="quiz-settings-visibility-summary"
-                  >
-                    <label className="quiz-settings-switch">
-                      <input
-                        type="radio"
-                        name="quiz-settings-visibility"
-                        checked={settings.active}
-                        disabled={!canEdit || busy}
-                        onChange={() => updateSettings({ active: true })}
-                      />
-                      <span>선택 학급 학생에게 공개</span>
-                    </label>
-                    <label className="quiz-settings-switch">
-                      <input
-                        type="radio"
-                        name="quiz-settings-visibility"
-                        checked={!settings.active}
-                        disabled={!canEdit || busy}
-                        onChange={() => updateSettings({ active: false })}
-                      />
-                      <span>모든 학생에게 비공개</span>
-                    </label>
-                  </div>
-                  <p
-                    id="quiz-settings-visibility-summary"
-                    className="quiz-settings-summary"
-                  >
-                    {settings.active
-                      ? `저장하면 선택한 ${normalizedSelectedClassIds.length}개 학급의 학생이 응시할 수 있습니다.`
-                      : "저장하면 모든 학생에게 평가가 비공개됩니다. 학급 선택은 유지됩니다."}
-                  </p>
-                  <div className="quiz-settings-section-heading quiz-settings-target-heading">
-                    <h4>공개 대상 학급</h4>
-                    <InfoHelp label="응시 초기화 도움말">
-                      응시 초기화는 저장된 평가의 선택 학급에 즉시 적용됩니다.
-                      설정을 변경했다면 먼저 저장해 주세요. 기존 제출 결과와
-                      위스는 유지됩니다.
+                      학급을 선택하고 저장하면 해당 학급 학생에게 공개됩니다.
+                      선택한 학급 없이 저장하면 모든 학생에게 비공개됩니다. 응시
+                      중인 학생의 처리에는 기존 평가 규칙이 적용됩니다. 응시
+                      초기화는 저장된 평가의 선택 학급에 즉시 적용됩니다. 설정을
+                      변경했다면 먼저 저장해 주세요. 기존 제출 결과와 위스는
+                      유지됩니다.
                     </InfoHelp>
                     <div className="quiz-settings-actions">
                       <button
@@ -824,12 +781,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         }
                         onClick={() =>
                           updateSettings({
-                            visibleClassIds: [
-                              ...new Set([
-                                ...availableTargetIds,
-                                ...unknownSelectedClassIds,
-                              ]),
-                            ],
+                            visibleClassIds: [...availableTargetIds],
                           })
                         }
                       >
@@ -927,11 +879,6 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       >
                         해당 선택 해제
                       </button>
-                    </p>
-                  )}
-                  {fieldErrors.visibility && (
-                    <p className="quiz-settings-error" role="alert">
-                      {fieldErrors.visibility}
                     </p>
                   )}
                 </section>
@@ -1101,7 +1048,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       : ready
                         ? !hasStoredSettings
                           ? "아직 저장하지 않은 기본 설정"
-                          : settings.active
+                          : normalizedSelectedClassIds.length > 0
                             ? `저장된 공개 대상 · ${normalizedSelectedClassIds.length}개 학급`
                             : "저장된 상태 · 학생 비공개"
                         : ""}
