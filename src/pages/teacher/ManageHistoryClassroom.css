@@ -406,9 +406,19 @@
   }
 
   .history-classroom .history-card-status {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) 44px 44px;
+    gap: 4px;
+    margin-right: 0;
+    padding-right: 0;
+    padding-bottom: 0;
     overflow: visible;
-    justify-content: flex-start;
+  }
+
+  .history-classroom .history-card-count {
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
   }
 
   .history-classroom .history-filters {
@@ -494,6 +504,16 @@
 }
 
 @container history-content (max-width: 480px) {
+  .history-classroom .history-card-count {
+    height: auto;
+    min-height: 44px;
+    flex-direction: column;
+    gap: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    line-height: 16px;
+  }
+
   .history-classroom .history-student-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

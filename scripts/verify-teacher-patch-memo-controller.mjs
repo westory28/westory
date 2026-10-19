@@ -163,6 +163,9 @@ const harness = async (operations = {}, options = {}) => {
       },
     },
     "./AppToastProvider": { useAppToast: () => ({ showToast }) },
+    "./useFloatingLauncherVisibility": {
+      useFloatingLauncherVisibility: () => () => {},
+    },
   };
   const exports = {};
   const browser = {

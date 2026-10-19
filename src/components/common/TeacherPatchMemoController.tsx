@@ -19,6 +19,7 @@ import {
   type TeacherPatchNoteType,
 } from "../../lib/teacherPatchNotes";
 import { useAppToast } from "./AppToastProvider";
+import { useFloatingLauncherVisibility } from "./useFloatingLauncherVisibility";
 
 const PATCH_MEMO_ROOT_SELECTOR = "[data-patch-memo-root]";
 const PATCH_TARGET_SELECTOR = "[data-patch-target]";
@@ -299,6 +300,12 @@ const TeacherPatchMemoController: React.FC = () => {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const focusLauncherWhenVisible = useFloatingLauncherVisibility(
+    buttonRef,
+    Boolean(currentUser && isTeacherRoute && canUsePatchMemo),
+    open || selectingTarget,
+  );
+
   const uid = currentUser?.uid || "";
   const activeUid = useRef(uid);
   activeUid.current = uid;
@@ -368,8 +375,8 @@ const TeacherPatchMemoController: React.FC = () => {
     const timer = window.setTimeout(() => bodyRef.current?.focus(), 80);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !selectingTarget) {
+        focusLauncherWhenVisible();
         setOpen(false);
-        buttonRef.current?.focus();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -684,9 +691,9 @@ const TeacherPatchMemoController: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                focusLauncherWhenVisible();
                 setOpen(false);
                 setSelectingTarget(false);
-                buttonRef.current?.focus();
               }}
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
               aria-label="패치 메모 닫기"

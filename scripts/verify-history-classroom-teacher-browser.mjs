@@ -779,6 +779,44 @@ try {
       ],
       [10, 5, 90, "3", "2"],
     );
+    const dashboardCard = page.locator(".history-dashboard article").first();
+    await dashboardCard.waitFor();
+    const dashboardGeometry = await page.locator(".history-dashboard").filter({ has: page.locator(".history-timeline-marker") }).evaluate((dashboard) => {
+      const marker = dashboard.querySelector(".history-timeline-marker").getBoundingClientRect();
+      const dashboardBox = dashboard.getBoundingClientRect();
+      const line = getComputedStyle(dashboard, "::before");
+      const status = dashboard.querySelector(".history-card-status");
+      const controls = [...status.querySelectorAll(".history-card-control")].map((control) => {
+        const box = control.getBoundingClientRect();
+        return { left: box.left, right: box.right, width: box.width, height: box.height, centerY: box.top + box.height / 2 };
+      });
+      return {
+        markerCenterX: marker.left + marker.width / 2,
+        lineCenterX: dashboardBox.left + parseFloat(line.left) + parseFloat(line.width) / 2,
+        statusOverflow: status.scrollWidth > status.clientWidth + 1,
+        controls,
+        pageOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+      };
+    });
+    assert(
+      Math.abs(dashboardGeometry.markerCenterX - dashboardGeometry.lineCenterX) <= 1,
+      `date marker stays on the timeline: ${JSON.stringify(dashboardGeometry)}`,
+    );
+    assert(
+      dashboardGeometry.controls.every((control) => control.width >= 44 && control.height >= 44 && control.left >= 0 && control.right <= viewport.width),
+      "dashboard edit and accordion controls remain reachable at 44px",
+    );
+    assert(
+      Math.abs(dashboardGeometry.controls[0].centerY - dashboardGeometry.controls[1].centerY) <= 1 && !dashboardGeometry.statusOverflow && !dashboardGeometry.pageOverflow,
+      `edit and accordion stay on the same row without overflow: ${JSON.stringify(dashboardGeometry)}`,
+    );
+    await dashboardCard.getByRole("button", { name: "상세 펼치기", exact: true }).click();
+    assert.equal(await dashboardCard.getByRole("button", { name: "상세 접기", exact: true }).getAttribute("aria-expanded"), "true");
+    await page.screenshot({
+      path: path.join(evidence, `teacher-dashboard-${viewport.width}.png`),
+      fullPage: true,
+    });
+    await dashboardCard.getByRole("button", { name: "상세 접기", exact: true }).click();
     await page
       .getByRole("button", { name: "새 역사교실", exact: true })
       .click();
@@ -1473,6 +1511,7 @@ try {
       viewport,
       options,
       geometry,
+      dashboardGeometry,
       editGeometry,
       statusGeometry,
       reviewWidths,

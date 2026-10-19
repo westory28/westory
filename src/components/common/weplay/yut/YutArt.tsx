@@ -179,6 +179,8 @@ export function YutIcon({
     | "arrow"
     | "copy"
     | "emote"
+    | "fullscreen"
+    | "fullscreen-exit"
     | "rotate";
 }) {
   return (
@@ -232,6 +234,12 @@ export function YutIcon({
           />
           <path d="M3 11a9 9 0 0 1 4-7m-4 0v7h6M21 13a9 9 0 0 1-4 7m4 0v-7h-6" />
         </>
+      )}
+      {name === "fullscreen" && (
+        <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+      )}
+      {name === "fullscreen-exit" && (
+        <path d="M3 8h5V3m13 5h-5V3M8 21v-5H3m13 5v-5h5" />
       )}
       {name === "copy" && (
         <>

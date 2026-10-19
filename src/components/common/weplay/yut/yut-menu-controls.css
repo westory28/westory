@@ -355,3 +355,142 @@
     opacity: 1;
   }
 }
+
+/* The portrait prompt keeps every line in its own, non-shrinking row. */
+.yut-game .yut-orientation-gate {
+  gap: 16px;
+  padding: 76px 20px 24px;
+  justify-content: flex-start;
+}
+.yut-game .yut-orientation-gate > * {
+  flex: none;
+  max-width: 100%;
+}
+.yut-game .yut-orientation-gate > svg {
+  margin-top: auto;
+}
+.yut-game .yut-orientation-gate > :last-child {
+  margin-bottom: auto;
+}
+.yut-game .yut-orientation-gate h1 {
+  line-height: 1.35;
+}
+.yut-game .yut-orientation-gate p {
+  line-height: 1.5;
+}
+
+/* A fixed page view also works where iPhone Safari lacks Fullscreen API. */
+.weplay-game-frame:has(.yut-game--fullscreen) {
+  isolation: auto;
+}
+.yut-game.yut-game--fullscreen,
+.weplay-game-frame .yut-game.yut-game--fullscreen {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: var(--yut-fullscreen-height);
+  margin: 0;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  overscroll-behavior: contain;
+}
+.yut-game.yut-game--fullscreen .yut-floating-fullscreen,
+.yut-game.yut-game--fullscreen:not(.yut-game--in-room)
+  .yut-floating-fullscreen {
+  position: absolute;
+  z-index: 201;
+  top: max(12px, env(safe-area-inset-top));
+  right: auto;
+  bottom: auto;
+  left: max(12px, env(safe-area-inset-left));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid #d3b477;
+  border-radius: 6px;
+  background: #251c14ed;
+  color: #fff1d2;
+}
+.yut-game--fullscreen .yut-floating-fullscreen span {
+  display: none;
+}
+.yut-game--portrait-fullscreen .yut-entry {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(120px, 1fr) auto;
+  gap: 16px;
+  padding: 76px 16px 64px;
+}
+.yut-game--portrait-fullscreen .yut-entry-title {
+  padding: 0;
+}
+.yut-game--portrait-fullscreen .yut-entry-title h1,
+.yut-game--portrait-fullscreen .yut-entry-title h1 span {
+  font-size: clamp(48px, 10vw, 84px);
+}
+.yut-game--portrait-fullscreen .yut-entry-menu {
+  max-height: none;
+  overflow: visible;
+}
+.yut-game--portrait-fullscreen .yut-waiting {
+  padding: 76px 16px 64px;
+}
+.yut-game--portrait-fullscreen .yut-waiting-heading,
+.yut-game--portrait-fullscreen .yut-waiting-footer {
+  flex-wrap: wrap;
+}
+.yut-game--portrait-fullscreen .yut-waiting-seats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.yut-game--portrait-fullscreen .yut-seat {
+  min-height: 0;
+  padding: 12px;
+}
+.yut-game--portrait-fullscreen .yut-match {
+  padding: 76px 12px 64px;
+  overflow: auto;
+}
+.yut-game--portrait-fullscreen .yut-match .yut-players {
+  position: relative;
+  inset: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.yut-game--portrait-fullscreen .yut-match .yut-player {
+  position: relative;
+  inset: auto;
+  width: auto;
+  min-height: 68px;
+  height: auto;
+}
+.yut-game--portrait-fullscreen .yut-board-area {
+  --yut-board-ratio: 9 / 7;
+  width: min(100%, var(--yut-board-max-width));
+  max-width: 100%;
+}
+.yut-game--portrait-fullscreen .yut-match .yut-action-dock {
+  height: auto;
+  min-height: 128px;
+  margin-top: 16px;
+  gap: 8px;
+}
+.yut-game--portrait-fullscreen .yut-move-controls {
+  flex-direction: column;
+  gap: 24px;
+}
+.yut-game--portrait-fullscreen .yut-floating-controls {
+  top: max(12px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
+  transform: none;
+}

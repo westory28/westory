@@ -142,6 +142,12 @@ samp {
   .notice-image-editor__period { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* Keep auxiliary launchers out of dialogs and actionable page content. */
+[data-launcher-obscured] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* Include body portals, and only reserve the memo slot while it is mounted. */
 body:has(button[data-patch-memo-root]) {
   --ws-page-float-bottom: calc(

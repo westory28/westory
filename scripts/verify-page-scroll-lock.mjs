@@ -85,6 +85,14 @@ const compile = (source) =>
   }).outputText;
 const makeRuntime = (page = makePage()) => {
   const listeners = new Map();
+  const addEventListener = (type, handler) => {
+    if (!listeners.has(type)) listeners.set(type, new Set());
+    listeners.get(type).add(handler);
+  };
+  const removeEventListener = (type, handler) =>
+    listeners.get(type)?.delete(handler);
+  page.addEventListener = addEventListener;
+  page.removeEventListener = removeEventListener;
   const context = vm.createContext({
     exports: {},
     document: page,
@@ -92,13 +100,12 @@ const makeRuntime = (page = makePage()) => {
     previewOpen: true,
     open: true,
     onClose: () => {},
+    dialogRef: { current: null },
+    closeRef: { current: () => {} },
+    busyRef: { current: false },
     window: {
-      addEventListener: (type, handler) => {
-        if (!listeners.has(type)) listeners.set(type, new Set());
-        listeners.get(type).add(handler);
-      },
-      removeEventListener: (type, handler) =>
-        listeners.get(type)?.delete(handler),
+      addEventListener,
+      removeEventListener,
     },
   });
   vm.runInContext(
@@ -249,12 +256,12 @@ const runEffect = (runtime, file, values = {}) => {
 };
 const header = "src/components/common/Header.tsx";
 const promotion = "src/components/common/StudentRankPromotionPopup.tsx";
-const products = "src/pages/teacher/components/points/PointProductsTab.tsx";
 const detail = "src/components/common/WisProductDetailModal.tsx";
 
 for (const [firstFile, secondFile] of [
   [header, promotion],
-  [products, detail],
+  // The shop preview is inline; only its detail dialog owns a lock now.
+  [header, detail],
 ]) {
   for (const closeParentFirst of [true, false]) {
     const runtime = makeRuntime();
@@ -276,7 +283,7 @@ for (const [firstFile, secondFile] of [
 {
   const runtime = makeRuntime();
   const child = runEffect(runtime, detail);
-  const parent = runEffect(runtime, products);
+  const parent = runEffect(runtime, header);
   parent();
   assertLocked(runtime.page);
   child();
@@ -284,20 +291,18 @@ for (const [firstFile, secondFile] of [
   for (const [file, values] of [
     [header, { mobileMenuOpen: false }],
     [promotion, { open: false }],
-    [products, { previewOpen: false }],
     [detail, { open: false }],
   ])
     assert.equal(runEffect(runtime, file, values), undefined);
   assert.equal(runtime.page.body.style.getPropertyValue("overflow-y"), "");
 }
 console.log(
-  "PASS real Header/rank and teacher preview/detail effects across sequential-open unmount and initial child-first mount",
+  "PASS real Header/rank and Header/product-detail effects across sequential-open unmount and initial child-first mount",
 );
 
 const lockOwners = [
   header,
   promotion,
-  products,
   detail,
   "src/components/common/MapViewer.tsx",
   "src/components/common/PdfMapViewer.tsx",
@@ -308,5 +313,5 @@ const lockOwners = [
   "src/pages/teacher/components/NoticeManagerModal.tsx",
 ];
 for (const file of lockOwners) readLockEffect(file);
-console.log("PASS all 11 page-lock owners use the shared lifecycle");
+console.log("PASS all 10 page-lock owners use the shared lifecycle");
 console.log("Page scroll lock: 6 groups passed; no browser or backend writes.");

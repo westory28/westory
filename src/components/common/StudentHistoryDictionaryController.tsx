@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import StudentHistoryDictionaryWorkspace from "./StudentHistoryDictionaryWorkspace";
+import { useFloatingLauncherVisibility } from "./useFloatingLauncherVisibility";
 
 const getFloatingOffsetClassName = (pathname: string, search: string) => {
   if (pathname.startsWith("/student/lesson/history-dictionary"))
@@ -30,6 +31,12 @@ export default function StudentHistoryDictionaryController() {
   const isStudentRoute =
     location.pathname.startsWith("/student") &&
     !location.pathname.startsWith("/student/lesson/history-dictionary");
+
+  const focusLauncherWhenVisible = useFloatingLauncherVisibility(
+    buttonRef,
+    Boolean(currentUser && isStudentRoute),
+    open,
+  );
 
   useEffect(() => {
     setSaveAnchor(null);
@@ -92,8 +99,8 @@ export default function StudentHistoryDictionaryController() {
   }, [open]);
 
   const close = () => {
+    focusLauncherWhenVisible();
     setOpen(false);
-    buttonRef.current?.focus();
   };
   if (!currentUser || !isStudentRoute) return null;
 

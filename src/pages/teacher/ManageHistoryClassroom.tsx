@@ -4614,9 +4614,12 @@ const ManageHistoryClassroom: React.FC = () => {
             key={group.dateKey}
             className="history-timeline-group relative flex w-full flex-col gap-3 lg:flex-row lg:items-start"
           >
-            <div className="history-timeline-date relative w-full shrink-0 pl-5 lg:w-32 lg:pl-0">
+            <div className="history-timeline-date relative w-full shrink-0 lg:w-32">
               <div className="relative z-10">
-                <div className="absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200" />
+                <div
+                  className="history-timeline-marker absolute left-0 top-2 h-3 w-3 rounded-full border-4 border-white bg-blue-600 shadow ring-1 ring-blue-200"
+                  aria-hidden="true"
+                />
                 <div className="ml-6">
                   <div className="whitespace-nowrap text-base font-black leading-6 text-gray-900 sm:text-lg">
                     {group.timelineDate.date}
@@ -4693,7 +4696,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         ].map(([label, count, className]) => (
                           <span
                             key={label}
-                            className={`inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5rem] sm:px-2.5 sm:text-xs ${className}`}
+                            className={`history-card-count inline-flex h-9 min-w-[4.6rem] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2 text-[11px] font-black sm:h-10 sm:min-w-[5rem] sm:px-2.5 sm:text-xs ${className}`}
                           >
                             {label}
                             <span>{count}</span>
@@ -4705,7 +4708,7 @@ const ManageHistoryClassroom: React.FC = () => {
                             event.stopPropagation();
                             openAssignmentEditor(row.assignment);
                           }}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100 sm:h-10 sm:w-10"
+                          className="history-card-control flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition hover:bg-blue-100"
                           aria-label={`${row.assignment.title} 설정 수정`}
                         >
                           <DashboardIcon name="edit" className="h-4 w-4" />
@@ -4720,7 +4723,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                 : row.assignment.id,
                             );
                           }}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 sm:h-10 sm:w-10"
+                          className="history-card-control flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
                           aria-label={expanded ? "상세 접기" : "상세 펼치기"}
                           aria-expanded={expanded}
                         >

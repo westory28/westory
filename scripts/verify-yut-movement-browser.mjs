@@ -22,13 +22,17 @@ try {
 }
 const entryPolishOnly = process.env.YUT_MOVEMENT_QA_SECTION === "entry-polish";
 const motionAuditOnly = process.env.YUT_MOVEMENT_QA_SECTION === "motion-audit";
+const mobileViewportOnly =
+  process.env.YUT_MOVEMENT_QA_SECTION === "mobile-viewport";
 const evidence = path.join(
   root,
-  motionAuditOnly
-    ? "output/yut-motion-complete-20261018"
-    : entryPolishOnly
-      ? "output/yut-entry-polish-20261018"
-      : "output/yut-movement-20261018",
+  mobileViewportOnly
+    ? "output/yut-mobile-viewport-20261019"
+    : motionAuditOnly
+      ? "output/yut-motion-complete-20261018"
+      : entryPolishOnly
+        ? "output/yut-entry-polish-20261018"
+        : "output/yut-movement-20261018",
 );
 await fs.mkdir(evidence, { recursive: true });
 const source = (p) => JSON.stringify(path.join(root, p).replaceAll("\\", "/"));
@@ -77,7 +81,7 @@ export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
 `;
 const harness = `import React,{useState,useEffect}from'react';import{createRoot}from'react-dom/client';import Game from ${source("src/components/common/weplay/yut/YutGame.tsx")};import Board from ${source("src/components/common/weplay/yut/YutBoard.tsx")};import Frame from ${source("src/components/common/weplay/WeplayGameFrame.tsx")};import{getYutLobby,subscribeYutRoom,getLegalYutMoves}from ${source("src/lib/yut.ts")};
-function App(){const[room,setRoom]=useState(window.qa.room),[key,setKey]=useState(0),[mounted,setMounted]=useState(true);window.qa.remount=()=>setKey(old=>old+1);window.qa.unmount=()=>setMounted(false);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game">{mounted&&<Board key={key} room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('.is-moving:not(.is-caught)'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect(),facing=node.querySelector('.yut-pawn-facing');window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88,facing:facing?.dataset.facing,mirror:facing?new DOMMatrixReadOnly(getComputedStyle(facing).transform).m11:null,pieceIds:node.dataset.pieceIds,movingGroups:document.querySelectorAll('.is-moving:not(.is-caught)').length});}}/>}</div>:<Frame theme="yut"><Game portal="student" onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[room,setRoom]=useState(window.qa.room),[key,setKey]=useState(0),[mounted,setMounted]=useState(true);window.qa.remount=()=>setKey(old=>old+1);window.qa.unmount=()=>setMounted(false);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game">{mounted&&<Board key={key} room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('.is-moving:not(.is-caught)'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect(),facing=node.querySelector('.yut-pawn-facing');window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88,facing:facing?.dataset.facing,mirror:facing?new DOMMatrixReadOnly(getComputedStyle(facing).transform).m11:null,pieceIds:node.dataset.pieceIds,movingGroups:document.querySelectorAll('.is-moving:not(.is-caught)').length});}}/>}</div>:<Frame theme="yut"><Game portal={new URLSearchParams(location.search).get("portal")==="teacher"?"teacher":"student"} onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
 const artHarness = `import {YutSprite,YutStackOptionArt} from ${source("src/components/common/weplay/yut/YutArt.tsx")};
 function Art(){const action=new URLSearchParams(location.search).get('art');return <div className="art-fixture yut-game" style={{display:'grid',gridTemplateColumns:'repeat(3, 190px)',gap:8,padding:16,height:'auto',width:610,background:'#d8c28e',color:'#241b14'}}><style>{'.art-fixture .yut-frame-sprite,.art-fixture .yut-stack-option-art{width:168px!important;height:168px!important;margin:auto}'}</style>{['sa','nong','gong','sang'].flatMap(role=>[0,1,2].map(frame=><div key={role+frame} data-art-frame={frame} style={{border:'1px solid #887045',background:'repeating-conic-gradient(#f5edd9 0% 25%,#dfd2b0 0% 50%) 50% / 20px 20px',textAlign:'center'}}><span style={{display:'block',background:'#f5edd9'}}>{action+' / '+role+' / '+(frame+1)}</span>{action==='stack-choice'?<YutStackOptionArt role={role} carried={frame===0}/>:<YutSprite role={role} pose={action}/>}</div>))}</div>};createRoot(document.getElementById('root')).render(new URLSearchParams(location.search).has('art')?<Art/>:<App/>);`;
 const bundle = await build({
@@ -177,23 +181,25 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: motionAuditOnly
-    ? "motion-audit"
-    : entryPolishOnly
-      ? "entry-polish"
-      : artOnly
-        ? "art"
-        : twoPiecesOnly
-          ? process.env.YUT_TWO_QA_PHASE
-            ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
-            : "two-pieces"
-          : captureOnly
-            ? "capture"
-            : gaugeOnly
-              ? "gauge"
-              : presentationOnly
-                ? "presentation"
-                : "all",
+  section: mobileViewportOnly
+    ? "mobile-viewport"
+    : motionAuditOnly
+      ? "motion-audit"
+      : entryPolishOnly
+        ? "entry-polish"
+        : artOnly
+          ? "art"
+          : twoPiecesOnly
+            ? process.env.YUT_TWO_QA_PHASE
+              ? "two-pieces-" + process.env.YUT_TWO_QA_PHASE
+              : "two-pieces"
+            : captureOnly
+              ? "capture"
+              : gaugeOnly
+                ? "gauge"
+                : presentationOnly
+                  ? "presentation"
+                  : "all",
   checks: [],
   errors: [],
   paths: {},
@@ -2411,8 +2417,234 @@ async function verifyMotionAudit() {
       " audit passed under both OS motion preferences; assertions and measured frames are recorded below",
   );
 }
+async function verifyMobileViewport() {
+  for (const [width, height] of [
+    [320, 568],
+    [390, 844],
+    [768, 844],
+  ]) {
+    const page = await open("scenario=entry", "no-preference", width, height);
+    await page.locator(".yut-orientation-gate").waitFor();
+    const rows = await page
+      .locator(".yut-orientation-gate > *")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const box = node.getBoundingClientRect();
+          return { top: box.top, bottom: box.bottom, width: box.width };
+        }),
+      );
+    for (let index = 1; index < rows.length; index++)
+      assert.ok(
+        rows[index].top >= rows[index - 1].bottom + 15,
+        `${width}: prompt rows do not overlap`,
+      );
+    assert.equal(
+      await page.locator(".yut-floating-fullscreen").count(),
+      0,
+      "Portrait has one clear fullscreen action",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `portrait-prompt-${width}.png`),
+    });
+    await page.evaluate(() => {
+      Element.prototype.requestFullscreen = undefined;
+      const header = document.createElement("header");
+      header.style.cssText =
+        "position:fixed;inset:0 0 auto;height:64px;z-index:50;background:red";
+      document.body.append(header);
+    });
+    await page
+      .getByRole("button", { name: "전체 화면으로 열기", exact: true })
+      .click();
+    await page.locator(".yut-game--portrait-fullscreen .yut-entry").waitFor();
+    assert.equal(await page.locator(".yut-orientation-gate").count(), 0);
+    assert.equal(
+      await page
+        .locator(".yut-game")
+        .getAttribute("data-floating-launcher-obstacle"),
+      "true",
+    );
+    assert.equal(
+      await page.evaluate(() => document.body.style.overflowY),
+      "hidden",
+    );
+    const fullscreenBox = await page.locator(".yut-game").boundingBox();
+    assert.deepEqual(
+      fullscreenBox,
+      { x: 0, y: 0, width, height },
+      "Fullscreen fills the viewport",
+    );
+    assert.ok(
+      await page.evaluate(() =>
+        Boolean(document.elementFromPoint(20, 20).closest(".yut-game")),
+      ),
+      "Fullscreen stays above the portal header",
+    );
+    await page
+      .getByRole("button", { name: "혼자서 시작", exact: true })
+      .click();
+    await page.getByRole("button", { name: "싱글 시작", exact: true }).click();
+    await page.locator(".yut-match").waitFor();
+    const throwButton = page.locator(".yut-throw-button");
+    if (height < 600) await throwButton.scrollIntoViewIfNeeded();
+    const throwBox = await throwButton.boundingBox();
+    assert.ok(
+      throwBox.y >= 0 && throwBox.y + throwBox.height <= height,
+      `${width}: main game action is reachable in portrait fullscreen`,
+    );
+    await page.screenshot({
+      path: path.join(evidence, `portrait-fullscreen-match-${width}.png`),
+    });
+    const before = await page.locator(".yut-game").evaluate((node) => ({
+      height: node.clientHeight,
+      board: node.querySelector(".yut-board").getBoundingClientRect().width,
+    }));
+    await page.setViewportSize({ width, height: height - 40 });
+    await page.evaluate(() => {
+      window.scrollTo(0, 100);
+      window.dispatchEvent(new Event("scroll"));
+    });
+    await page.waitForTimeout(150);
+    const after = await page.locator(".yut-game").evaluate((node) => ({
+      height: node.clientHeight,
+      board: node.querySelector(".yut-board").getBoundingClientRect().width,
+    }));
+    assert.deepEqual(
+      after,
+      before,
+      `${width}: address-bar height and scroll do not rescale fullscreen`,
+    );
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `${width}: no page horizontal overflow`,
+    );
+    await page
+      .getByRole("button", { name: "전체 화면 나가기", exact: true })
+      .click();
+    await page.locator(".yut-orientation-gate").waitFor();
+    assert.equal(await page.evaluate(() => document.body.style.overflowY), "");
+    await page.close();
+    report.checks.push(
+      `${width}: portrait prompt rows, explicit iPhone fullscreen fallback, portrait single play, fixed height/scale and exit restoration`,
+    );
+  }
+  for (const [width, height] of [
+    [844, 390],
+    [1280, 800],
+  ]) {
+    const page = await open(
+      "scenario=waiting-four",
+      "no-preference",
+      width,
+      height,
+    );
+    await page.evaluate(() => {
+      window.qa.fullscreenRequests = 0;
+      Element.prototype.requestFullscreen = async function () {
+        window.qa.fullscreenRequests++;
+      };
+    });
+    await page
+      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .click();
+    await page.locator(".yut-match").waitFor();
+    assert.equal(
+      await page.evaluate(() => window.qa.fullscreenRequests),
+      0,
+      "Starting a match never requests fullscreen",
+    );
+    const before = await page.locator(".yut-board").boundingBox();
+    await page.screenshot({
+      path: path.join(evidence, `landscape-match-${width}.png`),
+    });
+    await page.evaluate(() => {
+      document.body.style.minHeight = "1600px";
+      window.scrollTo(0, 240);
+    });
+    await page.waitForTimeout(100);
+    const after = await page.locator(".yut-board").boundingBox();
+    assert.equal(
+      after.width,
+      before.width,
+      "Scrolling never changes board width",
+    );
+    await page.close();
+    report.checks.push(
+      `${width}: game start stays in frame and scrolling preserves board scale`,
+    );
+  }
+  const native = await open("scenario=entry", "no-preference", 390, 844);
+  await native
+    .getByRole("button", { name: "전체 화면으로 열기", exact: true })
+    .click();
+  await native
+    .locator(".yut-game:fullscreen.yut-game--portrait-fullscreen")
+    .waitFor();
+  await native
+    .getByRole("button", { name: "전체 화면 나가기", exact: true })
+    .click();
+  await native.locator(".yut-orientation-gate").waitFor();
+  await native.close();
+  report.checks.push(
+    "Native fullscreen opens in portrait without an orientation lock and exits back to the prompt",
+  );
+  for (const portal of ["student", "teacher"]) {
+    const page = await open(
+      `scenario=path-four&move-seconds=60&portal=${portal}`,
+      "no-preference",
+      390,
+      844,
+    );
+    await page.evaluate(() => {
+      Element.prototype.requestFullscreen = undefined;
+    });
+    await page
+      .getByRole("button", { name: "전체 화면으로 열기", exact: true })
+      .click();
+    await page.locator(".yut-game--portrait-fullscreen .yut-match").waitFor();
+    assert.equal(await page.locator(".yut-player").count(), 4);
+    await page.locator(".yut-piece-choice").first().waitFor();
+    await page.screenshot({
+      path: path.join(evidence, `portrait-four-${portal}.png`),
+    });
+    await page
+      .getByRole("button", { name: "게임 규칙 보기", exact: true })
+      .click();
+    await page.locator("dialog[open]").waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(
+      await page.locator(".yut-game--fullscreen").count(),
+      1,
+      "Closing game rules preserves fullscreen",
+    );
+    await page
+      .getByRole("button", { name: "전체 화면 나가기", exact: true })
+      .focus();
+    await page.keyboard.press("Tab");
+    assert.ok(
+      await page.evaluate(() =>
+        Boolean(document.activeElement.closest(".yut-game")),
+      ),
+      "Fallback keyboard focus stays inside the game",
+    );
+    await page.keyboard.press("Escape");
+    await page.locator(".yut-orientation-gate").waitFor();
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.textContent),
+      "전체 화면으로 열기",
+    );
+    await page.close();
+    report.checks.push(
+      `${portal}: four-player portrait match, modal Escape, keyboard focus containment and return focus`,
+    );
+  }
+}
 try {
-  if (motionAuditOnly) {
+  if (mobileViewportOnly) {
+    await verifyMobileViewport();
+  } else if (motionAuditOnly) {
     await verifyMotionAudit();
   } else if (entryPolishOnly) {
     await verifyEntryPolish();

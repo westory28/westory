@@ -45,6 +45,7 @@ import YutStackChoice from "./YutStackChoice";
 import { YutEntryScene } from "./YutEntryScene";
 import WeplayGameLoading from "../WeplayGameLoading";
 import useYutSoundEffects from "../useYutSoundEffects";
+import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import "@fontsource/noto-serif-kr/600.css";
 import "./yut.css";
 import "./yut-feedback.css";
@@ -582,9 +583,18 @@ export default function YutGame({
   const localPlayerName = useRef<{ scope: string; name?: string }>();
   const [throwPower, setThrowPower] = useState(0.65);
   const shellRef = useRef<HTMLElement>(null);
-  const [portrait, setPortrait] = useState(portraitViewport);
+  const [portraitDevice, setPortraitDevice] = useState(portraitViewport);
   const [hidden, setHidden] = useState(() => document.hidden);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<
+    "native" | "page" | null
+  >(null);
+  const fullscreen = fullscreenMode !== null;
+  const portrait = portraitDevice && !fullscreen;
+  const viewport = useRef({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+  const [fullscreenHeight, setFullscreenHeight] = useState(window.innerHeight);
   const [moving, setMoving] = useState(false);
   const [selectedMove, setSelectedMove] = useState<YutMove | null>(null);
   const [stackChoice, setStackChoice] = useState<{
@@ -807,19 +817,14 @@ export default function YutGame({
 
   useEffect(() => {
     const measure = () => {
-      const top = Math.max(
-        0,
-        shellRef.current?.getBoundingClientRect().top || 0,
-      );
       const compact =
-        window.innerWidth > window.innerHeight && window.innerHeight <= 560;
-      const frame = shellRef.current?.closest(".weplay-game-frame");
-      const available = Math.min(
-        window.innerHeight - top - (compact ? 8 : 20),
-        document.fullscreenElement === shellRef.current
-          ? Infinity
-          : frame?.clientHeight || Infinity,
-      );
+        viewport.current.width > viewport.current.height &&
+        viewport.current.height <= 560;
+      const portraitFullscreen = fullscreen && portraitDevice;
+      // The board belongs to its frame. Page scrolling and browser chrome must
+      // never change its scale while a player is choosing or moving a piece.
+      const available =
+        shellRef.current?.clientHeight || viewport.current.height;
       const height = (selector: string) =>
         shellRef.current?.querySelector(selector)?.getBoundingClientRect()
           .height || 0;
@@ -830,7 +835,8 @@ export default function YutGame({
       const value = (input?: string) => parseFloat(input || "0") || 0;
       const matchStyle = style(".yut-match"),
         boardStyle = style(".yut-isometric-board-wrap"),
-        dockStyle = style(".yut-action-dock");
+        dockStyle = style(".yut-action-dock"),
+        playersStyle = style(".yut-players");
       const shellStyle = shellRef.current
         ? getComputedStyle(shellRef.current)
         : null;
@@ -843,33 +849,63 @@ export default function YutGame({
         value(dockStyle?.marginTop) +
         value(shellStyle?.borderTopWidth) +
         value(shellStyle?.borderBottomWidth) +
+        (portraitFullscreen
+          ? height(".yut-players") + value(playersStyle?.marginBottom)
+          : 0) +
         8;
-      setPortrait(portraitViewport());
       setBoardMaxWidth(
         Math.max(
           compact ? 260 : 320,
-          (available - overhead - 6) * (compact ? 3 : 5 / 2),
+          (available - overhead - 6) *
+            (portraitFullscreen ? 9 / 7 : compact ? 3 : 5 / 2),
         ),
       );
     };
     measure();
     const frame = window.requestAnimationFrame(measure);
-    const observer = new ResizeObserver(measure);
+    let frameWidth = shellRef.current?.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = shellRef.current?.clientWidth;
+      if (window.innerWidth <= 1023 && frameWidth === nextWidth) return;
+      frameWidth = nextWidth;
+      measure();
+    });
     const frameNode = shellRef.current?.closest(".weplay-game-frame");
     if (frameNode) observer.observe(frameNode);
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, { passive: true });
+    const resize = () => {
+      if (
+        window.innerWidth <= 1023 &&
+        window.innerWidth === viewport.current.width
+      )
+        return;
+      viewport.current = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+      setPortraitDevice(portraitViewport());
+      setFullscreenHeight(viewport.current.height);
+      measure();
+    };
+    window.addEventListener("resize", resize);
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", resize);
     };
-  }, [room?.status, portrait, fullscreen]);
+  }, [room?.status, portrait, portraitDevice, fullscreen, fullscreenHeight]);
   useEffect(() => {
     const visibility = () => setHidden(document.hidden);
-    const onFullscreen = () =>
-      setFullscreen(document.fullscreenElement === shellRef.current);
+    const onFullscreen = () => {
+      const active = document.fullscreenElement === shellRef.current;
+      if (active) {
+        viewport.current = {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+        setFullscreenHeight(viewport.current.height);
+      }
+      setFullscreenMode(active ? "native" : null);
+    };
     document.addEventListener("visibilitychange", visibility);
     document.addEventListener("fullscreenchange", onFullscreen);
     return () => {
@@ -877,6 +913,53 @@ export default function YutGame({
       document.removeEventListener("fullscreenchange", onFullscreen);
     };
   }, []);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const release = acquirePageScrollLock();
+    const previousFocus = document.activeElement as HTMLElement | null;
+    if (fullscreenMode === "page")
+      shellRef.current
+        ?.querySelector<HTMLButtonElement>(".yut-floating-fullscreen")
+        ?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (
+        fullscreenMode !== "page" ||
+        shellRef.current?.querySelector("dialog[open]")
+      )
+        return;
+      if (event.key === "Escape") setFullscreenMode(null);
+      if (event.key === "Tab") {
+        const controls = Array.from(
+          shellRef.current?.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]',
+          ) || [],
+        ).filter(
+          (node) => node.getClientRects().length && !node.closest("[inert]"),
+        );
+        const first = controls[0],
+          last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      release();
+      document.removeEventListener("keydown", escape);
+      if (fullscreenMode === "page") {
+        const returnTo =
+          shellRef.current?.querySelector<HTMLButtonElement>(
+            ".yut-orientation-gate button",
+          ) || previousFocus;
+        if (returnTo?.isConnected) returnTo.focus();
+      }
+    };
+  }, [fullscreen, fullscreenMode]);
   useEffect(() => {
     if (!local || room?.status !== "playing") {
       pauseStart.current = null;
@@ -921,22 +1004,23 @@ export default function YutGame({
       document.removeEventListener("keydown", escape);
     };
   }, [emoteOpen]);
-  const requestLandscape = async () => {
+  const requestGameFullscreen = async () => {
+    viewport.current = { width: window.innerWidth, height: window.innerHeight };
+    setFullscreenHeight(viewport.current.height);
     try {
-      if (!document.fullscreenElement)
-        await shellRef.current?.requestFullscreen?.();
+      if (shellRef.current?.requestFullscreen) {
+        await shellRef.current.requestFullscreen();
+        return;
+      }
     } catch {
-      /* Manual rotation remains available. */
+      /* iPhone and restricted browsers use the same fixed game view below. */
     }
-    try {
-      await (
-        screen.orientation as ScreenOrientation & {
-          lock?: (orientation: string) => Promise<void>;
-        }
-      ).lock?.("landscape");
-    } catch {
-      /* iOS and unsupported browsers use manual rotation. */
-    }
+    setFullscreenMode("page");
+  };
+  const exitGameFullscreen = () => {
+    if (document.fullscreenElement === shellRef.current)
+      void document.exitFullscreen?.();
+    else setFullscreenMode(null);
   };
 
   useEffect(() => {
@@ -1198,11 +1282,6 @@ export default function YutGame({
           Date.now() + (local ? 0 : serverOffset))
     )
       return;
-    if (
-      ["create", "match", "join", "start"].includes(action) &&
-      window.innerWidth <= 1023
-    )
-      void requestLandscape();
     if (
       ["throw", "move", "skip", "start"].includes(action) &&
       roomRef.current?.status === "finished"
@@ -1579,15 +1658,13 @@ export default function YutGame({
         name: portal === "student" ? lobby?.playerName : undefined,
       };
       setSingleOpen(false);
-      if (window.innerWidth <= 1023) void requestLandscape();
       setLocalMode(mode);
     }
   };
   const back = () => {
     if (room) setDialog("leave");
     else {
-      if (document.fullscreenElement === shellRef.current)
-        void document.exitFullscreen?.();
+      exitGameFullscreen();
       onBack();
     }
   };
@@ -1595,10 +1672,14 @@ export default function YutGame({
   return (
     <section
       ref={shellRef}
-      className={`yut-game ${room ? "yut-game--in-room" : ""} ${room && room.status !== "waiting" && !portrait ? "yut-game--match" : ""}`}
+      className={`yut-game ${room ? "yut-game--in-room" : ""} ${room && room.status !== "waiting" && !portrait ? "yut-game--match" : ""} ${fullscreen ? "yut-game--fullscreen" : ""} ${fullscreen && portraitDevice ? "yut-game--portrait-fullscreen" : ""}`}
       style={
-        { "--yut-board-max-width": `${boardMaxWidth}px` } as React.CSSProperties
+        {
+          "--yut-board-max-width": `${boardMaxWidth}px`,
+          "--yut-fullscreen-height": `${fullscreenHeight}px`,
+        } as React.CSSProperties
       }
+      data-floating-launcher-obstacle={fullscreen || undefined}
       aria-label="마우저구 윷놀이"
       data-motion-paused={hidden || portrait}
       onPointerDownCapture={sounds.unlock}
@@ -1738,14 +1819,14 @@ export default function YutGame({
         {portrait ? (
           <div className="yut-orientation-gate" role="status">
             <YutIcon name="rotate" />
-            <h1>가로로 펼치는 윷판</h1>
-            <p>휴대폰을 가로로 돌려 주세요.</p>
+            <h1>마우저구 윷놀이</h1>
+            <p>가로로 돌리거나 전체 화면으로 시작하세요.</p>
             <button
               className="yut-button yut-button--primary"
               type="button"
-              onClick={() => void requestLandscape()}
+              onClick={() => void requestGameFullscreen()}
             >
-              가로 전체 화면으로 열기
+              전체 화면으로 열기
             </button>
             {room?.status === "playing" && !local && (
               <p className="yut-orientation-notice">
@@ -2398,19 +2479,21 @@ export default function YutGame({
             </div>
           </div>
         )}
-        <button
-          type="button"
-          className="yut-floating-fullscreen"
-          aria-label={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
-          title={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
-          onClick={() => {
-            if (fullscreen) void document.exitFullscreen?.();
-            else void requestLandscape();
-          }}
-        >
-          <YutIcon name="rotate" />
-          <span>{fullscreen ? "전체 화면 나가기" : "전체 화면"}</span>
-        </button>
+        {!portrait && (
+          <button
+            type="button"
+            className="yut-floating-fullscreen"
+            aria-label={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
+            title={fullscreen ? "전체 화면 나가기" : "게임 전체 화면"}
+            onClick={() => {
+              if (fullscreen) exitGameFullscreen();
+              else void requestGameFullscreen();
+            }}
+          >
+            <YutIcon name={fullscreen ? "fullscreen-exit" : "fullscreen"} />
+            <span>{fullscreen ? "전체 화면 나가기" : "전체 화면"}</span>
+          </button>
+        )}
         {dialog === "create" && (
           <CreateRoomDialog
             initialCount={settings.defaultPlayerCount}
