@@ -171,22 +171,29 @@ body:has(button[data-patch-memo-root]) .ws-toast-stack {
 @keyframes ws-toast-enter {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(var(--ws-toast-enter-offset, 12px));
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-@media (max-width: 767px) {
-  .ws-toast-stack {
+@media (max-width: 767px), (max-height: 560px) and (pointer: coarse) {
+  .ws-toast-stack,
+  body:has(button[data-patch-memo-root]) .ws-toast-stack {
+    --ws-toast-enter-offset: -12px;
     padding: 12px;
     margin: -12px;
     right: calc(12px + env(safe-area-inset-right, 0px));
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-    width: calc(
-      100vw - 24px - env(safe-area-inset-left, 0px) -
-        env(safe-area-inset-right, 0px)
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    gap: 8px;
+    width: min(
+      360px,
+      calc(
+        100vw - 24px - env(safe-area-inset-left, 0px) -
+          env(safe-area-inset-right, 0px)
+      )
     );
     max-height: calc(
       100dvh - 24px - env(safe-area-inset-top, 0px) -
@@ -194,8 +201,27 @@ body:has(button[data-patch-memo-root]) .ws-toast-stack {
     );
   }
   .ws-toast {
-    padding: 16px;
+    grid-template-columns: 32px minmax(0, 1fr) 44px;
+    min-height: 72px;
+    padding: 12px;
     gap: 8px;
+  }
+  .ws-toast__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .ws-toast__icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .ws-toast__content {
+    padding-top: 4px;
+  }
+  .ws-toast__title,
+  .ws-toast__message {
+    font-size: 14px;
+    line-height: 1.5;
   }
 }
 @media (prefers-reduced-motion: reduce) {

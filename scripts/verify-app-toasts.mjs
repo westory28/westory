@@ -115,7 +115,15 @@ try {
       persistent: true,
     });
     await page.locator(".ws-toast").first().waitFor();
-    await page.waitForTimeout(240);
+    await page
+      .locator(".ws-toast")
+      .evaluateAll((nodes) =>
+        Promise.all(
+          nodes.flatMap((node) =>
+            node.getAnimations().map((animation) => animation.finished),
+          ),
+        ),
+      );
     const boxes = await page.locator(".ws-toast").evaluateAll((nodes) =>
       nodes.map((n) => {
         const b = n.getBoundingClientRect();
@@ -127,6 +135,8 @@ try {
           right: b.right,
           bottom: b.bottom,
           font: getComputedStyle(n.querySelector(".ws-toast__title")).fontSize,
+          icon: n.querySelector(".ws-toast__icon").getBoundingClientRect()
+            .width,
           close: n.querySelector("button").getBoundingClientRect().width,
         };
       }),
@@ -134,12 +144,15 @@ try {
     assert.equal(boxes.length, 2);
     for (const b of boxes) {
       assert.ok(b.x >= 0 && b.right <= width && b.y >= 0 && b.bottom <= 800);
-      assert.ok(b.h >= 96);
-      assert.equal(b.font, "16px");
+      assert.ok(b.h >= (width < 768 ? 72 : 96));
+      assert.equal(b.font, width < 768 ? "14px" : "16px");
+      assert.equal(b.icon, width < 768 ? 32 : 40);
+      if (width < 768) assert.ok(b.w <= 360);
       assert.ok(b.close >= 44);
     }
-    const last = boxes.at(-1);
-    assert.ok(Math.abs(last.bottom - (width < 768 ? 788 : 776)) < 2);
+    if (width < 768)
+      assert.ok(Math.abs(boxes[0].y - 12) < 2, JSON.stringify(boxes));
+    else assert.ok(Math.abs(boxes.at(-1).bottom - 776) < 2);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
@@ -152,6 +165,62 @@ try {
     });
     checks.push("layout " + width);
   }
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await reset();
+    await page.evaluate(() => {
+      const memo = document.createElement("button");
+      memo.setAttribute("data-patch-memo-root", "true");
+      document.body.append(memo);
+    });
+    await notify({ title: "저장 완료", persistent: true });
+    await page.locator(".ws-toast").waitFor();
+    await page
+      .locator(".ws-toast")
+      .evaluate((node) =>
+        Promise.all(
+          node.getAnimations().map((animation) => animation.finished),
+        ),
+      );
+    const box = await page.locator(".ws-toast").boundingBox();
+    if (width < 768) {
+      assert.ok(box.height >= 72 && box.height < 96);
+      assert.ok(Math.abs(box.y - 12) < 2);
+    } else assert.ok(Math.abs(box.y + box.height - 696) < 2);
+    checks.push("memo launcher clearance " + width);
+  }
+  const phone = await browser.newPage({
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  await phone.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  await phone.goto(origin);
+  await phone.waitForFunction(() => !!window.toastQA);
+  await phone.evaluate(() =>
+    window.toastQA.showToast({ title: "가로 화면 알림", persistent: true }),
+  );
+  await phone.locator(".ws-toast").waitFor();
+  await phone
+    .locator(".ws-toast")
+    .evaluate((node) =>
+      Promise.all(node.getAnimations().map((animation) => animation.finished)),
+    );
+  const phoneBox = await phone.locator(".ws-toast").boundingBox();
+  assert.ok(Math.abs(phoneBox.y - 12) < 2 && phoneBox.width <= 360);
+  assert.equal(
+    await phone
+      .locator(".ws-toast__title")
+      .evaluate((node) => getComputedStyle(node).fontSize),
+    "14px",
+  );
+  await phone.screenshot({
+    path: path.join(evidence, "toasts-phone-landscape.png"),
+  });
+  await phone.close();
+  checks.push("touch phone landscape stays compact at the top");
   await page.setViewportSize({ width: 1280, height: 800 });
   await reset();
   await page.clock.install();
