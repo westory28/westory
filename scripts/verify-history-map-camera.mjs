@@ -623,6 +623,115 @@ async function expectGlobe(page) {
     checks.push({ name: `globe-${name}-anchor`, passed: true });
   }
 }
+async function expectTouchCamera(page, width) {
+  await openView(page, "korea");
+  await selectSearch(page, "한강");
+  const session = await page.context().newCDPSession(page);
+  await session.send("Emulation.setTouchEmulationEnabled", {
+    enabled: true,
+    maxTouchPoints: 2,
+  });
+  const box = await page.locator(".history-atlas__map").boundingBox();
+  const x = box.x + box.width * 0.65;
+  const y = box.y + box.height * 0.72;
+  const touch = (type, points) =>
+    session.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: points.map(([x, y], id) => ({ x, y, id })),
+    });
+  const paint = () =>
+    page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+  const before = await flatSnapshot(page);
+  await page.evaluate(() => {
+    window.detailMutationCount = 0;
+    window.detailObserver = new MutationObserver((changes) => {
+      window.detailMutationCount += changes.length;
+    });
+    window.detailObserver.observe(
+      document.querySelector(".history-atlas__overlay"),
+      {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        characterData: true,
+      },
+    );
+  });
+  await touch("touchStart", [[x, y]]);
+  await touch("touchMove", [[x + 28, y + 10]]);
+  await paint();
+  const during = await flatSnapshot(page);
+  assert(
+    Math.abs(during.matrix[1] - before.matrix[1] - 28) < 0.1,
+    `${width}: native touch pans the camera before release`,
+  );
+  const anchor = (state) =>
+    state.anchor.map(
+      (value, index) => (value - state.matrix[index + 1]) / state.matrix[0],
+    );
+  assert(before.anchor && during.anchor, "Selected touch anchor stays visible");
+  assert(
+    anchor(before).every(
+      (value, index) => Math.abs(value - anchor(during)[index]) < 0.1,
+    ),
+    `${width}: touch labels and geometry move in the same frame`,
+  );
+  assert.equal(
+    await page.evaluate(() => window.detailMutationCount),
+    0,
+    "Touch camera does not re-render the open explanation",
+  );
+  await touch("touchEnd", []);
+  await paint();
+  const settled = await flatSnapshot(page);
+  assert.deepEqual(
+    settled.matrix,
+    during.matrix,
+    "Touch release preserves camera",
+  );
+  // Return to the exact starting props and release before the pending RAF.
+  // React's prop diff must not leave the preceding painted DOM transform behind.
+  await touch("touchStart", [[x, y]]);
+  await touch("touchMove", [[x - 24, y]]);
+  await paint();
+  await touch("touchMove", [[x, y]]);
+  await touch("touchEnd", []);
+  await paint();
+  assert.deepEqual(
+    (await flatSnapshot(page)).matrix,
+    settled.matrix,
+    "Fast out-and-back touch release restores the exact camera",
+  );
+  await touch("touchStart", [
+    [x - 35, y],
+    [x + 35, y],
+  ]);
+  await touch("touchMove", [
+    [x - 49, y],
+    [x + 49, y],
+  ]);
+  await paint();
+  const pinched = await flatSnapshot(page);
+  assert(
+    Math.abs(pinched.matrix[0] / settled.matrix[0] - 1.4) < 0.001,
+    "Native two-finger pinch updates the camera during the gesture",
+  );
+  await touch("touchCancel", []);
+  await paint();
+  assert.deepEqual(
+    (await flatSnapshot(page)).matrix,
+    pinched.matrix,
+    "Touch cancellation commits the last camera without a jump",
+  );
+  await page.evaluate(() => window.detailObserver.disconnect());
+  await session.detach();
+  checks.push({ name: `native-touch-camera-${width}`, passed: true });
+}
 try {
   for (const width of process.env.ATLAS_CAMERA_ONLY === "globe"
     ? []
@@ -691,6 +800,7 @@ try {
         path: path.join(out, `jeju-selection-${width}-after.png`),
         fullPage: true,
       });
+      await expectTouchCamera(page, width);
       await page.close();
       continue;
     }
@@ -747,6 +857,7 @@ try {
       path: path.join(out, "country-after-pan.png"),
       fullPage: true,
     });
+    await expectTouchCamera(page, width);
     await expectNaturalCountryOverlap(page);
     await openView(page, "world");
     await recordFlatFrames(

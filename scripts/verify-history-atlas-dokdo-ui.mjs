@@ -316,6 +316,8 @@ for (const width of [286, 356, 640, 920]) {
     land: null,
     geography: null,
     geographyLabels: [],
+    geographyLabelItems: new Map(),
+    textWidths: new Map(),
     terrain: null,
     showTerrain: true,
     terrainLayers: [],

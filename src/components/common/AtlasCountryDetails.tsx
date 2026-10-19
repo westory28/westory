@@ -52,11 +52,11 @@ export default function AtlasCountryDetails({
                 <h3>대한민국과의 관계</h3>
               </div>
               {profile.relations.length ? (
-                <ul>
+                <div className="atlas-place-details__paragraphs">
                   {profile.relations.map((text) => (
-                    <li key={text}>{text}</li>
+                    <p key={text}>{text}</p>
                   ))}
-                </ul>
+                </div>
               ) : (
                 <p className="atlas-place-details__name-note">
                   확인한 공개 자료에는 대한민국과의 관계를 설명한 내용이
@@ -70,11 +70,11 @@ export default function AtlasCountryDetails({
               <div className="atlas-place-details__section-heading">
                 <h3>역사</h3>
               </div>
-              <ul>
+              <div className="atlas-place-details__paragraphs">
                 {profile.history.map((text) => (
-                  <li key={text}>{text}</li>
+                  <p key={text}>{text}</p>
                 ))}
-              </ul>
+              </div>
             </section>
           )}
           <details className="atlas-place-details__sources" key={id}>

@@ -123,6 +123,110 @@ class Element {
       : null;
   }
 }
+function gestureHarness(node, transformRef, updates) {
+  const attributeNode = (attributes = {}) => ({
+    attributes,
+    writes: new Map(),
+    getAttribute(name) {
+      return this.attributes[name] ?? null;
+    },
+    setAttribute(name, value) {
+      this.writes.set(name, (this.writes.get(name) || 0) + 1);
+      this.attributes[name] = value;
+    },
+    removeAttribute(name) {
+      delete this.attributes[name];
+    },
+  });
+  const original = { ...transformRef.current };
+  const camera = attributeNode({
+    transform: `translate(${original.x} ${original.y}) scale(${original.scale})`,
+  });
+  const label = { style: { left: "40px", top: "60px" } };
+  const screenPath = attributeNode();
+  const pattern = attributeNode({
+    patternTransform: `scale(${1 / original.scale})`,
+  });
+  let zoomText = `${Math.round(original.scale * 100)}%`;
+  const zoom = {
+    writes: 0,
+    get textContent() {
+      return zoomText;
+    },
+    set textContent(value) {
+      this.writes += 1;
+      zoomText = value;
+    },
+  };
+  node.querySelectorAll = (selector) =>
+    selector === "pattern"
+      ? [pattern]
+      : selector.includes("history-atlas__minor-dots")
+        ? [screenPath]
+        : selector.includes("history-atlas__geography")
+          ? [camera]
+          : [label];
+  node.parentElement = { querySelector: () => zoom };
+  const frames = new Map(),
+    timers = new Map();
+  let sequence = 0;
+  const dependencies = {
+    mapRef: { current: node },
+    transformRef,
+    gestureFrameRef: { current: null },
+    gestureEndRef: { current: null },
+    gestureSnapshotRef: { current: null },
+    cameraFrameRef: { current: null },
+    useCallback: (callback) => callback,
+    flushSync: (callback) => callback(),
+    window: { matchMedia: () => ({ matches: false }) },
+    performance: { now: () => 0 },
+    setCameraMoving() {},
+    setTransform: (value) => updates.push(value),
+    requestAnimationFrame: (callback) => {
+      frames.set(++sequence, callback);
+      return sequence;
+    },
+    cancelAnimationFrame: (id) => frames.delete(id),
+    setTimeout: (callback) => {
+      timers.set(++sequence, callback);
+      return sequence;
+    },
+    clearTimeout: (id) => timers.delete(id),
+  };
+  dependencies.finishGesture = evaluate(
+    declarations.get("finishGesture"),
+    dependencies,
+  );
+  dependencies.moveGesture = evaluate(
+    declarations.get("moveGesture"),
+    dependencies,
+  );
+  dependencies.updateTransform = evaluate(
+    declarations.get("updateTransform"),
+    dependencies,
+  );
+  return {
+    ...dependencies,
+    camera,
+    label,
+    screenPath,
+    pattern,
+    zoom,
+    frames,
+    timers,
+    draw() {
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach((callback) => callback());
+    },
+    settle() {
+      const pending = [...timers.values()];
+      timers.clear();
+      pending.forEach((callback) => callback());
+    },
+  };
+}
 // Invoke the real native event handlers with mobile/tablet geometry. This checks
 // the gesture transitions themselves; CSS alone cannot prove touch dragging.
 let gestureCases = 0;
@@ -140,19 +244,15 @@ for (const mapWidth of [356, 720]) {
       listeners.delete(type);
     },
   };
+  const camera = gestureHarness(node, transformRef, updates);
   const cleanup = evaluate(touchEffect, {
     ...geometry,
+    ...camera,
     Element,
     mapWidth,
     mapHeight,
     movedRef,
     transformRef,
-    cameraFrameRef: { current: null },
-    mapRef: { current: node },
-    updateTransform: (value) => {
-      transformRef.current = value;
-      updates.push(value);
-    },
     zoom: () => assert.fail("Touch must not use the wheel handler"),
   })();
   const overlayDown = evaluate(overlayPointerDown, { movedRef });
@@ -344,13 +444,123 @@ for (const mapWidth of [356, 720]) {
     false,
     "Keyboard activation is not blocked by a previous drag",
   );
+  touch("touchstart", [[100, 100]]);
+  touch("touchmove", [[135, 125]]);
+  const canceledView = { ...transformRef.current };
+  touch("touchcancel", []);
+  same(updates.at(-1), canceledView);
+  assert.equal(
+    camera.frames.size,
+    0,
+    "Cancellation clears a pending gesture frame",
+  );
+  assert.equal(camera.gestureSnapshotRef.current, null);
+
+  const beforeWheel = { ...transformRef.current };
+  camera.updateTransform({ ...beforeWheel, x: beforeWheel.x + 60 }, true);
+  assert.notEqual(camera.cameraFrameRef.current, null);
+  const wheel = {
+    target: new Element(),
+    clientX: 110,
+    clientY: 120,
+    deltaY: -40,
+    deltaMode: 0,
+    preventDefault() {},
+  };
+  listeners.get("wheel")(wheel);
+  assert.equal(
+    camera.cameraFrameRef.current,
+    null,
+    "A wheel gesture cancels an in-progress selection camera animation",
+  );
+  const wheeled = { ...transformRef.current };
+  assert(wheeled.scale > beforeWheel.scale);
+  camera.draw();
+  camera.settle();
+  same(updates.at(-1), wheeled);
+  assert.equal(camera.gestureSnapshotRef.current, null);
   cleanup();
   assert.equal(
     listeners.size,
     0,
     "Rerenders remove every native interaction listener",
   );
-  gestureCases += 9;
+  gestureCases += 11;
+}
+
+for (const mapWidth of [356, 720]) {
+  const original = { scale: 3, x: -mapWidth, y: -480 };
+  const pan = gestureHarness({}, { current: original }, []);
+  for (let sample = 1; sample <= 5; sample++) {
+    pan.moveGesture({
+      ...original,
+      x: original.x + sample * 12,
+      y: original.y + sample * 8,
+    });
+    pan.draw();
+  }
+  pan.finishGesture(true);
+  assert.equal(
+    pan.pattern.writes.get("patternTransform") || 0,
+    0,
+    "Panning and release at the same scale retain the SVG texture cache",
+  );
+  assert.equal(
+    pan.zoom.writes,
+    0,
+    "Panning and release never rewrite an unchanged zoom label",
+  );
+  const transformRef = { current: original };
+  const updates = [];
+  const camera = gestureHarness({}, transformRef, updates);
+  const target = { scale: 4, x: original.x + 80, y: original.y + 40 };
+  for (let sample = 0; sample < 40; sample++) camera.moveGesture(target, true);
+  assert.equal(
+    updates.length,
+    0,
+    "Continuous gesture samples do not render React state",
+  );
+  assert.equal(camera.frames.size, 1, "A burst queues one display frame");
+  assert.equal(
+    camera.timers.size,
+    1,
+    "Wheel settling uses one replaceable timer",
+  );
+  camera.draw();
+  assert.equal(
+    camera.camera.attributes.transform,
+    `translate(${target.x} ${target.y}) scale(${target.scale})`,
+  );
+  assert.equal(camera.zoom.textContent, "400%");
+  assert.equal(camera.pattern.attributes.patternTransform, "scale(0.25)");
+  assert.notEqual(camera.label.style.left, "40px");
+  assert(camera.screenPath.attributes.transform);
+
+  // The last sample can return to the existing React props and be released
+  // before RAF. React will skip identical props, so stale imperative values
+  // must be restored before committing the final state.
+  camera.moveGesture(original);
+  camera.finishGesture(true);
+  same(updates.at(-1), original);
+  assert.equal(
+    camera.frames.size,
+    0,
+    "Fast release cancels the pending display frame",
+  );
+  assert.equal(camera.timers.size, 0);
+  assert.equal(
+    camera.camera.attributes.transform,
+    `translate(${original.x} ${original.y}) scale(${original.scale})`,
+  );
+  assert.equal(camera.label.style.left, "40px");
+  assert.equal(camera.label.style.top, "60px");
+  assert.equal(
+    camera.pattern.attributes.patternTransform,
+    `scale(${1 / original.scale})`,
+  );
+  assert.equal(camera.zoom.textContent, "300%");
+  assert.equal(camera.screenPath.attributes.transform, undefined);
+  gestureCases += 3;
 }
 
 const koreaAreas = JSON.parse(

@@ -546,6 +546,17 @@ export default function HistoryAtlas({
   const [motionPaused, setMotionPaused] = useState(false);
   const transformRef = useRef(transform);
   const cameraFrameRef = useRef<number | null>(null);
+  const gestureFrameRef = useRef<number | null>(null);
+  const gestureEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gestureSnapshotRef = useRef<{
+    transform: AtlasTransform;
+    labels: { node: HTMLElement; x: number; y: number }[];
+    geometry: NodeListOf<SVGElement>;
+    screenPaths: NodeListOf<SVGElement>;
+    patterns: NodeListOf<SVGPatternElement>;
+    zoom: Element | null;
+    paintedScale: number;
+  } | null>(null);
   const resetProjectionRef = useRef(false);
   const regionOverviewRef = useRef(false);
   const movedRef = useRef(false);
@@ -1287,8 +1298,120 @@ export default function HistoryAtlas({
     selectedCountryLabel,
     geographyLabels,
   ]);
+  const finishGesture = useCallback((synchronous = false) => {
+    if (gestureFrameRef.current !== null)
+      cancelAnimationFrame(gestureFrameRef.current);
+    if (gestureEndRef.current !== null) clearTimeout(gestureEndRef.current);
+    gestureFrameRef.current = null;
+    gestureEndRef.current = null;
+    const snapshot = gestureSnapshotRef.current;
+    if (!snapshot) return;
+    gestureSnapshotRef.current = null;
+    // Restore React's last committed props before reconciliation. A round trip
+    // or clamped label can otherwise retain a transient DOM value when its
+    // next virtual prop equals its previous one.
+    const previous = snapshot.transform;
+    snapshot.geometry.forEach((node) =>
+      node.setAttribute(
+        "transform",
+        `translate(${previous.x} ${previous.y}) scale(${previous.scale})`,
+      ),
+    );
+    snapshot.screenPaths.forEach((node) => node.removeAttribute("transform"));
+    for (const label of snapshot.labels) {
+      label.node.style.left = `${label.x}px`;
+      label.node.style.top = `${label.y}px`;
+    }
+    if (snapshot.paintedScale !== previous.scale) {
+      snapshot.patterns.forEach((node) =>
+        node.setAttribute("patternTransform", `scale(${1 / previous.scale})`),
+      );
+      if (snapshot.zoom)
+        snapshot.zoom.textContent = `${Math.round(previous.scale * 100)}%`;
+    }
+    const commit = () => setTransform({ ...transformRef.current });
+    if (synchronous) flushSync(commit);
+    else commit();
+  }, []);
+  // During a continuous gesture only the camera and existing label anchors move.
+  // Reconcile visibility/collisions once at release, not on every touch sample.
+  const moveGesture = useCallback(
+    (value: AtlasTransform, settle = false) => {
+      const map = mapRef.current;
+      if (!map) return;
+      gestureSnapshotRef.current ??= {
+        transform: transformRef.current,
+        labels: Array.from(
+          map.querySelectorAll<HTMLElement>(
+            ".history-atlas__terrain-label, .history-atlas__traditional-label, .history-atlas__country-label, .history-atlas__province-label, .history-atlas__point, .history-atlas__label-anchor",
+          ),
+        ).map((node) => ({
+          node,
+          x: parseFloat(node.style.left),
+          y: parseFloat(node.style.top),
+        })),
+        geometry: map.querySelectorAll<SVGElement>(
+          ".history-atlas__geography, [data-atlas-camera-features]",
+        ),
+        screenPaths: map.querySelectorAll<SVGElement>(
+          ".history-atlas__minor-dots, .history-atlas__terrain-leader",
+        ),
+        patterns: map.querySelectorAll<SVGPatternElement>("pattern"),
+        zoom: map.parentElement?.querySelector(".history-atlas__zoom") || null,
+        paintedScale: transformRef.current.scale,
+      };
+      transformRef.current = value;
+      if (gestureFrameRef.current === null)
+        gestureFrameRef.current = requestAnimationFrame(() => {
+          gestureFrameRef.current = null;
+          const snapshot = gestureSnapshotRef.current;
+          if (!snapshot) return;
+          const next = transformRef.current;
+          const camera = `translate(${next.x} ${next.y}) scale(${next.scale})`;
+          snapshot.geometry.forEach((node) =>
+            node.setAttribute("transform", camera),
+          );
+          const ratio = next.scale / snapshot.transform.scale;
+          const x = next.x - snapshot.transform.x * ratio;
+          const y = next.y - snapshot.transform.y * ratio;
+          snapshot.screenPaths.forEach((node) =>
+            node.setAttribute(
+              "transform",
+              `translate(${x} ${y}) scale(${ratio})`,
+            ),
+          );
+          for (const label of snapshot.labels) {
+            label.node.style.left = `${label.x * ratio + x}px`;
+            label.node.style.top = `${label.y * ratio + y}px`;
+          }
+          // Rewriting an unchanged SVG pattern invalidates its raster cache.
+          // Panning must reuse the terrain textures at the current scale.
+          if (snapshot.paintedScale !== next.scale) {
+            snapshot.patterns.forEach((node) =>
+              node.setAttribute("patternTransform", `scale(${1 / next.scale})`),
+            );
+            if (snapshot.zoom)
+              snapshot.zoom.textContent = `${Math.round(next.scale * 100)}%`;
+            snapshot.paintedScale = next.scale;
+          }
+        });
+      if (settle) {
+        if (gestureEndRef.current !== null) clearTimeout(gestureEndRef.current);
+        gestureEndRef.current = setTimeout(() => finishGesture(true), 120);
+      }
+    },
+    [finishGesture],
+  );
+  useLayoutEffect(() => {
+    mapRef.current
+      ?.querySelectorAll(
+        ".history-atlas__minor-dots, .history-atlas__terrain-leader",
+      )
+      .forEach((node) => node.removeAttribute("transform"));
+  }, [transform]);
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
+      finishGesture();
       if (cameraFrameRef.current !== null)
         cancelAnimationFrame(cameraFrameRef.current);
       cameraFrameRef.current = null;
@@ -1327,12 +1450,15 @@ export default function HistoryAtlas({
       };
       cameraFrameRef.current = requestAnimationFrame(step);
     },
-    [],
+    [finishGesture],
   );
   useEffect(
     () => () => {
       if (cameraFrameRef.current !== null)
         cancelAnimationFrame(cameraFrameRef.current);
+      if (gestureFrameRef.current !== null)
+        cancelAnimationFrame(gestureFrameRef.current);
+      if (gestureEndRef.current !== null) clearTimeout(gestureEndRef.current);
     },
     [],
   );
@@ -1796,6 +1922,7 @@ export default function HistoryAtlas({
       };
     };
     const begin = (event: TouchEvent) => {
+      finishGesture(true);
       if (
         event.target instanceof Element &&
         event.target.closest(".history-atlas__overlay")
@@ -1837,7 +1964,7 @@ export default function HistoryAtlas({
         mapWidth,
         mapHeight,
       );
-      updateTransform(
+      moveGesture(
         constrainAtlasTransform(
           {
             ...zoomed,
@@ -1850,6 +1977,7 @@ export default function HistoryAtlas({
       );
     };
     const end = (event: TouchEvent) => {
+      finishGesture(true);
       if (event.touches.length === 0) touch = null;
       else {
         const moved = movedRef.current;
@@ -1858,6 +1986,7 @@ export default function HistoryAtlas({
       }
     };
     const cancel = () => {
+      finishGesture(true);
       touch = null;
       movedRef.current = true;
     };
@@ -1868,14 +1997,22 @@ export default function HistoryAtlas({
       )
         return;
       event.preventDefault();
+      if (cameraFrameRef.current !== null)
+        updateTransform(transformRef.current);
       const rect = node.getBoundingClientRect();
       const delta =
         event.deltaY *
         (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? mapHeight : 1);
-      zoom(Math.exp(-Math.max(-240, Math.min(240, delta)) * 0.003), [
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-      ]);
+      moveGesture(
+        zoomAtlasAt(
+          transformRef.current,
+          Math.exp(-Math.max(-240, Math.min(240, delta)) * 0.003),
+          [event.clientX - rect.left, event.clientY - rect.top],
+          mapWidth,
+          mapHeight,
+        ),
+        true,
+      );
     };
     node.addEventListener("touchstart", begin, { passive: false });
     node.addEventListener("touchmove", move, { passive: false });
@@ -1889,7 +2026,7 @@ export default function HistoryAtlas({
       node.removeEventListener("touchcancel", cancel);
       node.removeEventListener("wheel", wheel);
     };
-  }, [mapWidth, mapHeight, updateTransform, zoom]);
+  }, [mapWidth, mapHeight, updateTransform, moveGesture, finishGesture]);
 
   const requestPlaceFocus = (placeId: string) => {
     pendingVisualScaleRef.current =
@@ -2426,6 +2563,7 @@ export default function HistoryAtlas({
             }}
             onPointerDown={(event) => {
               if (event.pointerType === "touch" || event.button !== 0) return;
+              finishGesture(true);
               if (cameraFrameRef.current !== null)
                 updateTransform(transformRef.current);
               movedRef.current = false;
@@ -2446,6 +2584,7 @@ export default function HistoryAtlas({
               if (!drag || drag.pointerId !== event.pointerId) return;
               if (!(event.buttons & 1)) {
                 dragRef.current = null;
+                finishGesture(true);
                 return;
               }
               const x = event.clientX - drag.x;
@@ -2454,7 +2593,7 @@ export default function HistoryAtlas({
               movedRef.current = true;
               if (!event.currentTarget.hasPointerCapture(event.pointerId))
                 event.currentTarget.setPointerCapture(event.pointerId);
-              updateTransform(
+              moveGesture(
                 constrainAtlasTransform(
                   { ...drag.start, x: drag.start.x + x, y: drag.start.y + y },
                   mapWidth,
@@ -2463,14 +2602,17 @@ export default function HistoryAtlas({
               );
             }}
             onPointerUp={(event) => {
+              finishGesture(true);
               dragRef.current = null;
               if (event.currentTarget.hasPointerCapture(event.pointerId))
                 event.currentTarget.releasePointerCapture(event.pointerId);
             }}
             onPointerCancel={() => {
+              finishGesture(true);
               dragRef.current = null;
             }}
             onLostPointerCapture={() => {
+              finishGesture(true);
               dragRef.current = null;
             }}
             onClickCapture={(event) => {
@@ -2690,6 +2832,7 @@ export default function HistoryAtlas({
               />
               {paths && (
                 <g
+                  data-atlas-camera-features=""
                   transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
                 >
                   {landformPaths.map(({ placeId, path }) => (

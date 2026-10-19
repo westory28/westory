@@ -217,6 +217,35 @@ async function expectRegionDescription(page) {
   );
   assert.equal(await article.locator("details").getAttribute("open"), null);
 }
+async function expectCountryTypography(article) {
+  const typography = await article.evaluate((element) => {
+    const overview = element.querySelector(".atlas-place-details__definition");
+    const paragraphs = element.querySelectorAll(
+      ".atlas-place-details__paragraphs p",
+    );
+    return [overview, ...paragraphs].map((paragraph) => {
+      const style = getComputedStyle(paragraph);
+      return {
+        left: paragraph.getBoundingClientRect().left,
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+      };
+    });
+  });
+  assert(typography.length > 1, "Country narrative uses readable paragraphs");
+  for (const paragraph of typography) {
+    assert(
+      Math.abs(paragraph.left - typography[0].left) < 1,
+      "Country overview, relationships and history share the same left column",
+    );
+    assert.equal(paragraph.fontFamily, typography[0].fontFamily);
+    assert.equal(paragraph.fontSize, "16px");
+    assert.equal(paragraph.fontWeight, "400");
+    assert.equal(paragraph.lineHeight, "26.4px");
+  }
+}
 async function expectFreePanning(page, view) {
   const map = page.locator(".history-atlas__map");
   const homeLand = await page.locator(".history-atlas__land").getAttribute("d");
@@ -521,6 +550,13 @@ try {
         await page
           .getByRole("article", { name: "탄자니아 설명", exact: true })
           .waitFor();
+        await expectCountryTypography(
+          page.getByRole("article", { name: "탄자니아 설명", exact: true }),
+        );
+        await page.screenshot({
+          path: path.join(out, `country-world-${width}.png`),
+          fullPage: true,
+        });
         assert(
           await page
             .getByRole("heading", { name: "대한민국과의 관계", exact: true })
@@ -550,6 +586,16 @@ try {
         await page
           .getByRole("article", { name: `${countryName} 설명`, exact: true })
           .waitFor();
+        await expectCountryTypography(
+          page.getByRole("article", {
+            name: `${countryName} 설명`,
+            exact: true,
+          }),
+        );
+        await page.screenshot({
+          path: path.join(out, `country-globe-${width}.png`),
+          fullPage: true,
+        });
         assert(
           await page
             .getByRole("heading", { name: "역사", exact: true })

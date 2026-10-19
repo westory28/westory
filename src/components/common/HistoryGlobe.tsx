@@ -514,6 +514,20 @@ export default function HistoryGlobe({
       ),
     ];
   }, [terrain, geography, showTerrain]);
+  const geographyLabelItems = useMemo(() => {
+    const names = new Map<string, Item>();
+    for (const item of mapItems) {
+      for (const name of [...item.names, ...item.aliases]) {
+        if (!names.has(name)) names.set(name, item);
+      }
+    }
+    return new Map(
+      geographyLabels.map((label) => [
+        label,
+        names.get(normalizeAtlasSearch(label.name)),
+      ]),
+    );
+  }, [geographyLabels, mapItems]);
   const terrainLayers = useMemo(() => {
     if (!showTerrain) return [];
     const layers = new Map<AtlasTerrainKind, MultiPolygon>();
@@ -805,6 +819,12 @@ export default function HistoryGlobe({
           ?.createPattern(mountainTile.canvas, "repeat") || null
       : null;
     const desertTexture = desertPattern();
+    const textWidths = new Map<string, number>();
+    const refreshTextWidths = () => {
+      textWidths.clear();
+      requestDraw();
+    };
+    document.fonts.addEventListener("loadingdone", refreshTextWidths);
     drawRef.current = () => {
       const canvas = canvasRef.current,
         root = rootRef.current;
@@ -847,6 +867,27 @@ export default function HistoryGlobe({
         `${atlasProjectedNorthBearing(projection, [camera.longitude, camera.latitude])}deg`,
       );
       const path = geoPath(projection, context);
+      // Reuse the exact projected coast for filling, clipping and stroking.
+      // Projecting it into the current canvas path repeated all work each time.
+      const landPath = land ? new Path2D() : null;
+      if (land && landPath)
+        geoPath(projection, {
+          beginPath() {},
+          moveTo: (x, y) => landPath.moveTo(x, y),
+          lineTo: (x, y) => landPath.lineTo(x, y),
+          arc: (x, y, radius, start, end, anticlockwise) =>
+            landPath.arc(x, y, radius, start, end, anticlockwise),
+          closePath: () => landPath.closePath(),
+        })(land);
+      const measureLabelWidth = (text: string) => {
+        const key = `${context.font}\0${text}`;
+        let value = textWidths.get(key);
+        if (value === undefined) {
+          value = context.measureText(text).width;
+          textWidths.set(key, value);
+        }
+        return value;
+      };
       const interacting =
         !!gesture.current?.moved ||
         wheelActive.current ||
@@ -869,20 +910,14 @@ export default function HistoryGlobe({
       context.strokeStyle = color("--ws-border-blue");
       context.lineWidth = 0.6;
       context.stroke();
-      if (land) {
-        context.beginPath();
-        path(land);
+      if (landPath) {
         context.fillStyle = color("--ws-surface");
-        context.fill();
+        context.fill(landPath);
       }
       // All terrestrial fills share the visible coast. Different source
       // resolutions must never paint a second coast into the sea.
       context.save();
-      if (land) {
-        context.beginPath();
-        path(land);
-        context.clip();
-      }
+      if (landPath) context.clip(landPath);
       if (showTerrain && geography && !terrain) {
         context.beginPath();
         path(geography.deserts);
@@ -967,11 +1002,8 @@ export default function HistoryGlobe({
         provinceArea?.properties.regionId?.startsWith("water");
       if (highlightedShape && !highlightedCountry) {
         context.save();
-        if (land && highlightedArea && !marineRegion) {
-          context.beginPath();
-          path(land);
-          context.clip();
-        }
+        if (landPath && highlightedArea && !marineRegion)
+          context.clip(landPath);
         context.beginPath();
         path(highlightedShape);
         if (highlightedArea) {
@@ -989,12 +1021,10 @@ export default function HistoryGlobe({
       }
       // The continuous base coastline is always the final edge on top of
       // country/region fills, including Tanzania's islands and coastal inlets.
-      if (land) {
-        context.beginPath();
-        path(land);
+      if (landPath) {
         context.strokeStyle = color("--ws-text-soft");
         context.lineWidth = 0.7;
-        context.stroke();
+        context.stroke(landPath);
       }
       landClipRef.current?.setAttribute(
         "d",
@@ -1137,7 +1167,7 @@ export default function HistoryGlobe({
               context.font = "700 14px 'Noto Sans KR', sans-serif";
               const textWidth = Math.min(
                 width - 32,
-                context.measureText(provinceArea.properties.name).width,
+                measureLabelWidth(provinceArea.properties.name),
               );
               const x = shapeAnchor[0] - textWidth / 2;
               const y = shapeAnchor[1];
@@ -1158,23 +1188,32 @@ export default function HistoryGlobe({
       if (!labelNodes) return;
       const focusedLabel = document.activeElement;
       const claimedLabels = new Set<SVGGElement>();
-      const claimLabel = (key: string) => {
+      const claimLabel = (() => {
         const groups = Array.from(labelNodes) as SVGGElement[];
-        const group =
-          groups.find(
-            (node) =>
-              node.getAttribute("data-globe-key") === key &&
-              !claimedLabels.has(node),
-          ) ||
-          groups.find(
-            (node) => !claimedLabels.has(node) && node !== focusedLabel,
-          );
-        if (group) {
-          claimedLabels.add(group);
-          group.setAttribute("data-globe-key", key);
-        }
-        return group;
-      };
+        const keyed = new Map(
+          groups.map((group) => [group.getAttribute("data-globe-key"), group]),
+        );
+        let freeIndex = 0;
+        return (key: string) => {
+          const existing = keyed.get(key);
+          let group =
+            existing && !claimedLabels.has(existing) ? existing : undefined;
+          if (!group) {
+            while (
+              freeIndex < groups.length &&
+              (claimedLabels.has(groups[freeIndex]) ||
+                groups[freeIndex] === focusedLabel)
+            )
+              freeIndex += 1;
+            group = groups[freeIndex++];
+          }
+          if (group) {
+            claimedLabels.add(group);
+            group.setAttribute("data-globe-key", key);
+          }
+          return group;
+        };
+      })();
       for (const node of labelNodes) {
         const group = node as SVGGElement;
         group.style.display = "none";
@@ -1206,7 +1245,7 @@ export default function HistoryGlobe({
             : null;
         if (!xy) return false;
         context.font = `${active ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
-        const textWidth = Math.min(width - 32, context.measureText(name).width);
+        const textWidth = Math.min(width - 32, measureLabelWidth(name));
         const offsets = active
           ? [[0, 0]]
           : [
@@ -1276,10 +1315,7 @@ export default function HistoryGlobe({
             : nameOf(point.item);
         const emphasized = activeLabel;
         context.font = `${emphasized ? 700 : 500} 14px 'Noto Sans KR', sans-serif`;
-        const textWidth = Math.min(
-          width - 32,
-          context.measureText(label).width,
-        );
+        const textWidth = Math.min(width - 32, measureLabelWidth(label));
         const onShape = activeLabel && !!selectedShape;
         const x = onShape ? point.x - textWidth / 2 : point.x + 10;
         let y = onShape ? point.y : point.y - 18;
@@ -1388,11 +1424,7 @@ export default function HistoryGlobe({
           !isGlobePointVisible(label.coordinates, camera)
         )
           continue;
-        const labelName = normalizeAtlasSearch(label.name);
-        const labelItem = mapItems.find(
-          (item) =>
-            item.names.includes(labelName) || item.aliases.includes(labelName),
-        );
+        const labelItem = geographyLabelItems.get(label);
         if (
           labelItem &&
           (labelledPlaces.has(labelItem.place.id) ||
@@ -1402,7 +1434,7 @@ export default function HistoryGlobe({
         const xy = projection(label.coordinates);
         if (!xy) continue;
         const [x, y] = xy;
-        const textWidth = context.measureText(label.name).width;
+        const textWidth = measureLabelWidth(label.name);
         const left = x - textWidth / 2;
         if (
           left < 8 ||
@@ -1462,10 +1494,14 @@ export default function HistoryGlobe({
       }
     };
     requestDraw();
+    return () => {
+      document.fonts.removeEventListener("loadingdone", refreshTextWidths);
+    };
   }, [
     land,
     geography,
     geographyLabels,
+    geographyLabelItems,
     terrain,
     terrainLayers,
     showTerrain,
