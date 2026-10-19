@@ -2,13 +2,14 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { createStudentWisWallet } = require('./studentWisWallet');
+const {
+  resolveRankPolicy, getProfileEmojiEntryById, getCurrentTierCodeForRankTotal,
+  getAllowedEmojiIdsForTier,
+} = require('./studentProfileEmojiPolicy');
 
 const createStudentProfileEmojiHandler = ({
   db,
   loadPolicy,
-  getProfileEmojiEntryById,
-  getCurrentTierCodeForRankTotal,
-  getAllowedEmojiIdsForTier,
   assertSession = assertScoreWorkflowSession,
 }) => {
   const canonicalWallet = createStudentWisWallet({ db });
@@ -35,12 +36,13 @@ const createStudentProfileEmojiHandler = ({
       // Legacy wallets and a previously selected emoji never grant access.
       const { wallet } = await canonicalWallet.read(transaction, { year, semester }, uid);
       const policy = await loadPolicy(transaction, year, semester);
-      const emojiEntry = getProfileEmojiEntryById(emojiId, policy.rankPolicy.emojiRegistry);
+      const rankPolicy = resolveRankPolicy(policy?.rankPolicy);
+      const emojiEntry = getProfileEmojiEntryById(emojiId, rankPolicy.emojiRegistry);
       if (!emojiEntry || emojiEntry.enabled === false) {
         throw new HttpsError('invalid-argument', '선택할 수 없는 이모지입니다.');
       }
-      const tierCode = getCurrentTierCodeForRankTotal(wallet.rankEarnedTotal, policy.rankPolicy);
-      if (!getAllowedEmojiIdsForTier(policy.rankPolicy, tierCode).includes(emojiId)) {
+      const tierCode = getCurrentTierCodeForRankTotal(wallet.rankEarnedTotal, rankPolicy);
+      if (!getAllowedEmojiIdsForTier(rankPolicy, tierCode).includes(emojiId)) {
         throw new HttpsError('failed-precondition', '현재 학기 점수로 아직 선택할 수 없는 이모지입니다.');
       }
       transaction.set(db.doc(`users/${uid}`), {

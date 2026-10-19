@@ -168,3 +168,33 @@ firebase functions:list --project history-quiz-yongsin
 
 중첩 팝업의 닫힘·경로 이동 후 스크롤 복원은 `npm run verify:page-scroll-lock`으로
 검증한다. 화면 검증에는 390·768·1280px의 학생/교사 알림장, 위스 순위와 명예 배지를 포함한다.
+
+## 학생 등급별 프로필 이모지 제한 (2026-10-19)
+
+등급 접근은 `studentProfileEmojiPolicy.js`의 공통 정책과 현재 학기의 canonical
+`semester_wis_accounts.rankEarnedTotal`로 판정한다. 이전 `point_wallets`, 잔액,
+저장된 상위 이모지, `emojiPolicy.enabled=false`는 해금 권한을 주지 않는다.
+현재 등급까지 허용된 이모지만 저장·표시하며 미등록·비활성·ID/그림 불일치는
+정책의 기본 이모지로 처리한다. 명예의 전당의 학생·교사·보관 학기 조회도 같은
+판정을 사용하고 순위 공개 범위·읽기 전용 계약을 유지한다.
+
+프로필, 현재 계좌, 등급 정책, 활성 학기 변경 trigger 4개는 실행 시점의 최신
+포인터·정책·계좌·프로필을 transaction에서 다시 읽어 잘못된 선택만 정리한다.
+점수·거래·순위·등록 정보는 수정하지 않는다. 신규 자기 프로필 생성 시에는 이모지
+필드를 직접 지정할 수 없으며 승인 후 기존 서버 선택 기능을 사용한다.
+
+기존 데이터 정리는 `node functions/scripts/fix-legacy-student-profile-emojis.cjs
+--project=history-quiz-yongsin`으로 먼저 확인하고, 적용할 때 `--apply`와
+`--backup=<저장소 밖의 새 JSON 경로>`를 추가한다. 변경 전 기록은 로컬에만 남기며
+Git에 포함하지 않는다. 적용 중 선택·학기가 바뀌면 덮어쓰지 않고 재검사한다.
+2026-10-19에는 학생 324명 중 등급에 맞지 않는 73명을 기본 이모지로 수정했고,
+재검사에서 위반 0명과 정상 선택 보존을 확인했다.
+
+배포 대상은 서울 `getWisEconomyState`, `updateStudentProfileIcon`,
+`reconcileStudentProfileEmojiOnUserWrite`, `reconcileStudentProfileEmojiOnAccountWrite`,
+`reconcileStudentProfileEmojiOnPolicyWrite`, `reconcileStudentProfileEmojiOnSemesterWrite`와
+Firestore rules다. 미국의 기존 순위 함수는 삭제·재배포하지 않는다.
+`npm --prefix functions run check`, `npm run build` 및
+`firebase emulators:exec --only firestore --config firebase.student-access-test.json
+--project demo-westory-session-student-access "node scripts/verify-student-access.mjs"`로
+검증하고, 프론트엔드도 해당 커밋을 운영 도메인에 배포·승격한다.

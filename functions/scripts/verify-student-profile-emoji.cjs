@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { createStudentProfileEmojiHandler } = require('../studentProfileEmoji');
 const { accountIdFor } = require('../studentWisWallet');
+const { resolveStudentProfileEmoji, resolveRankPolicy, getCurrentTierCodeForRankTotal } = require('../studentProfileEmojiPolicy');
 
 // Isolated in-memory transactions only; no credentials or production data.
 const uid = 'emoji-student', semesterId = '2026-2';
@@ -12,10 +13,10 @@ const profilePath = `users/${uid}`;
 const policyPath = 'years/2026/semesters/2/point_policies/current';
 const slotPath = `semester_enrollment_slots/slot_${createHash('sha256').update(`${semesterId}\n${uid}`).digest('hex').slice(0, 40)}`;
 const registry = [
-  { id: 'smile', emoji: '😀', enabled: true },
-  { id: 'cool', emoji: '😎', enabled: true },
-  { id: 'fox', emoji: '🦊', enabled: true },
-  { id: 'disabled', emoji: '🚫', enabled: false },
+  { id: 'smile', emoji: '😀', enabled: true, unlockTierCode: 'tier_1' },
+  { id: 'cool', emoji: '😎', enabled: true, unlockTierCode: 'tier_2' },
+  { id: 'fox', emoji: '🦊', enabled: true, unlockTierCode: 'tier_5' },
+  { id: 'disabled', emoji: '🚫', enabled: false, unlockTierCode: 'tier_1' },
 ];
 const request = (overrides = {}) => ({
   auth: { uid },
@@ -74,9 +75,6 @@ function fixture({ rank = 0, balance = 0, assertSession } = {}) {
     },
     loadPolicy: async (transaction, year, semester) =>
       (await transaction.get(db.doc(`years/${year}/semesters/${semester}/point_policies/current`))).data(),
-    getProfileEmojiEntryById: (id, entries) => entries.find(entry => entry.id === id),
-    getCurrentTierCodeForRankTotal: total => total >= 500 ? 'tier_5' : total >= 50 ? 'tier_2' : 'tier_1',
-    getAllowedEmojiIdsForTier: (_policy, tier) => tier === 'tier_5' ? ['smile', 'cool', 'fox'] : tier === 'tier_2' ? ['smile', 'cool'] : ['smile'],
   });
   return { handler, documents, reads, writes, get sessionCalls() { return sessionCalls; } };
 }
@@ -151,6 +149,78 @@ const rejected = async (state, input, code = 'failed-precondition') => {
   });
   await test('disabled and unknown emoji never change profile', async () => {
     for (const emojiId of ['disabled', 'unknown']) await rejected(fixture({ rank: 500 }), request({ emojiId }), 'invalid-argument');
+  });
+  await test('semester policy thresholds and disabled entries govern saving', async () => {
+    const rankPolicy = { emojiRegistry: registry, tiers: [
+      { code: 'tier_1', minPoints: 0 }, { code: 'tier_2', minPoints: 2000 },
+      { code: 'tier_5', minPoints: 5000 },
+    ] };
+    for (const emojiId of ['cool', 'fox']) {
+      const locked = fixture({ rank: 1835 });
+      locked.documents.set(policyPath, { rankPolicy });
+      await rejected(locked, request({ emojiId }));
+    }
+    const state = fixture({ rank: 1835 });
+    state.documents.set(policyPath, { rankPolicy });
+    const saved = await state.handler(request());
+    assert.equal(saved.profileIcon, '😀');
+    assert.equal(saved.tierCode, 'tier_1');
+  });
+  await test('shared resolver defaults locked, disabled, unknown and mismatched IDs', async () => {
+    const rankPolicy = { emojiRegistry: registry, emojiPolicy: { defaultEmojiId: 'cool' } };
+    for (const [profileEmojiId, profileIcon, reason] of [
+      ['fox', '🦊', 'tier_locked'], ['disabled', '🚫', 'disabled'],
+      ['unknown', '😀', 'unknown_id'], ['smile', '🦊', 'id_icon_mismatch'],
+      ['cool', '🦊', 'id_icon_mismatch'], ['smile', { icon: '😀' }, 'id_icon_mismatch'],
+    ]) {
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId, profileIcon, rankEarnedTotal: 0, rankPolicy });
+      assert.equal(resolved.profileEmojiId, 'cool');
+      assert.equal(resolved.profileIcon, '😎');
+      assert.equal(resolved.isValid, false);
+      assert.equal(resolved.reason, reason);
+    }
+    const allowed = resolveStudentProfileEmoji({ profileEmojiId: 'smile', profileIcon: '😀', rankEarnedTotal: 0, rankPolicy });
+    assert.equal(allowed.profileIcon, '😀');
+    assert.equal(allowed.isValid, true);
+    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'smile', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+  });
+  await test('legacy raw icons require current unlock and normalize to registry glyph', async () => {
+    const rankPolicy = { emojiRegistry: registry.map(entry => entry.id === 'smile'
+      ? { ...entry, legacyValues: ['☺️'] } : entry) };
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', rankEarnedTotal: 500, rankPolicy }).profileIcon, '🦊');
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '☺️', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+  });
+  await test('invalid canonical rank values fail closed instead of unlocking higher emojis', async () => {
+    const rankPolicy = { emojiRegistry: registry };
+    for (const rankEarnedTotal of [Infinity, -Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, '500', -1, 500.5, null, undefined]) {
+      assert.equal(getCurrentTierCodeForRankTotal(rankEarnedTotal, rankPolicy), 'tier_1');
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', rankEarnedTotal, rankPolicy });
+      assert.equal(resolved.profileEmojiId, 'smile');
+      assert.equal(resolved.profileIcon, '😀');
+      assert.equal(resolved.reason, 'tier_locked');
+    }
+    assert.equal(getCurrentTierCodeForRankTotal(500, rankPolicy), 'tier_5');
+  });
+  await test('disabled default falls back safely and display flags never disable tier authorization', async () => {
+    const rankPolicy = { emojiRegistry: registry, emojiPolicy: { defaultEmojiId: 'disabled' } };
+    assert.equal(resolveRankPolicy(rankPolicy).emojiPolicy.defaultEmojiId, 'smile');
+    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'unknown', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    for (const flags of [{ enabled: false }, { emojiPolicy: { enabled: false } }]) {
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', rankEarnedTotal: 0,
+        rankPolicy: { emojiRegistry: registry, ...flags } });
+      assert.equal(resolved.profileIcon, '😀');
+      assert.equal(resolved.reason, 'tier_locked');
+      const normalized = resolveRankPolicy({ emojiRegistry: registry, ...flags });
+      assert.equal(flags.emojiPolicy ? normalized.emojiPolicy.enabled : normalized.enabled, false);
+    }
+    const state = fixture();
+    state.documents.set(policyPath, { rankPolicy: { emojiRegistry: registry, emojiPolicy: { enabled: false } } });
+    await rejected(state, request({ emojiId: 'fox' }));
+    const unlocked = fixture({ rank: 500 });
+    unlocked.documents.set(policyPath, { rankPolicy: { emojiRegistry: registry, emojiPolicy: { enabled: false } } });
+    assert.equal((await unlocked.handler(request({ emojiId: 'fox' }))).profileIcon, '🦊');
+    await rejected(fixture(), request({ emojiId: 'disabled' }), 'invalid-argument');
   });
   await test('invalid scope and client-supplied score or owner are rejected', async () => {
     for (const data of [{ year: '../2026' }, { semester: '3' }, { emojiId: '' }, { emojiId: {} },

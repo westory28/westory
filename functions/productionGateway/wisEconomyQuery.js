@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
+const { resolveStudentProfileEmoji } = require("../studentProfileEmojiPolicy");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
@@ -3060,14 +3061,20 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
   // Read icons only for the already permitted and rank-limited entries. Never
   // return profile documents or extend the grade/class/public ranking scope.
   const selected = accounts.filter((account) => publicIds.has(hallPublicId(scope, account.studentUid)));
-  const profiles = selected.length
-    ? await transaction.getAll(selected.map((account) => `users/${account.studentUid}`)) : [];
+  const [year, semester] = scope.split("-");
+  const [policySnapshot, ...profiles] = await transaction.getAll([
+    `years/${year}/semesters/${semester}/point_policies/current`,
+    ...selected.map((account) => `users/${account.studentUid}`),
+  ]);
   const icons = new Map(selected.map((account, index) => {
-    const value = profiles[index]?.data?.profileIcon || account.profileIcon || "😀";
-    const icon = typeof value === "string" && Array.from(value).length <= 16 &&
-      /^[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}\u200d\uFE0F]+$/u.test(value)
-      ? value : "😀";
-    return [hallPublicId(scope, account.studentUid), icon];
+    const profile = profiles[index]?.exists ? profiles[index].data : account;
+    const resolved = resolveStudentProfileEmoji({
+      profileEmojiId: profile?.profileEmojiId,
+      profileIcon: profile?.profileIcon,
+      rankEarnedTotal: account.rankEarnedTotal,
+      rankPolicy: policySnapshot.data?.rankPolicy,
+    });
+    return [hallPublicId(scope, account.studentUid), resolved.profileIcon];
   }));
   for (const entry of entries) entry.profileIcon = icons.get(entry.uid) || "😀";
   const snapshotBody = { gradeLeaderboardByGrade: hall.gradeLeaderboardByGrade, classLeaderboardByClassKey: hall.classLeaderboardByClassKey };

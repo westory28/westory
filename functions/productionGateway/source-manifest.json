@@ -420,7 +420,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "fc20dd628d69b36f2fe721052711c644c3840e491ec5c86f2659ddec90f21979",
+      "sha256": "f8e15dff6d0f1d0a62d0a5514be9e2dff8e464190d6ced2e96cf4b599877ab12",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -431,7 +431,8 @@
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Authorized historical teacher catalog/order queries use bounded read-only legacy fallback; semester inventory drives canonical archive catalog and retains product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
-        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs."
+        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
+        "2026-10-19: Resolve public ranking profile emojis against the requested semester rank policy and canonical earned total, rejecting stale tier unlocks and ID/icon mismatches without writes."
       ]
     },
     {

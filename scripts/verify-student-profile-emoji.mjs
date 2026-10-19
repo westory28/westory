@@ -32,6 +32,9 @@ assert.equal(resolve(policy, 50, { profileIcon: "😎" }).entry.id, "cool");
 assert.equal(resolve(policy, NaN, oldProfile).entry.id, "smile");
 assert.equal(resolve(policy, -1, oldProfile).entry.id, "smile");
 assert.equal(resolve(policy, 500, { profileEmojiId: "unknown", profileIcon: "🦊" }).entry.id, "smile");
+const disabledPolicy = resolvePointRankPolicy({ ...policy, emojiPolicy: { ...policy.emojiPolicy, enabled: false } });
+assert.equal(resolve(disabledPolicy, 0, oldProfile).entry.id, "smile", "A display setting never grants higher-tier emoji access");
+assert.equal(resolve(disabledPolicy, 500, oldProfile).entry.id, "fox");
 const entries = [
   { uid: "low", cumulativeEarned: 0, profileIcon: "🦊", rank: 2 },
   { uid: "high", cumulativeEarned: 500, profileIcon: "🦊", rank: 1 },
@@ -75,4 +78,41 @@ await missing;
 assert.equal(context.loaded, "");
 assert.equal(context.wallet, null);
 assert.ok(context.error);
-console.log("PASS student emoji: current-semester thresholds, saved-icon fallback, all ranking groups, stale response and missing-account denial");
+// Execute the real recognition loader: an old public snapshot must never grant
+// its emoji to a student whose canonical score no longer permits it.
+const recognitionSource = await readFile(new URL("src/lib/wisHallOfFameRecognition.ts", root), "utf8");
+const recognitionBuild = await build({
+  stdin: { contents: recognitionSource, loader: "ts", resolveDir: fileURLToPath(new URL("src/lib/", root)) },
+  bundle: true, write: false, platform: "node", format: "cjs",
+  plugins: [{ name: "recognition-boundaries", setup(builder) {
+    builder.onResolve({ filter: /^\.\/(wisHallOfFame|safeStorage|studentWis|points|studentProfileEmoji)$/ }, args => ({ path: args.path, namespace: "fixture" }));
+    builder.onLoad({ filter: /.*/, namespace: "fixture" }, args => ({ contents: ({
+      "./wisHallOfFame": `export const getWisHallOfFameSnapshot = async () => ({});
+        export const findWisHallOfFameRecognition = () => globalThis.fixture.recognition;
+        export const isHallOfFameRecognitionEnabled = () => true;
+        export const buildWisHallOfFameSeenStorageKey = () => "fixture-seen";`,
+      "./safeStorage": "export const readLocalOnly = () => null; export const writeLocalOnly = () => {};",
+      "./studentWis": "export const getStudentPointWallet = async () => globalThis.fixture.wallet;",
+      "./points": "export const getPointPolicy = async () => { if (globalThis.fixture.failPolicy) throw Error('denied'); return { rankPolicy: globalThis.fixture.policy }; };",
+      "./studentProfileEmoji": "export const resolveStudentProfileEmoji = (...args) => globalThis.resolve(...args);",
+    })[args.path] }));
+  } }],
+});
+const recognitionContext = {
+  module: { exports: {} }, resolve, console: { warn() {} },
+  fixture: {
+    policy, wallet: { rankEarnedTotal: 0 }, failPolicy: false,
+    recognition: { scope: "grade", entry: { rank: 1, grade: "3", class: "1", studentName: "학생", profileIcon: "👑" } },
+  },
+};
+vm.runInNewContext(recognitionBuild.outputFiles[0].text, recognitionContext);
+const loadRecognition = recognitionContext.module.exports.loadHallOfFameRecognition;
+const currentProfile = { uid: "student", grade: "3", class: "1", ...oldProfile };
+assert.equal((await loadRecognition({ year: "2026", semester: "2" }, currentProfile)).profileIcon, "😀");
+recognitionContext.fixture.wallet.rankEarnedTotal = 500;
+assert.equal((await loadRecognition({ year: "2026", semester: "2" }, currentProfile)).profileIcon, "🦊");
+recognitionContext.fixture.wallet = null;
+assert.equal(await loadRecognition({ year: "2026", semester: "2" }, currentProfile), null);
+recognitionContext.fixture.failPolicy = true;
+assert.equal(await loadRecognition({ year: "2026", semester: "2" }, currentProfile), null);
+console.log("PASS student emoji: current-semester thresholds, all ranking groups, stale response, missing-account denial and recognition popup authority");

@@ -928,7 +928,7 @@ const run = async () => {
   assert.doesNotMatch(publicHallJson, /\*|never-expose|never-use-profile-name/u);
   const ownHallEntry = studentHallState.hallOfFame.gradeLeaderboardByGrade["2"].find(entry => entry.studentName === "합성 학생");
   assert.equal(ownHallEntry.number, "7");
-  assert.equal(ownHallEntry.profileIcon, "🦊");
+  assert.equal(ownHallEntry.profileIcon, "😀", "A saved legacy fox does not grant its tier unlock");
   assert.equal(ownHallEntry.currentBalance, 0);
   assert.deepEqual(Object.keys(ownHallEntry).sort(), ["uid", "rank", "grade", "class", "classKey", "number",
     "studentName", "displayName", "currentBalance", "cumulativeEarned", "profileIcon", "podiumSlot"].sort());
@@ -1036,6 +1036,80 @@ const run = async () => {
   assert.equal(invalidIconHall.hallOfFame.gradeLeaderboardByGrade["2"].find(entry => entry.uid === ownHallEntry.uid).profileIcon, "😀");
   assert.doesNotMatch(JSON.stringify(invalidIconHall.hallOfFame), /example\.invalid/u);
   tx.set("users/student-1", profileBefore);
+  // The server resolves every public map from the queried semester's canonical
+  // rank and policy, regardless of a legacy wallet or a previously saved icon.
+  const emojiPolicy = {
+    tiers: [{ code: "tier_1", minPoints: 0 }, { code: "tier_2", minPoints: 2000 },
+      { code: "tier_5", minPoints: 5000 }],
+    emojiRegistry: [
+      { id: "smile", emoji: "😀", enabled: true, unlockTierCode: "tier_1" },
+      { id: "note", emoji: "📝", enabled: true, unlockTierCode: "tier_1" },
+      { id: "cool", emoji: "😎", enabled: true, unlockTierCode: "tier_2" },
+      { id: "fox", emoji: "🦊", enabled: true, unlockTierCode: "tier_5" },
+      { id: "disabled", emoji: "🚫", enabled: false, unlockTierCode: "tier_1" },
+    ],
+    emojiPolicy: { defaultEmojiId: "note" },
+  };
+  let emojiHallScenarios = 0;
+  for (const [audience, source] of [["student", "CURRENT"], ["teacher", "CURRENT"], ["teacher", "EXPLICIT"]]) {
+    for (const [profile, rank, expectedIcon, policy = emojiPolicy] of [
+      [{ profileEmojiId: "fox", profileIcon: "🦊" }, 1835, "📝"],
+      [{ profileEmojiId: "cool", profileIcon: "😎" }, 1835, "📝"],
+      [{ profileEmojiId: "smile", profileIcon: "😀" }, 1835, "😀"],
+      [{ profileEmojiId: "smile", profileIcon: "🦊" }, 1835, "📝"],
+      [{ profileEmojiId: "note", profileIcon: "🦊" }, 1835, "📝"],
+      [{ profileEmojiId: "unknown", profileIcon: "😀" }, 1835, "📝"],
+      [{ profileEmojiId: "disabled", profileIcon: "🚫" }, 1835, "📝"],
+      [{ profileIcon: "🦊" }, 1835, "📝"],
+      [{ profileEmojiId: "fox", profileIcon: "🦊" }, 5000, "🦊"],
+      [{ profileEmojiId: "smile" }, 1835, "😀"],
+      [{ profileEmojiId: "unknown", profileIcon: "😀" }, 1835, "😀",
+        { ...emojiPolicy, emojiPolicy: { defaultEmojiId: "disabled" } }],
+      [{ profileEmojiId: "fox", profileIcon: "🦊" }, 1835, "📝",
+        { ...emojiPolicy, emojiPolicy: { ...emojiPolicy.emojiPolicy, enabled: false } }],
+      [{ profileEmojiId: "fox", profileIcon: "🦊" }, 5000, "🦊",
+        { ...emojiPolicy, emojiPolicy: { ...emojiPolicy.emojiPolicy, enabled: false } }],
+    ]) {
+      const seed = structuredClone(hallRosterSeed);
+      const path = `semester_wis_accounts/${accountId}`;
+      seed[path] = { ...seed[path], rankEarnedTotal: rank, earnedTotal: 99999, balance: 99999,
+        grade: "2", classNumber: "3", studentNumber: "7", displayName: "합성 학생",
+        profileEmojiId: "fox", profileIcon: "🦊" };
+      seed["users/student-1"] = { ...profileBefore, profileEmojiId: undefined, profileIcon: undefined, ...profile };
+      seed["years/2026/semesters/2/point_policies/current"] = { rankPolicy: policy };
+      seed["years/2026/semesters/2/point_wallets/student-1"] = { rankEarnedTotal: 99999 };
+      // An archived teacher read must use that archive's policy, not the active
+      // pointer's permissive policy or any profile/account fallback glyph.
+      if (source === "EXPLICIT") {
+        seed["site_settings/semester_active"] = { semesterId: "2026-1", revision: 1 };
+        seed["semester_manifests/2026-2"].status = "ARCHIVED";
+        seed["years/2026/semesters/1/point_policies/current"] = {
+          rankPolicy: { ...policy, tiers: policy.tiers.map((tier) => ({ ...tier, minPoints: 0 })) },
+        };
+      }
+      const probe = new MemoryTransaction(seed);
+      const before = structuredClone(probe.documents);
+      const core = wis.createWisQueryCore({
+        assertSession: async (request) => ({ uid: request.auth.uid, email: request.auth.token.email }),
+        store: { get: (path) => probe.get(path), runTransaction: (callback) => callback(probe) },
+      });
+      const uid = audience === "student" ? "student-1" : "teacher-1";
+      const state = await core.getWisEconomyState({
+        auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr` } },
+        data: { audience, semesterId: "2026-2", source, projection: "hall-of-fame" },
+      });
+      for (const groupName of ["gradeLeaderboardByGrade", "classLeaderboardByClassKey", "gradeTop3ByGrade", "classTop3ByClassKey"]) {
+        const rows = Object.values(state.hallOfFame[groupName]).flat();
+        const entry = rows.find((item) => item.uid === ownHallEntry.uid);
+        assert.ok(entry, `${audience}/${source}/${groupName} retains the permitted student's entry`);
+        assert.equal(entry.profileIcon, expectedIcon, `${audience}/${source}/${groupName} validates the current rank and stored ID`);
+      }
+      assert.equal(state.writeCount, 0);
+      assert.deepEqual(probe.documents, before, "Emoji projection is read-only");
+      assert.doesNotMatch(JSON.stringify(state.hallOfFame), /profileEmojiId|emojiRegistry|privateNote|never-expose/u);
+      emojiHallScenarios += 1;
+    }
+  }
   // An unranked viewer still has a grade/class scope; never fall back to the
   // teacher's all-grade projection when their initial balance earns no rank.
   const ownAccountPath = `semester_wis_accounts/${wis.accountIdFor("2026-2", "student-1")}`;
@@ -2086,7 +2160,7 @@ const run = async () => {
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
   );
 
-  console.log(JSON.stringify({ passed: true, cases: 50, sparseHallScenarios: 126, addedChecks: ["sparse hall zero-score fill, positive ties, public limits, active scope, test exclusion, stable snapshots and zero writes; hard account cap preserved", "order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "selected emoji only, invalid URL fallback and public-field allowlist", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 50, sparseHallScenarios: 126, emojiHallScenarios, addedChecks: ["sparse hall zero-score fill, positive ties, public limits, active scope, test exclusion, stable snapshots and zero writes; hard account cap preserved", "order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "semester rank policy enforces locked/disabled/unknown/mismatched/default IDs and preserves allowed icons in all four public maps for students, teachers and archive reads", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
 };
 
 run().then(async () => {

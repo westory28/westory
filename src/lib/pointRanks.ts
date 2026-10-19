@@ -943,13 +943,6 @@ export const getPointRankAllowedEmojiIds = (
   currentTierCode?: PointRankTierCode | null,
 ) => {
   const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
-  const enabledRegistry = resolvedPolicy.emojiRegistry.filter(
-    (entry) => entry.enabled !== false,
-  );
-  if (!resolvedPolicy.emojiPolicy.enabled) {
-    return enabledRegistry.map((entry) => entry.id);
-  }
-
   const targetTierCode =
     currentTierCode || resolvedPolicy.tiers[0]?.code || "tier_1";
   const targetTierIndex = resolvedPolicy.tiers.findIndex(

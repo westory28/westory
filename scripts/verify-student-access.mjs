@@ -311,6 +311,19 @@ try {
           registrationApprovalStatus: "APPROVED",
         }),
       );
+      for (const emojiFields of [
+        { profileIcon: "👑" },
+        { profileEmojiId: "crown" },
+        { profileIcon: "😀", profileEmojiId: "smile" },
+      ]) {
+        await assertFails(
+          setDoc(doc(fresh, "users/fresh"), {
+            ...profile,
+            registrationApprovalStatus: "PENDING",
+            ...emojiFields,
+          }),
+        );
+      }
       await assertSucceeds(
         setDoc(doc(fresh, "users/fresh"), {
           ...profile,

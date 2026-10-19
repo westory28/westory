@@ -12,6 +12,9 @@ import {
   isHallOfFameRecognitionEnabled,
 } from "./wisHallOfFame";
 import { readLocalOnly, writeLocalOnly } from "./safeStorage";
+import { getStudentPointWallet } from "./studentWis";
+import { getPointPolicy } from "./points";
+import { resolveStudentProfileEmoji } from "./studentProfileEmoji";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
@@ -43,7 +46,13 @@ export const markHallOfFameRecognitionSeen = (seenKey: string) => {
 
 export const loadHallOfFameRecognition = async (
   config: ConfigLike,
-  userData: Pick<UserData, "uid" | "grade" | "class"> | null | undefined,
+  userData:
+    | Pick<
+        UserData,
+        "uid" | "grade" | "class" | "profileEmojiId" | "profileIcon"
+      >
+    | null
+    | undefined,
   hallOfFameConfig?: HallOfFameInterfaceConfig | InterfaceConfig | null,
 ): Promise<HallOfFameRecognition | null> => {
   try {
@@ -59,6 +68,18 @@ export const loadHallOfFameRecognition = async (
       return null;
     }
 
+    if (!userData?.uid) return null;
+    const [wallet, policy] = await Promise.all([
+      getStudentPointWallet(config, userData.uid),
+      getPointPolicy(config),
+    ]);
+    if (!wallet) return null;
+    const profileEmoji = resolveStudentProfileEmoji(
+      policy.rankPolicy,
+      wallet.rankEarnedTotal ?? 0,
+      userData,
+    );
+
     return {
       seenKey,
       rank: recognition.entry.rank,
@@ -66,7 +87,7 @@ export const loadHallOfFameRecognition = async (
       className: recognition.entry.class,
       studentName:
         recognition.entry.displayName || recognition.entry.studentName,
-      profileIcon: recognition.entry.profileIcon,
+      profileIcon: profileEmoji.entry?.emoji || "😀",
       scope: recognition.scope,
       headline: buildHeadline(recognition.scope),
       message: buildMessage(recognition.scope),

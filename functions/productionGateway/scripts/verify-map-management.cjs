@@ -133,6 +133,38 @@ function loadClient(handler) {
     },
   };
   const calls = [];
+  const firebase = {
+    auth,
+    getHttpsCallable: async (name) => async (input) => {
+      calls.push({ name, input });
+      if (name === "openApplicationSession")
+        return {
+          data: {
+            status: "active",
+            authTime: 123,
+            authorityGeneration: "w1r2-2026-08-09",
+            protocolVersion: 2,
+            revision: "a".repeat(64),
+          },
+        };
+      return { data: await handler(name, input) };
+    },
+  };
+  // Exercise the real session gate against the same isolated auth/transport
+  // fixture; a pass-through session mock would conceal ownership regressions.
+  const applicationSession = {};
+  const sessionSourcePath = path.resolve(__dirname, "../../../src/lib/applicationSession.ts");
+  const sessionJavascript = ts.transpileModule(fs.readFileSync(sessionSourcePath, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInNewContext(sessionJavascript, {
+    exports: applicationSession,
+    require(name) {
+      if (name === "./firebase") return firebase;
+      if (name === "./semesterArchive") return { isSemesterArchive: false };
+      throw new Error(`Unexpected session dependency: ${name}`);
+    },
+  });
   vm.runInNewContext(javascript, {
     exports,
     crypto: crypto.webcrypto,
@@ -142,24 +174,8 @@ function loadClient(handler) {
     Date,
     btoa,
     require(name) {
-      if (name === "./firebase")
-        return {
-          auth,
-          getHttpsCallable: async (name) => async (input) => {
-            calls.push({ name, input });
-            if (name === "openApplicationSession")
-              return {
-                data: {
-                  status: "active",
-                  authTime: 123,
-                  authorityGeneration: "w1r2-2026-08-09",
-                  protocolVersion: 2,
-                  revision: "a".repeat(64),
-                },
-              };
-            return { data: await handler(name, input) };
-          },
-        };
+      if (name === "./firebase") return firebase;
+      if (name === "./applicationSession") return applicationSession;
       if (name === "./appCheck")
         return { ensureWestoryAppCheck: async () => {} };
       if (name === "./lessonManagement")
@@ -375,6 +391,18 @@ function loadClient(handler) {
     checks++;
   }
   {
+    for (const signedIn of [false, true]) {
+      const client = loadClient(() => {
+        throw new Error("Invalid authentication must not reach a command");
+      });
+      if (signedIn) client.auth.currentUser.getIdTokenResult = async () => ({ claims: { auth_time: 0 } });
+      else client.auth.currentUser = null;
+      await assert.rejects(client.api.saveMapResources({}, [{ source, document: fixture().document }]));
+      assert.equal(client.calls.length, 0, "Missing owner and invalid session tokens fail before transport");
+      checks++;
+    }
+  }
+  {
     let savedPayload;
     const client = loadClient(async (name, input) => {
       if (name === "executeCommand") {
@@ -411,6 +439,10 @@ function loadClient(handler) {
     assert(!Object.hasOwn(savedPayload.resources[0].document, "pdfBlanks"));
     assert(!Object.hasOwn(savedPayload.resources[0].document, "answerOptions"));
     assert(!Object.hasOwn(savedPayload.resources[0].document, "id"));
+    assert.equal(client.calls[0].name, "openApplicationSession");
+    assert.deepEqual({ ...client.calls.find((call) => call.name === "executeCommand").input._session }, {
+      authorityGeneration: "w1r2-2026-08-09", protocolVersion: 2, revision: "a".repeat(64),
+    });
     checks++;
   }
   {

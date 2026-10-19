@@ -732,6 +732,7 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == 'student'
         && request.resource.data.registrationApprovalStatus == 'PENDING'
+        && !request.resource.data.keys().hasAny(['profileIcon', 'profileEmojiId'])
         && (!request.resource.data.keys().hasAny(['teacherPortalEnabled']) || request.resource.data.teacherPortalEnabled == false)
         && (!request.resource.data.keys().hasAny(['staffPermissions']) || request.resource.data.staffPermissions.size() == 0);
     }
