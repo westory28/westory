@@ -784,6 +784,11 @@
   font-size: 24px;
   line-height: 1.2;
 }
+.yut-emote-options button > span:last-child {
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 .yut-emote-menu p {
   margin-top: 10px;
   font-size: 12px;

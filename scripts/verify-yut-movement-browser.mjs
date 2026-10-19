@@ -2424,6 +2424,19 @@ async function verifyMobileReadability() {
     await page.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
     if (width < 1280) await page.getByRole('button', {name: height > width ? '전체 화면으로 열기' : '게임 전체 화면', exact:true}).click();
     await page.locator('.yut-match').waitFor();
+    await page.getByRole('button',{name:'감정표현',exact:true}).click();
+    const emoteLabels = await page.locator('.yut-emote-options button > span:last-child').evaluateAll(nodes => nodes.map(node => {
+      const style = getComputedStyle(node), range = document.createRange();
+      range.selectNodeContents(node);
+      return {text:node.textContent, fontSize:style.fontSize, lines:range.getClientRects().length, fits:node.scrollWidth<=node.parentElement.clientWidth-10};
+    }));
+    assert.equal(emoteLabels.length,7);
+    for (const label of emoteLabels) {
+      assert.equal(label.lines,1,`${width}: ${label.text} stays on one line`);
+      assert.ok(label.fits,`${width}: ${label.text} fits its emote button`);
+    }
+    await page.screenshot({path:path.join(evidence,`emote-labels-${width}.png`)});
+    await page.getByRole('button',{name:'감정표현',exact:true}).click();
     await page.evaluate(() => window.qa.preparePiece('1','o5',3));
     const center = page.getByRole('button',{name:/가운데 발판 선택/});
     await center.waitFor();
@@ -2498,7 +2511,7 @@ async function verifyMobileReadability() {
     await page.waitForFunction(()=>window.qa.calls.some(call=>call.action==='throw'));
     report.paths[`readability-${width}`]={centerGeometry,pads,margins,controlHits,hiddenHelp,textGeometry};
     await page.close();
-    report.checks.push(`${width}×${height}: center target clickable, result/timer outside crossing, pad highlights share board geometry, hidden help clipped, throw/event rows separate and fullscreen controls inset`);
+    report.checks.push(`${width}×${height}: emote labels fit on one line, center target clickable, result/timer outside crossing, pad highlights share board geometry, hidden help clipped, throw/event rows separate and fullscreen controls inset`);
   }
 }
 async function verifyMobileViewport() {
