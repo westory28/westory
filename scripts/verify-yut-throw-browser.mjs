@@ -34,7 +34,7 @@ const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=funct
 window.qa.freeze=time=>{const scene=window.qa.scene;scene.cancelFrame();scene.running=false;scene.elapsed=time;scene.pose();scene.render();const el=document.querySelector('.yut-throw-3d');el.style.opacity='1';el.style.transition='none';return {power:scene.power,camera:[scene.camera.fov,...scene.camera.position.toArray(),...scene.camera.projectionMatrix.elements],points:window.qa.projected};};
 window.qa.plan=yutThrowPlan;window.qa.pose=sampleYutPose;window.qa.finalNormal=(flat,index,power,key)=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,index,power,key)).y;
 const room={id:'visual-qa',revision:0,lastEvent:{kind:'create',atMs:0,text:''},status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
-function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={state.throwKey||state.rolling?[]:moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -326,6 +326,48 @@ try {
         sticks,
         `${fallback ? "CSS" : "rendered WebGL raycast"} mask ${mask}`,
       );
+      assert.equal(
+        await page
+          .locator(".yut-throw-3d")
+          .evaluate((node) => getComputedStyle(node).visibility),
+        "visible",
+        "throw fixtures must not retain move destinations that hide the throw",
+      );
+      if (fallback) {
+        const marked = await page
+          .locator(".yut-throw-3d__wood")
+          .evaluateAll((nodes) =>
+            nodes.map((node) => Boolean(node.querySelector("i"))),
+          );
+        assert.deepEqual(
+          marked,
+          sticks.map((flat) => !flat),
+          "X engravings only on rounded backs",
+        );
+      } else if (mask === 3) {
+        await page.waitForFunction(() => window.qa.scene.textures.length >= 16);
+        const brightness = await page.evaluate(() =>
+          window.qa.scene.groups[0].children[0].material
+            .slice(1)
+            .map((material) => {
+              const canvas = material.map.image;
+              const pixels = canvas
+                .getContext("2d")
+                .getImageData(0, 0, canvas.width, canvas.height).data;
+              let sum = 0;
+              for (let i = 0; i < pixels.length; i += 4)
+                sum +=
+                  pixels[i] * 0.2126 +
+                  pixels[i + 1] * 0.7152 +
+                  pixels[i + 2] * 0.0722;
+              return sum / (pixels.length / 4);
+            }),
+        );
+        assert.ok(
+          brightness[1] > brightness[0] + 50,
+          "belly stays clearly brighter after painted atlas loads",
+        );
+      }
       assert.equal(await page.evaluate(() => window.qa.releases), mask + 1);
       const impacts = await page.evaluate(() =>
         window.qa.impacts.slice(-4).sort(),

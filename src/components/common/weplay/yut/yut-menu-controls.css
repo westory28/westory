@@ -403,10 +403,10 @@
   .yut-floating-fullscreen {
   position: absolute;
   z-index: 201;
-  top: max(12px, var(--yut-safe-top, env(safe-area-inset-top)));
+  top: calc(16px + var(--yut-safe-top, env(safe-area-inset-top)));
   right: auto;
   bottom: auto;
-  left: max(12px, var(--yut-safe-left, env(safe-area-inset-left)));
+  left: calc(16px + var(--yut-safe-left, env(safe-area-inset-left)));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -424,16 +424,16 @@
 .yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
   top: auto;
   left: calc(
-    max(16px, var(--yut-safe-left, env(safe-area-inset-left))) +
+    calc(16px + var(--yut-safe-left, env(safe-area-inset-left))) +
       var(--yut-toolbar-width, 200px) + 8px
   );
   right: auto;
-  bottom: max(12px, var(--yut-safe-bottom, env(safe-area-inset-bottom)));
+  bottom: calc(16px + var(--yut-safe-bottom, env(safe-area-inset-bottom)));
 }
 @media (orientation: landscape) and (max-width: 820px) {
   .yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
-    top: max(4px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
+    top: calc(16px + env(safe-area-inset-top));
+    left: calc(16px + env(safe-area-inset-left));
     bottom: auto;
   }
 }
@@ -487,8 +487,8 @@
     var(--yut-safe-left);
 }
 .yut-game--rotated-fullscreen .yut-floating-controls {
-  top: max(12px, var(--yut-safe-top));
-  right: max(16px, var(--yut-safe-right));
+  top: calc(16px + var(--yut-safe-top));
+  right: calc(16px + var(--yut-safe-right));
 }
 .yut-game--rotated-fullscreen .yut-isometric-board .yut-isometric-piece {
   width: clamp(44px, 8.2%, 66px);
@@ -497,8 +497,8 @@
 .yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
   top: auto;
   right: auto;
-  bottom: max(12px, var(--yut-safe-bottom));
-  left: max(16px, var(--yut-safe-left));
+  bottom: calc(16px + var(--yut-safe-bottom));
+  left: calc(16px + var(--yut-safe-left));
 }
 /* Native dialogs leave the rotated canvas for the browser's top layer. */
 .yut-game--rotated-fullscreen .yut-dialog[open] {
@@ -715,18 +715,18 @@
   }
   .yut-game--rotated-fullscreen .yut-floating-controls {
     gap: 4px;
-    top: max(8px, var(--yut-safe-top));
-    right: max(12px, var(--yut-safe-right));
+    top: calc(16px + var(--yut-safe-top));
+    right: calc(16px + var(--yut-safe-right));
   }
   .yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
-    bottom: max(8px, var(--yut-safe-bottom));
-    left: max(12px, var(--yut-safe-left));
+    bottom: calc(16px + var(--yut-safe-bottom));
+    left: calc(16px + var(--yut-safe-left));
   }
   .yut-game--rotated-fullscreen.yut-game--match .yut-floating-fullscreen {
     left: calc(
-      max(12px, var(--yut-safe-left)) + var(--yut-toolbar-width, 200px) + 8px
+      calc(16px + var(--yut-safe-left)) + var(--yut-toolbar-width, 200px) + 8px
     );
-    bottom: max(8px, var(--yut-safe-bottom));
+    bottom: calc(16px + var(--yut-safe-bottom));
   }
   .yut-game--rotated-fullscreen .yut-capture-reaction {
     width: 200px;
@@ -778,7 +778,7 @@
 }
 @container yut-canvas (max-width: 820px) and (max-height: 560px) {
   .yut-game--rotated-fullscreen.yut-game--match .yut-floating-controls {
-    top: max(4px, var(--yut-safe-top));
+    top: calc(16px + var(--yut-safe-top));
     bottom: auto;
     left: 50%;
     transform: translateX(-50%);
@@ -787,9 +787,9 @@
     padding-top: 52px;
   }
   .yut-game--rotated-fullscreen.yut-game--match .yut-floating-fullscreen {
-    top: max(4px, var(--yut-safe-top));
+    top: calc(16px + var(--yut-safe-top));
     bottom: auto;
-    left: max(12px, var(--yut-safe-left));
+    left: calc(16px + var(--yut-safe-left));
   }
   .yut-game--rotated-fullscreen.yut-game--match
     .yut-floating-controls
@@ -837,5 +837,100 @@
   60%,
   82% {
     transform: rotate(90deg);
+  }
+}
+
+/* Keep instructions and status in flow, outside the selectable board. */
+.yut-game .yut-match {
+  padding-bottom: 20px;
+}
+.yut-game .yut-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.yut-game .yut-match .yut-action-dock {
+  height: auto;
+  min-height: 92px;
+  flex-shrink: 0;
+  margin-top: 4px;
+  gap: 4px;
+}
+.yut-game .yut-action-dock > *,
+.yut-game .yut-power-control > :not(.yut-sr-only) {
+  flex-shrink: 0;
+}
+.yut-game .yut-power-help {
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
+}
+.yut-game .yut-match .yut-event {
+  height: auto;
+  flex-shrink: 0;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.yut-action-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+.yut-game .yut-action-status .yut-turn-gauge {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: 180px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.yut-action-status .yut-turn-gauge-label {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.yut-action-status .yut-turn-gauge-label strong {
+  font-size: 16px;
+}
+.yut-action-status .yut-turn-gauge-track {
+  height: 4px;
+}
+.yut-game.yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
+  left: auto;
+  right: calc(16px + var(--yut-safe-right, env(safe-area-inset-right)));
+}
+.yut-game--fullscreen:not(.yut-game--rotated-fullscreen) .yut-floating-controls {
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+}
+.yut-game--fullscreen.yut-game--match:not(.yut-game--rotated-fullscreen)
+  .yut-floating-controls {
+  top: auto;
+  right: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: calc(16px + env(safe-area-inset-left));
+}
+@media (orientation: landscape) and (max-width: 820px) {
+  .yut-game.yut-game--fullscreen.yut-game--match .yut-floating-fullscreen {
+    left: calc(16px + env(safe-area-inset-left));
+    right: auto;
+  }
+  .yut-game--fullscreen.yut-game--match:not(.yut-game--rotated-fullscreen)
+    .yut-floating-controls {
+    top: calc(16px + env(safe-area-inset-top));
+    bottom: auto;
+    left: 50%;
+  }
+}
+@container yut-canvas (max-width: 820px) and (max-height: 560px) {
+  .yut-game.yut-game--rotated-fullscreen.yut-game--match .yut-floating-fullscreen {
+    left: calc(16px + var(--yut-safe-left));
+    right: auto;
   }
 }

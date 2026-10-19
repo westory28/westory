@@ -24,9 +24,10 @@ const entryPolishOnly = process.env.YUT_MOVEMENT_QA_SECTION === "entry-polish";
 const motionAuditOnly = process.env.YUT_MOVEMENT_QA_SECTION === "motion-audit";
 const mobileViewportOnly =
   process.env.YUT_MOVEMENT_QA_SECTION === "mobile-viewport";
+const readabilityOnly = process.env.YUT_MOVEMENT_QA_SECTION === "mobile-readability";
 const evidence = path.join(
   root,
-  mobileViewportOnly
+  mobileViewportOnly || readabilityOnly
     ? "output/yut-mobile-viewport-20261019"
     : motionAuditOnly
       ? "output/yut-motion-complete-20261018"
@@ -181,7 +182,7 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: mobileViewportOnly
+  section: readabilityOnly ? "mobile-readability" : mobileViewportOnly
     ? "mobile-viewport"
     : motionAuditOnly
       ? "motion-audit"
@@ -2417,6 +2418,89 @@ async function verifyMotionAudit() {
       " audit passed under both OS motion preferences; assertions and measured frames are recorded below",
   );
 }
+async function verifyMobileReadability() {
+  for (const [width, height] of [[390,844],[844,390],[768,1024],[1280,800]]) {
+    const page = await open('scenario=path-four&move-seconds=60', 'no-preference', width, height);
+    await page.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
+    if (width < 1280) await page.getByRole('button', {name: height > width ? '전체 화면으로 열기' : '게임 전체 화면', exact:true}).click();
+    await page.locator('.yut-match').waitFor();
+    await page.evaluate(() => window.qa.preparePiece('1','o5',3));
+    const center = page.getByRole('button',{name:/가운데 발판 선택/});
+    await center.waitFor();
+    const centerGeometry = await center.evaluate(node => {
+      const box = node.getBoundingClientRect(), hit = document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+      const overlaps = Array.from(document.querySelectorAll('.yut-turn-gauge,.yut-throw-result')).map(other => {
+        const b = other.getBoundingClientRect();
+        return Math.max(0,Math.min(box.right,b.right)-Math.max(box.left,b.left))*Math.max(0,Math.min(box.bottom,b.bottom)-Math.max(box.top,b.top));
+      });
+      return {box:box.toJSON(),hit:hit===node||node.contains(hit),overlaps};
+    });
+    assert.ok(centerGeometry.hit,`${width}: center destination receives physical pointer input`);
+    assert.ok(centerGeometry.overlaps.every(area=>area===0),`${width}: result and gauge leave center crossing clear`);
+    await center.click();
+    assert.equal(await center.getAttribute('aria-pressed'),'true');
+    const pads = await page.locator('.yut-route-pad,.yut-destination-pad').evaluateAll(nodes => nodes.map(node => {
+      const surface = document.querySelector('.yut-isometric-surface');
+      const attributes = node.tagName.toLowerCase()==='ellipse' ? ['cx','cy','rx','ry'] : ['points'];
+      const matching = Array.from(surface.querySelectorAll(node.tagName)).find(candidate => attributes.every(attribute => candidate.getAttribute(attribute)===node.getAttribute(attribute)));
+      const box = node.getBoundingClientRect(), matchBox = matching?.getBoundingClientRect();
+      return {node:node.dataset.padNode,tag:node.tagName,match:!!matching,box:box.toJSON(),matchBox:matchBox?.toJSON(),viewBox:node.ownerSVGElement.getAttribute('viewBox'),surfaceViewBox:surface.getAttribute('viewBox'),fill:getComputedStyle(node).fill};
+    }));
+    assert.ok(pads.length>0);
+    for (const pad of pads) {
+      assert.ok(pad.match,`${width}: ${pad.node} highlight matches actual pad geometry`);
+      assert.equal(pad.viewBox,pad.surfaceViewBox);
+      for (const key of ['x','y','width','height']) assert.ok(Math.abs(pad.box[key]-pad.matchBox[key])<.6,`${width}: ${pad.node} painted ${key} scales with surface`);
+    }
+    const margins = await page.locator('.yut-hud-actions button,.yut-floating-fullscreen,.yut-action-dock button').evaluateAll(nodes => nodes.filter(node=>node.getBoundingClientRect().width>0).map(node => {
+      const box = node.getBoundingClientRect();
+      return {label:node.getAttribute('aria-label')||node.textContent.trim(),left:box.left,top:box.top,right:innerWidth-box.right,bottom:innerHeight-box.bottom};
+    }));
+    assert.ok(margins.length>=3);
+    if (width < 1280) for (const control of margins) assert.ok(Math.min(control.left,control.top,control.right,control.bottom)>=15.5,`${width}: safe inset ${JSON.stringify(control)}`);
+    const controlHits = await page.locator('.yut-piece-choice,.yut-floating-fullscreen,.yut-move-confirm').evaluateAll(nodes=>nodes.filter(node=>node.getBoundingClientRect().width>0).map(node=>{
+      const b=node.getBoundingClientRect();
+      const targets=[[.5,.5],[.15,.5],[.85,.5]].map(([x,y])=>document.elementFromPoint(b.x+b.width*x,b.y+b.height*y));
+      return {label:node.getAttribute('aria-label')||node.textContent.trim(),clear:targets.every(hit=>hit===node||node.contains(hit))};
+    }));
+    assert.ok(controlHits.every(control=>control.clear),`${width}: toolbar controls remain unobstructed ${JSON.stringify(controlHits)}`);
+    await page.screenshot({path:path.join(evidence,`readability-center-${width}.png`)});
+    await page.evaluate(() => {
+      const room = JSON.parse(JSON.stringify(window.qa.room));
+      Object.assign(room,{phase:'throw',pendingThrow:null,turnUid:'qa',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+120000,lastEvent:{kind:'leave',atMs:Date.now()-5000,text:'상대 학생의 연결 상태가 변경되었습니다'}});
+      room.revision++; room.syncRevision++; window.qa.emit(room);
+    });
+    const button = page.locator('.yut-throw-button');
+    await button.waitFor();
+    await page.waitForTimeout(100);
+    const hiddenHelp = await page.locator('.yut-sr-only').evaluateAll(nodes=>nodes.map(node=>({box:node.getBoundingClientRect().toJSON(),clip:getComputedStyle(node).clip,clipPath:getComputedStyle(node).clipPath,overflow:getComputedStyle(node).overflow})));
+    assert.ok(hiddenHelp.length>0);
+    assert.ok(hiddenHelp.every(item=>item.box.width<=1&&item.box.height<=1&&item.overflow==='hidden'),`${width}: screen-reader instructions stay visually clipped`);
+    const textGeometry = await page.evaluate(() => {
+      const selectors=['.yut-throw-button','.yut-power-help','.yut-event'];
+      return selectors.map(selector=>({selector,box:document.querySelector(selector).getBoundingClientRect().toJSON(),text:document.querySelector(selector).textContent}));
+    });
+    const contentBounds = await page.locator('.yut-game-content').boundingBox();
+    for (const text of textGeometry) {
+      assert.ok(text.box.left>=0&&text.box.top>=0&&text.box.right<=width+.5&&text.box.bottom<=height+.5,`${width}: ${text.selector} stays inside viewport ${JSON.stringify(text.box)}`);
+      assert.ok(text.box.left>=contentBounds.x-.5&&text.box.top>=contentBounds.y-.5&&text.box.right<=contentBounds.x+contentBounds.width+.5&&text.box.bottom<=contentBounds.y+contentBounds.height+.5,`${width}: ${text.selector} stays inside game frame ${JSON.stringify({text:text.box,contentBounds})}`);
+    }
+    for(let i=0;i<textGeometry.length;i++) for(let j=i+1;j<textGeometry.length;j++) {
+      const a=textGeometry[i].box,b=textGeometry[j].box;
+      const area=Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+      assert.equal(area,0,`${width}: ${textGeometry[i].selector} and ${textGeometry[j].selector} do not overlap`);
+    }
+    await page.screenshot({path:path.join(evidence,`readability-throw-${width}.png`)});
+    await button.focus(); await page.keyboard.down('Space');
+    await page.waitForTimeout(80);
+    await page.screenshot({path:path.join(evidence,`readability-charging-${width}.png`)});
+    await page.keyboard.up('Space');
+    await page.waitForFunction(()=>window.qa.calls.some(call=>call.action==='throw'));
+    report.paths[`readability-${width}`]={centerGeometry,pads,margins,controlHits,hiddenHelp,textGeometry};
+    await page.close();
+    report.checks.push(`${width}×${height}: center target clickable, result/timer outside crossing, pad highlights share board geometry, hidden help clipped, throw/event rows separate and fullscreen controls inset`);
+  }
+}
 async function verifyMobileViewport() {
   for (const reduced of ["no-preference", "reduce"]) {
     const page = await open("scenario=entry", reduced, 390, 844);
@@ -2683,8 +2767,11 @@ async function verifyMobileViewport() {
   }
 }
 try {
-  if (mobileViewportOnly) {
+  if (readabilityOnly) {
+    await verifyMobileReadability();
+  } else if (mobileViewportOnly) {
     await verifyMobileViewport();
+    await verifyMobileReadability();
   } else if (motionAuditOnly) {
     await verifyMotionAudit();
   } else if (entryPolishOnly) {

@@ -57,7 +57,7 @@
       #42291255 4px,
       #e0ba7333 5px 7px
     ),
-    linear-gradient(90deg, #71512e, #ba945f 45%, #876133);
+    linear-gradient(90deg, #876133, #a97842 45%, #876133);
   box-shadow: 4px 8px 8px #171e2440;
   transform: translate(-50%, -50%) rotate(var(--stick-rest));
 }
@@ -67,10 +67,10 @@
     repeating-linear-gradient(
       89deg,
       transparent 0 3px,
-      #66451f55 4px,
-      #e6c18b55 5px 8px
+      #66451f22 4px,
+      #e6c18b33 5px 8px
     ),
-    #c39e69;
+    #edd9a6;
 }
 .yut-throw-3d__fallback.has-result .yut-throw-3d__wood {
   animation:

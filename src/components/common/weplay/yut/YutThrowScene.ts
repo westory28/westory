@@ -153,10 +153,10 @@ function woodTextures(
         ring * 15 + (random() - 0.5) * 16 - (pore < 0.025 ? 30 : 0);
       const offset = (y * 256 + x) * 4;
       const base = flat
-        ? [190, 151, 95]
+        ? [237, 217, 166]
         : endGrain
-          ? [166, 125, 74]
-          : [160, 117, 65];
+          ? [213, 183, 123]
+          : [169, 120, 66];
       grain.data[offset] = base[0] + variation;
       grain.data[offset + 1] = base[1] + variation * 0.8;
       grain.data[offset + 2] = base[2] + variation * 0.58;
@@ -165,7 +165,8 @@ function woodTextures(
   }
   context.putImageData(grain, 0, 0);
   if (atlas && !endGrain) {
-    // Use the original painted wood quadrant; retain cut end-grain and engraved marks.
+    // Blend the painted grain without replacing the pale belly / brown back colors.
+    context.globalAlpha = flat ? 0.12 : 0.3;
     context.filter = flat
       ? "saturate(.52) brightness(1.26)"
       : "saturate(.62) brightness(1.08)";
@@ -181,6 +182,7 @@ function woodTextures(
       height,
     );
     context.filter = "none";
+    context.globalAlpha = 1;
   }
   // Long fibres, weather checks and pale chipped edges give the wood a hand-worked finish.
   for (let line = 0; line < 240 && !endGrain; line++) {
@@ -206,7 +208,8 @@ function woodTextures(
     context.fillStyle = "rgba(235,205,153,.35)";
     context.fillRect(x, random() * height, 1 + random() * 3, 2 + random() * 12);
   }
-  if (flat) {
+  // Only the rounded back is carved. The cut belly remains pale, unmarked wood.
+  if (!flat && !endGrain) {
     context.strokeStyle = "#48301c";
     context.lineWidth = 13;
     context.lineCap = "square";
@@ -222,9 +225,6 @@ function woodTextures(
       context.stroke();
     }
     context.shadowOffsetX = context.shadowOffsetY = 0;
-    context.strokeStyle = "rgba(70,41,18,.5)";
-    context.lineWidth = 2;
-    context.strokeRect(17, 34, 222, 956);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -295,6 +295,29 @@ export function createYutGeometry() {
           : Math.atan2(y + 0.1, x) / Math.PI,
         (z + 0.878) / 1.756,
       );
+  }
+  // Keep even the exposed flat bevel pale. X marks belong only to curved faces.
+  const groups = [...geometry.groups];
+  geometry.clearGroups();
+  for (const group of groups) {
+    for (
+      let start = group.start;
+      start < group.start + group.count;
+      start += 3
+    ) {
+      const materialIndex =
+        group.materialIndex === 0
+          ? 0
+          : normals.getY(start) +
+                normals.getY(start + 1) +
+                normals.getY(start + 2) <
+              -1.5
+            ? 2
+            : 1;
+      const previous = geometry.groups[geometry.groups.length - 1];
+      if (previous?.materialIndex === materialIndex) previous.count += 3;
+      else geometry.addGroup(start, 3, materialIndex);
+    }
   }
   return geometry;
 }
@@ -383,16 +406,16 @@ export class YutThrowScene {
     floor.receiveShadow = true;
     this.world.add(floor);
 
-    const grain = woodTextures(false),
-      marked = woodTextures(true),
+    const back = woodTextures(false),
+      belly = woodTextures(true),
       endGrain = woodTextures(false, true);
-    for (const material of [grain, marked, endGrain])
+    for (const material of [back, belly, endGrain])
       this.textures.push(material.color, material.bump, material.roughness);
     const bodyMaterial = new THREE.MeshStandardMaterial({
-      map: grain.color,
-      bumpMap: grain.bump,
+      map: back.color,
+      bumpMap: back.bump,
       bumpScale: 0.028,
-      roughnessMap: grain.roughness,
+      roughnessMap: back.roughness,
       color: 0xffffff,
       roughness: 1,
       metalness: 0,
@@ -405,10 +428,10 @@ export class YutThrowScene {
       roughness: 0.96,
     });
     const flatMaterial = new THREE.MeshStandardMaterial({
-      map: marked.color,
-      bumpMap: marked.bump,
+      map: belly.color,
+      bumpMap: belly.bump,
       bumpScale: 0.024,
-      roughnessMap: marked.roughness,
+      roughnessMap: belly.roughness,
       roughness: 0.94,
       metalness: 0,
     });
@@ -435,12 +458,16 @@ export class YutThrowScene {
     const flatGeometry = new THREE.PlaneGeometry(0.375, 1.69);
     for (let index = 0; index < 4; index++) {
       const group = new THREE.Group();
-      const body = new THREE.Mesh(bodyGeometry, [capMaterial, bodyMaterial]);
+      const body = new THREE.Mesh(bodyGeometry, [
+        capMaterial,
+        bodyMaterial,
+        flatMaterial,
+      ]);
       body.castShadow = true;
       body.receiveShadow = true;
       const face = new THREE.Mesh(flatGeometry, flatMaterial);
       face.rotation.x = Math.PI / 2;
-      // The bevel extends 0.018 below the flat face; keep its marking outside.
+      // The bevel extends 0.018 below the flat face; keep the pale belly outside.
       face.position.y = -0.119;
       group.add(body, face);
       this.groups.push(group);

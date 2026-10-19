@@ -13,7 +13,7 @@ export type YutThrow3DProps = YutThrowState & {
   onImpact?: (index: number) => void;
 };
 
-/** Visual only. `true` is the marked flat face up, exactly as in yutCore. */
+/** Visual only. `true` is the pale flat belly up, exactly as in yutCore. */
 export default function YutThrow3D({
   throwKey,
   sticks,
@@ -200,7 +200,7 @@ export default function YutThrow3D({
                   } as CSSProperties
                 }
               >
-                {sticks?.[index] && (
+                {!sticks?.[index] && (
                   <i>
                     ×<br />×<br />×
                   </i>

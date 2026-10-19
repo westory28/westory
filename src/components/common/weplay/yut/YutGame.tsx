@@ -847,12 +847,14 @@ export default function YutGame({
       const matchStyle = style(".yut-match"),
         boardStyle = style(".yut-isometric-board-wrap"),
         dockStyle = style(".yut-action-dock");
+      const eventStyle = style(".yut-event");
       const shellStyle = shellRef.current
         ? getComputedStyle(shellRef.current)
         : null;
       const overhead =
         height(".yut-action-dock") +
         height(".yut-event") +
+        value(eventStyle?.marginTop) +
         value(matchStyle?.paddingTop) +
         value(matchStyle?.paddingBottom) +
         value(boardStyle?.paddingTop) +
@@ -878,6 +880,13 @@ export default function YutGame({
     });
     const frameNode = shellRef.current?.closest(".weplay-game-frame");
     if (frameNode) observer.observe(frameNode);
+    // Action text can grow when the phase changes; this is independent of
+    // browser chrome or page scrolling, which must not rescale the board.
+    const contentObserver = new ResizeObserver(measure);
+    for (const selector of [".yut-action-dock", ".yut-event"]) {
+      const node = shellRef.current?.querySelector(selector);
+      if (node) contentObserver.observe(node);
+    }
     const resize = () => {
       if (
         window.innerWidth <= 1023 &&
@@ -896,6 +905,7 @@ export default function YutGame({
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
+      contentObserver.disconnect();
       window.removeEventListener("resize", resize);
     };
   }, [room?.status, portrait, fullscreen, canvasWidth, canvasHeight]);
@@ -2266,6 +2276,78 @@ export default function YutGame({
                     !phaseWaiting
                   }
                 >
+                  {room.status !== "finished" || settling || finishing ? (
+                    <>
+                      {(settling || pending === "throw") && (
+                        <div className="yut-toss-dimmer" aria-hidden="true" />
+                      )}
+                      <YutThrow3D
+                        power={currentToss?.power ?? throwPower}
+                        throwKey={currentToss?.key || null}
+                        sticks={currentToss?.sticks || null}
+                        rolling={pending === "throw"}
+                        onComplete={completeToss}
+                        onRelease={() =>
+                          sounds.throw(currentToss?.power ?? throwPower)
+                        }
+                        onImpact={sounds.impact}
+                      />
+                      {celebrating &&
+                        settling &&
+                        !resultVisible &&
+                        currentToss?.room.pendingThrow && (
+                          <div
+                            className={`yut-landing-result ${currentToss.room.pendingThrow.value >= 4 ? "is-bonus" : ""}`}
+                            data-result={currentToss.room.pendingThrow.value}
+                            role="status"
+                            aria-live="assertive"
+                          >
+                            <strong>
+                              {currentToss.room.pendingThrow.label}!
+                            </strong>
+                            <span>
+                              {currentToss.room.pendingThrow.value}칸
+                              {currentToss.room.pendingThrow.value >= 4
+                                ? " · 한 번 더"
+                                : ""}
+                            </span>
+                          </div>
+                        )}
+                    </>
+                  ) : (
+                    <YutVictory
+                      room={room}
+                      uid={uid}
+                      local={local}
+                      busy={busy}
+                      onClaim={() => void command("claimReward")}
+                    />
+                  )}
+                </YutBoard>
+              </div>
+              <div className="yut-action-dock">
+                <div className="yut-action-status">
+                  <div className="yut-throw-result" role="status">
+                    {settling || pending === "throw" ? (
+                      <span>
+                        {celebrating
+                          ? "윷 결과를 확인하세요"
+                          : "윷을 던지는 중"}
+                      </span>
+                    ) : room.pendingThrow ? (
+                      <>
+                        <strong>{room.pendingThrow.label}</strong>
+                        <span>
+                          {room.pendingThrow.value}칸
+                          {room.pendingThrow.value >= 4 && " · 한 번 더"}
+                        </span>
+                      </>
+                    ) : room.status === "finished" ? (
+                      <span>한 판, 잘 놀았습니다.</span>
+                    ) : !myTurn ? (
+                      <span>{turn?.name || "친구"} 님의 차례</span>
+                    ) : null}
+                  </div>
                   {room.status === "playing" &&
                     !settling &&
                     !moving &&
@@ -2284,71 +2366,6 @@ export default function YutGame({
                         phase={room.phase}
                       />
                     )}
-                  {room.status !== "finished" || settling || finishing ? (
-                    <>
-                      {(settling || pending === "throw") && (
-                        <div className="yut-toss-dimmer" aria-hidden="true" />
-                      )}
-                      <YutThrow3D
-                        power={currentToss?.power ?? throwPower}
-                        throwKey={currentToss?.key || null}
-                        sticks={currentToss?.sticks || null}
-                        rolling={pending === "throw"}
-                        onComplete={completeToss}
-                        onRelease={() =>
-                          sounds.throw(currentToss?.power ?? throwPower)
-                        }
-                        onImpact={sounds.impact}
-                      />
-                      {celebrating && currentToss?.room.pendingThrow && (
-                        <div
-                          className={`yut-landing-result ${currentToss.room.pendingThrow.value >= 4 ? "is-bonus" : ""}`}
-                          data-result={currentToss.room.pendingThrow.value}
-                          role="status"
-                          aria-live="assertive"
-                        >
-                          <strong>
-                            {currentToss.room.pendingThrow.label}!
-                          </strong>
-                          <span>
-                            {currentToss.room.pendingThrow.value}칸
-                            {currentToss.room.pendingThrow.value >= 4
-                              ? " · 한 번 더"
-                              : ""}
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <YutVictory
-                      room={room}
-                      uid={uid}
-                      local={local}
-                      busy={busy}
-                      onClaim={() => void command("claimReward")}
-                    />
-                  )}
-                </YutBoard>
-              </div>
-              <div className="yut-action-dock">
-                <div className="yut-throw-result" role="status">
-                  {settling || pending === "throw" ? (
-                    <span>
-                      {celebrating ? "윷 결과를 확인하세요" : "윷을 던지는 중"}
-                    </span>
-                  ) : room.pendingThrow ? (
-                    <>
-                      <strong>{room.pendingThrow.label}</strong>
-                      <span>
-                        {room.pendingThrow.value}칸
-                        {room.pendingThrow.value >= 4 && " · 한 번 더"}
-                      </span>
-                    </>
-                  ) : room.status === "finished" ? (
-                    <span>한 판, 잘 놀았습니다.</span>
-                  ) : !myTurn ? (
-                    <span>{turn?.name || "친구"} 님의 차례</span>
-                  ) : null}
                 </div>
                 {primaryAction === "again" && !settling && !finishing ? (
                   <button

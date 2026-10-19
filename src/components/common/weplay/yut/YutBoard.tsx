@@ -45,6 +45,37 @@ const pointStyle = ([x, y]: [number, number]) => ({
 });
 const diamond = (x: number, y: number, rx: number, ry: number) =>
   `${x},${y - ry} ${x + rx},${y} ${x},${y + ry} ${x - rx},${y}`;
+// Use the board's coordinates for paint; touch targets may be larger than a pad.
+function PadHighlight({
+  node,
+  className,
+}: {
+  node: YutNode;
+  className: string;
+}) {
+  const [x, y] = nodePosition(node);
+  const outer = node.startsWith("o") || node === "finish" || node === "home";
+  const corner =
+    node === "finish" ||
+    node === "home" ||
+    (outer && Number(node.slice(1)) % 5 === 0);
+  return outer ? (
+    <polygon
+      className={className}
+      data-pad-node={node}
+      points={diamond(x, y - 3, corner ? 54 : 43, corner ? 37 : 30)}
+    />
+  ) : (
+    <ellipse
+      className={className}
+      data-pad-node={node}
+      cx={x}
+      cy={y}
+      rx={node === "center" ? 27 : 17}
+      ry={node === "center" ? 19 : 12}
+    />
+  );
+}
 export const yutNodeLabel = (node: YutNode) =>
   node === "home"
     ? "출발 전"
@@ -866,6 +897,7 @@ export default function YutBoard({
         className="yut-board yut-isometric-board"
         role="group"
         aria-label="윷판"
+        data-selecting={destinations.length > 0}
       >
         <BoardSurface prefix={prefix} />
         {(previewPath.length > 1 || destinations.length > 0) && (
@@ -900,12 +932,13 @@ export default function YutBoard({
                 .join(" ")}
             />
             {previewPath.slice(1).map((node, i) => (
-              <ellipse
-                key={i}
-                cx={nodePosition(node)[0]}
-                cy={nodePosition(node)[1]}
-                rx="24"
-                ry="16"
+              <PadHighlight key={i} node={node} className="yut-route-pad" />
+            ))}
+            {destinations.map((move) => (
+              <PadHighlight
+                key={`${move.route}-${move.targetNode}`}
+                node={move.targetNode}
+                className={`yut-destination-pad${selectedMove?.route === move.route ? " is-previewed" : ""}`}
               />
             ))}
           </svg>
@@ -991,20 +1024,7 @@ export default function YutBoard({
             onClick={() => onMove(move)}
             aria-pressed={selectedMove?.route === move.route}
             aria-label={`${move.route === "outer" ? "바깥길" : "지름길"}, ${yutNodeLabel(move.targetNode)} 발판 선택`}
-          >
-            <svg
-              viewBox="0 0 100 70"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              {move.targetNode.startsWith("o") ||
-              move.targetNode === "finish" ? (
-                <path d="M50 3 97 35 50 67 3 35Z" />
-              ) : (
-                <ellipse cx="50" cy="35" rx="47" ry="32" />
-              )}
-            </svg>
-          </button>
+          />
         ))}
       </div>
     </div>
