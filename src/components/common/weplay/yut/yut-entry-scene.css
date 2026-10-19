@@ -77,18 +77,40 @@
   }
 }
 .yut-entry-stick {
-  animation: yut-entry-stick-float 4800ms ease-in-out var(--stick-delay)
-    infinite alternate;
+  --stick-motion: 1;
+  transform-box: view-box;
+  transform-origin: var(--stick-origin-x) var(--stick-origin-y);
+  animation: yut-entry-stick-flight var(--stick-duration) ease-in-out
+    var(--stick-delay) infinite;
 }
 .yut-entry-stick > svg {
   overflow: hidden;
 }
-@keyframes yut-entry-stick-float {
-  from {
-    transform: translateY(0);
+@keyframes yut-entry-stick-flight {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
   }
-  to {
-    transform: translateY(-12px);
+  28% {
+    transform: translate(
+        calc(var(--stick-flight-x) * var(--stick-motion) * -0.45),
+        calc(var(--stick-flight-y) * var(--stick-motion) * 0.5)
+      )
+      rotate(calc(var(--stick-tilt) * var(--stick-motion) * -0.4));
+  }
+  56% {
+    transform: translate(
+        calc(var(--stick-flight-x) * var(--stick-motion)),
+        calc(var(--stick-flight-y) * var(--stick-motion))
+      )
+      rotate(calc(var(--stick-tilt) * var(--stick-motion)));
+  }
+  80% {
+    transform: translate(
+        calc(var(--stick-flight-x) * var(--stick-motion) * 0.35),
+        calc(var(--stick-flight-y) * var(--stick-motion) * 0.3)
+      )
+      rotate(calc(var(--stick-tilt) * var(--stick-motion) * 0.2));
   }
 }
 .yut-game[data-motion-paused="true"] .yut-entry-actor-frame,
@@ -186,15 +208,8 @@
     animation-duration: calc(var(--actor-duration) * 1.5);
   }
   .yut-game .yut-entry-stick {
-    animation-name: yut-entry-stick-small;
-  }
-  @keyframes yut-entry-stick-small {
-    from {
-      transform: translateY(0);
-    }
-    to {
-      transform: translateY(-3px);
-    }
+    --stick-motion: 0.45;
+    animation-duration: calc(var(--stick-duration) * 1.3);
   }
 }
 @media (orientation: landscape) and (max-height: 560px) {

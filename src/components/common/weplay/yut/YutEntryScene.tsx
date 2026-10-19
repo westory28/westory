@@ -50,10 +50,54 @@ const ACTORS = [
   },
 ];
 const STICKS = [
-  { x: 770, y: 75, size: 400, col: 0, row: 0, delay: -1300 },
-  { x: 1020, y: 210, size: 330, col: 1, row: 0, delay: -3200 },
-  { x: 480, y: 570, size: 450, col: 0, row: 1, delay: -700 },
-  { x: 730, y: 490, size: 290, col: 1, row: 1, delay: -2400 },
+  {
+    x: 770,
+    y: 75,
+    size: 400,
+    col: 0,
+    row: 0,
+    delay: -650,
+    period: 3200,
+    flightX: 28,
+    flightY: -84,
+    tilt: 22,
+  },
+  {
+    x: 1020,
+    y: 210,
+    size: 330,
+    col: 1,
+    row: 0,
+    delay: -2200,
+    period: 3600,
+    flightX: -32,
+    flightY: -68,
+    tilt: -20,
+  },
+  {
+    x: 480,
+    y: 570,
+    size: 450,
+    col: 0,
+    row: 1,
+    delay: -1100,
+    period: 2900,
+    flightX: 42,
+    flightY: -58,
+    tilt: -14,
+  },
+  {
+    x: 730,
+    y: 490,
+    size: 290,
+    col: 1,
+    row: 1,
+    delay: -2900,
+    period: 4000,
+    flightX: -22,
+    flightY: -74,
+    tilt: 26,
+  },
 ];
 /** One fixed background, intact character poses and independent wooden sticks. */
 export function YutEntryScene() {
@@ -187,7 +231,15 @@ export function YutEntryScene() {
                 key={index}
                 className="yut-entry-stick"
                 style={
-                  { "--stick-delay": `${stick.delay}ms` } as React.CSSProperties
+                  {
+                    "--stick-delay": `${stick.delay}ms`,
+                    "--stick-duration": `${stick.period}ms`,
+                    "--stick-flight-x": `${stick.flightX}px`,
+                    "--stick-flight-y": `${stick.flightY}px`,
+                    "--stick-tilt": `${stick.tilt}deg`,
+                    "--stick-origin-x": `${stick.x + stick.size / 2}px`,
+                    "--stick-origin-y": `${stick.y + stick.size / 2}px`,
+                  } as React.CSSProperties
                 }
               >
                 <svg

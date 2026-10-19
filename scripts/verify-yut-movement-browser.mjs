@@ -34,7 +34,9 @@ const evidence = path.join(
     : mobileViewportOnly || readabilityOnly
     ? "output/yut-mobile-viewport-20261019"
     : motionAuditOnly
-      ? "output/yut-motion-complete-20261018"
+      ? process.env.YUT_MOTION_QA_PHASE === "entry"
+        ? "output/yut-entry-flight-20261019"
+        : "output/yut-motion-complete-20261018"
       : entryPolishOnly
         ? "output/yut-entry-polish-20261018"
         : "output/yut-movement-20261018",
@@ -1092,6 +1094,7 @@ async function verifyEntryArtwork() {
       "Each independent entry layer downloads once",
     );
     assert.equal(new Set(before).size, 3);
+    const stickFlight = await verifyEntryStickFlight(scene, label, reduced);
     const frames = await scene.evaluate((node) => {
       const actors = Array.from(node.querySelectorAll(".yut-entry-actor"));
       return actors.map((actor) => {
@@ -1345,6 +1348,7 @@ async function verifyEntryArtwork() {
       layers,
       backgroundPixelEqual: true,
       requests: before.length,
+      stickFlight,
       menuReachability,
     };
     await page.close();
@@ -1359,6 +1363,175 @@ async function verifyEntryArtwork() {
   report.checks.push(
     "Fixed-background pixel identity, independent intact actor frames/alpha, staggered normal/reduced timing, pause/resume, cached layers, safe menu/window stacking and save-data still passed",
   );
+  report.checks.push(
+    "Four distinct stick flights preserve bitmap proportions and rotate about their own centers under normal/reduced motion; desktop/844 landscape/768 tablet controls stay clear, with three entry layer requests and zero repeat downloads",
+  );
+}
+async function verifyEntryStickFlight(scene, label, reduced) {
+  const page = scene.page();
+  const live = await scene.locator(".yut-entry-stick").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const animation = node.getAnimations()[0],
+        timing = animation?.effect.getTiming();
+      return {
+        duration: timing?.duration,
+        delay: timing?.delay,
+        playState: animation?.playState,
+        time: animation?.currentTime,
+        transform: getComputedStyle(node).transform,
+      };
+    }),
+  );
+  assert.equal(live.length, 4);
+  assert.equal(new Set(live.map((stick) => stick.duration)).size, 4);
+  assert.equal(new Set(live.map((stick) => stick.delay)).size, 4);
+  assert.ok(live.every((stick) => stick.playState === "running"));
+  const normalPeriods = [3200, 3600, 2900, 4000];
+  live.forEach((stick, index) =>
+    assert.ok(
+      Math.abs(
+        stick.duration -
+          normalPeriods[index] * (reduced === "reduce" ? 1.3 : 1),
+      ) < 1e-6,
+      `${label}: each stick retains its distinct flight period`,
+    ),
+  );
+  await page.waitForFunction(
+    (before) =>
+      Array.from(document.querySelectorAll(".yut-entry-stick")).every(
+        (node, index) =>
+          node.getAnimations()[0].currentTime > before[index] + 150,
+      ),
+    live.map((stick) => stick.time),
+  );
+  const advanced = await scene
+    .locator(".yut-entry-stick")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        transform: getComputedStyle(node).transform,
+        time: node.getAnimations()[0]?.currentTime,
+        state: node.getAnimations()[0]?.playState,
+      })),
+    );
+  assert.ok(
+    advanced.every((stick, index) => stick.transform !== live[index].transform),
+    `${label}: all four sticks visibly progress under the OS motion preference ${JSON.stringify({ live, advanced })}`,
+  );
+  await scene.evaluate(async (node) => {
+    const animations = node.getAnimations({ subtree: true });
+    node.qaAnimationRestore = animations.map((animation) => ({
+      animation,
+      time: animation.currentTime,
+      rate: animation.playbackRate,
+    }));
+    animations.forEach((animation) => (animation.playbackRate = 0));
+    node.querySelectorAll(".yut-entry-actor-frame").forEach((frame) =>
+      frame.getAnimations().forEach((animation) => {
+        const timing = animation.effect.getTiming();
+        animation.currentTime = Number(timing.duration) * 1.05 + timing.delay;
+      }),
+    );
+  });
+  const samples = [];
+  for (const progress of [0, 0.28, 0.56, 0.8]) {
+    const sticks = await scene.evaluate((node, progress) => {
+      const stage = node.querySelector(".yut-entry-stage"),
+        rootMatrix = stage.getScreenCTM();
+      return Array.from(node.querySelectorAll(".yut-entry-stick")).map(
+        (stick) => {
+          const animation = stick.getAnimations()[0],
+            timing = animation.effect.getTiming();
+          animation.currentTime =
+            Number(timing.duration) * (1 + progress) + timing.delay;
+          const style = getComputedStyle(stick),
+            matrix = new DOMMatrixReadOnly(style.transform),
+            svg = stick.querySelector("svg"),
+            view = svg.viewBox.baseVal;
+          const sourceCenter = new DOMPoint(
+              view.x + view.width / 2,
+              view.y + view.height / 2,
+            ),
+            screenCenter = sourceCenter.matrixTransform(svg.getScreenCTM());
+          return {
+            matrix: Array.from([
+              matrix.a,
+              matrix.b,
+              matrix.c,
+              matrix.d,
+              matrix.e,
+              matrix.f,
+            ]),
+            angle: (Math.atan2(matrix.b, matrix.a) * 180) / Math.PI,
+            origin: style.transformOrigin,
+            sourceCenter: { x: sourceCenter.x, y: sourceCenter.y },
+            center: { x: screenCenter.x, y: screenCenter.y },
+            stageCenter: {
+              x: sourceCenter.matrixTransform(svg.getCTM()).x,
+              y: sourceCenter.matrixTransform(svg.getCTM()).y,
+            },
+            scale: Math.hypot(rootMatrix.a, rootMatrix.b),
+            box: svg.getBoundingClientRect().toJSON(),
+          };
+        },
+      );
+    }, progress);
+    samples.push({ progress, sticks });
+    if (progress === 0 || progress === 0.56)
+      await page.screenshot({
+        path: path.join(
+          evidence,
+          `flight-${label}-${progress === 0 ? "rest" : "peak"}.png`,
+        ),
+      });
+  }
+  const flight = samples[0].sticks.map((start, index) => {
+    const peak = samples[2].sticks[index],
+      motion = reduced === "reduce" ? 0.45 : 1,
+      expectedX = [28, -32, 42, -22][index] * motion,
+      expectedY = [-84, -68, -58, -74][index] * motion,
+      expectedTilt = [22, -20, -14, 26][index] * motion,
+      dx = (peak.center.x - start.center.x) / start.scale,
+      dy = (peak.center.y - start.center.y) / start.scale;
+    assert.ok(
+      Math.abs(dx - expectedX) < 0.1 && Math.abs(dy - expectedY) < 0.1,
+      `${label}: stick ${index + 1} translates around its own source center (${dx},${dy})`,
+    );
+    assert.ok(
+      Math.abs(peak.angle - expectedTilt) < 0.05,
+      `${label}: stick ${index + 1} rotates visibly without bitmap deformation`,
+    );
+    assert.ok(
+      Math.hypot(
+        peak.center.x - start.center.x,
+        peak.center.y - start.center.y,
+      ) > 5,
+      `${label}: stick ${index + 1} flight remains perceptible on screen`,
+    );
+    assert.ok(
+      Math.abs(peak.matrix[0] ** 2 + peak.matrix[1] ** 2 - 1) < 0.001,
+      `${label}: rotation preserves the bitmap aspect ratio`,
+    );
+    return {
+      index,
+      dx,
+      dy,
+      angle: peak.angle,
+      screenTravel: Math.hypot(
+        peak.center.x - start.center.x,
+        peak.center.y - start.center.y,
+      ),
+      duration: live[index].duration,
+      delay: live[index].delay,
+    };
+  });
+  await scene.evaluate((node) => {
+    node.qaAnimationRestore.forEach(({ animation, time, rate }) => {
+      animation.currentTime = time;
+      animation.playbackRate = rate;
+    });
+    delete node.qaAnimationRestore;
+  });
+  return { live, samples, measured: flight };
 }
 async function assertEntryAnimationState(scene, state) {
   await scene.page().waitForFunction((state) => {
@@ -2496,7 +2669,7 @@ async function verifyMotionFeedback(reducedMotion) {
 }
 async function verifyMotionAudit() {
   const phase = process.env.YUT_MOTION_QA_PHASE;
-  if (phase === "entry-final") {
+  if (phase === "entry" || phase === "entry-final") {
     await verifyEntryArtwork();
     return;
   }
