@@ -60,6 +60,10 @@ export interface AtlasEntry {
   relatedEntryIds?: string[];
   /** Individually sourced event; source-map captions must not populate this. */
   historicalStory?: AtlasHistoricalStory;
+  /** Geographic background is available across eras; it is not a dated event. */
+  geographicReference?: {
+    sources: AtlasHistoricalStory["sources"];
+  };
 }
 
 export interface AtlasEra {
@@ -89,6 +93,15 @@ export const ATLAS_SUBJECT_BOUNDS: Record<AtlasSubject, AtlasUnit["bounds"]> = {
 
 export const normalizeAtlasSearch = (value: string) =>
   value.normalize("NFKC").toLocaleLowerCase("ko").replace(/\s+/gu, "");
+
+export const matchesAtlasTemporalScope = (
+  entry: AtlasEntry,
+  unitId: string,
+  eraId: string,
+) =>
+  !!entry.geographicReference ||
+  ((!unitId || entry.unitId === unitId) &&
+    (!eraId || !!entry.eraIds?.includes(eraId)));
 
 export const matchesAtlasSearch = (
   entry: AtlasEntry,

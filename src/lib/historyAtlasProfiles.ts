@@ -5,6 +5,7 @@ import {
 } from "../data/historyAtlasPlaceProfiles";
 import { historyAtlasReferenceDefinitions } from "../data/historyAtlasReferenceDefinitions";
 import { historyAtlasEncyclopediaDefinitions } from "../data/historyAtlasEncyclopediaDefinitions";
+import { atlasEastAsiaReferences } from "../data/historyAtlasEastAsia";
 
 export type {
   AtlasPlaceProfile,
@@ -17,6 +18,17 @@ const profilesById = new Map(
   historyAtlasPlaceProfiles.flatMap((profile) =>
     (profile.placeIds || []).map((id) => [id, profile] as const),
   ),
+);
+const geographicProfilesById = new Map<string, AtlasPlaceProfile>(
+  atlasEastAsiaReferences.map((reference) => [
+    reference.place.id,
+    {
+      definition: reference.definition,
+      facts: reference.facts,
+      sources: reference.sources,
+      quality: "verified",
+    },
+  ]),
 );
 const profilesByName = new Map(
   historyAtlasPlaceProfiles.flatMap((profile) =>
@@ -98,7 +110,9 @@ export const getAtlasPlaceProfile = (
   entries: AtlasEntry[] = [],
 ): AtlasPlaceProfile => {
   const profile =
-    profilesById.get(place.id) || profilesByName.get(normalizeName(place.name));
+    geographicProfilesById.get(place.id) ||
+    profilesById.get(place.id) ||
+    profilesByName.get(normalizeName(place.name));
   if (profile) {
     return {
       definition: profile.definition,

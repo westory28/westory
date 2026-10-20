@@ -102,7 +102,7 @@ export const getAtlasHistoricalSummary = (entry: AtlasEntry) =>
         .join(" ");
 
 export const isAtlasHistoricalEntry = (entry: AtlasEntry) =>
-  !!getAtlasHistoricalSummary(entry);
+  !entry.geographicReference && !!getAtlasHistoricalSummary(entry);
 
 export const atlasEntrySubject = (dataset: AtlasDataset, entry: AtlasEntry) =>
   dataset.units.find((unit) => unit.id === entry.unitId)?.subject;

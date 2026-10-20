@@ -183,9 +183,20 @@ for (let lat = 33.1; lat < 43; lat += 0.12) {
 }
 
 let requests = 0;
+const cities = loadModule("src/data/historyAtlasEastAsiaCities.ts", () => {
+  throw new Error("Unexpected city reference dependency");
+});
+const references = loadModule("src/data/historyAtlasEastAsia.ts", (name) => {
+  assert.equal(name, "./historyAtlasEastAsiaCities");
+  return cities;
+});
 const loader = loadModule(
   "src/lib/historyAtlasTerrain.ts",
-  () => ({ default: "terrain.json" }),
+  (name) => {
+    if (name === "../data/historyAtlasEastAsia") return references;
+    assert(name.endsWith("terrain.json?url"));
+    return { default: "terrain.json" };
+  },
   async () => {
     requests += 1;
     return { ok: requests > 1, json: async () => terrain };

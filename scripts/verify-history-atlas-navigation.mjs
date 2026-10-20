@@ -43,7 +43,9 @@ const { findAtlasRiver, atlasFocusExtent, atlasRiverPath } = load(
   "src/lib/historyAtlasRivers.ts",
 );
 const { getAtlasPlaceProfile } = load("src/lib/historyAtlasProfiles.ts");
-const { ATLAS_SUBJECT_BOUNDS } = load("src/lib/historyAtlas.ts");
+const { ATLAS_SUBJECT_BOUNDS, matchesAtlasTemporalScope } = load(
+  "src/lib/historyAtlas.ts",
+);
 const {
   createAtlasProjection,
   constrainAtlasTransform,
@@ -971,6 +973,7 @@ for (const subject of ["korea", "world"])
           subjectEntries: empty ? [] : regionFixture,
           pendingFocusRef,
           matchesAtlasCurrentRegion: () => true,
+          matchesAtlasTemporalScope,
           atlasRegionCameraBounds,
           atlasAreaCameraBounds,
           findAtlasRegionArea,
@@ -1001,6 +1004,7 @@ for (const subject of ["korea", "world"])
               "SelectedId",
               "DetailOpen",
               "ProvinceDetailOpen",
+              "RegionSelectionDismissed",
               "ViewBounds",
             ].map((key) => [
               `set${key}`,

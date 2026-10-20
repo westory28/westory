@@ -1,6 +1,8 @@
 import type { AtlasDataset, AtlasPlace } from "../lib/historyAtlas";
 import { addAtlasHistoricalStories } from "../lib/historyAtlasStories";
 import { buildAtlasMapDataset } from "../lib/historyAtlasMapDataset";
+import { addAtlasGeographicReferences } from "../lib/historyAtlasGeographicReferences";
+import { atlasEastAsiaReferences } from "./historyAtlasEastAsia";
 import { profileHistoricalStories } from "./historyAtlasProfileStories";
 import { atlasWorldRestoredHistoricalStories } from "./historyAtlasWorldRestoration";
 import { atlasLandformHistoricalStories } from "./historyAtlasLandformRestoration";
@@ -1784,25 +1786,28 @@ for (const update of [
 
 export const historyAtlasSourceDataset: AtlasDataset =
   addAtlasHistoricalStories(
-    {
-      ...originalHistoryAtlasDataset,
-      places: [...places.values()],
-      eras: historyAtlasEras,
-      entries: [
-        ...originalHistoryAtlasDataset.entries.map((entry) => ({
-          ...entry,
-          eraIds: originalAtlasEntryEras[entry.id] || [],
-        })),
-        ...koreaExpansionEntries.map((entry) => ({
-          ...entry,
-          ...koreaHistoricalEntryCorrections[entry.id],
-        })),
-        ...worldExpansionEntries.map((entry) => ({
-          ...entry,
-          ...worldHistoricalEntryCorrections[entry.id],
-        })),
-      ],
-    },
+    addAtlasGeographicReferences(
+      {
+        ...originalHistoryAtlasDataset,
+        places: [...places.values()],
+        eras: historyAtlasEras,
+        entries: [
+          ...originalHistoryAtlasDataset.entries.map((entry) => ({
+            ...entry,
+            eraIds: originalAtlasEntryEras[entry.id] || [],
+          })),
+          ...koreaExpansionEntries.map((entry) => ({
+            ...entry,
+            ...koreaHistoricalEntryCorrections[entry.id],
+          })),
+          ...worldExpansionEntries.map((entry) => ({
+            ...entry,
+            ...worldHistoricalEntryCorrections[entry.id],
+          })),
+        ],
+      },
+      atlasEastAsiaReferences,
+    ),
     [
       ...koreaHistoricalStories,
       ...worldHistoricalStories,

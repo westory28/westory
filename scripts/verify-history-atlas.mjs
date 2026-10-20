@@ -96,9 +96,14 @@ for (const entry of dataset.entries) {
   const place = places.get(entry.placeId);
   assert(place, `${entry.id}: missing place`);
   assert(entry.summary.trim(), `${entry.id}: missing source context`);
-  assert(entry.eraIds?.length > 0, `${entry.id}: missing historical period`);
   assert(
-    entry.citations.length > 0 || entry.historicalStory?.sources.length > 0,
+    entry.geographicReference || entry.eraIds?.length > 0,
+    `${entry.id}: missing historical period`,
+  );
+  assert(
+    entry.citations.length > 0 ||
+      entry.historicalStory?.sources.length > 0 ||
+      entry.geographicReference?.sources.length > 0,
     `${entry.id}: missing evidence`,
   );
   for (const citation of entry.citations) {

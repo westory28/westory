@@ -318,6 +318,7 @@ export default function AtlasPlaceDetails({
     ...new Map<string, AtlasProfileSource>(
       [
         ...(activeEntry.historicalStory?.sources || []),
+        ...(entry.geographicReference?.sources || []),
         ...(activeRelation?.sources || []),
         ...related.flatMap((relation) => relation.sources),
         ...profile.sources,

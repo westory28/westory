@@ -23,6 +23,7 @@ import {
   ATLAS_SUBJECT_BOUNDS,
   ATLAS_SUBJECT_LABELS,
   matchesAtlasSearch,
+  matchesAtlasTemporalScope,
   normalizeAtlasSearch,
   type AtlasDataset,
   type AtlasEntry,
@@ -70,7 +71,10 @@ import {
   findAtlasLandform,
   loadAtlasLandformGeometry,
 } from "../../lib/historyAtlasLandforms";
-import { loadAtlasTerrainGeometry } from "../../lib/historyAtlasTerrain";
+import {
+  findAtlasReferenceTerrain,
+  loadAtlasTerrainGeometry,
+} from "../../lib/historyAtlasTerrain";
 import {
   atlasKoreanTraditionalRegions,
   getAtlasKoreanTraditionalRegion,
@@ -492,6 +496,8 @@ export default function HistoryAtlas({
   const [filterNotice, setFilterNotice] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
   const [provinceDetailOpen, setProvinceDetailOpen] = useState(false);
+  const [regionSelectionDismissed, setRegionSelectionDismissed] =
+    useState(false);
   const [listPage, setListPage] = useState(0);
   const [viewBounds, setViewBounds] = useState<AtlasUnit["bounds"] | null>(
     null,
@@ -646,8 +652,7 @@ export default function HistoryAtlas({
     () =>
       subjectEntries.filter(
         ({ entry, place }) =>
-          (!unitId || entry.unitId === unitId) &&
-          (!eraId || entry.eraIds?.includes(eraId)) &&
+          matchesAtlasTemporalScope(entry, unitId, eraId) &&
           (traditionalArea
             ? !!place.coordinates &&
               geoContains(traditionalArea, place.coordinates)
@@ -686,7 +691,7 @@ export default function HistoryAtlas({
     [subject, areaGeometry],
   );
   const provinceArea =
-    areaGeometry && !selected && !countryId
+    !regionSelectionDismissed && areaGeometry && !selected && !countryId
       ? traditionalRegionId
         ? traditionalArea
         : findAtlasRegionArea(subregionId || regionId, areaGeometry)
@@ -833,11 +838,12 @@ export default function HistoryAtlas({
     for (const { place } of visiblePlaces) {
       const area =
         (areaGeometry && findAtlasArea(place, areaGeometry)) ||
-        (landformGeometry && findAtlasLandform(place, landformGeometry));
+        (landformGeometry && findAtlasLandform(place, landformGeometry)) ||
+        (terrainGeometry && findAtlasReferenceTerrain(place, terrainGeometry));
       if (area) result.set(place.id, area);
     }
     return result;
-  }, [visiblePlaces, landformGeometry, areaGeometry]);
+  }, [visiblePlaces, landformGeometry, areaGeometry, terrainGeometry]);
   const selectedLandform = selected
     ? landformsByPlace.get(selected.place.id) || null
     : null;
@@ -1794,6 +1800,12 @@ export default function HistoryAtlas({
     if (selected.place.kind === "water" && geometry?.subject !== subject)
       return;
     if (selected.place.kind === "desert" && !landformGeometry) return;
+    if (
+      selected.entry.geographicReference &&
+      ["desert", "mountain"].includes(selected.place.kind || "") &&
+      !terrainGeometry
+    )
+      return;
     if (isAtlasAreaPlace(selected.place) && !areaGeometry) return;
     const coordinates = selectedShape
       ? atlasShapeGeographicAnchor(selectedShape)
@@ -1847,6 +1859,7 @@ export default function HistoryAtlas({
     updateTransform,
     selectedShape,
     landformGeometry,
+    terrainGeometry,
     areaGeometry,
     geometry,
     subject,
@@ -1989,6 +2002,20 @@ export default function HistoryAtlas({
     pendingFocusRef.current = placeId;
     setFocusRevision((value) => value + 1);
   };
+  const closeDetails = () => {
+    // Keep the painted camera while clearing every selection, including the
+    // region implied by a retained filter. It must not refocus after closing.
+    updateTransform(transformRef.current);
+    pendingFocusRef.current = null;
+    pendingVisualScaleRef.current = null;
+    focusDetailsAfterListRef.current = false;
+    setSelectedId("");
+    setCountryId("");
+    setProvinceDetailOpen(false);
+    setRegionSelectionDismissed(true);
+    setDetailOpen(false);
+    mapRef.current?.focus({ preventScroll: true });
+  };
   const resetView = () => {
     regionOverviewRef.current = true;
     resetProjectionRef.current =
@@ -2035,6 +2062,7 @@ export default function HistoryAtlas({
       nextSubregionId !== subregionId ||
       (regionControlChanged && !!traditionalRegionId);
     if (regionChanged) {
+      setRegionSelectionDismissed(false);
       setProvinceDetailOpen(false);
       setListPage(0);
       setQuery("");
@@ -2047,8 +2075,7 @@ export default function HistoryAtlas({
     const matches = searchEntries(
       subjectEntries.filter(
         ({ entry, place }) =>
-          (!nextUnitId || entry.unitId === nextUnitId) &&
-          (!nextEraId || entry.eraIds?.includes(nextEraId)) &&
+          matchesAtlasTemporalScope(entry, nextUnitId, nextEraId) &&
           matchesAtlasCurrentRegion(
             place,
             subject,
@@ -2154,12 +2181,20 @@ export default function HistoryAtlas({
       setViewBounds(null);
       cleared.push("지역");
     }
-    if (unitId && next.entry.unitId !== unitId) {
+    if (
+      unitId &&
+      !next.entry.geographicReference &&
+      next.entry.unitId !== unitId
+    ) {
       setUnitId("");
       setViewBounds(null);
       cleared.push("단원");
     }
-    if (eraId && !next.entry.eraIds?.includes(eraId)) {
+    if (
+      eraId &&
+      !next.entry.geographicReference &&
+      !next.entry.eraIds?.includes(eraId)
+    ) {
       setEraId("");
       cleared.push("시대");
     }
@@ -2201,6 +2236,7 @@ export default function HistoryAtlas({
     pendingFocusRef.current = null;
   };
   const selectTraditionalRegion = (region: string) => {
+    setRegionSelectionDismissed(false);
     setTraditionalRegionId(region);
     setRegionId("");
     setSubregionId("");
@@ -2509,8 +2545,7 @@ export default function HistoryAtlas({
                 event.preventDefault();
                 resetView();
               } else if (event.key === "Escape") {
-                setCountryId("");
-                setDetailOpen(false);
+                closeDetails();
               }
             }}
             onPointerDown={(event) => {
@@ -2621,8 +2656,7 @@ export default function HistoryAtlas({
                   onKeyDown={(event) => {
                     if (event.key !== "Escape") return;
                     event.stopPropagation();
-                    setDetailOpen(false);
-                    mapRef.current?.focus({ preventScroll: true });
+                    closeDetails();
                   }}
                   onPointerDown={(event) => {
                     if (event.pointerType !== "touch") movedRef.current = false;
@@ -2634,10 +2668,7 @@ export default function HistoryAtlas({
                       type="button"
                       className="history-atlas__button"
                       aria-label="장소 설명 닫기"
-                      onClick={() => {
-                        setDetailOpen(false);
-                        mapRef.current?.focus({ preventScroll: true });
-                      }}
+                      onClick={closeDetails}
                     >
                       ×
                     </button>
@@ -2861,7 +2892,10 @@ export default function HistoryAtlas({
                     data-traditional-label={label.region}
                     style={{ left: label.x, top: label.y }}
                     aria-label={`${label.name} 지역 범위와 설명 보기`}
-                    aria-pressed={traditionalRegionId === label.region}
+                    aria-pressed={
+                      !regionSelectionDismissed &&
+                      traditionalRegionId === label.region
+                    }
                     onClick={() => selectTraditionalRegion(label.region)}
                     onKeyDown={(event) => {
                       if (event.key !== "Enter" && event.key !== " ") return;
@@ -2897,8 +2931,7 @@ export default function HistoryAtlas({
                   onKeyDown={(event) => {
                     if (event.key !== "Escape") return;
                     event.stopPropagation();
-                    setCountryId("");
-                    mapRef.current?.focus({ preventScroll: true });
+                    closeDetails();
                   }}
                 >
                   <span>{country.properties.name}</span>

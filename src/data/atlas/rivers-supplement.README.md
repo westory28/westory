@@ -38,3 +38,17 @@ mixing old and new versions of its individual ways. The manifest preserves
 these explicit filters; conflicting duplicate way snapshots cause a build error.
 The build reads only local responses and makes no network request. The app
 serves the derived file locally; it does not query Overpass on user visits.
+
+The 2026-10-20 Liao amendment uses the OSM API response for waterway relation
+405843. Its ordered `main_stream` ways continue through Panjin to the
+Shuangtaizi estuary; the generalized Natural Earth line instead continues
+toward Yingkou/Daliao. Selection therefore prefers the OSM main stream.
+No vertices are interpolated or simplified in this amendment. After rebuilding
+the general supplement, apply the saved response with:
+
+```powershell
+node scripts/build-history-atlas-liao-river.mjs <liao-relation-405843.json>
+```
+
+Its response hash, member way IDs, relation version, endpoints and processing
+are recorded in the same ODbL source manifest. Other river groups are preserved.

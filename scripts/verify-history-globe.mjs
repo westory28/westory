@@ -698,6 +698,7 @@ const globeAst = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 let regionHandler, chooseEntryHandler;
+let globeCloseClick, globePopupKeyDown;
 const globeDeclarations = new Map();
 const globeEffects = [];
 const visitGlobe = (node) => {
@@ -710,6 +711,16 @@ const visitGlobe = (node) => {
     node.expression.getText(globeAst) === "useEffect"
   )
     globeEffects.push(node);
+  if (ts.isJsxOpeningElement(node)) {
+    const attribute = (name) =>
+      node.attributes.properties.find(
+        (property) => property.name?.getText(globeAst) === name,
+      )?.initializer;
+    if (attribute("aria-label")?.text === "장소 설명 닫기")
+      globeCloseClick = attribute("onClick").expression.getText(globeAst);
+    if (attribute("className")?.text === "history-globe__popup")
+      globePopupKeyDown = attribute("onKeyDown").expression.getText(globeAst);
+  }
   ts.forEachChild(node, visitGlobe);
 };
 visitGlobe(globeAst);
@@ -868,6 +879,8 @@ for (const empty of [false, true]) {
       fitGlobeRegionCamera,
       GLOBE_INITIAL_VIEW: m.GLOBE_INITIAL_VIEW,
       matchesGlobeRegion: () => true,
+      matchesAtlasTemporalScope: load("src/lib/historyAtlas.ts")
+        .matchesAtlasTemporalScope,
       ...Object.fromEntries(
         [
           "RegionId",
@@ -880,6 +893,7 @@ for (const empty of [false, true]) {
           "Query",
           "Camera",
           "ProvinceDetailOpen",
+          "RegionSelectionDismissed",
         ].map((key) => [
           `set${key}`,
           (value) => {
@@ -894,6 +908,11 @@ for (const empty of [false, true]) {
   assert.equal(state.SelectedId, null);
   assert.equal(state.SelectedCountryId, null);
   assert.equal(state.Panel, "list");
+  assert.equal(
+    state.RegionSelectionDismissed,
+    false,
+    "Choosing another region enables its geographic highlight",
+  );
   equal(
     state.Camera ?? null,
     empty
@@ -976,6 +995,103 @@ function evaluateGlobe(expression, dependencies = {}) {
   );
   return exports.run;
 }
+let globeDismissalCases = 0;
+for (const kind of ["place", "country", "province"]) {
+  const previous = { longitude: 125, latitude: 37, roll: 12, zoom: 4.2 };
+  const viewRef = { current: { ...previous } };
+  const cameraFrame = { current: 17 };
+  const focusedSelection = { current: { shape: {}, revision: 4 } };
+  const pendingPanelFocus = { current: "detail" };
+  const frames = new Set([17]);
+  let committed,
+    drawCount = 0;
+  const state = {
+    SelectedId: kind === "place" ? "selected-entry" : null,
+    SelectedCountryId: kind === "country" ? "KOR" : null,
+    ProvinceDetailOpen: kind === "province",
+    RegionSelectionDismissed: false,
+    Panel: "detail",
+    Page: 0,
+  };
+  const cancelCamera = evaluateGlobe(
+    globeDeclarations.get("cancelCamera").getText(globeAst),
+    {
+      useCallback: (callback) => callback,
+      cameraFrame,
+      cancelAnimationFrame: (id) => frames.delete(id),
+    },
+  );
+  const commitView = evaluateGlobe(
+    globeDeclarations.get("commitView").getText(globeAst),
+    {
+      useCallback: (callback) => callback,
+      viewRef,
+      setView: (value) => {
+        committed = value;
+      },
+      requestDraw: () => {
+        drawCount++;
+      },
+    },
+  );
+  const returnToList = evaluateGlobe(
+    globeDeclarations.get("returnToList").getText(globeAst),
+    {
+      cancelCamera,
+      commitView,
+      focusedSelection,
+      pendingPanelFocus,
+      filtered: [{ place: { id: "place-id" } }],
+      selected: kind === "place" ? { place: { id: "place-id" } } : undefined,
+      PAGE_SIZE: 40,
+      ...Object.fromEntries(
+        Object.keys(state).map((key) => [
+          `set${key}`,
+          (value) => {
+            state[key] = value;
+          },
+        ]),
+      ),
+    },
+  );
+  if (kind === "country")
+    evaluateGlobe(globePopupKeyDown, { returnToList })({
+      key: "Escape",
+      preventDefault() {},
+    });
+  else if (kind === "province")
+    evaluateGlobe(globeDeclarations.get("onKeyDown").getText(globeAst), {
+      returnToList,
+      viewRef,
+    })({ key: "Escape" });
+  else evaluateGlobe(globeCloseClick, { returnToList })();
+  equal(state, {
+    SelectedId: null,
+    SelectedCountryId: null,
+    ProvinceDetailOpen: false,
+    RegionSelectionDismissed: true,
+    Panel: "list",
+    Page: 0,
+  });
+  equal(viewRef.current, previous);
+  equal(committed, previous);
+  assert.equal(cameraFrame.current, null);
+  assert.equal(frames.size, 0);
+  assert.equal(focusedSelection.current, null);
+  assert.equal(pendingPanelFocus.current, "list");
+  assert.equal(drawCount, 1, "Closing commits one stationary globe redraw");
+  const provinceArea = evaluateGlobe(
+    globeDeclarations.get("provinceArea").arguments[0].getText(globeAst),
+    { regionSelectionDismissed: state.RegionSelectionDismissed },
+  )();
+  assert.equal(provinceArea, null, "Retained region filters cannot reselect");
+  evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+    highlightedShape: null,
+    selected: undefined,
+    setCamera: () => assert.fail("Closing cannot refocus the globe"),
+  })();
+  globeDismissalCases++;
+}
 const atlasModel = load("src/lib/historyAtlas.ts");
 const regionModel = load("src/lib/historyAtlasRegions.ts");
 const areaModel = load("src/lib/historyAtlasAreas.ts");
@@ -1017,6 +1133,7 @@ for (const [regionSubject, collection] of Object.entries(areaCollections)) {
         {
           selected: undefined,
           selectedCountry: null,
+          regionSelectionDismissed: false,
           areas: allAreas,
           subject,
           regionId,
@@ -1035,6 +1152,7 @@ for (const [regionSubject, collection] of Object.entries(areaCollections)) {
         let camera;
         evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
           highlightedShape: feature,
+          selected: undefined,
           focusedSelection: { current: null },
           selectionRevision: 1,
           cameraFrame: { current: null },
@@ -1735,5 +1853,5 @@ for (let index = 0; index < terrainSource.features.length; index += 1) {
 }
 
 console.log(
-  `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, actual all-subject filter/tag and river/desert hit handlers, pixel-budget, assets, menu migration and access checks passed.`,
+  `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, ${globeDismissalCases} explanation dismissals with no residual selection or camera movement, actual all-subject filter/tag and river/desert hit handlers, pixel-budget, assets, menu migration and access checks passed.`,
 );

@@ -98,10 +98,10 @@ const fixtureDb = (initial = new Map()) => {
 const errorCode = (expected) => (error) => error.code === expected;
 const source = await loadCatalogSource();
 assert.deepEqual(source.counts, {
-  total: 3367,
+  total: 3377,
   history: 1125,
-  places: 2242,
-  attributions: 4863,
+  places: 2252,
+  attributions: 4980,
 });
 assert.match(source.sourceHash, /^[a-f0-9]{64}$/u);
 assert.match(source.sourceBundleHash, /^[a-f0-9]{64}$/u);
@@ -113,7 +113,7 @@ assert.equal(
   ),
   source.sourceHash,
 );
-assert.equal(new Set(source.terms.map((term) => term.id)).size, 3367);
+assert.equal(new Set(source.terms.map((term) => term.id)).size, 3377);
 assert.equal(
   source.terms.filter((term) => term.word === "안양").length,
   2,
@@ -207,7 +207,7 @@ const dry = await runCatalogSync({
   report: (line) => reports.push(line),
 });
 assert.deepEqual(dry.counts, {
-  create: 3367,
+  create: 3377,
   update: 0,
   unchanged: 0,
   conflict: 0,
@@ -227,7 +227,7 @@ const applied = await runCatalogSync({
   report: (line) => reports.push(line),
 });
 assert.equal(applied.verified, true);
-assert.deepEqual(applied.applied, { create: 3367, update: 0, batches: 17 });
+assert.deepEqual(applied.applied, { create: 3377, update: 0, batches: 17 });
 assert.deepEqual(
   all.data.get(unrelatedId),
   unrelated,
@@ -253,7 +253,7 @@ const repeat = await runCatalogSync({
   ...transforms,
   report: (line) => reports.push(line),
 });
-assert.equal(repeat.counts.unchanged, 3367);
+assert.equal(repeat.counts.unchanged, 3377);
 assert.equal(
   all.state.commits,
   beforeRepeat,

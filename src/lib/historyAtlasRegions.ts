@@ -3,6 +3,7 @@ import { koreaAtlasRegionIdsByPlace } from "../data/historyAtlasKoreaRegions";
 import { worldAtlasRegionIdsByPlace } from "../data/historyAtlasWorldRegions";
 import { atlasKoreaRestoredRegionOverrides } from "../data/historyAtlasKoreaRestoration";
 import { atlasLandformRegionOverrides } from "../data/historyAtlasLandformRestoration";
+import { atlasEastAsiaReferences } from "../data/historyAtlasEastAsia";
 
 export interface AtlasRegionOption {
   id: string;
@@ -107,6 +108,9 @@ const regionGroups = new Map(
   ATLAS_WORLD_REGION_GROUPS.map((group) => [group.id, group]),
 );
 const provinceIds = new Set(ATLAS_KOREA_PROVINCES.map(({ id }) => id));
+const eastAsiaReferenceIds = new Set(
+  atlasEastAsiaReferences.map(({ place }) => place.id),
+);
 
 /** Static, source-backed memberships; never infer a place from a search alias. */
 export function getAtlasPlaceRegionIds(
@@ -119,7 +123,14 @@ export function getAtlasPlaceRegionIds(
         koreaAtlasRegionIdsByPlace[place.id]
       : atlasLandformRegionOverrides[place.id] ||
         worldAtlasRegionIdsByPlace[place.id];
-  return ids?.length ? ids : ["unclassified"];
+  if (ids?.length && !ids.every((id) => id === "unclassified")) return ids;
+  if (eastAsiaReferenceIds.has(place.id))
+    return subject === "korea"
+      ? ["outside-korea"]
+      : place.id === "kr-6c3a9774fc76"
+        ? ["asia-north"]
+        : ["asia-east"];
+  return ["unclassified"];
 }
 
 export function matchesAtlasRegion(

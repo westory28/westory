@@ -79,11 +79,12 @@ const isHistoricalEntry = (entry: AtlasEntry) =>
   !!getAtlasHistoricalSummary(entry).trim() &&
   (entry.historicalStory
     ? entry.historicalStory.sources.length > 0
-    : entry.citations.length > 0);
+    : (entry.geographicReference?.sources.length || entry.citations.length) >
+      0);
 
-/** A map pin needs all three: an individual historical account, an identified
- * physical place, and an evidenced coordinate. Captions and broad territories
- * remain in the source ledger, never as unclickable list/search placeholders.
+/** A map label needs a sourced historical account or reviewed geographic
+ * reference, an identified place, and an evidenced coordinate. Unreviewed
+ * captions and political territories stay in the source ledger.
  */
 export const buildAtlasMapDataset = (source: AtlasDataset) => {
   const units = new Map(source.units.map((unit) => [unit.id, unit]));
@@ -102,7 +103,13 @@ export const buildAtlasMapDataset = (source: AtlasDataset) => {
         (alias) => !atlasMapContextOnlyAliases[place.id].includes(alias),
       );
     const reasons: AtlasMapExclusionReason[] = [];
-    if (place.kind === "country" || place.kind === "region")
+    if (
+      place.kind === "country" ||
+      (place.kind === "region" &&
+        !entriesByPlace
+          .get(place.id)
+          ?.some((entry) => entry.geographicReference))
+    )
       reasons.push("country-or-region");
     // This is an exclusion guard, never the inclusion criterion. Independently
     // checked history and location are still required for every remaining name.

@@ -8,6 +8,9 @@ import { format } from "prettier";
 // Reuse the checked atlas corpus without importing its map/story runtime in the
 // dictionary. Never import the AKS verbatim-excerpt fallback as open content.
 const cache = new Map();
+// Update the reviewed geography without rewriting unrelated dictionary entries
+// or dropping their published attribution records.
+const geographicOnly = process.argv.includes("--geographic-references-only");
 function load(filename) {
   const path = resolve(filename);
   if (cache.has(path)) return cache.get(path);
@@ -36,6 +39,16 @@ const { historyAtlasReferenceDefinitions } = load(
 const references = new Map(
   historyAtlasReferenceDefinitions.map((entry) => [entry[0], entry]),
 );
+const { atlasEastAsiaReferences } = load("src/data/historyAtlasEastAsia.ts");
+const geographicReferences = new Map(
+  atlasEastAsiaReferences.map((reference) => [reference.place.id, reference]),
+);
+const previous = geographicOnly
+  ? load("src/data/historyDictionaryPlaces.ts")
+  : { historyDictionaryPlaceRows: [], historyDictionaryPlaceSources: [] };
+const previousRows = new Map(
+  previous.historyDictionaryPlaceRows.map((row) => [row[0], row]),
+);
 const displayedPlaces = new Map(
   displayed.places.map((place) => [place.id, place]),
 );
@@ -51,7 +64,8 @@ function internSource(source) {
   }
   return sourceIds.get(key);
 }
-const toSource = (source) => {
+previous.historyDictionaryPlaceSources.forEach(internSource);
+const toSource = (source, retrievedAt = "2026-10-15") => {
   const wikipedia = /https:\/\/(?:ko|en)\.wikipedia\.org\//u.test(source.url);
   return {
     title: source.title,
@@ -71,7 +85,7 @@ const toSource = (source) => {
     changes: wikipedia
       ? source.license?.split("변경: ")[1] || "본문 발췌·요약"
       : "위스토리 지도에서 작성한 설명의 참고 자료",
-    retrievedAt: "2026-10-15",
+    retrievedAt,
   };
 };
 const entriesByPlace = new Map();
@@ -79,10 +93,14 @@ for (const entry of original.entries) {
   if (!entriesByPlace.has(entry.placeId)) entriesByPlace.set(entry.placeId, []);
   entriesByPlace.get(entry.placeId).push(entry);
 }
-const result = [];
+const result = [...previous.historyDictionaryPlaceRows];
+const resultIndices = new Map(result.map((row, index) => [row[0], index]));
 const omitted = [];
 for (const sourcePlace of original.places) {
   const place = displayedPlaces.get(sourcePlace.id) || sourcePlace;
+  const geographicReference = geographicReferences.get(place.id);
+  if (geographicOnly && !geographicReference) continue;
+  const previousRow = previousRows.get(place.id);
   const entries = entriesByPlace.get(place.id) || [];
   const profile = getAtlasPlaceProfile(place, entries);
   const reference = references.get(place.id);
@@ -90,7 +108,21 @@ for (const sourcePlace of original.places) {
   let attributionIds;
   // Prefer reviewed map explanations for visible places. Otherwise the already
   // checked revision-based open source definition is the reusable fallback.
-  if (
+  if (geographicReference) {
+    definition = geographicReference.definition;
+    attributionIds = [
+      internSource({
+        title: "위스토리 동아시아 역사 지리",
+        author: "위스토리",
+        url: "",
+        changes: "확인한 기관 자료의 지리적 사실을 바탕으로 뜻풀이를 새로 작성",
+        retrievedAt: "2026-10-20",
+      }),
+      ...geographicReference.sources.map((source) =>
+        internSource(toSource(source, "2026-10-20")),
+      ),
+    ];
+  } else if (
     reference &&
     (!displayedPlaces.has(place.id) || profile.quality !== "verified")
   ) {
@@ -156,31 +188,47 @@ for (const sourcePlace of original.places) {
   );
   assert(attributionIds.length, `${place.id}: missing provenance`);
   const tags = [
-    ...new Set(
-      entries.flatMap((entry) => {
+    ...new Set([
+      ...(previousRow?.[4] || []),
+      ...entries.flatMap((entry) => {
         const unit = units.get(entry.unitId);
         return unit
           ? [unit.subject === "korea" ? "한국사" : "세계사", unit.title]
           : [];
       }),
-    ),
+    ]),
   ];
-  result.push([
+  const word = previousRow?.[1] || place.name;
+  const row = [
     place.id,
-    place.name,
+    word,
     definition,
     [
       ...new Set(
-        [...(place.aliases || []), place.modernName || ""].filter(Boolean),
+        [
+          ...(previousRow?.[3] || []),
+          ...(place.aliases || []),
+          ...(word === place.name ? [] : [place.name]),
+          place.modernName || "",
+        ].filter(Boolean),
       ),
     ],
     tags,
-    [...new Set(attributionIds)],
-  ]);
+    [...new Set([...(previousRow?.[5] || []), ...attributionIds])],
+  ];
+  const existingIndex = resultIndices.get(place.id);
+  if (existingIndex === undefined) {
+    resultIndices.set(place.id, result.length);
+    result.push(row);
+  } else result[existingIndex] = row;
 }
 assert(
   omitted.every((place) => !place.displayed),
   "A visible map place has no dictionary definition",
+);
+assert(
+  displayed.places.every((place) => result.some((row) => row[0] === place.id)),
+  "A visible map place is missing from the generated dictionary",
 );
 const output = `// Generated by scripts/build-history-dictionary-places.mjs.\n// Wikipedia-derived texts retain their individual CC BY-SA 4.0 attribution.\n// Other entries are Westory-authored summaries with separate reference sources.\n// No map geometry, student data, or AKS verbatim-excerpt fallback is included.\nimport type { HistoryDictionaryAttribution, HistoryDictionaryPlaceRow } from "../lib/historyDictionaryCatalog";\n\nexport const historyDictionaryPlaceSources: HistoryDictionaryAttribution[] = ${JSON.stringify(sources, null, 2)};\n\nexport const historyDictionaryPlaceRows: HistoryDictionaryPlaceRow[] = [\n${result.map((row) => `  ${JSON.stringify(row)},`).join("\n")}\n];\n`;
 writeFileSync(

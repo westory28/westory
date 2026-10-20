@@ -131,6 +131,47 @@ for (const place of displayed.places) {
     `${place.name}: visible map place missing`,
   );
 }
+const { atlasEastAsiaReferences } = load("src/data/historyAtlasEastAsia.ts");
+assert.equal(atlasEastAsiaReferences.length, 41);
+for (const reference of atlasEastAsiaReferences) {
+  const term = terms.find((item) => item.atlasPlaceId === reference.place.id);
+  assert(term, `${reference.place.name}: geographic reference missing`);
+  assert.equal(
+    term.definition,
+    reference.definition,
+    `${term.id}: reviewed geographic explanation lost`,
+  );
+  for (const source of reference.sources)
+    assert(
+      term.attributions.some((item) => item.url === source.url),
+      `${term.id}: reviewed source missing`,
+    );
+  for (const alias of reference.place.aliases || [])
+    assert(
+      term.word === alias || term.aliases.includes(alias),
+      `${term.id}: geographic search alias missing: ${alias}`,
+    );
+  assert(term.facetIds.includes("subject:korea"));
+  assert(term.facetIds.includes("subject:world"));
+}
+// The dictionary merges previously published aliases. Keep nearby archaeological
+// sites and modern districts from becoming aliases of the reviewed city point.
+for (const [placeId, distinctNames] of [
+  ["world-9ab745ec51b2", ["성락", "성러", "盛乐", "盛樂"]],
+  ["xian", ["함양", "셴양", "咸阳", "咸陽", "Xianyang"]],
+  ["beijing", ["요 중경", "요중경", "중경", "요 상경", "요상경"]],
+  ["kr-da2cc50b7f4d", ["금 상경", "금상경", "회령부", "아청", "阿城"]],
+  ["world-872972e9a3dc", ["린안구", "임안구", "临安区", "臨安區"]],
+  ["eastasia-ye", ["안양", "安阳", "安陽"]],
+]) {
+  const term = terms.find((item) => item.atlasPlaceId === placeId);
+  assert(term, `${placeId}: reviewed city missing`);
+  for (const name of distinctNames)
+    assert(
+      !term.aliases.includes(name),
+      `${term.word}: distinct location incorrectly merged as alias: ${name}`,
+    );
+}
 
 const first = (query) => searchHistoryDictionaryCatalog(query, 1)[0];
 assert.equal(first("과 전 법").word, "과전법");

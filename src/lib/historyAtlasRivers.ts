@@ -140,7 +140,7 @@ export function findAtlasRiver(
       .map((feature) => feature.properties?.name),
   );
   const filtered =
-    osmNames.size && koreanRivers.has(place.name)
+    osmNames.size && (koreanRivers.has(place.name) || place.name === "랴오허강")
       ? features.filter(
           (feature) => feature.properties?.source === "OpenStreetMap",
         )

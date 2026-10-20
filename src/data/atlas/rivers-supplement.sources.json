@@ -7,12 +7,12 @@
   "generatedAt": "2026-10-15T05:09:03.048811+00:00",
   "coordinateSystem": "WGS84 longitude, latitude",
   "simplificationToleranceDegrees": 0.0003,
-  "processing": "Simplify each source way separately with Shapely preserve_topology=True; round to six decimals. Preserve way endpoints and separate MultiLineString parts. No joining, interpolation or traced geometry.",
+  "processing": "Simplify each source way separately with Shapely preserve_topology=True; round to six decimals. Preserve way endpoints and separate MultiLineString parts. No joining, interpolation or traced geometry. Liao main-stream amendment: retain unsimplified OSM relation member ways; see per-source processing.",
   "geometryFile": "rivers-supplement.json",
-  "sha256": "d0c554e07cd51a7c2e4f96bb01494427aa6f4f26d4e739620c17a1210d45b1f7",
-  "bytes": 243355,
-  "featureCount": 21,
-  "wayCount": 383,
+  "sha256": "a7f233c0fc4b26764612724a375c02c0f6da497ff113b2e0fe42c440ebbf6ce4",
+  "bytes": 285741,
+  "featureCount": 22,
+  "wayCount": 397,
   "sources": [
     {
       "id": "korea-river-osm-source",
@@ -99,6 +99,19 @@
       "generator": "Overpass API 0.7.62.11 87bfad18",
       "sourceElements": 8,
       "includedNames": null
+    },
+    {
+      "id": "liao-osm-relation-405843",
+      "file": "liao-relation-405843.json",
+      "sha256": "e8bd1195579dbf46d5634c0c1f95441d1dba1fbb0e0a17186a2f1a868d82d523",
+      "url": "https://api.openstreetmap.org/api/0.6/relation/405843/full.json",
+      "retrievedAt": "2026-10-20",
+      "relationVersion": 28,
+      "sourceElements": 1848,
+      "includedNames": [
+        "랴오허강"
+      ],
+      "processing": "No simplification or interpolation. Retain main_stream member ways and round WGS84 vertices to six decimals."
     }
   ],
   "rivers": [
@@ -930,6 +943,41 @@
         36.029435
       ],
       "coverage": "Named source ways only; continuity and complete headwater-to-mouth coverage are not asserted."
+    },
+    {
+      "name": "랴오허강",
+      "osmWayIds": [
+        50006112,
+        226058760,
+        226058757,
+        226058763,
+        226058758,
+        226058762,
+        243472679,
+        226058771,
+        226058759,
+        226058815,
+        465221579,
+        226058807,
+        912771274,
+        928822732
+      ],
+      "sourceIds": [
+        "liao-osm-relation-405843"
+      ],
+      "sourceNames": [
+        "辽河"
+      ],
+      "ways": 14,
+      "sourcePoints": 1846,
+      "outputPoints": 1846,
+      "bbox": [
+        121.806493,
+        40.822887,
+        123.912971,
+        42.982575
+      ],
+      "coverage": "OSM relation 405843 main_stream members, retaining their order, vertices and shared endpoints. Modern main stream through Panjin; no Daliao/Yingkou substitution."
     }
   ],
   "requestedCoverage": [
@@ -1010,6 +1058,11 @@
         "Wei"
       ],
       "note": "Existing generalized geometry; full river coverage is not asserted."
+    },
+    {
+      "name": "랴오허강",
+      "status": "supplement",
+      "wayCount": 14
     }
   ],
   "ignoredElementCount": 2520,

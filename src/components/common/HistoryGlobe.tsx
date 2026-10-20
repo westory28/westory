@@ -17,6 +17,7 @@ import {
 } from "d3-geo";
 import {
   ATLAS_SUBJECT_LABELS,
+  matchesAtlasTemporalScope,
   normalizeAtlasSearch,
   type AtlasDataset,
   type AtlasEntry,
@@ -39,6 +40,7 @@ import {
 import { globeInteractionGeometry } from "../../lib/historyGlobeRendering";
 import { getAtlasMountainTexture } from "../../lib/historyAtlasTerrainTexture";
 import {
+  findAtlasReferenceTerrain,
   loadAtlasTerrainGeometry,
   type AtlasTerrainCollection,
   type AtlasTerrainKind,
@@ -277,6 +279,8 @@ export default function HistoryGlobe({
   const [panel, setPanel] = useState<"list" | "detail">("list");
   const [panelOpen, setPanelOpen] = useState(false);
   const [provinceDetailOpen, setProvinceDetailOpen] = useState(false);
+  const [regionSelectionDismissed, setRegionSelectionDismissed] =
+    useState(false);
   const [notice, setNotice] = useState("");
   const [land, setLand] = useState<GeoPermissibleObjects | null>(null);
   const [geography, setGeography] = useState<GlobeGeography | null>(null);
@@ -363,7 +367,7 @@ export default function HistoryGlobe({
   );
   const selectedPlaceCountry = useMemo(
     () =>
-      selected && countries
+      selected && countries && !selected.entry.geographicReference
         ? findAtlasCountryForPlace(selected.place, countries.countries)
         : null,
     [selected, countries],
@@ -380,8 +384,7 @@ export default function HistoryGlobe({
     const result = items.filter(
       (item) =>
         (subject === "all" || item.subject === subject) &&
-        (!unitId || item.entry.unitId === unitId) &&
-        (!eraId || item.entry.eraIds?.includes(eraId)) &&
+        matchesAtlasTemporalScope(item.entry, unitId, eraId) &&
         matchesGlobeRegion(item, subject, regionId, subregionId, areas) &&
         (!normalized || item.search.includes(normalized)),
     );
@@ -433,20 +436,29 @@ export default function HistoryGlobe({
   );
   const selectedLandform = useMemo(
     () =>
-      selected && geography
-        ? findAtlasLandform(selected.place, geography)
+      selected
+        ? (geography && findAtlasLandform(selected.place, geography)) ||
+          (terrain && findAtlasReferenceTerrain(selected.place, terrain))
         : null,
-    [selected, geography],
+    [selected, geography, terrain],
   );
   const selectedArea = useMemo(
     () => (selected && areas ? findAtlasArea(selected.place, areas) : null),
     [selected, areas],
   );
   const provinceArea = useMemo(() => {
-    if (!areas || selected || selectedCountry) return null;
+    if (regionSelectionDismissed || !areas || selected || selectedCountry)
+      return null;
     const region = (subregionId || regionId).replace(/^(korea|world):/, "");
     return region ? findAtlasRegionArea(region, areas) : null;
-  }, [areas, selected, selectedCountry, regionId, subregionId]);
+  }, [
+    regionSelectionDismissed,
+    areas,
+    selected,
+    selectedCountry,
+    regionId,
+    subregionId,
+  ]);
   const highlightedCountry = selectedCountry || selectedPlaceCountry;
   const selectedShape =
     selectedRiver || selectedPlaceCountry || selectedLandform || selectedArea;
@@ -702,9 +714,9 @@ export default function HistoryGlobe({
       );
       next = {
         ...next,
-        zoom: Math.min(
-          GLOBE_MAX_ZOOM,
-          scale / (Math.min(width, height) * 0.44),
+        zoom: Math.max(
+          selected?.entry.geographicReference ? viewRef.current.zoom : 0,
+          Math.min(GLOBE_MAX_ZOOM, scale / (Math.min(width, height) * 0.44)),
         ),
       };
     }
@@ -1559,11 +1571,20 @@ export default function HistoryGlobe({
       if (subjectChanged) {
         setSubject(next.subject);
       }
-      if (unitId && (subjectChanged || next.entry.unitId !== unitId)) {
+      if (
+        unitId &&
+        (subjectChanged ||
+          (!next.entry.geographicReference && next.entry.unitId !== unitId))
+      ) {
         setUnitId("");
         cleared.push("단원");
       }
-      if (eraId && (subjectChanged || !next.entry.eraIds?.includes(eraId))) {
+      if (
+        eraId &&
+        (subjectChanged ||
+          (!next.entry.geographicReference &&
+            !next.entry.eraIds?.includes(eraId)))
+      ) {
         setEraId("");
         cleared.push("시대");
       }
@@ -1645,6 +1666,7 @@ export default function HistoryGlobe({
     );
   };
   const changeRegion = (group: string, subregion: string) => {
+    setRegionSelectionDismissed(false);
     setSelectedCountryId(null);
     setProvinceDetailOpen(false);
     setRegionId(group);
@@ -1660,8 +1682,7 @@ export default function HistoryGlobe({
           .filter(
             (item) =>
               (subject === "all" || item.subject === subject) &&
-              (!unitId || item.entry.unitId === unitId) &&
-              (!eraId || item.entry.eraIds?.includes(eraId)) &&
+              matchesAtlasTemporalScope(item.entry, unitId, eraId) &&
               matchesGlobeRegion(item, subject, group, subregion, areas),
           )
           .flatMap(({ place }) =>
@@ -1677,8 +1698,13 @@ export default function HistoryGlobe({
     if (next) setCamera(next, { x: 0.5, y: 0.5 });
   };
   const returnToList = () => {
+    cancelCamera();
+    commitView();
+    focusedSelection.current = null;
     setSelectedCountryId(null);
+    setSelectedId(null);
     setProvinceDetailOpen(false);
+    setRegionSelectionDismissed(true);
     const index = filtered.findIndex(
       (item) => item.place.id === selected?.place.id,
     );
@@ -1863,7 +1889,7 @@ export default function HistoryGlobe({
       setSelectedCountryId(null);
       next = GLOBE_INITIAL_VIEW;
     }
-    if (event.key === "Escape") setSelectedCountryId(null);
+    if (event.key === "Escape") returnToList();
     if (next) {
       event.preventDefault();
       setCamera(next, event.key === "Home" ? { x: 0.5, y: 0.5 } : undefined);
@@ -2283,7 +2309,7 @@ export default function HistoryGlobe({
                     event.currentTarget.dataset.globeCountry
                   ) {
                     event.preventDefault();
-                    setSelectedCountryId(null);
+                    returnToList();
                     canvasRef.current?.focus({ preventScroll: true });
                     return;
                   }

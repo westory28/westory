@@ -31,7 +31,9 @@ function load(filename) {
 }
 
 // Region membership is an archival catalogue; map curation may exclude its names.
-const dataset = load("src/data/historyAtlasContent.ts").historyAtlasSourceDataset;
+const dataset = load(
+  "src/data/historyAtlasContent.ts",
+).historyAtlasSourceDataset;
 const regions = load("src/lib/historyAtlasRegions.ts");
 const { koreaAtlasRegionIdsByPlace: korea } = load(
   "src/data/historyAtlasKoreaRegions.ts",
@@ -221,7 +223,9 @@ for (const province of ATLAS_KOREA_PROVINCES) {
   assert(
     filtered.every(
       (entry) =>
-        entry.citations.length || entry.historicalStory?.sources.length,
+        entry.citations.length ||
+        entry.historicalStory?.sources.length ||
+        entry.geographicReference?.sources.length,
     ),
   );
 }

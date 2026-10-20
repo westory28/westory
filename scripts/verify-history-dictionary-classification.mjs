@@ -52,7 +52,7 @@ assert(
 );
 const byId = new Map(terms.map((term) => [term.id, term]));
 const facetIds = new Set(facets.map((facet) => facet.id));
-assert.equal(terms.length, 2373);
+assert.equal(terms.length, 2383);
 assert.equal(byId.size, terms.length);
 assert.equal(facetIds.size, facets.length);
 assert.equal(
@@ -61,7 +61,7 @@ assert.equal(
 );
 assert.equal(
   Object.keys(metadata.historyDictionaryPlaceClassification).length,
-  2240,
+  2250,
 );
 assert.equal(audit.total, terms.length);
 assert.equal(audit.facetCount, facets.length);

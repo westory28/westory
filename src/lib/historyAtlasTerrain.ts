@@ -5,6 +5,9 @@ import type {
   Polygon,
 } from "geojson";
 import terrainUrl from "../data/atlas/terrain.json?url";
+import type { AtlasPlace } from "./historyAtlas";
+import type { AtlasAreaFeature } from "./historyAtlasAreas";
+import { atlasEastAsiaReferences } from "../data/historyAtlasEastAsia";
 
 export type AtlasTerrainKind =
   | "mountain"
@@ -35,6 +38,26 @@ export type AtlasTerrainCollection = FeatureCollection<
 >;
 
 let terrainPromise: Promise<AtlasTerrainCollection> | undefined;
+
+const referenceTerrainIds = new Map(
+  atlasEastAsiaReferences
+    .filter((reference) => reference.terrainId)
+    .map((reference) => [reference.place.id, reference.terrainId]),
+);
+
+export function findAtlasReferenceTerrain(
+  place: AtlasPlace,
+  terrain: AtlasTerrainCollection,
+): AtlasAreaFeature | null {
+  const id = referenceTerrainIds.get(place.id);
+  if (!id) return null;
+  const feature = terrain.features.find((item) => item.properties.id === id);
+  if (!feature) return null;
+  return {
+    ...feature,
+    properties: { ...feature.properties, placeId: place.id },
+  };
+}
 
 /** Physical terrain is a separate local layer; historical desert lookup stays unchanged. */
 export function loadAtlasTerrainGeometry(): Promise<AtlasTerrainCollection> {

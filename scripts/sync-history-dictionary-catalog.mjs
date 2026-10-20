@@ -22,7 +22,7 @@ import {
 export const COLLECTION = "history_dictionary_catalog";
 export const MANAGED_BY = "westory-history-dictionary-catalog";
 export const SCHEMA_VERSION = 1;
-export const EXPECTED_SOURCE_COUNT = 3367;
+export const EXPECTED_SOURCE_COUNT = 3377;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const reservedKeys = new Set([
   "schemaVersion",

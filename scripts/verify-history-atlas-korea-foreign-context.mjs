@@ -59,7 +59,11 @@ const contextIds = ["kr-23f8483f8d47", "kr-ed074edaab7c", "beijing", "tokyo"];
 const koreanPlaceIds = (data) =>
   new Set(
     data.entries
-      .filter((entry) => atlasEntrySubject(data, entry) === "korea")
+      .filter(
+        (entry) =>
+          !entry.geographicReference &&
+          atlasEntrySubject(data, entry) === "korea",
+      )
       .map((entry) => entry.placeId),
   );
 const baselineKoreanIds = koreanPlaceIds(baseline);
@@ -68,7 +72,7 @@ assert.deepEqual(
     .filter((id) => !baselineKoreanIds.has(id))
     .sort(),
   [...contextIds].sort(),
-  "Only four evidenced places are added to the Korean map",
+  "Only four evidenced places gain Korean historical accounts",
 );
 assert.equal(
   JSON.stringify(

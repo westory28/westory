@@ -168,8 +168,15 @@ const worldCoreWords = new Set(
   ),
 );
 
-const facetSets = [];
-const setIds = new Map();
+// Keep published palette indices stable when new reviewed places add themes.
+// Every term is still reclassified from its sources below.
+const { historyDictionaryFacetSets: previousFacetSets } = load(
+  "src/data/historyDictionaryClassification.ts",
+);
+const facetSets = previousFacetSets.map((ids) => Array.from(ids));
+const setIds = new Map(
+  facetSets.map((ids, index) => [JSON.stringify(ids), index]),
+);
 function intern(ids) {
   const expanded = expandHistoryDictionaryFacetIds(ids);
   const key = JSON.stringify(expanded);
@@ -396,6 +403,7 @@ saveGenerated(
 );
 const audit = {
   reviewedAt: "2026-10-18",
+  geographicReferencesReviewedAt: "2026-10-20",
   total: historyDictionaryCoreRows.length + historyDictionaryPlaceRows.length,
   coreCount: historyDictionaryCoreRows.length,
   placeCount: historyDictionaryPlaceRows.length,

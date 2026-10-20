@@ -94,7 +94,14 @@ assert(
 for (const place of dataset.places) {
   assert(finitePoint(place), `${place.id}: unclickable map place`);
   assert(place.locationNote?.trim(), `${place.id}: no coordinate provenance`);
-  assert(!["country", "region"].includes(place.kind), place.id);
+  assert(place.kind !== "country", place.id);
+  if (place.kind === "region")
+    assert(
+      dataset.entries.some(
+        (entry) => entry.placeId === place.id && entry.geographicReference,
+      ),
+      `${place.id}: a region needs reviewed geographic evidence`,
+    );
   assert(
     !/연구소|박물관|미술관|고속\s*(?:도로|국도)/u.test(place.name),
     place.name,

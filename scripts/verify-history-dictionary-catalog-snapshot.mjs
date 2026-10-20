@@ -126,7 +126,7 @@ const decoded = verifyCatalogSnapshotChunks(
     data: chunk.document,
   })),
 );
-assert.equal(decoded.length, 3367);
+assert.equal(decoded.length, 3377);
 const sorted = [...source.terms].sort((a, b) =>
   a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
 );
@@ -263,7 +263,7 @@ assert(published.snapshot.published && published.snapshot.verified);
 assert.equal(
   fixture.state.reads.filter((path) => path.startsWith(`${COLLECTION}/`))
     .length,
-  3367,
+  3377,
   "Snapshot-only must read each original once, not perform a second source scan",
 );
 assert(
@@ -432,7 +432,7 @@ console.log(
     gzipBytes: prepared.compressedBytes,
     base64Characters: prepared.encodedCharacters,
     chunks: prepared.chunks.length,
-    snapshotOnlySourceReads: 3367,
+    snapshotOnlySourceReads: 3377,
     attributionCount: decoded.reduce(
       (count, term) => count + term.attributions.length,
       0,

@@ -46,6 +46,7 @@ const ast = ts.createSourceFile(
 const declarations = new Map();
 const effects = [];
 let clickCapture, labelClick, listClick, overlayPointerDown;
+let closeClick, overlayKeyDown, mapKeyDown;
 function visit(node) {
   if (ts.isVariableDeclaration(node) && node.initializer)
     declarations.set(node.name.getText(ast), node.initializer.getText(ast));
@@ -61,8 +62,14 @@ function visit(node) {
       clickCapture = attribute("onClickCapture").expression.getText(ast);
     if (attribute("className")?.text === "history-atlas__point-label")
       labelClick = onClick;
-    if (attribute("className")?.text === "history-atlas__overlay")
+    if (attribute("className")?.text === "history-atlas__overlay") {
       overlayPointerDown = attribute("onPointerDown").expression.getText(ast);
+      overlayKeyDown = attribute("onKeyDown").expression.getText(ast);
+    }
+    if (attribute("aria-label")?.text === "장소 설명 닫기")
+      closeClick = onClick;
+    if (attribute("ref")?.expression?.getText(ast) === "mapRef")
+      mapKeyDown = attribute("onKeyDown").expression.getText(ast);
     if (onClick === "() => focusPlace(item.place.id)") listClick = onClick;
   }
   ts.forEachChild(node, visit);
@@ -578,6 +585,96 @@ for (const mapWidth of [356, 720]) {
   gestureCases += 3;
 }
 
+// Closing an explanation cancels focus motion and every selection without
+// resetting its camera or the filters that produced the current place list.
+let dismissalCases = 0;
+for (const kind of ["place", "country", "province", "traditional"]) {
+  const before = { scale: 4.25, x: -612.5, y: 87.25 };
+  const transformRef = { current: { ...before } };
+  const updates = [];
+  const camera = gestureHarness({}, transformRef, updates);
+  camera.updateTransform({ scale: 8, x: -900, y: -100 }, true);
+  const state = {
+    SelectedId: kind === "place" ? "place-entry" : "",
+    CountryId: kind === "country" ? "KOR" : "",
+    ProvinceDetailOpen: kind === "province" || kind === "traditional",
+    RegionSelectionDismissed: false,
+    DetailOpen: true,
+  };
+  const pendingFocusRef = { current: "pending-place" };
+  const pendingVisualScaleRef = { current: 1234 };
+  const focusDetailsAfterListRef = { current: true };
+  let mapFocused = false;
+  const closeDetails = evaluate(declarations.get("closeDetails"), {
+    ...camera,
+    pendingFocusRef,
+    pendingVisualScaleRef,
+    focusDetailsAfterListRef,
+    mapRef: {
+      current: {
+        focus: () => {
+          mapFocused = true;
+        },
+      },
+    },
+    ...Object.fromEntries(
+      Object.keys(state).map((key) => [
+        `set${key}`,
+        (value) => {
+          state[key] = value;
+        },
+      ]),
+    ),
+  });
+  if (kind === "country")
+    evaluate(overlayKeyDown, { closeDetails })({
+      key: "Escape",
+      stopPropagation() {},
+    });
+  else if (kind === "province") {
+    const node = {};
+    evaluate(mapKeyDown, { closeDetails })({
+      key: "Escape",
+      target: node,
+      currentTarget: node,
+    });
+  } else evaluate(closeClick, { closeDetails })();
+  same(state, {
+    SelectedId: "",
+    CountryId: "",
+    ProvinceDetailOpen: false,
+    RegionSelectionDismissed: true,
+    DetailOpen: false,
+  });
+  same(transformRef.current, before);
+  same(updates.at(-1), before);
+  assert.equal(camera.cameraFrameRef.current, null);
+  assert.equal(camera.frames.size, 0);
+  assert.equal(pendingFocusRef.current, null);
+  assert.equal(pendingVisualScaleRef.current, null);
+  assert.equal(focusDetailsAfterListRef.current, false);
+  assert(mapFocused);
+  const provinceArea = evaluate(declarations.get("provinceArea"), {
+    regionSelectionDismissed: state.RegionSelectionDismissed,
+    areaGeometry: { features: [{}] },
+    selected: undefined,
+    countryId: state.CountryId,
+    traditionalRegionId: kind === "traditional" ? "giho" : "",
+    regionId: "gyeonggi",
+    subregionId: "",
+    findAtlasRegionArea: () => assert.fail("A closed region cannot reselect"),
+  });
+  assert.equal(provinceArea, null);
+  evaluate(selectionEffect, { selected: undefined, pendingFocusRef })();
+  for (const effect of effects.filter(
+    (effect) =>
+      effect.includes("if (!provinceArea") ||
+      effect.includes("if (!selectedCountry) return;"),
+  ))
+    evaluate(effect, { provinceArea, selectedCountry: undefined })();
+  dismissalCases++;
+}
+
 const koreaAreas = JSON.parse(
   readFileSync("src/data/atlas/areas-korea.json", "utf8"),
 );
@@ -817,7 +914,8 @@ for (const viewport of viewports) {
     const x = anchor[0] * focused.scale + focused.x;
     const y = anchor[1] * focused.scale + focused.y;
     assert(
-      x >= (viewport.overlayRight || 0) + 24 && x <= viewport.width - 24 &&
+      x >= (viewport.overlayRight || 0) + 24 &&
+        x <= viewport.width - 24 &&
         y >= (viewport.top || 0) + 24 &&
         y <= (viewport.top || 0) + viewport.height - 24,
       "The zoom-preserving shape anchor remains clear of the popup",
@@ -825,5 +923,5 @@ for (const viewport of viewports) {
   }
 }
 console.log(
-  `Atlas interaction checks passed: ${gestureCases} real touch/tap transitions, ${focusCases} label/list/search/story selection flows with exact geographic zoom preservation, popup clearance, shape zoom retention and maximum-zoom contracts.`,
+  `Atlas interaction checks passed: ${gestureCases} real touch/tap transitions, ${focusCases} label/list/search/story selection flows, ${dismissalCases} explanation dismissals with no residual selection or camera movement, exact geographic zoom preservation, popup clearance, shape zoom retention and maximum-zoom contracts.`,
 );
