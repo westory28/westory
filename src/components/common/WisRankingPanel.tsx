@@ -78,14 +78,17 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   >(null);
   const [defaultProfileIcon, setDefaultProfileIcon] = useState("😀");
   const [loading, setLoading] = useState(true);
+  const [loadDurationMs, setLoadDurationMs] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadDurationMs(null);
     setEntries([]);
     setRankPolicy(null);
     setDefaultProfileIcon("😀");
     if (!scopeReady) return;
+    const startedAt = performance.now();
     const scope = { year, semester };
     void (async () => {
       try {
@@ -97,6 +100,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
         setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
         setRankPolicy(policy);
         setDefaultProfileIcon(getPointRankDefaultEmojiValue(policy));
+        setLoadDurationMs(Math.round(performance.now() - startedAt));
       } catch (error) {
         console.warn("Failed to load wis ranking:", error);
         if (!cancelled) {
@@ -121,7 +125,10 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   ]);
 
   return (
-    <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
+    <div
+      className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0"
+      data-ranking-load-ms={loadDurationMs ?? undefined}
+    >
       <div className="wis-ranking-heading flex items-center justify-between gap-2">
         {hallOfFamePath ? (
           <button

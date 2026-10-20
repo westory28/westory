@@ -155,6 +155,9 @@ firebase functions:list --project history-quiz-yongsin
 
 대시보드는 미국 `getWisRankingPreview`를 한 번 호출해 순위와 등급 정책을 함께 받는다.
 Firestore `nam5`와 가까운 `us-central1`에서 읽기 전용 트랜잭션을 사용한다.
+순위 조회 함수만 256MiB 대기 인스턴스 1개, 최대 3개, 동시 요청 80개로 제한한다.
+서버 최초 기동 지연을 줄이기 위한 설정으로 대기 인스턴스 비용이 발생한다.
+주기적인 호출이나 캐시 갱신 요청으로 서버를 깨우지 않는다.
 기존 서울/미국 `getWisEconomyState`와 전체 명예의 전당 조회는 그대로 유지한다.
 
 현재 순위는 서버 전용 `semester_wis_preview_entries`의 학기·학년·점수·공개 ID

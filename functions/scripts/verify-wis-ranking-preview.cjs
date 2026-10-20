@@ -467,8 +467,9 @@ const run = async () => {
     const endpoint = require('../wisRankingPreview');
     assert.deepEqual(Object.keys(endpoint), ['getWisRankingPreview']);
     assert.deepEqual(endpoint.getWisRankingPreview.__endpoint.region, ['us-central1']);
-    assert.equal(typeof endpoint.getWisRankingPreview.__endpoint.minInstances === 'number' &&
-      endpoint.getWisRankingPreview.__endpoint.minInstances > 0, false);
+    assert.equal(endpoint.getWisRankingPreview.__endpoint.minInstances, 1);
+    assert.equal(endpoint.getWisRankingPreview.__endpoint.maxInstances, 3);
+    assert.equal(endpoint.getWisRankingPreview.__endpoint.concurrency, 80);
     const source = fs.readFileSync(require.resolve('../wisRankingPreview'), 'utf8');
     assert.match(source, /readOnly: true/); assert.match(source, /projection: 'ranking-preview'/);
     assert.match(source, /onCallWithStudentMaintenance/);
@@ -479,6 +480,6 @@ const run = async () => {
   console.log(JSON.stringify({ passed: true, cases, network: 0, metrics,
     checks, guarantees: ['current ordered materialized index pages of 20; no ranking/account/ledger collection scans', 'EXPLICIT archive alone retains 30s TTL, pending dedup, four-entry cache and failed-build retry',
       'fresh session, permissions, semester, actor and candidate canonical scope', 'fresh profiles and policy only for final five',
-      'ties, public limits, zero score, test identities, archive semantics and 2000 cap', 'no polling, timers, writes or reserved instances'] }));
+      'ties, public limits, zero score, test identities, archive semantics and 2000 cap', 'no polling, timers or query writes; one standby instance and at most three instances'] }));
 };
 run().catch(error => { console.error(error); process.exitCode = 1; });
