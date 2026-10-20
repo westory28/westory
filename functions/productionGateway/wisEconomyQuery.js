@@ -3514,7 +3514,18 @@ const queryPagedHall = async ({ transaction, scope, config, studentAccount, sele
     const selected = available.filter(account => publicIds.has(hallPublicId(scope, account.studentUid)));
     const unread = selected.filter(account => !verified.has(account.studentUid));
     if (unread.length) {
-      const snapshots = await transaction.getAll(unread.map(account => accountPath(account.accountId)));
+      // These index fields are read hints for selected candidates only. Start
+      // their roster batch alongside masked accounts, then retain the existing
+      // canonical slot/enrollment/class checks and stale-hint fallback below.
+      const safeHint = value => typeof value === "string" && /^[A-Za-z0-9_-]{1,180}$/.test(value);
+      const hints = [...new Set([
+        ...unread.map(account => enrollmentSlotPath(scope, account.studentUid)),
+        ...unread.filter(account => safeHint(account.enrollmentId)).map(account => enrollmentPath(account.enrollmentId)),
+        ...unread.filter(account => safeHint(account.classId)).map(account => classPath(account.classId)),
+      ])];
+      const snapshots = (await transaction.getAll([
+        ...unread.map(account => accountPath(account.accountId)), ...hints,
+      ])).slice(0, unread.length);
       const canonical = snapshots.filter(snapshot => snapshot.exists && isCanonicalRankingPreviewAccount(snapshot.data, scope))
         .map(snapshot => snapshot.data);
       const current = new Map((await readRankingPreviewRoster(transaction, canonical, scope))

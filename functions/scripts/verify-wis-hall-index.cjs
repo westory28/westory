@@ -120,6 +120,61 @@ test('initial teacher grade view validates only its public rows and retains all 
   assert.equal(state.hallOfFameConfigRevision, complete.hallOfFameConfigRevision); assert.deepEqual(state.rankPolicy, complete.rankPolicy);
 });
 
+test('selected index roster hints start beside the masked account batch without prefetching unselected people', async () => {
+  const ctx = setup(0); for (let index = 0; index < 35; index++) place(ctx, index);
+  const read = ctx.store.getAll.bind(ctx.store);
+  const slots = Array.from({ length: 10 }, (_, index) => slotPath(scope, `student-${index}`));
+  const enrollments = Array.from({ length: 10 }, (_, index) => `semester_enrollments/enrollment-${scope}-${index}`);
+  let rosterStarted = false, accountStartedBeforeRosterResolved = false, release;
+  const rosterGate = new Promise(resolve => { release = resolve; });
+  ctx.store.getAll = async (paths, options) => {
+    if (!options?.fieldMask && slots.every(path => paths.includes(path))) {
+      assert.ok(enrollments.every(path => paths.includes(path)));
+      assert.ok(paths.includes('semester_classes/class-2026-2-3-1'));
+      rosterStarted = true;
+      const result = read(paths, options);
+      await rosterGate;
+      return result;
+    }
+    if (options?.fieldMask && paths.some(path => path.startsWith('semester_wis_accounts/'))) {
+      assert.equal(rosterStarted, true, 'Roster hints must start before awaiting the account batch');
+      accountStartedBeforeRosterResolved = true; release();
+    }
+    return read(paths, options);
+  };
+  const state = await view(ctx, { hallGradeKey: '3' });
+  assert.equal(accountStartedBeforeRosterResolved, true); assert.equal(visible(state).size, 10);
+  assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 10);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_enrollment_slots/')).length, 10);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_enrollments/')).length, 10);
+  assert.ok(!ctx.store.reads.includes(slotPath(scope, 'student-10')));
+  assert.ok(!ctx.store.reads.includes(`semester_enrollments/enrollment-${scope}-10`));
+});
+
+test('unsafe or outdated index hints cannot override canonical slot enrollment, class, name or scope', async () => {
+  const ctx = setup(0); for (let index = 0; index < 35; index++) place(ctx, index);
+  ctx.store.patch(previewPath(scope, 'student-0'), { enrollmentId: '../forbidden', classId: 'foreign/path' });
+  ctx.store.patch(slotPath(scope, 'student-0'), { activeEnrollmentId: 'current-enrollment' });
+  ctx.store.set('semester_enrollments/current-enrollment', { enrollmentId: 'current-enrollment', semesterId: scope,
+    studentUid: 'student-0', enrollmentStatus: 'ACTIVE', classId: 'current-class', displayName: '현재 학적 이름',
+    studentNumber: '9', snapshot: { grade: '3', classNumber: '2' } });
+  ctx.store.set('semester_classes/current-class', { classId: 'current-class', semesterId: scope, status: 'ACTIVE', grade: '3', classNumber: '2' });
+  ctx.store.patch(previewPath(scope, 'student-1'), { enrollmentId: 'old-hint-enrollment', classId: 'old-hint-class' });
+  ctx.store.set('semester_enrollments/old-hint-enrollment', { enrollmentId: 'old-hint-enrollment', semesterId: '2025-1',
+    studentUid: 'another-student', classId: 'old-hint-class', enrollmentStatus: 'ACTIVE', displayName: '잘못된 힌트 이름', snapshot: { grade: '9', classNumber: '9' } });
+  ctx.store.set('semester_classes/old-hint-class', { classId: 'old-hint-class', semesterId: '2025-1', status: 'ACTIVE', grade: '9', classNumber: '9' });
+  ctx.store.resetStats(); const state = await view(ctx, { hallGradeKey: '3' });
+  assert.equal(state.hallOfFame.gradeLeaderboardByGrade['3'][0].studentName, '현재 학적 이름');
+  assert.equal(state.hallOfFame.gradeLeaderboardByGrade['3'][0].class, '2');
+  assert.equal(JSON.stringify(state).includes('잘못된 힌트 이름'), false);
+  assert.ok(!ctx.store.reads.some(path => path.includes('../') || path.includes('foreign/path')));
+  assert.ok(ctx.store.reads.includes('semester_enrollments/current-enrollment'));
+  assert.ok(ctx.store.reads.includes('semester_classes/current-class'));
+  assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
+  const previous = await original(ctx); assert.deepEqual(state.hallOfFame.gradeLeaderboardByGrade['3'], previous.hallOfFame.gradeLeaderboardByGrade['3']);
+});
+
 test('explicit grade and class view selections read one group without an automatic all-group request', async () => {
   const ctx = school(); ctx.store.resetStats();
   const grade = await view(ctx, { hallView: 'grade', hallGradeKey: '2' });
