@@ -5,6 +5,43 @@
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
+.atlas-place-details--scrollable {
+  font-family: "Noto Sans KR", sans-serif;
+  word-break: keep-all;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.atlas-place-details--scrollable > .atlas-place-details__header {
+  flex: none;
+  padding: 8px 64px 8px 12px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  background: var(--ws-surface, #ffffff);
+}
+.atlas-place-details--scrollable .atlas-place-details__title {
+  min-height: 44px;
+}
+.atlas-place-details__body {
+  flex: 1;
+  min-height: 0;
+  margin: 0 8px 8px 0;
+  padding: 12px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+.atlas-place-details__body > :first-child {
+  margin-top: 0 !important;
+}
+.atlas-place-details.atlas-place-details--scrollable
+  .atlas-place-details__body:focus-visible {
+  outline: 3px solid var(--ws-ring, #3b82f6);
+  outline-offset: -3px;
+}
 .atlas-place-details :is(h2, h3, p, dl, dd, ul) {
   margin: 0;
 }
@@ -66,11 +103,14 @@
   font-size: 14px;
   line-height: 1.65;
 }
+.atlas-place-details--scrollable .atlas-place-details__facts dd {
+  font-size: 16px;
+}
 .atlas-place-details section {
   margin-top: 16px;
 }
 .atlas-place-details .atlas-place-details__context {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 .atlas-place-details__chips {
   display: flex;
@@ -144,7 +184,7 @@
 .atlas-place-details__paragraphs {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 .atlas-place-details__paragraphs p {
   font-size: 16px;
@@ -153,19 +193,20 @@
   word-break: keep-all;
 }
 .atlas-place-details__name-note {
-  margin-top: 12px !important;
-  font-size: 14px;
+  margin-top: 8px !important;
+  font-size: 16px;
+  line-height: 1.65;
   color: var(--ws-text-muted, #6b7280);
 }
 .atlas-place-details__relation-context {
   margin-top: 8px !important;
   color: var(--ws-primary-text, #1e3a8a);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.65;
   word-break: keep-all;
 }
 .atlas-place-details__meaning {
-  margin-top: 12px;
+  margin-top: 16px;
 }
 .atlas-place-details__names > div,
 .atlas-place-details__related > div {

@@ -216,14 +216,62 @@ async function expectRegionDescription(page) {
       .length > 10,
   );
   assert.equal(await article.locator("details").getAttribute("open"), null);
+  await expectPopupReading(article);
 }
-async function expectCountryTypography(article) {
-  const typography = await article.evaluate((element) => {
-    const overview = element.querySelector(".atlas-place-details__definition");
-    const paragraphs = element.querySelectorAll(
-      ".atlas-place-details__paragraphs p",
+async function expectPopupReading(
+  article,
+  { leaveScrolled = false, requireScroll = false } = {},
+) {
+  const body = article.locator(".atlas-place-details__body");
+  assert.equal(
+    await body.evaluate((element) => element.scrollTop),
+    0,
+    "New selection starts at the top",
+  );
+  assert.equal(await body.getAttribute("tabindex"), "0");
+  assert.equal(await body.getAttribute("role"), "region");
+  assert(await body.getAttribute("aria-label"), "Reading region has a name");
+  await article.locator("h2").evaluate((title) => {
+    title.tabIndex = -1;
+    title.focus({ preventScroll: true });
+  });
+  for (let step = 0; step < 3; step++) {
+    if (await body.evaluate((element) => document.activeElement === element))
+      break;
+    await article.page().keyboard.press("Tab");
+  }
+  assert(
+    await body.evaluate((element) => document.activeElement === element),
+    "Tab reaches the reading body from the title",
+  );
+  if (
+    await body.evaluate(
+      (element) => element.scrollHeight > element.clientHeight,
+    )
+  ) {
+    await body.press("PageDown");
+    await article
+      .page()
+      .waitForFunction(
+        () =>
+          document.activeElement?.matches(".atlas-place-details__body") &&
+          document.activeElement.scrollTop > 0,
+      );
+    await body.evaluate((element) =>
+      element.scrollTo({ top: 0, behavior: "instant" }),
     );
-    return [overview, ...paragraphs].map((paragraph) => {
+  }
+  const reading = await article.evaluate(async (element, leaveScrolled) => {
+    const body = element.querySelector(".atlas-place-details__body");
+    const header = element.querySelector(".atlas-place-details__header");
+    const shell = element.parentElement;
+    const headerTop = header.getBoundingClientRect().top;
+    body.scrollTop = body.scrollHeight;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const paragraphs = element.querySelectorAll(
+      ".atlas-place-details__definition, .atlas-place-details__paragraphs p, .atlas-place-details__name-note, .atlas-place-details__relation-context",
+    );
+    const typography = [...paragraphs].map((paragraph) => {
       const style = getComputedStyle(paragraph);
       return {
         left: paragraph.getBoundingClientRect().left,
@@ -233,18 +281,65 @@ async function expectCountryTypography(article) {
         lineHeight: style.lineHeight,
       };
     });
-  });
-  assert(typography.length > 1, "Country narrative uses readable paragraphs");
-  for (const paragraph of typography) {
+    const result = {
+      headerTop,
+      headerAfter: header.getBoundingClientRect().top,
+      headerBottom: header.getBoundingClientRect().bottom,
+      bodyTop: body.getBoundingClientRect().top,
+      bodyHeight: body.clientHeight,
+      bodyScrollHeight: body.scrollHeight,
+      bodyScroll: body.scrollTop,
+      bodyWidth: body.clientWidth,
+      bodyScrollWidth: body.scrollWidth,
+      outerScroll: shell.scrollTop,
+      outerOverflow: getComputedStyle(shell).overflowY,
+      typography,
+    };
+    if (!leaveScrolled) body.scrollTop = 0;
+    return result;
+  }, leaveScrolled);
+  assert.equal(
+    reading.headerAfter,
+    reading.headerTop,
+    "Popup title stays fixed",
+  );
+  assert(
+    reading.bodyTop >= reading.headerBottom,
+    "Scrollbar starts below title",
+  );
+  assert.equal(reading.outerScroll, 0, "Outer popup does not scroll");
+  assert.equal(reading.outerOverflow, "hidden", "Only the popup body scrolls");
+  assert(reading.bodyHeight > 60, "Popup retains a readable body height");
+  assert(
+    reading.bodyScrollWidth <= reading.bodyWidth + 1,
+    "No body horizontal overflow",
+  );
+  if (requireScroll)
     assert(
-      Math.abs(paragraph.left - typography[0].left) < 1,
-      "Country overview, relationships and history share the same left column",
+      reading.bodyScrollHeight > reading.bodyHeight,
+      "Long narrative needs scrolling",
     );
-    assert.equal(paragraph.fontFamily, typography[0].fontFamily);
+  if (reading.bodyScrollHeight > reading.bodyHeight)
+    assert(reading.bodyScroll > 0, "Long narrative scrolls inside the body");
+  assert(reading.typography.length > 0, "Popup has readable narrative text");
+  for (const paragraph of reading.typography) {
+    assert(
+      Math.abs(paragraph.left - reading.typography[0].left) < 1,
+      "Overview, narrative and notes share the same left column",
+    );
+    assert.equal(paragraph.fontFamily, reading.typography[0].fontFamily);
     assert.equal(paragraph.fontSize, "16px");
     assert.equal(paragraph.fontWeight, "400");
     assert.equal(paragraph.lineHeight, "26.4px");
   }
+  return reading;
+}
+async function expectCountryTypography(article) {
+  const reading = await expectPopupReading(article, { requireScroll: true });
+  assert(
+    reading.typography.length > 1,
+    "Country narrative uses readable paragraphs",
+  );
 }
 async function expectFreePanning(page, view) {
   const map = page.locator(".history-atlas__map");
@@ -321,6 +416,12 @@ async function expectKoreanForeignPlaces(page) {
     await page.waitForFunction(
       () => !document.querySelector(".history-atlas--focusing"),
     );
+    // Leave each story at the bottom so the next existing selection also
+    // verifies that the shared detail body resets its own scroll position.
+    await expectPopupReading(detail.locator(".atlas-place-details"), {
+      leaveScrolled: true,
+      requireScroll: true,
+    });
     const point = await marker.boundingBox();
     const map = await page.locator(".history-atlas__map").boundingBox();
     assert(
@@ -483,6 +584,9 @@ try {
         await page.waitForFunction(
           () => !document.querySelector(".history-atlas--focusing"),
         );
+        await expectPopupReading(page.locator(".atlas-place-details"), {
+          requireScroll: width <= 768,
+        });
         await page
           .getByRole("button", { name: "장소 설명 닫기", exact: true })
           .click();

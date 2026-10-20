@@ -358,7 +358,7 @@ export default function AtlasPlaceDetails({
     }));
   }, [placeEntries, dataset.sources, profile]);
   return (
-    <div className="atlas-place-details">
+    <div className="atlas-place-details atlas-place-details--scrollable">
       <header className="atlas-place-details__header">
         <div className="atlas-place-details__title">
           <h2>{displayName}</h2>
@@ -391,225 +391,235 @@ export default function AtlasPlaceDetails({
         )}
       </header>
 
-      <section
-        className="atlas-place-details__context"
-        ref={contextSection}
-        tabIndex={-1}
+      <div
+        className="atlas-place-details__body"
+        key={entry.id}
+        role="region"
+        aria-label={`${displayName} 설명 내용`}
+        tabIndex={0}
       >
-        <div className="atlas-place-details__section-heading">
-          <h3>{activeGroup.length ? "역사 속 이 장소" : "장소 개요"}</h3>
-          {activeGroup.length > 0 && <span>{activeEntry.period}</span>}
-        </div>
-        <p className="atlas-place-details__definition">
-          {activeGroup.length
-            ? getAtlasHistoricalSummary(activeEntry)
-            : profile.definition}
-        </p>
-        {activeRelation && (
-          <p className="atlas-place-details__relation-context">
-            {activeRelation.reason}
-          </p>
-        )}
-        {entry.nameNote && (
-          <p className="atlas-place-details__name-note">{entry.nameNote}</p>
-        )}
-        {context.length > 0 && (
-          <ul>
-            {context
-              .filter((paragraph) => !activeEntry.summary.includes(paragraph))
-              .map((paragraph) => (
-                <li key={paragraph}>{paragraph}</li>
-              ))}
-          </ul>
-        )}
-        {significance.length > 0 && (
-          <div className="atlas-place-details__meaning">
-            <h3>기억할 점</h3>
-            <ul>
-              {significance.map((paragraph) => (
-                <li key={paragraph}>{paragraph}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      {stories.length > 0 && (
         <section
-          className="atlas-place-details__periods"
-          aria-label="시대별 이야기"
+          className="atlas-place-details__context"
+          ref={contextSection}
+          tabIndex={-1}
         >
-          <h3>시대별 보기</h3>
-          <div className="atlas-place-details__chips">
-            {shownStories.map((group) => {
-              const item =
-                group.find((candidate) => candidate.id === entry.id) ||
-                group[0];
-              const samePeriod = stories.filter(
-                (story) => story[0].period === item.period,
-              );
-              const identifier =
-                samePeriod.length > 1
-                  ? item.displayName &&
-                    samePeriod.every(
-                      (story) =>
-                        story === group ||
-                        story[0].displayName !== item.displayName,
-                    )
-                    ? item.displayName
-                    : String(samePeriod.indexOf(group) + 1)
-                  : "";
-              return (
-                <AtlasDetailChip
-                  key={item.id}
-                  pressed={group === activeGroup}
-                  title={
-                    item.historicalStory?.title ||
-                    item.displayName ||
-                    place.name
-                  }
-                  description={getAtlasHistoricalSummary(item)}
-                  onSelect={() => selectEntry(item.id)}
-                >
-                  {item.period}
-                  {identifier ? ` · ${identifier}` : ""}
-                </AtlasDetailChip>
-              );
-            })}
-            {stories.length > 6 && (
-              <button
-                type="button"
-                className="atlas-place-details__more"
-                aria-expanded={expandedPlace === place.id}
-                onClick={() =>
-                  setExpandedPlace(expandedPlace === place.id ? null : place.id)
-                }
-              >
-                {expandedPlace === place.id
-                  ? "접기"
-                  : `+${stories.length - 6}개 더 보기`}
-              </button>
-            )}
+          <div className="atlas-place-details__section-heading">
+            <h3>{activeGroup.length ? "역사 속 이 장소" : "장소 개요"}</h3>
+            {activeGroup.length > 0 && <span>{activeEntry.period}</span>}
           </div>
-        </section>
-      )}
-
-      {profile.facts.length > 0 && (
-        <dl className="atlas-place-details__facts">
-          {profile.facts.map((fact, index) => (
-            <div key={`${fact.label}-${index}`}>
-              <dt>{fact.label}</dt>
-              <dd>{fact.value}</dd>
+          <p className="atlas-place-details__definition">
+            {activeGroup.length
+              ? getAtlasHistoricalSummary(activeEntry)
+              : profile.definition}
+          </p>
+          {activeRelation && (
+            <p className="atlas-place-details__relation-context">
+              {activeRelation.reason}
+            </p>
+          )}
+          {entry.nameNote && (
+            <p className="atlas-place-details__name-note">{entry.nameNote}</p>
+          )}
+          {context.length > 0 && (
+            <div className="atlas-place-details__paragraphs">
+              {context
+                .filter((paragraph) => !activeEntry.summary.includes(paragraph))
+                .map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
             </div>
-          ))}
-        </dl>
-      )}
+          )}
+          {significance.length > 0 && (
+            <div className="atlas-place-details__meaning">
+              <h3>기억할 점</h3>
+              <div className="atlas-place-details__paragraphs">
+                {significance.map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
-      {aliases.length > 0 && (
-        <section className="atlas-place-details__names">
-          <h3>다른 이름 · 현재 지명</h3>
-          <div>
-            {aliases.map((name) => {
-              const story = stories
-                .flat()
-                .find(
-                  (item) => item.displayName === name && item.id !== entry.id,
+        {stories.length > 0 && (
+          <section
+            className="atlas-place-details__periods"
+            aria-label="시대별 이야기"
+          >
+            <h3>시대별 보기</h3>
+            <div className="atlas-place-details__chips">
+              {shownStories.map((group) => {
+                const item =
+                  group.find((candidate) => candidate.id === entry.id) ||
+                  group[0];
+                const samePeriod = stories.filter(
+                  (story) => story[0].period === item.period,
                 );
-              return story ? (
-                <AtlasDetailChip
-                  key={name}
-                  title={story.historicalStory?.title || name}
-                  description={getAtlasHistoricalSummary(story)}
-                  onSelect={() => selectEntry(story.id)}
+                const identifier =
+                  samePeriod.length > 1
+                    ? item.displayName &&
+                      samePeriod.every(
+                        (story) =>
+                          story === group ||
+                          story[0].displayName !== item.displayName,
+                      )
+                      ? item.displayName
+                      : String(samePeriod.indexOf(group) + 1)
+                    : "";
+                return (
+                  <AtlasDetailChip
+                    key={item.id}
+                    pressed={group === activeGroup}
+                    title={
+                      item.historicalStory?.title ||
+                      item.displayName ||
+                      place.name
+                    }
+                    description={getAtlasHistoricalSummary(item)}
+                    onSelect={() => selectEntry(item.id)}
+                  >
+                    {item.period}
+                    {identifier ? ` · ${identifier}` : ""}
+                  </AtlasDetailChip>
+                );
+              })}
+              {stories.length > 6 && (
+                <button
+                  type="button"
+                  className="atlas-place-details__more"
+                  aria-expanded={expandedPlace === place.id}
+                  onClick={() =>
+                    setExpandedPlace(
+                      expandedPlace === place.id ? null : place.id,
+                    )
+                  }
                 >
-                  {name}
-                </AtlasDetailChip>
-              ) : (
-                <span key={name}>{name}</span>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {relatedGroups.map(({ title, items }) => (
-        <section className="atlas-place-details__related" key={title}>
-          <h3>{title}</h3>
-          <div>
-            {items.map(({ entry: item, reason, sources, label }) => {
-              const name =
-                label ||
-                item.displayName ||
-                dataset.places.find(
-                  (candidate) => candidate.id === item.placeId,
-                )?.name ||
-                item.placeId;
-              return (
-                <AtlasDetailChip
-                  key={item.id}
-                  title={name}
-                  description={reason}
-                  onSelect={() => {
-                    setSelectedRelation({
-                      placeId: item.placeId,
-                      subject,
-                      reason,
-                      sources,
-                    });
-                    selectEntry(item.id);
-                  }}
-                >
-                  {name}
-                </AtlasDetailChip>
-              );
-            })}
-          </div>
-        </section>
-      ))}
-
-      <details className="atlas-place-details__sources" key={entry.id}>
-        <summary>
-          출처
-          {citations.length ? ` · 교과서 ${citations.length}권` : ""}
-          {referenceSources.length
-            ? ` · 참고 자료 ${referenceSources.length}곳`
-            : ""}
-        </summary>
-        {mapReferences.length > 0 && (
-          <div className="atlas-place-details__map-context">
-            <strong>지명이 표시된 자료의 주제</strong>
-            <ul>
-              {mapReferences.map((text) => (
-                <li key={text}>{text}</li>
-              ))}
-            </ul>
-          </div>
+                  {expandedPlace === place.id
+                    ? "접기"
+                    : `+${stories.length - 6}개 더 보기`}
+                </button>
+              )}
+            </div>
+          </section>
         )}
-        <ul>
-          {citations.map(({ source, sourceId, pages, printedPages }) => (
-            <li key={sourceId}>
-              <strong>{source?.title || sourceId}</strong>
-              <span>{source?.edition}</span>
-              {printedPages.length > 0 && (
-                <span>본문 {printedPages.join(", ")}쪽</span>
-              )}
-              <span>PDF {pages.join(", ")}쪽</span>
-            </li>
-          ))}
-          {referenceSources.map((source) => (
-            <li key={source.url}>
-              <a href={source.url} target="_blank" rel="noreferrer">
-                {source.title} ↗
-              </a>
-              {source.license && source.licenseUrl && (
-                <a href={source.licenseUrl} target="_blank" rel="noreferrer">
-                  {source.license}
+
+        {profile.facts.length > 0 && (
+          <dl className="atlas-place-details__facts">
+            {profile.facts.map((fact, index) => (
+              <div key={`${fact.label}-${index}`}>
+                <dt>{fact.label}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
+        {aliases.length > 0 && (
+          <section className="atlas-place-details__names">
+            <h3>다른 이름 · 현재 지명</h3>
+            <div>
+              {aliases.map((name) => {
+                const story = stories
+                  .flat()
+                  .find(
+                    (item) => item.displayName === name && item.id !== entry.id,
+                  );
+                return story ? (
+                  <AtlasDetailChip
+                    key={name}
+                    title={story.historicalStory?.title || name}
+                    description={getAtlasHistoricalSummary(story)}
+                    onSelect={() => selectEntry(story.id)}
+                  >
+                    {name}
+                  </AtlasDetailChip>
+                ) : (
+                  <span key={name}>{name}</span>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {relatedGroups.map(({ title, items }) => (
+          <section className="atlas-place-details__related" key={title}>
+            <h3>{title}</h3>
+            <div>
+              {items.map(({ entry: item, reason, sources, label }) => {
+                const name =
+                  label ||
+                  item.displayName ||
+                  dataset.places.find(
+                    (candidate) => candidate.id === item.placeId,
+                  )?.name ||
+                  item.placeId;
+                return (
+                  <AtlasDetailChip
+                    key={item.id}
+                    title={name}
+                    description={reason}
+                    onSelect={() => {
+                      setSelectedRelation({
+                        placeId: item.placeId,
+                        subject,
+                        reason,
+                        sources,
+                      });
+                      selectEntry(item.id);
+                    }}
+                  >
+                    {name}
+                  </AtlasDetailChip>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+
+        <details className="atlas-place-details__sources" key={entry.id}>
+          <summary>
+            출처
+            {citations.length ? ` · 교과서 ${citations.length}권` : ""}
+            {referenceSources.length
+              ? ` · 참고 자료 ${referenceSources.length}곳`
+              : ""}
+          </summary>
+          {mapReferences.length > 0 && (
+            <div className="atlas-place-details__map-context">
+              <strong>지명이 표시된 자료의 주제</strong>
+              <ul>
+                {mapReferences.map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <ul>
+            {citations.map(({ source, sourceId, pages, printedPages }) => (
+              <li key={sourceId}>
+                <strong>{source?.title || sourceId}</strong>
+                <span>{source?.edition}</span>
+                {printedPages.length > 0 && (
+                  <span>본문 {printedPages.join(", ")}쪽</span>
+                )}
+                <span>PDF {pages.join(", ")}쪽</span>
+              </li>
+            ))}
+            {referenceSources.map((source) => (
+              <li key={source.url}>
+                <a href={source.url} target="_blank" rel="noreferrer">
+                  {source.title} ↗
                 </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      </details>
+                {source.license && source.licenseUrl && (
+                  <a href={source.licenseUrl} target="_blank" rel="noreferrer">
+                    {source.license}
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
     </div>
   );
 }
