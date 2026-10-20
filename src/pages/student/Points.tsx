@@ -88,9 +88,22 @@ const normalizeSchoolField = (value: unknown) => {
 };
 
 const Points: React.FC = () => {
-  const { config, currentUser, userData, interfaceConfig } = useAuth();
+  const {
+    config,
+    configReady,
+    currentUser,
+    authGeneration,
+    userData,
+    interfaceConfig,
+  } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<StudentPointTab>("overview");
+  const requestedTab = searchParams.get("tab");
+  const activeTab: StudentPointTab =
+    requestedTab === "hall-of-fame" ||
+    requestedTab === "shop" ||
+    requestedTab === "orders"
+      ? requestedTab
+      : "overview";
   const [wallet, setWallet] = useState<PointWallet | null>(null);
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [products, setProducts] = useState<PointProduct[]>([]);
@@ -100,7 +113,12 @@ const Points: React.FC = () => {
     null,
   );
   const [rankManualAdjustPoints, setRankManualAdjustPoints] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [coreLoading, setLoading] = useState(true);
+  const [coreOwner, setCoreOwner] = useState<object | null>(null);
+  const [hallOwner, setHallOwner] = useState<object | null>(null);
+  const [hallLoading, setHallLoading] = useState(false);
+  const [hallErrorMessage, setHallErrorMessage] = useState("");
+  const [hallLoadMs, setHallLoadMs] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -121,40 +139,48 @@ const Points: React.FC = () => {
   const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
   const [purchaseRequestKey, setPurchaseRequestKey] = useState("");
   const { showToast } = useAppToast();
-  const historyLoadInFlightRef = useRef(false);
-  const ordersLoadInFlightRef = useRef(false);
-  const shopLoadInFlightRef = useRef(false);
+  const coreLoadInFlightRef = useRef<object | null>(null);
+  const hallLoadInFlightRef = useRef<object | null>(null);
+  const historyLoadInFlightRef = useRef<object | null>(null);
+  const ordersLoadInFlightRef = useRef<object | null>(null);
+  const shopLoadInFlightRef = useRef<object | null>(null);
 
-  const uid = currentUser?.uid || userData?.uid || "";
+  const uid = currentUser?.uid || "";
+  const scopeReady = Boolean(
+    currentUser && configReady && config?.year && config?.semester,
+  );
+  const requestScope = useMemo(
+    () => ({}),
+    [currentUser, authGeneration, configReady, config?.year, config?.semester],
+  );
+  const currentScopeRef = useRef(requestScope);
+  currentScopeRef.current = requestScope;
+  const isCurrentScope = () => currentScopeRef.current === requestScope;
 
   useEffect(() => {
-    const requestedTab = searchParams.get("tab");
     if (requestedTab === "history") {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete("tab");
       setSearchParams(nextParams, { replace: true });
-      setActiveTab("overview");
-      return;
     }
-    if (
-      requestedTab === "hall-of-fame" ||
-      requestedTab === "shop" ||
-      requestedTab === "orders"
-    ) {
-      setActiveTab(requestedTab);
-      return;
-    }
-    setActiveTab("overview");
   }, [searchParams, setSearchParams]);
 
-  const loadCorePointData = async () => {
+  const loadCorePointData = async (includeTransactions: boolean) => {
     const [loadedWallet, loadedTransactions, loadedPolicy] = await Promise.all([
       getPointWalletByUid(config, uid),
-      listPointTransactionsByUid(config, uid, STUDENT_POINT_TRANSACTION_LIMIT),
+      includeTransactions
+        ? listPointTransactionsByUid(
+            config,
+            uid,
+            STUDENT_POINT_TRANSACTION_LIMIT,
+          )
+        : Promise.resolve([]),
       getPointPolicy(config),
     ]);
     const loadedRankManualAdjustPoints =
-      loadedWallet && needsPointRankLegacyFallback(loadedWallet)
+      isCurrentScope() &&
+      loadedWallet &&
+      needsPointRankLegacyFallback(loadedWallet)
         ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
         : 0;
 
@@ -167,16 +193,37 @@ const Points: React.FC = () => {
   };
 
   const loadHallOfFameData = async () => {
-    if (!config?.year || !config?.semester) {
-      setHallOfFame(null);
+    if (
+      !scopeReady ||
+      !isCurrentScope() ||
+      hallLoadInFlightRef.current === requestScope
+    )
       return;
-    }
+    hallLoadInFlightRef.current = requestScope;
+    setHallLoading(true);
+    setHallErrorMessage("");
+    setHallLoadMs(null);
+    const started = performance.now();
     try {
       const snapshot = await getWisHallOfFameSnapshot(config);
+      if (!isCurrentScope()) return;
       setHallOfFame(snapshot);
+      setHallLoadMs(Math.round(performance.now() - started));
     } catch (error) {
       console.warn("Failed to load wis hall of fame snapshot:", error);
-      setHallOfFame(null);
+      if (isCurrentScope()) {
+        setHallOfFame(null);
+        setHallErrorMessage(
+          "명예의 전당을 불러오지 못했습니다. 다시 시도해 주세요.",
+        );
+      }
+    } finally {
+      if (hallLoadInFlightRef.current === requestScope)
+        hallLoadInFlightRef.current = null;
+      if (isCurrentScope()) {
+        setHallOwner(requestScope);
+        setHallLoading(false);
+      }
     }
   };
 
@@ -184,8 +231,14 @@ const Points: React.FC = () => {
     showLoading = true,
     setTransactionsFromCore = true,
   }: CoreLoadOptions = {}) => {
-    if (!uid) return;
+    if (
+      !scopeReady ||
+      !isCurrentScope() ||
+      coreLoadInFlightRef.current === requestScope
+    )
+      return;
 
+    coreLoadInFlightRef.current = requestScope;
     if (showLoading) setLoading(true);
     setErrorMessage("");
     try {
@@ -194,7 +247,8 @@ const Points: React.FC = () => {
         loadedTransactions,
         loadedPolicy,
         loadedRankManualAdjustPoints,
-      } = await loadCorePointData();
+      } = await loadCorePointData(setTransactionsFromCore);
+      if (!isCurrentScope()) return;
       setWallet(loadedWallet);
       if (setTransactionsFromCore) {
         setTransactions(loadedTransactions);
@@ -203,24 +257,34 @@ const Points: React.FC = () => {
       }
       setPolicy(loadedPolicy);
       setRankManualAdjustPoints(loadedRankManualAdjustPoints);
-      void loadHallOfFameData();
     } catch (error) {
       console.error("Failed to load student point data:", error);
-      setErrorMessage(
-        "위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      if (isCurrentScope())
+        setErrorMessage(
+          "위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
     } finally {
-      if (showLoading) setLoading(false);
+      if (coreLoadInFlightRef.current === requestScope)
+        coreLoadInFlightRef.current = null;
+      if (isCurrentScope()) {
+        setCoreOwner(requestScope);
+        if (showLoading) setLoading(false);
+      }
     }
   };
 
   const loadHistoryData = async ({
     force = false,
   }: DeferredLoadOptions = {}) => {
-    if (!uid || (!force && historyLoaded) || historyLoadInFlightRef.current)
+    if (
+      !scopeReady ||
+      !isCurrentScope() ||
+      (!force && historyLoaded) ||
+      historyLoadInFlightRef.current === requestScope
+    )
       return;
 
-    historyLoadInFlightRef.current = true;
+    historyLoadInFlightRef.current = requestScope;
     setHistoryLoading(true);
     setHistoryErrorMessage("");
     try {
@@ -229,26 +293,34 @@ const Points: React.FC = () => {
         uid,
         STUDENT_POINT_TRANSACTION_LIMIT,
       );
+      if (!isCurrentScope()) return;
       setTransactions(loadedTransactions);
       setHistoryLoaded(true);
     } catch (error) {
       console.error("Failed to load student point history:", error);
-      setHistoryErrorMessage(
-        "위스 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      if (isCurrentScope())
+        setHistoryErrorMessage(
+          "위스 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
     } finally {
-      historyLoadInFlightRef.current = false;
-      setHistoryLoading(false);
+      if (historyLoadInFlightRef.current === requestScope)
+        historyLoadInFlightRef.current = null;
+      if (isCurrentScope()) setHistoryLoading(false);
     }
   };
 
   const loadOrdersData = async ({
     force = false,
   }: DeferredLoadOptions = {}) => {
-    if (!uid || (!force && ordersLoaded) || ordersLoadInFlightRef.current)
+    if (
+      !scopeReady ||
+      !isCurrentScope() ||
+      (!force && ordersLoaded) ||
+      ordersLoadInFlightRef.current === requestScope
+    )
       return;
 
-    ordersLoadInFlightRef.current = true;
+    ordersLoadInFlightRef.current = requestScope;
     setOrdersLoading(true);
     setOrdersErrorMessage("");
     try {
@@ -256,37 +328,49 @@ const Points: React.FC = () => {
         uid,
         limitCount: 100,
       });
+      if (!isCurrentScope()) return;
       setOrders(loadedOrders);
       setOrdersLoaded(true);
     } catch (error) {
       console.error("Failed to load student point orders:", error);
-      setOrdersErrorMessage(
-        "구매 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      if (isCurrentScope())
+        setOrdersErrorMessage(
+          "구매 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
     } finally {
-      ordersLoadInFlightRef.current = false;
-      setOrdersLoading(false);
+      if (ordersLoadInFlightRef.current === requestScope)
+        ordersLoadInFlightRef.current = null;
+      if (isCurrentScope()) setOrdersLoading(false);
     }
   };
 
   const loadShopData = async ({ force = false }: DeferredLoadOptions = {}) => {
-    if (!uid || (!force && shopLoaded) || shopLoadInFlightRef.current) return;
+    if (
+      !scopeReady ||
+      !isCurrentScope() ||
+      (!force && shopLoaded) ||
+      shopLoadInFlightRef.current === requestScope
+    )
+      return;
 
-    shopLoadInFlightRef.current = true;
+    shopLoadInFlightRef.current = requestScope;
     setShopLoading(true);
     setShopErrorMessage("");
     try {
       const loadedProducts = await listPointProducts(config, true);
+      if (!isCurrentScope()) return;
       setProducts(loadedProducts);
       setShopLoaded(true);
     } catch (error) {
       console.error("Failed to load student point products:", error);
-      setShopErrorMessage(
-        "상품 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      if (isCurrentScope())
+        setShopErrorMessage(
+          "상품 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
     } finally {
-      shopLoadInFlightRef.current = false;
-      setShopLoading(false);
+      if (shopLoadInFlightRef.current === requestScope)
+        shopLoadInFlightRef.current = null;
+      if (isCurrentScope()) setShopLoading(false);
     }
   };
 
@@ -295,6 +379,7 @@ const Points: React.FC = () => {
       showLoading: false,
       setTransactionsFromCore: !historyLoaded,
     });
+    if (!isCurrentScope()) return;
     await Promise.all([
       historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
       ordersLoaded ? loadOrdersData({ force: true }) : Promise.resolve(),
@@ -303,6 +388,18 @@ const Points: React.FC = () => {
   };
 
   useEffect(() => {
+    setWallet(null);
+    setPolicy(POINT_POLICY_FALLBACK);
+    setRankManualAdjustPoints(0);
+    setHallOfFame(null);
+    setCoreOwner(null);
+    setHallOwner(null);
+    setHallErrorMessage("");
+    setHallLoadMs(null);
+    setErrorMessage("");
+    setHistoryLoading(false);
+    setOrdersLoading(false);
+    setShopLoading(false);
     setTransactions([]);
     setProducts([]);
     setOrders([]);
@@ -318,30 +415,31 @@ const Points: React.FC = () => {
     setPurchaseQuantity(1);
     setCancellingOrderId("");
 
-    if (!uid) {
-      setWallet(null);
-      setHallOfFame(null);
-      setLoading(false);
-      return;
-    }
-    void loadPointData({ setTransactionsFromCore: true });
-  }, [config, uid]);
+    setLoading(false);
+  }, [requestScope]);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!scopeReady) return;
+    if (activeTab === "hall-of-fame") {
+      void loadHallOfFameData();
+      return;
+    }
+    if (coreOwner !== requestScope)
+      void loadPointData({ setTransactionsFromCore: true });
     if (activeTab === "orders") {
       void loadOrdersData({ force: true });
     } else if (activeTab === "shop") {
       void loadShopData({ force: true });
     }
-  }, [activeTab, config, uid]);
+  }, [activeTab, requestScope]);
 
   useEffect(() => {
-    if (!uid) return undefined;
+    if (!scopeReady) return undefined;
     return subscribePointsUpdated(() => {
-      void refreshLoadedPointData();
+      if (activeTab === "hall-of-fame") void loadHallOfFameData();
+      else void refreshLoadedPointData();
     });
-  }, [config, uid, historyLoaded, ordersLoaded, shopLoaded]);
+  }, [requestScope, activeTab, historyLoaded, ordersLoaded, shopLoaded]);
 
   const safeWallet = wallet || DEFAULT_WALLET;
   const legacyUserData = (userData || null) as Record<string, unknown> | null;
@@ -352,14 +450,29 @@ const Points: React.FC = () => {
         : null,
     [currentUser?.uid, hallOfFame],
   );
+  const canonicalHallGradeKeys = Object.keys(
+    hallOfFame?.gradeLeaderboardByGrade || {},
+  );
+  const canonicalHallClassKeys = Object.keys(
+    hallOfFame?.classLeaderboardByClassKey || {},
+  );
+  const canonicalHallClassParts =
+    canonicalHallClassKeys.length === 1
+      ? canonicalHallClassKeys[0].split("-")
+      : [];
+  const [canonicalClassGrade, canonicalClass] =
+    canonicalHallClassParts.length === 2 ? canonicalHallClassParts : [];
   const currentHallGrade = normalizeSchoolField(
-    userData?.grade ||
+    canonicalClassGrade ||
+      (canonicalHallGradeKeys.length === 1 ? canonicalHallGradeKeys[0] : "") ||
+      userData?.grade ||
       legacyUserData?.studentGrade ||
       safeWallet.grade ||
       currentHallOfFameEntry?.grade,
   );
   const currentHallClass = normalizeSchoolField(
-    userData?.class ||
+    canonicalClass ||
+      userData?.class ||
       legacyUserData?.studentClass ||
       safeWallet.class ||
       currentHallOfFameEntry?.class,
@@ -516,6 +629,7 @@ const Points: React.FC = () => {
   };
 
   const isHallOfFameTab = activeTab === "hall-of-fame";
+  const loading = coreLoading || coreOwner !== requestScope;
   const activeTabLoading =
     (activeTab === "orders" && ordersLoading) ||
     (activeTab === "shop" && shopLoading);
@@ -535,6 +649,11 @@ const Points: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
+        data-hall-load-ms={
+          isHallOfFameTab && hallOwner === requestScope
+            ? (hallLoadMs ?? undefined)
+            : undefined
+        }
         className={`ws-page flex-1 ${
           isHallOfFameTab ? "" : "ws-page--reading"
         }`}
@@ -560,14 +679,14 @@ const Points: React.FC = () => {
         </div>
 
         <div className="min-w-0">
-          {loading && (
+          {!isHallOfFameTab && loading && (
             <InlineLoading
               message="위스 정보를 불러오는 중입니다."
               showWarning
             />
           )}
 
-          {!loading && !!errorMessage && (
+          {!isHallOfFameTab && !loading && !!errorMessage && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
               {errorMessage}
             </div>
@@ -602,18 +721,35 @@ const Points: React.FC = () => {
               />
             )}
 
-          {!loading &&
-            !errorMessage &&
-            !activeTabLoading &&
-            !activeTabErrorMessage &&
-            activeTab === "hall-of-fame" && (
+          {isHallOfFameTab &&
+            (!scopeReady || hallLoading || hallOwner !== requestScope ? (
+              <InlineLoading
+                message="명예의 전당을 불러오는 중입니다."
+                showWarning
+              />
+            ) : hallErrorMessage ? (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700"
+              >
+                {hallErrorMessage}{" "}
+                <button
+                  type="button"
+                  className="min-h-11 underline"
+                  onClick={() => void loadHallOfFameData()}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            ) : (
               <StudentPointHallOfFameTab
+                key={`${uid}:${authGeneration}:${config?.year}:${config?.semester}`}
                 snapshot={hallOfFame}
                 hallOfFameConfig={interfaceConfig?.hallOfFame}
                 currentGrade={currentHallGrade}
                 currentClass={currentHallClass}
               />
-            )}
+            ))}
 
           {!loading &&
             !errorMessage &&

@@ -17,14 +17,19 @@ const entries = state => Object.values(state.hallOfFame?.gradeLeaderboardByGrade
 
 class MemoryStore {
   constructor() { this.docs = new Map(); this.resetStats(); this.failRankingQueries = 0; this.delayRanking = null; }
-  resetStats() { this.reads = []; this.queries = []; this.writes = 0; }
+  resetStats() { this.reads = []; this.queries = []; this.getAllCalls = []; this.writes = 0; }
   set(path, data) { this.docs.set(path, structuredClone(data)); }
   patch(path, data) { this.set(path, { ...this.docs.get(path), ...data }); }
   async get(path) {
     this.reads.push(path);
     return { path, exists: this.docs.has(path), data: this.docs.has(path) ? structuredClone(this.docs.get(path)) : null };
   }
-  async getAll(paths) { return Promise.all(paths.map(path => this.get(path))); }
+  async getAll(paths, options) {
+    this.getAllCalls.push({ paths: [...paths], fieldMask: options?.fieldMask });
+    const rows = await Promise.all(paths.map(path => this.get(path)));
+    return Array.isArray(options?.fieldMask) ? rows.map(row => ({ ...row, data: row.exists
+      ? Object.fromEntries(options.fieldMask.filter(field => Object.hasOwn(row.data, field)).map(field => [field, row.data[field]])) : null })) : rows;
+  }
   async query(collection, filter) {
     const stats = { collection, ...filter };
     this.queries.push(stats);
@@ -68,9 +73,10 @@ class MemoryStore {
     rows = rows.slice(0, filter?.limit || rows.length);
     stats.returned = rows.length;
     stats.returnedPaths = rows.map(([path]) => path);
-    return rows.map(([path, data]) => ({ path, exists: true, data: structuredClone(data) }));
+    return rows.map(([path, data]) => ({ path, exists: true, data: structuredClone(Array.isArray(filter?.fieldMask)
+      ? Object.fromEntries(filter.fieldMask.filter(field => Object.hasOwn(data, field)).map(field => [field, data[field]])) : data) }));
   }
-  runTransaction(callback) { return callback({ get: path => this.get(path), getAll: paths => this.getAll(paths),
+  runTransaction(callback) { return callback({ get: path => this.get(path), getAll: (paths, options) => this.getAll(paths, options),
     query: (...args) => this.query(...args), set: () => { this.writes++; throw new Error('unexpected write'); },
     create: () => { this.writes++; throw new Error('unexpected write'); },
     delete: () => { this.writes++; throw new Error('unexpected write'); } }); }
@@ -471,7 +477,7 @@ const run = async () => {
     assert.equal(endpoint.getWisRankingPreview.__endpoint.maxInstances, 3);
     assert.equal(endpoint.getWisRankingPreview.__endpoint.concurrency, 80);
     const source = fs.readFileSync(require.resolve('../wisRankingPreview'), 'utf8');
-    assert.match(source, /readOnly: true/); assert.match(source, /projection: 'ranking-preview'/);
+    assert.match(source, /readOnly: true/); assert.match(source, /'hall-index' : 'ranking-preview'/);
     assert.match(source, /onCallWithStudentMaintenance/);
     const querySource = fs.readFileSync(require.resolve('../productionGateway/wisEconomyQuery'), 'utf8');
     assert.equal(/setInterval|setTimeout/.test(querySource), false);
@@ -482,4 +488,5 @@ const run = async () => {
       'fresh session, permissions, semester, actor and candidate canonical scope', 'fresh profiles and policy only for final five',
       'ties, public limits, zero score, test identities, archive semantics and 2000 cap', 'no polling, timers or query writes; one standby instance and at most three instances'] }));
 };
-run().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { MemoryStore, setup, addStudent, addScope, publicId, slotPath, accountPath, rankingPath, previewPath, policyPath };
+if (require.main === module) run().catch(error => { console.error(error); process.exitCode = 1; });

@@ -19,9 +19,10 @@ const flights = new WeakMap<
 
 // Share concurrent mounts only. Every new visit checks server authorization;
 // student names, rankings and policy are never persisted in browser storage.
-export const getWisRankingPreview = async (
+const getWisRankingState = async (
   config: WisConfig,
   audience: "student" | "teacher",
+  projection: "ranking-preview" | "hall-of-fame",
 ) => {
   const user = auth.currentUser;
   assertWisOwner(user?.uid || "");
@@ -32,7 +33,7 @@ export const getWisRankingPreview = async (
   const semesterId = wisSemesterId(config);
   const source =
     audience === "teacher" && isSemesterArchive ? "EXPLICIT" : "CURRENT";
-  const key = `${epoch}:${semesterId}:${audience}:${source}`;
+  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}`;
   let pending = flights.get(user);
   if (!pending) {
     pending = new Map();
@@ -44,8 +45,8 @@ export const getWisRankingPreview = async (
       audience,
       semesterId,
       source,
-      projection: "ranking-preview",
-      limit: 5,
+      projection,
+      limit: projection === "ranking-preview" ? 5 : 20,
     });
     pending.set(key, flight);
   }
@@ -53,11 +54,26 @@ export const getWisRankingPreview = async (
     const state = await flight;
     if (auth.currentUser !== user || state.semesterId !== semesterId)
       throw new Error("계정이나 학기가 바뀌었습니다. 다시 확인해 주세요.");
-    return {
-      snapshot: wisHallOfFame(state),
-      rankPolicy: resolvePointRankPolicy(state.rankPolicy),
-    };
+    return state;
   } finally {
     if (pending.get(key) === flight) pending.delete(key);
   }
 };
+
+export const getWisRankingPreview = async (
+  config: WisConfig,
+  audience: "student" | "teacher",
+) => {
+  const state = await getWisRankingState(config, audience, "ranking-preview");
+  return {
+    snapshot: wisHallOfFame(state),
+    rankPolicy: resolvePointRankPolicy(state.rankPolicy),
+  };
+};
+
+// The complete hall shares the existing warm, read-only callable. Pending
+// requests are isolated from the dashboard's five-entry preview.
+export const getWisHallOfFameState = (
+  config: WisConfig,
+  audience: "student" | "teacher",
+) => getWisRankingState(config, audience, "hall-of-fame");

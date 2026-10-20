@@ -8,6 +8,7 @@ import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
 } from "../../../../components/common/WisHallOfFameStudentPreview";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
+import { useAuth } from "../../../../contexts/AuthContext";
 import { getFirebaseStorage } from "../../../../lib/firebase";
 import { ensureSensitiveOperation } from "../../../../lib/sensitiveOperation";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
@@ -35,6 +36,7 @@ interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
   interfaceConfig?: InterfaceConfig | null;
   canManage: boolean;
+  refreshKey?: number;
   onInterfaceConfigRefresh?: () => Promise<void>;
 }
 
@@ -432,9 +434,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   config,
   interfaceConfig,
   canManage,
+  refreshKey = 0,
   onInterfaceConfigRefresh,
 }) => {
   const { showToast } = useAppToast();
+  const { currentUser, authGeneration } = useAuth();
   const initialDraft = useMemo(
     () => createDraft(interfaceConfig?.hallOfFame),
     [interfaceConfig?.hallOfFame],
@@ -442,6 +446,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const [snapshot, setSnapshot] = useState<WisHallOfFameSnapshot | null>(null);
   const [snapshotError, setSnapshotError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadDurationMs, setLoadDurationMs] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [featureSaving, setFeatureSaving] = useState(false);
   const [viewSaving, setViewSaving] = useState(false);
@@ -517,9 +522,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
   useEffect(() => {
     let cancelled = false;
+    const startedAt = performance.now();
+    setSnapshot(null);
+    setLoadDurationMs(null);
 
     const loadSnapshot = async () => {
-      if (!config) {
+      if (!config || !currentUser) {
         setLoading(false);
         return;
       }
@@ -531,6 +539,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         const nextSnapshot = await getWisHallOfFameSnapshot(config);
         if (!cancelled) {
           applySnapshotState(nextSnapshot);
+          setLoadDurationMs(Math.round(performance.now() - startedAt));
         }
       } catch (error) {
         console.warn(
@@ -555,7 +564,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config]);
+  }, [config?.year, config?.semester, currentUser, authGeneration, refreshKey]);
 
   const featureDirty =
     serializeFeatureDraft(featureDraft) !==
@@ -855,7 +864,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   }학기`;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-hall-load-ms={loadDurationMs ?? undefined}>
       <div className="ws-page-header">
         <div>
           <h2 className="text-2xl font-black text-slate-950">

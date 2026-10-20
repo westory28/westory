@@ -1143,6 +1143,8 @@ const createFirestoreStore = (db = getFirestore(), { readOnly = false } = {}) =>
     }
     if (Number.isSafeInteger(filter?.limit) && filter.limit > 0)
       query = query.limit(filter.limit);
+    if (Array.isArray(filter?.fieldMask) && filter.fieldMask.length)
+      query = query.select(...filter.fieldMask);
     const snapshot = await query.get();
     return snapshot.docs.map((document) => ({
       exists: true,
@@ -1176,10 +1178,12 @@ const createFirestoreStore = (db = getFirestore(), { readOnly = false } = {}) =>
             path: snapshot.ref.path,
           };
         },
-        getAll: async (paths) => {
+        getAll: async (paths, options) => {
           if (paths.length === 0) return [];
           const snapshots = await firestoreTransaction.getAll(
             ...paths.map((path) => db.doc(path)),
+            ...(Array.isArray(options?.fieldMask) && options.fieldMask.length
+              ? [{ fieldMask: options.fieldMask }] : []),
           );
           return snapshots.map((snapshot) => ({
             exists: snapshot.exists,
@@ -1219,6 +1223,8 @@ const createFirestoreStore = (db = getFirestore(), { readOnly = false } = {}) =>
           }
           if (Number.isSafeInteger(filter?.limit) && filter.limit > 0)
             query = query.limit(filter.limit);
+          if (Array.isArray(filter?.fieldMask) && filter.fieldMask.length)
+            query = query.select(...filter.fieldMask);
           const snapshot = await firestoreTransaction.get(query);
           return snapshot.docs.map((document) => ({
             exists: true,

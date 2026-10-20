@@ -61,9 +61,10 @@
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "161aba69349d60c934c050f3f7d446339d38b1a9811970c41385ed2646bff3a1",
+      "sha256": "695f8471f2c38594465b5223f17bc4697f790fbcfedda8ae4c80c2f74a30ee4b",
       "changes": [
-        "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default."
+        "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default.",
+        "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default."
       ]
     },
     {
@@ -422,7 +423,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "53dcb1bc0613b71ec157411da5c8b766798e728b51b27803298a2d27ca0a27d3",
+      "sha256": "8735196c8ccb50219e24fa24f350e24c62f90f28eae17ac0a97ff5aeabdaa9d2",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -436,7 +437,8 @@
         "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
         "2026-10-19: Resolve public ranking profile emojis against the requested semester rank policy and canonical earned total, rejecting stale tier unlocks and ID/icon mismatches without writes.",
         "2026-10-20: Add a bounded five-entry preview with 30-second lightweight ranking input cache and fresh request/candidate authority; full hall queries remain unchanged.",
-        "2026-10-20: Read current dashboard candidates from a maintained private ranking index in bounded ordered pages; verify only candidate accounts and canonical enrollment within each fresh request. Retain the 30-second input cache for explicit archives only."
+        "2026-10-20: Read current dashboard candidates from a maintained private ranking index in bounded ordered pages; verify only candidate accounts and canonical enrollment within each fresh request. Retain the 30-second input cache for explicit archives only.",
+        "2026-10-20: Add an opt-in full hall projection using one bounded lightweight index query and fresh published-union validation; preserve all grade/class/tie/zero scopes, historical EXPLICIT account snapshots, and the original full endpoint. Mask account reads only in the new full projection."
       ]
     },
     {

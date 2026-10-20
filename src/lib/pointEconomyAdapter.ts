@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { getWisHallOfFameState } from "./wisRankingPreview";
 import { readStorage, writeStorage, removeStorage } from "./safeStorage";
 import {
   assertWisOwner,
@@ -24,7 +25,7 @@ import type {
 } from "../types";
 
 export const getCanonicalWisHallOfFame = async (config: WisConfig) =>
-  wisHallOfFame(await queryWisState(config, "teacher", "hall-of-fame"));
+  wisHallOfFame(await getWisHallOfFameState(config, "teacher"));
 export const saveCanonicalWisHallOfFameConfig = async (
   config: WisConfig,
   hallOfFame: HallOfFameInterfaceConfig,
@@ -34,7 +35,7 @@ export const saveCanonicalWisHallOfFameConfig = async (
     true,
     async (step) => {
       const result = await step("config", async () => {
-        const state = await queryWisState(config, "teacher", "hall-of-fame");
+        const state = await getWisHallOfFameState(config, "teacher");
         return {
           commandType: "saveWisHallOfFameConfig",
           payload: {

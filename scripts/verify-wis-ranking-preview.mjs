@@ -27,7 +27,12 @@ const makeSnapshot = (uid, semesterId, audience = 'student') => ({
 });
 const makeState = call => ({
   semesterId: call.data.semesterId,
-  hallOfFame: makeSnapshot(call.uid, call.data.semesterId, call.data.audience),
+  hallOfFame: {
+    ...makeSnapshot(call.uid, call.data.semesterId, call.data.audience),
+    ...(call.data.projection === 'hall-of-fame' ? {
+      classLeaderboardByClassKey: { '3-1': [{ uid: 'public-class-entry', cumulativeEarned: 500, profileIcon: '😀' }] },
+    } : {}),
+  },
   rankPolicy: { enabled: true, themeId: 'korean_golpum' },
 });
 const calls = [];
@@ -79,7 +84,8 @@ const loadActual = relative => {
   vm.runInNewContext(js, { module, exports: module.exports, require, console, URLSearchParams, URL, Date, setTimeout, clearTimeout }, { filename });
   return module.exports;
 };
-const { getWisRankingPreview } = loadActual('src/lib/wisRankingPreview.ts');
+const { getWisRankingPreview, getWisHallOfFameState } = loadActual('src/lib/wisRankingPreview.ts');
+const { getStudentPointHallOfFame } = loadActual('src/lib/studentWis.ts');
 const rankingCalls = () => calls.filter(call => call.name === 'getWisRankingPreview');
 const opens = () => calls.filter(call => call.name === 'openApplicationSession').length;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -126,6 +132,29 @@ await step('successful re-entry makes one new authorization-checked read', async
   await start();
   assert.equal(rankingCalls().length, before + 1);
   assert.equal(opens(), 1);
+});
+await step('full hall uses one authorized read with class data and no extra policy request', async () => {
+  const before = calls.length;
+  const snapshot = await getStudentPointHallOfFame(config);
+  assert.equal(calls.length, before + 1);
+  const call = rankingCalls().at(-1);
+  assert.equal(call.data.projection, 'hall-of-fame');
+  assert.equal(call.data.limit, 20);
+  assert.equal(snapshot.classLeaderboardByClassKey['3-1'][0].profileIcon, '😀');
+});
+await step('full hall deduplicates concurrent consumers but never shares the five-entry preview', async () => {
+  hold = true;
+  const full = getWisHallOfFameState(config, 'teacher');
+  const shared = getWisHallOfFameState(config, 'teacher');
+  const preview = start(config, 'teacher');
+  await waitFor(() => pendingCalls().length === 2, 'separate projections');
+  assert.deepEqual(pendingCalls().map(call => call.data.projection).sort(), ['hall-of-fame', 'ranking-preview']);
+  for (const call of pendingCalls()) call.resolve();
+  const [state, duplicate, panel] = await Promise.all([full, shared, preview]);
+  assert.equal(state, duplicate);
+  assert.equal(state.hallOfFame.classLeaderboardByClassKey['3-1'].length, 1);
+  assert.equal(panel.snapshot.gradeLeaderboardByGrade['3'].length, 5);
+  hold = false;
 });
 await step('failed shared call clears its flight without polling and permits explicit retry', async () => {
   hold = true;

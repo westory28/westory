@@ -8,6 +8,7 @@ import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
+import { subscribePointsUpdated } from "../../lib/appEvents";
 import {
   adjustPoints,
   deletePointProduct,
@@ -293,7 +294,9 @@ const createRankEmojiCollectionDraft = (
 const ManagePoints: React.FC = () => {
   const {
     config,
+    configReady,
     currentUser,
+    authGeneration,
     userData,
     interfaceConfig,
     refreshInterfaceConfig,
@@ -305,8 +308,31 @@ const ManagePoints: React.FC = () => {
   const canManage =
     !isSemesterArchive && canManagePoints(userData, currentUser?.email);
 
-  const [activeTab, setActiveTab] = useState<TeacherPointTab>("overview");
-  const [loading, setLoading] = useState(true);
+  const requestedTab = searchParams.get("tab");
+  const activeTab: TeacherPointTab =
+    requestedTab &&
+    Object.prototype.hasOwnProperty.call(TEACHER_POINT_TAB_LABELS, requestedTab)
+      ? (requestedTab as TeacherPointTab)
+      : "overview";
+  const [pointLoading, setLoading] = useState(true);
+  const [loadedScope, setLoadedScope] = useState<object | null>(null);
+  const [hallRefresh, setHallRefresh] = useState(0);
+  const loadInFlightRef = useRef<object | null>(null);
+  const scopeReady = Boolean(
+    currentUser && configReady && config?.year && config?.semester,
+  );
+  const requestScope = useMemo(
+    () => ({}),
+    [currentUser, authGeneration, configReady, config?.year, config?.semester],
+  );
+  const currentScopeRef = useRef(requestScope);
+  const scopeGenerationRef = useRef(0);
+  if (currentScopeRef.current !== requestScope) scopeGenerationRef.current++;
+  currentScopeRef.current = requestScope;
+  const isCurrentScope = () => currentScopeRef.current === requestScope;
+  const loading =
+    activeTab !== "hall-of-fame" &&
+    (pointLoading || loadedScope !== requestScope);
   const [wallets, setWallets] = useState<PointWallet[]>([]);
   const [students, setStudents] = useState<PointStudentTarget[]>([]);
   const [grantLoading, setGrantLoading] = useState(false);
@@ -397,7 +423,7 @@ const ManagePoints: React.FC = () => {
 
   const actor = useMemo(
     () => ({
-      uid: currentUser?.uid || userData?.uid || "",
+      uid: currentUser?.uid || "",
       name: userData?.name || currentUser?.displayName || "",
     }),
     [currentUser?.displayName, currentUser?.uid, userData?.name, userData?.uid],
@@ -675,19 +701,24 @@ const ManagePoints: React.FC = () => {
   );
 
   const loadTransactionsForWallet = async (uid: string) => {
+    if (!isCurrentScope()) return;
     if (!uid) {
       setTransactions([]);
       return;
     }
     const nextTransactions = await listPointTransactionsByUid(config, uid, 20);
+    if (!isCurrentScope()) return;
     setTransactions(nextTransactions);
   };
 
   const loadAll = async () => {
-    if (!canRead) {
+    if (!isCurrentScope()) return;
+    if (!canRead || !scopeReady || activeTab === "hall-of-fame") {
       setLoading(false);
       return;
     }
+    if (loadInFlightRef.current === requestScope) return;
+    loadInFlightRef.current = requestScope;
 
     setLoading(true);
     setShopLoadError("");
@@ -697,9 +728,11 @@ const ManagePoints: React.FC = () => {
         ["products", "requests"].includes(searchParams.get("tab") || "")
       ) {
         if (searchParams.get("tab") === "products") {
-          setProducts(await readArchivedShopProducts());
+          const nextProducts = await readArchivedShopProducts();
+          if (isCurrentScope()) setProducts(nextProducts);
         } else {
-          setOrders(await readArchivedShopOrders());
+          const nextOrders = await readArchivedShopOrders();
+          if (isCurrentScope()) setOrders(nextOrders);
         }
         return;
       }
@@ -716,12 +749,14 @@ const ManagePoints: React.FC = () => {
         listPointProducts(config, false),
         listPointOrders(config, { limitCount: 200 }),
       ]);
+      if (!isCurrentScope()) return;
       const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
         needsPointRankLegacyFallback(wallet),
       )
         ? await getPointRankManualAdjustEarnedPointsMap(config)
         : {};
 
+      if (!isCurrentScope()) return;
       setWallets(nextWallets);
       setGrantGradeOptions(nextSchoolOptions.grades);
       setGrantClassOptions(nextSchoolOptions.classes);
@@ -752,39 +787,69 @@ const ManagePoints: React.FC = () => {
           : nextWallets[0]?.uid || "";
       setSelectedUid(nextSelectedUid);
     } catch (error: any) {
-      setShopLoadError(
-        error?.message ||
-          "상점 자료를 불러오지 못했습니다. 다시 시도해 주세요.",
-      );
+      if (isCurrentScope())
+        setShopLoadError(
+          error?.message ||
+            "상점 자료를 불러오지 못했습니다. 다시 시도해 주세요.",
+        );
     } finally {
-      setLoading(false);
+      if (loadInFlightRef.current === requestScope)
+        loadInFlightRef.current = null;
+      if (isCurrentScope()) {
+        setLoadedScope(requestScope);
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    const requestedTab = searchParams.get("tab");
     setGrantFeedback("");
     setProductFeedback("");
     setOrderFeedback("");
-    if (
-      requestedTab === "grant" ||
-      requestedTab === "policy" ||
-      requestedTab === "ranks" ||
-      requestedTab === "hall-of-fame" ||
-      requestedTab === "products" ||
-      requestedTab === "requests"
-    ) {
-      setActiveTab(requestedTab);
-      return;
-    }
-    setActiveTab("overview");
   }, [searchParams]);
 
   useEffect(() => {
-    void loadAll();
-  }, [canRead, config, isSemesterArchive ? searchParams.get("tab") : null]);
+    setWallets([]);
+    setStudents([]);
+    setTransactions([]);
+    setProducts([]);
+    setOrders([]);
+    setSelectedUid("");
+    setSavedPolicy(EMPTY_POLICY);
+    setPolicyDraft(EMPTY_POLICY);
+    setPolicyDirty(false);
+    setRankThemeDraft(createRankThemeDraft(EMPTY_POLICY.rankPolicy));
+    setRankSettingsDraft(createRankSettingsDraft(EMPTY_POLICY.rankPolicy));
+    setRankEmojiDraft(createRankEmojiCollectionDraft(EMPTY_POLICY.rankPolicy));
+    setRankManualAdjustEarnedPointsByUid({});
+    setLoadedScope(null);
+    setShopLoadError("");
+  }, [requestScope]);
 
   useEffect(() => {
+    if (activeTab === "hall-of-fame" || !scopeReady) return;
+    if (
+      loadedScope !== requestScope ||
+      (isSemesterArchive && ["products", "requests"].includes(activeTab))
+    )
+      void loadAll();
+  }, [canRead, requestScope, activeTab]);
+
+  useEffect(() => {
+    if (!scopeReady || !canRead || activeTab !== "hall-of-fame") return;
+    return subscribePointsUpdated(() => {
+      setHallRefresh((value) => value + 1);
+    });
+  }, [canRead, requestScope, activeTab]);
+
+  useEffect(() => {
+    if (
+      !scopeReady ||
+      !canRead ||
+      activeTab !== "overview" ||
+      loadedScope !== requestScope
+    )
+      return;
     if (!selectedUid) {
       setTransactions([]);
       return;
@@ -804,7 +869,7 @@ const ManagePoints: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config, selectedUid]);
+  }, [requestScope, selectedUid, activeTab, loadedScope, canRead]);
 
   useEffect(() => {
     if (!selectedEditableTransaction) {
@@ -887,6 +952,7 @@ const ManagePoints: React.FC = () => {
   }, [filteredGrantStudents, grantSelectedUid]);
 
   useEffect(() => {
+    if (!scopeReady || !canRead || activeTab !== "grant") return;
     if (
       !isGlobalGrantSearch &&
       (grantGradeFilter === "all" || grantClassFilter === "all")
@@ -925,6 +991,9 @@ const ManagePoints: React.FC = () => {
       cancelled = true;
     };
   }, [
+    requestScope,
+    activeTab,
+    canRead,
     grantClassFilter,
     grantGradeFilter,
     isGlobalGrantSearch,
@@ -2033,8 +2102,16 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "hall-of-fame" && (
+          {activeTab === "hall-of-fame" && !scopeReady && (
+            <InlineLoading
+              message="명예의 전당을 불러오는 중입니다."
+              showWarning
+            />
+          )}
+          {activeTab === "hall-of-fame" && scopeReady && (
             <HallOfFameManagementTab
+              key={scopeGenerationRef.current}
+              refreshKey={hallRefresh}
               config={config}
               interfaceConfig={interfaceConfig}
               canManage={canManage}
