@@ -61,8 +61,10 @@
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "a2d69f0a1e9df443704c08a1a1713493564456995d8941fb47c458a3a9cbc8c0",
-      "changes": []
+      "sha256": "161aba69349d60c934c050f3f7d446339d38b1a9811970c41385ed2646bff3a1",
+      "changes": [
+        "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default."
+      ]
     },
     {
       "sourceFile": "cutoverAuthorization.js",
@@ -420,7 +422,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "f8e15dff6d0f1d0a62d0a5514be9e2dff8e464190d6ced2e96cf4b599877ab12",
+      "sha256": "10333beccab75f19e6ab6f04cb4d1825412d6bc715e24e24dbbf49355d823afb",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -432,7 +434,8 @@
         "2026-10-18: Authorized historical teacher catalog/order queries use bounded read-only legacy fallback; semester inventory drives canonical archive catalog and retains product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
         "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
-        "2026-10-19: Resolve public ranking profile emojis against the requested semester rank policy and canonical earned total, rejecting stale tier unlocks and ID/icon mismatches without writes."
+        "2026-10-19: Resolve public ranking profile emojis against the requested semester rank policy and canonical earned total, rejecting stale tier unlocks and ID/icon mismatches without writes.",
+        "2026-10-20: Add a bounded five-entry preview with 30-second lightweight ranking input cache and fresh request/candidate authority; full hall queries remain unchanged."
       ]
     },
     {
@@ -492,5 +495,12 @@
     "saveAssessmentProgressGeneration": "1789221981500978",
     "getAssessmentStateGeneration": "1789221981193263",
     "comparison": "Latest executeCommand archive: 54 preserved source files match origin/main 4f817fa after LF normalization. Assessment changes build on that source, including the current exemption routine policy. Live saveAssessmentProgress and getAssessmentState assessmentLifecycle sources match each other; createAssessmentQueryCore and callable options matched the gateway before this patch."
+  },
+  "rankingPreviewExport": {
+    "name": "getWisRankingPreview",
+    "region": "us-central1",
+    "entry": "../wisRankingPreview.js",
+    "source": "wisEconomyQuery.js",
+    "readOnly": true
   }
 }

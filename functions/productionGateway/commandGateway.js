@@ -1106,7 +1106,7 @@ const applyBusinessCommand = async ({
   };
 };
 
-const createFirestoreStore = (db = getFirestore()) => ({
+const createFirestoreStore = (db = getFirestore(), { readOnly = false } = {}) => ({
   set: (path, data, options) =>
     options ? db.doc(path).set(data, options) : db.doc(path).set(data),
   get: async (path) => {
@@ -1234,7 +1234,7 @@ const createFirestoreStore = (db = getFirestore()) => ({
         delete: (path) => firestoreTransaction.delete(db.doc(path)),
       };
       return callback(transaction);
-    }),
+    }, readOnly ? { readOnly: true } : undefined),
 });
 
 const createCommandGatewayCore = ({

@@ -58,6 +58,7 @@ let analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
 let functionsPromise: Promise<Functions> | null = null;
+let wisRankingFunctionsPromise: Promise<Functions> | null = null;
 let storagePromise: Promise<FirebaseStorage> | null = null;
 
 const useFirebaseEmulators =
@@ -203,7 +204,25 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
-    getFirebaseFunctions(),
+    name === "getWisRankingPreview"
+      ? (wisRankingFunctionsPromise ??= import("firebase/functions")
+          .then(({ connectFunctionsEmulator, getFunctions }) => {
+            // Only the compact ranking read runs beside the nam5 database.
+            const functions = getFunctions(app, "us-central1");
+            if (import.meta.env.DEV && useFirebaseEmulators) {
+              connectFunctionsEmulator(
+                functions,
+                functionsEmulatorHost,
+                functionsEmulatorPort,
+              );
+            }
+            return functions;
+          })
+          .catch((error) => {
+            wisRankingFunctionsPromise = null;
+            throw error;
+          }))
+      : getFirebaseFunctions(),
     import("firebase/functions"),
   ]);
   return httpsCallable<RequestData, ResponseData>(functions, name);

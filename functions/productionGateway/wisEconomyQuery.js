@@ -32,6 +32,8 @@ const WIS_QUERY_MAX_LIMIT = 200;
 const WIS_TEACHER_OVERVIEW_MAX_LIMIT = 500;
 const WIS_RECENT_LEDGER_LIMIT = 100;
 const WIS_HALL_ACCOUNT_LIMIT = 2_000;
+const WIS_RANKING_PREVIEW_TTL_MS = 30_000;
+const WIS_RANKING_PREVIEW_CACHE_LIMIT = 4;
 const WIS_REBUILD_LEDGER_LIMIT = 400;
 const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
 const WIS_MANUAL_REVERSIBLE_TYPES = new Set(["GRANT", "DEDUCT", "ADJUST"]);
@@ -2532,8 +2534,8 @@ const normalizeQuery = (raw) => {
   const audience = value.audience === "teacher" ? "teacher" : "student";
   const allowedProjections =
     audience === "teacher"
-      ? ["summary", "overview", "account", "orders", "catalog", "hall-of-fame"]
-      : ["summary", "student-core", "orders", "catalog", "hall-of-fame"];
+      ? ["summary", "overview", "account", "orders", "catalog", "hall-of-fame", "ranking-preview"]
+      : ["summary", "student-core", "orders", "catalog", "hall-of-fame", "ranking-preview"];
   const projection =
     value.projection || (audience === "teacher" ? "overview" : "student-core");
   if (!allowedProjections.includes(projection))
@@ -3081,6 +3083,132 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
   return { ...hall, snapshotKey: `w7_${sha256(canonicalJson(snapshotBody)).slice(0, 32)}` };
 };
 
+// A preview request reuses documents already read for its actor or candidates.
+// This cache lasts only for the enclosing read transaction; authority is never
+// reused across requests, even when the ranking inputs below remain warm.
+const memoizeRankingPreviewReads = (transaction) => {
+  const documents = new Map();
+  const getAll = async (paths) => {
+    const missing = [...new Set(paths.filter((path) => !documents.has(path)))];
+    if (missing.length) {
+      const batch = transaction.getAll(missing);
+      missing.forEach((path, index) => documents.set(path, batch.then((rows) => rows[index])));
+    }
+    return Promise.all(paths.map((path) => documents.get(path)));
+  };
+  return { get: async (path) => (await getAll([path]))[0], getAll,
+    query: (...args) => transaction.query(...args) };
+};
+
+const isCanonicalRankingPreviewAccount = (account, scope) => {
+  const uid = String(account?.studentUid || "");
+  return uid && !uid.includes("/") && account.semesterId === scope &&
+    account.accountId === accountIdFor(scope, uid) &&
+    Number.isSafeInteger(account.rankEarnedTotal) && account.rankEarnedTotal >= 0;
+};
+
+const readRankingPreviewRoster = async (transaction, accounts, scope) => {
+  const projected = await projectTeacherRosterFields(transaction, accounts, scope,
+    { prefetchAccountHints: true });
+  // A cached grade/name is never enough to publish a student. The canonical
+  // class must still belong to this semester, including positive-score rows.
+  const classes = await transaction.getAll([...new Set(projected
+    .map((account) => account.classId).filter(Boolean))].map(classPath));
+  const validClasses = new Set(classes.filter((item) => item.exists &&
+    item.data?.semesterId === scope).map((item) => documentIdFromPath(item.path)));
+  return projected.filter((account) => account.enrollmentId && validClasses.has(account.classId));
+};
+
+const buildRankingPreviewInputs = async (transaction, scope, explicitTeacherRead) => {
+  const rows = await transaction.query(WIS_RANKING_COLLECTION, {
+    field: "semesterId", operator: "==", value: scope, limit: WIS_HALL_ACCOUNT_LIMIT + 1,
+  });
+  if (rows.length > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
+    "Wis ranking preview limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED",
+    { limit: WIS_HALL_ACCOUNT_LIMIT });
+  const accounts = rows.filter((row) => isCanonicalRankingPreviewAccount(row.data, scope) &&
+    documentIdFromPath(row.path) === row.data.accountId).map(({ data }) => ({
+    accountId: data.accountId, semesterId: scope, studentUid: data.studentUid,
+    rankEarnedTotal: data.rankEarnedTotal, displayName: String(data.displayName || "학생"),
+    enrollmentId: String(data.enrollmentId || ""), classId: String(data.classId || ""),
+    grade: String(data.grade || ""), classNumber: String(data.classNumber || ""),
+    // Ranking projections do not store account status. Fresh candidate accounts
+    // decide zero-score eligibility before anything is returned to the caller.
+    status: "ACTIVE", hallZeroEligible: true,
+  }));
+  if (explicitTeacherRead) {
+    // Older ranking writers omit grade/class fields or retain an earlier
+    // placement. Historical account metadata is authoritative for EXPLICIT
+    // teacher reads. Pay this bounded read only when that archive cache is cold;
+    // never retain accounts' large recentLedgerEntries in the shared cache.
+    const snapshots = await transaction.getAll(accounts.map((account) => accountPath(account.accountId)));
+    return snapshots.filter((snapshot) => snapshot.exists &&
+      isCanonicalRankingPreviewAccount(snapshot.data, scope)).map((snapshot) => ({
+      ...projectWisAccount(snapshot.data),
+      hallZeroEligible: snapshot.data.hallZeroEligible === true,
+    }));
+  }
+  return readRankingPreviewRoster(transaction, accounts, scope);
+};
+
+const buildRankingPreview = async ({ transaction, cached, scope, config, studentAccount,
+  explicitTeacherRead, rankPolicy, now }) => {
+  const initialHall = buildWisHallOfFameProjection({ accounts: cached.accounts,
+    config, scope, studentAccount });
+  let primaryGradeKey = initialHall.primaryGradeKey;
+  const invalid = new Set();
+  const verified = new Map();
+  let selected = [];
+  // Every pass either verifies a new candidate or stops. No account is read
+  // twice and the complete semester input is bounded at 2,000 documents.
+  while (verified.size + invalid.size < WIS_HALL_ACCOUNT_LIMIT) {
+    const available = cached.accounts.filter((account) => !invalid.has(account.studentUid));
+    const hall = buildWisHallOfFameProjection({ accounts: available, config, scope,
+      studentAccount: studentAccount ? { grade: primaryGradeKey } : null });
+    primaryGradeKey = hall.primaryGradeKey;
+    const wanted = (hall.gradeLeaderboardByGrade[primaryGradeKey] || []).slice(0, 5);
+    const wantedIds = new Set(wanted.map((entry) => entry.uid));
+    const candidates = available.filter((account) => wantedIds.has(hallPublicId(scope, account.studentUid)));
+    const unread = candidates.filter((account) => !verified.has(account.studentUid));
+    if (!unread.length) { selected = candidates.map((account) => verified.get(account.studentUid)); break; }
+    const snapshots = await transaction.getAll(unread.map((account) => accountPath(account.accountId)));
+    const canonical = snapshots.filter((snapshot) => snapshot.exists &&
+      isCanonicalRankingPreviewAccount(snapshot.data, scope)).map((snapshot) => snapshot.data);
+    const projected = explicitTeacherRead ? canonical : await readRankingPreviewRoster(transaction, canonical, scope);
+    const current = new Map(projected.map((account) => [account.studentUid, account]));
+    for (const candidate of unread) {
+      const account = current.get(candidate.studentUid);
+      const zeroEligible = account?.hallZeroEligible === true;
+      if (!account || String(account.grade || "") !== primaryGradeKey ||
+        !String(account.classNumber || "") || isWisHallTestAccount(account) ||
+        (account.rankEarnedTotal === 0 && !zeroEligible)) invalid.add(candidate.studentUid);
+      else verified.set(candidate.studentUid, { ...account, hallZeroEligible: Boolean(zeroEligible) });
+    }
+  }
+  // In the maximal-size case the final pass may finish exactly at the cap.
+  if (!selected.length && verified.size) selected = [...verified.values()];
+  const hall = buildWisHallOfFameProjection({ accounts: selected, config, scope,
+    studentAccount: { grade: primaryGradeKey } });
+  const entries = (hall.gradeLeaderboardByGrade[primaryGradeKey] || []).slice(0, 5);
+  const entryIds = new Set(entries.map((entry) => entry.uid));
+  const displayed = selected.filter((account) => entryIds.has(hallPublicId(scope, account.studentUid)));
+  const profiles = await transaction.getAll(displayed.map((account) => `users/${account.studentUid}`));
+  const icons = new Map(displayed.map((account, index) => {
+    const profile = profiles[index]?.exists ? profiles[index].data : account;
+    return [hallPublicId(scope, account.studentUid), resolveStudentProfileEmoji({
+      profileEmojiId: profile?.profileEmojiId, profileIcon: profile?.profileIcon,
+      rankEarnedTotal: account.rankEarnedTotal, rankPolicy,
+    }).profileIcon];
+  }));
+  entries.forEach((entry) => { entry.profileIcon = icons.get(entry.uid) || "😀"; });
+  const gradeLeaderboardByGrade = { [primaryGradeKey]: entries };
+  return { ...hall, primaryGradeKey, gradeLeaderboardByGrade,
+    gradeTop3ByGrade: { [primaryGradeKey]: entries.filter((entry) => entry.cumulativeEarned > 0 && entry.rank <= 3) },
+    classLeaderboardByClassKey: {}, classTop3ByClassKey: {},
+    snapshotKey: `w7_${sha256(canonicalJson(gradeLeaderboardByGrade)).slice(0, 32)}`,
+    updatedAt: new Date(now).toISOString(), updatedAtMs: now, sourceUpdatedAtMs: cached.updatedAtMs };
+};
+
 const emptyWisState = ({
   query,
   provenance,
@@ -3170,8 +3298,37 @@ const queryLegacyShop = async (transaction, query, economy, manifestRevision) =>
 const createWisQueryCore = ({
   store,
   assertSession = sessionAuthority.assertActiveApplicationSession,
+  now = Date.now,
 } = {}) => {
   if (!store) throw new TypeError("store is required.");
+  const rankingPreviewCache = new Map();
+  const loadRankingPreviewInputs = (transaction, scope, explicitTeacherRead) => {
+    const key = `${scope}:${explicitTeacherRead ? "explicit" : "canonical"}`;
+    const timestamp = now();
+    for (const [cacheKey, entry] of rankingPreviewCache) {
+      if (entry.expiresAt <= timestamp) rankingPreviewCache.delete(cacheKey);
+    }
+    const existing = rankingPreviewCache.get(key);
+    if (existing) {
+      rankingPreviewCache.delete(key);
+      rankingPreviewCache.set(key, existing);
+      return existing.pending;
+    }
+    const entry = { expiresAt: Infinity, pending: null };
+    entry.pending = buildRankingPreviewInputs(transaction, scope, explicitTeacherRead).then((accounts) => {
+      const updatedAtMs = now();
+      entry.expiresAt = updatedAtMs + WIS_RANKING_PREVIEW_TTL_MS;
+      return { accounts, updatedAtMs };
+    }).catch((error) => {
+      if (rankingPreviewCache.get(key) === entry) rankingPreviewCache.delete(key);
+      throw error;
+    });
+    rankingPreviewCache.set(key, entry);
+    while (rankingPreviewCache.size > WIS_RANKING_PREVIEW_CACHE_LIMIT) {
+      rankingPreviewCache.delete(rankingPreviewCache.keys().next().value);
+    }
+    return entry.pending;
+  };
   const getWisEconomyState = async (request) => {
     const identityPromise = assertSession(request, {
       recentAuth: false,
@@ -3237,13 +3394,20 @@ const createWisQueryCore = ({
         }),
         status: "LEGACY",
       };
-    return store.runTransaction(async (transaction) => {
-      const [manifest, economySnapshot, interfaceSnapshot, activePointer] =
+    return store.runTransaction(async (rawTransaction) => {
+      const isRankingPreview = query.projection === "ranking-preview";
+      const transaction = isRankingPreview ? memoizeRankingPreviewReads(rawTransaction) : rawTransaction;
+      const [year, semester] = query.semesterId.split("-");
+      const ownAccountId = accountIdFor(query.semesterId, uid);
+      const [manifest, economySnapshot, interfaceSnapshot, activePointer, policySnapshot, ownPreviewAccount] =
         await transaction.getAll([
           manifestPath(query.semesterId),
           economyPath(query.semesterId),
           WIS_HALL_OF_FAME_CONFIG_PATH,
           "site_settings/semester_active",
+          ...(isRankingPreview ? [`years/${year}/semesters/${semester}/point_policies/current`] : []),
+          ...(isRankingPreview && query.audience === "student" ? [accountPath(ownAccountId),
+            enrollmentSlotPath(query.semesterId, uid)] : []),
         ]);
       const historicalScope = activePointer.exists && Boolean(activePointer.data?.semesterId)
         && activePointer.data.semesterId !== query.semesterId;
@@ -3327,6 +3491,30 @@ const createWisQueryCore = ({
       const projectRoster = explicitTeacherRead
         ? async (_transaction, accounts) => accounts
         : projectTeacherRosterFields;
+
+      if (isRankingPreview) {
+        let studentAccount = null;
+        if (query.audience === "student") {
+          const ownAccount = ownPreviewAccount?.exists &&
+            isCanonicalRankingPreviewAccount(ownPreviewAccount.data, query.semesterId) &&
+            ownPreviewAccount.data.studentUid === uid ? ownPreviewAccount.data : null;
+          studentAccount = ownAccount
+            ? (await readRankingPreviewRoster(transaction, [ownAccount], query.semesterId))[0]
+            : null;
+          if (!studentAccount) return { ...emptyWisState({ query, provenance,
+            readOnly: true, economy: projectStudentEconomy(economySnapshot.data), manifestRevision,
+            reason: "WIS_ACTIVE_ENROLLMENT_REQUIRED" }), rankPolicy: policySnapshot?.data?.rankPolicy || null };
+        }
+        const cached = await loadRankingPreviewInputs(transaction, query.semesterId, explicitTeacherRead);
+        const rankPolicy = policySnapshot?.data?.rankPolicy || null;
+        const hallOfFame = await buildRankingPreview({ transaction, cached,
+          scope: query.semesterId, config: hallOfFameConfig, studentAccount,
+          explicitTeacherRead, rankPolicy, now: now() });
+        return { ...base, economy: query.audience === "student"
+          ? projectStudentEconomy(economySnapshot.data) : base.economy,
+          hallOfFame, rankPolicy,
+          status: Object.values(hallOfFame.gradeLeaderboardByGrade).some((rows) => rows.length) ? "CONTENT" : "EMPTY" };
+      }
 
       if (query.audience === "student") {
         const studentBase = {

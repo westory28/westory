@@ -6,9 +6,7 @@ import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
 import WisIcon from "./WisIcon";
 import { getWisHallOfFameGradeLeaderboard } from "../../lib/wisHallOfFame";
-import { getPointPolicy } from "../../lib/points";
-import { getStudentPointHallOfFame } from "../../lib/studentWis";
-import { getCanonicalWisHallOfFame } from "../../lib/pointEconomyAdapter";
+import { getWisRankingPreview } from "../../lib/wisRankingPreview";
 import {
   getPointRankDefaultEmojiValue,
   getPointRankDisplay,
@@ -89,27 +87,16 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     setDefaultProfileIcon("😀");
     if (!scopeReady) return;
     const scope = { year, semester };
-    // Badge settings must not hold up the ranking itself.
-    void getPointPolicy(scope)
-      .then((pointPolicy) => {
-        if (cancelled) return;
-        setRankPolicy(pointPolicy.rankPolicy || null);
-        setDefaultProfileIcon(
-          pointPolicy.rankPolicy
-            ? getPointRankDefaultEmojiValue(pointPolicy.rankPolicy)
-            : "😀",
-        );
-      })
-      .catch((error) => {
-        console.warn("Failed to load wis ranking policy:", error);
-      });
     void (async () => {
       try {
-        const snapshot = await (studentAudience
-          ? getStudentPointHallOfFame(scope)
-          : getCanonicalWisHallOfFame(scope));
+        const { snapshot, rankPolicy: policy } = await getWisRankingPreview(
+          scope,
+          studentAudience ? "student" : "teacher",
+        );
         if (cancelled) return;
         setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
+        setRankPolicy(policy);
+        setDefaultProfileIcon(getPointRankDefaultEmojiValue(policy));
       } catch (error) {
         console.warn("Failed to load wis ranking:", error);
         if (!cancelled) {

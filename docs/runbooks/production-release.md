@@ -151,6 +151,35 @@ firebase functions:list --project history-quiz-yongsin
 
 ## 순위 조회 표시 복구 (2026-10-08)
 
+### 대시보드 Top 5 조회 비용과 지연 (2026-10-20)
+
+대시보드는 미국 `getWisRankingPreview`를 한 번 호출해 순위와 등급 정책을 함께 받는다.
+Firestore `nam5`와 가까운 `us-central1`에서 읽기 전용 트랜잭션을 사용한다.
+기존 서울/미국 `getWisEconomyState`와 전체 명예의 전당 조회는 그대로 유지한다.
+
+순위 집계 입력은 거래 내역이 붙은 전체 계좌 대신 `semester_wis_rankings`에서 읽는다.
+인스턴스 메모리에 학기·보관 조회 구분별로 30초간 공유하고, 최대 4개 범위만 유지한다.
+동시 집계는 합치며 만료 후 다음 요청에서만 갱신한다. 타이머·폴링·자동 재시도는 없다.
+점수 순위 반영은 최대 30초 늦을 수 있다. 세션·권한·학기·공개 설정은 매 요청 검사하고,
+표시 후보의 현재 계좌·canonical 학적·이름 및 현재 등급 정책의 이모지는 다시 확인한다.
+교사의 명시적 보관 조회는 기존의 당시 계좌 학적 기준을 유지하며, 최초 집계 때만
+제한된 순위 ID에 대응하는 계좌를 읽어 누락되거나 오래된 순위 학적을 보완한다.
+브라우저에는 학생 이름이나 순위 캐시를 저장하지 않는다.
+
+검증은 `node scripts/verify-wis-ranking-preview.mjs`,
+`npm --prefix functions run check`, `npm run build`로 수행한다.
+백엔드 배포 대상은 새 함수 하나이며 기존 미국 동명 함수를 수정하거나 삭제하지 않는다.
+
+```powershell
+. .\scripts\use-westory-node.ps1
+firebase deploy --only "functions:getWisRankingPreview" --project history-quiz-yongsin
+firebase functions:list --project history-quiz-yongsin
+```
+
+프론트엔드는 해당 커밋의 Vercel 배포를 운영 도메인에 승격한다. 운영 대시보드에서
+5명과 등급의 표시, 새 callable 성공, 실제 응답 지연을 확인한다. 콜드 스타트와
+사용자 네트워크 지연을 포함한 결과를 측정 없이 항상 1초 이내라고 보고하지 않는다.
+
 `getWisEconomyState`의 운영 조회 소스는 `functions/productionGateway/wisEconomyQuery.js`에
 별도로 복구했다. 실명·번호와 공개 범위 안의 프로필 이모지를 반환하며 기존 학년·학급,
 학기 보관 조회, 로그인 세션 검사를 유지한다. `npm --prefix functions run check`에 조회와
