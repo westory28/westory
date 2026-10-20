@@ -265,6 +265,8 @@
   z-index: 0;
   display: block;
   pointer-events: none;
+  overflow: visible;
+  transform-origin: 0 0;
 }
 .history-atlas__land {
   fill: var(--atlas-land);

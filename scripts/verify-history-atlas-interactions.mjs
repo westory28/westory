@@ -72,7 +72,7 @@ const touchEffect = effects.find((effect) =>
   effect.includes('node.addEventListener("touchstart"'),
 );
 const selectionEffect = effects.find((effect) =>
-  effect.includes("const selectionBounds = reframeAtlasSelectionBounds("),
+  effect.includes("if (!selected || !pendingFocusRef.current) return;"),
 );
 const resizeEffect = effects.find((effect) =>
   effect.includes("if (detailOpen && selected)"),
@@ -142,6 +142,7 @@ function gestureHarness(node, transformRef, updates) {
   const camera = attributeNode({
     transform: `translate(${original.x} ${original.y}) scale(${original.scale})`,
   });
+  const surface = { style: { transform: "", willChange: "" } };
   const label = { style: { left: "40px", top: "60px" } };
   const screenPath = attributeNode();
   const pattern = attributeNode({
@@ -166,6 +167,8 @@ function gestureHarness(node, transformRef, updates) {
         : selector.includes("history-atlas__geography")
           ? [camera]
           : [label];
+  node.querySelector = (selector) =>
+    selector === ":scope > svg" ? surface : null;
   node.parentElement = { querySelector: () => zoom };
   const frames = new Map(),
     timers = new Map();
@@ -177,6 +180,7 @@ function gestureHarness(node, transformRef, updates) {
     gestureEndRef: { current: null },
     gestureSnapshotRef: { current: null },
     cameraFrameRef: { current: null },
+    cameraTimingRef: { current: { elapsed: 0, updatedAt: null } },
     useCallback: (callback) => callback,
     flushSync: (callback) => callback(),
     window: { matchMedia: () => ({ matches: false }) },
@@ -209,6 +213,7 @@ function gestureHarness(node, transformRef, updates) {
   return {
     ...dependencies,
     camera,
+    surface,
     label,
     screenPath,
     pattern,
@@ -527,14 +532,22 @@ for (const mapWidth of [356, 720]) {
     "Wheel settling uses one replaceable timer",
   );
   camera.draw();
+  const ratio = target.scale / original.scale;
   assert.equal(
-    camera.camera.attributes.transform,
-    `translate(${target.x} ${target.y}) scale(${target.scale})`,
+    camera.surface.style.transform,
+    `translate3d(${target.x - original.x * ratio}px, ${target.y - original.y * ratio}px, 0) scale(${ratio})`,
+    "The painted surface includes the complete transient camera delta",
   );
+  assert.equal(camera.surface.style.willChange, "transform");
+  assert.equal(camera.camera.writes.size, 0);
   assert.equal(camera.zoom.textContent, "400%");
-  assert.equal(camera.pattern.attributes.patternTransform, "scale(0.25)");
+  assert.equal(
+    camera.pattern.writes.size,
+    0,
+    "Pinching retains the painted texture until the camera is committed",
+  );
   assert.notEqual(camera.label.style.left, "40px");
-  assert(camera.screenPath.attributes.transform);
+  assert.equal(camera.screenPath.writes.size, 0);
 
   // The last sample can return to the existing React props and be released
   // before RAF. React will skip identical props, so stale imperative values
@@ -548,6 +561,8 @@ for (const mapWidth of [356, 720]) {
     "Fast release cancels the pending display frame",
   );
   assert.equal(camera.timers.size, 0);
+  assert.equal(camera.surface.style.transform, "");
+  assert.equal(camera.surface.style.willChange, "");
   assert.equal(
     camera.camera.attributes.transform,
     `translate(${original.x} ${original.y}) scale(${original.scale})`,
@@ -594,20 +609,15 @@ for (const viewport of viewports)
   for (const regional of [false, true])
     for (const entryPoint of ["label", "list", "search", "story"]) {
       const { width: mapWidth, mapHeight } = viewport;
-      let bounds = regional
+      const bounds = regional
         ? areas.atlasAreaCameraBounds(province)
         : atlas.ATLAS_SUBJECT_BOUNDS.korea;
-      let projection = geometry.createAtlasProjection(
+      const projection = geometry.createAtlasProjection(
         "korea",
         bounds,
         mapWidth,
         mapHeight,
       );
-      if (regional)
-        projection = geometry.fitAtlasRegionProjection(projection, province, {
-          width: mapWidth,
-          height: mapHeight,
-        });
       const transformRef = {
         current: { scale: regional ? 3 : 8, x: -mapWidth, y: -mapHeight },
       };
@@ -696,17 +706,10 @@ for (const viewport of viewports)
         `${entryPoint}: captures geographic scale before a regional projection changes`,
       );
 
-      // Match React's bounds/reset/focus cycle, including the first point after
-      // a regional overview. A new popup and projection must not overwrite the
-      // pre-selection visual scale while the pending focus is still resolving.
+      // A selection must preserve the existing projection, including the first
+      // point after a regional overview, and keep its pending scale snapshot.
       let camera;
       for (let render = 0; render < 5 && pendingFocusRef.current; render++) {
-        projection = geometry.createAtlasProjection(
-          "korea",
-          bounds,
-          mapWidth,
-          mapHeight,
-        );
         const current = {
           ...dependencies,
           projection,
@@ -729,10 +732,8 @@ for (const viewport of viewports)
             camera = value;
             transformRef.current = value;
           },
-          setViewBounds: (value) => {
-            bounds = value || atlas.ATLAS_SUBJECT_BOUNDS.korea;
-            transformRef.current = geometry.ATLAS_IDENTITY;
-          },
+          setViewBounds: () =>
+            assert.fail("Place selection must not refit the base projection"),
         };
         evaluate(resizeEffect, current)();
         near(
@@ -742,7 +743,7 @@ for (const viewport of viewports)
         );
         evaluate(selectionEffect, current)();
       }
-      assert(camera, "Selection resolves after projection/context reframing");
+      assert(camera, "Selection resolves using the existing projection");
       near(
         projection.scale() * camera.scale,
         originalVisualScale,
@@ -806,16 +807,23 @@ for (const viewport of viewports) {
       coordinates: geography.geoCentroid(shape),
       geometry: shape,
     };
-    same(
-      geometry.fitAtlasSelection(
-        projection,
-        { ...selection, minimumScale: 12 },
-        viewport,
-      ),
-      geometry.fitAtlasSelection(projection, selection, viewport),
+    const focused = geometry.fitAtlasSelection(
+      projection,
+      { ...selection, minimumScale: 12 },
+      viewport,
+    );
+    assert.equal(focused.scale, 12, "Shape selection never reduces prior zoom");
+    const anchor = projection(selection.coordinates);
+    const x = anchor[0] * focused.scale + focused.x;
+    const y = anchor[1] * focused.scale + focused.y;
+    assert(
+      x >= (viewport.overlayRight || 0) + 24 && x <= viewport.width - 24 &&
+        y >= (viewport.top || 0) + 24 &&
+        y <= (viewport.top || 0) + viewport.height - 24,
+      "The zoom-preserving shape anchor remains clear of the popup",
     );
   }
 }
 console.log(
-  `Atlas interaction checks passed: ${gestureCases} real touch/tap transitions, ${focusCases} label/list/search/story selection flows with exact geographic zoom preservation, popup clearance, full-shape fit and maximum-zoom contracts.`,
+  `Atlas interaction checks passed: ${gestureCases} real touch/tap transitions, ${focusCases} label/list/search/story selection flows with exact geographic zoom preservation, popup clearance, shape zoom retention and maximum-zoom contracts.`,
 );

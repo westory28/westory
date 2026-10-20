@@ -20,6 +20,10 @@ const output = path.resolve(
 const slowdown = Number(process.env.HISTORY_MAP_PERFORMANCE_CPU || 4);
 const frames = Number(process.env.HISTORY_MAP_PERFORMANCE_FRAMES || 60);
 const repeats = Number(process.env.HISTORY_MAP_PERFORMANCE_REPEATS || 2);
+const views = (
+  process.env.HISTORY_MAP_PERFORMANCE_VIEWS || "world,globe"
+).split(",");
+assert(views.every((view) => ["world", "globe"].includes(view)));
 assert(Number.isFinite(slowdown) && slowdown >= 1);
 assert(Number.isInteger(frames) && frames >= 10);
 assert(Number.isInteger(repeats) && repeats > 0);
@@ -207,7 +211,7 @@ try {
   });
   report.browserVersion = browser.version();
   for (const condition of conditions) {
-    for (const view of ["world", "globe"]) {
+    for (const view of views) {
       const result = { view, ...condition, samples: [] };
       for (let repeat = 1; repeat <= repeats; repeat++) {
         const page = await browser.newPage({

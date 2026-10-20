@@ -40,10 +40,7 @@ import {
   createAtlasPaths,
   createAtlasProjection,
   fitAtlasSelection,
-  fitAtlasRegionProjection,
-  includeAtlasContextBounds,
   loadAtlasGeometry,
-  reframeAtlasSelectionBounds,
   zoomAtlasAt,
   type AtlasGeometry,
   type AtlasTransform,
@@ -546,14 +543,16 @@ export default function HistoryAtlas({
   const [motionPaused, setMotionPaused] = useState(false);
   const transformRef = useRef(transform);
   const cameraFrameRef = useRef<number | null>(null);
+  const cameraTimingRef = useRef({
+    elapsed: 0,
+    updatedAt: null as number | null,
+  });
   const gestureFrameRef = useRef<number | null>(null);
   const gestureEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gestureSnapshotRef = useRef<{
     transform: AtlasTransform;
+    surface: SVGSVGElement | null;
     labels: { node: HTMLElement; x: number; y: number }[];
-    geometry: NodeListOf<SVGElement>;
-    screenPaths: NodeListOf<SVGElement>;
-    patterns: NodeListOf<SVGPatternElement>;
     zoom: Element | null;
     paintedScale: number;
   } | null>(null);
@@ -761,38 +760,9 @@ export default function HistoryAtlas({
       ? next
       : next.scale(retainedProjectionScale);
   }, [subject, bounds, mapWidth, mapHeight, retainedProjectionScale]);
-  const projection = useMemo(() => {
-    const fittedArea = selectedCountry || provinceArea;
-    return fittedArea
-      ? fitAtlasRegionProjection(
-          createAtlasProjection(
-            subject,
-            bounds,
-            mapWidth,
-            mapHeight,
-            (ATLAS_SUBJECT_BOUNDS[subject][0] +
-              ATLAS_SUBJECT_BOUNDS[subject][2]) /
-              2,
-          ),
-          fittedArea,
-          {
-            width: mapWidth,
-            height: availableMapHeight,
-            overlayRight: mapWidth >= 650 ? overlayObstacle?.right : undefined,
-          },
-        )
-      : baseProjection;
-  }, [
-    subject,
-    bounds,
-    mapWidth,
-    mapHeight,
-    provinceArea,
-    selectedCountry,
-    availableMapHeight,
-    overlayObstacle?.right,
-    baseProjection,
-  ]);
+  // Selection moves the camera, not the projection. Re-fitting the projection
+  // regenerated every world path and reduced the geographic zoom on each tap.
+  const projection = baseProjection;
   const needsWorldGeometry = atlasViewportNeedsWorldGeometry(
     subject,
     projection,
@@ -1311,21 +1281,15 @@ export default function HistoryAtlas({
     // or clamped label can otherwise retain a transient DOM value when its
     // next virtual prop equals its previous one.
     const previous = snapshot.transform;
-    snapshot.geometry.forEach((node) =>
-      node.setAttribute(
-        "transform",
-        `translate(${previous.x} ${previous.y}) scale(${previous.scale})`,
-      ),
-    );
-    snapshot.screenPaths.forEach((node) => node.removeAttribute("transform"));
+    if (snapshot.surface) {
+      snapshot.surface.style.transform = "";
+      snapshot.surface.style.willChange = "";
+    }
     for (const label of snapshot.labels) {
       label.node.style.left = `${label.x}px`;
       label.node.style.top = `${label.y}px`;
     }
     if (snapshot.paintedScale !== previous.scale) {
-      snapshot.patterns.forEach((node) =>
-        node.setAttribute("patternTransform", `scale(${1 / previous.scale})`),
-      );
       if (snapshot.zoom)
         snapshot.zoom.textContent = `${Math.round(previous.scale * 100)}%`;
     }
@@ -1333,14 +1297,22 @@ export default function HistoryAtlas({
     if (synchronous) flushSync(commit);
     else commit();
   }, []);
-  // During a continuous gesture only the camera and existing label anchors move.
+  useLayoutEffect(() => {
+    // Data, popup measurement or a second selection can commit during motion.
+    // Rebase the next frame on those newly rendered anchors before painting.
+    if (gestureSnapshotRef.current) finishGesture();
+    if (cameraFrameRef.current !== null)
+      cameraTimingRef.current.updatedAt = performance.now();
+  });
+  // During gestures and selection motion only the existing camera anchors move.
   // Reconcile visibility/collisions once at release, not on every touch sample.
   const moveGesture = useCallback(
-    (value: AtlasTransform, settle = false) => {
+    (value: AtlasTransform, settle = false, immediate = false) => {
       const map = mapRef.current;
       if (!map) return;
       gestureSnapshotRef.current ??= {
         transform: transformRef.current,
+        surface: map.querySelector<SVGSVGElement>(":scope > svg"),
         labels: Array.from(
           map.querySelectorAll<HTMLElement>(
             ".history-atlas__terrain-label, .history-atlas__traditional-label, .history-atlas__country-label, .history-atlas__province-label, .history-atlas__point, .history-atlas__label-anchor",
@@ -1350,51 +1322,43 @@ export default function HistoryAtlas({
           x: parseFloat(node.style.left),
           y: parseFloat(node.style.top),
         })),
-        geometry: map.querySelectorAll<SVGElement>(
-          ".history-atlas__geography, [data-atlas-camera-features]",
-        ),
-        screenPaths: map.querySelectorAll<SVGElement>(
-          ".history-atlas__minor-dots, .history-atlas__terrain-leader",
-        ),
-        patterns: map.querySelectorAll<SVGPatternElement>("pattern"),
         zoom: map.parentElement?.querySelector(".history-atlas__zoom") || null,
         paintedScale: transformRef.current.scale,
       };
       transformRef.current = value;
-      if (gestureFrameRef.current === null)
-        gestureFrameRef.current = requestAnimationFrame(() => {
-          gestureFrameRef.current = null;
-          const snapshot = gestureSnapshotRef.current;
-          if (!snapshot) return;
-          const next = transformRef.current;
-          const camera = `translate(${next.x} ${next.y}) scale(${next.scale})`;
-          snapshot.geometry.forEach((node) =>
-            node.setAttribute("transform", camera),
-          );
-          const ratio = next.scale / snapshot.transform.scale;
-          const x = next.x - snapshot.transform.x * ratio;
-          const y = next.y - snapshot.transform.y * ratio;
-          snapshot.screenPaths.forEach((node) =>
-            node.setAttribute(
-              "transform",
-              `translate(${x} ${y}) scale(${ratio})`,
-            ),
-          );
-          for (const label of snapshot.labels) {
-            label.node.style.left = `${label.x * ratio + x}px`;
-            label.node.style.top = `${label.y * ratio + y}px`;
-          }
-          // Rewriting an unchanged SVG pattern invalidates its raster cache.
-          // Panning must reuse the terrain textures at the current scale.
-          if (snapshot.paintedScale !== next.scale) {
-            snapshot.patterns.forEach((node) =>
-              node.setAttribute("patternTransform", `scale(${1 / next.scale})`),
-            );
-            if (snapshot.zoom)
-              snapshot.zoom.textContent = `${Math.round(next.scale * 100)}%`;
-            snapshot.paintedScale = next.scale;
-          }
-        });
+      const paint = () => {
+        gestureFrameRef.current = null;
+        const snapshot = gestureSnapshotRef.current;
+        if (!snapshot) return;
+        const next = transformRef.current;
+        const ratio = next.scale / snapshot.transform.scale;
+        const x = next.x - snapshot.transform.x * ratio;
+        const y = next.y - snapshot.transform.y * ratio;
+        // Move the already painted SVG as one composited surface. Mutating
+        // hundreds of SVG paths/groups re-rasterized the world on every frame.
+        if (snapshot.surface) {
+          snapshot.surface.style.willChange = "transform";
+          snapshot.surface.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${ratio})`;
+        }
+        for (const label of snapshot.labels) {
+          label.node.style.left = `${label.x * ratio + x}px`;
+          label.node.style.top = `${label.y * ratio + y}px`;
+        }
+        // Texture/stroke sizing is reconciled once on release. Rewriting SVG
+        // patterns during a pinch invalidates the composited surface's cache.
+        if (snapshot.paintedScale !== next.scale) {
+          if (snapshot.zoom)
+            snapshot.zoom.textContent = `${Math.round(next.scale * 100)}%`;
+          snapshot.paintedScale = next.scale;
+        }
+      };
+      if (immediate) {
+        if (gestureFrameRef.current !== null)
+          cancelAnimationFrame(gestureFrameRef.current);
+        paint();
+      } else if (gestureFrameRef.current === null) {
+        gestureFrameRef.current = requestAnimationFrame(paint);
+      }
       if (settle) {
         if (gestureEndRef.current !== null) clearTimeout(gestureEndRef.current);
         gestureEndRef.current = setTimeout(() => finishGesture(true), 120);
@@ -1402,13 +1366,6 @@ export default function HistoryAtlas({
     },
     [finishGesture],
   );
-  useLayoutEffect(() => {
-    mapRef.current
-      ?.querySelectorAll(
-        ".history-atlas__minor-dots, .history-atlas__terrain-leader",
-      )
-      .forEach((node) => node.removeAttribute("transform"));
-  }, [transform]);
   const updateTransform = useCallback(
     (value: AtlasTransform, animate = false) => {
       finishGesture();
@@ -1422,6 +1379,9 @@ export default function HistoryAtlas({
       };
       if (
         !animate ||
+        (Math.abs(from.x - value.x) < 0.01 &&
+          Math.abs(from.y - value.y) < 0.01 &&
+          Math.abs(from.scale - value.scale) < 0.00001) ||
         window.matchMedia("(prefers-reduced-motion: reduce)").matches
       ) {
         setCameraMoving(false);
@@ -1429,28 +1389,35 @@ export default function HistoryAtlas({
         return;
       }
       setCameraMoving(true);
-      let started: number | null = null;
+      cameraTimingRef.current = { elapsed: 0, updatedAt: null };
       const step = () => {
         const now = performance.now();
-        started ??= now;
-        const progress = Math.max(0, Math.min(1, (now - started) / 300));
+        const timing = cameraTimingRef.current;
+        // React can rebase the surface after a costly projection/data commit.
+        // Time spent preparing that surface is not visible camera movement.
+        timing.elapsed += now - (timing.updatedAt ?? now);
+        timing.updatedAt = now;
+        const progress = Math.max(0, Math.min(1, timing.elapsed / 300));
         const amount = 1 - Math.pow(1 - progress, 3);
-        flushSync(() =>
-          apply({
+        moveGesture(
+          {
             x: from.x + (value.x - from.x) * amount,
             y: from.y + (value.y - from.y) * amount,
             scale: from.scale + (value.scale - from.scale) * amount,
-          }),
+          },
+          false,
+          true,
         );
         if (progress < 1) cameraFrameRef.current = requestAnimationFrame(step);
         else {
           cameraFrameRef.current = null;
+          finishGesture();
           setCameraMoving(false);
         }
       };
       cameraFrameRef.current = requestAnimationFrame(step);
     },
-    [finishGesture],
+    [finishGesture, moveGesture],
   );
   useEffect(
     () => () => {
@@ -1740,14 +1707,14 @@ export default function HistoryAtlas({
   }, [provinceArea]);
 
   useEffect(() => {
-    if (!provinceArea) return;
+    if (!provinceArea || provinceDetailOpen) return;
     const next = atlasAreaCameraBounds(provinceArea);
     setViewBounds((current) =>
       current && next && current.every((value, index) => value === next[index])
         ? current
         : next,
     );
-  }, [provinceArea]);
+  }, [provinceArea, provinceDetailOpen]);
 
   useEffect(() => {
     if (!selectedCountry) return;
@@ -1755,8 +1722,9 @@ export default function HistoryAtlas({
       fitAtlasSelection(
         projection,
         {
-          coordinates: selectedCountry.properties.coordinates,
+          coordinates: atlasShapeGeographicAnchor(selectedCountry),
           geometry: selectedCountry,
+          minimumScale: transformRef.current.scale,
         },
         {
           width: mapWidth,
@@ -1785,8 +1753,11 @@ export default function HistoryAtlas({
       fitAtlasSelection(
         projection,
         {
-          coordinates: geoCentroid(provinceArea) as [number, number],
+          coordinates: atlasShapeGeographicAnchor(provinceArea),
           geometry: provinceArea,
+          minimumScale: provinceDetailOpen
+            ? transformRef.current.scale
+            : undefined,
         },
         {
           width: mapWidth,
@@ -1800,6 +1771,7 @@ export default function HistoryAtlas({
     );
   }, [
     provinceArea,
+    provinceDetailOpen,
     projection,
     mapWidth,
     mapHeight,
@@ -1824,20 +1796,10 @@ export default function HistoryAtlas({
     if (selected.place.kind === "desert" && !landformGeometry) return;
     if (isAtlasAreaPlace(selected.place) && !areaGeometry) return;
     const coordinates = selectedShape
-      ? geoCentroid(selectedShape)
+      ? atlasShapeGeographicAnchor(selectedShape)
       : selected.place.coordinates;
     if (!coordinates) {
       pendingFocusRef.current = null;
-      return;
-    }
-    const selectionBounds = reframeAtlasSelectionBounds(
-      subject,
-      coordinates as [number, number],
-      bounds,
-      baseBounds,
-    );
-    if (selectionBounds !== bounds) {
-      setViewBounds(selectionBounds === baseBounds ? null : selectionBounds);
       return;
     }
     const contextExtent = atlasFocusExtent(
@@ -1845,11 +1807,6 @@ export default function HistoryAtlas({
       subject,
       selectedShape,
     );
-    const contextBounds = includeAtlasContextBounds(bounds, contextExtent);
-    if (contextBounds !== bounds) {
-      setViewBounds(contextBounds);
-      return;
-    }
     pendingFocusRef.current = null;
     updateTransform(
       fitAtlasSelection(
@@ -1859,8 +1816,6 @@ export default function HistoryAtlas({
           contextBounds: contextExtent,
           geometry: selectedShape,
           minimumScale:
-            subject === "korea" &&
-            !selectedShape &&
             pendingVisualScaleRef.current !== null
               ? pendingVisualScaleRef.current / projection.scale()
               : undefined,
@@ -2037,10 +1992,7 @@ export default function HistoryAtlas({
   const resetView = () => {
     regionOverviewRef.current = true;
     resetProjectionRef.current =
-      bounds !== baseBounds ||
-      retainedProjectionScale !== null ||
-      !!selectedCountry ||
-      !!traditionalArea;
+      bounds !== baseBounds || retainedProjectionScale !== null;
     setCountryId("");
     setTraditionalRegionId("");
     setDetailOpen(false);

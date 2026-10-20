@@ -442,7 +442,7 @@ export function includeAtlasContextBounds(
   ];
 }
 
-/** Fit the full selection into the map area that remains beside its card. */
+/** Frame a selection beside its card, preserving zoom when a minimum is set. */
 export function fitAtlasSelection(
   projection: ReturnType<typeof createAtlasProjection>,
   selection: {
@@ -498,13 +498,12 @@ export function fitAtlasSelection(
       (availableHeight * 0.85) / Math.max(1, bottom - top),
     ),
   );
-  const minimumScale =
-    !selection.geometry && Number.isFinite(selection.minimumScale)
-      ? selection.minimumScale!
-      : 0.5;
+  const minimumScale = Number.isFinite(selection.minimumScale)
+    ? selection.minimumScale!
+    : 0.5;
   const scale = Math.min(ATLAS_MAX_ZOOM, Math.max(fittedScale, minimumScale));
-  // A zoomed-in point keeps its geographical scale and only moves out of the
-  // popup's way. Rivers and areas always retain the complete-geometry fit.
+  // Opening a description must not zoom out to fit a large river/country.
+  // Use its fixed geographic anchor when the complete extent would shrink it.
   const center =
     minimumScale > fittedScale ? projection(selection.coordinates) : null;
   return constrainAtlasTransform(
