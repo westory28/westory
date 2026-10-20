@@ -20,6 +20,7 @@ import NavigationIcon from "../../../components/layout/TeacherNavigationIcon";
 import StudentScheduleTitle from "./StudentScheduleTitle";
 import AttendanceStamp from "./AttendanceStamp";
 import "./studentWeekSchedule.css";
+import "../../../components/common/weekScheduleMarkers.css";
 import {
   eventIncludesDate,
   formatCalendarEventDateRange,

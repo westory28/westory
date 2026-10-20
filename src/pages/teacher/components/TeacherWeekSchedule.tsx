@@ -20,6 +20,7 @@ import {
 } from "../../../lib/schedulePeriods";
 import TeacherNavigationIcon from "../../../components/layout/TeacherNavigationIcon";
 import TeacherScheduleTitle from "./TeacherScheduleTitle";
+import "../../../components/common/weekScheduleMarkers.css";
 import {
   eventIncludesDate,
   formatCalendarEventDateRange,

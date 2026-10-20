@@ -280,7 +280,23 @@ try {
           const rects = Array.from(group.children, (child) =>
             child.getBoundingClientRect(),
           );
+          const circle = element.querySelector("strong");
+          const circleBounds = circle.getBoundingClientRect();
+          const circleStyle = getComputedStyle(circle);
+          const outerRing =
+            circleStyle.outlineStyle === "none"
+              ? 0
+              : Math.max(
+                  0,
+                  parseFloat(circleStyle.outlineWidth) +
+                    parseFloat(circleStyle.outlineOffset),
+                );
           return {
+            circleClearance: Math.min(
+              ...rects.map(
+                (rect) => rect.top - circleBounds.bottom - outerRing,
+              ),
+            ),
             inside: rects.every(
               (rect) =>
                 rect.left >= parent.left &&
@@ -297,6 +313,10 @@ try {
         assert(
           layout.inside && layout.oneLine && !layout.overflow,
           JSON.stringify({ width, role, index, layout }),
+        );
+        assert(
+          layout.circleClearance >= 3.5,
+          `Dots must clear the date circle and today ring: ${JSON.stringify({ width, role, index, layout })}`,
         );
         if (expectedBackgrounds[index]) {
           assert.equal(
@@ -349,6 +369,9 @@ try {
       );
       await days.nth(3).click();
       assert.equal(await days.nth(3).getAttribute("aria-pressed"), "true");
+      await page.locator(`.${role}-week-strip`).screenshot({
+        path: path.join(evidence, `${width}-${role}-week-strip.png`),
+      });
       results.push({
         width,
         role,
