@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { createFirestoreStore } = require('../productionGateway/commandGateway');
-const { setup, addStudent, accountPath, previewPath, slotPath, policyPath, publicId } = require('./verify-wis-ranking-preview.cjs');
+const { setup, addStudent, addScope, accountPath, previewPath, slotPath, policyPath, publicId } = require('./verify-wis-ranking-preview.cjs');
 
 const scope = '2026-2';
 const full = (ctx, options = {}) => ctx.request({ uid: 'teacher', audience: 'teacher', projection: 'hall-index', ...options });
@@ -42,6 +42,22 @@ const oneIndexQuery = (store, grade) => {
     { field: 'eligible', operator: '==', value: true },
     ...(grade ? [{ field: 'grade', operator: '==', value: grade }] : [])]);
 };
+const pagedIndexQueries = (store, { directory = 1, pages = 1 } = {}) => {
+  assert.equal(store.queries.length, directory + pages);
+  const directories = store.queries.filter(query => query.fieldMask);
+  assert.equal(directories.length, directory);
+  for (const query of directories) {
+    assert.equal(query.limit, 2001); assert.deepEqual(query.fieldMask, ['grade', 'classNumber']);
+    assert.equal(query.orderBy, undefined);
+  }
+  const paged = store.queries.filter(query => !query.fieldMask);
+  assert.equal(paged.length, pages);
+  for (const query of paged) {
+    assert.equal(query.collection, 'semester_wis_preview_entries'); assert.equal(query.limit, 20);
+    assert.equal(query.orderBy.at(-1).field, 'publicId'); assert.equal(query.documentIdOrder, 'asc');
+  }
+  return paged;
+};
 const tests = [], metrics = {};
 const test = (name, run) => tests.push({ name, run });
 
@@ -74,7 +90,9 @@ test('teacher full hall preserves every grade/class map and verifies only the pu
 test('student returns only the current own grade and own class while omitting the personal account', async () => {
   const ctx = school(); ctx.store.resetStats(); const uid = 'student-300';
   const state = await full(ctx, { uid, audience: 'student' });
-  oneIndexQuery(ctx.store, '3'); noPrivateResponse(state);
+  const studentQueries = pagedIndexQueries(ctx.store, { directory: 0, pages: 2 }); noPrivateResponse(state);
+  assert.ok(studentQueries.every(query => query.filters.some(filter => filter.field === 'grade' && filter.value === '3')));
+  assert.equal(studentQueries.filter(query => query.filters.some(filter => filter.field === 'classNumber')).length, 1);
   assert.deepEqual(Object.keys(state.hallOfFame.gradeLeaderboardByGrade), ['3']);
   assert.deepEqual(Object.keys(state.hallOfFame.classLeaderboardByClassKey), ['3-1']);
   assert.equal(state.hallOfFame.primaryGradeKey, '3');
@@ -86,7 +104,7 @@ test('initial teacher grade view validates only its public rows and retains all 
   const ctx = school(); ctx.store.resetStats(); const started = process.hrtime.bigint();
   const state = await view(ctx);
   metrics.teacher321InitialViewMs = Number(process.hrtime.bigint() - started) / 1e6;
-  oneIndexQuery(ctx.store); noPrivateResponse(state); assert.equal(state.status, 'CONTENT');
+  pagedIndexQueries(ctx.store); noPrivateResponse(state); assert.equal(state.status, 'CONTENT');
   assert.equal(state.hallOfFame.primaryGradeKey, '1');
   assert.deepEqual(Object.keys(state.hallOfFame.gradeLeaderboardByGrade), ['1', '2', '3']);
   assert.equal(Object.keys(state.hallOfFame.classLeaderboardByClassKey).length, 18);
@@ -105,12 +123,12 @@ test('initial teacher grade view validates only its public rows and retains all 
 test('explicit grade and class view selections read one group without an automatic all-group request', async () => {
   const ctx = school(); ctx.store.resetStats();
   const grade = await view(ctx, { hallView: 'grade', hallGradeKey: '2' });
-  oneIndexQuery(ctx.store); assert.equal(grade.hallOfFame.primaryGradeKey, '2'); assert.equal(visible(grade).size, 10);
+  pagedIndexQueries(ctx.store); assert.equal(grade.hallOfFame.primaryGradeKey, '2'); assert.equal(visible(grade).size, 10);
   assert.equal(grade.hallOfFame.gradeLeaderboardByGrade['2'].length, 10);
   assert.ok(Object.entries(grade.hallOfFame.gradeLeaderboardByGrade).every(([key, rows]) => key === '2' || !rows.length));
   ctx.store.resetStats();
   const selected = await view(ctx, { hallView: 'class', hallGradeKey: '2', hallClassKey: '2-4' });
-  oneIndexQuery(ctx.store); assert.equal(selected.status, 'CONTENT'); assert.equal(selected.hallOfFame.primaryGradeKey, '2');
+  pagedIndexQueries(ctx.store, { directory: 0 }); assert.equal(selected.status, 'CONTENT'); assert.equal(selected.hallOfFame.primaryGradeKey, '2');
   assert.equal(selected.hallOfFame.classLeaderboardByClassKey['2-4'].length, 10);
   assert.ok(Object.values(selected.hallOfFame.gradeLeaderboardByGrade).every(rows => !rows.length));
   assert.ok(Object.entries(selected.hallOfFame.classLeaderboardByClassKey).every(([key, rows]) => key === '2-4' || !rows.length));
@@ -156,7 +174,7 @@ test('selected-group verification excludes moved students and refills without di
   ctx.store.patch(accountPath(scope, 'student-2'), { rankEarnedTotal: 0 });
   ctx.store.resetStats();
   const selected = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
-  oneIndexQuery(ctx.store); assert.equal(selected.hallOfFame.classLeaderboardByClassKey['3-1'].length, 10);
+  pagedIndexQueries(ctx.store); assert.equal(selected.hallOfFame.classLeaderboardByClassKey['3-1'].length, 10);
   assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['1-7'], []);
   assert.deepEqual(selected.hallOfFame.gradeLeaderboardByGrade['1'], []);
   assert.equal(JSON.stringify(selected).includes('이동 이름'), false);
@@ -179,10 +197,160 @@ test('selected archive views preserve historical group keys and names without ca
 
 test('view payload validation rejects unsupported views and noncanonical keys before index reads', async () => {
   const ctx = school();
-  for (const data of [{ hallView: 'all' }, { hallGradeKey: '../3' }, { hallClassKey: ' 3-1' }, { hallGradeKey: 3 }]) {
+  for (const data of [{ hallView: 'all' }, { hallGradeKey: '../3' }, { hallClassKey: ' 3-1' }, { hallGradeKey: 3 },
+    { hallView: 'class', hallClassKey: 'unknown' }, { hallView: 'class', hallClassKey: '3-' }]) {
     await assert.rejects(() => view(ctx, data), error => error.code === 'invalid-argument');
   }
   assert.equal(ctx.store.queries.length, 0);
+});
+
+test('eight earned entries above a zero tail and all-zero groups stop after one twenty-row page', async () => {
+  for (const earned of [0, 8]) {
+    const ctx = setup(0);
+    for (let index = 0; index < 105; index++) place(ctx, index, { score: index < earned ? 100 - index : 0 });
+    ctx.store.resetStats(); const state = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
+    pagedIndexQueries(ctx.store); assert.equal(visible(state).size, earned || 5);
+    assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, earned || 5);
+    const previous = await original(ctx); assert.deepEqual(state.hallOfFame.classLeaderboardByClassKey['3-1'], previous.hallOfFame.classLeaderboardByClassKey['3-1']);
+  }
+});
+
+test('fresh earned-to-zero declines do not skip earlier public IDs after stale zero candidates disappear', async () => {
+  const ctx = setup(0);
+  const ordered = Array.from({ length: 120 }, (_, index) => index)
+    .sort((left, right) => publicId(scope, `student-${left}`).localeCompare(publicId(scope, `student-${right}`)));
+  const formerlyEarned = new Set(ordered.slice(-8)), inactiveZero = new Set(ordered.slice(0, 12));
+  for (let index = 0; index < 120; index++) {
+    place(ctx, index, { score: formerlyEarned.has(index) ? 100 : 0 });
+    if (formerlyEarned.has(index)) ctx.store.patch(accountPath(scope, `student-${index}`), { rankEarnedTotal: 0 });
+    if (inactiveZero.has(index)) ctx.store.patch(accountPath(scope, `student-${index}`), { status: 'CLOSED' });
+  }
+  ctx.store.resetStats(); const state = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
+  pagedIndexQueries(ctx.store, { pages: 2 });
+  assert.deepEqual(state.hallOfFame.classLeaderboardByClassKey['3-1'].map(entry => entry.uid),
+    ordered.slice(12, 17).map(index => publicId(scope, `student-${index}`)));
+  const previous = await original(ctx);
+  assert.deepEqual(state.hallOfFame.classLeaderboardByClassKey['3-1'], previous.hallOfFame.classLeaderboardByClassKey['3-1']);
+});
+
+test('student grade and class pages share fresh moved candidates and rerank the union before returning', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 70; index++) place(ctx, index, { classNumber: index < 30 ? '1' : '2', score: 1000 - index });
+  ctx.store.patch(`semester_enrollments/enrollment-${scope}-0`, { snapshot: { grade: '3', classNumber: '2' }, displayName: '반 이동 학생' });
+  ctx.store.resetStats(); const state = await full(ctx, { uid: 'student-60', audience: 'student' });
+  pagedIndexQueries(ctx.store, { directory: 0, pages: 2 });
+  assert.equal(state.hallOfFame.classLeaderboardByClassKey['3-2'][0].uid, publicId(scope, 'student-0'));
+  assert.equal(state.hallOfFame.classLeaderboardByClassKey['3-2'][0].studentName, '반 이동 학생');
+  const accountReads = ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/'));
+  assert.equal(accountReads.length, new Set(accountReads).size);
+  const previous = await original(ctx, { uid: 'student-60', audience: 'student' }); assert.deepEqual(hallBody(state), hallBody(previous));
+});
+
+test('student group boundaries refill after twenty stale high-score entries using finite cursors', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 85; index++) place(ctx, index, { score: 1000 - index });
+  for (let index = 0; index < 25; index++) ctx.store.patch(accountPath(scope, `student-${index}`), { rankEarnedTotal: 0 });
+  ctx.store.resetStats(); const state = await full(ctx, { uid: 'student-84', audience: 'student' });
+  const queries = pagedIndexQueries(ctx.store, { directory: 0, pages: 4 });
+  assert.equal(queries.filter(query => query.startAfterPath).length, 2);
+  assert.equal(state.hallOfFame.gradeLeaderboardByGrade['3'][0].cumulativeEarned, 975);
+  assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
+  const previous = await original(ctx, { uid: 'student-84', audience: 'student' }); assert.deepEqual(hallBody(state), hallBody(previous));
+});
+
+test('teacher directory pending requests deduplicate and expire after thirty seconds without caching authority', async () => {
+  const ctx = school(); let release;
+  ctx.store.delayRanking = new Promise(resolve => { release = resolve; });
+  const pending = Array.from({ length: 6 }, () => view(ctx));
+  for (let index = 0; index < 20; index++) await Promise.resolve();
+  release(); await Promise.all(pending);
+  assert.equal(ctx.store.queries.filter(query => query.fieldMask).length, 1);
+  assert.equal(ctx.store.queries.filter(query => !query.fieldMask).length, 6);
+  ctx.store.resetStats(); ctx.advance(29_999); await view(ctx); pagedIndexQueries(ctx.store, { directory: 0 });
+  ctx.store.resetStats(); ctx.advance(1); await view(ctx); pagedIndexQueries(ctx.store);
+  ctx.store.patch('users/teacher', { staffPermissions: [] }); ctx.store.resetStats();
+  await assert.rejects(() => view(ctx), error => error.details?.reason === 'WIS_MANAGE_REQUIRED'); assert.equal(ctx.store.queries.length, 0);
+});
+
+test('failed directory builds evict and the directory cache retains at most four scopes', async () => {
+  const ctx = setup(); ctx.store.failRankingQueries = 1;
+  await assert.rejects(() => view(ctx), /synthetic read failure/);
+  ctx.store.resetStats(); await view(ctx); pagedIndexQueries(ctx.store);
+  for (const semesterId of ['2025-1', '2025-2', '2026-1', '2027-1']) {
+    addScope(ctx.store, semesterId); addStudent(ctx.store, 100, { scope: semesterId });
+    await view(ctx, { scope: semesterId });
+  }
+  ctx.store.resetStats(); await view(ctx); pagedIndexQueries(ctx.store);
+});
+
+test('cached directory membership or emptiness never gates fresh requested groups or EMPTY results', async () => {
+  const ctx = setup(0); const empty = await view(ctx); assert.equal(empty.status, 'EMPTY');
+  place(ctx, 0, { grade: '1', classNumber: '8' }); ctx.store.resetStats();
+  const discovered = await view(ctx); pagedIndexQueries(ctx.store, { directory: 0 });
+  assert.equal(discovered.status, 'CONTENT'); assert.equal(discovered.hallOfFame.primaryGradeKey, '1');
+  assert.equal(discovered.hallOfFame.gradeLeaderboardByGrade['1'].length, 1);
+  place(ctx, 1, { grade: '2', classNumber: '9' }); ctx.store.resetStats();
+  const selected = await view(ctx, { hallView: 'class', hallGradeKey: '2', hallClassKey: '2-9' });
+  pagedIndexQueries(ctx.store, { directory: 0 }); assert.equal(selected.status, 'CONTENT');
+  assert.equal(selected.hallOfFame.classLeaderboardByClassKey['2-9'].length, 1);
+  assert.deepEqual(selected.hallOfFame.gradeLeaderboardByGrade['2'], []);
+});
+
+test('a truly absent requested class or grade falls back through fresh ordered queries', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 24; index++) place(ctx, index, { classNumber: index < 12 ? '2' : '10' });
+  ctx.store.resetStats();
+  const selected = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
+  const pages = pagedIndexQueries(ctx.store, { pages: 2 });
+  assert.equal(pages[0].returned, 0); assert.equal(pages[1].returned, 20);
+  assert.equal(selected.status, 'CONTENT'); assert.equal(selected.hallOfFame.classLeaderboardByClassKey['3-10'].length, 10);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-2'], []);
+  const complete = await full(ctx);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-10'], complete.hallOfFame.classLeaderboardByClassKey['3-10']);
+  ctx.store.resetStats(); const grade = await view(ctx, { hallView: 'grade', hallGradeKey: '9' });
+  pagedIndexQueries(ctx.store, { directory: 0, pages: 2 });
+  assert.equal(grade.hallOfFame.primaryGradeKey, '3'); assert.equal(grade.hallOfFame.gradeLeaderboardByGrade['3'].length, 10);
+  ctx.store.resetStats(); const missingBoth = await view(ctx, { hallView: 'class', hallGradeKey: '9', hallClassKey: '9-1' });
+  pagedIndexQueries(ctx.store, { directory: 0, pages: 3 });
+  assert.equal(missingBoth.hallOfFame.primaryGradeKey, '3'); assert.equal(missingBoth.hallOfFame.classLeaderboardByClassKey['3-10'].length, 10);
+});
+
+test('an indexed requested group with no current public members retains its known empty view', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 24; index++) place(ctx, index, { classNumber: index < 12 ? '1' : '2' });
+  for (let index = 0; index < 12; index++) ctx.store.docs.delete(accountPath(scope, `student-${index}`));
+  const selected = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
+  pagedIndexQueries(ctx.store);
+  assert.equal(selected.status, 'EMPTY'); assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-1'], []);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-2'], []);
+  assert.equal(ctx.store.reads.some(path => path === accountPath(scope, 'student-12')), false);
+});
+
+test('group pagination stops at two thousand inputs and never reads a candidate past that cap', async () => {
+  const ctx = setup(0); place(ctx, 0, { score: 5000 }); await view(ctx);
+  for (let index = 0; index < 2005; index++) {
+    place(ctx, index, { score: 5000 - index });
+    if (index < 2000) ctx.store.docs.delete(accountPath(scope, `student-${index}`));
+  }
+  ctx.store.resetStats();
+  await assert.rejects(() => view(ctx, { hallGradeKey: '3' }), error => error.details?.reason === 'WIS_HALL_ACCOUNT_LIMIT_EXCEEDED');
+  pagedIndexQueries(ctx.store, { directory: 0, pages: 100 });
+  assert.equal(ctx.store.queries.reduce((count, query) => count + query.returned, 0), 2000);
+  assert.equal(new Set(ctx.store.queries.slice(1).map(query => query.startAfterPath)).size, 99);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 2000);
+  assert.equal(ctx.store.reads.includes(accountPath(scope, 'student-2000')), false);
+});
+
+test('duplicate or nonadvancing group cursors fail instead of repeating reads', async () => {
+  const ctx = setup(0); for (let index = 0; index < 50; index++) place(ctx, index);
+  for (let index = 0; index < 20; index++) ctx.store.docs.delete(accountPath(scope, `student-${index}`));
+  const query = ctx.store.query.bind(ctx.store); let first;
+  ctx.store.query = async (collection, filter) => {
+    if (filter.fieldMask) return query(collection, filter);
+    if (!first) { first = await query(collection, filter); return first; }
+    return first;
+  };
+  await assert.rejects(() => view(ctx), error => error.details?.reason === 'WIS_RANKING_PREVIEW_CURSOR_INVALID');
 });
 
 test('class-only candidates do not renumber grades using the narrower visible union', async () => {
@@ -401,7 +569,10 @@ test('transport allows only hall-of-fame or default preview and preserves the ex
     try { await item.run(); } catch (error) { error.message = `${item.name}: ${error.message}`; throw error; }
   }
   console.log(JSON.stringify({ passed: true, cases: tests.length, network: 0, metrics,
-    guarantees: ['one bounded lightweight current-index query', 'published grade/class union only, with fresh canonical replacement',
+    guarantees: ['teacher full hall retains one bounded lightweight query; selected views use ordered pages of twenty',
+      'teacher option directory uses two fields, a four-scope thirty-second pending cache, no authority',
+      'student grade/class pages share fresh verified candidates and no directory query',
+      'published grade/class union only, with fresh canonical replacement',
       'all grade/class limits, ties, zero fill, current profiles and policy preserved', 'student own grade/class and no account/ledger payload',
       'stored EXPLICIT archive and old full endpoint unchanged', 'existing standby reused without polling or automatic query retries'] }));
 })().catch(error => { console.error(error); process.exitCode = 1; });

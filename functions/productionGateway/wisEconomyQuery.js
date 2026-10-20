@@ -2552,6 +2552,11 @@ const normalizeQuery = (raw) => {
   const hallView = value.hallView || "grade";
   if (!["grade", "class"].includes(hallView))
     fail("invalid-argument", "hallView is invalid.", "WIS_QUERY_INVALID");
+  const hallGradeKey = optionalText(value.hallGradeKey, "hallGradeKey", 80);
+  const hallClassKey = optionalText(value.hallClassKey, "hallClassKey", 160);
+  if (projection === "hall-view" && hallView === "class" && hallClassKey &&
+    (hallClassKey.indexOf("-") < 1 || hallClassKey.endsWith("-")))
+    fail("invalid-argument", "hallClassKey is invalid.", "WIS_QUERY_INVALID");
   const cursor = value.cursor ? text(value.cursor, "cursor", 160) : "";
   if (cursor && !/^[A-Za-z0-9_-]+$/.test(cursor)) {
     fail("invalid-argument", "cursor is invalid.", "WIS_QUERY_INVALID");
@@ -2562,8 +2567,8 @@ const normalizeQuery = (raw) => {
     source,
     projection,
     hallView,
-    hallGradeKey: optionalText(value.hallGradeKey, "hallGradeKey", 80),
-    hallClassKey: optionalText(value.hallClassKey, "hallClassKey", 160),
+    hallGradeKey,
+    hallClassKey,
     accountId: value.accountId ? text(value.accountId, "accountId", 80) : "",
     ledgerEntryId: value.ledgerEntryId
       ? text(value.ledgerEntryId, "ledgerEntryId", 80)
@@ -3384,6 +3389,183 @@ const queryIndexedHall = async ({ transaction, scope, config, studentAccount, se
     "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
 };
 
+const buildHallDirectory = async (transaction, scope) => {
+  const rows = await transaction.query(WIS_RANKING_PREVIEW_COLLECTION, {
+    filters: [{ field: "semesterId", operator: "==", value: scope },
+      { field: "eligible", operator: "==", value: true }],
+    fieldMask: ["grade", "classNumber"], limit: WIS_HALL_ACCOUNT_LIMIT + 1,
+  });
+  if (rows.length > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
+    "Wis hall directory limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED",
+    { limit: WIS_HALL_ACCOUNT_LIMIT });
+  const gradeKeys = new Set(), classKeys = new Set();
+  for (const { data } of rows) {
+    const grade = String(data?.grade || "").trim(), classNumber = String(data?.classNumber || "").trim();
+    if (grade && classNumber) { gradeKeys.add(grade); classKeys.add(`${grade}-${classNumber}`); }
+  }
+  return { gradeKeys: [...gradeKeys].sort(), classKeys: [...classKeys].sort() };
+};
+
+const mergeHallDirectory = (hall, directory) => {
+  const empty = keys => Object.fromEntries([...keys].sort().map(key => [key, []]));
+  const gradeKeys = new Set([...(directory?.gradeKeys || []), ...Object.keys(hall.gradeLeaderboardByGrade)]);
+  const classKeys = new Set([...(directory?.classKeys || []), ...Object.keys(hall.classLeaderboardByClassKey)]);
+  const gradeLeaderboardByGrade = { ...empty(gradeKeys), ...hall.gradeLeaderboardByGrade };
+  const classLeaderboardByClassKey = { ...empty(classKeys), ...hall.classLeaderboardByClassKey };
+  return { ...hall, gradeLeaderboardByGrade, classLeaderboardByClassKey,
+    gradeTop3ByGrade: { ...empty(gradeKeys), ...hall.gradeTop3ByGrade },
+    classTop3ByClassKey: { ...empty(classKeys), ...hall.classTop3ByClassKey },
+    snapshotKey: `w7_${sha256(canonicalJson({ gradeLeaderboardByGrade, classLeaderboardByClassKey })).slice(0, 32)}` };
+};
+
+// Ordered group queries share current account/roster authority. Student grade
+// candidates that move into the student's class therefore rerank both groups.
+// Directory data supplies empty selector options only, never access or EMPTY.
+const queryPagedHall = async ({ transaction, scope, config, studentAccount, selection, directory }) => {
+  const ownGrade = String(studentAccount?.grade || "").trim();
+  const ownClass = String(studentAccount?.classNumber || "").trim();
+  let requestedGrade = selection?.gradeKey || "", requestedClass = "";
+  if (!studentAccount && selection?.view === "class" && selection.classKey) {
+    const separator = selection.classKey.indexOf("-");
+    if (separator < 1 || separator === selection.classKey.length - 1) fail("invalid-argument",
+      "hallClassKey is invalid.", "WIS_QUERY_INVALID");
+    if (requestedGrade && selection.classKey.startsWith(`${requestedGrade}-`))
+      requestedClass = selection.classKey.slice(requestedGrade.length + 1);
+    else { requestedGrade = selection.classKey.slice(0, separator); requestedClass = selection.classKey.slice(separator + 1); }
+  }
+  const kinds = selection ? [selection.view] : ["grade", "class"];
+  const states = kinds.map(kind => ({ kind, grade: ownGrade || requestedGrade,
+    classNumber: kind === "class" ? ownClass || requestedClass : "", cursor: "", seen: new Set(),
+    last: null, exhausted: false, needsPage: true }));
+  const accounts = new Map(), pathsByPublicId = new Map(), verified = new Map(), invalid = new Set();
+  const observed = { gradeKeys: new Set(), classKeys: new Set() };
+  for (let step = 0; step <= WIS_HALL_ACCOUNT_LIMIT * (states.length + 1); step++) {
+    const pending = states.filter(state => state.needsPage);
+    await Promise.all(pending.map(async state => {
+      const limit = Math.min(WIS_RANKING_PREVIEW_PAGE_SIZE, WIS_HALL_ACCOUNT_LIMIT - state.seen.size);
+      if (!limit) fail("resource-exhausted", "Wis hall group candidate limit was exceeded.",
+        "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
+      const rows = await transaction.query(WIS_RANKING_PREVIEW_COLLECTION, {
+        filters: [{ field: "semesterId", operator: "==", value: scope },
+          { field: "eligible", operator: "==", value: true },
+          ...(state.grade ? [{ field: "grade", operator: "==", value: state.grade }] : []),
+          ...(state.classNumber ? [{ field: "classNumber", operator: "==", value: state.classNumber }] : [])],
+        orderBy: [{ field: "grade", direction: "asc" },
+          ...(state.kind === "class" ? [{ field: "classNumber", direction: "asc" }] : []),
+          { field: "rankEarnedTotal", direction: "desc" }, { field: "publicId", direction: "asc" }],
+        documentIdOrder: "asc", ...(state.cursor ? { startAfterPath: state.cursor } : {}), limit,
+      });
+      for (const row of rows) {
+        if (!row.path || state.seen.has(row.path)) fail("failed-precondition",
+          "Wis hall pagination did not advance.", "WIS_RANKING_PREVIEW_CURSOR_INVALID");
+        state.seen.add(row.path);
+        const data = row.data;
+        if (data?.eligible === true && isCanonicalRankingPreviewAccount(data, scope) &&
+          documentIdFromPath(row.path) === data.accountId && data.publicId === hallPublicId(scope, data.studentUid) &&
+          (!state.grade || String(data.grade || "") === state.grade) &&
+          (!state.classNumber || String(data.classNumber || "") === state.classNumber)) {
+          accounts.set(data.studentUid, data); pathsByPublicId.set(data.publicId, row.path);
+        }
+      }
+      if (accounts.size > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
+        "Wis hall candidate union limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
+      state.last = rows.at(-1) || state.last;
+      state.cursor = rows.at(-1)?.path || state.cursor;
+      state.exhausted = rows.length < limit;
+      state.needsPage = false;
+      // Preserve the old view's missing-selector fallback, using a real query
+      // instead of cached directory membership. Relax at most class then grade.
+      // Existing indexed groups whose fresh members are all hidden stay empty.
+      if (!studentAccount && selection && !rows.length && !state.seen.size &&
+        (state.classNumber || state.grade)) {
+        if (state.classNumber) state.classNumber = "";
+        else state.grade = "";
+        state.exhausted = false; state.needsPage = true;
+      }
+    }));
+    if (states.some(state => state.needsPage)) continue;
+    const available = [...accounts.values()].filter(account => !invalid.has(account.studentUid))
+      .map(account => verified.get(account.studentUid) || account);
+    const complete = buildWisHallOfFameProjection({ accounts: available, config, scope, studentAccount });
+    Object.keys(complete.gradeLeaderboardByGrade).forEach(key => observed.gradeKeys.add(key));
+    Object.keys(complete.classLeaderboardByClassKey).forEach(key => observed.classKeys.add(key));
+    const groups = states.map(state => {
+      const grade = state.grade || complete.primaryGradeKey;
+      const classKey = state.classNumber ? `${grade}-${state.classNumber}` :
+        Object.keys(complete.classLeaderboardByClassKey).sort()
+          .find(key => complete.classLeaderboardByClassKey[key][0]?.grade === grade) || "";
+      const classGrade = complete.classLeaderboardByClassKey[classKey]?.[0]?.grade || grade;
+      return { state, grade: state.kind === "class" ? classGrade : grade, classKey,
+        entries: state.kind === "class" ? complete.classLeaderboardByClassKey[classKey] || []
+          : complete.gradeLeaderboardByGrade[grade] || [] };
+    });
+    let hall = complete;
+    if (selection) {
+      const [group] = groups;
+      const gradeLeaderboardByGrade = group.state.kind === "grade" && group.entries.length ? { [group.grade]: group.entries } : {};
+      const classLeaderboardByClassKey = group.state.kind === "class" && group.entries.length ? { [group.classKey]: group.entries } : {};
+      hall = { ...complete, primaryGradeKey: group.grade, gradeLeaderboardByGrade, classLeaderboardByClassKey,
+        gradeTop3ByGrade: Object.fromEntries(Object.entries(gradeLeaderboardByGrade).map(([key, entries]) =>
+          [key, entries.filter(entry => entry.cumulativeEarned > 0 && entry.rank <= 3)])),
+        classTop3ByClassKey: Object.fromEntries(Object.entries(classLeaderboardByClassKey).map(([key, entries]) =>
+          [key, entries.filter(entry => entry.cumulativeEarned > 0 && entry.rank <= 3)])) };
+    }
+    const publicIds = new Set(groups.flatMap(group => group.entries).map(entry => entry.uid));
+    const selected = available.filter(account => publicIds.has(hallPublicId(scope, account.studentUid)));
+    const unread = selected.filter(account => !verified.has(account.studentUid));
+    if (unread.length) {
+      const snapshots = await transaction.getAll(unread.map(account => accountPath(account.accountId)));
+      const canonical = snapshots.filter(snapshot => snapshot.exists && isCanonicalRankingPreviewAccount(snapshot.data, scope))
+        .map(snapshot => snapshot.data);
+      const current = new Map((await readRankingPreviewRoster(transaction, canonical, scope))
+        .map(account => [account.studentUid, account]));
+      for (const candidate of unread) {
+        const account = current.get(candidate.studentUid);
+        if (!account || !String(account.grade || "").trim() || !String(account.classNumber || "").trim() ||
+          (studentAccount && String(account.grade || "").trim() !== ownGrade) || isWisHallTestAccount(account) ||
+          (account.rankEarnedTotal === 0 && account.hallZeroEligible !== true)) invalid.add(candidate.studentUid);
+        else verified.set(candidate.studentUid, account);
+      }
+      continue;
+    }
+    for (const { state, grade, classKey, entries } of groups) {
+      if (state.exhausted) continue;
+      const last = state.last?.data, cutoff = entries.at(-1);
+      const gradeOrder = String(last?.grade || "").localeCompare(grade);
+      const classNumber = state.kind === "class" ? classKey.slice(grade.length + 1) : "";
+      const groupOrder = gradeOrder || (state.kind === "class"
+        ? String(last?.classNumber || "").localeCompare(classNumber) : 0);
+      const groupComplete = groupOrder > 0 && entries.length > 0;
+      const publicLimit = state.kind === "class" ? config.publicRange.classRankLimit : config.publicRange.gradeRankLimit;
+      const target = cutoff?.cumulativeEarned === 0 ? Math.min(5, publicLimit)
+        : config.publicRange.includeTies ? 20 : publicLimit;
+      const scoreOrder = cutoff ? Number(last?.rankEarnedTotal) - cutoff.cumulativeEarned : Infinity;
+      const publicOrder = cutoff ? String(last?.publicId || "").localeCompare(cutoff.uid) : -1;
+      const pathOrder = cutoff ? String(state.last?.path || "").localeCompare(pathsByPublicId.get(cutoff.uid) || "") : -1;
+      const boundarySafe = cutoff && groupOrder === 0 && (scoreOrder < 0 ||
+        (scoreOrder === 0 && (publicOrder > 0 || (publicOrder === 0 && pathOrder >= 0))));
+      const publicRangeComplete = cutoff && groupOrder === 0 && entries.length >= publicLimit &&
+        entries.length < target && scoreOrder < 0;
+      // Zero rows only fill a sparse group up to five. Eight earned rows with
+      // a configured limit of ten are already complete once the index reaches
+      // zero; do not scan the rest of the school's tied zero-score rows.
+      const zeroTailComplete = groupOrder === 0 && Number(last?.rankEarnedTotal) === 0 &&
+        entries.length >= Math.min(5, publicLimit) && boundarySafe;
+      state.needsPage = !(groupComplete || publicRangeComplete || zeroTailComplete || (entries.length >= target && boundarySafe));
+    }
+    if (states.some(state => state.needsPage)) continue;
+    const decorated = await addHallProfileIcons(transaction, hall, selected, scope);
+    if (!directory) return studentAccount && selection ? mergeHallDirectory(decorated,
+      { gradeKeys: [ownGrade], classKeys: [`${ownGrade}-${ownClass}`] }) : decorated;
+    const outcome = await directory;
+    if (!outcome.ok) throw outcome.error;
+    return mergeHallDirectory(decorated, { gradeKeys: [...outcome.value.gradeKeys, ...observed.gradeKeys],
+      classKeys: [...outcome.value.classKeys, ...observed.classKeys] });
+  }
+  fail("resource-exhausted", "Wis hall processing limit was exceeded.",
+    "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
+};
+
 const emptyWisState = ({
   query,
   provenance,
@@ -3476,6 +3658,29 @@ const createWisQueryCore = ({
   now = Date.now,
 } = {}) => {
   if (!store) throw new TypeError("store is required.");
+  const hallDirectoryCache = new Map();
+  const loadHallDirectory = (transaction, scope) => {
+    for (const [key, entry] of hallDirectoryCache) {
+      if (entry.expiresAt <= now()) hallDirectoryCache.delete(key);
+    }
+    const cached = hallDirectoryCache.get(scope);
+    if (cached) {
+      hallDirectoryCache.delete(scope); hallDirectoryCache.set(scope, cached);
+      return cached.pending;
+    }
+    const entry = { expiresAt: Infinity, pending: null };
+    entry.pending = buildHallDirectory(transaction, scope).then(value => {
+      entry.expiresAt = now() + WIS_RANKING_PREVIEW_TTL_MS;
+      return value;
+    }).catch(error => {
+      if (hallDirectoryCache.get(scope) === entry) hallDirectoryCache.delete(scope);
+      throw error;
+    });
+    hallDirectoryCache.set(scope, entry);
+    while (hallDirectoryCache.size > WIS_RANKING_PREVIEW_CACHE_LIMIT)
+      hallDirectoryCache.delete(hallDirectoryCache.keys().next().value);
+    return entry.pending;
+  };
   const rankingPreviewCache = new Map();
   const loadRankingPreviewInputs = (transaction, scope, explicitTeacherRead) => {
     const key = `${scope}:${explicitTeacherRead ? "explicit" : "canonical"}`;
@@ -3697,8 +3902,15 @@ const createWisQueryCore = ({
           hallOfFame = await addHallProfileIcons(transaction,
             hallSelection ? selectHallView(complete, hallSelection) : complete, accounts, query.semesterId);
         } else if (isIndexedHall) {
-          hallOfFame = await queryIndexedHall({ transaction, scope: query.semesterId,
-            config: hallOfFameConfig, studentAccount, selection: hallSelection });
+          if (hallSelection || studentAccount) {
+            const directory = !studentAccount ? loadHallDirectory(transaction, query.semesterId)
+              .then(value => ({ ok: true, value }), error => ({ ok: false, error })) : null;
+            hallOfFame = await queryPagedHall({ transaction, scope: query.semesterId,
+              config: hallOfFameConfig, studentAccount, selection: hallSelection, directory });
+          } else {
+            hallOfFame = await queryIndexedHall({ transaction, scope: query.semesterId,
+              config: hallOfFameConfig, studentAccount });
+          }
         } else {
           hallOfFame = explicitTeacherRead
             ? await buildRankingPreview({ transaction,

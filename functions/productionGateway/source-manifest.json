@@ -423,7 +423,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "85d0546a3e9c2f10c7ea091b703bc2e355cbc24adaede609c237fc704e12b009",
+      "sha256": "708a4b6fe267146eb5b86ea11efae4b43edcd0c3bfd6463a3cb6e00842f57b61",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -439,7 +439,8 @@
         "2026-10-20: Add a bounded five-entry preview with 30-second lightweight ranking input cache and fresh request/candidate authority; full hall queries remain unchanged.",
         "2026-10-20: Read current dashboard candidates from a maintained private ranking index in bounded ordered pages; verify only candidate accounts and canonical enrollment within each fresh request. Retain the 30-second input cache for explicit archives only.",
         "2026-10-20: Add an opt-in full hall projection using one bounded lightweight index query and fresh published-union validation; preserve all grade/class/tie/zero scopes, historical EXPLICIT account snapshots, and the original full endpoint. Mask account reads only in the new full projection.",
-        "2026-10-20: Add an opt-in hall-view projection that verifies only the selected grade or class, retains empty selector maps for all permitted groups, enforces canonical student scope, and preserves full/preview/archive contracts without background queries."
+        "2026-10-20: Add an opt-in hall-view projection that verifies only the selected grade or class, retains empty selector maps for all permitted groups, enforces canonical student scope, and preserves full/preview/archive contracts without background queries.",
+        "2026-10-20: Page selected hall groups in ordered batches of twenty with fresh cutoff/zero-tail bounds; share student grade/class candidate authority and current moves. Cache only two-field teacher selector directories for thirty seconds with four-scope pending deduplication and failure eviction; preserve missing-group fallback via real bounded queries."
       ]
     },
     {
