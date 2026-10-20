@@ -73,6 +73,7 @@ import {
   type GradingPlanLike,
 } from "../../lib/studentScores";
 import type { PointPolicy, PointWallet } from "../../types";
+import "./mypage/MyPage.css";
 
 const LazyChart = lazyWithRetry(
   () => import("../../components/common/LazyChart"),
@@ -391,10 +392,16 @@ const wrongNoteItemMatchesSmallAssessmentScope = (
   selectedMidUnitId: string,
   selectedUnitId: string,
 ) => {
-  if (selectedBigUnitId !== "all" && item.bigUnitId !== selectedBigUnitId) {
+  if (
+    selectedBigUnitId !== "all" &&
+    (item.bigUnitId || item.bigUnitTitle || "unknown-big") !== selectedBigUnitId
+  ) {
     return false;
   }
-  if (selectedMidUnitId !== "all" && item.midUnitId !== selectedMidUnitId) {
+  if (
+    selectedMidUnitId !== "all" &&
+    (item.midUnitId || item.midUnitTitle || "unknown-mid") !== selectedMidUnitId
+  ) {
     return false;
   }
   if (selectedUnitId !== "all") {
@@ -448,10 +455,18 @@ const quizAttemptMatchesSmallAssessmentScope = (
     );
   }
 
-  if (selectedBigUnitId !== "all" && attempt.bigUnitId !== selectedBigUnitId) {
+  if (
+    selectedBigUnitId !== "all" &&
+    (attempt.bigUnitId || attempt.bigUnitTitle || "unknown-big") !==
+      selectedBigUnitId
+  ) {
     return false;
   }
-  if (selectedMidUnitId !== "all" && attempt.midUnitId !== selectedMidUnitId) {
+  if (
+    selectedMidUnitId !== "all" &&
+    (attempt.midUnitId || attempt.midUnitTitle || "unknown-mid") !==
+      selectedMidUnitId
+  ) {
     return false;
   }
   if (selectedUnitId !== "all") {
@@ -825,6 +840,8 @@ const MyPage: React.FC = () => {
   >([]);
   const [performanceScoresLoading, setPerformanceScoresLoading] =
     useState(false);
+  const performanceScopeRef = useRef("");
+  const performanceRequestRef = useRef(0);
 
   const [quizAttempts, setQuizAttempts] = useState<QuizAttemptReview[]>([]);
   const [selectedQuizAttempt, setSelectedQuizAttempt] =
@@ -875,7 +892,29 @@ const MyPage: React.FC = () => {
     return () => {
       myPageRequestRef.current += 1;
     };
-  }, [user, config]);
+  }, [
+    user?.uid,
+    config?.year,
+    config?.semester,
+    canUseLesson,
+    canUseQuiz,
+    canUseScore,
+  ]);
+
+  useEffect(() => {
+    const scopeKey = `${user?.uid}:${config?.year}:${config?.semester}`;
+    if (menu !== "score" || !canUseScore || !user || !config) return;
+    if (performanceScopeRef.current === scopeKey) return;
+    performanceScopeRef.current = scopeKey;
+    void loadPerformanceScoreData();
+  }, [menu, canUseScore, user?.uid, config?.year, config?.semester]);
+
+  useEffect(
+    () => () => {
+      performanceRequestRef.current += 1;
+    },
+    [],
+  );
 
   const isMenuAvailable = (nextMenu: MainMenu) => {
     if (nextMenu === "score") return canUseScore;
@@ -972,12 +1011,10 @@ const MyPage: React.FC = () => {
     setQuizAttempts([]);
     setWrongItems([]);
     setSelectedQuizAttempt(null);
-    const { titles, parents } = await loadUnitTitles().catch(() => ({
+    const unitTitles = loadUnitTitles().catch(() => ({
       titles: { exam_prep: "모의고사" } as Record<string, string>,
       parents: {} as Record<string, UnitParentMeta>,
     }));
-    if (requestId !== myPageRequestRef.current) return;
-    setUnitTitleMap(titles);
     const { year, semester } = getYearSemester(config);
     const quizResults: QuizResultSource = canUseQuiz
       ? loadStudentQuizResults(config, user.uid).then((rows) =>
@@ -988,11 +1025,15 @@ const MyPage: React.FC = () => {
         )
       : [];
     await Promise.all([
-      loadProfileAndEmoji(),
-      canUseScore ? loadScoreData() : resetScoreData(),
-      canUseScore ? loadPerformanceScoreData() : resetPerformanceScoreData(),
+      loadProfileAndEmoji(requestId),
+      canUseScore ? loadScoreData(requestId) : resetScoreData(),
+      !canUseScore ? resetPerformanceScoreData() : Promise.resolve(),
       canUseQuiz
-        ? loadQuizData(titles, parents, quizResults, requestId)
+        ? unitTitles.then(({ titles, parents }) => {
+            if (requestId !== myPageRequestRef.current) return;
+            setUnitTitleMap(titles);
+            return loadQuizData(titles, parents, quizResults, requestId);
+          })
         : resetQuizData(),
       loadProgressSummary(quizResults, requestId),
     ]);
@@ -1004,6 +1045,8 @@ const MyPage: React.FC = () => {
   };
 
   const resetPerformanceScoreData = async () => {
+    performanceRequestRef.current += 1;
+    performanceScopeRef.current = "";
     setPerformanceScores([]);
     setPerformanceScoresLoading(false);
   };
@@ -1043,13 +1086,14 @@ const MyPage: React.FC = () => {
     }
   };
 
-  const loadProfileAndEmoji = async () => {
+  const loadProfileAndEmoji = async (requestId = myPageRequestRef.current) => {
     if (!user) return;
 
     const [userSnap, schoolSnap] = await Promise.all([
       getDoc(doc(db, "users", user.uid)),
       getDoc(doc(db, "site_settings", "school_config")),
     ]);
+    if (requestId !== myPageRequestRef.current) return;
 
     if (userSnap.exists()) {
       const data = userSnap.data() as UserProfileDoc;
@@ -1206,18 +1250,21 @@ const MyPage: React.FC = () => {
     return { titles: map, parents: parentMap };
   };
 
-  const loadScoreData = async () => {
+  const loadScoreData = async (requestId = myPageRequestRef.current) => {
     if (!user || !config) return;
 
     const year = config.year || "2026";
     const semester = config.semester || "1";
     const scoreDocId = `${year}_${semester}`;
 
-    const scoreSnap = await getDoc(
-      doc(db, "users", user.uid, "academic_records", scoreDocId),
-    );
+    const [scoreSnap, plansSnap] = await Promise.all([
+      getDoc(doc(db, "users", user.uid, "academic_records", scoreDocId)),
+      getDocs(
+        collection(db, getSemesterCollectionPath(config, "grading_plans")),
+      ),
+    ]);
     const scoreMap = scoreSnap.exists() ? scoreSnap.data().scores || {} : {};
-    let targetGrade = normalizeClassValue(userData?.grade ?? profile?.grade);
+    let targetGrade = normalizeClassValue(userData?.grade);
     if (!targetGrade) {
       const userSnap = await getDoc(doc(db, "users", user.uid));
       if (userSnap.exists()) {
@@ -1226,10 +1273,6 @@ const MyPage: React.FC = () => {
         );
       }
     }
-
-    const plansSnap = await getDocs(
-      collection(db, getSemesterCollectionPath(config, "grading_plans")),
-    );
 
     const plans: GradingPlanLike[] = [];
     plansSnap.forEach((planDoc) => {
@@ -1247,6 +1290,7 @@ const MyPage: React.FC = () => {
       sortMode: "importance",
     });
 
+    if (requestId !== myPageRequestRef.current) return;
     setScoreRows(rows);
     setScoreChartData(
       rows.length
@@ -1269,18 +1313,31 @@ const MyPage: React.FC = () => {
 
   const loadPerformanceScoreData = async () => {
     if (!user || !config) return;
+    const requestId = ++performanceRequestRef.current;
+    const scopeKey = `${user.uid}:${config.year}:${config.semester}`;
     setPerformanceScoresLoading(true);
+    setPerformanceScores([]);
     try {
       const year = String(config.year || "2026");
       const semester = String(config.semester || "1");
-      setPerformanceScores(
-        await loadUserPerformanceScoreRecords(user.uid, { year, semester }),
-      );
+      const records = await loadUserPerformanceScoreRecords(user.uid, {
+        year,
+        semester,
+      });
+      if (
+        requestId === performanceRequestRef.current &&
+        scopeKey === pointRankScopeRef.current
+      )
+        setPerformanceScores(records);
     } catch (error) {
       console.error("Failed to load my performance scores:", error);
-      setPerformanceScores([]);
+      if (requestId === performanceRequestRef.current) {
+        performanceScopeRef.current = "";
+        setPerformanceScores([]);
+      }
     } finally {
-      setPerformanceScoresLoading(false);
+      if (requestId === performanceRequestRef.current)
+        setPerformanceScoresLoading(false);
     }
   };
 
@@ -1763,7 +1820,7 @@ const MyPage: React.FC = () => {
         if (categoryTab !== "all" && item.category !== categoryTab) {
           return false;
         }
-        if (isSmallUnitAssessmentCategory(categoryTab)) {
+        if (categoryTab !== "exam_prep") {
           return wrongNoteItemMatchesSmallAssessmentScope(
             item,
             selectedBigUnitId,
@@ -1793,7 +1850,7 @@ const MyPage: React.FC = () => {
   }, [filteredWrongItems]);
 
   const wrongNoteUnitHierarchy = useMemo<WrongNoteBigScopeOption[]>(() => {
-    if (!isSmallUnitAssessmentCategory(categoryTab)) return [];
+    if (categoryTab === "exam_prep") return [];
 
     const bigMap = new Map<
       string,
@@ -1808,7 +1865,11 @@ const MyPage: React.FC = () => {
     >();
 
     const addItem = (item: WrongNoteItem) => {
-      if (item.category !== categoryTab) return;
+      if (
+        item.category === "exam_prep" ||
+        (categoryTab !== "all" && item.category !== categoryTab)
+      )
+        return;
       const bigId = item.bigUnitId || item.bigUnitTitle || "unknown-big";
       const midId = item.midUnitId || item.midUnitTitle || "unknown-mid";
       const smallId = getWrongNoteItemScopeId(item);
@@ -1860,7 +1921,11 @@ const MyPage: React.FC = () => {
     };
 
     const addAttemptFallback = (attempt: QuizAttemptReview) => {
-      if (attempt.category !== categoryTab || attempt.allItems.length) return;
+      if (
+        (categoryTab !== "all" && attempt.category !== categoryTab) ||
+        attempt.allItems.length
+      )
+        return;
       addItem({
         key: attempt.key,
         questionNumber: 0,
@@ -1896,7 +1961,11 @@ const MyPage: React.FC = () => {
     };
 
     quizAttempts.forEach((attempt) => {
-      if (attempt.category !== categoryTab) return;
+      if (
+        attempt.category === "exam_prep" ||
+        (categoryTab !== "all" && attempt.category !== categoryTab)
+      )
+        return;
       attempt.allItems.forEach(addItem);
       addAttemptFallback(attempt);
     });
@@ -1986,7 +2055,7 @@ const MyPage: React.FC = () => {
         if (categoryTab !== "all" && attempt.category !== categoryTab) {
           return false;
         }
-        if (isSmallUnitAssessmentCategory(categoryTab)) {
+        if (categoryTab !== "exam_prep") {
           return quizAttemptMatchesSmallAssessmentScope(
             attempt,
             selectedBigUnitId,
@@ -2812,9 +2881,11 @@ const MyPage: React.FC = () => {
           {
             icon: "fa-book-open",
             label: "학습 진행",
-            value: lessonTotalCount
-              ? `${lessonProgressPercent}%`
-              : "학습 기록 없음",
+            value: progressSummaryLoading
+              ? "불러오는 중"
+              : lessonTotalCount
+                ? `${lessonProgressPercent}%`
+                : "학습 기록 없음",
             color: "blue",
             percent: lessonTotalCount ? lessonProgressPercent : null,
             onClick: openNextLesson,
@@ -2867,44 +2938,19 @@ const MyPage: React.FC = () => {
     { key: "wrong", label: "문제 풀이", onClick: startReview },
     { key: "retry", label: "다시 도전", onClick: openQuiz },
   ];
-  const isSmallUnitFilterMode = isSmallUnitAssessmentCategory(categoryTab);
+  const isSmallUnitFilterMode = categoryTab !== "exam_prep";
   const selectedBigScope =
     wrongNoteUnitHierarchy.find((item) => item.id === selectedBigUnitId) ||
     null;
   const selectedMidScope =
     selectedBigScope?.mids.find((item) => item.id === selectedMidUnitId) ||
     null;
-  const wrongNoteUnitFilterLabel =
-    categoryTab === "exam_prep" ? "회차" : "목차";
-  const wrongNoteAllUnitFilterLabel =
-    categoryTab === "exam_prep" ? "전체 회차" : "전체 목차";
-  const wrongNoteScopeButtonClass = (active: boolean) =>
-    `max-w-full min-h-11 truncate rounded-full px-4 py-2 text-sm font-extrabold transition ${
-      active
-        ? "bg-slate-900 text-white"
-        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-    }`;
-  const renderWrongNoteFilterRow = (
-    step: number,
-    label: string,
-    children: React.ReactNode,
-  ) => (
-    <div className="grid min-w-0 grid-cols-1 gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
-      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
-        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-          {step}
-        </span>
-        {label}
-      </div>
-      <div className="flex min-w-0 flex-wrap gap-2">{children}</div>
-    </div>
-  );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="student-my-page min-h-screen bg-slate-50 flex flex-col">
       <PortalWorkspace
         as="main"
-        className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs flex-1"
+        className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs ws-page--reading flex-1"
       >
         <PortalSubNavigation
           variant="tabs"
@@ -2939,29 +2985,27 @@ const MyPage: React.FC = () => {
         <section className="teacher-sub-content">
           <div className="space-y-8">
             {menu === "profile" && (
-              <div className="space-y-7">
-                <h2 className="text-xl font-bold text-slate-900">
-                  나의 기본 정보
-                </h2>
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-                  <div className="min-w-0 border-b border-slate-200 pb-6 xl:col-span-3">
-                    <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-                      <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-blue-50 text-5xl ring-1 ring-blue-100">
+              <div className="student-my-page__panel">
+                <h2 className="sr-only">나의 기본 정보</h2>
+                <div className="student-my-page__profile">
+                  <div className="student-my-page__identity">
+                    <div className="flex items-center gap-4">
+                      <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-blue-50 text-4xl ring-1 ring-blue-100">
                         {displayProfileIcon}
                         <button
                           type="button"
                           onClick={() => setIconModalOpen(true)}
-                          className="absolute -bottom-1 -right-1 inline-flex h-8 min-w-8 items-center justify-center whitespace-nowrap rounded-full border border-blue-100 bg-white px-2 text-[11px] font-extrabold text-blue-700 shadow-sm"
+                          className="absolute -bottom-2 -right-2 inline-flex h-11 min-w-11 items-center justify-center whitespace-nowrap rounded-full border border-blue-100 bg-white px-2 text-[11px] font-extrabold text-blue-700 shadow-sm"
                         >
                           변경
                         </button>
                       </div>
 
                       <div className="min-w-0">
-                        <div className="text-3xl font-black tracking-tight text-slate-900">
+                        <div className="text-2xl font-bold tracking-tight text-slate-900">
                           {profile?.name || userData?.name || "학생"}
                         </div>
-                        <div className="mt-2 text-xl font-bold tracking-tight text-slate-600">
+                        <div className="mt-2 text-base font-semibold text-slate-600">
                           <span>{withSuffix(profileGradeLabel, "학년")}</span>
                           <span className="mx-2 text-slate-300">·</span>
                           <span>{withSuffix(profileClassLabel, "반")}</span>
@@ -2994,7 +3038,7 @@ const MyPage: React.FC = () => {
                       key={item.label}
                       type="button"
                       onClick={item.onClick}
-                      className="rounded-xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                      className="student-my-page__progress text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                     >
                       <div className="flex items-center gap-3">
                         <span
@@ -3024,7 +3068,7 @@ const MyPage: React.FC = () => {
                         {item.value}
                       </div>
                       {item.percent !== null && (
-                        <div className="mt-6 h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
                           <div
                             className={`h-full rounded-full ${
                               item.color === "emerald"
@@ -3042,7 +3086,7 @@ const MyPage: React.FC = () => {
                 </div>
 
                 {canUseScore && subjectInsights.length > 0 && (
-                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <section className="ws-flat-section student-my-page__section student-my-page__score-overview">
                     <div className="flex flex-wrap items-center justify-between gap-5">
                       <div>
                         <div className="flex items-center gap-3">
@@ -3050,13 +3094,13 @@ const MyPage: React.FC = () => {
                             <i className="fas fa-chart-column"></i>
                           </span>
                           <h3 className="text-xl font-black text-slate-900">
-                            성적 요약
+                            점수 계산 요약
                           </h3>
                         </div>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="mt-4 grid grid-cols-3 gap-3">
                           <div className="px-1 py-2">
                             <div className="text-xs font-bold text-slate-400">
-                              전체 평균
+                              계산한 점수 평균
                             </div>
                             <div className="mt-1 text-2xl font-black text-blue-600">
                               {subjectInsights.length
@@ -3092,36 +3136,18 @@ const MyPage: React.FC = () => {
                     </div>
                   </section>
                 )}
-
-                {canUseQuiz && (
-                  <MyAssessmentSummary
-                    attempts={quizAttempts}
-                    loading={loadingWrong}
-                    error={quizLoadError}
-                    onOpen={(id) => {
-                      const attempt = quizAttempts.find(
-                        (item) => item.key === id,
-                      );
-                      if (attempt) openQuizAttemptReview(attempt);
-                    }}
-                    onRetry={() => void loadMyPage()}
-                    onStart={openQuiz}
-                  />
-                )}
               </div>
             )}
 
             {menu === "score" && (
-              <div className="space-y-7">
-                <h2 className="text-xl font-bold text-slate-900">
-                  나의 성적표
-                </h2>
+              <div className="student-my-page__panel">
+                <h2 className="sr-only">나의 성적표</h2>
 
-                <div className="grid gap-5 border-b border-slate-200 pb-5 md:grid-cols-3">
+                <div className="student-my-page__score-metrics">
                   {[
                     {
                       icon: "fa-arrow-trend-up",
-                      label: "전체 평균",
+                      label: "계산한 점수 평균",
                       value: `${subjectInsights.length ? `${scoreAverage}점` : "등록 점수 없음"}`,
                       tone: "blue",
                     },
@@ -3189,15 +3215,12 @@ const MyPage: React.FC = () => {
                   />
                 )}
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                <section className="ws-flat-section student-my-page__section">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <h3 className="text-xl font-black text-slate-900">
                         내 수행평가 점수
                       </h3>
-                      <p className="mt-1 text-sm font-bold text-slate-500">
-                        교사가 확정해 업로드한 수행평가 점수와 피드백입니다.
-                      </p>
                     </div>
                     <Link
                       to="/student/score/performance"
@@ -3207,13 +3230,16 @@ const MyPage: React.FC = () => {
                       <i className="fas fa-chevron-right text-xs"></i>
                     </Link>
                   </div>
-                  <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {performanceScoresLoading ? (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 lg:col-span-2">
+                      <div
+                        role="status"
+                        className="py-4 text-sm text-slate-500 md:col-span-2"
+                      >
                         수행평가 점수를 불러오는 중입니다.
                       </div>
                     ) : performanceScores.length === 0 ? (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 lg:col-span-2">
+                      <div className="py-4 text-sm text-slate-500 md:col-span-2">
                         아직 확인할 수행평가 점수가 없습니다.
                       </div>
                     ) : (
@@ -3271,8 +3297,8 @@ const MyPage: React.FC = () => {
                   </div>
                 </section>
 
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                <div className="student-my-page__columns">
+                  <section className="ws-flat-section student-my-page__section">
                     <h3 className="text-xl font-black text-slate-900">
                       과목별 성취 현황
                     </h3>
@@ -3283,7 +3309,7 @@ const MyPage: React.FC = () => {
                             key={item.subject}
                             type="button"
                             onClick={() => setSelectedSubject(item.subject)}
-                            className="grid w-full grid-cols-[76px_1fr_auto] items-center gap-4 text-left"
+                            className="grid min-h-11 w-full grid-cols-[64px_1fr_auto] items-center gap-3 text-left"
                           >
                             <span className="text-sm font-extrabold text-slate-700">
                               {item.subject}
@@ -3312,7 +3338,7 @@ const MyPage: React.FC = () => {
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <section className="ws-flat-section student-my-page__section">
                     <h3 className="text-xl font-black text-slate-900">
                       선택 과목 분석
                     </h3>
@@ -3341,10 +3367,14 @@ const MyPage: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                          <label className="text-sm font-bold text-slate-700">
+                          <label
+                            htmlFor="my-subject-goal"
+                            className="text-sm font-bold text-slate-700"
+                          >
                             과목 목표
                           </label>
                           <NumericInput
+                            id="my-subject-goal"
                             type="number"
                             min={0}
                             max={100}
@@ -3377,8 +3407,8 @@ const MyPage: React.FC = () => {
                   </section>
                 </div>
 
-                <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                <div className="student-my-page__columns">
+                  <section className="ws-flat-section student-my-page__section">
                     <h3 className="text-xl font-black text-slate-900">
                       추천 학습
                     </h3>
@@ -3409,12 +3439,12 @@ const MyPage: React.FC = () => {
                     </div>
                   </section>
 
-                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <section className="ws-flat-section student-my-page__section">
                     <h3 className="text-xl font-black text-slate-900">
                       다음 목표
                     </h3>
-                    <div className="mt-10 flex items-center gap-5">
-                      <span className="inline-flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-blue-50 text-3xl text-blue-600">
+                    <div className="mt-4 flex items-center gap-4">
+                      <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xl text-blue-600">
                         <i className="fas fa-bullseye"></i>
                       </span>
                       <div className="min-w-0">
@@ -3423,14 +3453,16 @@ const MyPage: React.FC = () => {
                             ? `${topNeedsCareSubject.subject} 목표 점수 ${topNeedsCareSubject.target}점 달성하기`
                             : "현재 목표를 유지하기"}
                         </div>
-                        <div className="mt-2 text-sm font-bold text-slate-400">
-                          {goalScore ||
-                            "나의 목표를 정하고 학습 흐름을 이어가요."}
-                        </div>
+                        {goalScore && (
+                          <div className="mt-2 text-sm text-slate-500">
+                            {goalScore}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="mt-6 flex gap-2">
                       <input
+                        aria-label="이번 학기 목표"
                         lang="ko"
                         inputMode="text"
                         value={goalScore}
@@ -3453,180 +3485,122 @@ const MyPage: React.FC = () => {
             )}
 
             {menu === "wrong_note" && (
-              <div className="space-y-7">
-                <h2 className="text-xl font-bold text-slate-900">오답 노트</h2>
+              <div className="student-my-page__panel">
+                <h2 className="sr-only">오답 노트</h2>
 
-                <section className="ws-flat-section">
-                  <div className="grid min-w-0 grid-cols-1 gap-4">
-                    <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
-                      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs text-blue-600">
-                          1
-                        </span>
-                        평가 유형
-                      </div>
-                      <div className="ws-page-tabs" aria-label="평가 유형">
-                        <button
-                          type="button"
-                          onClick={() => selectWrongNoteCategory("all")}
-                          aria-pressed={categoryTab === "all"}
-                        >
-                          전체
-                        </button>
-                        {CATEGORY_LABELS.map((tab) => (
-                          <button
-                            key={tab.key}
-                            type="button"
-                            onClick={() => selectWrongNoteCategory(tab.key)}
-                            aria-pressed={categoryTab === tab.key}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {isSmallUnitFilterMode ? (
-                      <>
-                        {renderWrongNoteFilterRow(
-                          2,
-                          "대단원",
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedBigUnitId("all");
-                                setSelectedMidUnitId("all");
-                                setSelectedUnitId("all");
-                              }}
-                              className={wrongNoteScopeButtonClass(
-                                selectedBigUnitId === "all",
-                              )}
-                            >
-                              전체 대단원
-                            </button>
-                            {wrongNoteUnitHierarchy.map((big) => (
-                              <button
-                                key={big.id}
-                                title={big.title}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedBigUnitId(big.id);
-                                  setSelectedMidUnitId("all");
-                                  setSelectedUnitId("all");
-                                }}
-                                className={wrongNoteScopeButtonClass(
-                                  selectedBigUnitId === big.id,
-                                )}
-                              >
-                                {big.title}
-                              </button>
-                            ))}
-                          </>,
-                        )}
-
-                        {selectedBigScope &&
-                          selectedBigUnitId !== "all" &&
-                          renderWrongNoteFilterRow(
-                            3,
-                            "중단원",
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedMidUnitId("all");
-                                  setSelectedUnitId("all");
-                                }}
-                                className={wrongNoteScopeButtonClass(
-                                  selectedMidUnitId === "all",
-                                )}
-                              >
-                                전체 중단원
-                              </button>
-                              {selectedBigScope.mids.map((mid) => (
-                                <button
-                                  key={mid.id}
-                                  title={mid.title}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedMidUnitId(mid.id);
-                                    setSelectedUnitId("all");
-                                  }}
-                                  className={wrongNoteScopeButtonClass(
-                                    selectedMidUnitId === mid.id,
-                                  )}
-                                >
-                                  {mid.title}
-                                </button>
-                              ))}
-                            </>,
-                          )}
-
-                        {selectedMidScope &&
-                          selectedMidUnitId !== "all" &&
-                          renderWrongNoteFilterRow(
-                            4,
-                            "소단원",
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedUnitId("all")}
-                                className={wrongNoteScopeButtonClass(
-                                  selectedUnitId === "all",
-                                )}
-                              >
-                                전체 소단원
-                              </button>
-                              {selectedMidScope.smalls.map((small) => (
-                                <button
-                                  key={small.id}
-                                  title={small.title}
-                                  type="button"
-                                  onClick={() => setSelectedUnitId(small.id)}
-                                  className={wrongNoteScopeButtonClass(
-                                    selectedUnitId === small.id,
-                                  )}
-                                >
-                                  {small.title}
-                                </button>
-                              ))}
-                            </>,
-                          )}
-                      </>
-                    ) : (
-                      renderWrongNoteFilterRow(
-                        2,
-                        wrongNoteUnitFilterLabel,
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedUnitId("all")}
-                            className={wrongNoteScopeButtonClass(
-                              selectedUnitId === "all",
-                            )}
-                          >
-                            {wrongNoteAllUnitFilterLabel}
-                          </button>
-                          {availableUnitTabs.map((tab) => (
-                            <button
-                              key={tab.id}
-                              title={tab.title}
-                              type="button"
-                              onClick={() => setSelectedUnitId(tab.id)}
-                              className={wrongNoteScopeButtonClass(
-                                selectedUnitId === tab.id,
-                              )}
-                            >
-                              {tab.title}
-                            </button>
-                          ))}
-                        </>,
-                      )
-                    )}
+                <section
+                  className="ws-flat-section student-my-page__filters"
+                  aria-label="오답노트 필터"
+                >
+                  <div className="ws-page-tabs" aria-label="평가 유형">
+                    <button
+                      type="button"
+                      onClick={() => selectWrongNoteCategory("all")}
+                      aria-pressed={categoryTab === "all"}
+                    >
+                      전체
+                    </button>
+                    {CATEGORY_LABELS.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => selectWrongNoteCategory(tab.key)}
+                        aria-pressed={categoryTab === tab.key}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
                   </div>
+                  {isSmallUnitFilterMode ? (
+                    <div className="student-my-page__unit-filters">
+                      <label>
+                        <span>대단원</span>
+                        <select
+                          aria-label="대단원"
+                          value={selectedBigUnitId}
+                          title={selectedBigScope?.title || "전체 대단원"}
+                          onChange={(event) => {
+                            setSelectedBigUnitId(event.target.value);
+                            setSelectedMidUnitId("all");
+                            setSelectedUnitId("all");
+                          }}
+                        >
+                          <option value="all">전체 대단원</option>
+                          {wrongNoteUnitHierarchy.map((big) => (
+                            <option key={big.id} value={big.id}>
+                              {big.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>중단원</span>
+                        <select
+                          aria-label="중단원"
+                          value={selectedMidUnitId}
+                          disabled={!selectedBigScope}
+                          title={selectedMidScope?.title || "전체 중단원"}
+                          onChange={(event) => {
+                            setSelectedMidUnitId(event.target.value);
+                            setSelectedUnitId("all");
+                          }}
+                        >
+                          <option value="all">전체 중단원</option>
+                          {selectedBigScope?.mids.map((mid) => (
+                            <option key={mid.id} value={mid.id}>
+                              {mid.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>소단원</span>
+                        <select
+                          aria-label="소단원"
+                          value={selectedUnitId}
+                          disabled={!selectedMidScope}
+                          title={
+                            selectedMidScope?.smalls.find(
+                              (small) => small.id === selectedUnitId,
+                            )?.title || "전체 소단원"
+                          }
+                          onChange={(event) =>
+                            setSelectedUnitId(event.target.value)
+                          }
+                        >
+                          <option value="all">전체 소단원</option>
+                          {selectedMidScope?.smalls.map((small) => (
+                            <option key={small.id} value={small.id}>
+                              {small.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="ws-filter-bar">
+                      <label>
+                        <span>회차</span>
+                        <select
+                          aria-label="회차"
+                          value={selectedUnitId}
+                          onChange={(event) =>
+                            setSelectedUnitId(event.target.value)
+                          }
+                        >
+                          <option value="all">전체 회차</option>
+                          {availableUnitTabs.map((tab) => (
+                            <option key={tab.id} value={tab.id}>
+                              {tab.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
                 </section>
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                <section className="ws-flat-section student-my-page__attempts">
                   {loadingWrong ? (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
                       응시 기록을 불러오는 중입니다.
@@ -3706,7 +3680,7 @@ const MyPage: React.FC = () => {
                                     )}
 
                                     <div
-                                      className={`grid gap-2 md:grid-cols-2 xl:grid-cols-3 ${
+                                      className={`student-my-page__attempt-list ${
                                         showGroupHeader ? "mt-3" : ""
                                       }`}
                                     >

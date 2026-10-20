@@ -89,11 +89,67 @@ assert.ok(
 
 const ScoreCard = loadTs("src/pages/student/score/components/ScoreCard.tsx", {
   react: React,
+  "../../../../lib/studentScores": scores,
   "../../../../components/common/NumericInput": loadTs(
     "src/components/common/NumericInput.tsx",
     { react: React },
   ),
 }).default;
+
+const plan = {
+  id: "weighted",
+  subject: "국어",
+  items: [
+    { name: "정기시험", maxScore: 100, ratio: 50 },
+    { name: "수행 1", maxScore: 20, ratio: 20 },
+    { name: "수행 2", maxScore: 30, ratio: 30 },
+  ],
+};
+const rowFor = (values) =>
+  scores.buildScoreRows([plan], values, { filterByGrade: false })[0];
+assert.equal(
+  rowFor({ weighted_0: "80", weighted_1: "15", weighted_2: "24" }).total,
+  79,
+);
+assert.equal(rowFor({}).hasData, false);
+assert.equal(rowFor({ weighted_0: "0" }).hasData, true);
+assert.equal(
+  rowFor({ weighted_0: "not a score", weighted_1: " " }).hasData,
+  false,
+);
+assert.equal(
+  rowFor({ weighted_0: "1000", weighted_1: "-1", weighted_2: "30" }).total,
+  80,
+);
+const precise = scores.buildScoreRows(
+  [
+    {
+      id: "precision",
+      subject: "수학",
+      items: Array.from({ length: 3 }, () => ({ maxScore: 3, ratio: 30 })),
+    },
+  ],
+  { precision_0: "1.334", precision_1: "1.334", precision_2: "1.334" },
+  { filterByGrade: false },
+)[0];
+assert.equal(
+  precise.total,
+  40,
+  "Sum the unrounded contributions before rounding the total",
+);
+const partial = rowFor({ weighted_0: "80" });
+const partialMarkup = renderToStaticMarkup(
+  React.createElement(ScoreCard, {
+    plan,
+    userScores: { weighted_0: "80" },
+    onScoreChange() {},
+    totalScore: partial.total,
+    hasData: partial.hasData,
+  }),
+);
+assert.match(partialMarkup, /입력한 점수 합계/);
+assert.doesNotMatch(partialMarkup, /class="score-calculator__grade"/);
+assert.equal((partialMarkup.match(/type="range"/g) || []).length, 3);
 for (const subject of ["음악", "미술", "체육", "국어", "영어", "기가"]) {
   const threeLevel = ["음악", "미술", "체육"].includes(subject);
   const boundaries = threeLevel

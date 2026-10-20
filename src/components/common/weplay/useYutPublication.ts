@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
-import { getYutLobby, type YutSettings } from "../../../lib/yut";
+import {
+  getYutLobby,
+  type YutSettings,
+  type YutLobbySnapshot,
+} from "../../../lib/yut";
 
 type Status = "checking" | "open" | "closed" | "error";
 
@@ -14,6 +18,7 @@ export default function useYutPublication(portal: "student" | "teacher") {
     scope: string;
     status: Status;
     settings?: YutSettings;
+    lobby?: YutLobbySnapshot;
   }>({
     scope: "",
     status: "checking",
@@ -33,6 +38,7 @@ export default function useYutPublication(portal: "student" | "teacher") {
       }
       pending = true;
       try {
+        const sentAtMs = Date.now();
         const lobby = await Promise.race([
           getYutLobby(config),
           new Promise<never>((_resolve, reject) => {
@@ -47,6 +53,12 @@ export default function useYutPublication(portal: "student" | "teacher") {
             scope,
             status: lobby.enabled === true ? "open" : "closed",
             settings: lobby.enabled === true ? lobby.settings : undefined,
+            lobby: {
+              scope: `${currentUser.uid}:${config.year}:${config.semester}`,
+              data: lobby,
+              sentAtMs,
+              receivedAtMs: Date.now(),
+            },
           });
       } catch (error) {
         if (active && scopeRef.current === scope) {
@@ -85,6 +97,8 @@ export default function useYutPublication(portal: "student" | "teacher") {
     scope,
     settings:
       access.scope === scope && status === "open" ? access.settings : undefined,
+    lobby:
+      access.scope === scope && status === "open" ? access.lobby : undefined,
     retry: () => setRevision((value) => value + 1),
   };
 }

@@ -13,19 +13,18 @@ import {
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageLoading } from "../../../components/common/LoadingState";
+import { InfoHelp } from "../../../components/common/InfoHelp";
 import { useAuth } from "../../../contexts/AuthContext";
 import ScoreCard from "./components/ScoreCard";
 import {
   getSemesterCollectionPath,
   getYearSemester,
 } from "../../../lib/semesterScope";
-import { lazyWithRetry } from "../../../lib/lazyWithRetry";
-import { buildScoreRows } from "../../../lib/studentScores";
-
-const GradeChart = lazyWithRetry(
-  () => import("./components/GradeChart"),
-  "student-score-grade-chart",
-);
+import {
+  buildScoreRows,
+  SCORE_ACHIEVEMENT_GUIDANCE,
+} from "../../../lib/studentScores";
+import "./score-calculator.css";
 
 interface GradingPlan {
   id: string;
@@ -65,6 +64,7 @@ const ScoreDashboard: React.FC = () => {
   const [plans, setPlans] = useState<GradingPlan[]>([]);
   const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showWarning, setShowWarning] = useState(false);
   const [agree, setAgree] = useState(false);
@@ -81,8 +81,11 @@ const ScoreDashboard: React.FC = () => {
   const [grade, setGrade] = useState(userData?.grade || "1");
   const [sortMode, setSortMode] = useState("importance");
 
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const didInitDefaultsRef = useRef(false);
+  const scoresRef = useRef(userScores);
+  scoresRef.current = userScores;
+  const activeScopeRef = useRef("");
+  activeScopeRef.current = `${currentUser?.uid}:${activeYear}:${semester}`;
 
   const getDraftKey = (targetSemester: string) => {
     const uid = currentUser?.uid || userData?.uid || "anonymous";
@@ -149,8 +152,17 @@ const ScoreDashboard: React.FC = () => {
       return;
     }
     let active = true;
+    let plansLoaded = false;
+    let scoresLoaded = false;
+    const finishLoading = () => {
+      if (active && plansLoaded && scoresLoaded) setLoading(false);
+    };
     setLoading(true);
     setLoadError(null);
+    setSaveError(null);
+    setLastSavedAt(null);
+    setSaving(false);
+    setHasUnsavedChanges(false);
     setPlans([]);
     setUserScores({});
     const unsubscribe = onSnapshot(
@@ -165,19 +177,25 @@ const ScoreDashboard: React.FC = () => {
         orderBy("createdAt", "desc"),
       ),
       (snapshot) => {
-        if (active)
+        if (active) {
           setPlans(
             snapshot.docs.map(
               (item) => ({ id: item.id, ...item.data() }) as GradingPlan,
             ),
           );
+          plansLoaded = true;
+          finishLoading();
+        }
       },
       (error) => {
         console.error("Failed to subscribe to grading plans:", error);
-        if (active)
+        if (active) {
           setLoadError(
             "평가 기준을 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.",
           );
+          plansLoaded = true;
+          finishLoading();
+        }
       },
     );
     getDoc(
@@ -190,11 +208,20 @@ const ScoreDashboard: React.FC = () => {
       ),
     )
       .then((snapshot) => {
-        if (active)
-          setUserScores({
-            ...(snapshot.exists() ? snapshot.data().scores || {} : {}),
-            ...loadDraftScores(semester),
-          });
+        if (active) {
+          const savedScores = snapshot.exists()
+            ? snapshot.data().scores || {}
+            : {};
+          const draft = loadDraftScores(semester);
+          const loadedScores = { ...savedScores, ...draft };
+          setUserScores(loadedScores);
+          scoresRef.current = loadedScores;
+          setHasUnsavedChanges(
+            Object.entries(draft).some(
+              ([key, value]) => value !== savedScores[key],
+            ),
+          );
+        }
       })
       .catch((error) => {
         console.error("Error loading score data:", error);
@@ -206,7 +233,8 @@ const ScoreDashboard: React.FC = () => {
         }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        scoresLoaded = true;
+        finishLoading();
       });
     return () => {
       active = false;
@@ -236,25 +264,17 @@ const ScoreDashboard: React.FC = () => {
   ]);
 
   useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!lastSavedAt) return;
-    const timer = window.setTimeout(() => setLastSavedAt(null), 2000);
-    return () => window.clearTimeout(timer);
-  }, [lastSavedAt]);
-
-  useEffect(() => {
     const handleBeforeUnload = () => {
-      if (loading) return;
+      if (loading || !hasUnsavedChanges) return;
       persistDraftScores(semester, userScores);
     };
 
     const handleVisibilityChange = () => {
-      if (!loading && document.visibilityState === "hidden") {
+      if (
+        !loading &&
+        hasUnsavedChanges &&
+        document.visibilityState === "hidden"
+      ) {
         persistDraftScores(semester, userScores);
       }
     };
@@ -272,9 +292,11 @@ const ScoreDashboard: React.FC = () => {
     userData?.uid,
     userScores,
     loading,
+    hasUnsavedChanges,
   ]);
 
   const handleScoreChange = (planId: string, idx: number, val: string) => {
+    if (showWarning || loadError || !hasHydratedUserDoc) return;
     const numVal = parseFloat(val);
     // Find max score for validation
     const plan = plans.find((p) => p.id === planId);
@@ -287,19 +309,13 @@ const ScoreDashboard: React.FC = () => {
     }
 
     const key = `${planId}_${idx}`;
-    const newScores = { ...userScores, [key]: finalVal };
+    const newScores = { ...scoresRef.current, [key]: finalVal };
+    scoresRef.current = newScores;
     setUserScores(newScores);
+    setHasUnsavedChanges(true);
+    setLastSavedAt(null);
     setSaveError(null);
     persistDraftScores(semester, newScores);
-
-    // Debounce Save
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    setSaving(true);
-    const semesterForSave = semester;
-    saveTimeoutRef.current = setTimeout(async () => {
-      await saveScores(newScores, semesterForSave);
-      setSaving(false);
-    }, 1000);
   };
 
   const sanitizeScores = (scoresToSave: { [key: string]: string }) => {
@@ -322,7 +338,9 @@ const ScoreDashboard: React.FC = () => {
     targetSemester: string = semester,
     options?: { announce?: boolean },
   ) => {
-    if (!currentUser?.uid || loadError) return;
+    if (!currentUser?.uid || loadError || showWarning || !hasHydratedUserDoc)
+      return;
+    const saveScope = `${currentUser.uid}:${activeYear}:${targetSemester}`;
     const scoreDocId = `${activeYear}_${targetSemester}`;
     const sanitizedScores = sanitizeScores(scoresToSave);
     try {
@@ -334,8 +352,6 @@ const ScoreDashboard: React.FC = () => {
         },
         { merge: true },
       );
-      setLastSavedAt(Date.now());
-      setSaveError(null);
       // An older save must not erase newer unsaved input.
       const currentDraft = loadDraftScores(targetSemester);
       if (
@@ -343,17 +359,32 @@ const ScoreDashboard: React.FC = () => {
         JSON.stringify(sanitizedScores)
       )
         clearDraftScores(targetSemester);
-      if (options?.announce) {
+      const isCurrentScope = activeScopeRef.current === saveScope;
+      const savedCurrentInputs =
+        isCurrentScope &&
+        JSON.stringify(sanitizeScores(scoresRef.current)) ===
+          JSON.stringify(sanitizedScores);
+      if (isCurrentScope) {
+        setSaveError(null);
+        setHasUnsavedChanges(!savedCurrentInputs);
+        if (savedCurrentInputs) setLastSavedAt(Date.now());
+      }
+      if (options?.announce && savedCurrentInputs) {
         showToast({
           tone: "success",
-          title: "성적 계산기가 저장되었습니다.",
+          title: "점수가 저장되었습니다.",
           message: `${activeYear}학년도 ${targetSemester}학기 입력값이 반영되었습니다.`,
         });
       }
     } catch (e) {
       console.error("Save failed", e);
-      setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-      if (options?.announce) {
+      if (activeScopeRef.current === saveScope) {
+        setSaveError(
+          "저장에 실패했습니다. 입력값은 유지됩니다. 다시 저장해 주세요.",
+        );
+        setHasUnsavedChanges(true);
+      }
+      if (options?.announce && activeScopeRef.current === saveScope) {
         showToast({
           tone: "error",
           title: "저장에 실패했습니다.",
@@ -364,10 +395,11 @@ const ScoreDashboard: React.FC = () => {
   };
 
   const handleManualSave = async () => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (saving || showWarning || loadError || !hasHydratedUserDoc) return;
+    const saveScope = activeScopeRef.current;
     setSaving(true);
     await saveScores(userScores, semester, { announce: true });
-    setSaving(false);
+    if (activeScopeRef.current === saveScope) setSaving(false);
   };
 
   const handleConfirmWarning = async () => {
@@ -459,7 +491,7 @@ const ScoreDashboard: React.FC = () => {
       showToast({
         tone: "success",
         title: "동의가 저장되었습니다.",
-        message: "이제 성적 계산기를 계속 사용할 수 있습니다.",
+        message: "이제 점수 계산기를 계속 사용할 수 있습니다.",
       });
     } catch (e) {
       console.error("Warning agreement save failed", {
@@ -491,13 +523,71 @@ const ScoreDashboard: React.FC = () => {
     hasData: row.hasData,
   }));
 
+  const saveDisabled =
+    saving ||
+    showWarning ||
+    !!loadError ||
+    !hasHydratedUserDoc ||
+    !hasUnsavedChanges;
+  const saveState = saveError
+    ? "error"
+    : saving
+      ? "saving"
+      : hasUnsavedChanges
+        ? "dirty"
+        : lastSavedAt
+          ? "saved"
+          : "idle";
+  const saveStatus = saving
+    ? "저장 중…"
+    : saveError
+      ? "저장 실패"
+      : hasUnsavedChanges
+        ? "저장되지 않은 변경"
+        : lastSavedAt
+          ? "저장 완료"
+          : "";
+  const saveActions = (footer = false) => (
+    <div
+      className={`score-calculator__actions${footer ? " score-calculator__footer" : ""}`}
+    >
+      <span
+        className="score-calculator__save-status"
+        data-state={saveState}
+        role={footer ? undefined : "status"}
+      >
+        {saveStatus}
+      </span>
+      <button
+        type="button"
+        onClick={handleManualSave}
+        disabled={saveDisabled}
+        className="min-h-11 px-4 py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+      >
+        {saving ? "저장 중…" : "점수 저장"}
+      </button>
+    </div>
+  );
+
   if (loading)
     return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
 
   return (
     <div className="ws-page ws-page--reading animate-fadeIn">
       <header className="ws-page-header mb-4">
-        <h1>성적 계산기</h1>
+        <div className="flex items-center gap-2">
+          <h1>점수 계산기</h1>
+          <InfoHelp
+            label="점수 계산과 성취도 기준"
+            sections={[
+              {
+                text: "입력 점수 ÷ 만점 × 반영 비율로 계산합니다. 미입력 항목은 합계에 포함하지 않으며, 모든 항목을 입력하면 성취도가 표시됩니다.",
+              },
+              { items: Object.values(SCORE_ACHIEVEMENT_GUIDANCE) },
+            ]}
+          />
+        </div>
+        {saveActions()}
       </header>
       {/* Warning Modal Overlay */}
       {hasHydratedUserDoc && showWarning && (
@@ -514,7 +604,7 @@ const ScoreDashboard: React.FC = () => {
               확인하세요.
             </div>
             <div className="text-xs text-gray-400 mb-4 bg-gray-50 p-2 rounded">
-              입력한 점수는 사용자의 계정에 안전하게 저장되며 성적 계산기에서
+              입력한 점수는 사용자의 계정에 안전하게 저장되며 점수 계산기에서
               계속 이어집니다.
             </div>
             <label className="flex items-center justify-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition mb-4">
@@ -545,6 +635,7 @@ const ScoreDashboard: React.FC = () => {
         <label className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-600">학기</span>
           <select
+            aria-label="학기"
             value={semester}
             onChange={(e) => setSemester(e.target.value)}
             className="min-h-11 p-2 border border-gray-300 bg-white rounded-lg text-sm min-w-[100px]"
@@ -556,6 +647,7 @@ const ScoreDashboard: React.FC = () => {
         <label className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-600">학년</span>
           <select
+            aria-label="학년"
             value={grade}
             onChange={(e) => setGrade(e.target.value)}
             className="min-h-11 p-2 border border-gray-300 bg-white rounded-lg text-sm min-w-[100px]"
@@ -568,6 +660,7 @@ const ScoreDashboard: React.FC = () => {
         <label className="flex min-w-0 items-center gap-2 sm:ml-auto">
           <span className="text-sm font-bold text-gray-600">정렬</span>
           <select
+            aria-label="정렬"
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value)}
             className="min-h-11 min-w-0 max-w-full p-2 border border-gray-300 bg-white rounded-lg text-sm"
@@ -577,13 +670,6 @@ const ScoreDashboard: React.FC = () => {
             <option value="importance">중요도순 (국어·수학·사회…)</option>
           </select>
         </label>
-        <button
-          onClick={handleManualSave}
-          disabled={saving || showWarning || !!loadError}
-          className={`min-h-11 px-4 py-2 rounded-lg text-sm font-bold transition ${saving || showWarning || loadError ? "bg-gray-200 text-gray-400 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700"}`}
-        >
-          저장
-        </button>
       </div>
 
       {loadError && (
@@ -595,49 +681,34 @@ const ScoreDashboard: React.FC = () => {
         </div>
       )}
       {saveError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {saveError}
         </div>
       )}
 
-      <React.Suspense fallback={<p>그래프를 준비하는 중입니다.</p>}>
-        <GradeChart rows={chartRows} />
-      </React.Suspense>
-      {/* Score inputs */}
-      <div>
-        {/* Left: Cards */}
-        <div>
-          {displayPlans.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-100 text-gray-400">
-              해당 학기의 평가 기준 데이터가 없습니다.
-            </div>
-          ) : (
-            displayPlans.map((plan) => (
-              <ScoreCard
-                disabled={showWarning || !!loadError}
-                key={plan.id}
-                plan={plan}
-                userScores={userScores}
-                onScoreChange={handleScoreChange}
-                totalScore={plan.currentScore}
-                hasData={plan.hasData}
-              />
-            ))
-          )}
-        </div>
+      <div className="score-calculator__subjects">
+        {displayPlans.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            해당 학기의 평가 기준 데이터가 없습니다.
+          </div>
+        ) : (
+          displayPlans.map((plan) => (
+            <ScoreCard
+              disabled={showWarning || !!loadError || !hasHydratedUserDoc}
+              key={plan.id}
+              plan={plan}
+              userScores={userScores}
+              onScoreChange={handleScoreChange}
+              totalScore={plan.currentScore}
+              hasData={plan.hasData}
+            />
+          ))
+        )}
       </div>
-
-      {/* Save Indicator */}
-      {saving && (
-        <div className="student-score-save-status fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
-          <i className="fas fa-sync fa-spin"></i> 저장 중...
-        </div>
-      )}
-      {!saving && lastSavedAt && !saveError && (
-        <div className="student-score-save-status fixed bottom-5 right-5 bg-emerald-700 text-white px-5 py-2.5 rounded-full text-xs flex items-center gap-2 shadow-lg z-50 animate-fadeIn">
-          <i className="fas fa-check"></i> 저장 완료
-        </div>
-      )}
+      {displayPlans.length > 0 && saveActions(true)}
     </div>
   );
 };

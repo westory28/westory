@@ -44,6 +44,29 @@
 }
 .weplay-game-card.is-unavailable:hover { border-color: var(--ws-border, #e5e7eb); }
 .weplay-game-card.is-unavailable .weplay-game-card-action { color: var(--ws-text-muted, #6b7280); }
+.weplay-catalog[data-portal="student"] a.weplay-game-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.weplay-catalog[data-portal="student"] a.weplay-game-card:is(:hover, :focus-visible, :active) {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md, 0 14px 28px rgba(15, 23, 42, 0.10));
+  border-color: var(--ws-primary, #2563eb);
+}
+.weplay-catalog[data-portal="student"] a.weplay-game-card .weplay-game-card-action {
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
+  font-size: 18px;
+}
+/* The requested short card interaction remains active for reduced motion.
+   All other game and page motion preferences keep their existing behavior. */
+@media (prefers-reduced-motion: reduce) {
+  .weplay-catalog[data-portal="student"] a.weplay-game-card {
+    transition-duration: 180ms !important;
+  }
+}
 .weplay-catalog-retry { min-height: 44px; padding: 8px 16px; margin-top: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-primary, #2563eb); cursor: pointer; font: inherit; }
 .weplay-game-card:focus-visible,
 .weplay-catalog-back:focus-visible,

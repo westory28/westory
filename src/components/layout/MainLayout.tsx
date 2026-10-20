@@ -81,6 +81,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const canUseTeacherPortal = Boolean(
     profileReady && canAccessTeacherPortal(userData, currentUser?.email),
   );
+  const useStudentLayout =
+    isStudentRoute ||
+    (location.pathname.startsWith("/developer-log") && !canUseTeacherPortal);
   const savedRole = profileReady ? readStorage(ROLE_SESSION_KEY) : null;
   let permissionRedirect: string | null = null;
   if (profileReady && isTeacherRoute) {
@@ -353,11 +356,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <PortalWorkspaceFooterProvider>
       <div
-        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : isStudentRoute ? "student-layout" : ""} ${isStudentWeplayRoute ? "student-weplay-layout" : ""} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
+        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : useStudentLayout ? "student-layout" : ""} ${isStudentWeplayRoute ? "student-weplay-layout" : ""} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
       >
         <Header
           teacherLayout={isTeacherRoute}
-          studentLayout={isStudentRoute}
+          studentLayout={useStudentLayout}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
         />
@@ -386,7 +389,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </main>
         {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
           isArchiveUnavailableRoute(location.pathname)) && (
-          <PortalFallbackFooter teacher={isTeacherRoute || isStudentRoute} />
+          <PortalFallbackFooter teacher={isTeacherRoute || useStudentLayout} />
         )}
       </div>
     </PortalWorkspaceFooterProvider>

@@ -220,6 +220,28 @@ try {
     await page.getByText("지금은 이용할 수 없음", { exact: true }).waitFor();
     assert.equal(await page.locator('a[href*="joseon-yut"]').count(), 0);
     assert.equal(await page.locator('a[href*="history-rain"]').count(), 1);
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await goto("portal=student&case=open&catalog=1");
+      const card = page.locator('a[href*="joseon-yut"]');
+      await card.waitFor();
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await card.focus();
+      await page.waitForTimeout(220);
+      const style = await card.evaluate(node => {
+        const action = getComputedStyle(node.querySelector(".weplay-game-card-action"));
+        return { transform: getComputedStyle(node).transform, shadow: getComputedStyle(node).boxShadow, font: action.fontSize, background: action.backgroundColor, color: action.color, overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      assert.equal(style.font, "18px");
+      assert.equal(style.color, "rgb(255, 255, 255)");
+      assert.notEqual(style.background, "rgba(0, 0, 0, 0)");
+      assert.notEqual(style.transform, "none");
+      assert.notEqual(style.shadow, "none");
+      assert.equal(style.overflow, false);
+      await page.screenshot({ path: path.join(evidence, `student-catalog-${width}.png`) });
+    }
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    checks.push("Student catalog has a blue 18px action and raised card focus at 390/768/1280px, including the requested reduced-motion override.");
     await goto("portal=student&case=open");
     await page.getByRole("button", { name: /건너뛰기/ }).click();
     await page.getByTestId("game-mounted").waitFor();
@@ -306,6 +328,7 @@ try {
       "A stalled publication read times out at 10 seconds, unmounts local play, suppresses duplicate reads and ignores a late open response.",
     );
   }
+  if (!process.env.YUT_STUDENT_CATALOG_ONLY) {
   await goto("portal=teacher&catalog=1");
   await page.getByRole("link", { name: /마우저구 윷놀이.*게임 관리/ }).click();
   await page.getByRole("checkbox", { name: "학생에게 공개" }).waitFor();
@@ -630,6 +653,7 @@ try {
   checks.push(
     "Read-only teacher can inspect/preview but cannot publish or close rooms; unauthorized user performs no management read.",
   );
+  }
   assert.deepEqual(errors, []);
 } finally {
   await fs.writeFile(

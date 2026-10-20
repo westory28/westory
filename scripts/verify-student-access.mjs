@@ -440,15 +440,47 @@ try {
         ["legacy"],
       );
       assert.equal(result.scopedLessons[0].semesterRevision, 1);
-      await adminDb
-        .doc("years/2026/semesters/2/lessons/class-only")
-        .set({
-          unitId: "class-only",
-          title: "다른 반",
-          contentHtml: "비공개",
-          assignedClassIds: ["class-other"],
-          contentRevision: 2,
+      const catalog = await call("getStudentVisibleLessons", "student", {
+        view: "catalog",
+      });
+      assert.deepEqual(
+        catalog.scopedLessons.map((row) => row.unitId),
+        result.scopedLessons.map((row) => row.unitId),
+      );
+      for (const row of [...catalog.scopedLessons, ...catalog.legacyLessons]) {
+        for (const field of [
+          "contentHtml",
+          "pdfUrl",
+          "worksheetTextRegions",
+          "worksheetBlanks",
+          "footnotes",
+        ]) {
+          assert.equal(
+            Object.hasOwn(row, field),
+            false,
+            `Catalog leaked heavy field ${field}`,
+          );
+        }
+      }
+      const detail = await call("getStudentVisibleLessons", "student", {
+        unitId: "public",
+      });
+      assert.deepEqual(detail.scopedLessons, result.scopedLessons);
+      assert.deepEqual(detail.legacyLessons, []);
+      for (const unitId of ["hidden", "missing"]) {
+        const unavailable = await call("getStudentVisibleLessons", "student", {
+          unitId,
         });
+        assert.deepEqual(unavailable.scopedLessons, []);
+        assert.deepEqual(unavailable.legacyLessons, []);
+      }
+      await adminDb.doc("years/2026/semesters/2/lessons/class-only").set({
+        unitId: "class-only",
+        title: "다른 반",
+        contentHtml: "비공개",
+        assignedClassIds: ["class-other"],
+        contentRevision: 2,
+      });
       await adminDb
         .doc("lessons/class-only")
         .set({ unitId: "class-only", title: "과거 공개", contentHtml: "과거" });
@@ -515,14 +547,12 @@ try {
     "ThinkCloud writes require command authority and anonymous students cannot read raw author identities",
     async () => {
       const prefix = "years/2026/semesters/2/think_cloud_sessions/test-session";
-      await adminDb
-        .doc(prefix)
-        .set({
-          title: "생각모아",
-          targetGrade: "2",
-          targetClass: "1",
-          status: "active",
-        });
+      await adminDb.doc(prefix).set({
+        title: "생각모아",
+        targetGrade: "2",
+        targetClass: "1",
+        status: "active",
+      });
       await adminDb
         .doc(prefix + "/responses/response")
         .set({ uid: "peer", displayName: "비공개 이름", textRaw: "고조선" });

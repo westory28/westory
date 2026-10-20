@@ -60,7 +60,7 @@ export default function PublicScoreDemo() {
         <div>
           <span className="entry-score-lab__eyebrow">직접 바꿔 보는 성적</span>
           <div className="entry-score-lab__title-row">
-            <h3 id={id + "-title"}>나의 성적 계산기</h3>
+            <h3 id={id + "-title"}>점수 계산기</h3>
             <AchievementHelp />
           </div>
         </div>

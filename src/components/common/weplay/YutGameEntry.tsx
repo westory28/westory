@@ -10,7 +10,8 @@ import useYutMusic from "./useYutMusic";
 import "./weplay.css";
 import "./weplay-catalog.css";
 
-const YutGame = lazy(() => import("./yut/YutGame"));
+const loadYutGame = () => import("./yut/YutGame");
+const YutGame = lazy(loadYutGame);
 
 export default function YutGameEntry({
   portal,
@@ -27,6 +28,8 @@ export default function YutGameEntry({
   const music = useYutMusic(musicActive && allowed);
   useEffect(() => {
     setIntroduced(false);
+    // Download the game while publication is checked and the opening plays.
+    void loadYutGame().catch(() => {});
   }, [portal, access.scope]);
   if (!allowed) {
     const status = access.status;
@@ -85,6 +88,7 @@ export default function YutGameEntry({
             }
           >
             <YutGame
+              initialLobby={portal === "student" ? access.lobby : undefined}
               initialSettings={
                 portal === "student" ? access.settings : initialSettings
               }

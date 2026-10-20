@@ -93,6 +93,7 @@ interface LessonWorksheetStageProps {
     answer: string,
   ) => void;
   pendingBlank?: LessonWorksheetBlank | null;
+  /** Legacy annotation props are accepted for compatibility and never applied. */
   annotationEnabled?: boolean;
   annotationUiMode?: "always" | "onDemand";
   annotationPersistenceKey?: string | number | null;
@@ -274,11 +275,6 @@ const STRAIGHT_LINE_MOVE_THRESHOLD = 0.002;
 const WHEEL_ZOOM_STEP_MIN = 0.01;
 const WHEEL_ZOOM_STEP_MAX = 0.18;
 const WHEEL_ZOOM_STEP_RATIO = 0.0012;
-const EMPTY_ANNOTATION_STATE: LessonWorksheetAnnotationState = {
-  strokes: [],
-  boxes: [],
-  textNotes: [],
-};
 
 const toPercent = (value: number) => `${value * 100}%`;
 const clampZoom = (value: number) =>
@@ -359,9 +355,6 @@ const createBox = (
   heightRatio: 0,
 });
 
-const getAnnotationStateKey = (state: LessonWorksheetAnnotationState) =>
-  JSON.stringify(state);
-
 const isWheelZoomBlockedTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
@@ -418,11 +411,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   onCreateExamHighlightFromSelection,
   onStudentAnswerChange,
   pendingBlank = null,
-  annotationEnabled,
   annotationUiMode = "always",
-  annotationPersistenceKey = null,
-  annotationState,
-  onAnnotationChange,
   teacherCurrentPage,
   onTeacherCurrentPageChange,
   studentCurrentPage,
@@ -439,8 +428,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherEditMode && teacherRightButtonPan;
   const isTeacherViewMode = capabilities.showTeacherPageNavigator;
   const isStudentSolveMode = capabilities.enableBlankSolve;
-  const isAnnotationEnabled =
-    capabilities.enableAnnotationTools && (annotationEnabled ?? true);
+  // Annotation tools are retired in every mode; legacy props cannot enable them.
+  const isAnnotationEnabled = capabilities.enableAnnotationTools;
   const isViewportInteractive =
     mode === "teacher-present" || isStudentSolveMode || isTeacherEditMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -482,17 +471,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isMobileToolMenuOpen, setIsMobileToolMenuOpen] = useState(false);
   const [textFontSize, setTextFontSize] = useState(20);
-  const [strokes, setStrokes] = useState<AnnotationStroke[]>(
-    annotationState?.strokes || [],
-  );
+  const [strokes, setStrokes] = useState<AnnotationStroke[]>([]);
   const [draftStroke, setDraftStroke] = useState<AnnotationStroke | null>(null);
-  const [boxes, setBoxes] = useState<AnnotationBox[]>(
-    annotationState?.boxes || [],
-  );
+  const [boxes, setBoxes] = useState<AnnotationBox[]>([]);
   const [draftBox, setDraftBox] = useState<AnnotationBox | null>(null);
-  const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>(
-    annotationState?.textNotes || [],
-  );
+  const [textNotes, setTextNotes] = useState<AnnotationTextNote[]>([]);
   const [activeTextNoteId, setActiveTextNoteId] = useState<string | null>(null);
   const [editingTextNoteId, setEditingTextNoteId] = useState<string | null>(
     null,
@@ -517,15 +500,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
   const corePointBurstTimeoutsRef = useRef<number[]>([]);
-  const initialAnnotationKey = getAnnotationStateKey(
-    annotationState || EMPTY_ANNOTATION_STATE,
-  );
-  const annotationPersistenceKeyRef = useRef<string | number | null>(
-    annotationPersistenceKey,
-  );
-  const localAnnotationKeyRef = useRef(initialAnnotationKey);
-  const lastAppliedExternalAnnotationKeyRef = useRef(initialAnnotationKey);
-
   useEffect(() => {
     studentZoomRef.current = studentZoom;
   }, [studentZoom]);
@@ -679,55 +653,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     }
     setToolbarSubmenu(null);
   }, [annotationTool]);
-
-  useEffect(() => {
-    if (annotationPersistenceKeyRef.current === annotationPersistenceKey)
-      return;
-    annotationPersistenceKeyRef.current = annotationPersistenceKey;
-    const nextState = annotationState || EMPTY_ANNOTATION_STATE;
-    const nextKey = getAnnotationStateKey(nextState);
-    localAnnotationKeyRef.current = nextKey;
-    lastAppliedExternalAnnotationKeyRef.current = nextKey;
-    setDraftStroke(null);
-    setDraftBox(null);
-    setTextNoteTransform(null);
-    setActiveTextNoteId(null);
-    setEditingTextNoteId(null);
-    setStrokes(nextState.strokes || []);
-    setBoxes(nextState.boxes || []);
-    setTextNotes(nextState.textNotes || []);
-  }, [annotationPersistenceKey, annotationState]);
-
-  useEffect(() => {
-    if (!annotationState) return;
-    const incomingKey = getAnnotationStateKey(annotationState);
-    const localKey = localAnnotationKeyRef.current;
-    if (incomingKey === localKey) {
-      lastAppliedExternalAnnotationKeyRef.current = incomingKey;
-      return;
-    }
-    if (localKey !== lastAppliedExternalAnnotationKeyRef.current) {
-      return;
-    }
-    lastAppliedExternalAnnotationKeyRef.current = incomingKey;
-    localAnnotationKeyRef.current = incomingKey;
-    setStrokes(annotationState.strokes || []);
-    setBoxes(annotationState.boxes || []);
-    setTextNotes(annotationState.textNotes || []);
-  }, [annotationState]);
-
-  useEffect(() => {
-    localAnnotationKeyRef.current = getAnnotationStateKey({
-      strokes,
-      boxes,
-      textNotes,
-    });
-    onAnnotationChange?.({
-      strokes,
-      boxes,
-      textNotes,
-    });
-  }, [boxes, onAnnotationChange, strokes, textNotes]);
 
   const visiblePageImages = useMemo(() => {
     if (isTeacherViewMode) {

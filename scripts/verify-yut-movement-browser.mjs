@@ -1818,7 +1818,7 @@ async function verifyBonusReveal(reducedMotion = "no-preference") {
   for (const value of [1, 4, 5]) {
     const page = await open("scenario=waiting", reducedMotion, 844, 390);
     await page
-      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .getByRole("button", { name: "게임 시작", exact: true })
       .click();
     await page.evaluate((value) => (window.qa.throwValue = value), value);
     const toss = page.getByRole("button", { name: "윷 던지기", exact: true });
@@ -2628,7 +2628,7 @@ async function verifyThemedLoading(
   );
   if (width >= height) {
     const start = page.getByRole("button", {
-      name: "윷판 펼치기",
+      name: "게임 시작",
       exact: true,
     });
     await page.evaluate(() => {
@@ -3050,7 +3050,7 @@ async function verifyMobileViewport() {
       };
     });
     await page
-      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .getByRole("button", { name: "게임 시작", exact: true })
       .click();
     await page.locator(".yut-match").waitFor();
     assert.equal(
@@ -3182,7 +3182,7 @@ try {
       );
       if (scenario === "waiting")
         await page
-          .getByRole("button", { name: "윷판 펼치기", exact: true })
+          .getByRole("button", { name: "게임 시작", exact: true })
           .click();
       const gauge = page.getByRole("progressbar", { name: label, exact: true });
       await gauge.waitFor();
@@ -3935,14 +3935,14 @@ try {
         true,
       );
       await loading
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .waitFor();
       await loading.evaluate(() => {
         window.qa.delay = 650;
         window.qa.fail = true;
       });
       await loading
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .click();
       await loading.locator(".weplay-game-loading").waitFor();
       assert.equal(
@@ -3970,11 +3970,11 @@ try {
         .getByRole("button", { name: "방 상태 다시 확인", exact: true })
         .click();
       await loading
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .waitFor();
       await loading.evaluate(() => (window.qa.delay = 0));
       await loading
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .click();
       const toss = loading.getByRole("button", {
         name: "윷 던지기",

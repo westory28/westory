@@ -32,7 +32,7 @@ async function roomCommand(label, room, action, data = {}) {
 const denied = (promise, codes = ['permission-denied']) => assert.rejects(promise, (error) => codes.includes(error.code));
 const token = (label) => {
   const enc = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${enc({ alg: 'none', typ: 'JWT' })}.${enc({ sub: uid(label), user_id: uid(label), email: `${label}@yongshin-ms.ms.kr`, email_verified: true, aud: projectId, iss: `https://securetoken.google.com/${projectId}`, iat: authTime, exp: authTime + 7200, auth_time: authTime, firebase: { sign_in_provider: 'google.com' } })}.`;
+  return `${enc({ alg: 'none', typ: 'JWT' })}.${enc({ sub: uid(label), user_id: uid(label), email: label === 'admin' ? 'westoria28@gmail.com' : `${label}@yongshin-ms.ms.kr`, email_verified: true, aud: projectId, iss: `https://securetoken.google.com/${projectId}`, iat: authTime, exp: authTime + 7200, auth_time: authTime, firebase: { sign_in_provider: 'google.com' } })}.`;
 };
 const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${projectId}/databases/(default)/documents/${path}`, {
   ...options, headers: { Authorization: `Bearer ${token(label)}`, 'Content-Type': 'application/json', ...options.headers },
@@ -45,13 +45,20 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
   assert.deepEqual(deployed.saveYutSettings.__endpoint.region, ['asia-northeast3']);
   const seed = {
     'site_settings/config': { year: '2026', semester: '2' },
+    // Production keeps the maintenance document even when student access is open.
+    // Omitting it hides the realtime-rule document access budget regression.
+    'site_settings/student_maintenance': {
+      enabled: false, blockedRoles: ['student'], bypassUids: Array.from({ length: 20 }, (_, i) => `maintenance-bypass-${i}`),
+      title: '점검', message: '점검 중입니다.', startedAt: null,
+      updatedAt: Timestamp.now(), updatedBy: 'test-admin', revision: 1,
+    },
     'site_settings/semester_active': { semesterId: '2026-2', revision: 1 },
     'semester_manifests/2026-2': { semesterId: '2026-2', status: 'ACTIVE', revision: 1 },
     'semester_classes/class_one': { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: '1', displayName: '1학년 1반' },
     'semester_classes/class_two': { semesterId: '2026-2', status: 'ACTIVE', grade: '3', classNumber: '2', displayName: '이전 학급 표시' },
   };
-  for (const label of ['a', 'b', 'c', 'd', 'e', 'outsider', 'teacher', 'staff', 'qa', 'qb', 'qc', 'p1', 'p2', 'p3', 'p4']) {
-    const role = label === 'teacher' ? 'teacher' : label === 'staff' ? 'staff' : 'student';
+  for (const label of ['a', 'b', 'c', 'd', 'e', 'outsider', 'teacher', 'admin', 'staff', 'qa', 'qb', 'qc', 'p1', 'p2', 'p3', 'p4']) {
+    const role = ['teacher', 'admin'].includes(label) ? 'teacher' : label === 'staff' ? 'staff' : 'student';
     seed[`users/${uid(label)}`] = { role, name: '테스트학생', registrationApprovalStatus: 'APPROVED', studentNumber: '1' };
     seed[sessionPath(label)] = { status: 'active', authTime, schemaVersion: 2, authorityGeneration: proof.authorityGeneration, protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE', generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000) };
     if (role === 'student') {
@@ -63,6 +70,15 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
   seed['semester_enrollments/enrollment_outsider'].studentName = '방재석';
   try {
     const batch = db.batch(); for (const [path, data] of Object.entries(seed)) batch.set(db.doc(path), data); await batch.commit();
+    for (const label of ['teacher', 'admin']) {
+      const annotationPath = `${base}/lesson_presentations/fixture/teachers/${uid(label)}`;
+      for (const path of [annotationPath, `${annotationPath}/classes/class_one`]) {
+        await db.doc(path).set({ annotations: ['legacy-fixture'] });
+        assert.equal((await rest(label, path)).status, 403, 'retired annotation data cannot be read by teachers or admins');
+        assert.equal((await rest(label, path, { method: 'PATCH', body: JSON.stringify({ fields: { annotations: { stringValue: 'blocked' } } }) })).status, 403, 'retired annotation writes remain blocked for cached clients');
+        assert.equal((await rest(label, path, { method: 'DELETE' })).status, 403, 'retirement does not permit deleting stored annotations');
+      }
+    }
     await denied(deployed.getYutLobby.run({ data: request('a').data }), ['unauthenticated']);
     await denied(deployed.getYutLobby.run(request('a', { _session: null })), ['unauthenticated']);
     await denied(deployed.getYutLobby.run(request('staff')));
@@ -113,6 +129,17 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     assert.equal(room.players.find(player => player.uid === uid('outsider')).name, '방재석(3학년 2반)');
     const crossClassRead = await rest('outsider', `${base}/yut_rooms/${room.id}`);
     assert.equal(crossClassRead.status, 200, `cross-class participant read: ${await crossClassRead.text()}`);
+    const maintenanceRef = db.doc('site_settings/student_maintenance');
+    await maintenanceRef.update({ enabled: true, startedAt: Timestamp.now(), bypassUids: [uid('outsider')] });
+    assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 200, 'explicit maintenance bypass retains participant read');
+    assert.equal((await rest('a', `${base}/yut_rooms/${room.id}`)).status, 403, 'maintenance blocks another participant');
+    await maintenanceRef.update({ enabled: false, startedAt: null, bypassUids: [1] });
+    assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 403, 'malformed maintenance configuration still fails closed');
+    await maintenanceRef.update({ enabled: true, startedAt: Timestamp.now(), bypassUids: [uid('outsider'), 1] });
+    assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 403, 'a matching bypass cannot rescue another malformed UID');
+    await maintenanceRef.update({ enabled: false, startedAt: null, bypassUids: [...seed['site_settings/student_maintenance'].bypassUids.slice(0, 19), ' '] });
+    assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 403, 'the twentieth UID retains whitespace validation');
+    await maintenanceRef.set(seed['site_settings/student_maintenance']);
     assert.equal(room.syncRevision, room.revision, 'legacy gameplay advances sync revision');
     // Existing rooms migrate their labels on restore without restarting a turn.
     const roomPath = db.doc(`${base}/yut_rooms/${room.id}`);

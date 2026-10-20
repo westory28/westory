@@ -170,47 +170,54 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
     return [];
   });
 
-const readEffectiveStudentLessons = (config: ConfigLike) =>
-  readCached(effectiveLessonsCache, getScopeKey(config), async () => {
-    const data = await (async () => {
-      if (isSemesterArchive) {
-        // Teacher archives remain read-only and never open a callable session.
-        const snapshot = await getDocs(
-          collection(db, getSemesterCollectionPath(config, "lessons")),
-        );
-        return {
-          scopedLessons: snapshot.docs.map(
-            (item) => item.data() as Partial<LessonData>,
-          ),
-          legacyLessons: [] as Partial<LessonData>[],
-        };
-      }
-      const read = await getHistoryDictionaryCallable<
-        { year: string; semester: string },
-        {
-          scopedLessons: Partial<LessonData>[];
-          legacyLessons: Partial<LessonData>[];
+const readEffectiveStudentLessons = (
+  config: ConfigLike,
+  view: "full" | "catalog" = "full",
+) =>
+  readCached(
+    effectiveLessonsCache,
+    `${getScopeKey(config)}:${view}`,
+    async () => {
+      const data = await (async () => {
+        if (isSemesterArchive) {
+          // Teacher archives remain read-only and never open a callable session.
+          const snapshot = await getDocs(
+            collection(db, getSemesterCollectionPath(config, "lessons")),
+          );
+          return {
+            scopedLessons: snapshot.docs.map(
+              (item) => item.data() as Partial<LessonData>,
+            ),
+            legacyLessons: [] as Partial<LessonData>[],
+          };
         }
-      >("getStudentVisibleLessons");
-      return (await read(getYearSemester(config))).data;
-    })();
-    const scopedLatestLessons = getLatestLessonsByUnitId(data.scopedLessons);
-    const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
-    const legacyLatestLessons = getLatestLessonsByUnitId(
-      data.legacyLessons,
-    ).filter(
-      (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
-    );
-    const effectiveLessons = [...scopedLatestLessons, ...legacyLatestLessons];
-    const visibleLessons = effectiveLessons.filter(isStudentVisibleLesson);
+        const read = await getHistoryDictionaryCallable<
+          { year: string; semester: string; view: "full" | "catalog" },
+          {
+            scopedLessons: Partial<LessonData>[];
+            legacyLessons: Partial<LessonData>[];
+          }
+        >("getStudentVisibleLessons");
+        return (await read({ ...getYearSemester(config), view })).data;
+      })();
+      const scopedLatestLessons = getLatestLessonsByUnitId(data.scopedLessons);
+      const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
+      const legacyLatestLessons = getLatestLessonsByUnitId(
+        data.legacyLessons,
+      ).filter(
+        (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
+      );
+      const effectiveLessons = [...scopedLatestLessons, ...legacyLatestLessons];
+      const visibleLessons = effectiveLessons.filter(isStudentVisibleLesson);
 
-    return {
-      scopedLatestLessons,
-      legacyLatestLessons,
-      visibleLessons,
-      visibleUnitIds: getLessonUnitIds(visibleLessons),
-    };
-  });
+      return {
+        scopedLatestLessons,
+        legacyLatestLessons,
+        visibleLessons,
+        visibleUnitIds: getLessonUnitIds(visibleLessons),
+      };
+    },
+  );
 
 export const readStudentVisibleLessons = (config: ConfigLike) =>
   readEffectiveStudentLessons(config).then(
@@ -221,7 +228,7 @@ export const readStudentVisibleCurriculumTree = (config: ConfigLike) =>
   readCached(visibleCurriculumTreeCache, getScopeKey(config), async () => {
     const [tree, { visibleUnitIds }] = await Promise.all([
       readStudentCurriculumTree(config),
-      readEffectiveStudentLessons(config),
+      readEffectiveStudentLessons(config, "catalog"),
     ]);
     return filterTreeByVisibleLessons(tree, visibleUnitIds);
   });
@@ -235,7 +242,7 @@ export const readStudentLatestLessonSelection = (
     `${getScopeKey(config)}:${getTreeCacheKey(tree)}`,
     async () => {
       const { scopedLatestLessons, legacyLatestLessons } =
-        await readEffectiveStudentLessons(config);
+        await readEffectiveStudentLessons(config, "catalog");
       let latestSelection = findLatestLessonTreeSelection(
         tree,
         scopedLatestLessons,
@@ -260,6 +267,22 @@ export const readStudentLatestLessonSelection = (
 
 export const readStudentLesson = (config: ConfigLike, unitId: string) =>
   readCached(lessonCache, `${getScopeKey(config)}:${unitId}`, async () => {
+    if (!isSemesterArchive) {
+      const read = await getHistoryDictionaryCallable<
+        { year: string; semester: string; unitId: string },
+        {
+          scopedLessons: Partial<LessonData>[];
+          legacyLessons: Partial<LessonData>[];
+        }
+      >("getStudentVisibleLessons");
+      const { data } = await read({ ...getYearSemester(config), unitId });
+      return pickStudentLesson(
+        [...data.scopedLessons, ...data.legacyLessons].filter(
+          (lesson) =>
+            lesson.unitId === unitId && isStudentVisibleLesson(lesson),
+        ),
+      );
+    }
     const { visibleLessons } = await readEffectiveStudentLessons(config);
     return pickStudentLesson(
       visibleLessons.filter((lesson) => lesson.unitId === unitId),

@@ -652,7 +652,7 @@ export const normalizeAssessmentConfigEntry = (
 
 export const readAssessmentConfigMap = async (
   config: ConfigLike,
-  grade3ClassIds: string[] = [],
+  grade3ClassIds: string[] | Promise<string[]> = [],
 ) => {
   const settingsRef = doc(
     db,
@@ -662,9 +662,10 @@ export const readAssessmentConfigMap = async (
     db,
     getSemesterDocPath(config, "assessment_config", "status"),
   );
-  const [settingsSnap, statusSnap] = await Promise.all([
+  const [settingsSnap, statusSnap, resolvedClassIds] = await Promise.all([
     getDoc(settingsRef),
     getDoc(statusRef),
+    grade3ClassIds,
   ]);
 
   const normalized: Record<string, AssessmentConfigEntry> = {};
@@ -674,7 +675,7 @@ export const readAssessmentConfigMap = async (
   Object.entries(statusData).forEach(([key, active]) => {
     normalized[key] = normalizeAssessmentConfigEntry(
       { active },
-      grade3ClassIds,
+      resolvedClassIds,
     );
   });
 
@@ -682,7 +683,7 @@ export const readAssessmentConfigMap = async (
     ? (settingsSnap.data() as Record<string, unknown>)
     : {};
   Object.entries(settingsData).forEach(([key, entry]) => {
-    normalized[key] = normalizeAssessmentConfigEntry(entry, grade3ClassIds);
+    normalized[key] = normalizeAssessmentConfigEntry(entry, resolvedClassIds);
   });
 
   const legacyMockExamKey = getAssessmentConfigKey("exam_prep", "exam_prep");

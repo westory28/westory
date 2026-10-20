@@ -36,8 +36,14 @@ let browser, server;
 const pages=[];
 const modulePath = value => JSON.stringify(path.join(root, value).replaceAll('\\', '/'));
 async function seed() {
+  const rules = await fetch(`http://${host}/emulator/v1/projects/${project}:securityRules`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ rules: { files: [{ name: 'firestore.rules', content: await fs.readFile(path.join(root, 'firestore.rules'), 'utf8') }] } }),
+  });
+  assert.equal(rules.status, 200, `isolated network project rules: ${await rules.text()}`);
   const records = {
     'site_settings/config': { year: '2026', semester: '2' },
+    'site_settings/student_maintenance': { enabled: false, blockedRoles: ['student'], bypassUids: Array.from({ length: 20 }, (_, i) => `maintenance-bypass-${i}`), title: '점검', message: '점검 중', startedAt: null, updatedAt: Timestamp.now(), updatedBy: 'qa-admin', revision: 1 },
     'site_settings/semester_active': { semesterId: '2026-2', revision: 1 },
     'semester_manifests/2026-2': { semesterId: '2026-2', status: 'ACTIVE', revision: 1 },
     [`${base}/weplay_games/joseon-yut`]: { enabled: true, version: 1, allowSolo: true, allowMultiplayer: true, allowPrivateRooms: true, defaultPlayerCount: 4, throwSeconds: 15, moveSeconds: 60 },
@@ -151,6 +157,11 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   assert.equal(room.players.filter(player=>player.uid===uid('d')).length,1);
   checks.push('Four independent Chromium clients join one real Firestore room; lost join acknowledgement retries the identical key once without duplicate membership.');
   await awaitObservedRoom(pages,room);
+  const hostStart = a.getByRole('button',{name:'게임 시작',exact:true});
+  const startBox = await hostStart.boundingBox(), seatsBox = await a.locator('.yut-waiting-seats').boundingBox();
+  assert.ok(startBox && seatsBox && startBox.y + startBox.height <= seatsBox.y, 'host start action is visible above the roster');
+  assert.equal(await a.locator('.yut-seat-class').first().innerText(), '3학년 1반');
+  await a.screenshot({path:path.join(evidence,'host-waiting-start.png')});
   // Requests really remain unresolved for 15s; only the UI timeout can recover.
   await b.evaluate(()=>window.netQA.hangAction='ready');
   await c.evaluate(()=>window.netQA.hangAction='emote');
@@ -170,7 +181,7 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   checks.push('Actual 15-second command and emote timeouts release both input locks; explicit command recovery reuses the original receipt and emotes remain usable.');
   for(const page of [c,d]){room=await getRoom(room.id);await awaitObservedRoom(pages,room);await page.getByRole('button',{name:'준비 완료',exact:true}).click();await page.getByRole('button',{name:'준비 취소',exact:true}).waitFor();}
   room=await getRoom(room.id);await awaitObservedRoom(pages,room);
-  await a.getByRole('button',{name:'윷판 펼치기',exact:true}).evaluate(button=>{button.click();button.click();});
+  await a.getByRole('button',{name:'게임 시작',exact:true}).evaluate(button=>{button.click();button.click();});
   await Promise.all(pages.map(page=>page.locator('.yut-board').waitFor()));
   assert.equal(calls.filter(call=>call.data.action==='start').length,1,'synchronous double activation sends one command');
   await until(async()=>{const states=await Promise.all(pages.map(browserRoom));return states.every(state=>state?.status==='playing'&&state.players.length===4);},'all four browser views did not converge');

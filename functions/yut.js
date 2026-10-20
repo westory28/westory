@@ -8,7 +8,10 @@ const hash = (text) => createHash('sha256').update(text).digest('hex');
 const text = (value, max) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const fail = (code, message) => { throw new HttpsError(code, message); };
 const identifier = (value) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
-const isOpen = (room, now) => room && ['waiting', 'playing'].includes(room.status) && room.expiresAtMs > now;
+const WAITING_MS = 10 * 60_000;
+const expired = (room, atMs) => !room || room.expiresAtMs <= atMs
+  || (room.status === 'waiting' && room.createdAtMs + WAITING_MS <= atMs);
+const isOpen = (room, now) => room && ['waiting', 'playing'].includes(room.status) && !expired(room, now);
 const matchesMembership = (room, actor) => actor.manager || room.enrollmentIds?.[actor.uid] === actor.enrollmentId;
 const koreaDay = (atMs) => new Date(atMs + 9 * 3600000).toISOString().slice(0, 10);
 const privateUsed = (player, day) => player.privatePlayDay === day
@@ -120,7 +123,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     });
   };
   const checkRoomAccess = (actor, room) => {
-    if (!room || room.expiresAtMs <= now()) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
+    if (expired(room, now())) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
     if (room.participantUids.includes(actor.uid) && !matchesMembership(room, actor)) fail('permission-denied', '수강 정보가 변경되었습니다. 새 방에 참가해 주세요.');
   };
   const getYutLobby = async (request) => {
@@ -132,7 +135,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       let room = null;
       if (identifier(pointer.roomId)) {
         const stored = (await transaction.get(ref(scope, 'yut_rooms', pointer.roomId))).data();
-        if (stored?.participantUids?.includes(actor.uid) && stored.status !== 'closed' && stored.expiresAtMs > now()
+        if (stored?.participantUids?.includes(actor.uid) && stored.status !== 'closed' && !expired(stored, now())
           && matchesMembership(stored, actor) && modeAllowed(actor, stored)) {
           const refreshed = await refreshRoomNames(transaction, scope, stored, actor);
           persistNames(transaction, scope, stored, refreshed);
@@ -160,7 +163,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       const snapshot = await transaction.get(db.collection(`years/${scope.year}/semesters/${scope.semester}/yut_rooms`)
         .where('status', 'in', ['waiting', 'playing'])
         .where('expiresAtMs', '>', serverNowMs).orderBy('expiresAtMs', 'desc').limit(101));
-      const active = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }));
+      const active = snapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id })).filter(room => !expired(room, serverNowMs));
       const cache = new Map();
       const read = (path) => {
         if (!cache.has(path)) cache.set(path, transaction.get(db.doc(path)).then((entry) => entry.data() || {}));
@@ -258,7 +261,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         const old = previous.roomId ? (await transaction.get(ref(scope, 'yut_rooms', previous.roomId))).data() : null;
         if (old && !modeAllowed(actor, old)) fail('permission-denied', '지금은 이 게임 모드가 열려 있지 않습니다.');
         let room = null;
-        if (old?.participantUids?.includes(actor.uid) && old.expiresAtMs > receivedAt && matchesMembership(old, actor)) {
+        if (old?.participantUids?.includes(actor.uid) && !expired(old, receivedAt) && matchesMembership(old, actor)) {
           const refreshed = await refreshRoomNames(transaction, scope, old, actor);
           persistNames(transaction, scope, old, refreshed);
           room = publicRoom(refreshed);
@@ -296,7 +299,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
             .where('visibility', '==', 'public').where('status', '==', 'waiting').where('joinable', '==', true)
             .where('expiresAtMs', '>', receivedAt).orderBy('expiresAtMs', 'desc').limit(40));
           const available = candidates.docs.map((entry) => ({ ...entry.data(), id: entry.id }))
-            .filter((entry) => entry.players.length < 4 - (entry.blockedSeats || []).length && !entry.participantUids.includes(actor.uid));
+            .filter((entry) => !expired(entry, receivedAt) && entry.players.length < 4 - (entry.blockedSeats || []).length && !entry.participantUids.includes(actor.uid));
           if (available.length) {
             room = available[random(available.length)]; roomId = room.id;
             room = core.addYutPlayer(room, { uid: actor.uid, name: actor.name }, receivedAt);
@@ -411,6 +414,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         transaction.set(ref(scope, 'yut_rooms', transferredRoom.id), transferredRoom);
       }
       transaction.set(ref(scope, 'yut_rooms', roomId), room);
+      // A code admits players only while waiting. Starting does not extend or
+      // rewrite it, so an expired code reused by another room stays untouched.
       if (codeRef) transaction.set(codeRef, { roomId, expiresAtMs: room.expiresAtMs });
       if (matchQueue) transaction.set(matchQueue.ref, { revision: matchQueue.revision, updatedAtMs: receivedAt });
       for (const [uid, quota] of quotaUpdates) {
@@ -425,7 +430,38 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { room: returnedRoomId ? publicRoom(room) : null, serverNowMs: receivedAt };
     });
   };
-  return { getYutLobby, commandYutRoom, getYutManagement, saveYutSettings };
+  const cleanupWaitingYutRooms = async () => {
+    const cutoff = now() - WAITING_MS;
+    // Collection-group scope also cleans an abandoned room after a semester switch.
+    const candidates = await db.collectionGroup('yut_rooms')
+      .where('status', '==', 'waiting').where('createdAtMs', '<=', cutoff)
+      .orderBy('createdAtMs').limit(200).get();
+    let deleted = 0;
+    for (const candidate of candidates.docs) {
+      const path = candidate.ref.path.match(/^years\/(\d{4})\/semesters\/([12])\/yut_rooms\/([a-zA-Z0-9_-]+)$/);
+      if (!path) continue;
+      const scope = { year: path[1], semester: path[2] }, roomId = path[3];
+      const removed = await db.runTransaction(async (transaction) => {
+        const room = (await transaction.get(candidate.ref)).data();
+        // Starting and cleanup contend on this document: a started game is never deleted.
+        if (!room || room.status !== 'waiting' || !expired(room, now())) return false;
+        const codeRef = identifier(room.code) ? ref(scope, 'yut_codes', room.code) : null;
+        const [code, ...players] = await Promise.all([
+          codeRef ? transaction.get(codeRef) : Promise.resolve(null),
+          ...(room.participantUids || []).filter(identifier).map(uid => transaction.get(ref(scope, 'yut_players', uid))),
+        ]);
+        transaction.delete(candidate.ref);
+        if (code?.data()?.roomId === roomId) transaction.delete(codeRef);
+        for (const player of players) {
+          if (player.data()?.roomId === roomId) transaction.update(player.ref, { roomId: null });
+        }
+        return true;
+      });
+      if (removed) deleted++;
+    }
+    return { deleted };
+  };
+  return { getYutLobby, commandYutRoom, getYutManagement, saveYutSettings, cleanupWaitingYutRooms };
 }
 
 module.exports = { createYutHandlers };

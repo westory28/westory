@@ -12,6 +12,7 @@ import {
   type YutMove,
   type YutRoom,
   type YutSettings,
+  type YutLobbySnapshot,
 } from "../../../../lib/yut";
 import {
   getLegalYutMoves,
@@ -20,6 +21,7 @@ import {
   addYutEmote,
   YUT_EMOTE_COOLDOWN_MS,
   YUT_EMOTE_VISIBLE_MS,
+  YUT_WAITING_MS,
   type YutEmoteKind,
 } from "../../../../../functions/yutCore.mjs";
 import {
@@ -531,6 +533,7 @@ export default function YutGame({
   music,
   onMusicActiveChange,
   initialSettings,
+  initialLobby,
 }: {
   portal: "student" | "teacher";
   preview?: boolean;
@@ -538,8 +541,12 @@ export default function YutGame({
   music: ReturnType<typeof useYutMusic>;
   onMusicActiveChange: (active: boolean) => void;
   initialSettings?: YutSettings;
+  initialLobby?: YutLobbySnapshot;
 }) {
   const { config, currentUser } = useAuth();
+  const admissionSnapshot = useRef(initialLobby);
+  const admissionConsumed = useRef(false);
+  const expiryCheckRoom = useRef("");
   const sounds = useYutSoundEffects();
   useEffect(() => {
     const warm = (file: string, priority: "high" | "low" = "low") => {
@@ -676,6 +683,9 @@ export default function YutGame({
   }, [portrait, onMusicActiveChange]);
   const uid = local ? YUT_PREVIEW_UID : currentUser?.uid || "";
   const accountScope = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
+  useEffect(() => {
+    expiryCheckRoom.current = "";
+  }, [accountScope]);
   const identity = `${accountScope}:${localMode || "online"}`;
   const singlePlayerName =
     portal === "student" && localPlayerName.current?.scope === accountScope
@@ -1121,6 +1131,25 @@ export default function YutGame({
       )
         return null;
       const sentAtMs = Date.now();
+      const admission = admissionSnapshot.current;
+      if (
+        !admissionConsumed.current &&
+        !recovery &&
+        retry === 0 &&
+        admission?.scope === accountScope &&
+        sentAtMs - admission.receivedAtMs <= 10000
+      ) {
+        admissionConsumed.current = true;
+        const elapsed = sentAtMs - admission.receivedAtMs;
+        return {
+          data: {
+            ...admission.data,
+            serverNowMs: admission.data.serverNowMs + elapsed,
+          },
+          sentAtMs: sentAtMs - (admission.receivedAtMs - admission.sentAtMs),
+        };
+      }
+      admissionConsumed.current = true;
       return { data: await withYutTimeout(getYutLobby(config)), sentAtMs };
     };
     void readLobby()
@@ -1141,6 +1170,11 @@ export default function YutGame({
         recordServerTime(data.serverNowMs, sentAtMs);
         setNeedsSync(false);
         acceptRoom(data.room);
+        if (!data.room && expiryCheckRoom.current)
+          setNote(
+            "10분 동안 시작하지 않아 방이 닫혔습니다. 새 방에 참가해 주세요.",
+          );
+        expiryCheckRoom.current = "";
       })
       .catch((failure) => {
         if (mounted.current && generation.current === run)
@@ -1233,6 +1267,18 @@ export default function YutGame({
     const timer = window.setInterval(() => setClock(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [room?.id, paused]);
+  useEffect(() => {
+    if (local || room?.status !== "waiting") return;
+    if (
+      clock + serverOffset <
+      Math.min(room.expiresAtMs, room.createdAtMs + YUT_WAITING_MS)
+    )
+      return;
+    if (expiryCheckRoom.current === room.id) return;
+    expiryCheckRoom.current = room.id;
+    // Confirm with the server: a start accepted just before the deadline wins.
+    setRetry((value) => value + 1);
+  }, [local, room, clock, serverOffset]);
   useEffect(() => {
     if (
       !local ||
@@ -2133,11 +2179,43 @@ export default function YutGame({
                 )}
               </div>
             </div>
+            <div className="yut-waiting-footer">
+              <span>
+                {room.players.length}/{4 - (room.blockedSeats?.length || 0)}명
+              </span>
+              {room.hostUid === uid ? (
+                <button
+                  className="yut-button yut-button--primary"
+                  type="button"
+                  onClick={() => void command("start")}
+                  disabled={
+                    busy ||
+                    room.players.length < 2 ||
+                    room.players.some((person) => !person.ready)
+                  }
+                >
+                  {pending === "start" ? "시작하는 중…" : "게임 시작"}
+                  <YutIcon name="arrow" />
+                </button>
+              ) : (
+                <button
+                  className={`yut-button ${player?.ready ? "" : "yut-button--primary"}`}
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void command("ready", { ready: !player?.ready })
+                  }
+                >
+                  {player?.ready ? "준비 취소" : "준비 완료"}
+                </button>
+              )}
+            </div>
             <div className="yut-waiting-seats">
               {[0, 1, 2, 3].map((index) => {
                 const person = room.players.find(
                   (person) => YUT_ROLES.indexOf(person.role) === index,
                 );
+                const nameParts = person?.name.match(/^(.*?)\s*\(([^()]+)\)$/);
                 const blocked = room.blockedSeats?.includes(index) || false;
                 const canChange = room.hostUid === uid && !local;
                 return (
@@ -2157,10 +2235,17 @@ export default function YutGame({
                             motionKey={person.uid}
                           />
                         </div>
-                        <strong>
-                          {person.name}
-                          {person.uid === uid && person.name !== "나" && (
-                            <span className="yut-me">나</span>
+                        <strong className="yut-seat-name" title={person.name}>
+                          <span>
+                            {nameParts ? nameParts[1] : person.name}
+                            {person.uid === uid && person.name !== "나" && (
+                              <span className="yut-me">나</span>
+                            )}
+                          </span>
+                          {nameParts && (
+                            <span className="yut-seat-class">
+                              {nameParts[2]}
+                            </span>
                           )}
                         </strong>
                         <span
@@ -2210,37 +2295,6 @@ export default function YutGame({
                 );
               })}
             </div>
-            <div className="yut-waiting-footer">
-              <span>
-                {room.players.length}/{4 - (room.blockedSeats?.length || 0)}명
-              </span>
-              {room.hostUid === uid ? (
-                <button
-                  className="yut-button yut-button--primary"
-                  type="button"
-                  onClick={() => void command("start")}
-                  disabled={
-                    busy ||
-                    room.players.length < 2 ||
-                    room.players.some((person) => !person.ready)
-                  }
-                >
-                  {pending === "start" ? "시작하는 중…" : "윷판 펼치기"}
-                  <YutIcon name="arrow" />
-                </button>
-              ) : (
-                <button
-                  className={`yut-button ${player?.ready ? "" : "yut-button--primary"}`}
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void command("ready", { ready: !player?.ready })
-                  }
-                >
-                  {player?.ready ? "준비 취소" : "준비 완료"}
-                </button>
-              )}
-            </div>
           </div>
         ) : (
           <div className="yut-match">
@@ -2253,7 +2307,7 @@ export default function YutGame({
                     displayRoom?.turnUid === person.uid &&
                     room.status !== "finished";
                   const last = revealedThrows[person.uid];
-                  const nameParts = person.name.match(/^(.*?)\s*(\([^()]+\))$/);
+                  const nameParts = person.name.match(/^(.*?)\s*\(([^()]+)\)$/);
                   return (
                     <div
                       className={`yut-player yut-player--seat-${YUT_ROLES.indexOf(person.role)} ${activeTurn ? "is-turn" : ""} ${!person.active ? "is-left" : ""}`}

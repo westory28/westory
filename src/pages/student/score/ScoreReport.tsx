@@ -158,7 +158,7 @@ const getNextOpenItem = (row: ScoreRow) =>
 
 const getActionText = (analysis: SubjectAnalysis | null) => {
   if (!analysis) {
-    return "성적 계산기에 점수를 입력하면 이번 주 집중 과목이 자동으로 정리됩니다.";
+    return "점수 계산기에 점수를 입력하면 이번 주 집중 과목이 자동으로 정리됩니다.";
   }
 
   const { row, nextOpenItem, dominantType } = analysis;
@@ -359,7 +359,7 @@ const ScoreReport: React.FC = () => {
   const strategyItems = [
     focusAnalysis
       ? `${focusAnalysis.row.subject}의 미입력 항목과 낮은 반영 구간을 먼저 점검하세요.`
-      : "성적 계산기에서 최근 평가 점수를 먼저 입력하세요.",
+      : "점수 계산기에서 최근 평가 점수를 먼저 입력하세요.",
     examShare >= performanceShare
       ? "정기시험 비중이 높으므로 오답 정리와 개념 확인 시간을 확보하세요."
       : "수행평가 비중이 높으므로 제출물 누락과 완성도를 확인하세요.",

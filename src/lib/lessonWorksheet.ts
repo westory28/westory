@@ -97,7 +97,7 @@ export const getLessonWorksheetStageCapabilities = (
         enableBlankSelection: false,
         enableBlankSolve: false,
         enableAnswerCheck: false,
-        enableAnnotationTools: true,
+        enableAnnotationTools: false,
         showTextRegionHints: false,
       };
     case "student-solve":
@@ -109,7 +109,7 @@ export const getLessonWorksheetStageCapabilities = (
         enableBlankSelection: false,
         enableBlankSolve: true,
         enableAnswerCheck: true,
-        enableAnnotationTools: true,
+        enableAnnotationTools: false,
         showTextRegionHints: false,
       };
   }

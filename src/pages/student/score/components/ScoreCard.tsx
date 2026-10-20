@@ -1,5 +1,10 @@
+import React from "react";
 import NumericInput from "../../../../components/common/NumericInput";
-import React, { useState } from "react";
+import {
+  buildScoreRows,
+  getGradeBand,
+  getTypeLabel,
+} from "../../../../lib/studentScores";
 
 interface ScoreItem {
   name: string;
@@ -21,6 +26,8 @@ interface ScoreCardProps {
   hasData: boolean;
 }
 
+const formatScore = (value: number) => Number(value.toFixed(1)).toString();
+
 const ScoreCard: React.FC<ScoreCardProps> = ({
   plan,
   disabled = false,
@@ -29,157 +36,137 @@ const ScoreCard: React.FC<ScoreCardProps> = ({
   totalScore,
   hasData,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-
-  const getGradeInfo = (
-    score: number,
-    hasData: boolean,
-    subjectName: string,
-  ) => {
-    if (!hasData)
-      return {
-        grade: "-",
-        colorCode: "#adb5bd",
-        class: "bg-none",
-        text: "미입력",
-      };
-
-    const roundedScore = Math.round(score);
-    const isArtsPE = ["음악", "미술", "체육"].some((key) =>
-      subjectName.includes(key),
-    );
-
-    if (isArtsPE) {
-      if (roundedScore >= 80)
-        return {
-          grade: "A",
-          colorCode: "#fa5252",
-          class: "bg-red-500",
-          text: `${score}점`,
-        };
-      if (roundedScore >= 60)
-        return {
-          grade: "B",
-          colorCode: "#fab005",
-          class: "bg-yellow-500",
-          text: `${score}점`,
-        };
-      return {
-        grade: "C",
-        colorCode: "#339af0",
-        class: "bg-blue-500",
-        text: `${score}점`,
-      };
-    } else {
-      if (roundedScore >= 90)
-        return {
-          grade: "A",
-          colorCode: "#fa5252",
-          class: "bg-red-500",
-          text: `${score}점`,
-        };
-      if (roundedScore >= 80)
-        return {
-          grade: "B",
-          colorCode: "#fd7e14",
-          class: "bg-orange-500",
-          text: `${score}점`,
-        };
-      if (roundedScore >= 70)
-        return {
-          grade: "C",
-          colorCode: "#fab005",
-          class: "bg-yellow-500",
-          text: `${score}점`,
-        };
-      if (roundedScore >= 60)
-        return {
-          grade: "D",
-          colorCode: "#51cf66",
-          class: "bg-green-500",
-          text: `${score}점`,
-        };
-      return {
-        grade: "E",
-        colorCode: "#339af0",
-        class: "bg-blue-500",
-        text: `${score}점`,
-      };
-    }
-  };
-
-  const info = getGradeInfo(totalScore, hasData, plan.subject);
+  const { breakdown } = buildScoreRows([plan], userScores, {
+    filterByGrade: false,
+  })[0];
+  const enteredCount = breakdown.filter((item) => item.entered).length;
+  const complete = hasData && enteredCount === breakdown.length;
+  const ratioTotal = breakdown.reduce((sum, item) => sum + item.ratio, 0);
+  const validPlan =
+    breakdown.length === 0 ||
+    (Math.abs(ratioTotal - 100) < 0.01 &&
+      breakdown.every((item) => item.maxScore > 0));
 
   return (
-    <div
-      className="bg-white rounded-lg mb-4 border border-gray-200 transition-all hover:shadow-md hover:-translate-y-0.5"
-      style={{ borderLeftWidth: "5px", borderLeftColor: info.colorCode }}
+    <section
+      className="ws-surface score-calculator__subject"
+      aria-label={`${plan.subject} 점수 계산`}
     >
-      <div
-        className="p-5 flex justify-between items-center cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="text-lg font-bold text-gray-800">{plan.subject}</div>
-        <div className="text-right">
-          <span
-            className="text-xl font-bold transition-colors"
-            style={{ color: info.colorCode }}
-          >
-            {info.text}
+      <div className="score-calculator__subject-header">
+        <div>
+          <h2>{plan.subject}</h2>
+          <span className="score-calculator__meta">
+            {enteredCount}/{breakdown.length}개 입력
           </span>
-          <span
-            className={`inline-block px-2 py-0.5 rounded text-xs font-bold text-white ml-2 align-middle ${info.class}`}
-          >
-            {info.grade}
+        </div>
+        <div
+          className="score-calculator__total"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <span className="score-calculator__meta">
+            {complete ? "환산 총점" : "입력한 점수 합계"}
           </span>
-          <div className="text-xs text-gray-400 mt-1">
-            {expanded ? "▲ 접기" : "▼ 점수 입력하기"}
+          <div>
+            <strong>
+              {hasData ? `${formatScore(totalScore)}점` : "미입력"}
+            </strong>
+            {complete && validPlan && (
+              <span className="score-calculator__grade">
+                {getGradeBand(totalScore, plan.subject)}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {expanded && (
-        <div className="px-6 pb-6 bg-gray-50 border-t border-gray-100 animate-fadeIn">
-          {plan.items.map((item, idx) => {
-            const key = `${plan.id}_${idx}`;
-            const val = userScores[key] || "";
+      <div
+        className="score-calculator__total-track"
+        role="meter"
+        aria-label={`${plan.subject} 환산 점수`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(100, Math.max(0, totalScore))}
+        aria-valuetext={
+          hasData
+            ? `${formatScore(totalScore)}점, ${enteredCount}/${breakdown.length}개 입력`
+            : "미입력"
+        }
+      >
+        <span style={{ width: `${Math.min(100, Math.max(0, totalScore))}%` }} />
+      </div>
 
-            return (
-              <div
-                key={idx}
-                className="flex gap-3 justify-between items-center py-3 border-b border-dashed border-gray-200 last:border-0"
-              >
-                <div className="min-w-0 break-words">
-                  <div className="text-sm text-gray-800">
-                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 mr-2">
-                      {item.type}
-                    </span>
-                    {item.name}
-                  </div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {item.maxScore}점 만점 / {item.ratio}% 반영
-                  </div>
-                </div>
+      <div className="score-calculator__items">
+        {breakdown.map((item, idx) => {
+          const inputId = `score-input-${item.key}`;
+          const rangeId = `score-range-${item.key}`;
+          const metaId = `score-meta-${item.key}`;
+          const canEdit = !disabled && item.maxScore > 0;
+          return (
+            <div className="score-calculator__item" key={item.key}>
+              <div className="score-calculator__item-heading">
+                <label htmlFor={inputId}>{item.name}</label>
+                <output
+                  htmlFor={`${inputId} ${rangeId}`}
+                  className="score-calculator__weighted"
+                >
+                  {item.entered
+                    ? `반영 ${formatScore(item.weighted)}점`
+                    : "미입력"}
+                </output>
+              </div>
+              <div id={metaId} className="score-calculator__meta">
+                {getTypeLabel(item.type)} · {formatScore(item.maxScore)}점 만점
+                · {formatScore(item.ratio)}% 반영
+              </div>
+              <div className="score-calculator__input-row">
+                <input
+                  id={rangeId}
+                  type="range"
+                  min={0}
+                  max={item.maxScore || 1}
+                  step={0.1}
+                  value={item.score}
+                  disabled={!canEdit}
+                  aria-label={`${plan.subject} ${item.name} 점수 조절`}
+                  aria-describedby={metaId}
+                  aria-valuetext={
+                    item.entered ? `${formatScore(item.score)}점` : "미입력"
+                  }
+                  className="score-calculator__range"
+                  onChange={(event) =>
+                    onScoreChange(plan.id, idx, event.target.value)
+                  }
+                />
                 <NumericInput
+                  id={inputId}
                   allowEmpty
-                  type="number"
-                  disabled={disabled}
                   min={0}
                   max={item.maxScore}
+                  step={0.1}
+                  inputMode="decimal"
+                  disabled={!canEdit}
                   aria-label={`${plan.subject} ${item.name} 점수`}
-                  className="w-20 shrink-0 p-2 border border-gray-300 rounded text-center text-sm focus:outline-none focus:border-blue-500"
-                  value={val}
-                  placeholder="0"
-                  onChange={(e) => onScoreChange(plan.id, idx, e.target.value)}
-                  // Make sure we stop propagation to avoid closing accordion if clicked inside? Actually input handles focus.
-                  onClick={(e) => e.stopPropagation()}
+                  aria-describedby={metaId}
+                  className="score-calculator__number"
+                  value={item.entered ? String(item.score) : ""}
+                  placeholder="미입력"
+                  onChange={(event) =>
+                    onScoreChange(plan.id, idx, event.target.value)
+                  }
                 />
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
+      {!validPlan && (
+        <p className="score-calculator__plan-warning" role="status">
+          평가 반영 비율이 {formatScore(ratioTotal)}%입니다. 평가 기준을
+          선생님께 확인해 주세요.
+        </p>
       )}
-    </div>
+    </section>
   );
 };
 

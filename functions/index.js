@@ -5441,6 +5441,10 @@ exports.getYutLobby = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.g
 exports.commandYutRoom = onCall({ region: REGION, maxInstances: 20 }, yutHandlers.commandYutRoom);
 exports.getYutManagement = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutManagement);
 exports.saveYutSettings = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.saveYutSettings);
+exports.cleanupWaitingYutRooms = onSchedule(
+  { region: REGION, schedule: 'every 1 minutes', timeZone: 'Asia/Seoul', maxInstances: 1 },
+  yutHandlers.cleanupWaitingYutRooms,
+);
 
 exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
   const manager = await assertQuizManager(request);

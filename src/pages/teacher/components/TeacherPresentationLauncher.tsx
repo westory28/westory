@@ -1,10 +1,5 @@
 ﻿import React from "react";
-import {
-  getTeacherPresentationClassOptionStatusText,
-  getTeacherPresentationRuntimeBadge,
-  getTeacherPresentationSelectorSummaryText,
-  type TeacherPresentationClassSummary,
-} from "../../../lib/teacherPresentation";
+import { type TeacherPresentationClassSummary } from "../../../lib/teacherPresentation";
 
 export type TeacherPresentationLauncherProps = {
   recentItems: TeacherPresentationClassSummary[];
@@ -18,20 +13,6 @@ export type TeacherPresentationLauncherProps = {
   onSelectClass: (classId: string) => void;
 };
 
-const badgeToneClass = (tone: "rose" | "amber" | "blue" | "slate") => {
-  if (tone === "rose") return "bg-rose-100 text-rose-700";
-  if (tone === "amber") return "bg-amber-100 text-amber-700";
-  if (tone === "blue") return "bg-blue-100 text-blue-700";
-  return "bg-slate-100 text-slate-600";
-};
-
-const badgeIconClass = (tone: "rose" | "amber" | "blue" | "slate") => {
-  if (tone === "rose") return "fas fa-triangle-exclamation";
-  if (tone === "amber") return "fas fa-pen";
-  if (tone === "blue") return "fas fa-check";
-  return "fas fa-clock";
-};
-
 const TeacherPresentationLauncher: React.FC<
   TeacherPresentationLauncherProps
 > = ({
@@ -40,11 +21,9 @@ const TeacherPresentationLauncher: React.FC<
   selectedClassLabel,
   classOptions,
   optionLoadState,
-  classLoadState,
   cachedSummary,
   onSelectClass,
 }) => {
-  const selectedBadge = getTeacherPresentationRuntimeBadge(selectedSummary);
   const selectedClassNumber =
     selectedSummary?.className || selectedClassId.split("-")[1] || "";
   const helperMessage =
@@ -52,9 +31,7 @@ const TeacherPresentationLauncher: React.FC<
       ? "반 목록을 모두 불러오지 못해 마지막으로 사용한 반만 표시하고 있습니다."
       : optionLoadState === "error"
         ? "반 목록을 불러오지 못했습니다."
-        : classLoadState === "loading"
-          ? "저장 상태를 확인하는 중입니다."
-          : "";
+        : "";
 
   return (
     <div className="mx-auto mb-2 w-full max-w-[min(100vw-1.5rem,1600px)] rounded-2xl border border-slate-200 bg-white/95 px-3 py-3 shadow-sm">
@@ -67,21 +44,6 @@ const TeacherPresentationLauncher: React.FC<
             {selectedClassNumber
               ? `3학년 ${selectedClassNumber}반`
               : selectedClassLabel}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <div
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${badgeToneClass(
-                selectedBadge.tone,
-              )}`}
-            >
-              <i
-                className={`${badgeIconClass(selectedBadge.tone)} text-[10px]`}
-              ></i>
-              {selectedBadge.text}
-            </div>
-            <div className="text-xs text-slate-500">
-              {getTeacherPresentationSelectorSummaryText(selectedSummary)}
-            </div>
           </div>
         </div>
       </div>
@@ -101,15 +63,12 @@ const TeacherPresentationLauncher: React.FC<
               <option value="preview-default">반 선택</option>
             )}
             {classOptions.map((option) => {
-              const optionStatus =
-                getTeacherPresentationClassOptionStatusText(option);
               const optionLabel = option.className
                 ? `${option.className}반`
                 : option.classLabel;
               return (
                 <option key={option.classId} value={option.classId}>
                   {optionLabel}
-                  {optionStatus ? ` · ${optionStatus}` : ""}
                 </option>
               );
             })}

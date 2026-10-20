@@ -10,6 +10,10 @@ const LESSON_FIELDS = [
   'worksheetBlanks', 'worksheetExamHighlights', 'worksheetFootnoteAnchors',
   'pdfProcessing', 'footnotes', 'updatedAt', 'createdAt', 'contentRevision', 'assignedClassIds',
 ];
+const CATALOG_FIELDS = [
+  'unitId', 'title', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt',
+  'contentRevision', 'assignedClassIds',
+];
 const timestampMs = (value) => {
   if (typeof value?.toMillis === 'function') return value.toMillis();
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -45,6 +49,11 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
   if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester)) {
     throw new HttpsError('invalid-argument', '학기 정보를 확인해 주세요.');
   }
+  const catalogOnly = request.data?.view === 'catalog';
+  const unitId = String(request.data?.unitId || '').trim();
+  if (unitId.length > 200 || unitId.includes('/')) {
+    throw new HttpsError('invalid-argument', '단원 정보를 확인해 주세요.');
+  }
   const profile = (await db.doc(`users/${request.auth.uid}`).get()).data() || {};
   let classId = '', semesterRevision = 0;
   if (profile.role === 'student') {
@@ -74,9 +83,14 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
     classId = enrollment.classId;
     semesterRevision = manifest.revision;
   }
+  const readLessons = (path) => {
+    let source = db.collection(path);
+    if (unitId) source = source.where('unitId', '==', unitId);
+    return source.select(...(catalogOnly ? CATALOG_FIELDS : LESSON_FIELDS)).get();
+  };
   const [scoped, legacy] = await Promise.all([
-    db.collection(`years/${year}/semesters/${semester}/lessons`).select(...LESSON_FIELDS).get(),
-    db.collection('lessons').select(...LESSON_FIELDS).get(),
+    readLessons(`years/${year}/semesters/${semester}/lessons`),
+    readLessons('lessons'),
   ]);
   const result = selectVisibleLessons(scoped.docs.map((doc) => doc.data()), legacy.docs.map((doc) => doc.data()), classId);
   return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,

@@ -29,6 +29,7 @@ export const YUT_STACK_ANIMATION_MS: number;
 export const YUT_CAPTURE_ANIMATION_MS: number;
 export const YUT_START_ANIMATION_MS: number;
 export const YUT_ROOM_MS: number;
+export const YUT_WAITING_MS: number;
 export const YUT_ROLES: YutRole[];
 export const YUT_EMOTE_KINDS: YutEmoteKind[];
 export const YUT_EMOTE_COOLDOWN_MS: number;

@@ -13,6 +13,14 @@
     },
     {
       "collectionGroup": "yut_rooms",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAtMs", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "yut_rooms",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "visibility", "order": "ASCENDING" },

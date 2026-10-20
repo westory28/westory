@@ -24,6 +24,8 @@ interface Props {
   onStart: () => void;
 }
 
+const RECENT_ATTEMPT_COUNT = 3;
+
 export default function MyAssessmentSummary({
   attempts,
   loading,
@@ -50,7 +52,7 @@ export default function MyAssessmentSummary({
       ) / 10
     : null;
   const maxCount = Math.max(1, ...bands.map((band) => band.count));
-  const shown = showAll ? attempts : attempts.slice(0, 5);
+  const shown = showAll ? attempts : attempts.slice(0, RECENT_ATTEMPT_COUNT);
 
   return (
     <section
@@ -164,14 +166,16 @@ export default function MyAssessmentSummary({
                 );
               })}
             </ul>
-            {attempts.length > 5 && (
+            {attempts.length > RECENT_ATTEMPT_COUNT && (
               <button
                 type="button"
                 className="my-assessment-summary__more"
                 onClick={() => setShowAll((value) => !value)}
                 aria-expanded={showAll}
               >
-                {showAll ? "최근 5회만 보기" : `전체 ${attempts.length}회 보기`}
+                {showAll
+                  ? `최근 ${RECENT_ATTEMPT_COUNT}회만 보기`
+                  : `전체 ${attempts.length}회 보기`}
               </button>
             )}
           </div>

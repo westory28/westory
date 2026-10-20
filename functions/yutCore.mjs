@@ -7,6 +7,7 @@ export const YUT_STACK_ANIMATION_MS = 2_100;
 export const YUT_CAPTURE_ANIMATION_MS = 2_700;
 export const YUT_START_ANIMATION_MS = 2_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
+export const YUT_WAITING_MS = 10 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
 export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 'angry'];
 export const YUT_EMOTE_COOLDOWN_MS = 5_000;
@@ -66,7 +67,7 @@ export function createYutRoom({ id, code, classId, classLabel, host, nowMs, visi
     participantUids: [host.uid], turnUid: null, phase: 'throw', pendingThrow: null,
     extraThrows: 0, phaseStartsAtMs: 0, turnDeadlineMs: 0, winnerUid: null,
     lastEvent: { kind: 'create', text: '새 판이 열렸습니다.', atMs: nowMs },
-    createdAtMs: nowMs, updatedAtMs: nowMs, expiresAtMs: nowMs + YUT_ROOM_MS,
+    createdAtMs: nowMs, updatedAtMs: nowMs, expiresAtMs: nowMs + YUT_WAITING_MS,
   };
 }
 export function addYutEmote(source, uid, kind, id, nowMs) {
@@ -123,6 +124,7 @@ export function startYutGame(source, nowMs) {
   room.rulesVersion = 2; room.pieceCount = 2;
   for (const player of room.players) player.pieces = piecesFor();
   room.status = 'playing';
+  room.expiresAtMs = nowMs + YUT_ROOM_MS;
   room.turnUid = room.players[0].uid;
   beginPhase(room, 'throw', nowMs, YUT_START_ANIMATION_MS);
   return event(room, 'start', '윷판이 시작되었습니다.', nowMs);

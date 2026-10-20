@@ -1271,6 +1271,10 @@ const QuizRunner: React.FC = () => {
       telemetryRef.current = null;
       timeoutHandledRef.current = false;
 
+      const curriculumRead = readStudentCurriculumTree(config).then(
+        (tree) => ({ ok: true as const, tree }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
       const assessmentState = await getAssessmentState({
         definitionId: assessmentDefinitionId,
       });
@@ -1300,7 +1304,9 @@ const QuizRunner: React.FC = () => {
         return;
       }
 
-      const curriculumTree = await readStudentCurriculumTree(config);
+      const curriculumResult = await curriculumRead;
+      if (!curriculumResult.ok) throw curriculumResult.error;
+      const curriculumTree = curriculumResult.tree;
       unitOrderMapRef.current = buildUnitOrderMap(curriculumTree);
       const visitLabels = (items: StudentCurriculumTreeItem[]) => {
         items.forEach((item) => {

@@ -13,7 +13,11 @@ export default function WeplayGameCatalog({
 }) {
   const publication = useYutPublication(portal);
   return (
-    <section className="weplay-catalog" aria-labelledby="weplay-catalog-title">
+    <section
+      className="weplay-catalog"
+      data-portal={portal}
+      aria-labelledby="weplay-catalog-title"
+    >
       <div className="weplay-catalog-heading">
         <h1 id="weplay-catalog-title" tabIndex={-1}>
           {portal === "teacher" ? "위플레이 관리" : "위플레이"}

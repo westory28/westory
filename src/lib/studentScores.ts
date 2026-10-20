@@ -211,24 +211,30 @@ export const buildScoreRows = (
     const breakdown = items.map((item, idx) => {
       const key = getScoreKey(plan.id, idx);
       const rawValue = scores?.[key];
-      const entered =
-        rawValue !== undefined && rawValue !== null && rawValue !== "";
       const score = Number(rawValue);
-      const maxScore = Number(item.maxScore || 0);
-      const ratio = Number(item.ratio || 0);
-      const safeScore = Number.isFinite(score) ? score : 0;
+      const entered =
+        (typeof rawValue === "number" ||
+          (typeof rawValue === "string" && rawValue.trim() !== "")) &&
+        Number.isFinite(score);
+      const rawMaxScore = Number(item.maxScore);
+      const rawRatio = Number(item.ratio);
+      const maxScore =
+        Number.isFinite(rawMaxScore) && rawMaxScore > 0 ? rawMaxScore : 0;
+      const ratio =
+        Number.isFinite(rawRatio) && rawRatio > 0 ? Math.min(100, rawRatio) : 0;
+      const safeScore = entered ? Math.max(0, Math.min(maxScore, score)) : 0;
+      // Preserve precision until the subject total is rounded. Rounding each
+      // assessment first can change the total and the achievement boundary.
       const weighted =
-        entered && maxScore > 0
-          ? Number(((safeScore / maxScore) * ratio).toFixed(1))
-          : 0;
+        entered && maxScore > 0 ? (safeScore / maxScore) * ratio : 0;
       const name = String(item.name || `${idx + 1}번 항목`);
 
       return {
         key,
         name,
-        score: Number(safeScore.toFixed(1)),
-        maxScore: Number(maxScore.toFixed(1)),
-        ratio: Number(ratio.toFixed(1)),
+        score: safeScore,
+        maxScore,
+        ratio,
         weighted,
         entered,
         type: normalizePlanItemType(item.type, name),

@@ -26,6 +26,12 @@ export interface YutLobby {
   classId: string;
   serverNowMs: number;
 }
+export interface YutLobbySnapshot {
+  scope: string;
+  data: YutLobby;
+  sentAtMs: number;
+  receivedAtMs: number;
+}
 export interface YutSettings {
   enabled: boolean;
   version: number;
@@ -224,7 +230,11 @@ export function yutErrorMessage(error: unknown): string {
   if (/unavailable|deadline|network/.test(failure?.code || ""))
     return "연결이 원활하지 않습니다. 방 상태를 확인한 뒤 다시 시도해 주세요.";
   if (/permission-denied/.test(failure?.code || ""))
-    return "현재 학교와 학기의 게임 참여 권한을 확인해 주세요.";
+    return failure.code?.startsWith("functions/") &&
+      failure.message &&
+      !/permission|insufficient/i.test(failure.message)
+      ? failure.message
+      : "방에 연결할 수 없습니다. 방 상태를 다시 확인해 주세요.";
   if (/aborted/.test(failure?.code || ""))
     return "방 상태가 바뀌었습니다. 새로 표시된 차례를 확인해 주세요.";
   return failure?.message && !/^(internal|INTERNAL)$/.test(failure.message)

@@ -31,6 +31,8 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const { config } = useAuth();
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set(),
   );
@@ -52,6 +54,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     let cancelled = false;
     const fetchTree = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const nextTree = await readStudentVisibleCurriculumTree(config);
         if (cancelled) return;
@@ -67,6 +70,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
         onSelectUnit(latestSelection.node.id, latestSelection.node.title);
       } catch (error) {
         console.error("Error fetching curriculum:", error);
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -76,7 +80,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config, onSelectUnit]);
+  }, [config?.year, config?.semester, onSelectUnit, reloadKey]);
 
   return (
     <PortalSubNavigation
@@ -88,7 +92,19 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       {loading && (
         <InlineLoading message="목차를 불러오는 중입니다." showWarning />
       )}
-      {!loading && tree.length === 0 && (
+      {!loading && loadError && (
+        <div role="alert" className="px-6 py-4 text-sm text-red-700">
+          목차를 불러오지 못했습니다.
+          <button
+            type="button"
+            className="mt-2 block min-h-11 rounded-lg border px-3 font-bold"
+            onClick={() => setReloadKey((value) => value + 1)}
+          >
+            다시 불러오기
+          </button>
+        </div>
+      )}
+      {!loading && !loadError && tree.length === 0 && (
         <div className="px-6 py-4 text-sm text-gray-500">
           공개된 수업 자료가 없습니다.
         </div>

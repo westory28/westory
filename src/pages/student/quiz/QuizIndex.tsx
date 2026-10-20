@@ -45,14 +45,10 @@ const QuizIndex: React.FC = () => {
       setLoading(true);
       setLoadError(false);
       try {
-        const [nextTree, grade3ClassIds] = await Promise.all([
+        const [nextTree, nextConfig] = await Promise.all([
           readStudentCurriculumTree(config),
-          getGrade3ClassIdsFromSchoolConfig(),
+          readAssessmentConfigMap(config, getGrade3ClassIdsFromSchoolConfig()),
         ]);
-        const nextConfig = await readAssessmentConfigMap(
-          config,
-          grade3ClassIds,
-        );
         if (cancelled) return;
         setTree(nextTree);
         setExpandedItems(getAllExpandedIndexes(nextTree));
@@ -69,7 +65,7 @@ const QuizIndex: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config, reloadKey]);
+  }, [config?.year, config?.semester, reloadKey]);
 
   const toggleAccordion = (index: number) => {
     setExpandedItems((current) => {

@@ -88,6 +88,36 @@ service cloud.firestore {
         && (uids.size() <= 19 || (uids[19] is string && uids[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$'))));
     }
 
+    function hasValidYutMaintenanceBypassUids(uids) {
+      let padded = uids.concat(['x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x']);
+      return validYutMaintenanceUid(padded[0])
+        && validYutMaintenanceUid(padded[1])
+        && validYutMaintenanceUid(padded[2])
+        && validYutMaintenanceUid(padded[3])
+        && validYutMaintenanceUid(padded[4])
+        && validYutMaintenanceUid(padded[5])
+        && validYutMaintenanceUid(padded[6])
+        && validYutMaintenanceUid(padded[7])
+        && validYutMaintenanceUid(padded[8])
+        && validYutMaintenanceUid(padded[9])
+        && validYutMaintenanceUid(padded[10])
+        && validYutMaintenanceUid(padded[11])
+        && validYutMaintenanceUid(padded[12])
+        && validYutMaintenanceUid(padded[13])
+        && validYutMaintenanceUid(padded[14])
+        && validYutMaintenanceUid(padded[15])
+        && validYutMaintenanceUid(padded[16])
+        && validYutMaintenanceUid(padded[17])
+        && validYutMaintenanceUid(padded[18])
+        && validYutMaintenanceUid(padded[19]);
+    }
+
+    function validYutMaintenanceUid(uid) {
+      // matches() on a non-string fails closed, just like the prior explicit
+      // type check, while evaluating each UID only once.
+      return uid.matches('^\\S(?:[\\s\\S]{0,126}\\S)?$');
+    }
+
     function isValidStudentMaintenanceConfig(config) {
       return config.keys().hasAll([
           'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
@@ -103,6 +133,36 @@ service cloud.firestore {
         && config.bypassUids.size() <= 20
         && config.bypassUids.toSet().size() == config.bypassUids.size()
         && hasValidMaintenanceBypassUids(config.bypassUids)
+        && config.title is string
+        && config.title.matches('^\\S(?:[\\s\\S]{0,78}\\S)?$')
+        && config.message is string
+        && config.message.matches('^\\S(?:[\\s\\S]{0,498}\\S)?$')
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    // The room listener has a tighter expression budget because it also checks
+    // canonical enrollment. Keep the general portal validator unchanged.
+    function isValidYutStudentMaintenanceConfig(config) {
+      return config.keys().hasAll([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.keys().hasOnly([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.enabled is bool
+        && config.blockedRoles == ['student']
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && hasValidYutMaintenanceBypassUids(config.bypassUids)
         && config.title is string
         && config.title.matches('^\\S(?:[\\s\\S]{0,78}\\S)?$')
         && config.message is string
@@ -1257,15 +1317,25 @@ service cloud.firestore {
       // Only participants may subscribe to a single room. All mutations and
       // join-code lookups are server commands; collection discovery stays shut.
       match /yut_rooms/{roomId} {
+        function currentYutMaintenance() {
+          let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
+          // One document read preserves the absent-config default without the
+          // exists()+get() pair exhausting the participant-read access budget.
+          return maintenance == null || (isValidYutStudentMaintenanceConfig(maintenance.data)
+            && (maintenance.data.enabled == false
+              || request.auth.token.email == 'westoria28@gmail.com'
+              || request.auth.uid in maintenance.data.bypassUids
+              || (userProfile().role in ['teacher', 'staff'])));
+        }
         function currentYutScope() {
           let scope = year + '-' + semester;
           let config = get(/databases/$(database)/documents/site_settings/config).data;
           let pointer = get(/databases/$(database)/documents/site_settings/semester_active).data;
           let manifest = get(/databases/$(database)/documents/semester_manifests/$(scope)).data;
-          return string(config.year) == year && string(config.semester) == semester
-            && pointer.semesterId == scope && manifest.status == 'ACTIVE'
-            && manifest.get('readOnly', false) == false && manifest.revision is int
-            && manifest.revision >= 1 && pointer.revision == manifest.revision;
+          return [string(config.year), string(config.semester), pointer.semesterId,
+              manifest.status, manifest.get('readOnly', false), pointer.revision]
+            == [year, semester, scope, 'ACTIVE', false, manifest.revision]
+            && manifest.revision is int && manifest.revision >= 1;
         }
         function currentYutStudentMember() {
           let settings = get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/weplay_games/joseon-yut).data;
@@ -1277,13 +1347,13 @@ service cloud.firestore {
           return settings.enabled == true && settings.version is int && settings.version >= 0 && settings.version <= 9007199254740991
             && settings.get('allowMultiplayer', true) == true
             && (resource.data.get('visibility', 'private') == 'public' || settings.get('allowPrivateRooms', true) == true)
-            && enrollment.studentUid == request.auth.uid
-            && enrollment.semesterId == year + '-' + semester
-            && enrollment.enrollmentStatus == 'ACTIVE' && enrollment.get('readOnly', false) == false
-            && slot.studentUid == request.auth.uid && slot.semesterId == year + '-' + semester
-            && slot.activeEnrollmentId == enrollmentId && slot.get('status', 'ACTIVE') == 'ACTIVE'
-            && classroom.semesterId == year + '-' + semester && classroom.status == 'ACTIVE'
-            && classroom.get('readOnly', false) == false;
+            && [enrollment.studentUid, enrollment.semesterId, enrollment.enrollmentStatus,
+                enrollment.get('readOnly', false), slot.studentUid, slot.semesterId,
+                slot.activeEnrollmentId, slot.get('status', 'ACTIVE'),
+                classroom.semesterId, classroom.status, classroom.get('readOnly', false)]
+              == [request.auth.uid, year + '-' + semester, 'ACTIVE', false,
+                request.auth.uid, year + '-' + semester, enrollmentId, 'ACTIVE',
+                year + '-' + semester, 'ACTIVE', false];
         }
         function currentYutMember() {
           let profile = userProfile();
@@ -1297,9 +1367,10 @@ service cloud.firestore {
         // Same Westory fences, with the active-session branch evaluated once;
         // a pending reauthentication transition alone cannot read game state.
         allow get: if hasWestoryIdentity() && hasActiveApplicationSession()
-          && passesStudentMaintenanceFence()
+          && currentYutMaintenance()
           && request.auth.uid in resource.data.participantUids
           && resource.data.expiresAtMs > request.time.toMillis()
+          && (resource.data.status != 'waiting' || resource.data.createdAtMs + 600000 > request.time.toMillis())
           && currentYutScope() && currentYutMember();
         allow list, create, update, delete: if false;
       }
@@ -1459,10 +1530,10 @@ service cloud.firestore {
       }
 
       match /lesson_presentations/{unitId}/teachers/{userId} {
-        allow read, write: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+        allow read, write: if false;
 
         match /classes/{classId} {
-          allow read, write: if isAdmin() || (canUseWestory() && request.auth.uid == userId && hasPermission('lesson_read'));
+          allow read, write: if false;
         }
       }
 

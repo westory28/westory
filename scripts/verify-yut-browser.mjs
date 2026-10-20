@@ -352,6 +352,23 @@ async function throwWithPower(page, duration = 420) {
 }
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
+  const loadingPage = await open(1280, "portal=student&uid=qa-loading");
+  await skip(loadingPage);
+  await loadingPage.getByRole("button", { name: "여럿이서 시작", exact: true }).waitFor();
+  assert.equal(
+    await loadingPage.evaluate(() => window.yutQA.calls.filter(call => call.endpoint === "lobby").length),
+    1,
+    "the publication response initializes the game without a duplicate lobby request",
+  );
+  checks.push("Actual student entry reuses the scoped publication response: one initial lobby request, with game loading warmed during the opening.");
+  await loadingPage.close();
+  if (process.env.YUT_QA_ONLY_LOADING === "1") {
+    console.log(checks.join("\n"));
+    await fs.writeFile(path.join(evidence, "loading-report.json"), JSON.stringify({ checks, errors }, null, 2));
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+    process.exit(0);
+  }
   if (process.env.YUT_QA_ONLY_MODES !== "1") {
     const powerPage = await open(1280, "power=1");
     const powerButton = powerPage.getByRole("button", {
@@ -489,7 +506,7 @@ try {
       const before = await page.evaluate(() => window.yutQA.calls.length);
       await capture(page, "yut-preview-waiting-" + width);
       await page
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .click();
       await page
         .getByRole("button", { name: "윷 던지기", exact: true })
@@ -658,7 +675,7 @@ try {
       document.fullscreenElement?.classList.contains("yut-game"),
     );
     await full
-      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .getByRole("button", { name: "게임 시작", exact: true })
       .click();
     await full
       .getByRole("button", { name: "윷 던지기", exact: true })
@@ -747,7 +764,7 @@ try {
     await capture(host, "yut-online-two-seat-waiting");
     assert.equal(
       await host
-        .getByRole("button", { name: "윷판 펼치기", exact: true })
+        .getByRole("button", { name: "게임 시작", exact: true })
         .isEnabled(),
       false,
     );
@@ -777,7 +794,7 @@ try {
     );
     await guest.keyboard.press("Escape");
     await host
-      .getByRole("button", { name: "윷판 펼치기", exact: true })
+      .getByRole("button", { name: "게임 시작", exact: true })
       .click();
     await host
       .getByRole("button", { name: "윷 던지기", exact: true })
@@ -976,7 +993,7 @@ try {
   await fastGuest
     .getByRole("button", { name: "준비 완료", exact: true })
     .click();
-  await fast.getByRole("button", { name: "윷판 펼치기", exact: true }).click();
+  await fast.getByRole("button", { name: "게임 시작", exact: true }).click();
   await fastGuest
     .getByRole("button", { name: "윷 던지기", exact: true })
     .waitFor({ timeout: 12000 });
