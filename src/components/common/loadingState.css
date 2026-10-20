@@ -1,0 +1,134 @@
+.ws-loading-page,
+.ws-loading-overlay,
+.ws-loading-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.ws-loading-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--ws-bg, #f9fafb);
+}
+.ws-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(4px);
+}
+.ws-loading-inline {
+  padding-block: 40px;
+}
+.ws-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  color: var(--ws-text-muted, #6b7280);
+  text-align: center;
+}
+.ws-loading__globe {
+  display: block;
+  width: 208px;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 16px;
+  overflow: visible;
+}
+.ws-loading__ocean {
+  fill: var(--ws-primary-soft, #eff6ff);
+}
+.ws-loading__land {
+  fill: var(--ws-primary, #2563eb);
+}
+.ws-loading__grid,
+.ws-loading__edge {
+  fill: none;
+  stroke: var(--ws-border-blue, #dbeafe);
+  stroke-width: 0.8;
+}
+.ws-loading__satellite {
+  fill: var(--ws-accent, #f59e0b);
+}
+.ws-loading__satellite--back {
+  opacity: 0.7;
+}
+.ws-loading__wordmark {
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+.ws-loading__we {
+  color: var(--ws-primary, #2563eb);
+}
+.ws-loading__story {
+  color: var(--ws-accent, #f59e0b);
+}
+.ws-loading__message {
+  margin-top: 8px;
+  padding-left: 0.75em;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+.ws-loading__dots {
+  display: inline-flex;
+  width: 0.75em;
+}
+.ws-loading__dots span {
+  width: 0.25em;
+  opacity: 0;
+  animation: ws-loading-dot 1200ms steps(1, end) infinite;
+}
+.ws-loading__dots span:nth-child(2) {
+  animation-name: ws-loading-dot-two;
+}
+.ws-loading__dots span:nth-child(3) {
+  animation-name: ws-loading-dot-three;
+}
+.ws-loading-inline .ws-loading__globe {
+  width: 144px;
+}
+.ws-loading-inline .ws-loading__wordmark {
+  font-size: 26px;
+}
+.ws-loading--paused .ws-loading__dots span {
+  animation-play-state: paused;
+}
+@keyframes ws-loading-dot {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+}
+@keyframes ws-loading-dot-two {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes ws-loading-dot-three {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  75% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-loading__dots span {
+    animation: none;
+    opacity: 1;
+  }
+}

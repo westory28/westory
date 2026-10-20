@@ -15,6 +15,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
+import { InlineLoading, PageLoading } from "./components/common/LoadingState";
 import { SensitiveOperationController } from "./components/common/SensitiveOperationController";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
@@ -167,7 +168,7 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 };
 
 const RouteContentFallback: React.FC = () => (
-  <div className="min-h-[12rem]" aria-hidden="true" />
+  <InlineLoading className="min-h-[12rem] items-center" />
 );
 
 const renderWithLayout = (children: React.ReactNode, _message?: string) => (
@@ -183,7 +184,7 @@ const ArchiveRouteContent: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
   <SemesterArchiveBoundary>
-    <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
+    <Suspense fallback={<PageLoading />}>{children}</Suspense>
   </SemesterArchiveBoundary>
 );
 

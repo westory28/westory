@@ -52,8 +52,9 @@ const empty = {authPhase:"signed-out",loading:false,currentUser:null,onboardingU
 export const user = {uid:"synthetic-student",email:"qa-fixture@yongshin-ms.ms.kr",displayName:"",photoURL:"",getIdTokenResult:async()=>({authTime:"fixture-epoch",claims:{auth_time:1}})};
 export const profile = {uid:user.uid,email:user.email,role:"student",name:"가나다",grade:"1",class:"1",number:"1",customNameConfirmed:true,privacyAgreed:true,consentAgreedItems:[],staffPermissions:[],teacherPortalEnabled:false};
 export const auth = {currentUser:null};
-let generation = 1, flow = 0, pending = null, profilePayload = null;
+let generation = 1, flow = 0, pending = null, profilePayload = null, bootstrapResolve = null;
 export const events = [];
+export const releaseBootstrap = () => {events.push("bootstrap-released");bootstrapResolve?.();bootstrapResolve=null;};
 let state = {...empty};
 const publish = (next) => {state={...state,...next};listeners.forEach(fn=>fn());profileWaiters.forEach(fn=>fn());};
 export const phase = (name, extra={}) => {
@@ -80,7 +81,7 @@ export const useAuth = () => {
     abandonLoginFlow:attempt=>{if(attempt===flow){events.push("flow-abandoned");flow++;}},
     discardStaleLoginUser:async(loginUser,attempt)=>{if(attempt!==flow && auth.currentUser===loginUser){events.push("stale-user-discarded");phase("signed-out");}},
     failLoginFlow:(attempt,error)=>{if(attempt!==flow)return;events.push("login-flow-failed");if(!auth.currentUser)phase("signed-out");else timeout();},
-    claimLoginBootstrap:async(loginUser)=>({generation:state.authGeneration,user:loginUser,authTime:"fixture-epoch",profile:state.userData}),
+    claimLoginBootstrap:async(loginUser)=>{if(new URLSearchParams(location.search).get("scenario")?.startsWith("resume-")){events.push("bootstrap-pending");await new Promise(resolve=>{bootstrapResolve=resolve;});}return {generation:state.authGeneration,user:loginUser,authTime:"fixture-epoch",profile:state.userData};},
     waitForAuthProfile:async(attempt,loginUser,matches)=>new Promise((resolve,reject)=>{const check=()=>{if(attempt!==state.authGeneration || loginUser!==auth.currentUser){profileWaiters.delete(check);reject(Object.assign(new Error("synthetic stale"),{code:"auth/stale-attempt"}));}else if(["ready","registration-pending"].includes(state.authPhase) && state.userData && matches(state.userData)){events.push("profile-ack-accepted");profileWaiters.delete(check);resolve();}};profileWaiters.add(check);check();}),
     isAuthAttemptCurrent:(attempt,loginUser)=>attempt===state.authGeneration && loginUser===auth.currentUser && state.authPhase!=="error",
     assertAuthAttemptCurrent:async(attempt,loginUser)=>{if(attempt!==state.authGeneration || loginUser!==auth.currentUser || state.authPhase==="error")throw Object.assign(new Error("synthetic stale"),{code:"auth/stale-attempt"});}
@@ -129,11 +130,11 @@ import {createRoot} from "react-dom/client";
 import {HashRouter,Routes,Route} from "react-router-dom";
 import Login from ${source("pages/Login.tsx")};
 import MainLayout from ${source("components/layout/MainLayout.tsx")};
-import {phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,profile} from "qa-auth";
-window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile};
+import {phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,profile,releaseBootstrap} from "qa-auth";
+window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,releaseBootstrap};
 const scenario=new URLSearchParams(location.search).get("scenario") || "loading";
 if(scenario==="redirect-timeout")localStorage.setItem("westoryRedirectAttempt",JSON.stringify({mode:"student",startedAt:Date.now()}));
-if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="registration-pending")phase("registration-pending",{userData:{...profile,registrationApprovalStatus:"PENDING"}});else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario==="redirect-timeout")phase("signed-out");else phase("opening-session");
+if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="registration-pending")phase("registration-pending",{userData:{...profile,registrationApprovalStatus:"PENDING"}});else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="resume-ready")phase("ready");else if(scenario==="teacher-ready")phase("ready",{userData:{...profile,role:"teacher"}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario==="redirect-timeout")phase("signed-out");else phase("opening-session");
 function Protected(){return <MainLayout><section data-testid="protected-child" className="p-6"><h1 className="text-2xl font-bold">합성 학생 포털</h1><button className="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-white">합성 학습 시작</button></section></MainLayout>}
 createRoot(document.getElementById("root")).render(<HashRouter><Routes><Route path="/" element={<Login/>}/><Route path="/student/*" element={<Protected/>}/><Route path="/teacher/*" element={<Protected/>}/></Routes></HashRouter>);
 `;
@@ -188,6 +189,7 @@ const cssFiles = [
   "src/assets/index.css",
   "src/components/layout/teacherLayout.css",
   "src/components/layout/studentLayout.css",
+  "src/components/common/loadingState.css",
   "src/components/public-entry/public-entry.css",
 ];
 const css = (
@@ -365,6 +367,23 @@ const newPage = async (
   });
   page.on("pageerror", (error) => report.pageErrors.push(error.message));
   page.on("dialog", (dialog) => dialog.dismiss());
+  // Observe commits from before React mounts, including nodes removed before a
+  // screenshot or the next animation frame could expose a transient entry page.
+  await page.addInitScript(() => {
+    window.authEntryMounts = 0;
+    new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (
+            node instanceof Element &&
+            (node.matches(".public-entry") ||
+              node.querySelector(".public-entry"))
+          )
+            window.authEntryMounts += 1;
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.route("**/*", (route) => {
     if (route.request().url().startsWith(origin)) return route.continue();
     report.externalRequests.push(new URL(route.request().url()).origin);
@@ -383,6 +402,40 @@ try {
   });
   report.browser = browser.version();
   for (const width of report.viewports) {
+    for (const scenario of ["resume-pending", "resume-ready"]) {
+      const resume = await newPage(width, scenario);
+      if (scenario === "resume-pending") {
+        await resume.getByRole("status").waitFor();
+        assert.equal(await resume.locator(".public-entry").count(), 0);
+        await resume.evaluate(() => window.authQa.phase("ready"));
+      }
+      await resume.waitForFunction(() =>
+        window.authQa.events.includes("bootstrap-pending"),
+      );
+      await resume.getByRole("status").waitFor();
+      await noProtected(resume);
+      assert.equal(await resume.locator(".public-entry").count(), 0);
+      assert.equal(await resume.evaluate(() => window.authEntryMounts), 0);
+      await resume.evaluate(() => window.authQa.releaseBootstrap());
+      await resume.getByTestId("protected-child").waitFor();
+      assert.equal(
+        await resume.evaluate(() => window.authEntryMounts),
+        0,
+        "Session restoration must never mount the public entry before navigation",
+      );
+      check("restored-student-session-keeps-loading-through-navigation", {
+        width,
+        scenario,
+      });
+      await resume.close();
+    }
+    const teacherResume = await newPage(width, "teacher-ready");
+    await teacherResume.getByTestId("protected-child").waitFor();
+    assert.equal(await teacherResume.evaluate(() => window.authEntryMounts), 0);
+    check("restored-teacher-first-render-does-not-mount-public-entry", {
+      width,
+    });
+    await teacherResume.close();
     for (const route of ["/", "/student/dashboard", "/teacher/settings"]) {
       const pending = await newPage(
         width,
@@ -858,6 +911,10 @@ try {
     window.authQa.events.includes("redirect-result-pending"),
   );
   await noProtected(redirectPage);
+  await redirectPage.getByRole("status").waitFor();
+  assert.equal(await redirectPage.locator(".public-entry").count(), 0);
+  assert.equal(await redirectPage.evaluate(() => window.authEntryMounts), 0);
+  check("redirect-recovery-does-not-mount-public-entry", { width: 390 });
   await capture(redirectPage, "redirect-pending", 390);
   await redirectPage
     .getByText(/auth\/startup-timeout/)

@@ -2015,13 +2015,15 @@ const Login: React.FC = () => {
         return;
       }
       authActionLockRef.current = false;
+      // Replacing the current #/ URL may not reload the page. Release the
+      // completed sign-out so the signed-out entry can render in that case.
+      setAuthBusy(false);
       if (typeof window !== "undefined") {
         window.location.replace(
           `${window.location.pathname}${window.location.search}#/`,
         );
         return;
       }
-      setAuthBusy(false);
     }
   };
 
@@ -2070,7 +2072,15 @@ const Login: React.FC = () => {
     );
   }
 
-  if (loading)
+  // A verified session still needs role/onboarding checks and navigation. Keep
+  // the entry page hidden even on the first ready render, before auto-resume's
+  // effect runs. Onboarding dialogs must remain available while they await input.
+  if (
+    loading ||
+    (!profileModalOpen &&
+      !consentModalOpen &&
+      (redirectRecoveryPending || authBusy || currentUser))
+  )
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
   const publicTeacherLogin = !classicEntry && (

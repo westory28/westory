@@ -1,9 +1,9 @@
 import React from "react";
-
-const DEFAULT_WARNING =
-  "자료를 불러오는 중에는 새로고침하거나 다른 화면으로 이동하지 마세요.";
+import LoadingGlobe from "./LoadingGlobe";
+import "./loadingState.css";
 
 type LoadingStateProps = {
+  // Kept for existing callers; shared loading has one consistent visible label.
   message?: string;
   detail?: string;
   className?: string;
@@ -11,79 +11,55 @@ type LoadingStateProps = {
   showWarning?: boolean;
 };
 
-type LoadingOverlayProps = LoadingStateProps & {
-  zIndexClassName?: string;
-};
+type LoadingOverlayProps = LoadingStateProps & { zIndexClassName?: string };
 
-const LoadingMark: React.FC = () => (
-  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-    <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
-  </div>
-);
-
-const LoadingCard: React.FC<LoadingStateProps> = ({
-  message = "자료를 불러오는 중입니다.",
-  detail,
+const LoadingContent: React.FC<{ className?: string }> = ({
   className = "",
-  warning = DEFAULT_WARNING,
-  showWarning = true,
 }) => (
   <div
-    className={`inline-block max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white px-6 py-5 text-center shadow-xl ${className}`}
+    className={`ws-loading ${className}`}
     role="status"
     aria-live="polite"
+    aria-label="처리 중"
     aria-busy="true"
   >
-    <LoadingMark />
-    <p className="mt-3 break-keep text-[clamp(0.75rem,3.5vw,0.875rem)] font-bold leading-6 text-gray-800">
-      {message}
-    </p>
-    {detail && (
-      <p className="mt-1 break-keep text-[clamp(0.625rem,3vw,0.75rem)] font-medium leading-5 text-gray-500">
-        {detail}
-      </p>
-    )}
-    {showWarning && (
-      <p className="mt-2 break-keep text-[clamp(0.625rem,3vw,0.75rem)] font-semibold leading-5 text-amber-700">
-        {warning}
-      </p>
-    )}
+    <LoadingGlobe />
+    <div className="ws-loading__wordmark" aria-hidden="true">
+      <span className="ws-loading__we">We</span>
+      <span className="ws-loading__story">story</span>
+    </div>
+    <div className="ws-loading__message" aria-hidden="true">
+      처리 중
+      <span className="ws-loading__dots">
+        <span>.</span>
+        <span>.</span>
+        <span>.</span>
+      </span>
+    </div>
   </div>
 );
 
-export const PageLoading: React.FC<LoadingStateProps> = (props) => (
-  <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-    <LoadingCard
-      {...props}
-      className={`w-fit max-w-[calc(100vw-2rem)] ${props.className || ""}`}
-    />
+export const PageLoading: React.FC<LoadingStateProps> = ({
+  className = "",
+}) => (
+  <div className="ws-loading-page">
+    <LoadingContent className={className} />
   </div>
 );
 
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   zIndexClassName = "z-[90]",
-  ...props
+  className = "",
 }) => (
-  <div
-    className={`fixed inset-0 ${zIndexClassName} flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm`}
-  >
-    <LoadingCard
-      {...props}
-      className={`w-fit max-w-[calc(100vw-2rem)] ${props.className || ""}`}
-    />
+  <div className={`ws-loading-overlay ${zIndexClassName}`}>
+    <LoadingContent className={className} />
   </div>
 );
 
 export const InlineLoading: React.FC<LoadingStateProps> = ({
   className = "",
-  showWarning = false,
-  ...props
 }) => (
-  <div className={`flex justify-center px-4 py-10 ${className}`}>
-    <LoadingCard
-      {...props}
-      showWarning={showWarning}
-      className="mx-auto w-fit max-w-[calc(100vw-2rem)] shadow-sm"
-    />
+  <div className={`ws-loading-inline ${className}`}>
+    <LoadingContent />
   </div>
 );
