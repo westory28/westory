@@ -149,6 +149,10 @@
 }
 
 .student-week-strip__weekday {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
 }
@@ -522,14 +526,6 @@
 .student-week-strip__day strong {
   position: relative;
   overflow: visible;
-}
-
-.student-week-strip__attendance {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 24px;
-  flex-shrink: 0;
 }
 
 .student-schedule-title {

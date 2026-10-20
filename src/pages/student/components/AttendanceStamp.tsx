@@ -1,16 +1,23 @@
 import React from "react";
-import attendanceStamp from "../../../assets/attendance-stamp.webp";
 import "./attendanceStamp.css";
 
 const AttendanceStamp = ({ date }: { date?: string }) => (
-  <img
+  <span
     className="student-attendance-stamp"
-    src={attendanceStamp}
-    width={36}
-    height={24}
-    alt={date ? `${date} 출석 완료` : "출석 완료"}
-    draggable={false}
-  />
+    role="img"
+    aria-label={date ? `${date} 출석 완료` : "출석 완료"}
+    title={date ? `${date} 출석 완료` : "출석 완료"}
+  >
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="m4 8 2.5 2.5L12 5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
 );
 
 export default AttendanceStamp;

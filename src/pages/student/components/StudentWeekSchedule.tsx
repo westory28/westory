@@ -358,13 +358,15 @@ const StudentWeekSchedule: React.FC<Props> = ({
                   onClick={() => onDateClick(date)}
                 >
                   <span
-                    className="student-week-strip__attendance"
+                    className="student-week-strip__weekday"
                     aria-hidden="true"
                   >
-                    {attendanceDateSet.has(date) && <AttendanceStamp />}
-                  </span>
-                  <span className="student-week-strip__weekday">
-                    {["일", "월", "화", "수", "목", "금", "토"][index]}
+                    <span>
+                      {["일", "월", "화", "수", "목", "금", "토"][index]}
+                    </span>
+                    {attendanceDateSet.has(date) && (
+                      <AttendanceStamp date={date} />
+                    )}
                   </span>
                   <strong>
                     <span className="student-week-strip__number">

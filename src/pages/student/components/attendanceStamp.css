@@ -1,9 +1,17 @@
 .student-attendance-stamp {
-  display: inline-block;
-  width: 36px;
-  height: 24px;
-  max-width: 100%;
-  flex: 0 1 auto;
-  object-fit: contain;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 50%;
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
   vertical-align: middle;
+}
+
+.student-attendance-stamp svg {
+  width: 12px;
+  height: 12px;
 }

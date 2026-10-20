@@ -176,13 +176,6 @@
     max-width: 100%;
   }
 
-  .student-full-calendar .student-calendar-day-date .student-attendance-stamp {
-    width: clamp(16px, 5vw, 24px);
-    height: auto;
-    flex: 0 1 auto;
-    min-width: 0;
-  }
-
   .student-full-calendar__list-event {
     grid-template-columns: var(--space-20) minmax(0, 1fr);
     gap: var(--space-2);

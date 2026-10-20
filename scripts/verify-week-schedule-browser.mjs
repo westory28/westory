@@ -22,6 +22,7 @@ import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
 import TeacherWeekSchedule from './src/pages/teacher/components/TeacherWeekSchedule';
 import StudentWeekSchedule from './src/pages/student/components/StudentWeekSchedule';
+import StudentCalendarSection from './src/pages/student/components/StudentCalendarSection';
 import './src/assets/index.css';
 import './src/pages/teacher/teacherDashboard.css';
 import './src/pages/student/studentDashboard.css';
@@ -53,9 +54,10 @@ function Calendar({role}) {
  const state=new URLSearchParams(location.search).get('state');
  const markers=new URLSearchParams(location.search).get('scenario')==='markers';
  const shared={events:state==='empty'?[]:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:setWeekStart,onDateClick:setSelectedDate,onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
- return <><output data-clicked={role}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
+ return <><output data-clicked={role}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
-createRoot(document.getElementById('root')).render(<MemoryRouter><div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div></MemoryRouter>);`,
+const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
+createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<main className="student-calendar-page__canvas"><StudentCalendarSection events={events} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></main>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
   },
   bundle: true,
   write: false,
@@ -70,12 +72,15 @@ createRoot(document.getElementById('root')).render(<MemoryRouter><div className=
       name: "read-only-school-config",
       setup(plugin) {
         plugin.onResolve(
-          { filter: /^firebase\/firestore$|(?:^|\/)firebase$/ },
+          {
+            filter:
+              /^firebase\/firestore$|(?:^|\/)(firebase|AuthContext|visibleSchedule|semesterArchive|academicCalendar)$/,
+          },
           () => ({ path: "school", namespace: "fixture" }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
           contents:
-            "export const db={};export const doc=()=>({});export const getDoc=async()=>({exists:()=>false});export const onSnapshot=()=>()=>{};",
+            "export const db={};export const doc=()=>({});export const getDoc=async()=>({exists:()=>false});export const onSnapshot=()=>()=>{};export const useAuth=()=>({config:{year:'2026',semester:'2'},userData:{grade:'3',class:'1'}});export const getStudentClassKey=()=> '3-1';export const loadVisibleCalendarEvents=async()=>[];export const isSemesterArchive=false;export const archiveScope=null;export const mutateAcademicCalendar=async()=>{throw new Error('Read-only calendar fixture');};",
           loader: "js",
         }));
       },
@@ -246,6 +251,7 @@ try {
     await page.clock.install({ time: new Date("2026-10-19T03:00:00Z") });
     await page.goto(`${origin}/?scenario=markers`);
     await page.evaluate(() => document.fonts.ready);
+    const dayAlignment = {};
     for (const role of ["teacher", "student"]) {
       const days = page.locator(`.${role}-week-strip__day`);
       const counts = [1, 7, 3, 3, 2, 2, 12];
@@ -369,6 +375,31 @@ try {
       );
       await days.nth(3).click();
       assert.equal(await days.nth(3).getAttribute("aria-pressed"), "true");
+      dayAlignment[role] = await days.evaluateAll(
+        (elements, role) =>
+          elements.map((element) => {
+            const day = element.getBoundingClientRect();
+            const weekday = element.firstElementChild.getBoundingClientRect();
+            const circle = element
+              .querySelector("strong")
+              .getBoundingClientRect();
+            const dots = element
+              .querySelector(`.${role}-week-strip__markers`)
+              .getBoundingClientRect();
+            return {
+              height: day.height,
+              circleTop: circle.top - day.top,
+              centerOffset:
+                (weekday.top + dots.bottom - day.top - day.bottom) / 2,
+            };
+          }),
+        role,
+      );
+      for (const position of dayAlignment[role])
+        assert(
+          Math.abs(position.centerOffset) <= 2.5,
+          `Weekday/date/dots stay centered: ${JSON.stringify({ width, role, position })}`,
+        );
       await page.locator(`.${role}-week-strip`).screenshot({
         path: path.join(evidence, `${width}-${role}-week-strip.png`),
       });
@@ -381,6 +412,26 @@ try {
         todayHolidayAndSelectionPreserved: true,
       });
     }
+    for (let index = 0; index < 7; index++) {
+      const student = dayAlignment.student[index];
+      const teacher = dayAlignment.teacher[index];
+      assert(Math.abs(student.height - teacher.height) < 1);
+      assert(
+        Math.abs(student.circleTop - teacher.circleTop) < 1,
+        `Attendance does not displace student dates: ${JSON.stringify({ width, index, student, teacher })}`,
+      );
+      const day = page.locator(".student-week-strip__day").nth(index);
+      const attended = index === 1 || index === 3;
+      assert.equal(
+        await day.locator(".student-attendance-stamp").count(),
+        attended ? 1 : 0,
+      );
+      assert.equal(
+        (await day.getAttribute("aria-label")).includes("출석 완료"),
+        attended,
+      );
+    }
+    results.push({ width, centeredWithAndWithoutAttendance: true });
     assert(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -439,6 +490,59 @@ try {
         );
       }
     }
+    await page.goto(`${origin}/?scenario=calendar`);
+    const fullCalendar = page.getByRole("region", { name: "학사 일정 달력" });
+    await fullCalendar
+      .getByRole("img", { name: "2026-10-19 출석 완료", exact: true })
+      .waitFor();
+    assert.equal(
+      await fullCalendar.locator(".student-attendance-stamp").count(),
+      2,
+    );
+    const attendanceMarks = await fullCalendar
+      .locator(".student-attendance-stamp")
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const mark = element.getBoundingClientRect();
+          const cell = element
+            .closest(".fc-daygrid-day")
+            .getBoundingClientRect();
+          return {
+            svg: Boolean(element.querySelector("svg")),
+            width: mark.width,
+            height: mark.height,
+            inside: mark.left >= cell.left && mark.right <= cell.right + 1,
+          };
+        }),
+      );
+    assert(
+      attendanceMarks.every(
+        (mark) =>
+          mark.svg && mark.width === 16 && mark.height === 16 && mark.inside,
+      ),
+    );
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    if (width === 390 || width === 1280)
+      await page.screenshot({
+        path: path.join(evidence, `${width}-attendance-calendar.png`),
+        fullPage: true,
+      });
+    await fullCalendar
+      .getByRole("button", { name: "목록", exact: true })
+      .click();
+    assert.equal(
+      await fullCalendar
+        .locator(
+          ".student-full-calendar__list-heading .student-attendance-stamp",
+        )
+        .count(),
+      2,
+    );
+    results.push({ width, monthAndListAttendanceCheck: true });
     assert.deepEqual(errors, []);
     await page.close();
   }

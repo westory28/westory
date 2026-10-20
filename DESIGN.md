@@ -822,13 +822,13 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 
 - Student map categories expand their map items directly beneath them in the existing submenu (16px indent, 8px inner spacing). Replace the horizontal map tabs and category badge with a compact selected-map heading (16px padding); reduce the outer viewer gutter to 8px to give maps more space. Category selection keeps the mobile menu open for choosing a map; item selection closes it. Keep existing viewer, zoom, tags and reward behavior.
 
-### Student attendance stamp
+### Student attendance indicator
 
-- Reuse one transparent red raster stamp reading 출석 for confirmed attendance only. Reserve a 36×24px stamp slot above each weekday in the student weekly strip; retain date buttons and their existing event markers. Full calendar month cells show the same 36×24px stamp beside the day number, fitting within narrow cells without horizontal overflow. Use existing danger-text ink and spacing tokens; no stamp animation or teacher UI changes. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
+- Confirmed attendance uses one compact 16px primary-blue circle with a white 12px SVG check, a `출석 완료` accessible name and date tooltip. In the weekly strip, place it beside the weekday with the existing 4px gap; never reserve an empty attendance row above the weekday. Weekday, date circle and event dots stay vertically centered at the teacher strip's positions whether attendance is present or absent. The full calendar uses the same 16px check beside its date number and in list headings. Keep existing 88px day hit areas, circle sizing and shared event-dot spacing. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
 
 ### Student full calendar alignment
 - Student full calendar reuses the teacher calendar shell, 1536px page width, 16px/24px gutters, and `max(600px, 100dvh - 176px)` canvas. Keep student actions read-only.
-- Reuse the teacher left-aligned numeric date header and 24px event labels. The attendance stamp stays beside the date in one non-wrapping row; mobile stamps scale from 16px to 24px wide to fit seven equal columns.
+- Reuse the teacher left-aligned numeric date header and 24px event labels. The 16px attendance check stays beside the date in one non-wrapping row at every viewport width.
 
 ### Korean text and assessment navigation
 
