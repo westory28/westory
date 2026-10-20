@@ -11,6 +11,7 @@ const publicId = (scope, uid) => `wispublic_${createHash('sha256').update(`${sco
 const slotPath = (scope, uid) => `semester_enrollment_slots/${buildEnrollmentSlotId(scope, uid)}`;
 const accountPath = (scope, uid) => `semester_wis_accounts/${accountIdFor(scope, uid)}`;
 const rankingPath = (scope, uid) => `semester_wis_rankings/${accountIdFor(scope, uid)}`;
+const previewPath = (scope, uid) => `semester_wis_preview_entries/${accountIdFor(scope, uid)}`;
 const policyPath = scope => `years/${scope.split('-')[0]}/semesters/${scope.split('-')[1]}/point_policies/current`;
 const entries = state => Object.values(state.hallOfFame?.gradeLeaderboardByGrade || {}).flat();
 
@@ -25,14 +26,49 @@ class MemoryStore {
   }
   async getAll(paths) { return Promise.all(paths.map(path => this.get(path))); }
   async query(collection, filter) {
-    this.queries.push({ collection, ...filter });
-    if (collection === 'semester_wis_rankings') {
+    const stats = { collection, ...filter };
+    this.queries.push(stats);
+    if (['semester_wis_rankings', 'semester_wis_preview_entries'].includes(collection)) {
       if (this.failRankingQueries > 0) { this.failRankingQueries--; throw new Error('synthetic read failure'); }
       if (this.delayRanking) await this.delayRanking;
     }
-    return [...this.docs].filter(([path, data]) => path.startsWith(`${collection}/`) &&
-      !path.slice(collection.length + 1).includes('/') && data[filter.field] === filter.value)
-      .slice(0, filter.limit).map(([path, data]) => ({ path, exists: true, data: structuredClone(data) }));
+    const filters = filter?.filters || (filter?.field ? [filter] : []);
+    const orderBy = Array.isArray(filter?.orderBy) ? filter.orderBy : filter?.orderBy ? [filter.orderBy] : [];
+    const compareValue = (left, right) => typeof left === 'string' && typeof right === 'string'
+      ? left < right ? -1 : left > right ? 1 : 0 : left < right ? -1 : left > right ? 1 : 0;
+    const compare = (left, right) => {
+      for (const ordering of orderBy) {
+        const value = compareValue(left[1][ordering.field], right[1][ordering.field]);
+        if (value) return ordering.direction === 'desc' ? -value : value;
+      }
+      const value = compareValue(left[0], right[0]);
+      return filter?.documentIdOrder === 'desc' ? -value : value;
+    };
+    const matches = (data, clause) => {
+      const value = data[clause.field];
+      if (clause.operator === '==') return value === clause.value;
+      if (clause.operator === '!=') return value !== undefined && value !== clause.value;
+      if (clause.operator === 'in') return clause.value.includes(value);
+      if (clause.operator === '>') return value > clause.value;
+      if (clause.operator === '>=') return value >= clause.value;
+      if (clause.operator === '<') return value < clause.value;
+      if (clause.operator === '<=') return value <= clause.value;
+      throw new Error(`Unsupported fixture filter ${clause.operator}`);
+    };
+    let rows = [...this.docs].filter(([path, data]) => path.startsWith(`${collection}/`) &&
+      !path.slice(collection.length + 1).includes('/') && filters.every(clause => matches(data, clause)) &&
+      orderBy.every(ordering => data[ordering.field] !== undefined)).sort(compare);
+    if (filter?.startAfterPath) {
+      const cursor = this.docs.get(filter.startAfterPath);
+      rows = cursor ? rows.filter(row => compare(row, [filter.startAfterPath, cursor]) > 0) : [];
+    } else if (filter?.startAfterId) {
+      rows = rows.filter(([path]) => compareValue(path.slice(collection.length + 1), filter.startAfterId) *
+        (filter.documentIdOrder === 'desc' ? -1 : 1) > 0);
+    }
+    rows = rows.slice(0, filter?.limit || rows.length);
+    stats.returned = rows.length;
+    stats.returnedPaths = rows.map(([path]) => path);
+    return rows.map(([path, data]) => ({ path, exists: true, data: structuredClone(data) }));
   }
   runTransaction(callback) { return callback({ get: path => this.get(path), getAll: paths => this.getAll(paths),
     query: (...args) => this.query(...args), set: () => { this.writes++; throw new Error('unexpected write'); },
@@ -62,6 +98,11 @@ const addStudent = (store, index, { scope = '2026-2', grade = '3', score = 1000 
     balance: score, recentLedgerEntries: Array.from({ length: 100 }, (_, n) => ({ reason: `large transaction ${n}` })) });
   const { status: _status, ...ranking } = fields;
   store.set(rankingPath(scope, uid), ranking);
+  // Simulate canonical writer output independently: never import the index
+  // writer into this query test, otherwise the same bug could seed and read it.
+  store.set(previewPath(scope, uid), { schemaVersion: 1, ...ranking, publicId: publicId(scope, uid), hallZeroEligible: status === 'ACTIVE',
+    eligible: (score > 0 || status === 'ACTIVE') && Number.isSafeInteger(score) && score >= 0 &&
+      !['방테스트', 'bangtest'].includes(name.toLowerCase().replace(/[\s._-]+/g, '')) });
   return uid;
 };
 const teacher = { uid: 'teacher', role: 'teacher', staffPermissions: ['point_read'] };
@@ -87,50 +128,75 @@ const assertBoundedResponse = state => {
 
 const run = async () => {
   let cases = 0;
-  {
+  const checks = [];
+  const metrics = {};
+  const check = async (name, run) => { await run(); cases++; checks.push(name); };
+  const previewQueries = store => store.queries.filter(query => query.collection === 'semester_wis_preview_entries');
+  const accountReads = store => store.reads.filter(path => path.startsWith('semester_wis_accounts/'));
+  const assertIndexOnly = (store, { pages = 1, grade = '3' } = {}) => {
+    const queries = previewQueries(store);
+    assert.equal(store.queries.length, pages, 'Current preview must not scan another collection');
+    assert.equal(queries.length, pages);
+    for (const query of queries) {
+      assert.ok(query.limit > 0 && query.limit <= 20);
+      assert.equal(query.documentIdOrder, 'asc');
+      assert.deepEqual(query.orderBy, [
+        { field: 'grade', direction: 'asc' }, { field: 'rankEarnedTotal', direction: 'desc' },
+        { field: 'publicId', direction: 'asc' },
+      ]);
+      const clauses = query.filters;
+      assert.ok(clauses.some(clause => clause.field === 'semesterId' && clause.operator === '==' && clause.value === '2026-2'));
+      assert.ok(clauses.some(clause => clause.field === 'eligible' && clause.operator === '==' && clause.value === true));
+      assert.equal(clauses.some(clause => clause.field === 'grade' && clause.value === grade), grade !== null);
+    }
+    assert.equal(store.writes, 0);
+  };
+  await check('current preview reads one ordered 20-entry index page and only final five canonical accounts', async () => {
     const ctx = setup(80); ctx.store.resetStats();
+    const started = process.hrtime.bigint();
     const cold = await ctx.request({ uid: 'student-79' });
-    assertBoundedResponse(cold); assert.equal(entries(cold).length, 5);
-    assert.equal(ctx.store.queries.length, 1); assert.equal(ctx.store.queries[0].collection, 'semester_wis_rankings');
-    assert.equal(ctx.store.queries[0].limit, 2001);
-    assert.equal(new Set(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/'))).size, 6);
+    metrics.normalCurrentQueryMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assertBoundedResponse(cold); assert.equal(entries(cold).length, 5); assertIndexOnly(ctx.store);
+    assert.equal(previewQueries(ctx.store)[0].returned, 20);
+    assert.equal(new Set(accountReads(ctx.store)).size, 6);
     assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-79').length, 5);
     ctx.store.resetStats(); const warm = await ctx.request({ uid: 'student-79' }); assertBoundedResponse(warm);
-    assert.equal(ctx.store.queries.length, 0);
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 6);
+    assertIndexOnly(ctx.store); assert.equal(accountReads(ctx.store).length, 6);
     assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_enrollment_slots/')).length, 6);
     assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_enrollments/')).length, 6);
     assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_classes/')).length, 1);
     assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
-    assert.equal(ctx.store.writes, 0); cases++;
-  }
-  {
-    const ctx = setup(); let release; ctx.store.delayRanking = new Promise(resolve => { release = resolve; });
-    const requests = Array.from({ length: 8 }, () => ctx.request());
-    for (let i = 0; i < 20; i++) await Promise.resolve();
-    release(); await Promise.all(requests);
-    assert.equal(ctx.store.queries.length, 1, 'simultaneous cold requests share one builder');
-    ctx.advance(29_999); await ctx.request(); assert.equal(ctx.store.queries.length, 1);
-    ctx.advance(1); await ctx.request(); assert.equal(ctx.store.queries.length, 2);
-    cases++;
-  }
-  {
+  });
+  await check('current failures retry explicitly without ranking-cache scans', async () => {
     const ctx = setup(); ctx.store.failRankingQueries = 1;
     await assert.rejects(() => ctx.request(), /synthetic read failure/);
-    assert.equal(entries(await ctx.request()).length, 5); assert.equal(ctx.store.queries.length, 2);
-    cases++;
-  }
-  {
-    const ctx = setup();
+    assert.equal(entries(await ctx.request()).length, 5);
+    assertIndexOnly(ctx.store, { pages: 2 });
+  });
+  await check('archive alone retains 30-second TTL and simultaneous cold-build deduplication', async () => {
+    const ctx = setup(); let release; ctx.store.delayRanking = new Promise(resolve => { release = resolve; });
+    const request = () => ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    const requests = Array.from({ length: 8 }, request);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    release(); await Promise.all(requests);
+    assert.equal(ctx.store.queries.length, 1);
+    assert.equal(ctx.store.queries[0].collection, 'semester_wis_rankings');
+    assert.equal(ctx.store.queries[0].limit, 2001);
+    ctx.advance(29_999); await request(); assert.equal(ctx.store.queries.length, 1);
+    ctx.advance(1); await request(); assert.equal(ctx.store.queries.length, 2);
+  });
+  await check('archive failed builders are retryable and the cache retains only four scopes', async () => {
+    const ctx = setup(); ctx.store.failRankingQueries = 1;
+    const explicit = scope => ctx.request({ uid: 'teacher', audience: 'teacher', scope, source: 'EXPLICIT' });
+    await assert.rejects(() => explicit('2026-2'), /synthetic read failure/);
+    assert.equal(entries(await explicit('2026-2')).length, 5);
     for (const scope of ['2025-1', '2025-2', '2026-1', '2026-2', '2027-1']) {
-      addScope(ctx.store, scope); addStudent(ctx.store, 100, { scope });
-      await ctx.request({ uid: 'teacher', audience: 'teacher', scope });
+      addScope(ctx.store, scope); addStudent(ctx.store, 100, { scope }); await explicit(scope);
     }
-    const before = ctx.store.queries.length;
-    await ctx.request({ uid: 'teacher', audience: 'teacher', scope: '2025-1' });
-    assert.equal(ctx.store.queries.length, before + 1, 'only four scope entries retained'); cases++;
-  }
-  {
+    const before = ctx.store.queries.length; await explicit('2025-1');
+    assert.equal(ctx.store.queries.length, before + 1);
+  });
+  await check('fresh canonical deletion, placement, withdrawal and names override stale index metadata', async () => {
     const ctx = setup(); await ctx.request();
     ctx.store.docs.delete(accountPath('2026-2', 'student-0'));
     ctx.store.patch('semester_enrollments/enrollment-2026-2-1', { snapshot: { grade: '2', classNumber: '1' }, displayName: '이동 후 이름' });
@@ -140,162 +206,226 @@ const run = async () => {
     assert.equal(rows.length, 5); assert.ok(rows.every(row => row.grade === '3'));
     assert.ok(!rows.some(row => [0, 1, 2].some(i => row.uid === publicId('2026-2', `student-${i}`))));
     assert.equal(rows.find(row => row.uid === publicId('2026-2', 'student-3')).studentName, '최신 이름');
-    assert.equal(ctx.store.queries.length, 0); assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
+    assertIndexOnly(ctx.store); assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
     assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-11').length, 5);
-    cases++;
-  }
-  {
-    const ctx = setup(); await ctx.request();
-    ctx.store.patch('semester_classes/class-2026-2-3', { semesterId: '2026-1' });
+  });
+  await check('actor class semester is validated before any index query', async () => {
+    const ctx = setup(); ctx.store.patch('semester_classes/class-2026-2-3', { semesterId: '2026-1' });
     const state = await ctx.request(); assert.equal(state.reason, 'WIS_ACTIVE_ENROLLMENT_REQUIRED');
-    assert.equal(state.hallOfFame, null); cases++;
-  }
-  {
+    assert.equal(state.hallOfFame, null); assert.equal(ctx.store.queries.length, 0);
+  });
+  await check('current policy and final five profiles are freshly applied on every request', async () => {
     const ctx = setup(); await ctx.request();
-    ctx.store.patch(accountPath('2026-2', 'student-0'), { rankEarnedTotal: 0 });
     ctx.store.patch(policyPath('2026-2'), { rankPolicy: { emojiRegistry: [
       { id: 'smile', emoji: '😀', enabled: true }, { id: 'trophy', emoji: '🏆', enabled: false },
     ] } });
-    const state = await ctx.request(); assert.equal(state.rankPolicy.emojiRegistry[1].enabled, false);
-    assert.ok(entries(state).every(row => row.profileIcon === '😀'));
-    assert.ok(entries(state).some(row => row.uid === publicId('2026-2', 'student-0') && row.cumulativeEarned === 0),
-      'fresh account score is returned without treating a cache mismatch as invalid');
-    assert.equal(ctx.store.queries.length, 1); cases++;
-  }
-  {
-    const ctx = setup(); await ctx.request();
-    ctx.store.patch(accountPath('2026-2', 'student-0'), { rankEarnedTotal: 1 });
-    const state = await ctx.request();
-    assert.equal(entries(state).find(row => row.uid === publicId('2026-2', 'student-0')).profileIcon, '😀',
-      'profile eligibility uses fresh account score'); cases++;
-  }
-  {
-    const ctx = setup(); await ctx.request();
-    ctx.store.patch('semester_enrollments/enrollment-2026-2-0', { displayName: '방테스트' });
+    ctx.store.patch('users/student-0', { profileEmojiId: 'smile', profileIcon: '😀' });
+    ctx.store.resetStats(); const state = await ctx.request();
+    assert.equal(state.rankPolicy.emojiRegistry[1].enabled, false);
+    assert.ok(entries(state).every(row => row.profileIcon === '😀')); assertIndexOnly(ctx.store);
+    assert.equal(ctx.store.reads.filter(path => path === policyPath('2026-2')).length, 1);
+    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-11').length, 5);
+  });
+  await check('fresh account score cannot preserve a stale high index rank', async () => {
+    const ctx = setup(); ctx.store.patch(accountPath('2026-2', 'student-0'), { rankEarnedTotal: 1 });
+    const state = await ctx.request(); const rows = entries(state);
+    assert.equal(rows.length, 5);
+    assert.ok(!rows.some(row => row.uid === publicId('2026-2', 'student-0')));
+    assert.ok(rows.some(row => row.uid === publicId('2026-2', 'student-5')));
+    assert.deepEqual(rows.map(row => row.cumulativeEarned), [999, 998, 997, 996, 995]);
+    assertIndexOnly(ctx.store);
+  });
+  await check('fresh score decreases across an entire first page trigger bounded next-page replacement', async () => {
+    const ctx = setup(80);
+    for (let i = 0; i < 20; i++) ctx.store.patch(accountPath('2026-2', `student-${i}`), { rankEarnedTotal: 0 });
+    ctx.store.resetStats(); const state = await ctx.request({ uid: 'student-79' });
+    assert.equal(entries(state).length, 5); assertIndexOnly(ctx.store, { pages: 2 });
+    assert.deepEqual(entries(state).map(row => row.cumulativeEarned), [980, 979, 978, 977, 976]);
+    assert.ok(entries(state).some(row => row.uid === publicId('2026-2', 'student-20')));
+    assert.equal(new Set(accountReads(ctx.store)).size, 26);
+    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-79').length, 5);
+  });
+  await check('freshly renamed test accounts remain hidden despite eligible old index entries', async () => {
+    const ctx = setup(); ctx.store.patch('semester_enrollments/enrollment-2026-2-0', { displayName: '방테스트' });
     const state = await ctx.request(); assert.ok(!entries(state).some(row => row.uid === publicId('2026-2', 'student-0')));
-    assert.equal(entries(state).length, 5); cases++;
-  }
-  {
+    assert.equal(entries(state).length, 5); assertIndexOnly(ctx.store);
+  });
+  await check('permissions and application sessions are rechecked on every request', async () => {
     const ctx = setup(); await ctx.request({ uid: 'teacher', audience: 'teacher' });
     ctx.store.patch('users/teacher', { staffPermissions: [] });
     await assert.rejects(() => ctx.request({ uid: 'teacher', audience: 'teacher' }), error => error.details?.reason === 'WIS_MANAGE_REQUIRED');
     ctx.store.patch('users/teacher', teacher); ctx.denySession();
-    await assert.rejects(() => ctx.request(), /session revoked/); cases++;
-  }
-  {
-    const ctx = setup(); await ctx.request();
-    ctx.store.patch('semester_manifests/2026-2', { status: 'PREPARING' });
+    await assert.rejects(() => ctx.request(), /session revoked/);
+  });
+  await check('preparing semesters and inactive actor enrollment do not expose index data', async () => {
+    const ctx = setup(); ctx.store.patch('semester_manifests/2026-2', { status: 'PREPARING' });
     assert.equal((await ctx.request()).reason, 'PREPARING_STUDENT_DATA_HIDDEN');
     ctx.store.patch('semester_manifests/2026-2', { status: 'ACTIVE' });
     ctx.store.patch(slotPath('2026-2', 'student-11'), { activeEnrollmentId: '' });
-    assert.equal((await ctx.request()).reason, 'WIS_ACTIVE_ENROLLMENT_REQUIRED'); cases++;
-  }
-  {
-    const ctx = setup(); addStudent(ctx.store, 100, { grade: '1', score: 1 });
-    const teacherState = await ctx.request({ uid: 'teacher', audience: 'teacher' });
-    assert.equal(teacherState.hallOfFame.primaryGradeKey, '1'); assert.equal(entries(teacherState).length, 1);
-    const studentState = await ctx.request(); assert.equal(studentState.hallOfFame.primaryGradeKey, '3');
-    assert.ok(entries(studentState).every(row => row.grade === '3')); cases++;
-  }
-  {
-    const ctx = setup(); addStudent(ctx.store, 100, { grade: '1', score: 0, status: 'CLOSED' });
+    assert.equal((await ctx.request()).reason, 'WIS_ACTIVE_ENROLLMENT_REQUIRED');
+    assert.equal(ctx.store.queries.length, 0);
+  });
+  await check('teacher keeps the first eligible grade even when it contains fewer than five students', async () => {
+    const ctx = setup(80);
+    for (let i = 100; i < 103; i++) addStudent(ctx.store, i, { grade: '1', score: 1 });
     const state = await ctx.request({ uid: 'teacher', audience: 'teacher' });
-    assert.equal(state.hallOfFame.primaryGradeKey, '3'); assert.equal(entries(state).length, 5); cases++;
-  }
-  {
-    const ctx = setup(80); await ctx.request({ uid: 'student-79' });
-    for (let i = 0; i < 79; i++) ctx.store.patch(slotPath('2026-2', `student-${i}`), { activeEnrollmentId: '' });
-    ctx.store.resetStats(); const state = await ctx.request({ uid: 'student-79' });
-    assert.equal(entries(state).length, 1); assert.equal(ctx.store.queries.length, 0);
-    const accounts = ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/'));
-    assert.equal(accounts.length, 80); assert.equal(accounts.length, new Set(accounts).size);
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-79').length, 0);
-    cases++;
-  }
-  {
-    const ctx = setup(); ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
-    for (let i = 0; i < 12; i++) ctx.store.docs.delete(slotPath('2026-2', `student-${i}`));
-    const canonical = await ctx.request({ uid: 'teacher', audience: 'teacher' }); assert.equal(entries(canonical).length, 0);
-    const archive = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
-    assert.equal(entries(archive).length, 5); assert.equal(archive.readOnly, true); assert.equal(archive.provenance, 'EXPLICIT');
-    assert.equal(ctx.store.queries.length, 2, 'explicit historical metadata uses a separate cache');
-    ctx.store.patch(accountPath('2026-2', 'student-0'), { displayName: '보관된 최신 이름' });
-    const refreshed = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
-    assert.equal(entries(refreshed).find(row => row.uid === publicId('2026-2', 'student-0')).studentName, '보관된 최신 이름');
-    cases++;
-  }
-  {
-    // Match real writer shapes: createWisAccounts omits grade/classNumber;
-    // older projections may retain a placement that differs from the account.
-    const ctx = setup(12); ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
-    for (let i = 0; i < 12; i++) {
-      const path = rankingPath('2026-2', `student-${i}`);
-      const row = { ...ctx.store.docs.get(path) };
-      if (i % 2) { row.grade = '2'; row.classNumber = '8'; row.displayName = '과거 투영 이름'; }
-      else { delete row.grade; delete row.classNumber; }
-      ctx.store.set(path, row);
-      ctx.store.docs.delete(slotPath('2026-2', `student-${i}`));
+    assert.equal(state.hallOfFame.primaryGradeKey, '1'); assert.equal(entries(state).length, 3);
+    assert.ok(entries(state).every(row => row.grade === '1'));
+    assertIndexOnly(ctx.store, { grade: null });
+    ctx.store.resetStats(); const studentState = await ctx.request();
+    assert.equal(studentState.hallOfFame.primaryGradeKey, '3');
+    assert.ok(entries(studentState).every(row => row.grade === '3')); assertIndexOnly(ctx.store);
+  });
+  await check('teacher advances past a wholly stale first grade to the next eligible grade', async () => {
+    const ctx = setup();
+    for (let i = 100; i < 103; i++) {
+      addStudent(ctx.store, i, { grade: '1', score: 1 }); ctx.store.docs.delete(accountPath('2026-2', `student-${i}`));
     }
-    ctx.store.resetStats();
-    const preview = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
-    assert.equal(entries(preview).length, 5); assert.equal(preview.hallOfFame.primaryGradeKey, '3');
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 12);
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/teacher').length, 5);
-    assertBoundedResponse(preview);
-    const full = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT', projection: 'hall-of-fame' });
-    assert.deepEqual(entries(preview), full.hallOfFame.gradeLeaderboardByGrade['3'].slice(0, 5));
-    ctx.store.resetStats();
-    const warm = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
-    assert.deepEqual(entries(warm), entries(preview)); assert.equal(ctx.store.queries.length, 0);
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 5); cases++;
-  }
-  {
+    const state = await ctx.request({ uid: 'teacher', audience: 'teacher' });
+    assert.equal(state.hallOfFame.primaryGradeKey, '3'); assert.equal(entries(state).length, 5);
+    assertIndexOnly(ctx.store, { grade: null });
+  });
+  await check('foreign-semester index entries cannot influence current teacher or student ordering', async () => {
+    const ctx = setup();
+    for (let i = 100; i < 105; i++) addStudent(ctx.store, i, { scope: '2026-1', grade: '1', score: 100_000 });
+    const state = await ctx.request({ uid: 'teacher', audience: 'teacher' });
+    assert.equal(state.hallOfFame.primaryGradeKey, '3'); assert.equal(entries(state).length, 5);
+    assert.ok(entries(state).every(row => row.cumulativeEarned <= 1000)); assertIndexOnly(ctx.store, { grade: null });
+    ctx.store.resetStats(); const studentState = await ctx.request();
+    assert.equal(studentState.hallOfFame.primaryGradeKey, '3'); assert.equal(entries(studentState).length, 5);
+    assert.ok(entries(studentState).every(row => row.cumulativeEarned <= 1000)); assertIndexOnly(ctx.store);
+  });
+  await check('twenty leading invalid candidates require exactly two cursor-bounded index pages', async () => {
+    const ctx = setup(80);
+    for (let i = 0; i < 20; i++) ctx.store.docs.delete(accountPath('2026-2', `student-${i}`));
+    ctx.store.resetStats(); const started = process.hrtime.bigint();
+    const state = await ctx.request({ uid: 'student-79' });
+    metrics.stale20CurrentQueryMs = Number(process.hrtime.bigint() - started) / 1e6;
+    assert.equal(entries(state).length, 5); assertIndexOnly(ctx.store, { pages: 2 });
+    const queries = previewQueries(ctx.store);
+    assert.equal(queries[1].startAfterPath, queries[0].returnedPaths.at(-1));
+    assert.equal(queries[0].returned, 20); assert.equal(queries[1].returned, 20);
+    assert.equal(new Set(accountReads(ctx.store)).size, 26);
+    assert.ok(entries(state).some(row => row.uid === publicId('2026-2', 'student-20')));
+    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-79').length, 5);
+  });
+  await check('eligible=false index entries are never exposed or read as candidates', async () => {
+    const ctx = setup(); ctx.store.patch(previewPath('2026-2', 'student-0'), { eligible: false });
+    const state = await ctx.request(); assert.equal(entries(state).length, 5);
+    assert.ok(!entries(state).some(row => row.uid === publicId('2026-2', 'student-0')));
+    assert.ok(!ctx.store.reads.includes(accountPath('2026-2', 'student-0'))); assertIndexOnly(ctx.store);
+  });
+  await check('index tie ordering, public rank limits and one-page stopping remain deterministic', async () => {
     const ctx = setup(0); addStudent(ctx.store, 100, { score: 0 });
-    for (let i = 0; i < 8; i++) addStudent(ctx.store, i, { score: i < 2 ? 100 : 0 });
-    ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
-    const preview = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
-    const full = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT', projection: 'hall-of-fame' });
-    assert.equal(entries(preview).length, 2);
-    assert.deepEqual(entries(preview), full.hallOfFame.gradeLeaderboardByGrade['3'].slice(0, 5)); cases++;
-  }
-  {
-    const ctx = setup(0); addStudent(ctx.store, 100, { score: 0 });
-    for (let i = 0; i < 9; i++) addStudent(ctx.store, i, { score: 100 });
+    for (let i = 0; i < 45; i++) addStudent(ctx.store, i, { score: 100 });
     for (const includeTies of [false, true]) for (const limit of [4, 5, 10, 20]) {
       ctx.store.set('site_settings/interface_config', { hallOfFame: { publicRange: {
         gradeRankLimit: limit, classRankLimit: 10, includeTies,
       } } });
-      const state = await ctx.request({ uid: 'student-100' });
+      ctx.store.resetStats(); const state = await ctx.request({ uid: 'student-100' });
       assert.equal(entries(state).length, includeTies ? 5 : Math.min(5, limit));
       assert.ok(entries(state).every(row => row.rank === 1));
       const ids = entries(state).map(row => row.uid); assert.deepEqual(ids, [...ids].sort((a, b) => a.localeCompare(b)));
-      assertBoundedResponse(state); cases++;
+      const eligibleIds = Array.from({ length: 45 }, (_, i) => publicId('2026-2', `student-${i}`)).sort((a, b) => a.localeCompare(b));
+      assert.deepEqual(ids, eligibleIds.slice(0, ids.length));
+      assertBoundedResponse(state); assertIndexOnly(ctx.store);
     }
-  }
-  {
+  });
+  await check('public four with positive ties fills the fifth place across a stale page boundary', async () => {
+    const ctx = setup(0); addStudent(ctx.store, 100, { score: 0 });
+    for (let i = 0; i < 45; i++) addStudent(ctx.store, i, { score: 100 });
+    const ordered = Array.from({ length: 45 }, (_, i) => `student-${i}`)
+      .sort((a, b) => publicId('2026-2', a).localeCompare(publicId('2026-2', b)));
+    for (const uid of ordered.slice(0, 16)) ctx.store.patch(slotPath('2026-2', uid), { activeEnrollmentId: '' });
+    ctx.store.set('site_settings/interface_config', { hallOfFame: { publicRange: {
+      gradeRankLimit: 4, classRankLimit: 10, includeTies: true,
+    } } });
+    const state = await ctx.request({ uid: 'student-100' });
+    assert.equal(entries(state).length, 5);
+    assert.deepEqual(entries(state).map(row => row.uid), ordered.slice(16, 21).map(uid => publicId('2026-2', uid)));
+    assert.ok(entries(state).every(row => row.rank === 1));
+    assertIndexOnly(ctx.store, { pages: 2 });
+  });
+  await check('zero score fills only the allowed five or four places and excludes closed accounts', async () => {
     const ctx = setup(0); addStudent(ctx.store, 100, { score: 0 });
     for (let i = 0; i < 12; i++) addStudent(ctx.store, i, { score: 0, status: i < 2 ? 'CLOSED' : 'ACTIVE' });
     let state = await ctx.request({ uid: 'student-100' }); assert.equal(entries(state).length, 5);
     assert.ok(!entries(state).some(row => [0, 1].some(i => row.uid === publicId('2026-2', `student-${i}`))));
     assert.ok(entries(state).every(row => row.cumulativeEarned === 0));
     ctx.store.patch('site_settings/interface_config', { hallOfFame: { publicRange: { gradeRankLimit: 4, classRankLimit: 10, includeTies: true } } });
-    state = await ctx.request({ uid: 'student-100' }); assert.equal(entries(state).length, 4); cases++;
-  }
-  {
-    const ctx = setup(2001);
-    await assert.rejects(() => ctx.request(), error => error.details?.reason === 'WIS_HALL_ACCOUNT_LIMIT_EXCEEDED');
-    assert.equal(ctx.store.queries.length, 1); assert.equal(ctx.store.queries[0].limit, 2001);
-    assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 1);
-    cases++;
-  }
-  {
+    ctx.store.resetStats(); state = await ctx.request({ uid: 'student-100' });
+    assert.equal(entries(state).length, 4); assertIndexOnly(ctx.store);
+  });
+  await check('current input inspection never exceeds 2000 entries or repeats a cursor', async () => {
+    const ctx = setup(0);
+    for (let i = 0; i < 2005; i++) addStudent(ctx.store, i, { score: 3000 - i });
+    for (let i = 0; i < 2000; i++) ctx.store.docs.delete(accountPath('2026-2', `student-${i}`));
+    ctx.store.resetStats();
+    let state; const started = process.hrtime.bigint();
+    try { state = await ctx.request({ uid: 'student-2004' }); }
+    catch (error) { assert.equal(error.details?.reason, 'WIS_HALL_ACCOUNT_LIMIT_EXCEEDED'); }
+    metrics.stale2000CurrentQueryMs = Number(process.hrtime.bigint() - started) / 1e6;
+    if (state) assert.equal(entries(state).length, 0, 'Entries beyond the cap must not be exposed');
+    assertIndexOnly(ctx.store, { pages: 100 });
+    const queries = previewQueries(ctx.store);
+    assert.equal(queries.reduce((sum, query) => sum + query.returned, 0), 2000);
+    assert.equal(new Set(queries.slice(1).map(query => query.startAfterPath)).size, 99);
+    assert.equal(accountReads(ctx.store).length, 2001);
+    assert.ok(!ctx.store.reads.includes(accountPath('2026-2', 'student-2000')));
+    assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/student-2004').length, 0);
+  });
+  await check('malformed or foreign canonical metadata cannot publish an indexed candidate', async () => {
     const ctx = setup();
-    ctx.store.patch(rankingPath('2026-2', 'student-0'), { accountId: 'forged' });
-    ctx.store.patch(rankingPath('2026-2', 'student-1'), { rankEarnedTotal: Number.NaN });
+    ctx.store.patch(previewPath('2026-2', 'student-0'), { accountId: 'forged' });
+    ctx.store.patch(previewPath('2026-2', 'student-1'), { rankEarnedTotal: Number.NaN });
     ctx.store.patch(accountPath('2026-2', 'student-2'), { semesterId: '2026-1' });
+    ctx.store.patch(previewPath('2026-2', 'student-3'), { publicId: 'forged' });
     const state = await ctx.request(); assert.equal(entries(state).length, 5);
-    assert.ok(!entries(state).some(row => [0, 1, 2].some(i => row.uid === publicId('2026-2', `student-${i}`)))); cases++;
-  }
+    assert.ok(!entries(state).some(row => [0, 1, 2, 3].some(i => row.uid === publicId('2026-2', `student-${i}`))));
+    assertIndexOnly(ctx.store);
+  });
+  await check('explicit archive keeps bounded full-cache semantics and ignores active slots', async () => {
+    const ctx = setup(); ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
+    for (let i = 0; i < 12; i++) ctx.store.docs.delete(slotPath('2026-2', `student-${i}`));
+    const canonical = await ctx.request({ uid: 'teacher', audience: 'teacher' }); assert.equal(entries(canonical).length, 0);
+    const archive = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    assert.equal(entries(archive).length, 5); assert.equal(archive.readOnly, true); assert.equal(archive.provenance, 'EXPLICIT');
+    assert.equal(ctx.store.queries.filter(query => query.collection === 'semester_wis_rankings').length, 1);
+    ctx.store.patch(accountPath('2026-2', 'student-0'), { displayName: '보관된 최신 이름' });
+    const refreshed = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    assert.equal(entries(refreshed).find(row => row.uid === publicId('2026-2', 'student-0')).studentName, '보관된 최신 이름');
+  });
+  await check('archive writer-shape compatibility preserves prior placement and missing fields', async () => {
+    const ctx = setup(); ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
+    for (let i = 0; i < 12; i++) {
+      const path = rankingPath('2026-2', `student-${i}`), row = { ...ctx.store.docs.get(path) };
+      if (i % 2) { row.grade = '2'; row.classNumber = '8'; row.displayName = '과거 투영 이름'; }
+      else { delete row.grade; delete row.classNumber; }
+      ctx.store.set(path, row); ctx.store.docs.delete(slotPath('2026-2', `student-${i}`));
+    }
+    const preview = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    assert.equal(entries(preview).length, 5); assert.equal(preview.hallOfFame.primaryGradeKey, '3');
+    assertBoundedResponse(preview);
+    const full = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT', projection: 'hall-of-fame' });
+    assert.deepEqual(entries(preview), full.hallOfFame.gradeLeaderboardByGrade['3'].slice(0, 5));
+    ctx.store.resetStats();
+    const warm = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    assert.deepEqual(entries(warm), entries(preview)); assert.equal(ctx.store.queries.length, 0);
+    assert.equal(accountReads(ctx.store).length, 5);
+  });
+  await check('archive preserves earned-score-only semantics and its original 2000 bound', async () => {
+    const ctx = setup(0); addStudent(ctx.store, 100, { score: 0 });
+    for (let i = 0; i < 8; i++) addStudent(ctx.store, i, { score: i < 2 ? 100 : 0 });
+    ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
+    const preview = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' });
+    const full = await ctx.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT', projection: 'hall-of-fame' });
+    assert.equal(entries(preview).length, 2);
+    assert.deepEqual(entries(preview), full.hallOfFame.gradeLeaderboardByGrade['3'].slice(0, 5));
+    const capped = setup(2001);
+    await assert.rejects(() => capped.request({ uid: 'teacher', audience: 'teacher', source: 'EXPLICIT' }), error => error.details?.reason === 'WIS_HALL_ACCOUNT_LIMIT_EXCEEDED');
+    assert.equal(capped.store.queries.length, 1); assert.equal(capped.store.queries[0].limit, 2001);
+    assert.equal(accountReads(capped.store).length, 0);
+  });
   {
     const options = [];
     const snapshot = ref => ({ exists: true, ref, data: () => ({ value: 'fixture' }) });
@@ -346,8 +476,8 @@ const run = async () => {
     assert.equal(/setInterval|setTimeout/.test(querySource), false);
     await deleteApp(app); cases++;
   }
-  console.log(JSON.stringify({ passed: true, cases, network: 0,
-    guarantees: ['ranking projection only; no account/ledger collection scans', '30s TTL, pending dedup, four-entry cache and failed-build retry',
+  console.log(JSON.stringify({ passed: true, cases, network: 0, metrics,
+    checks, guarantees: ['current ordered materialized index pages of 20; no ranking/account/ledger collection scans', 'EXPLICIT archive alone retains 30s TTL, pending dedup, four-entry cache and failed-build retry',
       'fresh session, permissions, semester, actor and candidate canonical scope', 'fresh profiles and policy only for final five',
       'ties, public limits, zero score, test identities, archive semantics and 2000 cap', 'no polling, timers, writes or reserved instances'] }));
 };

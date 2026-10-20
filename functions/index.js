@@ -8156,6 +8156,7 @@ exports.saveAssessmentProgress = require('./productionGateway/productionSource')
 exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
 exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
+Object.assign(exports, require('./wisRankingIndex').createWisRankingIndexTriggers({ db }));
 // Use the reviewed scoped query, preserving the live teacher archive boundary.
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },
   require('./historyDictionaryQuery').createHistoryDictionaryQueryHandler({ db }));

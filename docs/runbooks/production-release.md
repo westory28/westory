@@ -157,24 +157,38 @@ firebase functions:list --project history-quiz-yongsin
 Firestore `nam5`와 가까운 `us-central1`에서 읽기 전용 트랜잭션을 사용한다.
 기존 서울/미국 `getWisEconomyState`와 전체 명예의 전당 조회는 그대로 유지한다.
 
-순위 집계 입력은 거래 내역이 붙은 전체 계좌 대신 `semester_wis_rankings`에서 읽는다.
-인스턴스 메모리에 학기·보관 조회 구분별로 30초간 공유하고, 최대 4개 범위만 유지한다.
-동시 집계는 합치며 만료 후 다음 요청에서만 갱신한다. 타이머·폴링·자동 재시도는 없다.
-점수 순위 반영은 최대 30초 늦을 수 있다. 세션·권한·학기·공개 설정은 매 요청 검사하고,
+현재 순위는 서버 전용 `semester_wis_preview_entries`의 학기·학년·점수·공개 ID
+복합 인덱스에서 상위 후보 20명만 읽는다. 점수·등록 슬롯·학적·학급 변경 trigger가
+현재 원본을 transaction에서 다시 읽어 해당 학생의 조회용 항목만 갱신한다.
+계좌·거래·학생 프로필 원본은 수정하지 않는다. 브라우저의 직접 읽기·쓰기는 기존
+rules의 기본 거부를 유지한다. 대시보드 조회 시 전교 학적 재집계나 계좌 전수 조회는 없다.
+조회와 변경 반영에 타이머·폴링·자동 재시도를 추가하지 않는다.
+세션·권한·학기·공개 설정은 매 요청 검사하고,
 표시 후보의 현재 계좌·canonical 학적·이름 및 현재 등급 정책의 이모지는 다시 확인한다.
 교사의 명시적 보관 조회는 기존의 당시 계좌 학적 기준을 유지하며, 최초 집계 때만
 제한된 순위 ID에 대응하는 계좌를 읽어 누락되거나 오래된 순위 학적을 보완한다.
+이 보관 조회 입력만 인스턴스 메모리에 30초간 최대 4개 범위까지 공유한다.
 브라우저에는 학생 이름이나 순위 캐시를 저장하지 않는다.
 
 검증은 `node scripts/verify-wis-ranking-preview.mjs`,
-`npm --prefix functions run check`, `npm run build`로 수행한다.
-백엔드 배포 대상은 새 함수 하나이며 기존 미국 동명 함수를 수정하거나 삭제하지 않는다.
+`npm --prefix functions run check`, 프론트엔드 변경 시 `npm run build`로 수행한다.
+복합 인덱스 `semesterId / eligible / grade / rankEarnedTotal DESC / publicId`가
+READY인지 먼저 확인한다. 기존 원격 인덱스를 삭제하지 않고 이 인덱스만 추가한다.
+갱신 trigger 4개를 먼저 배포하고, 초기 조회용 자료를 검사·생성한 뒤 조회 함수를 배포한다.
+기존 서울/미국 `getWisEconomyState`는 수정하거나 삭제하지 않는다.
 
 ```powershell
 . .\scripts\use-westory-node.ps1
+firebase deploy --only "functions:updateWisRankingIndexOnAccountWrite,functions:updateWisRankingIndexOnSlotWrite,functions:updateWisRankingIndexOnEnrollmentWrite,functions:updateWisRankingIndexOnClassWrite" --project history-quiz-yongsin
+node functions/scripts/rebuild-wis-ranking-index.cjs --project history-quiz-yongsin
+node functions/scripts/rebuild-wis-ranking-index.cjs --project history-quiz-yongsin --apply
 firebase deploy --only "functions:getWisRankingPreview" --project history-quiz-yongsin
 firebase functions:list --project history-quiz-yongsin
 ```
+
+복구 도구는 기본 dry-run이며 계좌와 기존 조회용 항목의 합집합을 최대 2,000개까지
+재검증한다. 놓친 삭제 이벤트의 고아 항목도 공개 대상에서 제거한다. 원본은 수정하지
+않고 동일한 조회용 내용에는 쓰지 않는다. 이벤트 자동 재시도나 예약 재집계는 없다.
 
 프론트엔드는 해당 커밋의 Vercel 배포를 운영 도메인에 승격한다. 운영 대시보드에서
 5명과 등급의 표시, 새 callable 성공, 실제 응답 지연을 확인한다. 콜드 스타트와

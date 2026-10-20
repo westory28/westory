@@ -34,6 +34,8 @@ const WIS_RECENT_LEDGER_LIMIT = 100;
 const WIS_HALL_ACCOUNT_LIMIT = 2_000;
 const WIS_RANKING_PREVIEW_TTL_MS = 30_000;
 const WIS_RANKING_PREVIEW_CACHE_LIMIT = 4;
+const WIS_RANKING_PREVIEW_COLLECTION = "semester_wis_preview_entries";
+const WIS_RANKING_PREVIEW_PAGE_SIZE = 20;
 const WIS_REBUILD_LEDGER_LIMIT = 400;
 const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
 const WIS_MANUAL_REVERSIBLE_TYPES = new Set(["GRANT", "DEDUCT", "ADJUST"]);
@@ -3152,17 +3154,18 @@ const buildRankingPreviewInputs = async (transaction, scope, explicitTeacherRead
 };
 
 const buildRankingPreview = async ({ transaction, cached, scope, config, studentAccount,
-  explicitTeacherRead, rankPolicy, now }) => {
+  explicitTeacherRead, rankPolicy, now, includeProfiles = true, verification }) => {
   const initialHall = buildWisHallOfFameProjection({ accounts: cached.accounts,
     config, scope, studentAccount });
   let primaryGradeKey = initialHall.primaryGradeKey;
-  const invalid = new Set();
-  const verified = new Map();
+  const invalid = verification?.invalid || new Set();
+  const verified = verification?.verified || new Map();
   let selected = [];
   // Every pass either verifies a new candidate or stops. No account is read
   // twice and the complete semester input is bounded at 2,000 documents.
   while (verified.size + invalid.size < WIS_HALL_ACCOUNT_LIMIT) {
-    const available = cached.accounts.filter((account) => !invalid.has(account.studentUid));
+    const available = cached.accounts.filter((account) => !invalid.has(account.studentUid))
+      .map((account) => verified.get(account.studentUid) || account);
     const hall = buildWisHallOfFameProjection({ accounts: available, config, scope,
       studentAccount: studentAccount ? { grade: primaryGradeKey } : null });
     primaryGradeKey = hall.primaryGradeKey;
@@ -3192,7 +3195,8 @@ const buildRankingPreview = async ({ transaction, cached, scope, config, student
   const entries = (hall.gradeLeaderboardByGrade[primaryGradeKey] || []).slice(0, 5);
   const entryIds = new Set(entries.map((entry) => entry.uid));
   const displayed = selected.filter((account) => entryIds.has(hallPublicId(scope, account.studentUid)));
-  const profiles = await transaction.getAll(displayed.map((account) => `users/${account.studentUid}`));
+  const profiles = includeProfiles
+    ? await transaction.getAll(displayed.map((account) => `users/${account.studentUid}`)) : [];
   const icons = new Map(displayed.map((account, index) => {
     const profile = profiles[index]?.exists ? profiles[index].data : account;
     return [hallPublicId(scope, account.studentUid), resolveStudentProfileEmoji({
@@ -3207,6 +3211,69 @@ const buildRankingPreview = async ({ transaction, cached, scope, config, student
     classLeaderboardByClassKey: {}, classTop3ByClassKey: {},
     snapshotKey: `w7_${sha256(canonicalJson(gradeLeaderboardByGrade)).slice(0, 32)}`,
     updatedAt: new Date(now).toISOString(), updatedAtMs: now, sourceUpdatedAtMs: cached.updatedAtMs };
+};
+
+// Current dashboards read the maintained public-order index. Refresh only the
+// candidates that can be displayed; neither a cold process nor an expired
+// cache requires reading the whole school's canonical enrollment records.
+const queryRankingPreview = async ({ transaction, scope, config, studentAccount,
+  rankPolicy, now }) => {
+  const accounts = [];
+  const seen = new Set();
+  const verification = { invalid: new Set(), verified: new Map() };
+  const ownGrade = studentAccount ? String(studentAccount.grade || "") : "";
+  let cursor = "";
+  while (seen.size < WIS_HALL_ACCOUNT_LIMIT) {
+    const pageLimit = Math.min(WIS_RANKING_PREVIEW_PAGE_SIZE, WIS_HALL_ACCOUNT_LIMIT - seen.size);
+    const rows = await transaction.query(WIS_RANKING_PREVIEW_COLLECTION, {
+      filters: [
+        { field: "semesterId", operator: "==", value: scope },
+        { field: "eligible", operator: "==", value: true },
+        ...(studentAccount ? [{ field: "grade", operator: "==", value: ownGrade }] : []),
+      ],
+      orderBy: [
+        { field: "grade", direction: "asc" },
+        { field: "rankEarnedTotal", direction: "desc" },
+        { field: "publicId", direction: "asc" },
+      ],
+      documentIdOrder: "asc",
+      ...(cursor ? { startAfterPath: cursor } : {}),
+      limit: pageLimit,
+    });
+    for (const row of rows) {
+      if (!row.path || seen.has(row.path)) fail("failed-precondition",
+        "Wis ranking index pagination did not advance.", "WIS_RANKING_PREVIEW_CURSOR_INVALID");
+      seen.add(row.path);
+      const account = row.data;
+      if (account?.eligible === true && isCanonicalRankingPreviewAccount(account, scope) &&
+        documentIdFromPath(row.path) === account.accountId &&
+        account.publicId === hallPublicId(scope, account.studentUid) &&
+        (!studentAccount || String(account.grade || "") === ownGrade)) accounts.push(account);
+    }
+    const inputs = { transaction, cached: { accounts, updatedAtMs: now },
+      scope, config, studentAccount, explicitTeacherRead: false, rankPolicy, now, verification };
+    const hall = await buildRankingPreview({ ...inputs, includeProfiles: false });
+    const entries = hall.gradeLeaderboardByGrade[hall.primaryGradeKey] || [];
+    const last = rows.at(-1)?.data;
+    const groupComplete = !studentAccount && last &&
+      String(last.grade || "").localeCompare(hall.primaryGradeKey) > 0 && entries.length > 0;
+    const cutoff = entries.at(-1);
+    const publicLimit = Math.min(5, config.publicRange.gradeRankLimit);
+    const target = config.publicRange.includeTies && cutoff?.cumulativeEarned > 0 ? 5 : publicLimit;
+    // A score decrease in a visible account can make the next indexed row
+    // relevant. Read another bounded page until the known boundary is safe.
+    const boundarySafe = cutoff && last &&
+      (Number(last.rankEarnedTotal) < cutoff.cumulativeEarned ||
+        (Number(last.rankEarnedTotal) === cutoff.cumulativeEarned &&
+          String(last.publicId).localeCompare(cutoff.uid) >= 0));
+    const publicRangeComplete = cutoff && last && entries.length >= publicLimit &&
+      entries.length < target && Number(last.rankEarnedTotal) < cutoff.cumulativeEarned;
+    if (rows.length < pageLimit || groupComplete || publicRangeComplete || (entries.length >= target && boundarySafe))
+      return buildRankingPreview(inputs);
+    cursor = rows.at(-1)?.path || "";
+  }
+  fail("resource-exhausted", "Wis ranking preview candidate limit was exceeded.",
+    "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
 };
 
 const emptyWisState = ({
@@ -3505,11 +3572,14 @@ const createWisQueryCore = ({
             readOnly: true, economy: projectStudentEconomy(economySnapshot.data), manifestRevision,
             reason: "WIS_ACTIVE_ENROLLMENT_REQUIRED" }), rankPolicy: policySnapshot?.data?.rankPolicy || null };
         }
-        const cached = await loadRankingPreviewInputs(transaction, query.semesterId, explicitTeacherRead);
         const rankPolicy = policySnapshot?.data?.rankPolicy || null;
-        const hallOfFame = await buildRankingPreview({ transaction, cached,
-          scope: query.semesterId, config: hallOfFameConfig, studentAccount,
-          explicitTeacherRead, rankPolicy, now: now() });
+        const hallOfFame = explicitTeacherRead
+          ? await buildRankingPreview({ transaction,
+              cached: await loadRankingPreviewInputs(transaction, query.semesterId, true),
+              scope: query.semesterId, config: hallOfFameConfig, studentAccount,
+              explicitTeacherRead, rankPolicy, now: now() })
+          : await queryRankingPreview({ transaction, scope: query.semesterId,
+              config: hallOfFameConfig, studentAccount, rankPolicy, now: now() });
         return { ...base, economy: query.audience === "student"
           ? projectStudentEconomy(economySnapshot.data) : base.economy,
           hallOfFame, rankPolicy,

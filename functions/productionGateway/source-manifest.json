@@ -422,7 +422,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "10333beccab75f19e6ab6f04cb4d1825412d6bc715e24e24dbbf49355d823afb",
+      "sha256": "53dcb1bc0613b71ec157411da5c8b766798e728b51b27803298a2d27ca0a27d3",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -435,7 +435,8 @@
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
         "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
         "2026-10-19: Resolve public ranking profile emojis against the requested semester rank policy and canonical earned total, rejecting stale tier unlocks and ID/icon mismatches without writes.",
-        "2026-10-20: Add a bounded five-entry preview with 30-second lightweight ranking input cache and fresh request/candidate authority; full hall queries remain unchanged."
+        "2026-10-20: Add a bounded five-entry preview with 30-second lightweight ranking input cache and fresh request/candidate authority; full hall queries remain unchanged.",
+        "2026-10-20: Read current dashboard candidates from a maintained private ranking index in bounded ordered pages; verify only candidate accounts and canonical enrollment within each fresh request. Retain the 30-second input cache for explicit archives only."
       ]
     },
     {

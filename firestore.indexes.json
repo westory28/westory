@@ -1,6 +1,17 @@
 {
   "indexes": [
     {
+      "collectionGroup": "semester_wis_preview_entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "eligible", "order": "ASCENDING" },
+        { "fieldPath": "grade", "order": "ASCENDING" },
+        { "fieldPath": "rankEarnedTotal", "order": "DESCENDING" },
+        { "fieldPath": "publicId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "yut_rooms",
       "queryScope": "COLLECTION",
       "fields": [
