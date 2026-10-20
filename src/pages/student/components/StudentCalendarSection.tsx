@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -44,6 +44,14 @@ export default function StudentCalendarSection({
   const [view, setView] = useState<View>("dayGridMonth");
   const [title, setTitle] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });
+  const visibleWeekCount =
+    range.start && range.end
+      ? Math.round(
+          (new Date(`${range.end}T00:00:00`).getTime() -
+            new Date(`${range.start}T00:00:00`).getTime()) /
+            (7 * 24 * 60 * 60 * 1000),
+        )
+      : 5;
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [more, setMore] = useState<{
@@ -140,16 +148,13 @@ export default function StudentCalendarSection({
     <section
       className={`student-calendar-section student-calendar-shell student-full-calendar ${view === "dayGridMonth" ? "student-calendar-shell--month" : ""}`}
       aria-label="학사 일정 달력"
+      style={
+        { "--student-calendar-week-count": visibleWeekCount } as CSSProperties
+      }
     >
       <div className="student-calendar-shell__header">
         <div className="student-calendar-shell__header-main">
           <div className="student-calendar-shell__heading-group">
-            <span className="student-calendar-shell__eyebrow">
-              <span className="student-calendar-shell__eyebrow-icon">
-                <i className="far fa-calendar" aria-hidden="true" />
-              </span>
-              학사 일정
-            </span>
             <div className="student-calendar-shell__month-row">
               <div className="student-calendar-shell__month-badge">
                 <button
@@ -309,7 +314,7 @@ export default function StudentCalendarSection({
           contentHeight="100%"
           expandRows
           eventDisplay="block"
-          dayMaxEvents
+          dayMaxEvents={3}
           fixedWeekCount={false}
           showNonCurrentDates
           moreLinkText={(count) => `+${count}개`}

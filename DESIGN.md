@@ -94,7 +94,7 @@
 
 학생·교사 대시보드의 날짜 원은 고입, 정기 시험, 기타 평가, 안전교육, 행사·학사 운영, 창체, 기타, 자동 공휴일 순으로 가장 중요한 일정의 분류 색을 사용한다. 색이 채워진 원 안의 날짜 숫자는 항상 흰색이며, 기존 색상 보정으로 배경의 색조를 유지하면서 대비를 확보한다. 같은 중요도는 교시와 기존 순서를 따른다. 날짜 아래에는 일정마다 해당 분류 색의 점을 하나씩 표시하며, 같은 색의 일정도 합치지 않는다. 점은 가용 폭에 맞춰 한 줄로 배치하고 날짜의 접근 가능한 이름에 각 일정 제목과 분류를 제공한다. 오늘·선택·키보드 포커스는 테두리로 함께 구분한다.
 
-학사 일정 관리에서는 내부의 중복 ‘학사 일정’ 제목을 제거하고 월 탐색·조작부를 위로 올린다. 여러 날짜에 걸친 리본은 하루 일정보다 위에 고정하며, 하루 일정이 연속 리본을 덮지 않게 FullCalendar의 배치 여백을 보존한다. 주 행은 최소 160px, 요일 행을 포함한 본문은 표시 주 수×160px+40px를 기준으로 넓힌다. 하루 3개 일정까지 모두 표시하고 4개 이상일 때 더보기를 제공한다. 학생 월달력에는 이 관리 화면 치수를 적용하지 않는다.
+학생·교사 학사 일정에서는 내부의 중복 ‘학사 일정’ 제목을 제거하고 월 탐색·조작부를 위로 올린다. 여러 날짜에 걸친 리본은 하루 일정보다 위에 고정하며, 하루 일정이 연속 리본을 덮지 않게 FullCalendar의 배치 여백을 보존한다. 주 행은 최소 160px, 요일 행을 포함한 본문은 표시 주 수×160px+40px를 기준으로 넓힌다. 하루 3개 일정까지 모두 표시하고 4개 이상일 때 더보기를 제공한다.
 
 일정 등록·수정 창은 바깥 배경을 눌러도 닫히지 않는다. 명시적인 닫기·취소 및 기존 키보드 닫기 동작을 유지하고, 저장·삭제·권한 처리에는 영향을 주지 않는다.
 
@@ -824,11 +824,11 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 
 ### Student attendance indicator
 
-- Confirmed attendance uses one compact 16px primary-blue circle with a white 12px SVG check, a `출석 완료` accessible name and date tooltip. In the weekly strip, place it beside the weekday with the existing 4px gap; never reserve an empty attendance row above the weekday. Weekday, date circle and event dots stay vertically centered at the teacher strip's positions whether attendance is present or absent. The full calendar uses the same 16px check beside its date number and in list headings. Keep existing 88px day hit areas, circle sizing and shared event-dot spacing. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
+- Confirmed attendance uses one compact 16px primary-blue circle with a white 12px SVG check, a `출석 완료` accessible name and date tooltip. In the weekly strip, absolutely position it 4px to the right of the centered weekday; it never changes the weekday's horizontal position or reserves an empty attendance row. Weekday, date circle and event dots stay vertically centered at the teacher strip's positions whether attendance is present or absent. The full calendar uses the same 16px check beside its date number and in list headings. Keep existing 88px day hit areas, circle sizing and shared event-dot spacing. Attendance data remains scoped to the signed-in student and semester, with visible read/save errors and retry.
 
 ### Student full calendar alignment
-- Student full calendar reuses the teacher calendar shell, 1536px page width, 16px/24px gutters, and `max(600px, 100dvh - 176px)` canvas. Keep student actions read-only.
-- Reuse the teacher left-aligned numeric date header and 24px event labels. The 16px attendance check stays beside the date in one non-wrapping row at every viewport width.
+- Student full calendar reuses the teacher calendar shell, 1536px page width and 16px/24px gutters. Remove the inner duplicate heading; at 1120px and above place the centered month navigation and left actions on one row, with two compact rows below that width. Month rows are at least 160px high, with body height `max(visible weeks × 160px + 40px, 100dvh - 240px)` and natural page scrolling. Show three events per day before the more link. Keep student actions read-only.
+- Reuse the teacher left-aligned numeric date header and 24px event labels. The 16px attendance check stays beside the date in one non-wrapping row at every viewport width. Below 640px, use the existing 8px spacing token for the calendar shell's inner padding so seven date columns and attendance checks fit inside a 320px viewport.
 
 ### Korean text and assessment navigation
 

@@ -149,12 +149,19 @@
 }
 
 .student-week-strip__weekday {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   font-size: var(--ws-type-small, 0.875rem);
   color: var(--ws-text-muted, #6b7280);
+}
+
+.student-week-strip__weekday .student-attendance-stamp {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .student-week-strip__day strong {

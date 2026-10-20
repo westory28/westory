@@ -36,6 +36,11 @@ event('cross-year','고입 · 해를 넘기는 원서 접수','2026-12-31','2027
 event('long-range','고입 · 긴 일정 제목과 날짜 기간을 함께 확인하는 검증 일정','2026-10-19','2027-10-22'),
 event('single','3학년 스포츠','2026-10-20',undefined,'activity','period6','period7'),
 event('holiday','자동 공휴일 표시 검증','2026-10-21',undefined,'holiday')];
+const calendarEvents=[
+event('month-range','마이스터고 원서 접수','2026-10-19','2026-10-22'),
+...Array.from({length:2},(_,index)=>event('three-'+index,'일정 세 개 검증 '+(index+1),'2026-10-21',undefined,'activity')),
+...Array.from({length:3},(_,index)=>event('four-'+index,'일정 네 개 검증 '+(index+1),'2026-10-22',undefined,'event')),
+event('month-holiday','한글날','2026-10-09',undefined,'holiday')];
 const markerEvents=[
 event('holiday-only','자동 공휴일','2026-10-18',undefined,'holiday'),
 ...['2026-10-19','2026-10-20','2026-10-21','2026-10-22','2026-10-23'].map(date=>event('activity-'+date,'창체 '+date,date,undefined,'activity')),
@@ -57,7 +62,7 @@ function Calendar({role}) {
  return <><output data-clicked={role}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
 const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
-createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<main className="student-calendar-page__canvas"><StudentCalendarSection events={events} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></main>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
+createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
   },
   bundle: true,
   write: false,
@@ -149,8 +154,9 @@ const browser = await playwright.chromium.launch({
 });
 const results = [];
 try {
-  for (const width of [320, 390, 768, 1280, 1366, 1440]) {
+  for (const width of [320, 390, 768, 1120, 1280, 1366, 1440]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
+    await page.clock.setFixedTime(new Date("2026-10-20T12:00:00+09:00"));
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     for (const [week, expected, expectedCompact] of [
@@ -383,12 +389,23 @@ try {
             const circle = element
               .querySelector("strong")
               .getBoundingClientRect();
+            const weekdayText = (
+              role === "student"
+                ? element.firstElementChild.firstElementChild
+                : element.firstElementChild
+            ).getBoundingClientRect();
             const dots = element
               .querySelector(`.${role}-week-strip__markers`)
               .getBoundingClientRect();
             return {
               height: day.height,
               circleTop: circle.top - day.top,
+              weekdayCenterOffset:
+                (weekdayText.left +
+                  weekdayText.right -
+                  circle.left -
+                  circle.right) /
+                2,
               centerOffset:
                 (weekday.top + dots.bottom - day.top - day.bottom) / 2,
             };
@@ -416,6 +433,10 @@ try {
       const student = dayAlignment.student[index];
       const teacher = dayAlignment.teacher[index];
       assert(Math.abs(student.height - teacher.height) < 1);
+      assert(
+        Math.abs(student.weekdayCenterOffset) < 1,
+        `Attendance never shifts weekday text: ${JSON.stringify({ width, index, student })}`,
+      );
       assert(
         Math.abs(student.circleTop - teacher.circleTop) < 1,
         `Attendance does not displace student dates: ${JSON.stringify({ width, index, student, teacher })}`,
@@ -496,6 +517,92 @@ try {
       .getByRole("img", { name: "2026-10-19 출석 완료", exact: true })
       .waitFor();
     assert.equal(
+      await fullCalendar.locator(".student-calendar-shell__eyebrow").count(),
+      0,
+    );
+    const calendarLayout = await fullCalendar.evaluate((element) => {
+      const month = element
+        .querySelector(".student-calendar-shell__month-badge")
+        .getBoundingClientRect();
+      const tools = element
+        .querySelector(".student-calendar-shell__toolbar")
+        .getBoundingClientRect();
+      const rows = [
+        ...element.querySelectorAll(".fc-daygrid-body tbody > tr"),
+      ].map((row) => row.getBoundingClientRect().height);
+      const cell = element
+        .querySelector('[data-date="2026-10-21"]')
+        .getBoundingClientRect();
+      const centerX = (cell.left + cell.right) / 2;
+      const visibleEvents = [
+        ...element.querySelectorAll(".fc-daygrid-event"),
+      ].filter((event) => {
+        const rect = event.getBoundingClientRect();
+        return (
+          getComputedStyle(event).visibility !== "hidden" &&
+          rect.height > 0 &&
+          rect.left <= centerX &&
+          rect.right >= centerX &&
+          rect.top >= cell.top &&
+          rect.bottom <= cell.bottom
+        );
+      });
+      return {
+        rows,
+        monthAndToolsSameRow:
+          Math.abs(month.top + month.bottom - tools.top - tools.bottom) < 2,
+        controlsDoNotOverlap:
+          tools.right <= month.left || tools.top >= month.bottom,
+        visibleEvents: visibleEvents.length,
+        eventBottomGap:
+          cell.bottom -
+          Math.max(
+            ...visibleEvents.map(
+              (event) => event.getBoundingClientRect().bottom,
+            ),
+          ),
+      };
+    });
+    assert.equal(calendarLayout.rows.length, 5);
+    assert(
+      calendarLayout.rows.every((height) => height >= 160),
+      JSON.stringify({ width, calendarLayout }),
+    );
+    assert.equal(
+      calendarLayout.visibleEvents,
+      3,
+      JSON.stringify({ width, calendarLayout }),
+    );
+    assert(
+      calendarLayout.eventBottomGap >= 16,
+      JSON.stringify({ width, calendarLayout }),
+    );
+    assert(
+      calendarLayout.controlsDoNotOverlap,
+      JSON.stringify({ width, calendarLayout }),
+    );
+    if (width >= 1120) assert(calendarLayout.monthAndToolsSameRow);
+    assert.equal(
+      await fullCalendar
+        .locator('[data-date="2026-10-21"] .fc-more-link')
+        .count(),
+      0,
+    );
+    const moreLink = fullCalendar.locator(
+      '[data-date="2026-10-22"] .fc-more-link',
+    );
+    await moreLink.click();
+    await page.getByRole("dialog").waitFor();
+    assert.equal(
+      await page
+        .getByRole("dialog")
+        .getByText("일정 네 개 검증 3", { exact: true })
+        .count(),
+      1,
+    );
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("dialog").count(), 0);
+    assert.equal(
       await fullCalendar.locator(".student-attendance-stamp").count(),
       2,
     );
@@ -512,6 +619,7 @@ try {
             width: mark.width,
             height: mark.height,
             inside: mark.left >= cell.left && mark.right <= cell.right + 1,
+            rightOverflow: mark.right - cell.right,
           };
         }),
       );
@@ -520,6 +628,7 @@ try {
         (mark) =>
           mark.svg && mark.width === 16 && mark.height === 16 && mark.inside,
       ),
+      JSON.stringify({ width, attendanceMarks }),
     );
     assert(
       await page.evaluate(
@@ -531,6 +640,29 @@ try {
         path: path.join(evidence, `${width}-attendance-calendar.png`),
         fullPage: true,
       });
+    if (width === 390 || width === 1280) {
+      for (const [steps, weeks] of [
+        [2, 6],
+        [6, 4],
+      ]) {
+        for (let step = 0; step < steps; step++)
+          await fullCalendar
+            .getByRole("button", { name: "이전 달", exact: true })
+            .click();
+        const rows = fullCalendar.locator(".fc-daygrid-body tbody > tr");
+        assert.equal(await rows.count(), weeks);
+        assert(
+          (
+            await rows.evaluateAll((elements) =>
+              elements.map((element) => element.getBoundingClientRect().height),
+            )
+          ).every((height) => height >= 160),
+        );
+      }
+      await fullCalendar
+        .getByRole("button", { name: "오늘", exact: true })
+        .click();
+    }
     await fullCalendar
       .getByRole("button", { name: "목록", exact: true })
       .click();
@@ -542,7 +674,13 @@ try {
         .count(),
       2,
     );
-    results.push({ width, monthAndListAttendanceCheck: true });
+    results.push({
+      width,
+      monthAndListAttendanceCheck: true,
+      calendarLayout,
+      threeEventsVisible: true,
+      morePopoverUsable: true,
+    });
     assert.deepEqual(errors, []);
     await page.close();
   }

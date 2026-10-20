@@ -1,6 +1,44 @@
 .student-calendar-page__canvas {
-  height: calc(100dvh - 176px);
-  min-height: 600px;
+  min-width: 0;
+}
+
+.student-full-calendar.student-calendar-shell {
+  height: auto;
+}
+
+.student-full-calendar .student-full-calendar__body[data-calendar-view] {
+  flex: 0 0 auto;
+  height: max(
+    calc(var(--student-calendar-week-count, 5) * 160px + 40px),
+    calc(100dvh - 240px)
+  );
+}
+
+.student-full-calendar
+  .student-full-calendar__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-frame {
+  min-height: 160px;
+}
+
+@media (min-width: 1120px) {
+  .student-full-calendar .student-calendar-shell__header-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .student-full-calendar .student-calendar-shell__heading-group {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .student-full-calendar .student-calendar-shell__toolbar {
+    grid-column: 1;
+    grid-row: 1;
+    width: max-content;
+  }
 }
 
 /* FullCalendar background is a grid item too: assign the same rows as teacher. */
@@ -146,6 +184,10 @@
 }
 
 @media (max-width: 639px) {
+  .student-full-calendar.student-calendar-shell {
+    padding: var(--space-2);
+  }
+
   .student-full-calendar .student-calendar-shell__calendar-tools,
   .student-full-calendar .student-calendar-shell__control-cluster {
     flex-wrap: nowrap;
