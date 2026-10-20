@@ -16,6 +16,7 @@ import { PageLoading } from "../../../components/common/LoadingState";
 import { InfoHelp } from "../../../components/common/InfoHelp";
 import { useAuth } from "../../../contexts/AuthContext";
 import ScoreCard from "./components/ScoreCard";
+import ScoreOverview from "./components/ScoreOverview";
 import {
   getSemesterCollectionPath,
   getYearSemester,
@@ -35,6 +36,22 @@ interface GradingPlan {
   semester?: string;
   createdAt?: any;
 }
+
+const normalizeCalculatorScores = (scores: Record<string, unknown>) => {
+  const normalized: Record<string, string> = {};
+  Object.entries(scores || {}).forEach(([key, rawValue]) => {
+    if (!key || key.length > 120 || !/^.+_\d+$/.test(key)) return;
+    if (typeof rawValue === "string" && rawValue.trim() === "") {
+      normalized[key] = "";
+      return;
+    }
+    if (typeof rawValue !== "string" && typeof rawValue !== "number") return;
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1000) return;
+    normalized[key] = String(Math.round(numeric));
+  });
+  return normalized;
+};
 
 const getFirestoreErrorCode = (error: unknown) =>
   typeof error === "object" &&
@@ -80,6 +97,7 @@ const ScoreDashboard: React.FC = () => {
   const [semester, setSemester] = useState(activeSemester);
   const [grade, setGrade] = useState(userData?.grade || "1");
   const [sortMode, setSortMode] = useState("importance");
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>();
 
   const didInitDefaultsRef = useRef(false);
   const scoresRef = useRef(userScores);
@@ -117,7 +135,7 @@ const ScoreDashboard: React.FC = () => {
       if (!raw) return {};
       const parsed = JSON.parse(raw) as { scores?: { [key: string]: string } };
       return parsed?.scores && typeof parsed.scores === "object"
-        ? parsed.scores
+        ? normalizeCalculatorScores(parsed.scores)
         : {};
     } catch (error) {
       console.error("Failed to load temporary scores:", error);
@@ -213,12 +231,15 @@ const ScoreDashboard: React.FC = () => {
             ? snapshot.data().scores || {}
             : {};
           const draft = loadDraftScores(semester);
-          const loadedScores = { ...savedScores, ...draft };
+          const loadedScores = normalizeCalculatorScores({
+            ...savedScores,
+            ...draft,
+          });
           setUserScores(loadedScores);
           scoresRef.current = loadedScores;
           setHasUnsavedChanges(
-            Object.entries(draft).some(
-              ([key, value]) => value !== savedScores[key],
+            Object.entries(loadedScores).some(
+              ([key, value]) => value !== String(savedScores[key] ?? ""),
             ),
           );
         }
@@ -241,6 +262,10 @@ const ScoreDashboard: React.FC = () => {
       unsubscribe();
     };
   }, [currentUser?.uid, activeYear, semester]);
+
+  useEffect(() => {
+    setExpandedPlanId(undefined);
+  }, [currentUser?.uid, activeYear, semester, grade]);
 
   useEffect(() => {
     if (!currentUser?.uid || !hasHydratedUserDoc) {
@@ -297,16 +322,16 @@ const ScoreDashboard: React.FC = () => {
 
   const handleScoreChange = (planId: string, idx: number, val: string) => {
     if (showWarning || loadError || !hasHydratedUserDoc) return;
-    const numVal = parseFloat(val);
+    const numVal = Number(val);
     // Find max score for validation
     const plan = plans.find((p) => p.id === planId);
     const item = plan?.items[idx];
-    let finalVal = val;
-
-    if (item && !isNaN(numVal)) {
-      if (numVal > item.maxScore) finalVal = item.maxScore.toString();
-      if (numVal < 0) finalVal = "0";
-    }
+    if (val !== "" && !Number.isFinite(numVal)) return;
+    const maxScore = Math.max(0, Math.floor(Number(item?.maxScore) || 0));
+    const finalVal =
+      val === ""
+        ? ""
+        : String(Math.max(0, Math.min(maxScore, Math.round(numVal))));
 
     const key = `${planId}_${idx}`;
     const newScores = { ...scoresRef.current, [key]: finalVal };
@@ -318,20 +343,7 @@ const ScoreDashboard: React.FC = () => {
     persistDraftScores(semester, newScores);
   };
 
-  const sanitizeScores = (scoresToSave: { [key: string]: string }) => {
-    const sanitized: { [key: string]: string } = {};
-    Object.entries(scoresToSave || {}).forEach(([key, rawValue]) => {
-      if (!key || key.length > 120 || !/^.+_\d+$/.test(key)) return;
-      if (rawValue === "") {
-        sanitized[key] = "";
-        return;
-      }
-      const numeric = Number(rawValue);
-      if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1000) return;
-      sanitized[key] = String(numeric);
-    });
-    return sanitized;
-  };
+  const sanitizeScores = normalizeCalculatorScores;
 
   const saveScores = async (
     scoresToSave: { [key: string]: string },
@@ -516,12 +528,31 @@ const ScoreDashboard: React.FC = () => {
     semester,
     grade: String(grade),
     sortMode: sortMode as "importance" | "name" | "latest",
-  });
+  }).map((row) => ({
+    ...row,
+    total: Math.round(
+      row.breakdown.reduce((sum, item) => sum + item.weighted, 0),
+    ),
+  }));
   const displayPlans = chartRows.map((row) => ({
     ...plans.find((plan) => plan.id === row.id)!,
     currentScore: row.total,
     hasData: row.hasData,
   }));
+  const expandedId =
+    expandedPlanId === null
+      ? null
+      : (chartRows.find((row) => row.id === expandedPlanId)?.id ??
+        chartRows[0]?.id ??
+        null);
+  const selectChartSubject = (id: string) => {
+    setExpandedPlanId(id);
+    requestAnimationFrame(() => {
+      const toggle = document.getElementById(`score-toggle-${id}`);
+      toggle?.focus({ preventScroll: true });
+      toggle?.scrollIntoView({ block: "nearest" });
+    });
+  };
 
   const saveDisabled =
     saving ||
@@ -573,7 +604,7 @@ const ScoreDashboard: React.FC = () => {
     return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
 
   return (
-    <div className="ws-page ws-page--reading animate-fadeIn">
+    <div className="ws-page score-calculator animate-fadeIn">
       <header className="ws-page-header mb-4">
         <div className="flex items-center gap-2">
           <h1>점수 계산기</h1>
@@ -581,7 +612,7 @@ const ScoreDashboard: React.FC = () => {
             label="점수 계산과 성취도 기준"
             sections={[
               {
-                text: "입력 점수 ÷ 만점 × 반영 비율로 계산합니다. 미입력 항목은 합계에 포함하지 않으며, 모든 항목을 입력하면 성취도가 표시됩니다.",
+                text: "입력 점수 ÷ 만점 × 반영 비율로 계산합니다. 입력은 정수로 반올림하며, 환산 점수는 중간 반올림 없이 합산한 뒤 정수로 표시합니다. 미입력은 합계에서 제외하고 모든 항목을 입력하면 성취도가 표시됩니다.",
               },
               { items: Object.values(SCORE_ACHIEVEMENT_GUIDANCE) },
             ]}
@@ -689,26 +720,39 @@ const ScoreDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="score-calculator__subjects">
-        {displayPlans.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            해당 학기의 평가 기준 데이터가 없습니다.
+      {displayPlans.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          해당 학기의 평가 기준 데이터가 없습니다.
+        </div>
+      ) : (
+        <div className="score-calculator__layout">
+          <div>
+            <div className="score-calculator__subjects">
+              {displayPlans.map((plan) => (
+                <ScoreCard
+                  disabled={showWarning || !!loadError || !hasHydratedUserDoc}
+                  key={plan.id}
+                  plan={plan}
+                  userScores={userScores}
+                  onScoreChange={handleScoreChange}
+                  totalScore={plan.currentScore}
+                  hasData={plan.hasData}
+                  expanded={expandedId === plan.id}
+                  onToggle={() =>
+                    setExpandedPlanId(expandedId === plan.id ? null : plan.id)
+                  }
+                />
+              ))}
+            </div>
+            {saveActions(true)}
           </div>
-        ) : (
-          displayPlans.map((plan) => (
-            <ScoreCard
-              disabled={showWarning || !!loadError || !hasHydratedUserDoc}
-              key={plan.id}
-              plan={plan}
-              userScores={userScores}
-              onScoreChange={handleScoreChange}
-              totalScore={plan.currentScore}
-              hasData={plan.hasData}
-            />
-          ))
-        )}
-      </div>
-      {displayPlans.length > 0 && saveActions(true)}
+          <ScoreOverview
+            rows={chartRows}
+            expandedId={expandedId}
+            onSelect={selectChartSubject}
+          />
+        </div>
+      )}
     </div>
   );
 };

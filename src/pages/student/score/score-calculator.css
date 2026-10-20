@@ -1,3 +1,20 @@
+.score-calculator {
+  --score-exam: var(--ws-primary, #2563eb);
+  --score-performance: var(--ws-accent, #f59e0b);
+  container-type: inline-size;
+}
+
+.score-calculator__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.score-calculator__layout > * {
+  min-width: 0;
+}
+
 .score-calculator__actions {
   display: flex;
   flex-wrap: wrap;
@@ -21,14 +38,42 @@
 
 .score-calculator__subjects {
   display: grid;
-  gap: 16px;
+  overflow: hidden;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
 }
 
 .score-calculator__subject {
-  padding: 20px 24px;
+  min-width: 0;
 }
 
-.score-calculator__subject-header,
+.score-calculator__subject + .score-calculator__subject {
+  border-top: 1px solid var(--ws-border-soft);
+}
+
+.score-calculator__subject-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 16px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  text-align: left;
+  background: transparent;
+}
+
+.score-calculator__subject-toggle:hover,
+.score-calculator__subject-toggle[aria-expanded="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.score-calculator__subject-toggle[aria-expanded="true"]
+  .score-calculator__chevron {
+  transform: rotate(180deg);
+}
+
 .score-calculator__item-heading {
   display: flex;
   align-items: center;
@@ -37,10 +82,17 @@
 }
 
 .score-calculator__subject h2 {
-  margin: 0 0 4px;
+  margin: 0;
   color: var(--ws-text-strong);
-  font-size: var(--ws-type-section-title);
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.score-calculator__subject-name {
+  overflow-wrap: anywhere;
+}
+.score-calculator__items {
+  padding: 0 16px 8px;
 }
 
 .score-calculator__total {
@@ -50,7 +102,7 @@
 
 .score-calculator__total strong {
   color: var(--ws-primary);
-  font-size: var(--ws-type-page-title, 1.75rem);
+  font-size: 20px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -58,7 +110,7 @@
 .score-calculator__grade {
   margin-left: 8px;
   color: var(--ws-primary-text);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -68,26 +120,12 @@
   line-height: 1.55;
 }
 
-.score-calculator__total-track {
-  height: 8px;
-  margin-top: 12px;
-  overflow: hidden;
-  border-radius: 8px;
-  background: var(--ws-border-soft);
-}
-
-.score-calculator__total-track > span {
-  display: block;
-  height: 100%;
-  background: var(--ws-primary);
-}
-
 .score-calculator__item {
-  padding-top: 16px;
+  padding-top: 8px;
 }
 
 .score-calculator__item + .score-calculator__item {
-  margin-top: 12px;
+  margin-top: 4px;
   border-top: 1px solid var(--ws-border-soft);
 }
 
@@ -109,10 +147,9 @@
 
 .score-calculator__input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 80px;
+  grid-template-columns: minmax(0, 1fr) 64px;
   align-items: center;
-  gap: 16px;
-  margin-top: 4px;
+  gap: 12px;
 }
 
 .score-calculator__range {
@@ -138,9 +175,15 @@
   text-align: center;
 }
 
-.score-calculator__input-row input:focus-visible {
+.score-calculator__input-row input:focus-visible,
+.score-calculator__subject-toggle:focus-visible,
+.score-calculator__chart-row:focus-visible {
   outline: 2px solid var(--ws-ring);
   outline-offset: 2px;
+}
+
+.score-calculator__subject-toggle:focus-visible {
+  outline-offset: -3px;
 }
 
 .score-calculator__input-row input:disabled {
@@ -149,7 +192,7 @@
 }
 
 .score-calculator__plan-warning {
-  margin: 16px 0 0;
+  margin: 8px 0 0;
   color: var(--ws-warning-text, #dc2626);
   font-size: 14px;
 }
@@ -158,11 +201,124 @@
   margin-top: 16px;
 }
 
-@media (max-width: 639px) {
-  .score-calculator__subject {
-    padding: 16px;
+.score-calculator__overview {
+  padding: 16px;
+}
+
+.score-calculator__overview-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.score-calculator__overview h2 {
+  margin: 0;
+  color: var(--ws-text-strong);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.score-calculator__legend,
+.score-calculator__legend > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ws-text-muted);
+}
+
+.score-calculator__legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--score-exam);
+}
+
+.score-calculator__legend i[data-type="performance"] {
+  background: var(--score-performance);
+}
+
+.score-calculator__legend i[data-type="other"] {
+  background: var(--score-exam);
+}
+
+.score-calculator__chart-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 60px 4px 88px;
+  font-size: 14px;
+  color: var(--ws-text-muted);
+}
+
+.score-calculator__chart-row {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+}
+
+.score-calculator__chart-row:hover,
+.score-calculator__chart-row[data-active="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.score-calculator__chart-subject {
+  color: var(--ws-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.score-calculator__chart-track {
+  display: flex;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--ws-border-soft);
+}
+
+.score-calculator__bar-segment {
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.score-calculator__chart-value {
+  color: var(--ws-text-strong);
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-calculator__chart-value small {
+  display: block;
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+@container (min-width: 800px) {
+  .score-calculator__layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 
+  .score-calculator__overview {
+    position: sticky;
+    top: 72px;
+  }
+}
+
+@media (max-width: 639px) {
   .score-calculator__item-heading {
     flex-wrap: wrap;
     gap: 4px 12px;
