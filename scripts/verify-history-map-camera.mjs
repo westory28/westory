@@ -117,7 +117,7 @@ async function openView(page, view) {
   await page.waitForTimeout(500);
 }
 async function flatSnapshot(page) {
-  return page.evaluate(() => {
+  const snapshot = await page.evaluate(() => {
     const geography = document.querySelector(".history-atlas__geography");
     const matrix = geography?.getScreenCTM();
     const map = document
@@ -132,6 +132,10 @@ async function flatSnapshot(page) {
     const target = anchor || country;
     return {
       matrix: matrix && [matrix.a, matrix.e - map.left, matrix.f - map.top],
+      zoom: parseInt(
+        document.querySelector(".history-atlas__zoom").textContent,
+        10,
+      ),
       anchor: target && [
         parseFloat(target.style.left),
         parseFloat(target.style.top),
@@ -140,6 +144,12 @@ async function flatSnapshot(page) {
       activeCountry: country?.getAttribute("data-country-label"),
     };
   });
+  assert.equal(
+    snapshot.zoom,
+    Math.round(snapshot.matrix[0] * 100),
+    "Displayed zoom follows the visible camera after gestures and selections",
+  );
+  return snapshot;
 }
 function assertSameFlatCamera(actual, expected, message) {
   assert(
@@ -946,7 +956,9 @@ try {
     activePage = globe;
     globe.on("pageerror", (error) => errors.push(error.message));
     await globe.route("**/*", (route) =>
-      route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : route.abort(),
     );
     await expectGlobe(globe);
     await globe.close();

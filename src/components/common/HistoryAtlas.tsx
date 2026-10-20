@@ -2451,7 +2451,7 @@ export default function HistoryAtlas({
                 −
               </button>
               <output className="history-atlas__zoom" aria-label="지도 배율">
-                {Math.round(transform.scale * 100)}%
+                {`${Math.round(transform.scale * 100)}%`}
               </output>
               <button
                 type="button"
