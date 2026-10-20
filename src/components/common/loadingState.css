@@ -126,9 +126,3 @@
     opacity: 1;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .ws-loading__dots span {
-    animation: none;
-    opacity: 1;
-  }
-}

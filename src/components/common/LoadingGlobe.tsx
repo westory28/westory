@@ -27,13 +27,31 @@ export default function LoadingGlobe() {
     const gridPath = svg.querySelector<SVGPathElement>("[data-grid]")!;
     const front = svg.querySelector<SVGGElement>("[data-orbit-front]")!;
     const back = svg.querySelector<SVGGElement>("[data-orbit-back]")!;
-    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const container = svg.closest(".ws-loading");
+    // Loading progress stays animated regardless of the OS motion preference.
+    // Embedded browsers may omit animation frames or intersection observation.
+    const nativeFrames =
+      typeof window.requestAnimationFrame === "function" &&
+      typeof window.cancelAnimationFrame === "function";
+    const schedule = (callback: FrameRequestCallback) =>
+      nativeFrames
+        ? window.requestAnimationFrame(callback)
+        : window.setTimeout(
+            () => callback(performance.now()),
+            Math.ceil(1000 / 30),
+          );
+    const cancel = (handle: number) =>
+      nativeFrames
+        ? window.cancelAnimationFrame(handle)
+        : window.clearTimeout(handle);
     const projection = geoOrthographic()
       .translate(CENTER)
       .scale(RADIUS)
       .precision(0.5);
     const path = geoPath(projection).digits(1);
     let visible = true,
+      pageActive = true,
+      disposed = false,
       frame = 0,
       previous = 0,
       elapsed = 0;
@@ -58,42 +76,53 @@ export default function LoadingGlobe() {
       back.style.display = depth < 0 ? "" : "none";
     };
     const tick = (now: number) => {
+      if (disposed) return;
       if (!previous) previous = now;
       if (now - previous >= 1000 / 30) {
         elapsed += Math.min(now - previous, 100);
         previous = now;
         draw();
       }
-      frame = requestAnimationFrame(tick);
+      frame = schedule(tick);
     };
     const sync = () => {
-      cancelAnimationFrame(frame);
+      cancel(frame);
       frame = 0;
       previous = 0;
-      const running = visible && !document.hidden && !motion.matches;
-      svg
-        .closest(".ws-loading")
-        ?.classList.toggle("ws-loading--paused", !running);
-      if (motion.matches) {
-        elapsed = 0;
-        draw();
-      }
-      if (running) frame = requestAnimationFrame(tick);
+      const running = visible && pageActive && !document.hidden && !disposed;
+      container?.classList.toggle("ws-loading--paused", !running);
+      if (running) frame = schedule(tick);
     };
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
+    const onPageHide = () => {
+      pageActive = false;
       sync();
-    });
-    observer.observe(svg);
+    };
+    const onPageShow = () => {
+      pageActive = true;
+      sync();
+    };
+    const observer =
+      typeof window.IntersectionObserver === "function"
+        ? new IntersectionObserver(([entry]) => {
+            if (!entry || disposed) return;
+            visible = entry.isIntersecting;
+            sync();
+          })
+        : null;
+    // Observe the HTML container: older engines handle SVG intersections unevenly.
+    observer?.observe(container || svg);
     document.addEventListener("visibilitychange", sync);
-    motion.addEventListener("change", sync);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     draw();
     sync();
     return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
+      disposed = true;
+      cancel(frame);
+      observer?.disconnect();
       document.removeEventListener("visibilitychange", sync);
-      motion.removeEventListener("change", sync);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
     };
   }, []);
 
