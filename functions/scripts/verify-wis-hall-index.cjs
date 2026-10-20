@@ -6,6 +6,7 @@ const { setup, addStudent, accountPath, previewPath, slotPath, policyPath, publi
 
 const scope = '2026-2';
 const full = (ctx, options = {}) => ctx.request({ uid: 'teacher', audience: 'teacher', projection: 'hall-index', ...options });
+const view = (ctx, options = {}) => ctx.request({ uid: 'teacher', audience: 'teacher', projection: 'hall-view', ...options });
 const original = (ctx, options = {}) => ctx.request({ uid: 'teacher', audience: 'teacher', projection: 'hall-of-fame', ...options });
 const hallBody = state => Object.fromEntries(Object.entries(state.hallOfFame)
   .filter(([key]) => !['updatedAt', 'updatedAtMs', 'sourceUpdatedAtMs'].includes(key)));
@@ -79,6 +80,109 @@ test('student returns only the current own grade and own class while omitting th
   assert.equal(state.hallOfFame.primaryGradeKey, '3');
   assert.equal(ctx.store.reads.filter(path => path === accountPath(scope, uid)).length, 1);
   const previous = await original(ctx, { uid, audience: 'student' }); assert.deepEqual(hallBody(state), hallBody(previous));
+});
+
+test('initial teacher grade view validates only its public rows and retains all selector keys as empty maps', async () => {
+  const ctx = school(); ctx.store.resetStats(); const started = process.hrtime.bigint();
+  const state = await view(ctx);
+  metrics.teacher321InitialViewMs = Number(process.hrtime.bigint() - started) / 1e6;
+  oneIndexQuery(ctx.store); noPrivateResponse(state); assert.equal(state.status, 'CONTENT');
+  assert.equal(state.hallOfFame.primaryGradeKey, '1');
+  assert.deepEqual(Object.keys(state.hallOfFame.gradeLeaderboardByGrade), ['1', '2', '3']);
+  assert.equal(Object.keys(state.hallOfFame.classLeaderboardByClassKey).length, 18);
+  assert.equal(state.hallOfFame.gradeLeaderboardByGrade['1'].length, 10);
+  assert.deepEqual(state.hallOfFame.gradeLeaderboardByGrade['2'], []); assert.deepEqual(state.hallOfFame.gradeLeaderboardByGrade['3'], []);
+  assert.ok(Object.values(state.hallOfFame.classLeaderboardByClassKey).every(rows => rows.length === 0));
+  assert.ok(Object.values(state.hallOfFame.classTop3ByClassKey).every(rows => rows.length === 0));
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 10);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/teacher').length, 10);
+  const complete = await full(ctx);
+  assert.deepEqual(state.hallOfFame.gradeLeaderboardByGrade['1'], complete.hallOfFame.gradeLeaderboardByGrade['1']);
+  assert.deepEqual(state.hallOfFameConfig, complete.hallOfFameConfig);
+  assert.equal(state.hallOfFameConfigRevision, complete.hallOfFameConfigRevision); assert.deepEqual(state.rankPolicy, complete.rankPolicy);
+});
+
+test('explicit grade and class view selections read one group without an automatic all-group request', async () => {
+  const ctx = school(); ctx.store.resetStats();
+  const grade = await view(ctx, { hallView: 'grade', hallGradeKey: '2' });
+  oneIndexQuery(ctx.store); assert.equal(grade.hallOfFame.primaryGradeKey, '2'); assert.equal(visible(grade).size, 10);
+  assert.equal(grade.hallOfFame.gradeLeaderboardByGrade['2'].length, 10);
+  assert.ok(Object.entries(grade.hallOfFame.gradeLeaderboardByGrade).every(([key, rows]) => key === '2' || !rows.length));
+  ctx.store.resetStats();
+  const selected = await view(ctx, { hallView: 'class', hallGradeKey: '2', hallClassKey: '2-4' });
+  oneIndexQuery(ctx.store); assert.equal(selected.status, 'CONTENT'); assert.equal(selected.hallOfFame.primaryGradeKey, '2');
+  assert.equal(selected.hallOfFame.classLeaderboardByClassKey['2-4'].length, 10);
+  assert.ok(Object.values(selected.hallOfFame.gradeLeaderboardByGrade).every(rows => !rows.length));
+  assert.ok(Object.entries(selected.hallOfFame.classLeaderboardByClassKey).every(([key, rows]) => key === '2-4' || !rows.length));
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('semester_wis_accounts/')).length, 10);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/teacher').length, 10);
+  const complete = await full(ctx);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['2-4'], complete.hallOfFame.classLeaderboardByClassKey['2-4']);
+  const defaultClass = await view(ctx, { hallView: 'class', hallGradeKey: '2' });
+  assert.equal(defaultClass.hallOfFame.classLeaderboardByClassKey['2-1'].length, 10);
+});
+
+test('student view parameters cannot select another grade or class', async () => {
+  const ctx = school(), actor = { uid: 'student-300', audience: 'student' };
+  const grade = await view(ctx, { ...actor, hallView: 'grade', hallGradeKey: '1', hallClassKey: '1-2' });
+  assert.equal(grade.hallOfFame.primaryGradeKey, '3'); assert.deepEqual(Object.keys(grade.hallOfFame.gradeLeaderboardByGrade), ['3']);
+  assert.deepEqual(Object.keys(grade.hallOfFame.classLeaderboardByClassKey), ['3-1']);
+  assert.equal(grade.hallOfFame.gradeLeaderboardByGrade['3'].length, 10); assert.deepEqual(grade.hallOfFame.classLeaderboardByClassKey['3-1'], []);
+  const selected = await view(ctx, { ...actor, hallView: 'class', hallGradeKey: '1', hallClassKey: '1-2' });
+  assert.deepEqual(Object.keys(selected.hallOfFame.gradeLeaderboardByGrade), ['3']); assert.deepEqual(selected.hallOfFame.gradeLeaderboardByGrade['3'], []);
+  assert.deepEqual(Object.keys(selected.hallOfFame.classLeaderboardByClassKey), ['3-1']);
+  const complete = await full(ctx, actor);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-1'], complete.hallOfFame.classLeaderboardByClassKey['3-1']);
+});
+
+test('selected views preserve tie caps, zero-fill and current rank replacement', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 45; index++) place(ctx, index, { classNumber: index < 30 ? '1' : '2', score: 100 });
+  ctx.store.set('site_settings/interface_config', { hallOfFame: { publicRange: { gradeRankLimit: 4, classRankLimit: 4, includeTies: true } } });
+  const tied = await view(ctx, { hallView: 'class', hallClassKey: '3-1' });
+  assert.equal(tied.hallOfFame.classLeaderboardByClassKey['3-1'].length, 20);
+  for (let index = 0; index < 45; index++) ctx.store.patch(accountPath(scope, `student-${index}`), { rankEarnedTotal: index < 3 ? 100 : 0 });
+  const sparse = await view(ctx, { hallView: 'class', hallClassKey: '3-1' });
+  const complete = await full(ctx);
+  assert.equal(sparse.hallOfFame.classLeaderboardByClassKey['3-1'].length, 4);
+  assert.deepEqual(sparse.hallOfFame.classLeaderboardByClassKey['3-1'], complete.hallOfFame.classLeaderboardByClassKey['3-1']);
+});
+
+test('selected-group verification excludes moved students and refills without disclosing other groups', async () => {
+  const ctx = setup(0);
+  for (let index = 0; index < 40; index++) place(ctx, index, { classNumber: index < 20 ? '1' : '2' });
+  ctx.store.patch(`semester_enrollments/enrollment-${scope}-0`, { snapshot: { grade: '1', classNumber: '7' }, displayName: '이동 이름' });
+  ctx.store.docs.delete(accountPath(scope, 'student-1'));
+  ctx.store.patch(accountPath(scope, 'student-2'), { rankEarnedTotal: 0 });
+  ctx.store.resetStats();
+  const selected = await view(ctx, { hallView: 'class', hallGradeKey: '3', hallClassKey: '3-1' });
+  oneIndexQuery(ctx.store); assert.equal(selected.hallOfFame.classLeaderboardByClassKey['3-1'].length, 10);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['1-7'], []);
+  assert.deepEqual(selected.hallOfFame.gradeLeaderboardByGrade['1'], []);
+  assert.equal(JSON.stringify(selected).includes('이동 이름'), false);
+  assert.equal(ctx.store.reads.length, new Set(ctx.store.reads).size);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/teacher').length, 10);
+  const complete = await full(ctx);
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['3-1'], complete.hallOfFame.classLeaderboardByClassKey['3-1']);
+});
+
+test('selected archive views preserve historical group keys and names without canonical slots', async () => {
+  const ctx = school(); ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
+  for (let index = 0; index < 321; index++) ctx.store.docs.delete(slotPath(scope, `student-${index}`));
+  ctx.store.resetStats(); const selected = await view(ctx, { source: 'EXPLICIT', hallView: 'class', hallGradeKey: '2', hallClassKey: '2-3' });
+  assert.equal(ctx.store.queries.length, 1); assert.equal(ctx.store.queries[0].collection, 'semester_wis_accounts');
+  assert.equal(visible(selected).size, 10); assert.equal(Object.keys(selected.hallOfFame.classLeaderboardByClassKey).length, 18);
+  assert.equal(ctx.store.reads.filter(path => path.startsWith('users/') && path !== 'users/teacher').length, 10);
+  const complete = await full(ctx, { source: 'EXPLICIT' });
+  assert.deepEqual(selected.hallOfFame.classLeaderboardByClassKey['2-3'], complete.hallOfFame.classLeaderboardByClassKey['2-3']);
+});
+
+test('view payload validation rejects unsupported views and noncanonical keys before index reads', async () => {
+  const ctx = school();
+  for (const data of [{ hallView: 'all' }, { hallGradeKey: '../3' }, { hallClassKey: ' 3-1' }, { hallGradeKey: 3 }]) {
+    await assert.rejects(() => view(ctx, data), error => error.code === 'invalid-argument');
+  }
+  assert.equal(ctx.store.queries.length, 0);
 });
 
 test('class-only candidates do not renumber grades using the narrower visible union', async () => {
@@ -283,7 +387,7 @@ test('transport allows only hall-of-fame or default preview and preserves the ex
     if (name === './productionGateway/studentMaintenance') return { onCallWithStudentMaintenance: (configuration, handler) => { options = configuration; return handler; } };
     throw new Error('Unexpected dependency');
   } });
-  for (const [input, expected] of [['hall-of-fame', 'hall-index'], [undefined, 'ranking-preview'], ['hall-index', 'ranking-preview'], ['catalog', 'ranking-preview'], ['account', 'ranking-preview']]) {
+  for (const [input, expected] of [['hall-of-fame', 'hall-index'], ['hall-view', 'hall-view'], [undefined, 'ranking-preview'], ['hall-index', 'ranking-preview'], ['catalog', 'ranking-preview'], ['account', 'ranking-preview']]) {
     const request = { auth: { uid: 'actor' }, data: { projection: input, _session: { id: 'proof' } } };
     await exports.getWisRankingPreview(request); assert.equal(received.data.projection, expected);
     assert.equal(received.auth, request.auth); assert.equal(received.data._session, request.data._session); assert.equal(request.data.projection, input);

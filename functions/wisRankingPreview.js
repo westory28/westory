@@ -11,8 +11,9 @@ exports.getWisRankingPreview = onCallWithStudentMaintenance(
   { region: 'us-central1', memory: '256MiB', minInstances: 1, maxInstances: 3, concurrency: 80 },
   request => core.getWisEconomyState({
     ...request,
-    // Only the full hall may opt into another bounded ranking projection.
+    // Only full or explicitly selected hall views may opt into another bounded ranking projection.
     // Catalog, ledger, account and other query projections stay inaccessible.
-    data: { ...request.data, projection: request.data?.projection === 'hall-of-fame' ? 'hall-index' : 'ranking-preview' },
+    data: { ...request.data, projection: request.data?.projection === 'hall-view' ? 'hall-view'
+      : request.data?.projection === 'hall-of-fame' ? 'hall-index' : 'ranking-preview' },
   }),
 );

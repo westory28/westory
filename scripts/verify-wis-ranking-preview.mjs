@@ -84,7 +84,7 @@ const loadActual = relative => {
   vm.runInNewContext(js, { module, exports: module.exports, require, console, URLSearchParams, URL, Date, setTimeout, clearTimeout }, { filename });
   return module.exports;
 };
-const { getWisRankingPreview, getWisHallOfFameState } = loadActual('src/lib/wisRankingPreview.ts');
+const { getWisRankingPreview, getWisHallOfFameState, getWisHallOfFameView } = loadActual('src/lib/wisRankingPreview.ts');
 const { getStudentPointHallOfFame } = loadActual('src/lib/studentWis.ts');
 const rankingCalls = () => calls.filter(call => call.name === 'getWisRankingPreview');
 const opens = () => calls.filter(call => call.name === 'openApplicationSession').length;
@@ -154,6 +154,20 @@ await step('full hall deduplicates concurrent consumers but never shares the fiv
   assert.equal(state, duplicate);
   assert.equal(state.hallOfFame.classLeaderboardByClassKey['3-1'].length, 1);
   assert.equal(panel.snapshot.gradeLeaderboardByGrade['3'].length, 5);
+  hold = false;
+});
+await step('selected hall groups send one scoped request and isolate different group flights', async () => {
+  hold = true;
+  const first = getWisHallOfFameView(config, 'teacher', { view: 'grade', gradeKey: '3', classKey: '' });
+  const duplicate = getWisHallOfFameView(config, 'teacher', { view: 'grade', gradeKey: '3', classKey: '' });
+  const classView = getWisHallOfFameView(config, 'teacher', { view: 'class', gradeKey: '', classKey: '3-2' });
+  await waitFor(() => pendingCalls().length === 2, 'separate selected hall groups');
+  assert(pendingCalls().every(call => call.data.projection === 'hall-view'));
+  assert.deepEqual(pendingCalls().map(call => [call.data.hallView, call.data.hallGradeKey, call.data.hallClassKey]),
+    [['grade', '3', ''], ['class', '', '3-2']]);
+  for (const call of pendingCalls()) call.resolve();
+  await Promise.all([first, duplicate, classView]);
+  assert.equal(pendingCalls().length, 0, 'No trailing all-class fetch');
   hold = false;
 });
 await step('failed shared call clears its flight without polling and permits explicit retry', async () => {

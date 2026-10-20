@@ -1,5 +1,5 @@
 import NumericInput from "../../../../components/common/NumericInput";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import WisHallOfFamePositionEditor, {
   type HallOfFameEditorDeviceMode,
@@ -13,6 +13,7 @@ import { getFirebaseStorage } from "../../../../lib/firebase";
 import { ensureSensitiveOperation } from "../../../../lib/sensitiveOperation";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
+import { getWisHallOfFameView } from "../../../../lib/wisRankingPreview";
 import {
   resolveWisHallOfFamePodiumImageUrl,
   WIS_HALL_OF_FAME_GRADE_KEY,
@@ -27,10 +28,7 @@ import type {
   WisHallOfFameSnapshot,
 } from "../../../../types";
 
-import {
-  getCanonicalWisHallOfFame as getWisHallOfFameSnapshot,
-  saveCanonicalWisHallOfFameConfig as saveWisHallOfFameConfig,
-} from "../../../../lib/pointEconomyAdapter";
+import { saveCanonicalWisHallOfFameConfig as saveWisHallOfFameConfig } from "../../../../lib/pointEconomyAdapter";
 
 interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
@@ -457,6 +455,24 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
   const [gradeKey, setGradeKey] = useState("");
   const [classKey, setClassKey] = useState("");
+  const requestOwner = useMemo(
+    () => ({}),
+    [config?.year, config?.semester, currentUser, authGeneration],
+  );
+  const currentOwnerRef = useRef(requestOwner);
+  currentOwnerRef.current = requestOwner;
+  const queryKey = `${previewScope}:${previewScope === "grade" ? gradeKey : classKey}`;
+  const currentQueryRef = useRef(queryKey);
+  currentQueryRef.current = queryKey;
+  const requestSequenceRef = useRef(0);
+  const acceptedQueryRef = useRef<{
+    owner: object;
+    key: string;
+    refreshKey: number;
+    sequence: number;
+  } | null>(null);
+  const currentLoadRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [snapshotOwner, setSnapshotOwner] = useState<object | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [savedFeatureDraft, setSavedFeatureDraft] = useState<FeatureDraft>(() =>
@@ -477,6 +493,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
   const applySnapshotState = (nextSnapshot: WisHallOfFameSnapshot | null) => {
     setSnapshot(nextSnapshot);
+    setSnapshotOwner(requestOwner);
     if (!nextSnapshot) {
       setSnapshotError(
         "현재 학기 공개 랭킹을 불러오지 못했습니다. 다시 조회해 주세요.",
@@ -484,7 +501,106 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       return;
     }
     setSnapshotError("");
+    const grades = [
+      ...new Set([
+        ...Object.keys(nextSnapshot.gradeLeaderboardByGrade || {}),
+        ...Object.keys(nextSnapshot.gradeTop3ByGrade || {}),
+      ]),
+    ].sort((left, right) =>
+      left.localeCompare(right, "ko-KR", { numeric: true }),
+    );
+    const allClasses = [
+      ...new Set([
+        ...Object.keys(nextSnapshot.classLeaderboardByClassKey || {}),
+        ...Object.keys(nextSnapshot.classTop3ByClassKey || {}),
+      ]),
+    ];
+    const populatedClasses = allClasses.filter(
+      (key) =>
+        (nextSnapshot.classLeaderboardByClassKey?.[key]?.length || 0) > 0 ||
+        (nextSnapshot.classTop3ByClassKey?.[key]?.length || 0) > 0,
+    );
+    // A removed class can make the server choose a different group. Preserve
+    // that returned group instead of independently picking another empty key.
+    const responseClass =
+      previewScope === "class"
+        ? allClasses.includes(classKey)
+          ? classKey
+          : populatedClasses.length === 1
+            ? populatedClasses[0]
+            : ""
+        : "";
+    const nextGrade =
+      (responseClass && parseClassKey(responseClass).grade) ||
+      (grades.includes(gradeKey)
+        ? gradeKey
+        : nextSnapshot.primaryGradeKey ||
+          grades[0] ||
+          WIS_HALL_OF_FAME_GRADE_KEY);
+    const classes = allClasses
+      .filter((key) => parseClassKey(key).grade === nextGrade)
+      .sort((left, right) =>
+        left.localeCompare(right, "ko-KR", { numeric: true }),
+      );
+    const nextClass = classes.includes(responseClass)
+      ? responseClass
+      : classes.includes(classKey)
+        ? classKey
+        : classes[0] || "";
+    acceptedQueryRef.current = {
+      owner: requestOwner,
+      refreshKey,
+      sequence: requestSequenceRef.current,
+      key: `${previewScope}:${previewScope === "grade" ? nextGrade : nextClass}`,
+    };
+    setGradeKey(nextGrade);
+    setClassKey(nextClass);
   };
+
+  const loadCurrentSnapshot = async () => {
+    if (
+      !config ||
+      !currentUser ||
+      currentOwnerRef.current !== requestOwner ||
+      currentQueryRef.current !== queryKey
+    )
+      return false;
+    const sequence = ++requestSequenceRef.current;
+    const startedAt = performance.now();
+    const isCurrent = () =>
+      currentOwnerRef.current === requestOwner &&
+      currentQueryRef.current === queryKey &&
+      requestSequenceRef.current === sequence;
+    setLoadDurationMs(null);
+    try {
+      const nextSnapshot = await getWisHallOfFameView(config, "teacher", {
+        view: previewScope,
+        gradeKey,
+        classKey,
+      });
+      if (!isCurrent()) return false;
+      applySnapshotState(nextSnapshot);
+      setLoadDurationMs(Math.round(performance.now() - startedAt));
+      return Boolean(nextSnapshot);
+    } catch (error) {
+      if (isCurrent()) throw error;
+      return false;
+    } finally {
+      if (isCurrent()) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  };
+  currentLoadRef.current = loadCurrentSnapshot;
+
+  useEffect(
+    () => () => {
+      if (currentOwnerRef.current === requestOwner)
+        requestSequenceRef.current++;
+    },
+    [requestOwner],
+  );
 
   useEffect(() => {
     const nextDraft = createDraft(interfaceConfig?.hallOfFame);
@@ -522,12 +638,21 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    const startedAt = performance.now();
-    setSnapshot(null);
-    setLoadDurationMs(null);
+    const accepted = acceptedQueryRef.current;
+    // Resolving the initial default keys updates the selectors, but the same
+    // accepted group never needs a second request for that normalization.
+    if (
+      accepted?.owner === requestOwner &&
+      accepted.key === queryKey &&
+      accepted.refreshKey === refreshKey &&
+      accepted.sequence === requestSequenceRef.current
+    )
+      return;
+    if (snapshotOwner !== requestOwner) setSnapshot(null);
 
     const loadSnapshot = async () => {
       if (!config || !currentUser) {
+        setSnapshotOwner(requestOwner);
         setLoading(false);
         return;
       }
@@ -536,25 +661,22 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setSnapshotError("");
 
       try {
-        const nextSnapshot = await getWisHallOfFameSnapshot(config);
-        if (!cancelled) {
-          applySnapshotState(nextSnapshot);
-          setLoadDurationMs(Math.round(performance.now() - startedAt));
-        }
+        await loadCurrentSnapshot();
       } catch (error) {
         console.warn(
           "Failed to load hall of fame snapshot for teacher management:",
           error,
         );
-        if (!cancelled) {
+        if (
+          !cancelled &&
+          currentOwnerRef.current === requestOwner &&
+          currentQueryRef.current === queryKey
+        ) {
           setSnapshot(null);
+          setSnapshotOwner(requestOwner);
           setSnapshotError(
             "공개 랭킹을 불러오지 못했습니다. 그래도 위스 관리 화면은 계속 사용할 수 있습니다.",
           );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
         }
       }
     };
@@ -564,7 +686,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config?.year, config?.semester, currentUser, authGeneration, refreshKey]);
+  }, [requestOwner, queryKey, refreshKey]);
 
   const featureDirty =
     serializeFeatureDraft(featureDraft) !==
@@ -616,32 +738,6 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     [gradeKey, snapshot],
   );
 
-  useEffect(() => {
-    if (!gradeKey || !gradeOptions.includes(gradeKey)) {
-      setGradeKey(
-        snapshot?.primaryGradeKey ||
-          gradeOptions[0] ||
-          WIS_HALL_OF_FAME_GRADE_KEY,
-      );
-    }
-  }, [gradeKey, gradeOptions, snapshot?.primaryGradeKey]);
-
-  useEffect(() => {
-    if (!classOptions.length) {
-      setClassKey("");
-      return;
-    }
-    if (!classKey || !classOptions.includes(classKey)) {
-      setClassKey(classOptions[0] || "");
-    }
-  }, [classKey, classOptions]);
-
-  useEffect(() => {
-    if (previewScope === "class" && !classKey) {
-      setPreviewScope("grade");
-    }
-  }, [classKey, previewScope]);
-
   const previewClass = parseClassKey(classKey);
   const snapshotUpdatedAtLabel = snapshot?.updatedAt
     ? formatPointDateShortTime(snapshot.updatedAt)
@@ -682,12 +778,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   };
 
   const refreshSnapshot = async () => {
-    if (!config) return;
+    if (!config || refreshing) return;
 
     setRefreshing(true);
     try {
-      const nextSnapshot = await getWisHallOfFameSnapshot(config);
-      applySnapshotState(nextSnapshot);
+      if (!(await loadCurrentSnapshot())) return;
       showToast({
         tone: "success",
         title: "최신 위스 현황을 불러왔습니다.",
@@ -701,7 +796,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         message: failure.message,
       });
     } finally {
-      setRefreshing(false);
+      if (
+        currentOwnerRef.current === requestOwner &&
+        currentQueryRef.current === queryKey
+      )
+        setRefreshing(false);
     }
   };
 
@@ -792,10 +891,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
           const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
 
           if (hasNonImageChanges) {
+            if (currentOwnerRef.current !== requestOwner) return;
             const result = await saveWisHallOfFameConfig(
               config,
               buildCombinedConfig(nextFeatureDraft, layoutOnlyDraft),
             );
+            if (currentOwnerRef.current !== requestOwner) return;
             const nextDraft = createDraft(result.hallOfFame);
             const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
 
@@ -805,7 +906,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
               preserveImageSelection: true,
             });
             await refreshSavedInterfaceConfig();
-            applySnapshotState(await getWisHallOfFameSnapshot(config));
+            if (currentOwnerRef.current !== requestOwner) return;
+            await currentLoadRef.current?.();
+            if (currentOwnerRef.current !== requestOwner) return;
 
             showToast({
               tone: "warning",
@@ -825,10 +928,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         }
       }
 
+      if (currentOwnerRef.current !== requestOwner) return;
       const result = await saveWisHallOfFameConfig(
         config,
         buildCombinedConfig(nextFeatureDraft, nextViewDraft),
       );
+      if (currentOwnerRef.current !== requestOwner) return;
       const nextDraft = createDraft(result.hallOfFame);
       const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
 
@@ -836,7 +941,9 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setFeatureDraft(savedNextFeatureDraft);
       applySavedStudentViewDraft(nextDraft);
       await refreshSavedInterfaceConfig();
-      applySnapshotState(await getWisHallOfFameSnapshot(config));
+      if (currentOwnerRef.current !== requestOwner) return;
+      await currentLoadRef.current?.();
+      if (currentOwnerRef.current !== requestOwner) return;
 
       showToast({
         tone: "success",
@@ -852,8 +959,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         message: failure.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
-      setFeatureSaving(false);
-      setViewSaving(false);
+      if (currentOwnerRef.current === requestOwner) {
+        setFeatureSaving(false);
+        setViewSaving(false);
+      }
     }
   };
 
@@ -901,7 +1010,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
         </div>
       )}
 
-      {loading ? (
+      {loading || snapshotOwner !== requestOwner ? (
         <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center text-gray-400 shadow-sm">
           <div className="mb-2 text-2xl">
             <i className="fas fa-spinner fa-spin"></i>
@@ -996,7 +1105,23 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                   <select
                     id="hall-preview-grade"
                     value={gradeKey}
-                    onChange={(event) => setGradeKey(event.target.value)}
+                    onChange={(event) => {
+                      const nextGrade = event.target.value;
+                      const nextClass =
+                        Object.keys(snapshot?.classLeaderboardByClassKey || {})
+                          .filter(
+                            (key) => parseClassKey(key).grade === nextGrade,
+                          )
+                          .sort((left, right) =>
+                            left.localeCompare(right, "ko-KR", {
+                              numeric: true,
+                            }),
+                          )[0] || "";
+                      setGradeKey(nextGrade);
+                      setClassKey(nextClass);
+                      if (previewScope === "class" && !nextClass)
+                        setPreviewScope("grade");
+                    }}
                     className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm"
                   >
                     {gradeOptions.length === 0 && (

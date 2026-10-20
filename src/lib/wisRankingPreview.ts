@@ -22,7 +22,8 @@ const flights = new WeakMap<
 const getWisRankingState = async (
   config: WisConfig,
   audience: "student" | "teacher",
-  projection: "ranking-preview" | "hall-of-fame",
+  projection: "ranking-preview" | "hall-of-fame" | "hall-view",
+  selection?: { view: "grade" | "class"; gradeKey: string; classKey: string },
 ) => {
   const user = auth.currentUser;
   assertWisOwner(user?.uid || "");
@@ -33,7 +34,10 @@ const getWisRankingState = async (
   const semesterId = wisSemesterId(config);
   const source =
     audience === "teacher" && isSemesterArchive ? "EXPLICIT" : "CURRENT";
-  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}`;
+  const selectionKey = selection
+    ? JSON.stringify([selection.view, selection.gradeKey, selection.classKey])
+    : "";
+  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}:${selectionKey}`;
   let pending = flights.get(user);
   if (!pending) {
     pending = new Map();
@@ -47,6 +51,13 @@ const getWisRankingState = async (
       source,
       projection,
       limit: projection === "ranking-preview" ? 5 : 20,
+      ...(selection
+        ? {
+            hallView: selection.view,
+            hallGradeKey: selection.gradeKey,
+            hallClassKey: selection.classKey,
+          }
+        : {}),
     });
     pending.set(key, flight);
   }
@@ -77,3 +88,16 @@ export const getWisHallOfFameState = (
   config: WisConfig,
   audience: "student" | "teacher",
 ) => getWisRankingState(config, audience, "hall-of-fame");
+
+export const getWisHallOfFameView = async (
+  config: WisConfig,
+  audience: "student" | "teacher",
+  selection: { view: "grade" | "class"; gradeKey: string; classKey: string },
+) =>
+  wisHallOfFame(
+    await getWisRankingState(config, audience, "hall-view", {
+      view: selection.view,
+      gradeKey: selection.view === "grade" ? selection.gradeKey : "",
+      classKey: selection.view === "class" ? selection.classKey : "",
+    }),
+  );

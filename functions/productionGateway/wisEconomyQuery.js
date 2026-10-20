@@ -2530,6 +2530,9 @@ const normalizeQuery = (raw) => {
       "orderStatus",
       "cursor",
       "limit",
+      "hallView",
+      "hallGradeKey",
+      "hallClassKey",
       "_session",
     ],
     "getWisEconomyState payload",
@@ -2540,12 +2543,15 @@ const normalizeQuery = (raw) => {
   const audience = value.audience === "teacher" ? "teacher" : "student";
   const allowedProjections =
     audience === "teacher"
-      ? ["summary", "overview", "account", "orders", "catalog", "hall-of-fame", "ranking-preview", "hall-index"]
-      : ["summary", "student-core", "orders", "catalog", "hall-of-fame", "ranking-preview", "hall-index"];
+      ? ["summary", "overview", "account", "orders", "catalog", "hall-of-fame", "ranking-preview", "hall-index", "hall-view"]
+      : ["summary", "student-core", "orders", "catalog", "hall-of-fame", "ranking-preview", "hall-index", "hall-view"];
   const projection =
     value.projection || (audience === "teacher" ? "overview" : "student-core");
   if (!allowedProjections.includes(projection))
     fail("invalid-argument", "projection is invalid.", "WIS_QUERY_INVALID");
+  const hallView = value.hallView || "grade";
+  if (!["grade", "class"].includes(hallView))
+    fail("invalid-argument", "hallView is invalid.", "WIS_QUERY_INVALID");
   const cursor = value.cursor ? text(value.cursor, "cursor", 160) : "";
   if (cursor && !/^[A-Za-z0-9_-]+$/.test(cursor)) {
     fail("invalid-argument", "cursor is invalid.", "WIS_QUERY_INVALID");
@@ -2555,6 +2561,9 @@ const normalizeQuery = (raw) => {
     semesterId: semesterId(value.semesterId),
     source,
     projection,
+    hallView,
+    hallGradeKey: optionalText(value.hallGradeKey, "hallGradeKey", 80),
+    hallClassKey: optionalText(value.hallClassKey, "hallClassKey", 160),
     accountId: value.accountId ? text(value.accountId, "accountId", 80) : "",
     ledgerEntryId: value.ledgerEntryId
       ? text(value.ledgerEntryId, "ledgerEntryId", 80)
@@ -3291,7 +3300,34 @@ const queryRankingPreview = async ({ transaction, scope, config, studentAccount,
 // The full hall has many grade/class groups. Read the small private index once
 // instead of opening one query per group or downloading every account's ledger.
 // Only the union of publicly visible rows is verified against current sources.
-const queryIndexedHall = async ({ transaction, scope, config, studentAccount }) => {
+const selectHallView = (hall, selection, studentAccount = null, known = {}) => {
+  const gradeKeys = new Set([...(known.gradeKeys || []), ...Object.keys(hall.gradeLeaderboardByGrade)]);
+  const classKeys = new Set([...(known.classKeys || []), ...Object.keys(hall.classLeaderboardByClassKey)]);
+  const ownGrade = String(studentAccount?.grade || "").trim();
+  const ownClass = ownGrade && studentAccount?.classNumber
+    ? `${ownGrade}-${String(studentAccount.classNumber).trim()}` : "";
+  const gradeKey = ownGrade || (selection.gradeKey && gradeKeys.has(selection.gradeKey)
+    ? selection.gradeKey : hall.primaryGradeKey);
+  const classKey = ownClass || (selection.classKey && classKeys.has(selection.classKey)
+    ? selection.classKey : Object.keys(hall.classLeaderboardByClassKey).sort()
+      .find(key => hall.classLeaderboardByClassKey[key][0]?.grade === gradeKey) ||
+      Object.keys(hall.classLeaderboardByClassKey).sort()[0] || "");
+  const emptyGroups = keys => Object.fromEntries([...keys].sort().map(key => [key, []]));
+  const gradeLeaderboardByGrade = emptyGroups(gradeKeys);
+  const classLeaderboardByClassKey = emptyGroups(classKeys);
+  if (selection.view === "class") {
+    if (classKey && classKeys.has(classKey)) classLeaderboardByClassKey[classKey] = hall.classLeaderboardByClassKey[classKey] || [];
+  } else if (gradeKeys.has(gradeKey)) {
+    gradeLeaderboardByGrade[gradeKey] = hall.gradeLeaderboardByGrade[gradeKey] || [];
+  }
+  return { ...hall, primaryGradeKey: gradeKey, gradeLeaderboardByGrade, classLeaderboardByClassKey,
+    gradeTop3ByGrade: Object.fromEntries(Object.entries(gradeLeaderboardByGrade)
+      .map(([key, entries]) => [key, entries.filter(entry => entry.cumulativeEarned > 0 && entry.rank <= 3)])),
+    classTop3ByClassKey: Object.fromEntries(Object.entries(classLeaderboardByClassKey)
+      .map(([key, entries]) => [key, entries.filter(entry => entry.cumulativeEarned > 0 && entry.rank <= 3)])) };
+};
+
+const queryIndexedHall = async ({ transaction, scope, config, studentAccount, selection = null }) => {
   const ownGrade = studentAccount ? String(studentAccount.grade || "").trim() : "";
   const rows = await transaction.query(WIS_RANKING_PREVIEW_COLLECTION, {
     filters: [
@@ -3311,13 +3347,17 @@ const queryIndexedHall = async ({ transaction, scope, config, studentAccount }) 
     .map(({ data }) => [data.studentUid, data]));
   const invalid = new Set();
   const verified = new Map();
+  const known = { gradeKeys: new Set(), classKeys: new Set() };
   // Every non-final pass consumes previously unseen candidates. Score decreases
   // and class/grade moves replace old index metadata before all groups rerank.
   // At most the bounded index population can be read, with no polling/retries.
   for (let pass = 0; pass <= indexed.size; pass++) {
     const available = [...indexed.values()].filter(account => !invalid.has(account.studentUid))
       .map(account => verified.get(account.studentUid) || account);
-    const hall = buildWisHallOfFameProjection({ accounts: available, config, scope, studentAccount });
+    const complete = buildWisHallOfFameProjection({ accounts: available, config, scope, studentAccount });
+    Object.keys(complete.gradeLeaderboardByGrade).forEach(key => known.gradeKeys.add(key));
+    Object.keys(complete.classLeaderboardByClassKey).forEach(key => known.classKeys.add(key));
+    const hall = selection ? selectHallView(complete, selection, studentAccount, known) : complete;
     const publicIds = new Set([hall.gradeLeaderboardByGrade, hall.classLeaderboardByClassKey]
       .flatMap(group => Object.values(group).flat()).map(entry => entry.uid));
     const selected = available.filter(account => publicIds.has(hallPublicId(scope, account.studentUid)));
@@ -3531,7 +3571,9 @@ const createWisQueryCore = ({
       };
     return store.runTransaction(async (rawTransaction) => {
       const isRankingPreview = query.projection === "ranking-preview";
-      const isIndexedHall = query.projection === "hall-index";
+      const isIndexedHall = ["hall-index", "hall-view"].includes(query.projection);
+      const hallSelection = query.projection === "hall-view"
+        ? { view: query.hallView, gradeKey: query.hallGradeKey, classKey: query.hallClassKey } : null;
       const isIndexedRankingRead = isRankingPreview || isIndexedHall;
       const transaction = isIndexedRankingRead ? memoizeRankingPreviewReads(rawTransaction,
         { maskAccounts: isIndexedHall }) : rawTransaction;
@@ -3617,7 +3659,7 @@ const createWisQueryCore = ({
         rankings: [],
         hallOfFame: null,
         hallOfFameConfig:
-          ["hall-of-fame", "hall-index"].includes(query.projection) ? hallOfFameConfig : null,
+          ["hall-of-fame", "hall-index", "hall-view"].includes(query.projection) ? hallOfFameConfig : null,
         hallOfFameConfigRevision: Number(
           interfaceSnapshot.data?.hallOfFameRevision || 0,
         ),
@@ -3649,12 +3691,14 @@ const createWisQueryCore = ({
           // Historical teacher reads keep the original account snapshots, even
           // when current canonical slots/classes or ranking metadata differ.
           const accounts = await queryHallAccounts(transaction, query.semesterId, { compact: true });
-          hallOfFame = await addHallProfileIcons(transaction, buildWisHallOfFameProjection({
+          const complete = buildWisHallOfFameProjection({
             accounts, config: hallOfFameConfig, scope: query.semesterId,
-          }), accounts, query.semesterId);
+          });
+          hallOfFame = await addHallProfileIcons(transaction,
+            hallSelection ? selectHallView(complete, hallSelection) : complete, accounts, query.semesterId);
         } else if (isIndexedHall) {
           hallOfFame = await queryIndexedHall({ transaction, scope: query.semesterId,
-            config: hallOfFameConfig, studentAccount });
+            config: hallOfFameConfig, studentAccount, selection: hallSelection });
         } else {
           hallOfFame = explicitTeacherRead
             ? await buildRankingPreview({ transaction,
@@ -3667,7 +3711,8 @@ const createWisQueryCore = ({
         return { ...base, economy: query.audience === "student"
           ? projectStudentEconomy(economySnapshot.data) : base.economy,
           hallOfFame, rankPolicy,
-          status: Object.values(hallOfFame.gradeLeaderboardByGrade).some((rows) => rows.length) ? "CONTENT" : "EMPTY" };
+          status: [hallOfFame.gradeLeaderboardByGrade, hallOfFame.classLeaderboardByClassKey]
+            .some(group => Object.values(group).some(rows => rows.length)) ? "CONTENT" : "EMPTY" };
       }
 
       if (query.audience === "student") {
