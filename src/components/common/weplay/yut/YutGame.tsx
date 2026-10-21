@@ -835,47 +835,47 @@ export default function YutGame({
     [],
   );
 
+  const hasMatch = Boolean(room && room.status !== "waiting");
   useEffect(() => {
     const measure = () => {
       const compact = canvasWidth > canvasHeight && canvasHeight <= 560;
-      shellRef.current?.style.setProperty(
-        "--yut-toolbar-width",
-        `${shellRef.current.querySelector<HTMLElement>(".yut-floating-controls")?.offsetWidth || 200}px`,
-      );
       // The board belongs to its frame. Page scrolling and browser chrome must
       // never change its scale while a player is choosing or moving a piece.
       const available =
         shellRef.current?.querySelector<HTMLElement>(".yut-game-content")
           ?.clientHeight || canvasHeight;
-      const height = (selector: string) =>
-        shellRef.current?.querySelector<HTMLElement>(selector)?.offsetHeight ||
-        0;
       const style = (selector: string) => {
         const node = shellRef.current?.querySelector(selector);
         return node ? getComputedStyle(node) : null;
       };
       const value = (input?: string) => parseFloat(input || "0") || 0;
+      const contentStyle = style(".yut-game-content");
+      const contentInsets =
+        value(contentStyle?.paddingTop) + value(contentStyle?.paddingBottom);
+      const shortStage = compact && available - contentInsets <= 360;
+      shellRef.current?.toggleAttribute("data-short-stage", shortStage);
       const matchStyle = style(".yut-match"),
-        boardStyle = style(".yut-isometric-board-wrap"),
-        dockStyle = style(".yut-action-dock");
-      const eventStyle = style(".yut-event");
+        boardStyle = style(".yut-isometric-board-wrap");
+      shellRef.current?.style.setProperty(
+        "--yut-emote-max-height",
+        `${Math.max(44, available - contentInsets - (fullscreen ? 84 : 80))}px`,
+      );
       const shellStyle = shellRef.current
         ? getComputedStyle(shellRef.current)
         : null;
       const overhead =
-        height(".yut-action-dock") +
-        height(".yut-event") +
-        value(eventStyle?.marginTop) +
+        value(matchStyle?.getPropertyValue("--yut-dock-height")) +
+        value(matchStyle?.getPropertyValue("--yut-event-height")) +
         value(matchStyle?.paddingTop) +
         value(matchStyle?.paddingBottom) +
+        contentInsets +
         value(boardStyle?.paddingTop) +
-        value(dockStyle?.marginTop) +
         value(shellStyle?.borderTopWidth) +
         value(shellStyle?.borderBottomWidth) +
         8;
       setBoardMaxWidth(
         Math.max(
-          compact ? 260 : 320,
+          shortStage ? 160 : compact ? 260 : 320,
           (available - overhead - 6) * (compact ? 3 : 5 / 2),
         ),
       );
@@ -891,13 +891,6 @@ export default function YutGame({
     });
     const frameNode = shellRef.current?.closest(".weplay-game-frame");
     if (frameNode) observer.observe(frameNode);
-    // Action text can grow when the phase changes; this is independent of
-    // browser chrome or page scrolling, which must not rescale the board.
-    const contentObserver = new ResizeObserver(measure);
-    for (const selector of [".yut-action-dock", ".yut-event"]) {
-      const node = shellRef.current?.querySelector(selector);
-      if (node) contentObserver.observe(node);
-    }
     const resize = () => {
       if (
         window.innerWidth <= 1023 &&
@@ -916,10 +909,9 @@ export default function YutGame({
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
-      contentObserver.disconnect();
       window.removeEventListener("resize", resize);
     };
-  }, [room?.status, portrait, fullscreen, canvasWidth, canvasHeight]);
+  }, [hasMatch, portrait, fullscreen, canvasWidth, canvasHeight]);
   useEffect(() => {
     const visibility = () => setHidden(document.hidden);
     const onFullscreen = () => {
@@ -951,10 +943,14 @@ export default function YutGame({
     const escape = (event: KeyboardEvent) => {
       if (
         fullscreenMode !== "page" ||
+        event.defaultPrevented ||
         shellRef.current?.querySelector("dialog[open]")
       )
         return;
-      if (event.key === "Escape") setFullscreenMode(null);
+      if (event.key === "Escape") {
+        if (emotePanel.current?.querySelector(".yut-emote-menu")) return;
+        setFullscreenMode(null);
+      }
       if (event.key === "Tab") {
         const controls = Array.from(
           shellRef.current?.querySelectorAll<HTMLElement>(
@@ -2458,6 +2454,29 @@ export default function YutGame({
                     />
                   )}
                 </YutBoard>
+                {primaryAction === "throw" && (
+                  <div
+                    className="yut-throw-overlay"
+                    hidden={busy || settling || moving || phaseWaiting}
+                  >
+                    <YutPowerThrow
+                      rulesVersion={rulesVersion}
+                      disabled={
+                        busy ||
+                        settling ||
+                        moving ||
+                        phaseWaiting ||
+                        portrait ||
+                        hidden ||
+                        Boolean(dialog)
+                      }
+                      onThrow={(power) => {
+                        setThrowPower(power);
+                        void command("throw", { power });
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               <div className="yut-action-dock">
                 <div className="yut-action-status">
@@ -2544,24 +2563,8 @@ export default function YutGame({
                   >
                     다음 차례로 넘기기
                   </button>
-                ) : primaryAction === "throw" ? (
-                  <YutPowerThrow
-                    rulesVersion={rulesVersion}
-                    disabled={
-                      busy ||
-                      settling ||
-                      moving ||
-                      phaseWaiting ||
-                      portrait ||
-                      hidden ||
-                      Boolean(dialog)
-                    }
-                    onThrow={(power) => {
-                      setThrowPower(power);
-                      void command("throw", { power });
-                    }}
-                  />
-                ) : room.status === "playing" &&
+                ) : primaryAction !== "throw" &&
+                  room.status === "playing" &&
                   myTurn &&
                   room.phase === "move" &&
                   resultVisible ? (

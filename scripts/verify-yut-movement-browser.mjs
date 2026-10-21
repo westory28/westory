@@ -27,9 +27,12 @@ const mobileViewportOnly =
 const readabilityOnly = process.env.YUT_MOVEMENT_QA_SECTION === "mobile-readability";
 const finishSelectionOnly =
   process.env.YUT_MOVEMENT_QA_SECTION === "finish-selection";
+const boardLayoutOnly = process.env.YUT_MOVEMENT_QA_SECTION === "board-layout";
 const evidence = path.join(
   root,
-  finishSelectionOnly
+  boardLayoutOnly
+    ? "output/yut-board-layout-20261021"
+    : finishSelectionOnly
     ? "output/yut-finish-selection-20261019"
     : mobileViewportOnly || readabilityOnly
     ? "output/yut-mobile-viewport-20261019"
@@ -52,13 +55,15 @@ export const normalizeYutSettings=value=>({...DEFAULT_YUT_SETTINGS,...value});
 const sticks=value=>Array.from({length:4},(_,index)=>value!==5&&index<value);
 function seed(kind){
   if(kind==='entry')return null;
-  const four=kind.endsWith('four')||kind==='two-capture-many';
-  let room=core.createYutRoom({id:'qa-'+kind,code:'AB1234',classId:'',classLabel:'검증 윷판',host:{uid:'qa',name:${JSON.stringify(entryPolishOnly ? "검증 학생(3학년 2반)" : "검증 학생")}},nowMs:Date.now(),maxPlayers:four?4:2,moveSeconds:Number(params.get('move-seconds')||25)});
-  room=core.addYutPlayer(room,{uid:'other',name:'상대 학생'},Date.now());room=core.readyYutPlayer(room,'other',true,Date.now());
-  if(four){room=core.addYutPlayer(room,{uid:'third',name:'셋째 학생'},Date.now());room=core.readyYutPlayer(room,'third',true,Date.now());room=core.addYutPlayer(room,{uid:'fourth',name:'넷째 학생'},Date.now());room=core.readyYutPlayer(room,'fourth',true,Date.now());}
+  const identity=name=>kind==='layout'?name+'(3학년 2반)':name;
+  const count=Number(params.get('players'))||(kind.endsWith('four')||kind==='two-capture-many'?4:2);
+  let room=core.createYutRoom({id:'qa-'+kind,code:'AB1234',classId:'',classLabel:'검증 윷판',host:{uid:'qa',name:identity(${JSON.stringify(entryPolishOnly ? "검증 학생(3학년 2반)" : "검증 학생")})},nowMs:Date.now(),maxPlayers:count,moveSeconds:Number(params.get('move-seconds')||25)});
+  room=core.addYutPlayer(room,{uid:'other',name:identity('상대 학생')},Date.now());room=core.readyYutPlayer(room,'other',true,Date.now());
+  if(count>=3){room=core.addYutPlayer(room,{uid:'third',name:identity('셋째 학생')},Date.now());room=core.readyYutPlayer(room,'third',true,Date.now());}if(count===4){room=core.addYutPlayer(room,{uid:'fourth',name:identity('넷째 학생')},Date.now());room=core.readyYutPlayer(room,'fourth',true,Date.now());}
   if(kind.startsWith('waiting'))return room;
   room=core.startYutGame(room,Date.now()-10000);
   const own=room.players[0].pieces;
+  if(kind==='layout'){own[0].node='o1';own[1].node='o3';room.turnDeadlineMs=Date.now()+60000;return room;}
   own[0].node=kind.startsWith('finish')||kind==='two-finish-first'?'o18':kind==='corner'?'o14':'o5';
   if(kind.startsWith('finish')&&own[1])own[1].node='finish';
   if(kind.startsWith('finish')||kind==='two-finish-first')room.players.slice(1).forEach((player,index)=>player.pieces.forEach(piece=>piece.node=['o5','o10','o15'][index]));
@@ -93,12 +98,12 @@ qa.prepareThrow=value=>{const room={...qa.room,turnUid:'qa',phase:'throw',phaseS
 qa.preparePiece=(pieceId,node,value)=>{const room=JSON.parse(JSON.stringify(qa.room));if(node)room.players[0].pieces.find(piece=>piece.id===pieceId).node=node;Object.assign(room,{turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000});qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 export const getYutLobby=async()=>{if(params.has('hold-lobby')&&!qa.lobbyReleased)await new Promise(resolve=>qa.resolveLobby=()=>{qa.lobbyReleased=true;resolve()});if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
 export const subscribeYutRoom=(_config,_id,onRoom)=>{listeners.add(onRoom);return()=>listeners.delete(onRoom)};
-export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error('검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
+export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error(qa.errorMessage||'검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
 export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
 `;
 const harness = `import React,{useState,useEffect}from'react';import{createRoot}from'react-dom/client';import Game from ${source("src/components/common/weplay/yut/YutGame.tsx")};import Board from ${source("src/components/common/weplay/yut/YutBoard.tsx")};import Frame from ${source("src/components/common/weplay/WeplayGameFrame.tsx")};import{getYutLobby,subscribeYutRoom,getLegalYutMoves}from ${source("src/lib/yut.ts")};
-function App(){const[room,setRoom]=useState(window.qa.room),[key,setKey]=useState(0),[mounted,setMounted]=useState(true);window.qa.remount=()=>setKey(old=>old+1);window.qa.unmount=()=>setMounted(false);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game">{mounted&&<Board key={key} room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('.is-moving:not(.is-caught)'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect(),facing=node.querySelector('.yut-pawn-facing');window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88,facing:facing?.dataset.facing,mirror:facing?new DOMMatrixReadOnly(getComputedStyle(facing).transform).m11:null,pieceIds:node.dataset.pieceIds,movingGroups:document.querySelectorAll('.is-moving:not(.is-caught)').length});}}/>}</div>:<Frame theme="yut"><Game portal={new URLSearchParams(location.search).get("portal")==="teacher"?"teacher":"student"} onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[room,setRoom]=useState(window.qa.room),[key,setKey]=useState(0),[mounted,setMounted]=useState(true);window.qa.remount=()=>setKey(old=>old+1);window.qa.unmount=()=>setMounted(false);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game">{mounted&&<Board key={key} room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('.is-moving:not(.is-caught)'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect(),facing=node.querySelector('.yut-pawn-facing');window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88,facing:facing?.dataset.facing,mirror:facing?new DOMMatrixReadOnly(getComputedStyle(facing).transform).m11:null,pieceIds:node.dataset.pieceIds,movingGroups:document.querySelectorAll('.is-moving:not(.is-caught)').length});}}/>}</div>:<Frame theme="yut"><Game preview={new URLSearchParams(location.search).has("preview")} initialSettings={new URLSearchParams(location.search).has("preview")?{enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:Number(new URLSearchParams(location.search).get("players"))||2,throwSeconds:15,moveSeconds:60}:undefined} portal={new URLSearchParams(location.search).get("portal")==="teacher"?"teacher":"student"} onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
 const artHarness = `import {YutSprite,YutStackOptionArt} from ${source("src/components/common/weplay/yut/YutArt.tsx")};
 function Art(){const action=new URLSearchParams(location.search).get('art');return <div className="art-fixture yut-game" style={{display:'grid',gridTemplateColumns:'repeat(3, 190px)',gap:8,padding:16,height:'auto',width:610,background:'#d8c28e',color:'#241b14'}}><style>{'.art-fixture .yut-frame-sprite,.art-fixture .yut-stack-option-art{width:168px!important;height:168px!important;margin:auto}'}</style>{['sa','nong','gong','sang'].flatMap(role=>[0,1,2].map(frame=><div key={role+frame} data-art-frame={frame} style={{border:'1px solid #887045',background:'repeating-conic-gradient(#f5edd9 0% 25%,#dfd2b0 0% 50%) 50% / 20px 20px',textAlign:'center'}}><span style={{display:'block',background:'#f5edd9'}}>{action+' / '+role+' / '+(frame+1)}</span>{action==='stack-choice'?<YutStackOptionArt role={role} carried={frame===0}/>:<YutSprite role={role} pose={action}/>}</div>))}</div>};createRoot(document.getElementById('root')).render(new URLSearchParams(location.search).has('art')?<Art/>:<App/>);`;
 const bundle = await build({
@@ -198,7 +203,7 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: finishSelectionOnly ? "finish-selection" : readabilityOnly ? "mobile-readability" : mobileViewportOnly
+  section: boardLayoutOnly ? "board-layout" : finishSelectionOnly ? "finish-selection" : readabilityOnly ? "mobile-readability" : mobileViewportOnly
     ? "mobile-viewport"
     : motionAuditOnly
       ? "motion-audit"
@@ -856,7 +861,7 @@ async function verifyPlayerLabels(page, label) {
     labels.every((item) => item.badgeCountOverlap === 0),
     label + ": last result badge does not cover the completion count",
   );
-  assert.ok(labels.some((item) => item.classroom === "(3학년 2반)"));
+  assert.ok(labels.some((item) => item.classroom?.replace(/^\(|\)$/g, "") === "3학년 2반"));
   report.paths["player-labels-" + label] = labels;
 }
 async function verifyFullscreenControls(page, label) {
@@ -3153,8 +3158,212 @@ async function verifyMobileViewport() {
     );
   }
 }
+async function boardGeometry(page, label) {
+  const geometry = await page.evaluate(() => {
+    const rectangle = selector => document.querySelector(selector)?.getBoundingClientRect().toJSON();
+    const canvas = document.querySelector(".yut-game-content"), canvasBox = canvas.getBoundingClientRect();
+    const rotated = !!document.querySelector(".yut-game--rotated-fullscreen");
+    const local = box => rotated
+      ? { x: box.top - canvasBox.top, y: canvasBox.right - box.right, width: box.height, height: box.width }
+      : { x: box.left - canvasBox.left, y: box.top - canvasBox.top, width: box.width, height: box.height };
+    const controls = [...document.querySelectorAll(".yut-floating-controls > button,.yut-emote-control > button,.yut-floating-fullscreen,.yut-throw-button,.yut-move-controls button")]
+      .filter(node => node.getBoundingClientRect().width > 0 && getComputedStyle(node).visibility !== "hidden")
+      .map(node => {
+        const box = node.getBoundingClientRect(), hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return { label: node.getAttribute("aria-label") || node.textContent.trim(), box: box.toJSON(), logical: local(box), reachable: hit === node || node.contains(hit), blocked: node.disabled || !!node.closest("[inert]"), shadow: getComputedStyle(node).boxShadow };
+      });
+    const toolbar = rectangle(".yut-floating-controls");
+    const profiles = [...document.querySelectorAll(".yut-player")].map(node => { const box = node.getBoundingClientRect(); return { text: node.textContent, box: box.toJSON(), logical: local(box) }; });
+    return { board: rectangle(".yut-board"), stage: rectangle(".yut-match-stage"), game: rectangle(".yut-game"), toolbar, logicalToolbar: local(toolbar), logicalCanvas: { width: canvas.offsetWidth, height: canvas.offsetHeight }, controls, profiles, overlay: document.querySelector(".yut-throw-overlay") ? getComputedStyle(document.querySelector(".yut-throw-overlay")).position : null, rotated, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+  });
+  report.paths[label] = geometry;
+  return geometry;
+}
+const overlapArea = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+function verifyBoardGeometry(geometry, initial, label) {
+  assert.equal(geometry.overflow, false, label + ": no page horizontal overflow");
+  assert.ok((geometry.rotated ? geometry.board.height : geometry.board.width) >= 259.5, label + ": usable board width is at least 260px");
+  for (const property of ["x", "y", "width", "height"])
+    assert.ok(Math.abs(geometry.board[property] - initial.board[property]) <= .75, `${label}: board ${property} remains fixed across gameplay phases (${initial.board[property]} -> ${geometry.board[property]})`);
+  const toolbar = geometry.logicalToolbar;
+  assert.ok(toolbar.y >= 0 && toolbar.y <= 32, label + ": toolbar stays at the logical top edge");
+  assert.ok(geometry.logicalCanvas.width - toolbar.x - toolbar.width >= 0 && geometry.logicalCanvas.width - toolbar.x - toolbar.width <= 32, label + ": toolbar stays at the logical right edge");
+  for (const control of geometry.controls) {
+    assert.ok(control.box.width >= 43.5 && control.box.height >= 43.5, label + ": 44px target for " + control.label);
+    assert.ok(control.blocked || control.reachable, label + ": physical pointer reaches enabled " + control.label);
+    for (const profile of geometry.profiles)
+      assert.ok(overlapArea(control.box, profile.box) <= .5, label + ": " + control.label + " does not cover a player profile");
+  }
+  for (let first = 0; first < geometry.controls.length; first++)
+    for (let second = first + 1; second < geometry.controls.length; second++)
+      assert.ok(overlapArea(geometry.controls[first].box, geometry.controls[second].box) <= .5, `${label}: ${geometry.controls[first].label} does not overlap ${geometry.controls[second].label}`);
+  for (let first = 0; first < geometry.profiles.length; first++) {
+    const profile = geometry.profiles[first].logical;
+    assert.ok(profile.x >= -.5 && profile.y >= -.5 && profile.x + profile.width <= geometry.logicalCanvas.width + .5 && profile.y + profile.height <= geometry.logicalCanvas.height + .5, `${label}: profile ${first + 1} stays inside the game canvas`);
+    for (let second = first + 1; second < geometry.profiles.length; second++)
+      assert.ok(overlapArea(geometry.profiles[first].box, geometry.profiles[second].box) <= .5, `${label}: profiles ${first + 1} and ${second + 1} do not cover each other`);
+  }
+}
+async function verifyBoardMenu(page, label, stress = false) {
+  const emote = page.getByRole("button", { name: "감정표현", exact: true });
+  await emote.press("Enter");
+  const menu = page.getByRole("group", { name: "감정표현 선택", exact: true });
+  await menu.waitFor();
+  const geometry = await menu.evaluate(node => {
+    const box = node.getBoundingClientRect();
+    const overlap = other => { const b = other.getBoundingClientRect(); return Math.max(0, Math.min(box.right, b.right) - Math.max(box.left, b.left)) * Math.max(0, Math.min(box.bottom, b.bottom) - Math.max(box.top, b.top)); };
+    return { box: box.toJSON(), canvas: document.querySelector(".yut-game-content").getBoundingClientRect().toJSON(), profileOverlaps: [...document.querySelectorAll(".yut-player")].map(overlap), controlOverlaps: [...document.querySelectorAll(".yut-floating-controls > button,.yut-emote-control > button,.yut-floating-fullscreen")].map(overlap), targets: [...node.querySelectorAll("button")].map(button => { const rect = button.getBoundingClientRect(); return { width: rect.width, height: rect.height }; }) };
+  });
+  report.paths[label + "-menu"] = geometry;
+  await page.screenshot({ path: path.join(evidence, label + "-menu.png") });
+  assert.ok(geometry.profileOverlaps.every(area => area <= .5), label + ": opened emote menu does not obscure any player profile: " + JSON.stringify(geometry.profileOverlaps));
+  assert.ok(geometry.controlOverlaps.every(area => area <= .5), label + ": opened emote menu does not obscure toolbar/fullscreen controls");
+  assert.equal(geometry.targets.length, 7);
+  assert.ok(geometry.targets.every(target => target.width >= 43.5 && target.height >= 43.5), label + ": all seven emote choices keep 44px targets");
+  assert.ok(geometry.box.left >= geometry.canvas.left - .5 && geometry.box.right <= geometry.canvas.right + .5 && geometry.box.top >= geometry.canvas.top - .5 && geometry.box.bottom <= geometry.canvas.bottom + .5, label + ": emote menu stays inside the game canvas");
+  const ensureChoicesReachable = async () => {
+    for (const choice of await menu.getByRole("button").all()) {
+      await choice.scrollIntoViewIfNeeded();
+      assert.ok(await choice.evaluate(node => { const rect = node.getBoundingClientRect(), hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); return hit === node || node.contains(hit); }), label + ": emote choice remains reachable after its menu scrolls");
+    }
+  };
+  await ensureChoicesReachable();
+  if (stress) {
+    await page.evaluate(() => { window.qa.fail = true; window.qa.errorMessage = "감정표현을 보내지 못했습니다. 연결 상태를 확인한 뒤 잠시 후 다시 시도해 주세요."; });
+    await menu.getByRole("button").last().click();
+    await menu.getByRole("alert").waitFor();
+    await ensureChoicesReachable();
+    const bounded = await menu.evaluate(node => { const rect = node.getBoundingClientRect(), canvas = document.querySelector(".yut-game-content").getBoundingClientRect(); return rect.bottom <= canvas.bottom + .5 && rect.top >= canvas.top - .5 && node.scrollHeight > node.clientHeight; });
+    assert.ok(bounded, label + ": long error fits within a scrolling menu instead of extending below the game");
+    await page.screenshot({ path: path.join(evidence, label + "-menu-error.png") });
+    await menu.getByRole("button").last().click();
+    await menu.waitFor({ state: "detached" });
+    await page.evaluate(() => window.qa.emote());
+    await emote.press("Enter");
+    await menu.getByRole("status").waitFor();
+    await ensureChoicesReachable();
+    await menu.getByRole("status").scrollIntoViewIfNeeded();
+    assert.ok(await menu.getByRole("status").evaluate(node => { const a = node.getBoundingClientRect(), b = node.closest(".yut-emote-menu").getBoundingClientRect(); return a.top >= b.top && a.bottom <= b.bottom; }), label + ": cooldown text can be scrolled into view");
+    await page.screenshot({ path: path.join(evidence, label + "-menu-cooldown.png") });
+  }
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "detached" });
+  assert.ok(await emote.evaluate(node => document.activeElement === node), label + ": Escape returns focus to emote trigger");
+  await verifyRuleControl(page, label);
+}
+async function verifyBoardLayout() {
+  for (const [width, height] of [[390, 844], [768, 1024], [568, 320], [740, 360], [844, 390], [1024, 600], [1280, 800], [1440, 900]].filter(([width, height]) => !process.env.YUT_LAYOUT_VIEWPORT || process.env.YUT_LAYOUT_VIEWPORT === `${width}x${height}`)) {
+    for (const count of process.env.YUT_LAYOUT_PLAYERS ? [Number(process.env.YUT_LAYOUT_PLAYERS)] : [2, 3, 4]) {
+      const label = `layout-${width}x${height}-${count}players`;
+      const page = await open(`scenario=layout&players=${count}&move-seconds=60`, "no-preference", width, height);
+      if (width < height) {
+        await page.locator(".yut-orientation-gate").waitFor();
+        assert.equal(await page.locator(".yut-board").count(), 0, label + ": portrait gate prevents obscured play");
+        if (count === 4) await page.screenshot({ path: path.join(evidence, label + "-portrait-gate.png") });
+        await page.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
+        await page.getByRole("button", { name: "전체 화면으로 열기", exact: true }).click();
+        await page.locator(".yut-game--rotated-fullscreen .yut-match").waitFor();
+      }
+      await page.locator(".yut-throw-button").waitFor();
+      await page.waitForTimeout(200);
+      assert.equal(await page.locator(".yut-player").count(), count);
+      await verifyPlayerLabels(page, label);
+      const initial = await boardGeometry(page, label + "-throw");
+      await page.screenshot({ path: path.join(evidence, label + "-throw.png") });
+      verifyBoardGeometry(initial, initial, label + "-throw");
+      assert.equal(initial.overlay, "absolute", label + ": throw control floats out of layout flow");
+      const throwButton = initial.controls.find(control => /던지기|던져/.test(control.label));
+      assert.ok(throwButton, label + ": primary throw target exists");
+      assert.notEqual(throwButton.shadow, "none", label + ": floating throw button has a visible shadow");
+      assert.ok(overlapArea(throwButton.box, initial.board) >= throwButton.box.width * throwButton.box.height * .5 && throwButton.box.x + throwButton.box.width / 2 >= initial.board.left && throwButton.box.x + throwButton.box.width / 2 <= initial.board.right && throwButton.box.y + throwButton.box.height / 2 >= initial.board.top && throwButton.box.y + throwButton.box.height / 2 <= initial.board.bottom, label + ": floating throw target is centered over the board (compact views may overhang its edges)");
+      await verifyBoardMenu(page, label, width <= 740 && width > height && count === 4);
+      await page.evaluate(() => {
+        const qa = window.qa;
+        qa.boardFrames = [];
+        qa.trackBoard = true;
+        const sample = () => {
+          if (!qa.trackBoard) return;
+          const box = document.querySelector(".yut-board")?.getBoundingClientRect();
+          if (box) qa.boardFrames.push({ x: box.x, y: box.y, width: box.width, height: box.height });
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      await page.evaluate(() => { window.qa.throwValue = 2; window.qa.delay = 800; });
+      const action = page.locator(".yut-throw-button");
+      await action.focus();
+      await page.keyboard.down("Space");
+      await page.waitForTimeout(80);
+      await page.keyboard.up("Space");
+      await page.waitForFunction(() => window.qa.calls.some(call => call.action === "throw"));
+      assert.equal(await page.evaluate(() => window.qa.room.phase), "throw", label + ": throw response remains pending during the delay check");
+      assert.equal(await page.locator(".yut-throw-overlay").isVisible(), false, label + ": delayed response cannot leave the floating button over the toss animation");
+      verifyBoardGeometry(await boardGeometry(page, label + "-throw-pending"), initial, label + "-throw-pending");
+      await page.waitForFunction(() => window.qa.room.phase === "move");
+      await page.locator(".yut-match-stage.is-tossing").waitFor();
+      verifyBoardGeometry(await boardGeometry(page, label + "-toss"), initial, label + "-toss");
+      await page.locator(".yut-piece-choice").first().waitFor({ timeout: 10000 });
+      await page.evaluate(() => { window.qa.delay = 0; });
+      verifyBoardGeometry(await boardGeometry(page, label + "-result"), initial, label + "-result");
+      await page.getByRole("button", { name: "2번 말 이동", exact: true }).click();
+      verifyBoardGeometry(await boardGeometry(page, label + "-piece-selected"), initial, label + "-piece-selected");
+      await page.locator(".yut-isometric-destination").first().click();
+      verifyBoardGeometry(await boardGeometry(page, label + "-move-selected"), initial, label + "-move-selected");
+      await page.getByRole("button", { name: "결정", exact: true }).click();
+      await page.waitForFunction(() => window.qa.calls.some(call => call.action === "move"));
+      await page.waitForFunction(() => window.qa.room.turnUid !== "qa");
+      await page.waitForTimeout(1000);
+      verifyBoardGeometry(await boardGeometry(page, label + "-opponent-turn"), initial, label + "-opponent-turn");
+      assert.equal(await page.locator(".yut-throw-overlay").count(), 0, label + ": opponent turn has no student throw overlay");
+      assert.equal(await page.evaluate(() => window.qa.calls.filter(call => call.action === "throw").length), 1, label + ": one keyboard release issues one throw");
+      await page.evaluate(() => {
+        const qa = window.qa;
+        qa.emit({ ...qa.room, revision: qa.room.revision + 1, syncRevision: qa.room.syncRevision + 1, lastEvent: { kind: "move", atMs: Date.now(), text: "검증 학생(3학년 2반) 님의 2번 말이 두 칸 이동했습니다. 상대 학생(3학년 2반) 님의 차례입니다. 남은 말을 골라 다음 이동을 준비합니다." } });
+      });
+      await page.waitForTimeout(100);
+      const eventGeometry = await page.locator(".yut-event").evaluate(node => {
+        const box = node.getBoundingClientRect(), range = document.createRange();
+        range.selectNodeContents(node);
+        return { box: box.toJSON(), scrollHeight: node.scrollHeight, clientHeight: node.clientHeight, text: node.textContent, lines: [...range.getClientRects()].map(rect => rect.toJSON()) };
+      });
+      report.paths[label + "-long-event"] = eventGeometry;
+      await page.screenshot({ path: path.join(evidence, label + "-opponent.png") });
+      assert.ok(eventGeometry.scrollHeight <= eventGeometry.clientHeight + 1, label + ": long Korean event remains fully visible in its reserved row");
+      verifyBoardGeometry(await boardGeometry(page, label + "-long-event-board"), initial, label + "-long-event");
+      const frameSummary = await page.evaluate(() => {
+        const qa = window.qa;
+        qa.trackBoard = false;
+        return { count: qa.boardFrames.length, ranges: Object.fromEntries(["x", "y", "width", "height"].map(key => [key, { min: Math.min(...qa.boardFrames.map(frame => frame[key])), max: Math.max(...qa.boardFrames.map(frame => frame[key])) }])) };
+      });
+      report.paths[label + "-animation-frame-stability"] = frameSummary;
+      assert.ok(frameSummary.count > 20, label + ": browser frames cover the live gameplay transitions");
+      for (const [key, range] of Object.entries(frameSummary.ranges))
+        assert.ok(range.max - range.min <= .75, label + ": no transient board " + key + " shift between phase snapshots");
+      await page.close();
+      report.checks.push(`${width}×${height}, ${count} players: fixed board geometry through throw/toss/result/pawn selection/confirmation/opponent turn; floating primary action, upper-right tools, profile-safe emote menu and accessible targets`);
+      console.log("Passed " + label);
+    }
+    const previewLabel = `preview-${width}x${height}`;
+    const preview = await open("scenario=entry&portal=teacher&preview=1&players=4", "no-preference", width, height);
+    if (width < height) {
+      await preview.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
+      await preview.getByRole("button", { name: "전체 화면으로 열기", exact: true }).click();
+    }
+    await preview.getByRole("button", { name: "게임 시작", exact: true }).click();
+    await preview.locator(".yut-throw-button").waitFor();
+    await preview.waitForTimeout(200);
+    const previewGeometry = await boardGeometry(preview, previewLabel);
+    verifyBoardGeometry(previewGeometry, previewGeometry, previewLabel);
+    await verifyBoardMenu(preview, previewLabel);
+    assert.equal(await preview.evaluate(() => window.qa.calls.length), 0, previewLabel + ": teacher preview remains local with zero online commands");
+    await preview.close();
+    report.checks.push(`${width}×${height}: teacher preview retains the same controls without issuing online room commands`);
+  }
+}
 try {
-  if (finishSelectionOnly) {
+  if (boardLayoutOnly) {
+    await verifyBoardLayout();
+  } else if (finishSelectionOnly) {
     await verifyFinishSelection();
   } else if (readabilityOnly) {
     await verifyMobileReadability();

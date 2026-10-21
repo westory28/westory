@@ -13,3 +13,5 @@
 검증: 앱 빌드·변경 TypeScript Prettier·Functions 전체 check, demo Firestore 통합 및 대기방 만료 검사, 교사 모니터링 브라우저 검사와 학생 공개 제어 회귀 검사. 추가 회귀는 burst 묶음, 조회 중 후속 신호, 숨김/재연결/닫기, 느린 응답 중 만료, 첫 만료 조회가 보류된 동안 두 번째 방의 만료를 포함한다. 운영 검증에는 Chrome `방재석` 프로필을 사용하며 테스트 방이나 학생 데이터를 만들지 않는다.
 
 배포 대상: `commandYutRoom`, `getYutLobby`, `saveYutSettings`, `cleanupWaitingYutRooms`, Firestore rules 및 Vercel 프론트엔드. 배포 전 운영 rules가 기준 HEAD와 같고 경기 코어·세션 가드·설정 저장 로직이 운영 소스와 같음을 확인했다. Firebase CLI의 rules test 요청이 503으로 실패하여, 같은 공식 Rules API의 test 및 ruleset 생성으로 서버 검증을 통과한 뒤 release를 갱신하고 운영 소스를 대조했다.
+
+운영 확인: `117fca6e`를 push하고 Vercel `dpl_6HkdYDip6NBBrnFPPyh4ozMds8ET`의 Ready와 운영 승격을 확인했다. `www.westory.kr`이 해당 배포를 가리키며 HTTP 200과 새 번들 `main-CfgXgrXz.js`를 반환했다. Chrome `방재석`의 교사 화면에서 `실시간 반영 중`, 대기·진행 0개, 최근 진행이 없는 방 2개의 접힘을 확인했다. 네 함수의 ACTIVE와 운영 Firestore rules 원문 일치를 재확인했다. 실제 운영 방을 수정하지 않았으며, 진행 이벤트별 자동 반영은 로컬 통합·브라우저 검사로 검증했다.
