@@ -28,6 +28,7 @@ type NotificationEventDefinition = {
   defaultPriority: NotificationPriority;
   titleTemplate: string;
   bodyTemplate: string;
+  fixedBody?: boolean;
   targetUrl: string;
   targetLabel: string;
   tokens?: NotificationTemplateToken[];
@@ -239,13 +240,34 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "역사교실 통과 알림",
-    bodyTemplate:
-      "{studentName} 학생이 {assignmentTitle}을(를) {percent}%로 통과했습니다.",
+    bodyTemplate: "{studentName} 학생이 역사교실을 {percent}%로 통과했습니다.",
+    fixedBody: true,
     targetUrl: "/teacher/quiz/history-classroom",
     targetLabel: "교사 역사교실 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },
-      { key: "assignmentTitle", label: "과제 이름" },
+      { key: "percent", label: "정답률" },
+    ],
+  },
+  {
+    key: "history_classroom_failed",
+    label: "역사교실 미통과",
+    audience: "teachers",
+    description:
+      "학생이 역사교실을 제출한 뒤 미통과했을 때 교사에게 정답률을 안내합니다.",
+    triggerLabel: "학생이 역사교실 과제를 미통과했을 때",
+    recipientLabel: "교사·평가 권한자",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "normal",
+    titleTemplate: "역사교실 미통과 알림",
+    bodyTemplate:
+      "{studentName} 학생이 역사교실을 {percent}%로 미통과했습니다.",
+    fixedBody: true,
+    targetUrl: "/teacher/quiz/history-classroom",
+    targetLabel: "교사 역사교실 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
       { key: "percent", label: "정답률" },
     ],
   },
@@ -570,7 +592,9 @@ const normalizePolicy = (
     titleTemplate: String(
       source.titleTemplate ?? defaults.titleTemplate,
     ).trim(),
-    bodyTemplate: String(source.bodyTemplate ?? defaults.bodyTemplate).trim(),
+    bodyTemplate: event.fixedBody
+      ? defaults.bodyTemplate
+      : String(source.bodyTemplate ?? defaults.bodyTemplate).trim(),
     targetUrl: String(source.targetUrl ?? defaults.targetUrl).trim(),
   };
 };
@@ -875,6 +899,7 @@ const SettingsNotifications: React.FC = () => {
                 inputMode="text"
                 value={toFriendlyNotificationText(event, policy.bodyTemplate)}
                 disabled={disabled}
+                readOnly={event.fixedBody}
                 rows={2}
                 onChange={(eventTarget) =>
                   updatePolicy(event.key, {

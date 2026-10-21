@@ -291,7 +291,7 @@ export const query=(reference,...filters)=>({...reference,filters:filters.filter
 export const where=(field,operator,value)=>({field,operator,value});
 export const orderBy=()=>null;
 export const limit=()=>null;
-export const serverTimestamp=()=>({seconds:1790676000,nanoseconds:0});
+export const serverTimestamp=()=>fixture.pendingSourceTimestamps?{__pendingServerTimestamp:true}:{seconds:1790676000,nanoseconds:0};
 const snap=(key,value)=>({id:key.split('/').at(-1),exists:()=>value!==undefined,data:()=>structuredClone(value)});
 export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return snap(reference.path,fixture.store[reference.path]);};
 export const getDocs=async(reference)=>{fixture.reads.push(reference.path);if(fixture.failResultReads&&reference.path==='semester_assessment_results')throw new Error('Expected canonical result read failure');const docs=Object.entries(fixture.store).filter(([key,value])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')&&(reference.filters||[]).every(filter=>filter.operator==='in'?filter.value.includes(value[filter.field]):value[filter.field]===filter.value)).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
@@ -325,8 +325,10 @@ export const saveHistoryAssessmentSource=async(_config,sourceId,payload,expected
  fixture.commands.push({commandType,payload:commandPayload});changed();
  try {
  const reference={path:${JSON.stringify(scope)}+'/history_classrooms/'+sourceId};
- const fields=Object.keys(payload).filter(key=>key!=='retryResetByStudentUid');
- await setDoc(reference,payload,{mergeFields:fields});
+ const stored=fixture.store[reference.path];
+ const serverPayload={...payload,createdAt:stored?.createdAt||{seconds:1790676000,nanoseconds:0},updatedAt:{seconds:1790676000,nanoseconds:0}};
+ const fields=Object.keys(serverPayload).filter(key=>key!=='retryResetByStudentUid');
+ await setDoc(reference,serverPayload,{mergeFields:fields});
  fixture.store[reference.path].contentRevision=expectedRevision+1;
  const asIso=value=>value?.seconds!==undefined?new Date(value.seconds*1000).toISOString():typeof value==='string'?value:null;
  const result={contentRevision:expectedRevision+1,publicationWindow:{publishedAt:asIso(payload.publishedAt),dueAt:asIso(payload.dueAt)}};
@@ -621,75 +623,47 @@ const assignmentReasons = [
   "수업 태도",
   "교사 지시 불이행",
 ];
-const assertReasonCombobox = async (page, input, blurTarget) => {
+const assertReasonDropdown = async (page, input, customInput, blurTarget) => {
   const originalValue = await input.inputValue();
-  assert.equal(await input.getAttribute("role"), "combobox");
-  assert.equal(await input.getAttribute("aria-autocomplete"), "list");
-  assert.equal(await input.getAttribute("list"), null);
-  await input.click();
-  assert.equal(await input.getAttribute("aria-expanded"), "true");
-  const listId = await input.getAttribute("aria-controls");
-  assert(listId, "an open reason field identifies its own listbox");
-  const list = page.locator(`[id="${listId}"]`);
-  assert.equal(await list.getAttribute("role"), "listbox");
-  assert.deepEqual(await list.getByRole("option").allTextContents(), assignmentReasons);
-  const geometry = await input.evaluate((element) => {
-    const anchor = element.getBoundingClientRect();
-    const options = document.getElementById(element.getAttribute("aria-controls")).getBoundingClientRect();
-    return {
-      anchor: { left: anchor.left, right: anchor.right, top: anchor.top, bottom: anchor.bottom, width: anchor.width },
-      options: { left: options.left, right: options.right, top: options.top, bottom: options.bottom, width: options.width },
-      viewport: innerWidth,
-    };
+  assert.equal(await input.evaluate((element) => element.tagName), "SELECT");
+  assert.equal(await input.getAttribute("aria-autocomplete"), null);
+  assert.deepEqual(await input.locator("option").allTextContents(), ["사유 선택", ...assignmentReasons, "직접 입력"]);
+  assert.equal(await customInput.count(), 0, "Preset reasons do not show a text field");
+  await input.focus();
+  await input.press("End");
+  assert.equal(await input.inputValue(), "__other__", "Keyboard selection can choose direct input");
+  await input.press("Tab");
+  await customInput.waitFor();
+  const geometry = await customInput.evaluate((element) => {
+    const field = element.getBoundingClientRect();
+    const row = element.closest(".history-student-row, .history-student-entry");
+    const rowBox = row.getBoundingClientRect();
+    const select = row.querySelector(".history-reason-input").getBoundingClientRect();
+    return { left: field.left, right: field.right, top: field.top, width: field.width,
+      rowLeft: rowBox.left, rowRight: rowBox.right, selectBottom: select.bottom,
+      selectHeight: select.height, height: field.height, viewport: innerWidth };
   });
-  assert(
-    Math.abs(geometry.anchor.left - geometry.options.left) <= 1 &&
-      Math.abs(geometry.anchor.right - geometry.options.right) <= 1 &&
-      Math.abs(geometry.anchor.width - geometry.options.width) <= 1 &&
-      ((geometry.options.top >= geometry.anchor.bottom && geometry.options.top <= geometry.anchor.bottom + 8) ||
-        (geometry.options.bottom <= geometry.anchor.top && geometry.options.bottom >= geometry.anchor.top - 8)) &&
-      geometry.options.left >= 0 && geometry.options.right <= geometry.viewport,
-    `reason options stay attached above or below their field at the same width: ${JSON.stringify(geometry)}`,
-  );
-  await input.press("ArrowDown");
-  let activeId = await input.getAttribute("aria-activedescendant");
-  assert.equal(await page.locator(`[id="${activeId}"]`).textContent(), assignmentReasons[0]);
-  await input.press("ArrowDown");
-  activeId = await input.getAttribute("aria-activedescendant");
-  assert.equal(await page.locator(`[id="${activeId}"]`).textContent(), assignmentReasons[1]);
-  await input.press("Enter");
-  assert.equal(await input.inputValue(), assignmentReasons[1]);
-  assert.equal(await input.getAttribute("aria-expanded"), "false");
-  assert.equal(await list.count(), 0, "keyboard selection closes the reason list");
-  assert(await input.evaluate((element) => document.activeElement === element));
-  const composingKey = await input.evaluate((element) => {
-    const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true, isComposing: true });
-    element.dispatchEvent(event);
-    return { prevented: event.defaultPrevented, expanded: element.getAttribute("aria-expanded") };
+  assert(geometry.top >= geometry.selectBottom && geometry.left >= geometry.rowLeft &&
+    geometry.right <= geometry.rowRight + 1 && geometry.left - geometry.rowLeft <= 12 &&
+    geometry.rowRight - geometry.right <= 12 && geometry.selectHeight >= 44 &&
+    geometry.height >= 44 && geometry.left >= 0 && geometry.right <= geometry.viewport,
+    `Direct input fills the row below its dropdown: ${JSON.stringify(geometry)}`);
+  assert.equal(await customInput.getAttribute("required"), "");
+  assert.equal(await customInput.getAttribute("lang"), "ko");
+  await customInput.fill("한글 조합 중인 직접 입력 사유\n둘째 줄");
+  const composingKey = await customInput.evaluate((element) => {
+    element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    const key = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true });
+    element.dispatchEvent(key);
+    element.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "사유" }));
+    return { prevented: key.defaultPrevented, value: element.value };
   });
-  assert.deepEqual(composingKey, { prevented: false, expanded: "false" }, "Korean composition keys do not open or select reason presets");
-  await input.click();
-  await input.press("ArrowDown");
-  await input.press("Escape");
-  assert.equal(await input.getAttribute("aria-expanded"), "false");
-  assert.equal(await list.count(), 0);
-  assert(await input.evaluate((element) => document.activeElement === element && !!element.closest('[role="dialog"]')),
-    "Escape closes only the reason list and keeps the dialog input focused");
-  await input.click();
-  await list.getByRole("option", { name: assignmentReasons[3], exact: true }).click();
+  assert.deepEqual(composingKey, { prevented: false, value: "한글 조합 중인 직접 입력 사유\n둘째 줄" },
+    "Korean composition and multiline input remain intact");
+  await input.selectOption(assignmentReasons[3]);
+  assert.equal(await customInput.count(), 0, "Selecting a preset hides direct input");
   assert.equal(await input.inputValue(), assignmentReasons[3]);
-  assert.equal(await input.getAttribute("aria-expanded"), "false");
-  assert.equal(await list.count(), 0, "pointer selection closes the reason list");
-  assert(await input.evaluate((element) => document.activeElement === element));
-  await input.click();
-  assert.equal(await list.count(), 1);
-  await blurTarget.focus();
-  assert.equal(await input.getAttribute("aria-expanded"), "false");
-  assert.equal(await list.count(), 0, "moving focus outside the field closes its list");
-  await input.fill(originalValue);
-  if (await input.getAttribute("aria-expanded") === "true") {
-    await input.press("Escape");
-  }
+  await input.selectOption(originalValue || assignmentReasons[0]);
   await blurTarget.focus();
   return geometry;
 };
@@ -738,7 +712,7 @@ const assertAttemptColumnAlignment = async (panel) => {
   return geometry;
 };
 try {
-  for (const viewport of (process.argv.includes('--results-only') ? [] : [
+  for (const viewport of (process.argv.includes('--results-only') || process.argv.includes('--reasons-only') ? [] : [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
@@ -847,9 +821,11 @@ try {
     assert.equal(await page.getByLabel("검증학생 배정 사유", { exact: true }).count(), 0, "A student is not added without a reason");
     await page.getByText("배정 사유를 입력해 주세요.", { exact: true }).waitFor();
     const reasonInput = page.getByLabel("추가할 학생 배정 사유", { exact: true });
-    const reasonGeometry = await assertReasonCombobox(page, reasonInput,
+    const reasonText = page.getByLabel("추가할 학생 직접 입력 사유", { exact: true });
+    const reasonGeometry = await assertReasonDropdown(page, reasonInput, reasonText,
       page.getByLabel("전체 학생 이름 검색", { exact: true }));
-    await reasonInput.fill("   ");
+    await reasonInput.selectOption("__other__");
+    await reasonText.fill("   ");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     assert.equal(
       await page.evaluate(() => window.__fixture.writes.length),
@@ -868,22 +844,24 @@ try {
       ),
       fullPage: true,
     });
-    await reasonInput.fill("교사가 작성한 세부 사유");
-    assert.equal(await reasonInput.inputValue(), "교사가 작성한 세부 사유");
-    await reasonInput.fill("지각");
+    await reasonText.fill("교사가 작성한 세부 사유");
+    assert.equal(await reasonText.inputValue(), "교사가 작성한 세부 사유");
+    await reasonInput.selectOption("지각");
     assert.equal(
-      await page.getByLabel("추가할 학생 기타 사유", { exact: true }).count(),
+      await reasonText.count(),
       0,
-      "Preset and custom reasons share the same input",
+      "Switching to a preset hides the separate custom field",
     );
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     const assignedReason = page.getByLabel("검증학생 배정 사유", { exact: true });
     assert.equal(await assignedReason.inputValue(), "지각");
-    const assignedReasonGeometry = await assertReasonCombobox(page, assignedReason,
+    const assignedReasonText = page.getByLabel("검증학생 직접 입력 사유", { exact: true });
+    const assignedReasonGeometry = await assertReasonDropdown(page, assignedReason, assignedReasonText,
       page.getByLabel("전체 학생 이름 검색", { exact: true }));
-    await assignedReason.fill("같은 행에서 직접 수정한 사유");
-    assert.equal(await assignedReason.inputValue(), "같은 행에서 직접 수정한 사유");
-    await assignedReason.fill("지각");
+    await assignedReason.selectOption("__other__");
+    await assignedReasonText.fill("아래 행에서 직접 수정한 사유");
+    assert.equal(await assignedReasonText.inputValue(), "아래 행에서 직접 수정한 사유");
+    await assignedReason.selectOption("지각");
     await page
       .getByRole("button", { name: "역사교실 저장", exact: true })
       .click();
@@ -1012,12 +990,13 @@ try {
       await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
       "지각",
     );
-    const editReasonGeometry = await assertReasonCombobox(page,
+    const editReasonGeometry = await assertReasonDropdown(page,
       page.getByLabel("검증학생 배정 사유", { exact: true }),
+      page.getByLabel("검증학생 직접 입력 사유", { exact: true }),
       page.locator('input[type="number"]').first());
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
-      .fill("");
+      .selectOption("__other__");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     assert.equal(
       await page.evaluate(() => window.__fixture.writes.length),
@@ -1032,7 +1011,7 @@ try {
       fullPage: true,
     });
     await page
-      .getByLabel("검증학생 배정 사유", { exact: true })
+      .getByLabel("검증학생 직접 입력 사유", { exact: true })
       .fill("기존 자유 입력 사유를 유지합니다");
     await page.getByRole("button", { name: "설정 저장", exact: true }).click();
     const preserved = await waitWrite(page, 2);
@@ -1053,6 +1032,11 @@ try {
       snapshotFields(created.data),
       "unchanged source preserves the original assignment snapshot",
     );
+    await page.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true }).click();
+    assert.equal(await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(), "__other__",
+      "Saved free-text reasons automatically reopen as direct input");
+    assert.equal(await page.getByLabel("검증학생 직접 입력 사유", { exact: true }).inputValue(), "기존 자유 입력 사유를 유지합니다");
+    await page.getByRole("button", { name: "취소", exact: true }).click();
 
     // A pre-existing map assignment keeps its own pages and blanks even when
     // its old live map changes. OCR regions were optional in production.
@@ -1320,7 +1304,7 @@ try {
     await page.locator('input[type="number"]').first().fill("22");
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
-      .fill("수업 태도");
+      .selectOption("수업 태도");
     await page.evaluate(() => (window.__fixture.pauseWrite = true));
     const resetButton = pending.getByRole("button", {
       name: "검증학생 재응시 제한 리셋",
@@ -1475,7 +1459,7 @@ try {
     await page
       .getByRole("button", { name: "배정 학생 추가", exact: true })
       .click();
-    await page.getByLabel("추가할 학생 배정 사유", { exact: true }).fill("수업 태도");
+    await page.getByLabel("추가할 학생 배정 사유", { exact: true }).selectOption("수업 태도");
     await page.getByLabel("전체 학생 이름 검색", { exact: true }).fill("추가학생");
     await page.getByRole("button", { name: /추가학생.*3-2/ }).click();
     const unsavedReset = page
@@ -1669,6 +1653,67 @@ try {
       `teacher ${viewport.width}px create/edit/source-switch/snapshot/attempt-history/reset: passed`,
     );
   }
+  if (!process.argv.includes("--results-only")) {
+    const reasonPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await reasonPage.route("**/*", route => route.request().url().startsWith(`http://127.0.0.1:${server.address().port}`) ? route.continue() : route.abort());
+    await reasonPage.goto(`http://127.0.0.1:${server.address().port}/`);
+    const reasonSeed = structuredClone(serveStore);
+    const savedCreatedAt = reasonSeed[seededAssignmentPath].createdAt;
+    Object.assign(reasonSeed[seededAssignmentPath], { isPublished: false, publishedAt: null });
+    await reasonPage.evaluate(seed => {
+      window.__fixture.store = seed;
+      window.__fixture.pendingSourceTimestamps = true;
+      window.__remount();
+    }, reasonSeed);
+    const editButton = reasonPage.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true });
+    await editButton.waitFor();
+    const timelineBefore = await reasonPage.locator(".history-timeline-date").allTextContents();
+    assert(timelineBefore.every(label => !label.includes("날짜 미정")));
+    await editButton.click();
+    const reasonName = `${assignedStudents[0].name} 배정 사유`;
+    const textName = `${assignedStudents[0].name} 직접 입력 사유`;
+    await reasonPage.getByLabel(reasonName, { exact: true }).selectOption("__other__");
+    await reasonPage.getByLabel(textName, { exact: true }).fill("직접 입력 후에도 목록에 남는 사유");
+    await reasonPage.getByRole("button", { name: "설정 저장", exact: true }).click();
+    await reasonPage.getByText("역사교실 설정을 저장했습니다.", { exact: true }).waitFor();
+    await dismissToasts(reasonPage);
+    await editButton.waitFor();
+    assert.deepEqual(await reasonPage.locator(".history-timeline-date").allTextContents(), timelineBefore,
+      "Custom-reason settings save preserves the original date while the client serverTimestamp is unresolved");
+    assert.deepEqual(await reasonPage.evaluate(assignmentPath => window.__fixture.store[assignmentPath].createdAt, seededAssignmentPath), savedCreatedAt,
+      "The server assignment retains its original creation date");
+    await reasonPage.evaluate(() => window.__remount());
+    await editButton.waitFor();
+    assert.deepEqual(await reasonPage.locator(".history-timeline-date").allTextContents(), timelineBefore,
+      "The assignment remains in the same dated list after reloading");
+    await editButton.click();
+    assert.equal(await reasonPage.getByLabel(reasonName, { exact: true }).inputValue(), "__other__");
+    assert.equal(await reasonPage.getByLabel(textName, { exact: true }).inputValue(), "직접 입력 후에도 목록에 남는 사유");
+    await reasonPage.getByRole("button", { name: "취소", exact: true }).click();
+    await reasonPage.getByRole("button", { name: "새 역사교실", exact: true }).click();
+    await reasonPage.locator("#history-create-source").selectOption("b");
+    await reasonPage.getByLabel("추가할 학생 배정 사유", { exact: true }).selectOption("__other__");
+    await reasonPage.getByLabel("추가할 학생 직접 입력 사유", { exact: true }).fill("신규 등록에 직접 작성한 사유");
+    await reasonPage.getByLabel("전체 학생 이름 검색", { exact: true }).fill(assignedStudents[0].name);
+    await reasonPage.getByRole("button", { name: new RegExp(`${assignedStudents[0].name}.*3-2`) }).click();
+    assert.equal(await reasonPage.getByLabel(reasonName, { exact: true }).inputValue(), "__other__");
+    assert.equal(await reasonPage.getByLabel(textName, { exact: true }).inputValue(), "신규 등록에 직접 작성한 사유",
+      "Adding a student copies the custom reason and selection to that student's lower input row");
+    await reasonPage.getByRole("button", { name: "역사교실 저장", exact: true }).click();
+    await reasonPage.getByText("역사교실 과제를 저장했습니다.", { exact: true }).waitFor();
+    await dismissToasts(reasonPage);
+    const customCreated = await reasonPage.evaluate(() => window.__fixture.writes.at(-1));
+    assert.equal(customCreated.data.targetStudentReasons[assignedStudents[0].uid], "신규 등록에 직접 작성한 사유");
+    assert((await reasonPage.locator(".history-timeline-date").allTextContents()).every(label => !label.includes("날짜 미정")),
+      "A new custom-reason assignment has a valid local creation date while the server timestamp resolves");
+    await reasonPage.evaluate(() => window.__remount());
+    await reasonPage.getByRole("button", { name: `${customCreated.data.title} 설정 수정`, exact: true }).click();
+    assert.equal(await reasonPage.getByLabel(textName, { exact: true }).inputValue(), "신규 등록에 직접 작성한 사유");
+    reports.push({ viewport: { width: 1280, height: 900 }, customReasonTimeline: "new/custom assignments saved; createdAt preserved; unresolved client timestamp; visible after save and reload; free-text reasons preserved" });
+    await reasonPage.close();
+    console.log("teacher custom-reason save, unresolved timestamps, dated list retention and reload: passed");
+  }
+  if (!process.argv.includes("--reasons-only")) {
   const resultPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const resultErrors = [];
   resultPage.on("pageerror", error => resultErrors.push(error.message));
@@ -1754,9 +1799,10 @@ try {
   reports.push({ viewport: { width: 1280, height: 900 }, canonicalResults: "live pass; failed then passed; immutable review; publication and exemption toasts; preserved results on read error", errors: resultErrors });
   await resultPage.close();
   console.log("teacher canonical realtime results, retry history, deep links, publication/exemption toasts and read failure: passed");
+  }
 } finally {
   await fs.writeFile(
-    path.join(evidence, "teacher-browser-report.json"),
+    path.join(evidence, process.argv.includes("--reasons-only") ? "teacher-reasons-browser-report.json" : "teacher-browser-report.json"),
     JSON.stringify(
       {
         recordedAt: new Date().toISOString(),

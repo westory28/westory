@@ -1215,6 +1215,7 @@ const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: "students",
   history_classroom_passed: "teachers",
+  history_classroom_failed: "teachers",
   history_classroom_locked: "teachers",
   history_classroom_submitted: "teachers",
   history_classroom_exemption_granted: "students",

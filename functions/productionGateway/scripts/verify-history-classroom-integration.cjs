@@ -529,6 +529,9 @@ const probeGrant = async (payload, failedBatch = 0) => {
   const begin = uid => executeAuthenticated(student(uid), "startAssessmentAttempt", { definitionId: syncDefinitionId });
   const submitPayload = (started, answer) => ({ attemptId: started.result.attemptId, expectedRevision: started.result.revision,
     answers: { "sync-blank": answer }, submitReason: "STUDENT" });
+  await db.doc("site_settings/notification_config").set({ eventPolicies: { history_classroom_passed: {
+    titleTemplate: "{studentName} 통과", bodyTemplate: "{studentName} 학생이 {assignmentTitle}을(를) {percent}%로 통과했습니다.",
+  }, history_classroom_failed: { bodyTemplate: "과제 {assignmentTitle}: {percent}%" } } });
   const syncPassed = await begin(students[30]);
   const lostSubmitId = randomUUID(), passedPayload = submitPayload(syncPassed, "고려");
   await assert.rejects(production.executeCommand.run(authenticatedRequest(student(students[30]), {
@@ -544,6 +547,9 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(passedProjection.answerChecks[0].blankId, "sync-blank");
   assert.equal(passedProjection.answerChecks[0].correctAnswer, "고려");
   assert.equal(passedProjection.answerChecks[0].page, 2);
+  const passedAlert = (await teacherItems()).docs.find(doc => doc.data().entityId === syncPassed.result.attemptId).data();
+  assert.equal(passedAlert.title, `합성 ${students[30]} 통과`, "custom titles remain supported");
+  assert.equal(passedAlert.body, `합성 ${students[30]} 학생이 역사교실을 100%로 통과했습니다.`, "old stored body templates cannot restore long assignment names");
   assert.equal(await teacherCount(), initialTeacherCount + 1);
   assert.equal(await count(`${root}/notification_inboxes/disabled-quiz-staff/items`), 0, "staff without an enabled teacher portal cannot receive student outcomes");
   assert.equal((await get(`${root}/notification_inboxes/teacher`)).unreadCount, await teacherCount());
@@ -551,9 +557,22 @@ const probeGrant = async (payload, failedBatch = 0) => {
   await executeAuthenticated(student(students[30]), "submitAssessmentAttempt", passedPayload);
   assert.equal(await teacherCount(), initialTeacherCount + 1, "receipt replay and replayed submission share one pass alert");
   const failedStart = await begin(students[31]);
-  await executeAuthenticated(student(students[31]), "submitAssessmentAttempt", submitPayload(failedStart, "오답"));
+  const failedPayload = submitPayload(failedStart, "오답");
+  const failedCommandId = randomUUID();
+  await executeAuthenticated(student(students[31]), "submitAssessmentAttempt", failedPayload, failedCommandId);
   assert.equal((await get(`${root}/history_classroom_results/${failedStart.result.attemptId}`)).status, "failed");
-  assert.equal(await teacherCount(), initialTeacherCount + 1, "ordinary failure is visible in the result table without a pass alert");
+  const failedAlert = (await teacherItems()).docs.find(doc => doc.data().entityId === failedStart.result.attemptId).data();
+  assert.equal(failedAlert.type, "history_classroom_failed");
+  assert.equal(failedAlert.body, `합성 ${students[31]} 학생이 역사교실을 0%로 미통과했습니다.`);
+  assert.ok(failedAlert.targetUrl.includes(`assignmentId=${syncSourceId}`));
+  await executeAuthenticated(student(students[31]), "submitAssessmentAttempt", failedPayload, failedCommandId);
+  await executeAuthenticated(student(students[31]), "submitAssessmentAttempt", failedPayload);
+  assert.equal(await teacherCount(), initialTeacherCount + 2, "failure receipt and submission replay share one outcome alert");
+  await db.doc("site_settings/notification_config").set({ eventPolicies: { history_classroom_failed: { enabled: false } } });
+  const mutedFailure = await begin(students[27]);
+  await executeAuthenticated(student(students[27]), "submitAssessmentAttempt", submitPayload(mutedFailure, "오답"));
+  assert.equal((await get(`${root}/history_classroom_results/${mutedFailure.result.attemptId}`)).status, "failed");
+  assert.equal(await teacherCount(), initialTeacherCount + 2, "a disabled failure policy suppresses only its notification");
   await db.doc("site_settings/notification_config").set({ eventPolicies: { history_classroom_locked: {
     titleTemplate: "{studentName} 확인", bodyTemplate: "{assignmentTitle}: {reason}",
   } } });
@@ -568,12 +587,12 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(lockedAlert.type, "history_classroom_locked");
   assert.equal(lockedAlert.title, `합성 ${students[32]} 확인`);
   assert.ok(lockedAlert.targetUrl.includes(`assignmentId=${syncSourceId}`));
-  assert.equal(await teacherCount(), initialTeacherCount + 2, "repeated lock commands produce one teacher alert");
+  assert.equal(await teacherCount(), initialTeacherCount + 3, "repeated lock commands produce one teacher alert");
   await db.doc("site_settings/notification_config").set({ teacherNotificationsEnabled: false });
   const disabledStart = await begin(students[33]);
   await executeAuthenticated(student(students[33]), "submitAssessmentAttempt", submitPayload(disabledStart, "고려"));
   assert.equal((await get(`${root}/history_classroom_results/${disabledStart.result.attemptId}`)).status, "passed");
-  assert.equal(await teacherCount(), initialTeacherCount + 2, "disabled teacher notifications still commit the teacher result projection");
+  assert.equal(await teacherCount(), initialTeacherCount + 3, "disabled teacher notifications still commit the teacher result projection");
   await db.doc("site_settings/notification_config").delete();
   const conflictStart = await begin(students[29]);
   const conflictPath = `${root}/history_classroom_results/${conflictStart.result.attemptId}`;
@@ -581,17 +600,17 @@ const probeGrant = async (payload, failedBatch = 0) => {
   await assert.rejects(executeAuthenticated(student(students[29]), "submitAssessmentAttempt", submitPayload(conflictStart, "고려")));
   assert.equal(await get(`semester_assessment_results/${conflictStart.result.attemptId}`), undefined);
   assert.equal((await get(`semester_assessment_attempts/${conflictStart.result.attemptId}`)).status, "STARTED");
-  assert.equal(await teacherCount(), initialTeacherCount + 2, "a projection identity failure rolls back score, receipt and notification");
+  assert.equal(await teacherCount(), initialTeacherCount + 3, "a projection identity failure rolls back score, receipt and notification");
   await db.doc(conflictPath).delete();
   await executeAuthenticated(student(students[29]), "submitAssessmentAttempt", submitPayload(conflictStart, "고려"));
-  assert.equal(await teacherCount(), initialTeacherCount + 3);
+  assert.equal(await teacherCount(), initialTeacherCount + 4);
   const clearAt = Timestamp.now();
   const passedAlertDoc = (await teacherItems()).docs.find(doc => doc.data().entityId === syncPassed.result.attemptId);
   await passedAlertDoc.ref.delete();
   await db.doc(`${root}/notification_inboxes/teacher`).set({ broadcastClearedAt: clearAt }, { merge: true });
   await executeAuthenticated(student(students[30]), "submitAssessmentAttempt", passedPayload);
   assert.equal((await passedAlertDoc.ref.get()).exists, false, "a replay must not restore an explicitly cleared old alert");
-  console.log("PASS exported history result integration: pass/fail and lock projections, teacher pass/check alerts, configured templates/disable policy, receipt+submission replay, response-loss recovery, atomic rollback, cleared-alert preservation");
+  console.log("PASS exported history result integration: pass/fail and lock projections, concise teacher pass/fail/check alerts, legacy body-template override and event/global disable policy, receipt+submission replay, response-loss recovery, atomic rollback, cleared-alert preservation");
   const recoveryStart = await begin(students[28]);
   await executeAuthenticated(student(students[28]), "lockHistoryClassroomAttempt", {
     attemptId: recoveryStart.result.attemptId, reason: "NAVIGATION",

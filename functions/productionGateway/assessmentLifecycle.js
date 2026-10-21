@@ -801,7 +801,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         updatedAt: timestamp,
         updatedBy: actor.actorUid,
         updateReason: payload.reason,
-        ...(snapshot.exists ? {} : { createdAt: timestamp, createdBy: actor.actorUid }),
+        // Source replacement must retain its original provenance. Older saves
+        // dropped these fields; the canonical definition retains their origin.
+        createdAt: snapshot.data?.createdAt || definition.data?.createdAt || timestamp,
+        createdBy: snapshot.data?.createdBy || definition.data?.createdBy || actor.actorUid,
       }, { merge: false });
       // Publication changes only after every source guard passes. The client
       // refreshes the definition snapshot and republishes the accepted source.

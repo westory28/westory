@@ -75,6 +75,18 @@ const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
 
 const getNotificationBodyText = (notification: WestoryNotification) => {
   const body = String(notification.body || "").trim();
+  if (
+    notification.type === "history_classroom_passed" ||
+    notification.type === "history_classroom_failed" ||
+    notification.type === "history_classroom_submitted"
+  ) {
+    // Older inbox items keep their IDs/read state; shorten only the known
+    // result sentence without fetching student or assignment records.
+    return body.replace(
+      /^(.+? 학생이) .+ (\d+(?:\.\d+)?)%로 (미통과|통과)했습니다\.$/u,
+      "$1 역사교실을 $2%로 $3했습니다.",
+    );
+  }
   if (notification.type === "history_dictionary_requested") {
     return body.replace(
       /학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g,
@@ -89,6 +101,7 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
   if (
     notification.type === "history_classroom_submitted" ||
     notification.type === "history_classroom_passed" ||
+    notification.type === "history_classroom_failed" ||
     notification.type === "history_classroom_locked"
   ) {
     if (!targetUrl || targetUrl === "/teacher/quiz?menu=history2") {

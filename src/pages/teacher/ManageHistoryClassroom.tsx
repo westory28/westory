@@ -541,6 +541,25 @@ const getTimestampMs = (value: unknown): number | null => {
   return null;
 };
 
+const normalizeSavedHistoryClassroomAssignment = (
+  id: string,
+  payload: Partial<HistoryClassroomAssignment>,
+  previous: HistoryClassroomAssignment | null | undefined,
+  savedAt: Date,
+) =>
+  normalizeHistoryClassroomAssignment(id, {
+    ...previous,
+    ...payload,
+    createdAt:
+      [
+        previous?.createdAt,
+        payload.createdAt,
+        previous?.publishedAt,
+        previous?.updatedAt,
+      ].find((value) => getTimestampMs(value) !== null) || savedAt,
+    updatedAt: savedAt,
+  });
+
 const formatDateTimeLabel = (value: unknown, fallback = "일시 없음") => {
   const timestampMs = getTimestampMs(value);
   if (!timestampMs) return fallback;
@@ -971,116 +990,53 @@ const AssignmentReasonInput: React.FC<{
   id: string;
   studentName: string;
   value: string;
+  explicitOther: boolean;
   invalid: boolean;
   describedBy?: string;
   className?: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, other: boolean) => void;
 }> = ({
   id,
   studentName,
   value,
+  explicitOther,
   invalid,
   describedBy,
   className = "",
   onChange,
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const optionsRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [openAbove, setOpenAbove] = useState(false);
-  const [optionsMaxHeight, setOptionsMaxHeight] = useState<number>();
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listId = `${id}-options`;
-  useLayoutEffect(() => {
-    if (!open || !inputRef.current || !optionsRef.current) return;
-    const anchor = inputRef.current.getBoundingClientRect();
-    let top = 0;
-    let bottom = window.innerHeight;
-    let ancestor = inputRef.current.parentElement;
-    while (ancestor) {
-      if (
-        /(auto|scroll|hidden|clip)/.test(getComputedStyle(ancestor).overflowY)
-      ) {
-        const bounds = ancestor.getBoundingClientRect();
-        top = Math.max(top, bounds.top);
-        bottom = Math.min(bottom, bounds.bottom);
-      }
-      ancestor = ancestor.parentElement;
-    }
-    const below = Math.max(0, bottom - anchor.bottom - 4);
-    const above = Math.max(0, anchor.top - top - 4);
-    const flip = optionsRef.current.scrollHeight > below && above > below;
-    setOpenAbove(flip);
-    setOptionsMaxHeight(Math.max(44, flip ? above : below));
-  }, [open]);
-  const chooseReason = (reason: string) => {
-    onChange(reason);
-    inputRef.current?.focus();
-    setOpen(false);
-    setActiveIndex(-1);
-  };
+  const other =
+    explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
 
   return (
-    <div
-      className={`history-reason-control ${className}`}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setOpen(false);
-          setActiveIndex(-1);
-        }
-      }}
-    >
-      <input
-        ref={inputRef}
+    <div className={`history-reason-control ${className}`}>
+      <select
         id={id}
         className="history-reason-input"
-        role="combobox"
         aria-label={`${studentName} 배정 사유`}
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        aria-activedescendant={
-          open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
-        }
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        autoComplete="off"
-        title={value || "배정 사유 선택 또는 직접 입력"}
-        value={value}
-        placeholder="배정 사유"
+        title={other ? "직접 입력" : value || "배정 사유 선택"}
+        value={other ? OTHER_ASSIGNMENT_REASON : value}
         required
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
         onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(false);
-          setActiveIndex(-1);
+          const nextOther = event.target.value === OTHER_ASSIGNMENT_REASON;
+          onChange(
+            nextOther ? (other ? value : "") : event.target.value,
+            nextOther,
+          );
         }}
-        onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return;
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            const direction = event.key === "ArrowDown" ? 1 : -1;
-            setActiveIndex((current) =>
-              !open || current < 0
-                ? direction === 1
-                  ? 0
-                  : ASSIGNMENT_REASONS.length - 1
-                : (current + direction + ASSIGNMENT_REASONS.length) %
-                  ASSIGNMENT_REASONS.length,
-            );
-            setOpen(true);
-          } else if (open && event.key === "Enter" && activeIndex >= 0) {
-            event.preventDefault();
-            chooseReason(ASSIGNMENT_REASONS[activeIndex]);
-          } else if (open && event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            setOpen(false);
-            setActiveIndex(-1);
-          }
-        }}
-      />
+      >
+        <option value="" disabled>
+          사유 선택
+        </option>
+        {ASSIGNMENT_REASONS.map((reason) => (
+          <option key={reason} value={reason}>
+            {reason}
+          </option>
+        ))}
+        <option value={OTHER_ASSIGNMENT_REASON}>직접 입력</option>
+      </select>
       <svg
         className="history-reason-chevron"
         viewBox="0 0 20 20"
@@ -1093,148 +1049,45 @@ const AssignmentReasonInput: React.FC<{
           strokeWidth="1.5"
         />
       </svg>
-      {open && (
-        <div
-          ref={optionsRef}
-          id={listId}
-          role="listbox"
-          aria-label={`${studentName} 배정 사유 목록`}
-          className={`history-reason-options${openAbove ? " is-above" : ""}`}
-          style={{ maxHeight: optionsMaxHeight }}
-        >
-          {ASSIGNMENT_REASONS.map((reason, index) => (
-            <button
-              key={reason}
-              id={`${listId}-${index}`}
-              type="button"
-              role="option"
-              tabIndex={-1}
-              aria-selected={value === reason}
-              className={activeIndex === index ? "is-active" : undefined}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => chooseReason(reason)}
-            >
-              {reason}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 };
 
-const AssignmentReasonField: React.FC<{
+const AssignmentReasonText: React.FC<{
   id: string;
   studentName: string;
   value: string;
-  explicitOther: boolean;
-  showError: boolean;
-  compact?: boolean;
-  onChange: (value: string, other: boolean) => void;
-}> = ({
-  id,
-  studentName,
-  value,
-  explicitOther,
-  showError,
-  compact = false,
-  onChange,
-}) => {
-  const other =
-    explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
-  const invalid = showError && !value.trim();
-  if (compact) {
-    return (
-      <div className="history-entry-reason min-w-0">
-        <AssignmentReasonInput
-          id={id}
-          studentName={studentName}
-          value={value}
-          invalid={invalid}
-          describedBy={invalid ? `${id}-error` : undefined}
-          onChange={(nextValue) =>
-            onChange(nextValue, !ASSIGNMENT_REASONS.includes(nextValue))
-          }
-        />
-        {invalid && (
-          <p
-            id={`${id}-error`}
-            role="alert"
-            className="mt-1 text-sm text-red-600"
-          >
-            배정 사유를 입력해 주세요.
-          </p>
-        )}
-      </div>
-    );
-  }
-  return (
-    <div className="history-entry-reason min-w-0 space-y-2">
-      <label className="block" htmlFor={id}>
-        <span className="mb-1 block text-xs font-bold text-gray-500">
-          배정 사유
-        </span>
-        <select
-          id={id}
-          aria-label={`${studentName} 배정 사유`}
-          value={other ? OTHER_ASSIGNMENT_REASON : value}
-          aria-invalid={invalid}
-          title={value || "배정 사유 선택"}
-          onChange={(event) => {
-            const nextOther = event.target.value === OTHER_ASSIGNMENT_REASON;
-            onChange(
-              nextOther ? (other ? value : "") : event.target.value,
-              nextOther,
-            );
-          }}
-          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="">사유 선택</option>
-          {ASSIGNMENT_REASONS.map((reason) => (
-            <option key={reason} value={reason}>
-              {reason}
-            </option>
-          ))}
-          <option value={OTHER_ASSIGNMENT_REASON}>기타</option>
-        </select>
-      </label>
-      {invalid && !other && (
-        <p role="alert" className="text-sm text-red-600">
-          배정 사유를 선택해 주세요.
-        </p>
-      )}
-      {other && (
-        <label className="block" htmlFor={`${id}-other`}>
-          <span className="mb-1 block text-xs font-bold text-gray-500">
-            기타 사유 (필수)
-          </span>
-          <textarea
-            id={`${id}-other`}
-            lang="ko"
-            inputMode="text"
-            rows={2}
-            required
-            value={value}
-            aria-label={`${studentName} 기타 사유`}
-            aria-invalid={invalid}
-            aria-describedby={invalid ? `${id}-error` : undefined}
-            onChange={(event) => onChange(event.target.value, true)}
-            className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          />
-          {invalid && (
-            <span
-              id={`${id}-error`}
-              role="alert"
-              className="mt-1 block text-sm text-red-600"
-            >
-              기타 사유를 입력해 주세요.
-            </span>
-          )}
-        </label>
-      )}
-    </div>
-  );
-};
+  invalid: boolean;
+  onChange: (value: string) => void;
+}> = ({ id, studentName, value, invalid, onChange }) => (
+  <label className="history-reason-custom" htmlFor={`${id}-other`}>
+    <span className="mb-1 block text-xs font-bold text-gray-500">
+      직접 입력 (필수)
+    </span>
+    <textarea
+      id={`${id}-other`}
+      lang="ko"
+      inputMode="text"
+      rows={2}
+      required
+      value={value}
+      aria-label={`${studentName} 직접 입력 사유`}
+      aria-invalid={invalid}
+      aria-describedby={invalid ? `${id}-error` : undefined}
+      onChange={(event) => onChange(event.target.value)}
+      className="history-reason-text"
+    />
+    {invalid && (
+      <span
+        id={`${id}-error`}
+        role="alert"
+        className="mt-1 block text-sm text-red-600"
+      >
+        배정 사유를 입력해 주세요.
+      </span>
+    )}
+  </label>
+);
 
 const HistoryActionButton: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -1315,6 +1168,8 @@ const AssignmentStudentPicker: React.FC<{
         )
         .slice(0, 8)
     : [];
+  const otherReason =
+    reasonOther || (!!reason && !ASSIGNMENT_REASONS.includes(reason));
   const addStudent = (student: StudentOption) => {
     if (!onAdd(student)) return;
     setGrade(student.grade);
@@ -1398,13 +1253,14 @@ const AssignmentStudentPicker: React.FC<{
             ))}
           </select>
         </div>
-        <AssignmentReasonField
+        <AssignmentReasonInput
           id={id}
           studentName="추가할 학생"
           value={reason}
           explicitOther={reasonOther}
-          showError={reasonError}
-          compact
+          invalid={reasonError && !reason.trim()}
+          describedBy={reasonError ? `${id}-error` : undefined}
+          className="history-entry-reason"
           onChange={onReasonChange}
         />
         <div className="history-student-search-group">
@@ -1428,6 +1284,25 @@ const AssignmentStudentPicker: React.FC<{
           />
         </div>
       </div>
+      {otherReason ? (
+        <AssignmentReasonText
+          id={id}
+          studentName="추가할 학생"
+          value={reason}
+          invalid={reasonError && !reason.trim()}
+          onChange={(value) => onReasonChange(value, true)}
+        />
+      ) : (
+        reasonError && (
+          <p
+            id={`${id}-error`}
+            role="alert"
+            className="mt-1 text-sm text-red-600"
+          >
+            배정 사유를 입력해 주세요.
+          </p>
+        )
+      )}
       {search.trim() && (
         <div className="mt-2 rounded-xl border border-gray-200 bg-white p-2">
           {searchResults.length ? (
@@ -1459,11 +1334,22 @@ const AssignedStudentRow: React.FC<{
   student: StudentOption;
   id: string;
   reason: string;
+  explicitOther: boolean;
   invalid: boolean;
-  onReasonChange: (reason: string) => void;
+  onReasonChange: (reason: string, other: boolean) => void;
   onRemove: () => void;
-}> = ({ student, id, reason, invalid, onReasonChange, onRemove }) => (
-  <div>
+}> = ({
+  student,
+  id,
+  reason,
+  explicitOther,
+  invalid,
+  onReasonChange,
+  onRemove,
+}) => {
+  const otherReason =
+    explicitOther || (!!reason && !ASSIGNMENT_REASONS.includes(reason));
+  return (
     <div className="history-student-row">
       <div
         className="history-student-info"
@@ -1475,10 +1361,11 @@ const AssignedStudentRow: React.FC<{
         <span className="history-student-name">{student.name}</span>
       </div>
       <AssignmentReasonInput
-        id={`${id}-other`}
+        id={id}
         className="history-student-reason"
         studentName={student.name}
         value={reason}
+        explicitOther={explicitOther}
         invalid={invalid}
         describedBy={invalid ? `${id}-error` : undefined}
         onChange={onReasonChange}
@@ -1489,14 +1376,27 @@ const AssignedStudentRow: React.FC<{
         onClick={onRemove}
         className="history-student-remove text-red-500 hover:bg-red-50 rounded-xl"
       />
+      {otherReason && (
+        <AssignmentReasonText
+          id={id}
+          studentName={student.name}
+          value={reason}
+          invalid={invalid}
+          onChange={(value) => onReasonChange(value, true)}
+        />
+      )}
+      {invalid && !otherReason && (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1 text-sm text-red-600"
+        >
+          배정 사유를 입력해 주세요.
+        </p>
+      )}
     </div>
-    {invalid && (
-      <p id={`${id}-error`} role="alert" className="mt-1 text-sm text-red-600">
-        배정 사유를 입력해 주세요.
-      </p>
-    )}
-  </div>
-);
+  );
+};
 
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
@@ -3949,17 +3849,17 @@ const ManageHistoryClassroom: React.FC = () => {
       );
       payload.contentRevision = saved.contentRevision;
       Object.assign(payload, saved.publicationWindow);
+      const savedAt = new Date();
 
       setAssignments((prev) =>
         prev.map((assignment) =>
           assignment.id === targetAssignment.id
-            ? (() => {
-                const normalized = normalizeHistoryClassroomAssignment(
-                  targetAssignment.id,
-                  payload as Partial<HistoryClassroomAssignment>,
-                );
-                return normalized;
-              })()
+            ? normalizeSavedHistoryClassroomAssignment(
+                targetAssignment.id,
+                payload as Partial<HistoryClassroomAssignment>,
+                assignment,
+                savedAt,
+              )
             : assignment,
         ),
       );
@@ -4376,13 +4276,16 @@ const ManageHistoryClassroom: React.FC = () => {
       );
       payload.contentRevision = saved.contentRevision;
       Object.assign(payload, saved.publicationWindow);
+      const savedAt = new Date();
 
       setAssignments((prev) => {
-        const normalizedAssignment = normalizeHistoryClassroomAssignment(
+        const normalized = normalizeSavedHistoryClassroomAssignment(
           assignmentId,
           payload as Partial<HistoryClassroomAssignment>,
+          prev.find((assignment) => assignment.id === assignmentId) ||
+            existingAssignment,
+          savedAt,
         );
-        const normalized = normalizedAssignment;
         if (existingAssignment) {
           return prev.map((assignment) =>
             assignment.id === assignmentId ? normalized : assignment,
@@ -4470,7 +4373,10 @@ const ManageHistoryClassroom: React.FC = () => {
       const prefix = editing
         ? "history-edit-add-reason"
         : "history-create-add-reason";
-      document.getElementById(prefix)?.focus();
+      (
+        document.getElementById(`${prefix}-other`) ||
+        document.getElementById(prefix)
+      )?.focus();
       return false;
     }
     if (editing) {
@@ -4478,13 +4384,21 @@ const ManageHistoryClassroom: React.FC = () => {
         previous.includes(uid) ? previous : [...previous, uid],
       );
       setEditingStudentReasons((previous) => ({ ...previous, [uid]: reason }));
-      setEditingOtherReasonUids((previous) => [...new Set([...previous, uid])]);
+      setEditingOtherReasonUids((previous) =>
+        editingNewStudentReasonOther || !ASSIGNMENT_REASONS.includes(reason)
+          ? [...new Set([...previous, uid])]
+          : previous.filter((otherUid) => otherUid !== uid),
+      );
     } else {
       setSelectedStudentUids((previous) =>
         previous.includes(uid) ? previous : [...previous, uid],
       );
       setStudentReasons((previous) => ({ ...previous, [uid]: reason }));
-      setOtherReasonUids((previous) => [...new Set([...previous, uid])]);
+      setOtherReasonUids((previous) =>
+        newStudentReasonOther || !ASSIGNMENT_REASONS.includes(reason)
+          ? [...new Set([...previous, uid])]
+          : previous.filter((otherUid) => otherUid !== uid),
+      );
     }
     return true;
   };
@@ -6191,19 +6105,22 @@ const ManageHistoryClassroom: React.FC = () => {
                           student={student}
                           id={`history-create-reason-${student.uid}`}
                           reason={studentReasons[student.uid] || ""}
+                          explicitOther={otherReasonUids.includes(student.uid)}
                           invalid={
                             showReasonErrors &&
                             otherReasonUids.includes(student.uid) &&
                             !String(studentReasons[student.uid] || "").trim()
                           }
-                          onReasonChange={(reason) => {
+                          onReasonChange={(reason, other) => {
                             setStudentReasons((prev) => ({
                               ...prev,
                               [student.uid]: reason,
                             }));
-                            setOtherReasonUids((prev) => [
-                              ...new Set([...prev, student.uid]),
-                            ]);
+                            setOtherReasonUids((prev) =>
+                              other
+                                ? [...new Set([...prev, student.uid])]
+                                : prev.filter((uid) => uid !== student.uid),
+                            );
                           }}
                           onRemove={() =>
                             setSelectedStudentUids((prev) =>
@@ -6771,6 +6688,9 @@ const ManageHistoryClassroom: React.FC = () => {
                             student={student}
                             id={`history-edit-reason-${student.uid}`}
                             reason={editingStudentReasons[student.uid] || ""}
+                            explicitOther={editingOtherReasonUids.includes(
+                              student.uid,
+                            )}
                             invalid={
                               showEditingReasonErrors &&
                               editingOtherReasonUids.includes(student.uid) &&
@@ -6778,14 +6698,16 @@ const ManageHistoryClassroom: React.FC = () => {
                                 editingStudentReasons[student.uid] || "",
                               ).trim()
                             }
-                            onReasonChange={(reason) => {
+                            onReasonChange={(reason, other) => {
                               setEditingStudentReasons((prev) => ({
                                 ...prev,
                                 [student.uid]: reason,
                               }));
-                              setEditingOtherReasonUids((prev) => [
-                                ...new Set([...prev, student.uid]),
-                              ]);
+                              setEditingOtherReasonUids((prev) =>
+                                other
+                                  ? [...new Set([...prev, student.uid])]
+                                  : prev.filter((uid) => uid !== student.uid),
+                              );
                             }}
                             onRemove={() => {
                               setEditingStudentUids((prev) =>

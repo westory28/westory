@@ -382,6 +382,38 @@ const runManagementContentCommands = async () => {
   assert.equal(historySaved.result.contentRevision, 1);
   assert.equal(store.snapshot("years/2026/semesters/2/history_classrooms/history-two").data.lessonUnitId, "unit-one");
   assert.deepEqual(store.snapshot("years/2026/semesters/2/history_classrooms/history-two").data.lessonUnitPath, ["대단원", "중단원"]);
+  const metadataSource = { sourceType: "lesson", lessonUnitId: "unit-one", title: "생성 정보 검증",
+    blanks: [{ id: "blank-1", answer: "정답" }], targetStudentReasons: { "student-uid": "직접 입력 사유" }, isPublished: false };
+  const metadataPath = "years/2026/semesters/2/history_classrooms/history-metadata";
+  const metadataDefinitionPath = "semester_assessment_definitions/history_classroom:2026-2:history-metadata";
+  await execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "history-metadata", source: metadataSource, expectedRevision: 0, reason: "생성 정보 최초 저장",
+  });
+  const metadataCreated = clone(store.snapshot(metadataPath).data);
+  assert.ok(metadataCreated.createdAt);
+  assert.equal(metadataCreated.createdBy, "admin-uid");
+  store.documents.set(metadataPath, { ...metadataCreated, createdBy: "original-teacher" });
+  store.documents.set(metadataDefinitionPath, { createdAt: "2026-08-01T00:00:00.000Z", createdBy: "definition-teacher" });
+  nowMs += 1000;
+  await execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "history-metadata", source: metadataSource, expectedRevision: 1, reason: "작성자가 달라도 원본 생성 정보 유지",
+  });
+  assert.deepEqual(store.snapshot(metadataPath).data.createdAt, metadataCreated.createdAt);
+  assert.equal(store.snapshot(metadataPath).data.createdBy, "original-teacher");
+  const metadataMissing = clone(store.snapshot(metadataPath).data);
+  delete metadataMissing.createdAt;
+  delete metadataMissing.createdBy;
+  store.documents.set(metadataPath, metadataMissing);
+  await execute(admin, "upsertHistoryClassroomSource", {
+    semesterId, sourceId: "history-metadata", source: metadataSource, expectedRevision: 2, reason: "과거 누락 생성 정보 보완",
+  });
+  assert.equal(store.snapshot(metadataPath).data.createdAt, "2026-08-01T00:00:00.000Z");
+  assert.equal(store.snapshot(metadataPath).data.createdBy, "definition-teacher");
+  assert.deepEqual(store.snapshot(metadataPath).data.targetStudentReasons, metadataSource.targetStudentReasons);
+  assert.equal(store.snapshot(metadataPath).data.isPublished, false);
+  store.documents.delete(metadataPath);
+  store.documents.delete(metadataDefinitionPath);
+  nowMs -= 1000;
   const historyDeleted = await execute(admin, "deleteHistoryClassroomSource", {
     semesterId,
     sourceId: "history-two",
@@ -855,6 +887,7 @@ const runKind = async (kind) => {
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "HISTORY_LESSON_METADATA_PRESERVED",
+      "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",
       "QUIZ_PREFLIGHT_ZERO_WRITE",
       "HISTORY_PREFLIGHT_ZERO_WRITE",
       "EXPLICIT_START_ONLY",

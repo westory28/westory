@@ -63,7 +63,10 @@ const createHistoryClassroomSync = ({ now = () => new Date(), prepareInput = nul
         const inboxPath = `${root(semesterId)}/notification_inboxes/${uid}`;
         const path = `${inboxPath}/items/${id}`;
         items.set(path, { path, inboxPath, uid, occurredAtMs: timestampMs(event.occurredAt) || now().getTime(), data: {
-          type: prepared.type, title: text(prepared.title, 80, "알림"), body: text(prepared.body, 500),
+          type: prepared.type, title: text(prepared.title, 80, "알림"),
+          // Outcome wording stays concise even when a saved policy still has
+          // the former assignment-title template. Enable/priority policies apply.
+          body: text(["history_classroom_passed", "history_classroom_failed"].includes(event.type) ? event.body : prepared.body, 500),
           targetUrl: text(prepared.targetUrl, 240), entityType: text(prepared.entityType, 80),
           entityId: text(prepared.entityId, 160), actorUid: text(prepared.actorUid, 160),
           recipientUid: uid, priority: prepared.priority === "high" ? "high" : "normal",
@@ -134,10 +137,11 @@ const createHistoryClassroomSync = ({ now = () => new Date(), prepareInput = nul
     const [year, semester] = attempt.semesterId.split("-");
     const targetUrl = `/teacher/quiz/history-classroom?assignmentId=${encodeURIComponent(assignmentId)}`;
     const events = [];
-    if (passed) events.push({ audience: "teachers", type: "history_classroom_passed", title: "역사교실 통과 알림",
-      body: `${student.studentName} 학생이 ${assignmentTitle}을(를) ${result.percent}%로 통과했습니다.`,
+    if (!cancelled) events.push({ audience: "teachers", type: passed ? "history_classroom_passed" : "history_classroom_failed",
+      title: passed ? "역사교실 통과 알림" : "역사교실 미통과 알림",
+      body: `${student.studentName} 학생이 역사교실을 ${result.percent}%로 ${passed ? "통과" : "미통과"}했습니다.`,
       targetUrl, entityType: "history_classroom_result", entityId: attempt.attemptId, actorUid: attempt.studentUid, priority: "normal",
-      dedupeKey: `history_classroom_passed:${year}:${semester}:${attempt.attemptId}`,
+      dedupeKey: `history_classroom_${passed ? "passed" : "failed"}:${year}:${semester}:${attempt.attemptId}`,
       occurredAt: result.submittedAtIso || result.createdAt,
       templateValues: { studentName: student.studentName, assignmentTitle, percent: result.percent },
     });

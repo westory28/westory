@@ -266,8 +266,10 @@ const fixture = async (role = "teacher") => {
         tree,
         (node) =>
           node.type === "button" &&
-          (node.props["aria-label"] === label ||
-            text(node.props.children) === label),
+          (label instanceof RegExp
+            ? label.test(text(node.props.children))
+            : node.props["aria-label"] === label ||
+              text(node.props.children) === label),
       ),
     toggle: async () => {
       find(
@@ -458,6 +460,36 @@ const fixture = async (role = "teacher") => {
 }
 
 {
+  const f = await fixture();
+  f.setRows([
+    notification("legacy-pass", {
+      body: "홍길동 학생이 ① 조선 건국, 500년 역사의 시작을(를) 93.3%로 통과했습니다.",
+    }),
+    notification("legacy-fail", {
+      type: "history_classroom_failed",
+      body: "김학생 학생이 긴 과제 제목을(를) 0%로 미통과했습니다.",
+      targetUrl: "/teacher/quiz?menu=history2",
+    }),
+    notification("student-assignment", {
+      type: "history_classroom_assigned",
+      body: "공개된 원래 과제 이름 과제가 새로 열렸습니다.",
+    }),
+  ]);
+  await f.emit({ unreadCount: 3 });
+  assert.equal(
+    f.calls.toasts.at(-1).message,
+    "홍길동 학생이 역사교실을 93.3%로 통과했습니다.",
+  );
+  await f.toggle();
+  assert.match(f.text(), /홍길동 학생이 역사교실을 93\.3%로 통과했습니다\./);
+  assert.match(f.text(), /김학생 학생이 역사교실을 0%로 미통과했습니다\./);
+  assert.doesNotMatch(f.text(), /500년 역사의 시작|긴 과제 제목/);
+  assert.match(f.text(), /공개된 원래 과제 이름 과제가 새로 열렸습니다\./);
+  f.button(/legacy-fail/).props.onClick();
+  assert.equal(f.calls.routes.at(-1), "/teacher/quiz/history-classroom");
+}
+
+{
   const config = { year: "2026", semester: "2" };
   const calls = [];
   const module = { exports: {} };
@@ -530,6 +562,9 @@ const fixture = async (role = "teacher") => {
     teacherNotificationsEnabled: false,
     eventPolicies: {
       history_classroom_passed: { enabled: false, titleTemplate: "기존 제목" },
+      history_classroom_failed: {
+        bodyTemplate: "과제 {assignmentTitle}: {percent}%",
+      },
     },
   });
   assert.equal(migrated.teacherNotificationsEnabled, false);
@@ -539,6 +574,15 @@ const fixture = async (role = "teacher") => {
     "기존 제목",
   );
   assert.equal(migrated.eventPolicies.history_classroom_locked.enabled, true);
+  assert.equal(migrated.eventPolicies.history_classroom_failed.enabled, true);
+  assert.equal(
+    migrated.eventPolicies.history_classroom_passed.bodyTemplate,
+    "{studentName} 학생이 역사교실을 {percent}%로 통과했습니다.",
+  );
+  assert.equal(
+    migrated.eventPolicies.history_classroom_failed.bodyTemplate,
+    "{studentName} 학생이 역사교실을 {percent}%로 미통과했습니다.",
+  );
   assert.equal(
     migrated.eventPolicies.history_classroom_locked.priority,
     "high",
