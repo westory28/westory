@@ -1215,6 +1215,7 @@ const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: "students",
   history_classroom_passed: "teachers",
+  history_classroom_locked: "teachers",
   history_classroom_submitted: "teachers",
   history_classroom_exemption_granted: "students",
   history_classroom_exemption_requested: "teachers",
@@ -1350,13 +1351,14 @@ const prepareNotificationInput = async (
   semester,
   input,
   fallbackAudience = "",
+  configOverride = null,
 ) => {
   const type = sanitizeNotificationText(input.type, 80, "system_notice");
   const audience = resolveNotificationAudience(
     type,
     fallbackAudience || input.audience,
   );
-  const config = await loadNotificationConfigSafely();
+  const config = configOverride || await loadNotificationConfigSafely();
   const policy = getNotificationPolicy(config, type);
 
   if (
@@ -12208,8 +12210,19 @@ const semesterCoreCommandAdapter =
   });
 const archiveEnrollmentCommandAdapter =
   archiveEnrollment.createArchiveEnrollmentCommandAdapter();
+const createHistoryClassroomSync = (options = {}) =>
+  require("./historyClassroomSync").createHistoryClassroomSync({
+      prepareInput: (year, semester, input, config) =>
+        prepareNotificationInput(year, semester, input, input.audience, config),
+      expiresAt: getNotificationExpiryTimestamp,
+      ...options,
+  });
+// The bounded maintenance script reuses exactly the callable's notification
+// settings/templates. This factory is not attached to the root Functions entry.
+exports.createHistoryClassroomSync = createHistoryClassroomSync;
 const assessmentCommandAdapter =
   assessmentLifecycle.createAssessmentCommandAdapter({
+    historySync: createHistoryClassroomSync(),
     wisRewards: wisEconomy.createAssessmentWisRewardAdapter({
       loadPolicy: async (transaction, semesterId) => {
         const [year, semester] = semesterId.split("-");

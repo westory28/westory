@@ -238,6 +238,8 @@ export type WestoryNotificationType =
   | "history_classroom_assigned"
   | "history_classroom_passed"
   | "history_classroom_submitted"
+  | "history_classroom_locked"
+  | "history_classroom_exemption_granted"
   | "history_classroom_exemption_requested"
   | "history_classroom_exemption_reviewed"
   | "performance_score_objection_requested"

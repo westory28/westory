@@ -15,6 +15,7 @@ const assessment = require("../assessmentLifecycle");
 const gateway = require("../commandGateway");
 const enrollment = require("../archiveEnrollment");
 const sessionAuthority = require("../sessionAuthority");
+const wis = require("../wisEconomy");
 const production = require("../productionSource");
 const semesterId = "2026-2";
 const root = "years/2026/semesters/2";
@@ -95,6 +96,8 @@ const probeGrant = async (payload, failedBatch = 0) => {
     "site_settings/semester_active": { semesterId, revision: 1 },
     [`semester_manifests/${semesterId}`]: { semesterId, status: "ACTIVE", revision: 1 },
     "users/teacher": { role: "teacher", teacherPortalEnabled: true, staffPermissions: ["quiz_read"] },
+    "users/disabled-quiz-staff": { role: "staff", teacherPortalEnabled: false, staffPermissions: ["quiz_read"] },
+    [`${wis.WIS_ECONOMY_COLLECTION}/${semesterId}`]: { semesterId, status: "ACTIVE_OPEN", revision: 1, ledgerEntryCount: 0 },
     "semester_classes/class_one": { semesterId, classId: "class_one", grade: "3", classNumber: "2", status: "ACTIVE" },
     [`${root}/history_classrooms/history-one`]: { title: "합성 역사교실", sourceType: "lesson", lessonUnitId: "unit-one", mapResourceId: "", isPublished: true, targetStudentUids: students,
       blanks: [{ id: "blank-1", answer: "고려" }], passThresholdPercent: 100 },
@@ -105,6 +108,11 @@ const probeGrant = async (payload, failedBatch = 0) => {
     seed[`semester_enrollments/enrollment_${uid}`] = { semesterId, studentUid: uid, enrollmentId: `enrollment_${uid}`,
       classId: "class_one", enrollmentStatus: "ACTIVE", studentNumber: uid.split("-")[1] };
     seed[`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, uid)}`] = { semesterId, studentUid: uid, activeEnrollmentId: `enrollment_${uid}` };
+    const accountId = wis.accountIdFor(semesterId, uid);
+    seed[`${wis.WIS_ACCOUNT_COLLECTION}/${accountId}`] = { schemaVersion: 1, policyVersion: wis.WIS_POLICY_VERSION,
+      accountId, studentUid: uid, semesterId, enrollmentId: `enrollment_${uid}`, classId: "class_one", status: "ACTIVE", revision: 1,
+      displayName: `합성 ${uid}`, grade: "3", classNumber: "2", studentNumber: uid.split("-")[1],
+      balance: 0, earnedTotal: 0, rankEarnedTotal: 0, adjustedTotal: 0, spentTotal: 0, recentLedgerEntries: [] };
   }
   for (const auth of [teacher, ...students.map((uid) => student(uid))]) {
     seed[`application_sessions/${auth.uid}/sessions/${authTime}`] = {
@@ -223,6 +231,7 @@ const probeGrant = async (payload, failedBatch = 0) => {
   console.log("PASS atomic save: role guard, same-command replay/status, full rollback, competing revisions preserve matched source+definition");
 
   const grantId = randomUUID();
+  const notificationsBeforeGrant = await count(`${root}/notification_inboxes/${students[0]}/items`);
   const grantPayload = { semesterId, recipientUids: students.slice(0, 32), classId: "3-2", targetGrade: "3", targetClass: "2", reason: "합성 현장체험" };
   const singleProbe = await probeGrant({ ...grantPayload, recipientUids: [students[0]] });
   const classProbes = [];
@@ -261,6 +270,7 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(grantStatus.status, "SUCCEEDED");
   assert.deepEqual(grantStatus.result.exemptionIds, grant.result.exemptionIds, "grant response loss recovers the same receipt");
   assert.equal(await count(`${root}/history_classroom_exemptions`), 32);
+  assert.equal(await count(`${root}/notification_inboxes/${students[0]}/items`), notificationsBeforeGrant + 1, "canonical grant creates exactly one student notification, including concurrent receipt replay");
   const tickets = await db.collection(`${root}/history_classroom_exemptions`).get();
   assert.ok(tickets.docs.every((doc) => !students.slice(32).includes(doc.data().uid) && doc.data().grantScope === "class"));
   const ticketFor = (uid) => tickets.docs.find((doc) => doc.data().uid === uid).id;
@@ -300,6 +310,7 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(requestStatus.status, "SUCCEEDED");
   assert.equal(requestStatus.result.requestId, requested.result.requestId);
   assert.equal((await get(`${root}/history_classroom_exemptions/${requestPayload.exemptionId}`)).status, "requested");
+  assert.equal((await get(`${root}/notification_inboxes/teacher`)).unreadCount, 1, "the exported canonical student request reaches the teacher inbox");
   await assert.rejects(execute(teacher, "revokeHistoryClassroomExemptions", { semesterId, exemptionIds: [requestPayload.exemptionId] }), expectCode("failed-precondition"));
   const attempt = await execute(student(), "startAssessmentAttempt", { definitionId });
   const reviewed = await executeAuthenticated(teacher, "reviewHistoryClassroomExemptionRequest", { semesterId, requestId: requested.result.requestId, approved: true });
@@ -309,11 +320,13 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(canonical.completionSource, "exemption");
   assert.equal(compatible.resultId, canonical.resultId);
   assert.equal(canonical.reward.totalAwarded, 0);
+  assert.equal(await count(`${root}/notification_inboxes/${students[0]}/items`), notificationsBeforeGrant + 2, "canonical approval notifies the student alongside completion");
   assert.equal((await get(`semester_assessment_attempts/${attempt.result.attemptId}`)).status, "LOCKED");
   await assert.rejects(execute(student(), "startAssessmentAttempt", { definitionId }), (error) => error.details?.reason === "ASSESSMENT_ALREADY_EXEMPTED");
   const again = await executeAuthenticated(teacher, "reviewHistoryClassroomExemptionRequest", { semesterId, requestId: requested.result.requestId, approved: true });
   assert.equal(again.result.resultId, reviewed.result.resultId);
   assert.equal(await count("semester_assessment_results"), 1);
+  assert.equal(await count(`${root}/notification_inboxes/${students[0]}/items`), notificationsBeforeGrant + 2, "replayed approval must not duplicate the student notification");
   console.log("PASS ticket request/approval and canonical-compatible result transaction.");
 
   const rejectedRequest = await execute(student(students[1]), "createHistoryClassroomExemptionRequest", { ...requestPayload, exemptionId: ticketFor(students[1]) });
@@ -484,6 +497,146 @@ const probeGrant = async (payload, failedBatch = 0) => {
   }
   console.log("PASS concurrent same-ticket/different-assignment and student-request/teacher-direct races each permit exactly one outcome");
   console.log("PASS teacher direct exemptions: available/legacy ticket, role/capability/target/owner/semester/expiry/window/pending guards, fixed-result concurrency, receipt/status, no rewards, active-attempt lock and no student-request impersonation");
+
+  // This section exercises the actual exported callable, rather than only the
+  // domain adapter: projection, configured notification and receipt are one
+  // transaction even when the HTTP response is lost.
+  const syncSourceId = "canonical-result-integration";
+  const syncDefinitionId = `history_classroom:${semesterId}:${syncSourceId}`;
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: syncSourceId,
+    source: { ...authoredSource, title: "결과 연동 검증", targetStudentUids: students, cooldownMinutes: 0,
+      blanks: [{ id: "sync-blank", answer: "고려", page: 2 }] } });
+  const teacherItems = () => db.collection(`${root}/notification_inboxes/teacher/items`).get();
+  const teacherCount = () => count(`${root}/notification_inboxes/teacher/items`);
+  const initialTeacherCount = await teacherCount();
+  const publicationSourceId = "publication-notification-integration";
+  const assignedAlerts = async uid => (await db.collection(`${root}/notification_inboxes/${uid}/items`).get()).docs
+    .filter(doc => doc.data().type === "history_classroom_assigned" && doc.data().entityId === publicationSourceId).length;
+  const publicationSource = { ...authoredSource, targetStudentUids: students.slice(0, 1), isPublished: false };
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: publicationSourceId, source: publicationSource });
+  assert.equal(await assignedAlerts(students[0]), 0, "private saves must not alert students");
+  const publishPayload = { ...sourceSavePayload, sourceId: publicationSourceId, expectedRevision: 1, source: { ...publicationSource, isPublished: true } };
+  const publicationCommandId = randomUUID();
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", publishPayload, publicationCommandId);
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", publishPayload, publicationCommandId);
+  assert.equal(await assignedAlerts(students[0]), 1, "publication and its replay notify one assigned student once");
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...publishPayload, expectedRevision: 2 });
+  assert.equal(await assignedAlerts(students[0]), 1, "an ordinary public settings save does not resend assignment alerts");
+  await executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...publishPayload, expectedRevision: 3,
+    source: { ...publishPayload.source, targetStudentUids: students.slice(0, 2) } });
+  assert.equal(await assignedAlerts(students[0]), 1);
+  assert.equal(await assignedAlerts(students[1]), 1, "adding recipients notifies only newly assigned students");
+  const begin = uid => executeAuthenticated(student(uid), "startAssessmentAttempt", { definitionId: syncDefinitionId });
+  const submitPayload = (started, answer) => ({ attemptId: started.result.attemptId, expectedRevision: started.result.revision,
+    answers: { "sync-blank": answer }, submitReason: "STUDENT" });
+  const syncPassed = await begin(students[30]);
+  const lostSubmitId = randomUUID(), passedPayload = submitPayload(syncPassed, "고려");
+  await assert.rejects(production.executeCommand.run(authenticatedRequest(student(students[30]), {
+    commandId: lostSubmitId, commandType: "submitAssessmentAttempt", payload: passedPayload, _testDropResponseAfterCommit: true,
+  })), error => error.details?.reason === "TEST_RESPONSE_LOSS");
+  const passedReceipt = await authenticatedStatus(student(students[30]), "submitAssessmentAttempt", lostSubmitId);
+  assert.equal(passedReceipt.result.passed, true);
+  const passedProjection = await get(`${root}/history_classroom_results/${syncPassed.result.attemptId}`);
+  assert.equal(passedProjection.uid, students[30]);
+  assert.equal(passedProjection.assignmentId, syncSourceId);
+  assert.equal(passedProjection.status, "passed");
+  assert.equal(passedProjection.percent, 100);
+  assert.equal(passedProjection.answerChecks[0].blankId, "sync-blank");
+  assert.equal(passedProjection.answerChecks[0].correctAnswer, "고려");
+  assert.equal(passedProjection.answerChecks[0].page, 2);
+  assert.equal(await teacherCount(), initialTeacherCount + 1);
+  assert.equal(await count(`${root}/notification_inboxes/disabled-quiz-staff/items`), 0, "staff without an enabled teacher portal cannot receive student outcomes");
+  assert.equal((await get(`${root}/notification_inboxes/teacher`)).unreadCount, await teacherCount());
+  await executeAuthenticated(student(students[30]), "submitAssessmentAttempt", passedPayload, lostSubmitId);
+  await executeAuthenticated(student(students[30]), "submitAssessmentAttempt", passedPayload);
+  assert.equal(await teacherCount(), initialTeacherCount + 1, "receipt replay and replayed submission share one pass alert");
+  const failedStart = await begin(students[31]);
+  await executeAuthenticated(student(students[31]), "submitAssessmentAttempt", submitPayload(failedStart, "오답"));
+  assert.equal((await get(`${root}/history_classroom_results/${failedStart.result.attemptId}`)).status, "failed");
+  assert.equal(await teacherCount(), initialTeacherCount + 1, "ordinary failure is visible in the result table without a pass alert");
+  await db.doc("site_settings/notification_config").set({ eventPolicies: { history_classroom_locked: {
+    titleTemplate: "{studentName} 확인", bodyTemplate: "{assignmentTitle}: {reason}",
+  } } });
+  const lockedStart = await begin(students[32]);
+  const lockPayload = { attemptId: lockedStart.result.attemptId, reason: "VISIBILITY_HIDDEN" };
+  await executeAuthenticated(student(students[32]), "lockHistoryClassroomAttempt", lockPayload);
+  await executeAuthenticated(student(students[32]), "lockHistoryClassroomAttempt", { ...lockPayload, reason: "NAVIGATION" });
+  const lockedProjection = await get(`${root}/history_classroom_results/${lockedStart.result.attemptId}`);
+  assert.equal(lockedProjection.status, "cancelled");
+  assert.equal(lockedProjection.lockReason, "VISIBILITY_HIDDEN");
+  const lockedAlert = (await teacherItems()).docs.find(doc => doc.data().entityId === lockedStart.result.attemptId).data();
+  assert.equal(lockedAlert.type, "history_classroom_locked");
+  assert.equal(lockedAlert.title, `합성 ${students[32]} 확인`);
+  assert.ok(lockedAlert.targetUrl.includes(`assignmentId=${syncSourceId}`));
+  assert.equal(await teacherCount(), initialTeacherCount + 2, "repeated lock commands produce one teacher alert");
+  await db.doc("site_settings/notification_config").set({ teacherNotificationsEnabled: false });
+  const disabledStart = await begin(students[33]);
+  await executeAuthenticated(student(students[33]), "submitAssessmentAttempt", submitPayload(disabledStart, "고려"));
+  assert.equal((await get(`${root}/history_classroom_results/${disabledStart.result.attemptId}`)).status, "passed");
+  assert.equal(await teacherCount(), initialTeacherCount + 2, "disabled teacher notifications still commit the teacher result projection");
+  await db.doc("site_settings/notification_config").delete();
+  const conflictStart = await begin(students[29]);
+  const conflictPath = `${root}/history_classroom_results/${conflictStart.result.attemptId}`;
+  await db.doc(conflictPath).set({ uid: "foreign-student", assignmentId: syncSourceId });
+  await assert.rejects(executeAuthenticated(student(students[29]), "submitAssessmentAttempt", submitPayload(conflictStart, "고려")));
+  assert.equal(await get(`semester_assessment_results/${conflictStart.result.attemptId}`), undefined);
+  assert.equal((await get(`semester_assessment_attempts/${conflictStart.result.attemptId}`)).status, "STARTED");
+  assert.equal(await teacherCount(), initialTeacherCount + 2, "a projection identity failure rolls back score, receipt and notification");
+  await db.doc(conflictPath).delete();
+  await executeAuthenticated(student(students[29]), "submitAssessmentAttempt", submitPayload(conflictStart, "고려"));
+  assert.equal(await teacherCount(), initialTeacherCount + 3);
+  const clearAt = Timestamp.now();
+  const passedAlertDoc = (await teacherItems()).docs.find(doc => doc.data().entityId === syncPassed.result.attemptId);
+  await passedAlertDoc.ref.delete();
+  await db.doc(`${root}/notification_inboxes/teacher`).set({ broadcastClearedAt: clearAt }, { merge: true });
+  await executeAuthenticated(student(students[30]), "submitAssessmentAttempt", passedPayload);
+  assert.equal((await passedAlertDoc.ref.get()).exists, false, "a replay must not restore an explicitly cleared old alert");
+  console.log("PASS exported history result integration: pass/fail and lock projections, teacher pass/check alerts, configured templates/disable policy, receipt+submission replay, response-loss recovery, atomic rollback, cleared-alert preservation");
+  const recoveryStart = await begin(students[28]);
+  await executeAuthenticated(student(students[28]), "lockHistoryClassroomAttempt", {
+    attemptId: recoveryStart.result.attemptId, reason: "NAVIGATION",
+  });
+  const recoveryProjectionPath = `${root}/history_classroom_results/${recoveryStart.result.attemptId}`;
+  const recoveryAlert = (await teacherItems()).docs.find(doc => doc.data().entityId === recoveryStart.result.attemptId);
+  await recoveryAlert.ref.delete();
+  await db.doc(recoveryProjectionPath).delete();
+  await db.doc(`${root}/history_classroom_results/${failedStart.result.attemptId}`).delete();
+  await db.doc(`${root}/history_classroom_results/${syncPassed.result.attemptId}`).delete();
+  const repair = require("../../scripts/repair-history-classroom-sync.cjs");
+  assert.throws(() => repair.parseArgs(["--apply"]), /explicit assignment IDs/);
+  const repairOptions = repair.parseArgs(["--project", projectId, "--assignment-id", syncSourceId, "--notify-since", clearAt.toDate().toISOString()]);
+  const immutableBeforeRepair = JSON.stringify(await get(`semester_assessment_results/${syncPassed.result.attemptId}`));
+  const rewardBeforeRepair = JSON.stringify(await get(`${wis.WIS_ACCOUNT_COLLECTION}/${wis.accountIdFor(semesterId, students[30])}`));
+  const dryRepair = await repair.runRepair({ db, options: repairOptions, createSync: production.createHistoryClassroomSync });
+  assert.equal(dryRepair.mode, "dry-run");
+  assert.equal(dryRepair.assignments[0].projections, 3);
+  assert.equal(dryRepair.assignments[0].notifications, 1, "only a missing new lock alert is recovered; cleared earlier passes stay cleared");
+  assert.equal(await get(recoveryProjectionPath), undefined, "repair defaults to no writes");
+  const appliedRepair = await repair.runRepair({ db, options: { ...repairOptions, apply: true }, createSync: production.createHistoryClassroomSync });
+  assert.equal(appliedRepair.assignments[0].projections, 3);
+  assert.equal((await get(recoveryProjectionPath)).status, "cancelled");
+  assert.equal((await recoveryAlert.ref.get()).exists, true);
+  const replayRepair = await repair.runRepair({ db, options: { ...repairOptions, apply: true }, createSync: production.createHistoryClassroomSync });
+  assert.equal(replayRepair.assignments[0].projections, 0);
+  assert.equal(replayRepair.assignments[0].notifications, 0);
+  assert.equal(JSON.stringify(await get(`semester_assessment_results/${syncPassed.result.attemptId}`)), immutableBeforeRepair);
+  assert.equal(JSON.stringify(await get(`${wis.WIS_ACCOUNT_COLLECTION}/${wis.accountIdFor(semesterId, students[30])}`)), rewardBeforeRepair);
+  const resetAuthTime = Math.floor(Date.now() / 1000) - 5;
+  const resetTeacher = { uid: teacher.uid, token: { ...teacher.token, auth_time: resetAuthTime } };
+  await db.doc(`application_sessions/${teacher.uid}/sessions/${resetAuthTime}`).set({
+    ...seed[`application_sessions/${teacher.uid}/sessions/${authTime}`], authTime: resetAuthTime,
+    highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+  });
+  await executeAuthenticated(resetTeacher, "resetAssessmentAttempt", { definitionId: syncDefinitionId, studentUid: students[28], reason: "복구 검증 후 교사 재응시 승인" });
+  await db.doc(recoveryProjectionPath).delete();
+  const { resetAt: omittedResetAt, resetBy: omittedResetBy, ...oldLock } = await get(`semester_assessment_attempts/${recoveryStart.result.attemptId}`);
+  const staleLockId = `attempt_${"e".repeat(64)}`;
+  await db.doc(`semester_assessment_attempts/${staleLockId}`).set({ ...oldLock, attemptId: staleLockId, studentUid: students[30],
+    enrollmentId: `enrollment_${students[30]}`, lockedAtIso: new Date(Date.parse(passedProjection.submittedAtIso) - 1).toISOString() });
+  const resetRepair = await repair.runRepair({ db, options: repairOptions, createSync: production.createHistoryClassroomSync });
+  assert.equal(resetRepair.assignments[0].projections, 0, "a reset lock is never recreated as a current teacher-check event");
+  assert.equal(await get(`${root}/history_classroom_results/${staleLockId}`), undefined, "a later canonical pass supersedes an old lock even without a reset marker");
+  console.log("PASS bounded history repair: explicit sources, dry-run, pass/fail/lock reconstruction, notification cutoff/clear preservation, idempotence, immutable scores and reward account unchanged, reset and superseded locks skipped");
   await db.doc(`semester_manifests/${semesterId}`).update({ status: "ARCHIVED" });
   await assert.rejects(execute(teacher, "grantHistoryClassroomExemptions", grantPayload), expectCode("failed-precondition"));
   await assert.rejects(applyDirect(4), expectCode("failed-precondition"));

@@ -190,16 +190,29 @@ export const loadNotifications = async (
     .slice(0, NOTIFICATION_LIMIT);
 };
 
-export const markNotificationsRead = async (config: ConfigLike) => {
+export const markNotificationsRead = async (
+  config: ConfigLike,
+  input?: { itemIds: string[]; broadcastReadThroughMs?: number },
+) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("markNotificationsRead");
-  await callable({ year, semester });
+  await callStudentDataService("manageNotificationInbox", {
+    year,
+    semester,
+    action: "MARK_READ",
+    itemIds: Array.from(new Set(input?.itemIds || [])),
+    ...(input?.broadcastReadThroughMs
+      ? { broadcastReadThroughMs: input.broadcastReadThroughMs }
+      : {}),
+  });
 };
 
 export const clearNotifications = async (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("clearNotifications");
-  await callable({ year, semester });
+  await callStudentDataService("manageNotificationInbox", {
+    year,
+    semester,
+    action: "CLEAR",
+  });
 };
 
 export const createManagedNotifications = async (

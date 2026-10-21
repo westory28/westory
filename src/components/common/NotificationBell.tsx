@@ -88,7 +88,8 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
   const targetUrl = String(notification.targetUrl || "").trim();
   if (
     notification.type === "history_classroom_submitted" ||
-    notification.type === "history_classroom_passed"
+    notification.type === "history_classroom_passed" ||
+    notification.type === "history_classroom_locked"
   ) {
     if (!targetUrl || targetUrl === "/teacher/quiz?menu=history2") {
       return "/teacher/quiz/history-classroom";
@@ -202,6 +203,20 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     scopeKey: "",
     unreadCount: 0,
   });
+  const notificationScopeKey = [
+    currentUser?.uid,
+    config?.year,
+    config?.semester,
+  ].join(":");
+  const notificationScopeKeyRef = useRef(notificationScopeKey);
+  notificationScopeKeyRef.current = notificationScopeKey;
+  const markingReadRef = useRef<{
+    scopeKey: string;
+    itemKeys: Set<string>;
+    pendingItemIds: Set<string>;
+    pendingBroadcastReadThroughMs: number;
+    queued: boolean;
+  } | null>(null);
 
   const includeBroadcasts = String(userData?.role || "").trim() === "student";
   const notificationSourcesReady =
@@ -423,6 +438,70 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     if (!open || !currentUser?.uid || !config) return undefined;
     let cancelled = false;
 
+    const markDisplayedNotificationsRead = async (
+      items: WestoryNotification[],
+    ) => {
+      const unreadItems = items.filter(
+        (item) =>
+          !item.readAt && (!item.broadcast || timestampMs(item.createdAt) > 0),
+      );
+      if (!unreadItems.length) return;
+
+      const pending = markingReadRef.current;
+      if (pending?.scopeKey === notificationScopeKey) {
+        for (const item of unreadItems) {
+          const key = getRealtimeToastKey(item);
+          if (pending.itemKeys.has(key)) continue;
+          pending.itemKeys.add(key);
+          if (item.broadcast) {
+            pending.pendingBroadcastReadThroughMs = Math.max(
+              pending.pendingBroadcastReadThroughMs,
+              timestampMs(item.createdAt),
+            );
+          } else pending.pendingItemIds.add(item.id);
+          pending.queued = true;
+        }
+        return;
+      }
+
+      const state = {
+        scopeKey: notificationScopeKey,
+        itemKeys: new Set(unreadItems.map(getRealtimeToastKey)),
+        pendingItemIds: new Set(
+          unreadItems.filter((item) => !item.broadcast).map((item) => item.id),
+        ),
+        pendingBroadcastReadThroughMs: Math.max(
+          0,
+          ...unreadItems
+            .filter((item) => item.broadcast)
+            .map((item) => timestampMs(item.createdAt)),
+        ),
+        queued: false,
+      };
+      markingReadRef.current = state;
+      try {
+        do {
+          state.queued = false;
+          const itemIds = Array.from(state.pendingItemIds);
+          const broadcastReadThroughMs = state.pendingBroadcastReadThroughMs;
+          state.pendingItemIds.clear();
+          state.pendingBroadcastReadThroughMs = 0;
+          await markNotificationsRead(config, {
+            itemIds,
+            ...(broadcastReadThroughMs ? { broadcastReadThroughMs } : {}),
+          });
+        } while (
+          state.queued &&
+          markingReadRef.current === state &&
+          notificationScopeKeyRef.current === notificationScopeKey
+        );
+      } catch (error) {
+        console.error("Failed to mark notifications as read:", error);
+      } finally {
+        if (markingReadRef.current === state) markingReadRef.current = null;
+      }
+    };
+
     const loadItems = async () => {
       try {
         const nextNotifications = await loadNotifications(
@@ -434,7 +513,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             broadcastClearedAt: inbox?.broadcastClearedAt,
           },
         );
-        if (!cancelled) setNotifications(nextNotifications);
+        if (cancelled) return;
+        setNotifications(nextNotifications);
+        void markDisplayedNotificationsRead(nextNotifications);
       } catch (error) {
         console.error("Failed to load notifications:", error);
       }
@@ -451,6 +532,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     includeBroadcasts,
     inbox?.broadcastClearedAt,
     inbox?.lastBroadcastReadAt,
+    inbox?.updatedAt,
+    broadcastNotifications,
+    notificationScopeKey,
     open,
   ]);
 
@@ -468,19 +552,6 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
-
-  useEffect(() => {
-    if (!open || !config) return;
-    const hasUnreadBroadcast = notifications.some(
-      (notification) => notification.broadcast && !notification.readAt,
-    );
-    if (unreadCount <= 0 && !hasUnreadBroadcast) return;
-    void markNotificationsRead(config)
-      .then(() => setPersonalUnreadCount(0))
-      .catch((error) => {
-        console.error("Failed to mark notifications as read:", error);
-      });
-  }, [config?.semester, config?.year, notifications, open, unreadCount]);
 
   const panelTitle = useMemo(
     () => (unreadCount > 0 ? `새 알림 ${displayUnreadCount}개` : "알림"),
@@ -501,7 +572,6 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     try {
       await clearNotifications(config);
       setNotifications([]);
-      setPersonalUnreadCount(0);
     } catch (error) {
       console.error("Failed to clear notifications:", error);
       showToast({

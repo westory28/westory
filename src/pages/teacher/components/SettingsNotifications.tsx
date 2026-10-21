@@ -250,6 +250,28 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     ],
   },
   {
+    key: "history_classroom_locked",
+    label: "역사교실 교사 확인 요청",
+    audience: "teachers",
+    description:
+      "학생의 화면 전환이나 페이지 이탈로 응시가 종료되면 교사에게 확인을 요청합니다.",
+    triggerLabel: "학생의 역사교실 응시가 화면 이탈로 종료되었을 때",
+    recipientLabel: "교사·평가 권한자",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "역사교실 확인 요청",
+    bodyTemplate:
+      "{studentName} 학생의 {assignmentTitle} 응시가 자동 종료되어 교사 확인이 필요합니다.",
+    targetUrl: "/teacher/quiz/history-classroom",
+    targetLabel: "교사 역사교실 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "assignmentTitle", label: "과제 이름" },
+      { key: "reason", label: "종료 사유" },
+    ],
+  },
+  {
     key: "history_classroom_submitted",
     label: "역사교실 제출 완료",
     audience: "teachers",

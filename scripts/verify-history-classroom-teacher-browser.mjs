@@ -287,13 +287,20 @@ export const useAuth=()=>({config,userData:{uid:'teacher-fixture',role:'teacher'
 const ref=(...parts)=>({path:parts.filter(p=>typeof p==='string').join('/')});
 export const collection=(_db,...parts)=>ref(...parts);
 export const doc=(_db,...parts)=>ref(...parts);
-export const query=(reference)=>reference;
+export const query=(reference,...filters)=>({...reference,filters:filters.filter(Boolean)});
+export const where=(field,operator,value)=>({field,operator,value});
 export const orderBy=()=>null;
 export const limit=()=>null;
 export const serverTimestamp=()=>({seconds:1790676000,nanoseconds:0});
 const snap=(key,value)=>({id:key.split('/').at(-1),exists:()=>value!==undefined,data:()=>structuredClone(value)});
 export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return snap(reference.path,fixture.store[reference.path]);};
-export const getDocs=async(reference)=>{fixture.reads.push(reference.path);const docs=Object.entries(fixture.store).filter(([key])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
+export const getDocs=async(reference)=>{fixture.reads.push(reference.path);if(fixture.failResultReads&&reference.path==='semester_assessment_results')throw new Error('Expected canonical result read failure');const docs=Object.entries(fixture.store).filter(([key,value])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')&&(reference.filters||[]).every(filter=>filter.operator==='in'?filter.value.includes(value[filter.field]):value[filter.field]===filter.value)).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
+export const onSnapshot=(reference,next,error)=>{
+ let active=true;
+ const refresh=()=>{getDocs(reference).then(snapshot=>{if(active)next(snapshot);}).catch(failure=>{if(active)error(failure);});};
+ refresh();window.addEventListener('fixture-change',refresh);
+ return ()=>{active=false;window.removeEventListener('fixture-change',refresh);};
+};
 export const getDocFromServer=getDoc;
 export const getDocsFromServer=getDocs;
 export const setDoc=async(reference,payload,options)=>{
@@ -358,7 +365,7 @@ export const executeAssessmentManagementCommand=async(commandType,payload)=>{
   const resultPath=${JSON.stringify(scope)}+'/history_classroom_results/'+resultId;
   const requestId='synthetic-direct-request-'+payload.assignmentId+'-'+payload.studentUid;
   const timestamp=serverTimestamp();
-  const result={resultId,definitionId:'history_classroom:'+payload.semesterId+':'+payload.assignmentId,semesterId:payload.semesterId,assignmentId:payload.assignmentId,assignmentTitle:source.title,uid:payload.studentUid,studentUid:payload.studentUid,studentName:ticket.studentName,studentGrade:'3',studentClass:'2',studentNumber:ticket.studentNumber,status:'passed',passed:true,score:source.blanks.length,total:source.blanks.length,percent:100,passThresholdPercent:source.passThresholdPercent,completionSource:'exemption',exemptionId:payload.exemptionId,exemptionRequestId:requestId,origin:'teacher_direct',initiatedByUid:'teacher-fixture',approvedByUid:'teacher-fixture',approvedAt:timestamp,createdAt:timestamp,updatedAt:timestamp,answers:{},answerChecks:[],reward:{status:'NOT_ELIGIBLE',awarded:false,totalAwarded:0}};
+  const result={resultId,definitionId:'history_classroom:'+payload.semesterId+':'+payload.assignmentId,semesterId:payload.semesterId,assignmentId:payload.assignmentId,assignmentTitle:source.title,uid:payload.studentUid,studentUid:payload.studentUid,studentName:ticket.studentName,studentGrade:'3',studentClass:'2',studentNumber:ticket.studentNumber,status:'passed',passed:true,score:source.blanks.length,total:source.blanks.length,percent:100,passThresholdPercent:source.passThresholdPercent,completionSource:'exemption',exemptionId:payload.exemptionId,exemptionRequestId:requestId,origin:'teacher_direct',initiatedByUid:'teacher-fixture',approvedByUid:'teacher-fixture',approvedAt:timestamp,submittedAtIso:new Date(timestamp.seconds*1000).toISOString(),createdAt:timestamp,updatedAt:timestamp,answers:{},answerChecks:[],reward:{status:'NOT_ELIGIBLE',awarded:false,totalAwarded:0}};
   fixture.store[ticketPath]={...ticket,status:'used',usedAssignmentId:payload.assignmentId,usedByUid:payload.studentUid,usedAt:timestamp,origin:'teacher_direct',initiatedByUid:'teacher-fixture',exemptionRequestId:requestId};
   fixture.store[resultPath]=result;
   fixture.store['semester_assessment_results/'+resultId]=structuredClone(result);
@@ -377,7 +384,7 @@ const component = JSON.stringify(
 );
 const bundle = await build({
   stdin: {
-    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import Manage from ${component};const root=createRoot(document.getElementById('root'));let revision=0;window.__remount=()=>root.render(<MemoryRouter key={++revision}><Manage/></MemoryRouter>);window.__remount();`,
+    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import {AppToastProvider} from './src/components/common/AppToastProvider';import Manage from ${component};const root=createRoot(document.getElementById('root'));let revision=0;window.__remount=(route='/')=>root.render(<MemoryRouter key={++revision} initialEntries={[route]}><AppToastProvider><Manage/></AppToastProvider></MemoryRouter>);window.__remount();`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -563,12 +570,21 @@ const snapshotFields = (assignment) =>
       "answerOptions",
     ].map((key) => [key, assignment[key]]),
   );
+const dismissToasts = async (page) => {
+  for (let index=0;index<8;index++) {
+    const close=page.locator('.ws-toast button').first();
+    if (!await close.count()) break;
+    await close.click();
+  }
+};
 const waitWrite = async (page, count) => {
   await page.waitForFunction(
     (count) => window.__fixture.writes.length === count,
     count,
   );
-  return page.evaluate(() => window.__fixture.writes.at(-1));
+  const written = await page.evaluate(() => window.__fixture.writes.at(-1));
+  await dismissToasts(page);
+  return written;
 };
 const measure = async (page, id) =>
   page.locator(id).evaluate((el) => {
@@ -722,13 +738,13 @@ const assertAttemptColumnAlignment = async (panel) => {
   return geometry;
 };
 try {
-  for (const viewport of [
+  for (const viewport of (process.argv.includes('--results-only') ? [] : [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
     { width: 1280, height: 900 },
     { width: 1366, height: 768 },
-  ]) {
+  ])) {
     const page = await browser.newPage({ viewport, hasTouch: true });
     const errors = [],
       alerts = [];
@@ -1595,7 +1611,8 @@ try {
     await grantButton.waitFor();
     assert.equal(await exemptionModal.getByPlaceholder("예: 학교 행사, 공결, 상담 등").inputValue(), "학급 활동 참여");
     await exemptionModal.getByText("부여 대상 32명 · 제외 2명", { exact: true }).waitFor();
-    assert(alerts.includes("서버 처리 결과를 확인하지 못했습니다. 잠시 후 같은 내용으로 다시 시도해 주세요."));
+    await page.getByText("서버 처리 결과를 확인하지 못했습니다. 잠시 후 같은 내용으로 다시 시도해 주세요.", { exact: true }).waitFor();
+    await dismissToasts(page);
     const failedGrant = await page.evaluate(() => window.__fixture.commands.at(-1));
     await grantButton.click();
     await page.waitForFunction(() => window.__fixture.commands.filter(command => command.commandType === "grantHistoryClassroomExemptions").length === 2);
@@ -1652,6 +1669,91 @@ try {
       `teacher ${viewport.width}px create/edit/source-switch/snapshot/attempt-history/reset: passed`,
     );
   }
+  const resultPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const resultErrors = [];
+  resultPage.on("pageerror", error => resultErrors.push(error.message));
+  await resultPage.route("**/*", route => route.request().url().startsWith(`http://127.0.0.1:${server.address().port}`) ? route.continue() : route.abort());
+  await resultPage.goto(`http://127.0.0.1:${server.address().port}/`);
+  const resultSeed = structuredClone(serveStore);
+  const sourceId = seededAssignmentPath.split("/").at(-1);
+  const resultStudents = assignedStudents.slice(0, 4);
+  const seedSource = resultSeed[seededAssignmentPath];
+  seedSource.targetStudentUids = resultStudents.map(student => student.uid);
+  seedSource.targetStudentAccessMap = Object.fromEntries(resultStudents.map(student => [student.uid, true]));
+  seedSource.targetStudentNames = resultStudents.map(student => student.name);
+  resultSeed[`${scope}/history_classroom_exemptions/results-ticket`] = syntheticTicket(resultStudents[2]);
+  const canonical = (id, student, passed, percent, time) => ({
+    resultId: id, attemptId: id, definitionId: `history_classroom:2026-2:${sourceId}`,
+    semesterId: "2026-2", assessmentKind: "HISTORY_CLASSROOM", studentUid: student.uid,
+    score: passed ? 2 : 1, total: 2, percent, passed, passThresholdPercent: 90,
+    answerChecks: [{ id: "saved-ocr", correct: true }, { id: "saved-manual", correct: passed }],
+    submittedAtIso: time, submissionRef: `semester_assessment_submissions/${id}`,
+  });
+  for (const [id, passed, percent, time] of [
+    ["canonical-failure", false, 72, "2026-10-21T00:00:00Z"],
+    ["canonical-retry-pass", true, 97, "2026-10-21T00:10:00Z"],
+  ]) {
+    resultSeed[`semester_assessment_results/${id}`] = canonical(id, resultStudents[1], passed, percent, time);
+    resultSeed[`semester_assessment_submissions/${id}`] = { attemptId: id, studentUid: resultStudents[1].uid,
+      definitionId: `history_classroom:2026-2:${sourceId}`, semesterId: "2026-2", answers: { "saved-ocr": "고조선", "saved-manual": "삼국 시대" } };
+  }
+  await resultPage.evaluate(({ seed, id }) => {
+    window.__fixture.store = seed;
+    window.__remount(`/?assignmentId=${encodeURIComponent(id)}`);
+  }, { seed: resultSeed, id: sourceId });
+  const resultPanel = resultPage.getByRole("region", { name: "응시 현황 및 제출 내역" });
+  await resultPanel.waitFor();
+  const untouched = resultPanel.getByRole("row", { name: `${resultStudents[0].name} 응시 현황`, exact: true });
+  const retryPassed = resultPanel.getByRole("row", { name: `${resultStudents[1].name} 응시 현황`, exact: true });
+  await retryPassed.getByText("통과", { exact: true }).waitFor();
+  await untouched.getByText("응시 전", { exact: true }).waitFor();
+  assert.equal(await retryPassed.getByText("97%", { exact: true }).count(), 1);
+  assert.equal(await retryPassed.getByText("면제 완료", { exact: true }).count(), 0);
+  assert.equal(await resultPage.evaluate(() => window.__fixture.reads.filter(path => path.startsWith("semester_assessment_submissions/")).length), 0,
+    "Canonical results load without fetching submitted answers");
+  await resultPage.evaluate(({ result }) => {
+    window.__fixture.store[`semester_assessment_results/${result.attemptId}`] = result;
+    window.dispatchEvent(new CustomEvent("fixture-change"));
+  }, { result: canonical("canonical-live-pass", resultStudents[0], true, 93, "2026-10-21T00:20:00Z") });
+  await untouched.getByText("통과", { exact: true }).waitFor();
+  await untouched.getByText("93%", { exact: true }).waitFor();
+  await retryPassed.click();
+  const detail = resultPage.locator(`#${await retryPassed.getAttribute("aria-controls")}`);
+  assert.equal(await detail.getByRole("button", { name: `${resultStudents[1].name} 제출 자료 확인`, exact: true }).count(), 2, "Failed and passed attempts both remain reviewable");
+  await detail.getByRole("button", { name: `${resultStudents[1].name} 제출 자료 확인`, exact: true }).first().click();
+  await resultPage.getByRole("img", { name: `${longTitle} 1`, exact: true }).waitFor();
+  assert.equal(await resultPage.evaluate(() => window.__fixture.reads.filter(path => path.startsWith("semester_assessment_submissions/")).length), 1,
+    "Opening a canonical review lazily reads its immutable submitted answers once");
+  await resultPage.getByRole("button", { name: "닫기", exact: true }).last().click();
+  await resultPage.getByRole("switch").click();
+  await resultPage.getByRole("button", { name: "설정 저장", exact: true }).click();
+  await resultPage.getByText("학생에게 비공개로 전환했습니다.", { exact: true }).waitFor();
+  await dismissToasts(resultPage);
+  await resultPage.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true }).click();
+  await resultPage.getByRole("switch").click();
+  await resultPage.getByRole("button", { name: "설정 저장", exact: true }).click();
+  await resultPage.getByText("학생에게 공개로 전환했습니다.", { exact: true }).waitFor();
+  await dismissToasts(resultPage);
+  await resultPage.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true }).click();
+  await resultPage.getByRole("button", { name: new RegExp(`${resultStudents[2].name} 면제권 1장 사용`) }).click();
+  await resultPage.getByText("면제권을 사용했습니다.", { exact: true }).waitFor();
+  await dismissToasts(resultPage);
+  await resultPanel.getByRole("row", { name: `${resultStudents[2].name} 응시 현황`, exact: true }).getByText("면제 완료", { exact: true }).waitFor();
+  assert.equal(await resultPanel.getByText("4명 · 제출 4건", { exact: true }).count(), 1,
+    "Canonical and projected exemption copies do not duplicate submission counts");
+  await resultPage.screenshot({ path: path.join(evidence, "teacher-canonical-results-1280.png"), fullPage: true });
+  await resultPage.evaluate(() => { window.__fixture.failResultReads = true; window.dispatchEvent(new CustomEvent("fixture-change")); });
+  await resultPanel.getByRole("alert").waitFor();
+  await untouched.getByText("통과", { exact: true }).waitFor();
+  const unresolved = resultPanel.getByRole("row", { name: `${resultStudents[3].name} 응시 현황`, exact: true });
+  await unresolved.getByText("확인 불가", { exact: true }).waitFor();
+  assert.equal(await unresolved.getByText("응시 전", { exact: true }).count(), 0, "Read failures are not shown as an unattempted student");
+  assert.equal(await unresolved.getByRole("button", { name: /재응시 제한 리셋$/ }).count(), 0);
+  assert.equal(await resultPage.evaluate(() => window.__fixture.commands.filter(command => command.commandType === "applyHistoryClassroomExemption").length), 1);
+  assert.deepEqual(resultErrors, [], "Canonical result, review, publication and exemption actions have no runtime errors");
+  reports.push({ viewport: { width: 1280, height: 900 }, canonicalResults: "live pass; failed then passed; immutable review; publication and exemption toasts; preserved results on read error", errors: resultErrors });
+  await resultPage.close();
+  console.log("teacher canonical realtime results, retry history, deep links, publication/exemption toasts and read failure: passed");
 } finally {
   await fs.writeFile(
     path.join(evidence, "teacher-browser-report.json"),

@@ -61,6 +61,7 @@ const output = await build({
   },
   bundle: true,
   write: false,
+  outfile: path.join(evidence, "student-index-fixture.js"),
   format: "esm",
   platform: "browser",
   define: { "process.env.NODE_ENV": '"production"', "import.meta.env": "{}" },
@@ -93,7 +94,8 @@ const css = (
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
-const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const importedCss = output.outputFiles.filter(file => file.path.endsWith(".css")).map(file => file.text).join("\n");
+const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}\n${importedCss}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((req, res) => {
   res.setHeader(
     "Content-Type",
@@ -103,7 +105,7 @@ const server = http.createServer((req, res) => {
   );
   res.end(
     req.url === "/fixture.js"
-      ? output.outputFiles[0].text
+      ? output.outputFiles.find(file => file.path.endsWith(".js")).text
       : req.url === "/tailwind.js"
         ? tailwind
         : html,

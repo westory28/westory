@@ -8,6 +8,7 @@ const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 const historyExemptions = require("./historyClassroomExemptions");
 const learning = require("./assessmentLearning");
+const { createHistoryClassroomSync } = require("./historyClassroomSync");
 
 const REGION = "asia-northeast3";
 const ASSESSMENT_SCHEMA_VERSION = 1;
@@ -651,11 +652,12 @@ const assertContentRevision = (snapshot, expectedRevision, label) => {
   return currentRevision;
 };
 
-const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = null } = {}) => ({
+const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = null,
+  historySync = createHistoryClassroomSync({ now }) } = {}) => ({
   apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, concreteTimestamp, actor }) => {
     if (Object.values(historyExemptions.COMMAND_TYPES).includes(commandType))
       return historyExemptions.apply({ transaction, commandId, commandType, payload, actor, timestamp,
-        helpers: { assertActiveEnrollment, assertTeacherActor, assertStudentActor, assertAssessmentSemesterWritable, now } });
+        helpers: { assertActiveEnrollment, assertTeacherActor, assertStudentActor, assertAssessmentSemesterWritable, now, historySync } });
     if (commandType === ASSESSMENT_COMMAND_TYPES.LOCK_HISTORY_CLASSROOM_ATTEMPT) {
       assertStudentActor(actor);
       const path = attemptPath(payload.attemptId);
@@ -668,9 +670,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         fail("failed-precondition", "This attempt is no longer active.", "ASSESSMENT_ATTEMPT_NOT_WRITABLE");
       const settled = ["SUBMITTED", "LOCKED"].includes(attempt.status);
       const revision = Number(attempt.revision || 0) + (settled ? 0 : 1);
+      const historyPlan = attempt.status !== "SUBMITTED" && ["VISIBILITY_HIDDEN", "NAVIGATION"].includes(settled ? attempt.lockReason : payload.reason)
+        ? await historySync.prepareAttempt({ transaction, attempt: { ...attempt, lockedAtIso: attempt.lockedAtIso || now().toISOString() },
+          lockReason: settled ? attempt.lockReason : payload.reason, timestamp }) : null;
       if (!settled) transaction.set(path, { status: "LOCKED", revision, lockReason: payload.reason,
         lockedAtIso: now().toISOString(), updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "assessment-attempt-lock", id: payload.attemptId, refs: [path] }, sourceHash: attempt.sourceHash || null,
+      historyPlan?.apply();
+      return { target: { kind: "assessment-attempt-lock", id: payload.attemptId, refs: [path, ...(historyPlan?.refs || [])] }, sourceHash: attempt.sourceHash || null,
         result: { attemptId: payload.attemptId, status: settled ? attempt.status : "LOCKED", revision } };
     }
     if (commandType === ASSESSMENT_COMMAND_TYPES.UPSERT_QUIZ_QUESTION) {
@@ -777,6 +783,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         normalizeIso(source.publishedAt, "publishedAt");
         normalizeIso(source.dueAt, "dueAt");
       }
+      const previousStudentUids = new Set(definition.data?.assignedStudentUids || snapshot.data?.targetStudentUids ||
+        (snapshot.data?.targetStudentUid ? [snapshot.data.targetStudentUid] : []));
+      const previouslyPublished = snapshot.data?.isPublished === true && definition.data?.status === "PUBLISHED";
+      const assignmentNotifications = savedDefinition ? await historySync.prepareAssignment({ transaction, semesterId: payload.semesterId,
+        assignmentId: payload.sourceId, assignmentTitle: source.title, revision: nextRevision, actorUid: actor.actorUid, timestamp,
+        recipientUids: savedDefinition.assignedStudentUids.filter(uid => !previouslyPublished || !previousStudentUids.has(uid)),
+      }) : null;
       transaction.set(path, {
         ...source,
         // Reset permission is owned by reset commands; a stale editor must not
@@ -796,7 +809,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       else if (definition.exists && definition.data?.status === "PUBLISHED")
         transaction.set(definition.path, { status: "PAUSED", revision: Number(definition.data.revision || 0) + 1,
           transitionReason: payload.reason, updatedAt: timestamp, updatedBy: actor.actorUid, commandId }, { merge: true });
-      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(savedDefinition || (definition.exists && definition.data?.status === "PUBLISHED") ? [definitionPath(definitionId)] : [])] }, sourceHash: sha256(canonicalJson(source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision,
+      assignmentNotifications?.apply();
+      return { target: { kind: "history-classroom-source", id: payload.sourceId, refs: [path, ...(savedDefinition || (definition.exists && definition.data?.status === "PUBLISHED") ? [definitionPath(definitionId)] : []), ...(assignmentNotifications?.refs || [])] }, sourceHash: sha256(canonicalJson(source)), result: { sourceId: payload.sourceId, contentRevision: nextRevision,
         ...(atomicSave ? { definitionId, status: savedDefinition?.status || (definition.data?.status === "PUBLISHED" ? "PAUSED" : definition.data?.status || "DRAFT"),
           definitionRevision: savedDefinition?.revision || Number(definition.data?.revision || 0) + (definition.data?.status === "PUBLISHED" ? 1 : 0),
           publicationWindow: { publishedAt: source.publishedAt || null, dueAt: source.dueAt || null } } : {}) } };
@@ -1085,7 +1099,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
             .filter(document => selectedIds.includes(String(document.data?.id ?? document.path.split("/").at(-1))))
             .map(document => [String(document.data?.id ?? document.path.split("/").at(-1)), document.path.split("/").at(-1)])),
         } : {}),
-        ...(definition.assessmentKind === "HISTORY_CLASSROOM" ? { passThresholdPercent: source.passThresholdPercent } : {}),
+        ...(definition.assessmentKind === "HISTORY_CLASSROOM" ? { sourceId: definition.sourceId, assignmentId: definition.sourceId,
+          assignmentTitle: definition.title, passThresholdPercent: source.passThresholdPercent } : {}),
         sourceHash: source.sourceHash,
         startedAtIso: nowDate.toISOString(),
         deadlineAtIso: new Date(deadlineMs).toISOString(),
@@ -1119,7 +1134,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
           fail("failed-precondition", "Assessment result is inconsistent.", "ASSESSMENT_RESULT_INVALID");
         const reward = result.reward || { status: "NOT_RECORDED", awarded: false, duplicate: false, amount: 0, bonusAwarded: false,
           bonusAmount: 0, totalAwarded: 0, blockedReason: "reward_not_recorded", blockedMessage: "이전 제출의 보상 확인 기록이 없습니다.", ledgerEntryIds: [] };
-        return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
+        const historyPlan = await historySync.prepareAttempt({ transaction, attempt, result, timestamp });
+        historyPlan.apply();
+        return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef, ...historyPlan.refs] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
           score: result.score, total: result.total, percent: result.percent, ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
@@ -1147,6 +1164,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const reviewSnapshots = attempt.assessmentKind === "QUIZ" && Array.isArray(attempt.questionSnapshots)
         ? learning.boundQuestionSnapshots(attempt.questionSnapshots, attempt.questionIds || [],
           { ...attempt, questionSnapshots: undefined, answers: effectiveAnswers, analytics }) : {};
+      const historyPlan = await historySync.prepareAttempt({ transaction, attempt, answers: effectiveAnswers,
+        result: { score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, submittedAtIso, createdAt: timestamp }, timestamp });
       // No reads below this point: score, reward ledger/projections and receipt
       // are committed together, or none of them are committed.
       transaction.create(immutableSubmissionPath, {
@@ -1196,7 +1215,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       });
       transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}), submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
       rewardPlan.apply();
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
+      historyPlan.apply();
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {

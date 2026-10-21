@@ -8168,3 +8168,8 @@ exports.getHistoryDictionaryContinuity = onCall({ region: REGION, timeoutSeconds
   require('./historyDictionaryContinuity').createHistoryDictionaryContinuityHandler({ db }));
 
 exports.claimStudentLearningReward = onCall({ region: REGION }, require("./studentLearningReward").createStudentLearningRewardHandler({ db, loadPolicy }));
+
+// Personal inbox state uses its own session-guarded transport. Retired legacy
+// notification writers remain outside the deployment targets.
+exports.manageNotificationInbox = onCall({ region: REGION },
+  require('./notificationInbox').createNotificationInboxHandler({ db }));

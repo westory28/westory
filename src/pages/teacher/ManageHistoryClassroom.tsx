@@ -12,13 +12,15 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
+import { useAppToast } from "../../components/common/AppToastProvider";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
@@ -71,14 +73,20 @@ import {
   readHistoryClassroomLessonSources,
   type HistoryClassroomLessonSource,
 } from "../../lib/historyClassroomLessonSources";
-import { createManagedNotifications } from "../../lib/notifications";
 import {
   isActiveRosterStudent,
   isStudentRosterProfile,
 } from "../../lib/studentRoster";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
+import {
+  getTeacherHistoryCompletion,
+  getTeacherHistoryCompletionsByUid,
+  mergeTeacherHistoryResults,
+  normalizeTeacherCanonicalHistoryResult,
+  readTeacherHistorySubmissionAnswers,
+  type TeacherHistoryClassroomResult,
+} from "./components/historyClassroomResults";
 
-const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
 const NEW_ASSIGNMENT_DEFAULTS = {
   timeLimitMinutes: 10,
   cooldownMinutes: 5,
@@ -1492,6 +1500,7 @@ const AssignedStudentRow: React.FC<{
 
 const ManageHistoryClassroom: React.FC = () => {
   const { config, userData } = useAuth();
+  const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [lessonSources, setLessonSources] = useState<
     HistoryClassroomLessonSource[]
@@ -1502,9 +1511,13 @@ const ManageHistoryClassroom: React.FC = () => {
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
+  const [assignmentReadScope, setAssignmentReadScope] = useState("");
   const [resultsByAssignment, setResultsByAssignment] = useState<
-    Record<string, HistoryClassroomResult[]>
+    Record<string, TeacherHistoryClassroomResult[]>
   >({});
+  const [resultLoadError, setResultLoadError] = useState("");
+  const [unverifiedResultAssignmentIds, setUnverifiedResultAssignmentIds] =
+    useState<string[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [exemptions, setExemptions] = useState<HistoryClassroomExemption[]>([]);
   const [exemptionRequests, setExemptionRequests] = useState<
@@ -1652,6 +1665,11 @@ const ManageHistoryClassroom: React.FC = () => {
     {},
   );
   const [reviewResultId, setReviewResultId] = useState("");
+  const [reviewSubmission, setReviewSubmission] = useState<{
+    resultId: string;
+    answers: Record<string, string>;
+  } | null>(null);
+  const [reviewSubmissionError, setReviewSubmissionError] = useState("");
   const [reviewCurrentPage, setReviewCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   useEffect(() => {
@@ -1669,8 +1687,16 @@ const ManageHistoryClassroom: React.FC = () => {
   const preserveBlankResetRef = React.useRef(false);
   const blankEditorComposingRef = React.useRef(false);
   const blankEditorCommitLockRef = React.useRef(false);
+  const exemptionReadVersionRef = React.useRef(0);
+  const exemptionReadScopeRef = React.useRef("");
+  exemptionReadScopeRef.current = `${getAssessmentSemesterId(config)}:${userData?.uid || ""}`;
 
   const loadExemptionData = React.useCallback(async () => {
+    const version = ++exemptionReadVersionRef.current;
+    const scope = exemptionReadScopeRef.current;
+    const isCurrent = () =>
+      version === exemptionReadVersionRef.current &&
+      scope === exemptionReadScopeRef.current;
     setLoadingExemptions(true);
     setExemptionLoadError("");
     try {
@@ -1686,6 +1712,7 @@ const ManageHistoryClassroom: React.FC = () => {
         getDocs(collection(db, exemptionPath)),
         getDocs(collection(db, requestPath)),
       ]);
+      if (!isCurrent()) return;
       setExemptions(
         exemptionSnap.docs
           .map((docSnap) =>
@@ -1712,16 +1739,18 @@ const ManageHistoryClassroom: React.FC = () => {
           ),
       );
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load history classroom exemption data:", error);
       setExemptionLoadError(
         "면제권 내역을 불러오지 못했습니다. 새로고침해 주세요.",
       );
     } finally {
-      setLoadingExemptions(false);
+      if (isCurrent()) setLoadingExemptions(false);
     }
-  }, [config]);
+  }, [config, userData?.uid]);
 
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       setRefreshingDashboard(true);
       try {
@@ -1747,6 +1776,7 @@ const ManageHistoryClassroom: React.FC = () => {
               compareSchoolValues(a.number, b.number) ||
               a.name.localeCompare(b.name, "ko"),
           );
+        if (cancelled) return;
         setStudents(loadedStudents);
 
         let assignmentPath = getSemesterCollectionPath(
@@ -1765,6 +1795,10 @@ const ManageHistoryClassroom: React.FC = () => {
             ),
           );
         }
+        if (cancelled) return;
+        setAssignmentReadScope(
+          `${getAssessmentSemesterId(config)}:${userData?.uid || ""}`,
+        );
         assignmentCollectionPathsRef.current = Object.fromEntries(
           assignmentSnap.docs.map((item) => [item.id, assignmentPath]),
         );
@@ -1776,38 +1810,6 @@ const ManageHistoryClassroom: React.FC = () => {
             .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
         );
 
-        const resultPath = getSemesterCollectionPath(
-          config,
-          "history_classroom_results",
-        );
-        let resultSnap = await getDocs(
-          query(
-            collection(db, resultPath),
-            orderBy("createdAt", "desc"),
-            limit(HISTORY_CLASSROOM_RESULT_LIMIT),
-          ),
-        );
-        if (resultSnap.empty) {
-          resultSnap = await getDocs(
-            query(
-              collection(db, "history_classroom_results"),
-              orderBy("createdAt", "desc"),
-              limit(HISTORY_CLASSROOM_RESULT_LIMIT),
-            ),
-          );
-        }
-        const groupedResults: Record<string, HistoryClassroomResult[]> = {};
-        resultSnap.docs.forEach((docSnap) => {
-          const result = normalizeHistoryClassroomResult(
-            docSnap.id,
-            docSnap.data(),
-          );
-          groupedResults[result.assignmentId] = [
-            ...(groupedResults[result.assignmentId] || []),
-            result,
-          ];
-        });
-        setResultsByAssignment(groupedResults);
         void loadExemptionData();
       } catch (error) {
         console.error(
@@ -1815,19 +1817,230 @@ const ManageHistoryClassroom: React.FC = () => {
           error,
         );
       } finally {
-        setRefreshingDashboard(false);
+        if (!cancelled) setRefreshingDashboard(false);
       }
     };
 
     void loadData();
-  }, [config, dashboardRefreshKey, loadExemptionData]);
+    return () => {
+      cancelled = true;
+    };
+  }, [config, dashboardRefreshKey, loadExemptionData, userData?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const snapshots = new Map<string, TeacherHistoryClassroomResult[]>();
+    const waiting = new Set<string>();
+    const failures = new Set<string>();
+    const unsubscribe: Array<() => void> = [];
+    const sourceAssignmentIds = new Map<string, string[]>();
+    const legacyFallbacks = new Map<
+      number,
+      { signature: string; stop: () => void }
+    >();
+    const semesterId = getAssessmentSemesterId(config);
+    if (assignmentReadScope !== `${semesterId}:${userData?.uid || ""}`) {
+      setUnverifiedResultAssignmentIds(
+        assignments.map((assignment) => assignment.id),
+      );
+      setResultsByAssignment({});
+      return;
+    }
+    const assignmentIds = assignments.map((assignment) => assignment.id);
+    const batches = Array.from(
+      { length: Math.ceil(assignmentIds.length / 10) },
+      (_, index) => assignmentIds.slice(index * 10, index * 10 + 10),
+    );
+    setUnverifiedResultAssignmentIds(assignmentIds);
+    setResultLoadError("");
+    if (!assignmentIds.length) {
+      setResultsByAssignment({});
+      return;
+    }
+    const publish = () => {
+      if (cancelled) return;
+      const legacy = [...snapshots.entries()]
+        .filter(([key]) => !key.startsWith("canonical:"))
+        .flatMap(([, results]) => results);
+      const canonical = [...snapshots.entries()]
+        .filter(([key]) => key.startsWith("canonical:"))
+        .flatMap(([, results]) => results);
+      // A failed source must not erase a successful result from the last read.
+      setResultsByAssignment((previous) =>
+        mergeTeacherHistoryResults(
+          failures.size || waiting.size
+            ? [...Object.values(previous).flat(), ...legacy]
+            : legacy,
+          canonical,
+        ),
+      );
+      setUnverifiedResultAssignmentIds([
+        ...new Set(
+          [...waiting, ...failures].flatMap(
+            (key) => sourceAssignmentIds.get(key) || [],
+          ),
+        ),
+      ]);
+      setResultLoadError(
+        failures.size
+          ? "일부 역사교실 결과를 확인하지 못했습니다. 새로고침해 주세요."
+          : "",
+      );
+    };
+    type ResultSource = { name: string; path: string; field: string };
+    const sources: ResultSource[] = [
+      {
+        name: "semester",
+        path: getSemesterCollectionPath(config, "history_classroom_results"),
+        field: "assignmentId",
+      },
+      {
+        name: "canonical",
+        path: "semester_assessment_results",
+        field: "definitionId",
+      },
+    ];
+    const updateLegacyFallback = (ids: string[], index: number) => {
+      const key = `legacy:${index}`;
+      const signature = ids.join("\n");
+      if (legacyFallbacks.get(index)?.signature === signature) return;
+      legacyFallbacks.get(index)?.stop();
+      legacyFallbacks.delete(index);
+      snapshots.delete(key);
+      waiting.delete(key);
+      failures.delete(key);
+      if (!ids.length) return;
+      waiting.add(key);
+      sourceAssignmentIds.set(key, ids);
+      const stop = subscribe(
+        {
+          name: "legacy",
+          path: "history_classroom_results",
+          field: "assignmentId",
+        },
+        ids,
+        index,
+      );
+      legacyFallbacks.set(index, { signature, stop });
+    };
+    function subscribe(source: ResultSource, ids: string[], index: number) {
+      const key = `${source.name}:${index}`;
+      let listening = true;
+      sourceAssignmentIds.set(key, ids);
+      const values =
+        source.name === "canonical"
+          ? ids.map((id) =>
+              buildAssessmentDefinitionId(semesterId, "HISTORY_CLASSROOM", id),
+            )
+          : ids;
+      const disconnect = onSnapshot(
+        query(collection(db, source.path), where(source.field, "in", values)),
+        (snapshot) => {
+          if (cancelled || !listening) return;
+          try {
+            const results = snapshot.docs.flatMap((item) => {
+              if (source.name === "canonical") {
+                const result = normalizeTeacherCanonicalHistoryResult(
+                  item.id,
+                  item.data(),
+                  semesterId,
+                  assignments,
+                );
+                return result ? [result] : [];
+              }
+              const result = normalizeHistoryClassroomResult(
+                item.id,
+                item.data(),
+              );
+              const assignment = assignments.find(
+                (item) => item.id === result.assignmentId,
+              );
+              return assignment &&
+                getHistoryClassroomAssignedStudentUids(assignment).includes(
+                  result.uid,
+                )
+                ? [result]
+                : [];
+            });
+            snapshots.set(key, results);
+            failures.delete(key);
+            if (source.name === "semester")
+              updateLegacyFallback(
+                ids.filter(
+                  (id) => !results.some((result) => result.assignmentId === id),
+                ),
+                index,
+              );
+          } catch (error) {
+            console.error(
+              "Failed to verify history classroom result snapshot",
+              error,
+            );
+            failures.add(key);
+          }
+          waiting.delete(key);
+          publish();
+        },
+        (error) => {
+          if (cancelled || !listening) return;
+          const optionalLegacyDenied =
+            source.name === "legacy" &&
+            error.code === "permission-denied" &&
+            ids.every(
+              (id) =>
+                assignmentCollectionPathsRef.current[id] !==
+                "history_classrooms",
+            );
+          if (optionalLegacyDenied) {
+            snapshots.set(key, []);
+            failures.delete(key);
+          } else {
+            console.error("Failed to subscribe to history classroom results", {
+              path: source.path,
+              assignmentIds: ids,
+              error,
+            });
+            failures.add(key);
+          }
+          waiting.delete(key);
+          publish();
+        },
+      );
+      const stop = () => {
+        listening = false;
+        disconnect();
+      };
+      unsubscribe.push(stop);
+      return stop;
+    }
+    sources.forEach((source) =>
+      batches.forEach((ids, index) => {
+        waiting.add(`${source.name}:${index}`);
+        sourceAssignmentIds.set(`${source.name}:${index}`, ids);
+      }),
+    );
+    sources.forEach((source) =>
+      batches.forEach((ids, index) => subscribe(source, ids, index)),
+    );
+    return () => {
+      cancelled = true;
+      unsubscribe.forEach((stop) => stop());
+    };
+  }, [
+    assignments,
+    assignmentReadScope,
+    config,
+    dashboardRefreshKey,
+    userData?.uid,
+  ]);
 
   useEffect(() => {
     if (searchParams.get("panel") !== "exemption-requests") return;
     setExemptionPanelOpen(true);
     setExemptionModalTab("requests");
     setHighlightedExemptionRequestId(searchParams.get("requestId") || "");
-  }, [searchParams]);
+    void loadExemptionData();
+  }, [searchParams, loadExemptionData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2388,18 +2601,10 @@ const ManageHistoryClassroom: React.FC = () => {
 
     assignments.forEach((assignment) => {
       const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
-      const assignedUidSet = new Set(assignedUids);
-      const latestByStudentUid = new Map<string, HistoryClassroomResult>();
-      (resultsByAssignment[assignment.id] || []).forEach((result) => {
-        if (
-          !result.uid ||
-          !assignedUidSet.has(result.uid) ||
-          latestByStudentUid.has(result.uid)
-        ) {
-          return;
-        }
-        latestByStudentUid.set(result.uid, result);
-      });
+      const latestByStudentUid = getTeacherHistoryCompletionsByUid(
+        resultsByAssignment[assignment.id] || [],
+        assignedUids,
+      );
 
       const attemptedCount = latestByStudentUid.size;
       const untouchedCount = Math.max(
@@ -2523,14 +2728,70 @@ const ManageHistoryClassroom: React.FC = () => {
     [editingVisibleResults, reviewResultId],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    setReviewSubmission(null);
+    setReviewSubmissionError("");
+    if (
+      !reviewResult?.canonicalSubmissionRef ||
+      reviewResult.answerChecks.length ||
+      Object.keys(reviewResult.answers).length
+    )
+      return;
+    void getDoc(doc(db, reviewResult.canonicalSubmissionRef))
+      .then((snapshot) => {
+        const answers = readTeacherHistorySubmissionAnswers(
+          reviewResult,
+          snapshot.data(),
+        );
+        if (!cancelled)
+          setReviewSubmission({ resultId: reviewResult.id, answers });
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to load history classroom submitted answers",
+          error,
+        );
+        if (!cancelled)
+          setReviewSubmissionError(
+            "제출 답안을 불러오지 못했습니다. 닫은 뒤 다시 시도해 주세요.",
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    reviewResult?.id,
+    reviewResult?.canonicalSubmissionRef,
+    reviewResult?.answerChecks.length,
+    config,
+    userData?.uid,
+  ]);
+
+  const reviewAnswers =
+    reviewSubmission && reviewSubmission.resultId === reviewResult?.id
+      ? reviewSubmission.answers
+      : reviewResult?.answers || {};
+  const loadingReviewSubmission =
+    !!reviewResult?.canonicalSubmissionRef &&
+    !reviewResult.answerChecks.length &&
+    !Object.keys(reviewResult.answers).length &&
+    reviewSubmission?.resultId !== reviewResult.id &&
+    !reviewSubmissionError;
+
   const reviewAnswerChecks = useMemo(() => {
     if (!editingPreviewAssignment || !reviewResult) return [];
     if (reviewResult.answerChecks.length) return reviewResult.answerChecks;
     return summarizeHistoryClassroomAnswers(
       editingPreviewAssignment,
-      reviewResult.answers,
-    ).checks;
-  }, [editingPreviewAssignment, reviewResult]);
+      reviewAnswers,
+    ).checks.map((check) => ({
+      ...check,
+      correct: reviewResult.canonicalAnswerChecks
+        ? reviewResult.canonicalAnswerChecks[check.blankId] === true
+        : check.correct,
+    }));
+  }, [editingPreviewAssignment, reviewResult, reviewAnswers]);
 
   useEffect(() => {
     if (!reviewResult || !editingPreviewAssignment) return;
@@ -2594,8 +2855,7 @@ const ManageHistoryClassroom: React.FC = () => {
         return {
           student,
           statusKey: "completed" as const,
-          statusLabel:
-            latestResult.status === "cancelled" ? "자동 종료" : "응시 완료",
+          statusLabel: describeHistoryResultStatus(latestResult.status),
           detailLabel:
             latestResult.status === "cancelled"
               ? "창 전환 또는 이탈로 자동 종료되었습니다."
@@ -2603,8 +2863,21 @@ const ManageHistoryClassroom: React.FC = () => {
           toneClassName:
             latestResult.status === "cancelled"
               ? "border-amber-200 bg-amber-50 text-amber-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700",
+              : latestResult.status === "failed"
+                ? "border-rose-200 bg-rose-50 text-rose-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700",
           canResetAttempt: latestResult.status !== "passed",
+        };
+      }
+
+      if (unverifiedResultAssignmentIds.includes(editingPreviewAssignment.id)) {
+        return {
+          student,
+          statusKey: "unverified" as const,
+          statusLabel: resultLoadError ? "확인 불가" : "결과 확인 중",
+          detailLabel: resultLoadError || "제출 결과를 확인하고 있습니다.",
+          toneClassName: "border-slate-200 bg-slate-50 text-slate-700",
+          canResetAttempt: false,
         };
       }
 
@@ -2638,6 +2911,8 @@ const ManageHistoryClassroom: React.FC = () => {
     editingResultsByStudentUid,
     editingPreviewAssignment,
     editingStudents,
+    resultLoadError,
+    unverifiedResultAssignmentIds,
   ]);
 
   const editingAttemptStatusCounts = useMemo(
@@ -2648,7 +2923,7 @@ const ManageHistoryClassroom: React.FC = () => {
             accumulator.completed += 1;
           } else if (row.statusKey === "overdueAbsent") {
             accumulator.overdueAbsent += 1;
-          } else {
+          } else if (row.statusKey === "pending") {
             accumulator.pending += 1;
           }
           return accumulator;
@@ -2680,20 +2955,12 @@ const ManageHistoryClassroom: React.FC = () => {
     const totals = assignments.reduce(
       (accumulator, assignment) => {
         const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
-        const assignedUidSet = new Set(assignedUids);
         const assignedCount = assignedUids.length;
         const attemptMeta = assignmentAttemptMetaById.get(assignment.id);
-        const latestByStudentUid = new Map<string, HistoryClassroomResult>();
-        (resultsByAssignment[assignment.id] || []).forEach((result) => {
-          if (
-            !result.uid ||
-            !assignedUidSet.has(result.uid) ||
-            latestByStudentUid.has(result.uid)
-          ) {
-            return;
-          }
-          latestByStudentUid.set(result.uid, result);
-        });
+        const latestByStudentUid = getTeacherHistoryCompletionsByUid(
+          resultsByAssignment[assignment.id] || [],
+          assignedUids,
+        );
 
         accumulator.assigned += assignedCount;
         accumulator.submitted += attemptMeta?.completed || 0;
@@ -2734,19 +3001,11 @@ const ManageHistoryClassroom: React.FC = () => {
       assignments.map((assignment) => {
         const attemptMeta = assignmentAttemptMetaById.get(assignment.id);
         const assignedUids = getHistoryClassroomAssignedStudentUids(assignment);
-        const assignedUidSet = new Set(assignedUids);
-        const latestByStudentUid = new Map<string, HistoryClassroomResult>();
         const assignmentResults = resultsByAssignment[assignment.id] || [];
-        assignmentResults.forEach((result) => {
-          if (
-            !result.uid ||
-            !assignedUidSet.has(result.uid) ||
-            latestByStudentUid.has(result.uid)
-          ) {
-            return;
-          }
-          latestByStudentUid.set(result.uid, result);
-        });
+        const latestByStudentUid = getTeacherHistoryCompletionsByUid(
+          assignmentResults,
+          assignedUids,
+        );
         const statusCounts = {
           passed: 0,
           failed: 0,
@@ -2767,7 +3026,8 @@ const ManageHistoryClassroom: React.FC = () => {
                 (getTimestampMs(a.createdAt) || 0) -
                 (getTimestampMs(b.createdAt) || 0),
             );
-          const latest = attempts[attempts.length - 1] || null;
+          const latest =
+            getTeacherHistoryCompletion([...attempts].reverse()) || null;
           const fallbackName =
             assignment.targetStudentNames[index] ||
             assignment.targetStudentName ||
@@ -3117,7 +3377,10 @@ const ManageHistoryClassroom: React.FC = () => {
       setExemptionSelectedStudentUids([]);
       setExemptionReason("");
       await loadExemptionData();
-      alert(`${result.createdCount}명에게 면제권을 부여했습니다.`);
+      showToast({
+        tone: "success",
+        title: `${result.createdCount}명에게 면제권을 부여했습니다.`,
+      });
     } catch (error) {
       console.error("Failed to grant history classroom exemptions:", error);
       alert(
@@ -3140,6 +3403,16 @@ const ManageHistoryClassroom: React.FC = () => {
         approved: status === "approved",
       });
       await loadExemptionData();
+      showToast({
+        tone: "success",
+        title:
+          status === "approved"
+            ? "면제권 사용 요청을 승인했습니다."
+            : "면제권 사용 요청을 반려했습니다.",
+        ...(status === "approved"
+          ? { message: "면제권 1장을 사용해 역사교실을 완료했습니다." }
+          : {}),
+      });
     } catch (error) {
       console.error("Failed to review history classroom exemption request:", {
         requestId,
@@ -3394,6 +3667,29 @@ const ManageHistoryClassroom: React.FC = () => {
     setEditingIsPublished(assignment.isPublished);
     setPreviewOpen(false);
   };
+
+  useEffect(() => {
+    const assignmentId = searchParams.get("assignmentId");
+    if (
+      !assignmentId ||
+      assignmentReadScope !==
+        `${getAssessmentSemesterId(config)}:${userData?.uid || ""}`
+    )
+      return;
+    const assignment = assignments.find((item) => item.id === assignmentId);
+    if (!assignment) return;
+    openAssignmentEditor(assignment);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("assignmentId");
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    assignments,
+    assignmentReadScope,
+    config,
+    searchParams,
+    setSearchParams,
+    userData?.uid,
+  ]);
 
   const loadAssignmentIntoWorksheetEditor = (
     assignment: HistoryClassroomAssignment,
@@ -3653,26 +3949,7 @@ const ManageHistoryClassroom: React.FC = () => {
       );
       payload.contentRevision = saved.contentRevision;
       Object.assign(payload, saved.publicationWindow);
-      if (editingIsPublished && !targetAssignment.isPublished) {
-        void createManagedNotifications(config, {
-          recipientUids: updatedStudents.map((student) => student.uid),
-          type: "history_classroom_assigned",
-          title: "역사교실이 배정되었습니다",
-          body: `${nextMapTitle} 과제가 새로 열렸습니다.`,
-          targetUrl: "/student/history-classroom",
-          entityType: "history_classroom",
-          entityId: targetAssignment.id,
-          dedupeKey: `history_classroom_assigned:${targetAssignment.id}`,
-          templateValues: {
-            assignmentTitle: nextMapTitle,
-          },
-        }).catch((notificationError) => {
-          console.error(
-            "Failed to create history classroom assignment notifications:",
-            notificationError,
-          );
-        });
-      }
+
       setAssignments((prev) =>
         prev.map((assignment) =>
           assignment.id === targetAssignment.id
@@ -3689,6 +3966,18 @@ const ManageHistoryClassroom: React.FC = () => {
       closeAssignmentEditor();
       setWorksheetEditingAssignmentId("");
       setWorksheetEditingIsPublished(true);
+      showToast({
+        tone: "success",
+        title: "역사교실 설정을 저장했습니다.",
+        message:
+          editingIsPublished === targetAssignment.isPublished
+            ? editingIsPublished
+              ? "학생에게 공개된 상태입니다."
+              : "학생에게 비공개인 상태입니다."
+            : editingIsPublished
+              ? "학생에게 공개로 전환했습니다."
+              : "학생에게 비공개로 전환했습니다.",
+      });
     } catch (error) {
       console.error("Failed to save history classroom assignment edit", {
         path: `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
@@ -3703,9 +3992,14 @@ const ManageHistoryClassroom: React.FC = () => {
         ...getFirestoreErrorSummary(error),
         error,
       });
-      alert(
-        getHistoryClassroomErrorMessage(error, "역사교실 수정에 실패했습니다."),
-      );
+      showToast({
+        tone: "error",
+        title: "역사교실 설정을 저장하지 못했습니다.",
+        message: getHistoryClassroomErrorMessage(
+          error,
+          "역사교실 수정에 실패했습니다.",
+        ),
+      });
     } finally {
       savingEditRef.current = false;
       setSavingEdit(false);
@@ -3734,7 +4028,8 @@ const ManageHistoryClassroom: React.FC = () => {
       applyingExemptionRef.current ||
       savingEditRef.current ||
       resettingAttemptRef.current ||
-      deletingAssignment
+      deletingAssignment ||
+      unverifiedResultAssignmentIds.includes(assignment.id)
     )
       return;
     const exemption = getAvailableStudentExemptions(
@@ -3763,10 +4058,11 @@ const ManageHistoryClassroom: React.FC = () => {
           item.id === applied.exemptionId ? { ...item, status: "used" } : item,
         ),
       );
-      setDirectExemptionFeedback((previous) => ({
-        ...previous,
-        [key]: "면제권 1장을 사용했습니다.",
-      }));
+      showToast({
+        tone: "success",
+        title: "면제권을 사용했습니다.",
+        message: `${student.name} 학생의 면제권 1장을 사용해 역사교실을 완료했습니다.`,
+      });
       try {
         const resultSnapshot = await getDoc(
           doc(
@@ -3802,13 +4098,19 @@ const ManageHistoryClassroom: React.FC = () => {
         }));
       }
     } catch (error) {
+      const message = getHistoryClassroomErrorMessage(
+        error,
+        "면제권을 사용하지 못했습니다. 다시 시도해 주세요.",
+      );
       setDirectExemptionFeedback((previous) => ({
         ...previous,
-        [key]: getHistoryClassroomErrorMessage(
-          error,
-          "면제권을 사용하지 못했습니다. 다시 시도해 주세요.",
-        ),
+        [key]: message,
       }));
+      showToast({
+        tone: "error",
+        title: "면제권을 사용하지 못했습니다.",
+        message,
+      });
     } finally {
       applyingExemptionRef.current = false;
       setApplyingExemptionUid("");
@@ -3825,7 +4127,8 @@ const ManageHistoryClassroom: React.FC = () => {
       resettingAttemptRef.current ||
       applyingExemptionRef.current ||
       savingEdit ||
-      deletingAssignment
+      deletingAssignment ||
+      unverifiedResultAssignmentIds.includes(targetAssignment.id)
     )
       return;
     if (
@@ -4073,26 +4376,7 @@ const ManageHistoryClassroom: React.FC = () => {
       );
       payload.contentRevision = saved.contentRevision;
       Object.assign(payload, saved.publicationWindow);
-      if (nextIsPublished && !existingAssignment?.isPublished) {
-        void createManagedNotifications(config, {
-          recipientUids: selectedStudents.map((student) => student.uid),
-          type: "history_classroom_assigned",
-          title: "역사교실이 배정되었습니다",
-          body: `${resolvedMapTitle} 과제가 새로 열렸습니다.`,
-          targetUrl: "/student/history-classroom",
-          entityType: "history_classroom",
-          entityId: assignmentId,
-          dedupeKey: `history_classroom_assigned:${assignmentId}`,
-          templateValues: {
-            assignmentTitle: resolvedMapTitle,
-          },
-        }).catch((notificationError) => {
-          console.error(
-            "Failed to create history classroom assignment notifications:",
-            notificationError,
-          );
-        });
-      }
+
       setAssignments((prev) => {
         const normalizedAssignment = normalizeHistoryClassroomAssignment(
           assignmentId,
@@ -4135,7 +4419,13 @@ const ManageHistoryClassroom: React.FC = () => {
       setWorksheetImportSourceId("");
       setWorksheetImportSourceTitle("");
       setWorksheetSourceAssignment(null);
-      alert("역사교실 과제를 저장했습니다.");
+      showToast({
+        tone: "success",
+        title: "역사교실 과제를 저장했습니다.",
+        message: nextIsPublished
+          ? "학생에게 공개된 상태입니다."
+          : "학생에게 비공개인 상태입니다.",
+      });
       pendingAssignmentId.current = "";
       setIsCreateModalOpen(false);
     } catch (error) {
@@ -4155,12 +4445,14 @@ const ManageHistoryClassroom: React.FC = () => {
         ...getFirestoreErrorSummary(error),
         error,
       });
-      alert(
-        getHistoryClassroomErrorMessage(
+      showToast({
+        tone: "error",
+        title: "역사교실 과제를 저장하지 못했습니다.",
+        message: getHistoryClassroomErrorMessage(
           error,
           "역사교실 과제 저장에 실패했습니다.",
         ),
-      );
+      });
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -4265,6 +4557,11 @@ const ManageHistoryClassroom: React.FC = () => {
 
   return (
     <div className="history-classroom ws-page">
+      {resultLoadError && (
+        <p role="alert" className="mb-4 text-sm text-red-600">
+          {resultLoadError}
+        </p>
+      )}
       <section className="history-dashboard mb-4">
         <div className="history-heading ws-page-header">
           <div className="flex items-start gap-4">
@@ -6517,6 +6814,11 @@ const ManageHistoryClassroom: React.FC = () => {
                     aria-label="응시 현황 및 제출 내역"
                     className="history-attempt-section flex min-h-0 min-w-0 flex-col rounded-2xl border border-gray-200 bg-white p-3.5"
                   >
+                    {resultLoadError && (
+                      <p role="alert" className="mb-2 text-sm text-red-600">
+                        {resultLoadError}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm font-bold text-gray-700">
                         응시 현황
@@ -6583,7 +6885,8 @@ const ManageHistoryClassroom: React.FC = () => {
                                 editingAssignment.id,
                               );
                             const completed =
-                              !row.canResetAttempt ||
+                              (row.statusKey === "completed" &&
+                                !row.canResetAttempt) ||
                               studentResults.some(
                                 (result) =>
                                   result.passed || result.status === "passed",
@@ -6594,21 +6897,29 @@ const ManageHistoryClassroom: React.FC = () => {
                                 request.assignmentId === editingAssignment.id &&
                                 request.status === "pending",
                             );
-                            const exemptionDisabledReason = !savedStudent
-                              ? "학생 배정을 먼저 저장해 주세요."
-                              : completed
-                                ? "이미 통과하거나 면제된 학생입니다."
-                                : !editingAssignment.isPublished
-                                  ? "과제를 공개한 뒤 사용할 수 있습니다."
-                                  : isHistoryClassroomPastDue(editingAssignment)
-                                    ? "응시 기간이 지났습니다."
-                                    : pendingRequest
-                                      ? "면제권 사용 요청을 먼저 검토해 주세요."
-                                      : exemptionLoadError
-                                        ? exemptionLoadError
-                                        : !availableExemptions.length
-                                          ? "사용 가능한 면제권이 없습니다."
-                                          : "";
+                            const exemptionDisabledReason =
+                              unverifiedResultAssignmentIds.includes(
+                                editingAssignment.id,
+                              )
+                                ? resultLoadError ||
+                                  "제출 결과를 확인하고 있습니다."
+                                : !savedStudent
+                                  ? "학생 배정을 먼저 저장해 주세요."
+                                  : completed
+                                    ? "이미 통과하거나 면제된 학생입니다."
+                                    : !editingAssignment.isPublished
+                                      ? "과제를 공개한 뒤 사용할 수 있습니다."
+                                      : isHistoryClassroomPastDue(
+                                            editingAssignment,
+                                          )
+                                        ? "응시 기간이 지났습니다."
+                                        : pendingRequest
+                                          ? "면제권 사용 요청을 먼저 검토해 주세요."
+                                          : exemptionLoadError
+                                            ? exemptionLoadError
+                                            : !availableExemptions.length
+                                              ? "사용 가능한 면제권이 없습니다."
+                                              : "";
                             const toggleHistory = () => {
                               if (!studentResults.length) return;
                               setExpandedAttemptUids((prev) =>
@@ -6973,8 +7284,10 @@ const ManageHistoryClassroom: React.FC = () => {
                       제출 답안 확인
                     </div>
                     <div className="text-lg font-black text-gray-900">
-                      {reviewResult.studentName || "학생"} ·{" "}
-                      {reviewResult.score}/{reviewResult.total} ·{" "}
+                      {reviewResult.studentName ||
+                        studentByUid.get(reviewResult.uid)?.name ||
+                        "학생"}{" "}
+                      · {reviewResult.score}/{reviewResult.total} ·{" "}
                       {reviewResult.percent}%
                     </div>
                   </div>
@@ -6987,16 +7300,26 @@ const ManageHistoryClassroom: React.FC = () => {
                   ></HistoryActionButton>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50">
-                  <HistoryClassroomAssignmentView
-                    assignment={editingPreviewAssignment}
-                    currentPage={reviewCurrentPage}
-                    onCurrentPageChange={setReviewCurrentPage}
-                    answers={reviewResult.answers}
-                    answerChecks={reviewAnswerChecks}
-                    interactiveViewport
-                    readOnly
-                    layoutVariant="modalPreview"
-                  />
+                  {reviewSubmissionError ? (
+                    <p role="alert" className="p-4 text-sm text-red-600">
+                      {reviewSubmissionError}
+                    </p>
+                  ) : loadingReviewSubmission ? (
+                    <p role="status" className="p-4 text-sm text-gray-600">
+                      제출 답안을 불러오는 중입니다.
+                    </p>
+                  ) : (
+                    <HistoryClassroomAssignmentView
+                      assignment={editingPreviewAssignment}
+                      currentPage={reviewCurrentPage}
+                      onCurrentPageChange={setReviewCurrentPage}
+                      answers={reviewAnswers}
+                      answerChecks={reviewAnswerChecks}
+                      interactiveViewport
+                      readOnly
+                      layoutVariant="modalPreview"
+                    />
+                  )}
                 </div>
               </div>
             )}

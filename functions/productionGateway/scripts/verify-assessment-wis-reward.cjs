@@ -77,6 +77,7 @@ let sequence = 0;
 const newCommandId = () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`;
 const attemptFor = (kind = "QUIZ", key = "one") => ({
   attemptId: `attempt_${hash(kind + key)}`, definitionId: "definition-one", semesterId: scope, assessmentKind: kind,
+  ...(kind === "HISTORY_CLASSROOM" ? { sourceId: "history-one" } : {}),
   studentUid: uid, enrollmentId: "enrollment-one", classId: "class_one", revision: 1, status: "STARTED",
   gradingSnapshot: [{ id: "one", answer: "a" }, { id: "two", answer: "b" }], sourceHash: hash("source"),
   deadlineAtIso: "2026-09-12T01:00:00.000Z", startedAtIso: "2026-09-12T00:00:00.000Z",

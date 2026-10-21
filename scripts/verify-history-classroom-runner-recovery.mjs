@@ -177,6 +177,7 @@ const bundle = await build({
   },
   bundle: true,
   write: false,
+  outfile: path.join(evidence, "student-runner-fixture.js"),
   platform: "browser",
   format: "esm",
   define: { "process.env.NODE_ENV": '"production"', "import.meta.env": "{}" },
@@ -221,7 +222,8 @@ const css = (
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
-const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const importedCss = bundle.outputFiles.filter(file => file.path.endsWith(".css")).map(file => file.text).join("\n");
+const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}\n${importedCss}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1400"><rect width="1000" height="1400" fill="white"/><text x="100" y="100" font-size="36">인터넷 연결과 답안 복구 검증</text></svg>';
 const server = http.createServer((req, res) => {
@@ -236,7 +238,7 @@ const server = http.createServer((req, res) => {
   );
   res.end(
     url === "/fixture.js"
-      ? bundle.outputFiles[0].text
+      ? bundle.outputFiles.find(file => file.path.endsWith(".js")).text
       : url === "/tailwind.js"
         ? tailwind
         : url === "/worksheet.svg"

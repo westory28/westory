@@ -223,6 +223,9 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     if (!recipients.length) fail("failed-precondition", "면제권을 부여할 활성 학생이 없습니다.");
     const exemptionIds = recipients.map(({ uid }) => `exemption_${hash(`${commandId}\n${uid}`)}`);
     const refs = exemptionIds.map((id) => ticketPath(semesterId, id));
+    const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "granted", actorUid: actor.actorUid, timestamp,
+      items: recipients.map(({ uid, profile }, index) => ({ uid, exemptionId: exemptionIds[index], reason: payload.reason,
+        grantScopeLabel: payload.classId || payload.targetGrade ? `${profile.studentGrade}학년 ${profile.studentClass}반` : "학생별" })) });
     recipients.forEach(({ profile, enrollment }, index) => transaction.create(refs[index], {
       ...profile, semesterId, enrollmentId: enrollment.enrollmentId, classId: enrollment.classId,
       reason: payload.reason, status: "available", revision: 1, grantScope: payload.classId || payload.targetGrade ? "class" : "student",
@@ -230,7 +233,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
       grantedByUid: actor.actorUid, grantedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,
       exemptionRequestId: "", usedAssignmentId: "", commandId,
     }));
-    return response("history-exemptions", commandId, refs, { createdCount: refs.length, exemptionIds });
+    notifications.apply();
+    return response("history-exemptions", commandId, [...refs, ...notifications.refs], { createdCount: refs.length, exemptionIds });
   }
   if (commandType === COMMAND_TYPES.REVOKE_HISTORY_CLASSROOM_EXEMPTIONS) {
     const refs = payload.exemptionIds.map((id) => ticketPath(semesterId, id));
@@ -248,14 +252,22 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     const [ticket, previous, completed] = await transaction.getAll([ticketRef, requestRef,
       `semester_assessment_results/${resultIdFor(semesterId, payload.assignmentId, actor.actorUid)}`]);
     if (!ticket.exists || ticketOwner(ticket.data) !== actor.actorUid) fail("permission-denied", "본인의 면제권만 사용할 수 있습니다.");
-    if (previous.exists && ["pending", "requested", "approved"].includes(previous.data?.status))
+    if (previous.exists && ["pending", "requested", "approved"].includes(previous.data?.status)) {
+      if (previous.data.status !== "approved") {
+        const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "requested", actorUid: actor.actorUid, timestamp,
+          items: [{ ...previous.data, requestId }] });
+        notifications.apply();
+      }
       return response("history-exemption-request", requestId, [requestRef, ticketRef], { requestId, status: previous.data.status });
+    }
     if (ticketStatus(ticket.data) !== "available" || completed.exists) fail("failed-precondition", "이미 사용 중이거나 처리된 면제권입니다.", "HISTORY_EXEMPTION_NOT_AVAILABLE");
     assertTicketAssignment(ticket.data, payload.assignmentId, helpers.now);
     await assertNotPassed(transaction, semesterId, payload.assignmentId, actor.actorUid, assignment);
     const requests = await transaction.query(`${root(semesterId)}/history_classroom_exemption_requests`, { field: "uid", operator: "==", value: actor.actorUid });
     if (requests.some((row) => row.data?.assignmentId === payload.assignmentId && ["pending", "requested", "approved"].includes(row.data.status)))
       fail("already-exists", "이 역사교실의 면제권 사용 요청이 이미 있습니다.");
+    const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "requested", actorUid: actor.actorUid, timestamp,
+      items: [{ requestId, studentName: ticket.data.studentName, assignmentTitle: assignment.source.title }] });
     transaction.set(requestRef, { uid: actor.actorUid, studentName: ticket.data.studentName || "학생", studentGrade: ticket.data.studentGrade || "",
       studentClass: ticket.data.studentClass || "", studentNumber: ticket.data.studentNumber || "", semesterId,
       assignmentId: payload.assignmentId, assignmentTitle: assignment.source.title || "역사교실", exemptionId: payload.exemptionId,
@@ -263,7 +275,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
       requestedAt: timestamp, createdAt: previous.data?.createdAt || timestamp, updatedAt: timestamp });
     transaction.set(ticketRef, { status: "requested", ...(ticket.data.state !== undefined ? { state: "requested" } : {}), requestedAssignmentId: payload.assignmentId, pendingRequestId: requestId, exemptionRequestId: requestId, requestedAt: timestamp,
       revision: Number(ticket.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
-    return response("history-exemption-request", requestId, [requestRef, ticketRef], { requestId, status: "pending" });
+    notifications.apply();
+    return response("history-exemption-request", requestId, [requestRef, ticketRef, ...notifications.refs], { requestId, status: "pending" });
   }
   if (commandType === COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION) {
     if (!["teacher", "admin"].includes(actor.actorRole)) fail("permission-denied", "교사만 면제권을 사용할 수 있습니다.");
@@ -290,6 +303,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     const requestRef = requestPath(semesterId, requestId);
     const audit = { origin: "teacher_direct", initiatedByUid: actor.actorUid };
     const current = { ...profileSnapshot(studentUid, profile.data, assignment.enrollment, assignment.semesterClass), semesterId, assignmentId, exemptionId };
+    const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "reviewed", actorUid: actor.actorUid, timestamp,
+      items: [{ uid: studentUid, requestId, approved: true, assignmentTitle: assignment.source.title }] });
     transaction.set(ticketRef, { status: "used", ...(ticket.data.state !== undefined ? { state: "used" } : {}), ...audit,
       requestedAssignmentId: "", pendingRequestId: "", exemptionRequestId: requestId, usedAssignmentId: assignmentId,
       usedRequestId: requestId, usedByUid: studentUid, usedAt: timestamp, revision: Number(ticket.data.revision || 0) + 1, updatedAt: timestamp }, { merge: true });
@@ -298,7 +313,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
       reviewReason: "교사 직접 사용", reviewedByUid: actor.actorUid, reviewedAt: timestamp,
       resultId: approval.resultId, createdAt: timestamp, updatedAt: timestamp });
     writeCompletion(transaction, approval, current, requestId, actor, timestamp, helpers.now, audit);
-    return response("history-exemption-direct", requestId, [requestRef, ticketRef, approval.canonicalRef, approval.legacyRef, ...approval.attempts.map(row => row.path)],
+    notifications.apply();
+    return response("history-exemption-direct", requestId, [requestRef, ticketRef, approval.canonicalRef, approval.legacyRef, ...approval.attempts.map(row => row.path), ...notifications.refs],
       { studentUid, assignmentId, exemptionId, resultId: approval.resultId, status: "approved", origin: "teacher_direct" });
   }
   const requestRef = requestPath(semesterId, payload.requestId);
@@ -323,6 +339,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     resultId = approval.resultId;
     refs.push(approval.canonicalRef, approval.legacyRef, ...approval.attempts.map((row) => row.path));
   }
+  const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "reviewed", actorUid: actor.actorUid, timestamp,
+    items: [{ ...current, requestId: payload.requestId, approved: payload.approved }] });
   // All validation and reads precede the writes, including approval's result.
   transaction.set(ticketRef, { status: payload.approved ? "used" : "available", requestedAssignmentId: "", pendingRequestId: "",
     ...(ticket.data.state !== undefined ? { state: payload.approved ? "used" : "available" } : {}),
@@ -333,7 +351,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
   if (approval) {
     writeCompletion(transaction, approval, { ...current, semesterId }, payload.requestId, actor, timestamp, helpers.now);
   }
-  return response("history-exemption-review", payload.requestId, refs, { requestId: payload.requestId, status: targetStatus, resultId });
+  notifications.apply();
+  return response("history-exemption-review", payload.requestId, [...refs, ...notifications.refs], { requestId: payload.requestId, status: targetStatus, resultId });
 };
 
 module.exports = { COMMAND_TYPES, normalizePayload, apply, resultIdFor };
