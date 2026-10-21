@@ -1,4 +1,4 @@
-const { createHash, randomInt } = require('node:crypto');
+const { createHash, randomInt, randomUUID } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 
@@ -40,6 +40,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     return { year: data.year, semester: data.semester, id: `${data.year}-${data.semester}` };
   };
   const ref = (scope, collection, id) => db.doc(`years/${scope.year}/semesters/${scope.semester}/${collection}/${id}`);
+  // Notify authorized monitors without exposing rooms or adding a shared read
+  // lock. A unique token also distinguishes changes committed in the same ms.
+  const notifyManagement = (transaction, scope) => transaction.set(ref(scope, 'yut_management', 'current'), {
+    changeId: randomUUID(), updatedAtMs: now(),
+  });
   const settingsFrom = (data) => {
     const valid = !!data && typeof data.enabled === 'boolean' && Number.isSafeInteger(data.version) && data.version >= 0;
     return { enabled: valid && data.enabled === true, version: valid ? data.version : 0,
@@ -117,10 +122,12 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     return { ...room, players, playerNamesVersion: 1, ...(changed ? { syncRevision: (room.syncRevision ?? room.revision) + 1 } : {}) };
   };
   const persistNames = (transaction, scope, before, after) => {
-    if (before !== after) transaction.update(ref(scope, 'yut_rooms', before.id), {
+    if (before === after) return;
+    transaction.update(ref(scope, 'yut_rooms', before.id), {
       players: after.players, playerNamesVersion: after.playerNamesVersion,
       ...(after.syncRevision !== before.syncRevision ? { syncRevision: after.syncRevision } : {}),
     });
+    notifyManagement(transaction, scope);
   };
   const checkRoomAccess = (actor, room) => {
     if (expired(room, now())) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
@@ -216,6 +223,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       const serverNowMs = now(), settings = { ...actor.settings, enabled: data.enabled, version: actor.settings.version + 1, updatedAtMs: serverNowMs };
       for (const field of ['allowSolo', 'allowMultiplayer', 'allowPrivateRooms', 'defaultPlayerCount', 'throwSeconds', 'moveSeconds']) if (data[field] !== undefined) settings[field] = data[field];
       transaction.set(ref(scope, 'weplay_games', 'joseon-yut'), { ...settings, updatedBy: actor.uid });
+      notifyManagement(transaction, scope);
       return { settings, serverNowMs };
     });
   };
@@ -416,6 +424,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         transaction.set(ref(scope, 'yut_rooms', transferredRoom.id), transferredRoom);
       }
       transaction.set(ref(scope, 'yut_rooms', roomId), room);
+      notifyManagement(transaction, scope);
       // A code admits players only while waiting. Starting does not extend or
       // rewrite it, so an expired code reused by another room stays untouched.
       if (codeRef) transaction.set(codeRef, { roomId, expiresAtMs: room.expiresAtMs });
@@ -453,6 +462,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           ...(room.participantUids || []).filter(identifier).map(uid => transaction.get(ref(scope, 'yut_players', uid))),
         ]);
         transaction.delete(candidate.ref);
+        notifyManagement(transaction, scope);
         if (code?.data()?.roomId === roomId) transaction.delete(codeRef);
         for (const player of players) {
           if (player.data()?.roomId === roomId) transaction.update(player.ref, { roomId: null });

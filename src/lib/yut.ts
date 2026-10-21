@@ -207,6 +207,22 @@ export const commandYutRoom = (config: WeplayConfig, data: YutCommand) =>
     config,
     data,
   );
+export const subscribeYutManagement = (
+  config: WeplayConfig,
+  onChange: () => void,
+  onError: (error: unknown) => void,
+  onConnectionChange?: (connected: boolean) => void,
+) =>
+  onSnapshot(
+    doc(db, getSemesterDocPath(config, "yut_management", "current")),
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      onConnectionChange?.(!snapshot.metadata.fromCache);
+      // A server-confirmed missing signal also initializes pre-existing rooms.
+      if (!snapshot.metadata.fromCache) onChange();
+    },
+    onError,
+  );
 export const subscribeYutRoom = (
   config: WeplayConfig,
   roomId: string,

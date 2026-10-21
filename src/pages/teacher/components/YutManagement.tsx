@@ -28,6 +28,7 @@ import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import YutGameEntry from "../../../components/common/weplay/YutGameEntry";
 import YutSpectator from "./YutSpectator";
+import useYutMonitoring from "./useYutMonitoring";
 import WeplayMusicButton from "../../../components/common/weplay/WeplayMusicButton";
 import {
   isWeplayAudioMuted,
@@ -104,8 +105,6 @@ export default function YutManagement() {
   const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}/${canRead}/${canWrite}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const viewRef = useRef(view);
-  viewRef.current = view;
   const generation = useRef(0);
   const savingRef = useRef(false);
   const inFlight = useRef(false);
@@ -117,6 +116,8 @@ export default function YutManagement() {
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState("");
   const [monitorOpen, setMonitorOpen] = useState(false);
+  const [showInactiveRooms, setShowInactiveRooms] = useState(false);
+  const [monitorClock, setMonitorClock] = useState(Date.now);
   const [spectating, setSpectating] = useState<{
     id: string;
     code: string;
@@ -125,14 +126,27 @@ export default function YutManagement() {
   const monitorRef = useRef<HTMLDialogElement>(null);
   const monitorCloseRef = useRef<HTMLButtonElement>(null);
   const spectatorBackRef = useRef<HTMLButtonElement>(null);
-  const monitorOpenRef = useRef(false);
-  monitorOpenRef.current = monitorOpen;
-  const spectatingRef = useRef(false);
-  spectatingRef.current = !!spectating;
   const [readError, setReadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [conflict, setConflict] = useState(false);
   const current = loadedScope === scope ? data : null;
+  const monitorVisible =
+    monitorOpen && !!current && !["preview", "online"].includes(view || "");
+  const monitor = useYutMonitoring(
+    config,
+    scope,
+    canRead && monitorVisible && !spectating,
+  );
+  const rooms = monitor.data?.rooms || [];
+  const isInactive = (room: YutManagedRoom) =>
+    room.status === "playing" &&
+    Number(room.turnDeadlineMs) > 0 &&
+    monitorClock + monitor.serverOffsetMs > Number(room.turnDeadlineMs) + 60000;
+  const activeRooms = rooms.filter((room) => !isInactive(room));
+  const inactiveRooms = rooms.filter(isInactive);
+  const visibleRooms = showInactiveRooms
+    ? [...activeRooms, ...inactiveRooms]
+    : activeRooms;
   const dirty = !!draft && isDirty(draft);
   const throwError = draft
     ? secondsError(draft.throwSeconds, "윷 던지기 제한 시간", 3, 15)
@@ -217,21 +231,8 @@ export default function YutManagement() {
     inFlight.current = false;
     savingRef.current = false;
     void load();
-    const refresh = () => {
-      if (
-        !document.hidden &&
-        monitorOpenRef.current &&
-        !spectatingRef.current &&
-        !["preview", "online"].includes(viewRef.current || "")
-      )
-        void load();
-    };
-    const interval = window.setInterval(refresh, 15000);
-    document.addEventListener("visibilitychange", refresh);
     return () => {
       generation.current++;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refresh);
     };
   }, [load]);
   useEffect(() => {
@@ -239,8 +240,6 @@ export default function YutManagement() {
     setPendingClose("");
     setMonitorOpen(false);
   }, [view]);
-  const monitorVisible =
-    monitorOpen && !!current && !["preview", "online"].includes(view || "");
   useEffect(() => {
     if (!monitorVisible) return;
     const dialog = monitorRef.current;
@@ -248,13 +247,22 @@ export default function YutManagement() {
     const opener = document.activeElement as HTMLElement | null;
     const releaseScrollLock = acquirePageScrollLock();
     dialog.showModal();
-    void load();
     return () => {
       dialog.close();
       releaseScrollLock();
       opener?.focus();
     };
-  }, [monitorVisible, load]);
+  }, [monitorVisible]);
+  useEffect(() => {
+    if (!monitorVisible) {
+      setShowInactiveRooms(false);
+      return;
+    }
+    if (spectating) return;
+    setMonitorClock(Date.now());
+    const timer = window.setInterval(() => setMonitorClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [monitorVisible, !!spectating]);
   useEffect(() => {
     if (!monitorVisible) return;
     const body = monitorRef.current?.querySelector<HTMLElement>(
@@ -391,6 +399,7 @@ export default function YutManagement() {
         savingRef.current = false;
         setClosing("");
         void load();
+        monitor.refresh();
       }
     }
   };
@@ -783,7 +792,6 @@ export default function YutManagement() {
                       className="yut-management-button"
                       onClick={() => {
                         setSpectating(null);
-                        void load();
                       }}
                     >
                       목록으로
@@ -819,35 +827,51 @@ export default function YutManagement() {
                   <>
                     <div className="yut-management-row">
                       <strong>
-                        대기·진행 중인 방 {current.rooms.length}개
+                        대기·진행 중인 방
+                        {monitor.data && ` ${activeRooms.length}개`}
                       </strong>
                       <div className="yut-management-actions">
-                        <span className="yut-management-muted">
-                          마지막 확인 {timeLabel(current.serverNowMs)}
+                        <span className="yut-management-muted" role="status">
+                          {monitor.status === "error"
+                            ? "연결 끊김"
+                            : monitor.status === "paused"
+                              ? "일시 중지"
+                              : monitor.status !== "live"
+                                ? "연결 확인 중…"
+                                : monitor.refreshing
+                                  ? "갱신 중…"
+                                  : "실시간 반영 중"}
+                          {monitor.data &&
+                            ` · ${timeLabel(monitor.data.serverNowMs)}`}
                         </span>
-                        <InfoHelp label="방 현황 갱신 안내">
-                          모니터링 창이 열려 있을 때 15초마다 갱신합니다.
-                        </InfoHelp>
                         <button
                           className="yut-management-button"
-                          disabled={refreshing || saving}
-                          onClick={() => void load()}
+                          disabled={monitor.refreshing || saving}
+                          onClick={monitor.refresh}
                         >
-                          {refreshing ? "확인 중…" : "새로고침"}
+                          {monitor.status === "error"
+                            ? "다시 연결"
+                            : "새로고침"}
                         </button>
                       </div>
                     </div>
-                    {readError && (
+                    {monitor.error && (
                       <p className="yut-management-error" role="alert">
-                        {readError}
+                        {monitor.error}
                       </p>
                     )}
-                    {current.truncated && <p>최근 방 100개를 표시합니다.</p>}
-                    {current.rooms.length === 0 ? (
+                    {monitor.data?.truncated && (
+                      <p>최근 방 100개를 표시합니다.</p>
+                    )}
+                    {!monitor.data ? (
+                      monitor.status === "connecting" && (
+                        <p>게임방을 확인하고 있습니다.</p>
+                      )
+                    ) : visibleRooms.length === 0 ? (
                       <p>대기 중이거나 진행 중인 방이 없습니다.</p>
                     ) : (
                       <ul className="yut-management-room-list">
-                        {current.rooms.map((room) => {
+                        {visibleRooms.map((room) => {
                           const leaders = room.players.filter(
                             (player) =>
                               player.active &&
@@ -872,9 +896,11 @@ export default function YutManagement() {
                                     /{room.maxPlayers || 4}명
                                   </span>
                                   <span>
-                                    {room.status === "playing"
-                                      ? "진행 중"
-                                      : "대기 중"}
+                                    {isInactive(room)
+                                      ? "최근 진행 없음"
+                                      : room.status === "playing"
+                                        ? "진행 중"
+                                        : "대기 중"}
                                   </span>
                                 </div>
                                 <div className="yut-management-actions">
@@ -883,6 +909,7 @@ export default function YutManagement() {
                                     className="yut-management-button"
                                     onClick={() => {
                                       setPendingClose("");
+                                      setServerOffsetMs(monitor.serverOffsetMs);
                                       setSpectating({
                                         id: room.id,
                                         code: room.code,
@@ -904,7 +931,8 @@ export default function YutManagement() {
                                   )}
                                 </div>
                               </div>
-                              {room.status === "playing" &&
+                              {!isInactive(room) &&
+                                room.status === "playing" &&
                                 leaders.length > 0 && (
                                   <p className="yut-management-leader">
                                     <strong>
@@ -977,6 +1005,7 @@ export default function YutManagement() {
                                             </span>
                                           )}
                                         {room.turnUid === player.uid &&
+                                          !isInactive(room) &&
                                           room.status === "playing" && (
                                             <span className="yut-management-turn">
                                               현재 차례
@@ -990,6 +1019,25 @@ export default function YutManagement() {
                           );
                         })}
                       </ul>
+                    )}
+                    {inactiveRooms.length > 0 && (
+                      <div className="yut-management-actions">
+                        <button
+                          type="button"
+                          className="yut-management-button"
+                          aria-expanded={showInactiveRooms}
+                          onClick={() =>
+                            setShowInactiveRooms((value) => !value)
+                          }
+                        >
+                          최근 진행이 없는 방 {inactiveRooms.length}개{" "}
+                          {showInactiveRooms ? "접기" : "보기"}
+                        </button>
+                        <InfoHelp label="최근 진행이 없는 방 기준">
+                          차례 제한 시각이 지난 뒤 1분 이상 진행이 없는
+                          방입니다. 진행이 재개되면 자동으로 다시 표시합니다.
+                        </InfoHelp>
+                      </div>
                     )}
                   </>
                 )}

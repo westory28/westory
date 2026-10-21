@@ -62,8 +62,15 @@ const request = data => ({ auth: { uid: 'expiry-host', token: { email: 'host@yon
     action: 'join', code: 'ABC234', requestKey: randomUUID(),
   })), error => error.code === 'not-found');
   assert.equal(core.startYutGame(old, now).status, 'playing', 'the shared local-preview core has no online admission expiry');
+  const previousSignals = await Promise.all([base, previousScope].map(async scope => (await db.doc(`${scope}/yut_management/current`).get()).data()));
   const result = await handlers.cleanupWaitingYutRooms();
   assert.equal(result.deleted, 2);
+  const cleanupSignals = await Promise.all([base, previousScope].map(async (scope, index) => {
+    const signal = (await db.doc(`${scope}/yut_management/current`).get()).data();
+    assert.notEqual(signal.changeId, previousSignals[index]?.changeId, 'waiting-room deletion invalidates its own semester monitor');
+    assert.deepEqual(Object.keys(signal).sort(), ['changeId', 'updatedAtMs']);
+    return signal;
+  }));
   assert.equal((await db.doc(`${base}/yut_rooms/expired`).get()).exists, false);
   assert.equal((await db.doc(`${base}/yut_codes/ABC234`).get()).exists, false);
   assert.equal((await db.doc(`${base}/yut_players/expiry-host`).get()).data().roomId, null);
@@ -73,6 +80,7 @@ const request = data => ({ auth: { uid: 'expiry-host', token: { email: 'host@yon
   assert.equal((await db.doc(`${base}/yut_rooms/fresh`).get()).exists, true);
   assert.equal((await db.doc(`${base}/yut_rooms/started`).get()).exists, true);
   assert.equal((await handlers.cleanupWaitingYutRooms()).deleted, 0, 'cleanup retry is idempotent');
+  assert.deepEqual(await Promise.all([base, previousScope].map(async scope => (await db.doc(`${scope}/yut_management/current`).get()).data())), cleanupSignals, 'cleanup without a deletion does not send another monitor event');
   await db.doc(`${base}/yut_codes/ABC235`).set({ roomId: 'new-code-owner', expiresAtMs: now + 120000 });
   const begun = await handlers.commandYutRoom(request({
     action: 'start', roomId: fresh.id, requestKey: randomUUID(), expectedRevision: fresh.revision,

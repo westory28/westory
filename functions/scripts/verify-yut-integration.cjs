@@ -12,6 +12,16 @@ process.env.WESTORY_APP_CHECK_MODE = 'DISABLED';
 const deployed = require('../index');
 const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
 const db = getFirestore(), base = 'years/2026/semesters/2';
+const signalRef = db.doc(`${base}/yut_management/current`);
+const readSignal = async () => (await signalRef.get()).data();
+async function assertSignalChanged(before, message) {
+  const signal = await readSignal();
+  assert.deepEqual(Object.keys(signal).sort(), ['changeId', 'updatedAtMs'], 'monitor signal contains no room or participant data');
+  assert.match(signal.changeId, /^[a-f0-9-]{36}$/);
+  assert.equal(Number.isSafeInteger(signal.updatedAtMs), true);
+  assert.notEqual(signal.changeId, before?.changeId, message);
+  return signal;
+}
 const authTime = Math.floor(Date.now() / 1000) - 10;
 const proof = { authorityGeneration: 'w1r2-2026-08-09', protocolVersion: 2, revision: 'a'.repeat(64) };
 const uid = (label) => `yut-${label}`;
@@ -21,7 +31,12 @@ const key = () => randomUUID();
 async function command(label, action, data = {}) {
   // Keep tests fast without changing the production throttle or guard code.
   await db.doc(`${base}/yut_players/${uid(label)}`).set({ lastCommandAtMs: 0 }, { merge: true });
-  return deployed.commandYutRoom.run(request(label, { action, requestKey: key(), ...data }));
+  const signalBefore = await readSignal();
+  const result = await deployed.commandYutRoom.run(request(label, { action, requestKey: key(), ...data }));
+  // Join/match include intentionally write-free reconnects. Their first join is
+  // checked separately; the remaining successful commands must notify monitors.
+  if (!['join', 'match'].includes(action)) await assertSignalChanged(signalBefore, `${action} notifies live monitors in its room transaction`);
+  return result;
 }
 async function roomCommand(label, room, action, data = {}) {
   // Authorization/concurrency cases advance past visual grace without sleeping.
@@ -51,9 +66,15 @@ async function verifySpectatorRules(roomRef) {
   ];
   const originals = new Map(await Promise.all(restorePaths.map(async path => [path, (await db.doc(path).get()).data()])));
   const pointersBefore = await Promise.all(managers.map(async label => (await db.doc(`${base}/yut_players/${uid(label)}`).get()).data()));
+  const signalBefore = await readSignal();
+  let sharedFenceChecks = true;
   const expectRead = async (label, status, message, options) => {
     const response = await rest(label, fixtureRef.path, options);
     assert.equal(response.status, status, `${message}: ${await response.text()}`);
+    if (sharedFenceChecks) {
+      const signalResponse = await rest(label, signalRef.path, options);
+      assert.equal(signalResponse.status, status, `monitor signal shares the access fence: ${message}: ${await signalResponse.text()}`);
+    }
   };
   try {
     await fixtureRef.set(fixture);
@@ -70,15 +91,24 @@ async function verifySpectatorRules(roomRef) {
     await db.doc(`users/${uid('staff')}`).update({ staffPermissions: ['lesson_read'] });
     for (const label of managers) {
       assert.equal((await rest(label, `${base}/yut_rooms`)).status, 403, `${label} cannot enumerate rooms`);
+      assert.equal((await rest(label, `${base}/yut_management`)).status, 403, `${label} cannot enumerate management signals`);
+      assert.equal((await rest(label, `${base}/yut_management/other`)).status, 403, `${label} may only read the current signal`);
       for (const [path, options] of [
         [fixtureRef.path, { method: 'PATCH', body: JSON.stringify({ fields: { revision: { integerValue: '999' } } }) }],
         [fixtureRef.path, { method: 'DELETE' }],
         [`${base}/yut_rooms/spectator-client-create`, { method: 'PATCH', body: JSON.stringify({ fields: { status: { stringValue: 'waiting' } } }) }],
+        [signalRef.path, { method: 'PATCH', body: JSON.stringify({ fields: { changeId: { stringValue: 'forged' } } }) }],
+        [signalRef.path, { method: 'DELETE' }],
+        [`${base}/yut_management/forged`, { method: 'PATCH', body: JSON.stringify({ fields: { changeId: { stringValue: 'forged' } } }) }],
       ]) assert.equal((await rest(label, path, options)).status, 403, `${label} observation never grants client create/update/delete`);
     }
     assert.deepEqual((await fixtureRef.get()).data(), fixture, 'observer reads and denied writes leave every playing-room field unchanged');
     assert.deepEqual((await roomRef.get()).data(), roomBefore, 'observation leaves the active game, revision and clocks untouched');
     assert.deepEqual(await Promise.all(managers.map(async label => (await db.doc(`${base}/yut_players/${uid(label)}`).get()).data())), pointersBefore, 'observation never creates player pointers, heartbeat or command receipts');
+    assert.deepEqual(await readSignal(), signalBefore, 'reads and rejected writes never notify other monitors');
+    assert.equal((await rest('a', signalRef.path)).status, 403, 'even participating students cannot subscribe to the management signal');
+    const anonymousRead = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${projectId}/databases/(default)/documents/${signalRef.path}`);
+    assert.equal(anonymousRead.status, 403, `unauthenticated clients cannot subscribe to the management signal: ${await anonymousRead.text()}`);
     for (const patch of [
       { registrationApprovalStatus: 'PENDING' }, { registrationApprovalStatus: null },
       { isDeleted: true }, { deletedAt: Timestamp.now() }, { weplayDeletionPending: true },
@@ -112,6 +142,7 @@ async function verifySpectatorRules(roomRef) {
       await expectRead('teacher', 403, 'inactive, mismatched or read-only semester scope denies observers');
       await db.doc(path).set(originals.get(path));
     }
+    sharedFenceChecks = false; // Room expiry/status never revokes the separate management subscription.
     await fixtureRef.update({ expiresAtMs: Date.now() - 1 });
     await expectRead('teacher', 403, 'an expired room cannot be observed');
     await fixtureRef.set({ ...fixture, status: 'waiting' });
@@ -180,12 +211,15 @@ async function verifySpectatorRules(roomRef) {
     const defaultManagement = await deployed.getYutManagement.run(request('teacher'));
     assert.deepEqual(defaultManagement.settings, { enabled: false, version: 0, allowSolo: true, allowMultiplayer: true, allowPrivateRooms: true, defaultPlayerCount: 4, throwSeconds: 5, moveSeconds: 25 });
     assert.deepEqual(defaultManagement.rooms, []);
+    assert.equal((await rest('teacher', signalRef.path)).status, 404, 'an authorized monitor can subscribe before the first signal exists');
+    assert.equal((await rest('a', signalRef.path)).status, 403, 'an absent signal does not bypass student restrictions');
     await denied(deployed.getYutManagement.run(request('a')));
     await denied(deployed.saveYutSettings.run(request('a', { enabled: true, expectedVersion: 0 })));
     await db.doc(`${base}/weplay_games/joseon-yut`).set({ enabled: 'true', version: 0 });
     await denied(deployed.getYutLobby.run(request('a')));
     const initialSave = await deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: 0 }));
     assert.equal(initialSave.settings.version, 1);
+    const initialSignal = await assertSignalChanged(undefined, 'settings changes initialize the live management signal');
     await denied(deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: 0 })), ['aborted']);
     await denied(deployed.saveYutSettings.run(request('teacher', { enabled: 'true', expectedVersion: 1 })), ['invalid-argument']);
     await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: true, staffPermissions: ['lesson_read'] });
@@ -200,6 +234,7 @@ async function verifySpectatorRules(roomRef) {
     assert.equal((await deployed.getYutLobby.run(request('a'))).playerName, '정규학생-a(1학년 1반)');
     const creation = request('a', { action: 'create', requestKey: key(), classId: 'class_two', name: '위조 이름', grade: '9', classNumber: '99' });
     const [created, retry] = await Promise.all([deployed.commandYutRoom.run(creation), deployed.commandYutRoom.run(creation)]);
+    await assertSignalChanged(initialSignal, 'creating the first room wakes a monitor whose list was empty');
     let room = created.room;
     assert.equal(retry.room.id, room.id); assert.equal(room.classId, '');
     assert.equal(room.players[0].name, '정규학생-a(1학년 1반)', 'canonical enrollment/class records override request and profile labels');
@@ -217,7 +252,9 @@ async function verifySpectatorRules(roomRef) {
     await db.doc('semester_classes/class_two').update({ status: 'ACTIVE' });
     // Simulate an already-open room created before the cross-class/emote patch.
     await db.doc(`${base}/yut_rooms/${room.id}`).update({ classId: 'class_one', classLabel: '1학년 1반', syncRevision: FieldValue.delete(), emotes: FieldValue.delete() });
+    const beforeJoinSignal = await readSignal();
     room = (await command('outsider', 'join', { code: room.code })).room;
+    await assertSignalChanged(beforeJoinSignal, 'joining updates monitored occupancy and participant labels');
     assert.equal(room.players.length, 2, 'another active class joins a legacy room by code');
     assert.equal(room.players.find(player => player.uid === uid('outsider')).name, '방재석(3학년 2반)');
     const crossClassRead = await rest('outsider', `${base}/yut_rooms/${room.id}`);
@@ -238,7 +275,9 @@ async function verifySpectatorRules(roomRef) {
     const roomPath = db.doc(`${base}/yut_rooms/${room.id}`);
     const legacyPlayers = room.players.map(player => ({ ...player, name: '7번 정○○' }));
     await roomPath.update({ players: legacyPlayers, playerNamesVersion: FieldValue.delete() });
+    const beforeRestoreSignal = await readSignal();
     const restored = (await deployed.getYutLobby.run(request('a', { name: '위조 복원 이름' }))).room;
+    const afterRestoreSignal = await assertSignalChanged(beforeRestoreSignal, 'canonical label refresh notifies management without a gameplay action');
     assert.deepEqual(restored.players.map(player => player.name), ['정규학생-a(1학년 1반)', '방재석(3학년 2반)']);
     assert.equal(restored.revision, room.revision);
     assert.equal(restored.syncRevision, room.syncRevision + 1);
@@ -247,6 +286,7 @@ async function verifySpectatorRules(roomRef) {
     assert.deepEqual((await roomPath.get()).data().players, restored.players, 'realtime readers receive refreshed legacy labels');
     assert.equal((await roomPath.get()).data().playerNamesVersion, 1);
     assert.equal((await deployed.getYutLobby.run(request('a'))).room.syncRevision, restored.syncRevision, 'unchanged names do not create repeated writes');
+    assert.deepEqual(await readSignal(), afterRestoreSignal, 'unchanged lobby reads cannot cause a refresh loop');
     const identityReads = [];
     const countedHandlers = require('../yut').createYutHandlers({
       db: {
@@ -325,7 +365,9 @@ async function verifySpectatorRules(roomRef) {
     assert.equal(managed.rooms[0].standings.every(player => player.finishedPieces === 0 && player.totalPieces === 2), true);
     const monitorRoomRef = db.doc(`${base}/yut_rooms/${room.id}`);
     const beforeMonitor = (await monitorRoomRef.get()).data();
+    const beforeMonitorSignal = await readSignal();
     await deployed.getYutManagement.run(request('teacher'));
+    assert.deepEqual(await readSignal(), beforeMonitorSignal, 'management refresh remains read-only and cannot trigger itself');
     assert.deepEqual((await monitorRoomRef.get()).data(), beforeMonitor, 'monitor summary never changes gameplay, revision or clocks');
     await verifySpectatorRules(monitorRoomRef);
     await denied(deployed.getYutManagement.run(request('a')));
@@ -595,7 +637,26 @@ async function verifySpectatorRules(roomRef) {
     await roomCommand('p1', publicTwo, 'leave');
     assert.equal((await db.doc(`${base}/yut_rooms/${publicOne.id}`).get()).data().participantUids.includes(uid('p1')), false, 'leave still cleans up when multiplayer is disabled');
     await saveModes({ enabled: false });
-    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, read-only teacher/staff/admin observation and unchanged active games, two-piece explicit stacks and idempotent move choices, phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
+    // Exercise a real completing command: finished games must leave the live
+    // list even when nobody closes the room manually.
+    let finishingRoom = (await command('admin', 'create', { visibility: 'public', maxPlayers: 2 })).room;
+    finishingRoom = (await command('staff', 'join', { code: finishingRoom.code })).room;
+    finishingRoom = (await roomCommand('staff', finishingRoom, 'ready', { ready: true })).room;
+    finishingRoom = (await roomCommand('admin', finishingRoom, 'start')).room;
+    assert.equal((await deployed.getYutManagement.run(request('teacher'))).rooms.some(entry => entry.id === finishingRoom.id), true);
+    const nearFinishPlayers = finishingRoom.players.map(player => ({ ...player, pieces: player.pieces.map((piece, index) => ({ id: piece.id, node: player.uid === uid('admin') ? (index ? 'finish' : 'o19') : 'home', lane: 'outer' })) }));
+    await db.doc(`${base}/yut_rooms/${finishingRoom.id}`).update({ players: nearFinishPlayers, turnUid: uid('admin'), phase: 'move', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, pendingThrow: { value: 1, label: '도', sticks: [true, false, false, false] } });
+    finishingRoom = (await roomCommand('admin', finishingRoom, 'move', { pieceId: '1', route: 'outer' })).room;
+    assert.equal(finishingRoom.status, 'finished');
+    assert.equal((await deployed.getYutManagement.run(request('teacher'))).rooms.some(entry => entry.id === finishingRoom.id), false, 'completion signal reload excludes the finished room immediately');
+    const sameTime = Date.now();
+    const sameTimeHandlers = createYutHandlers({ db, now: () => sameTime });
+    await sameTimeHandlers.saveYutSettings(request('teacher', { enabled: false, expectedVersion: modeSettings.version }));
+    const firstSameTimeSignal = await readSignal();
+    await sameTimeHandlers.saveYutSettings(request('teacher', { enabled: false, expectedVersion: modeSettings.version + 1 }));
+    const secondSameTimeSignal = await assertSignalChanged(firstSameTimeSignal, 'changes in one millisecond still produce distinct monitor events');
+    assert.equal(firstSameTimeSignal.updatedAtMs, secondSameTimeSignal.updatedAtMs);
+    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, private live management signal lifecycle/same-ms uniqueness/read-only refresh and authorization fences, read-only teacher/staff/admin observation and unchanged active games, two-piece explicit stacks and idempotent move choices, phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
   } finally {
     // This emulator/project was checked before importing any Admin SDK code.
     await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' });
