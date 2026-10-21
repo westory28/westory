@@ -842,7 +842,19 @@
 
 /* Keep instructions and status in flow, outside the selectable board. */
 .yut-game .yut-match {
+  display: flex;
+  flex-direction: column;
   padding-bottom: 20px;
+}
+.yut-game .yut-match .yut-match-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.yut-game .yut-board-area {
+  flex-shrink: 0;
+  margin-top: auto;
 }
 .yut-game .yut-sr-only {
   position: absolute;

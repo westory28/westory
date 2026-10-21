@@ -2302,7 +2302,11 @@ export default function YutGame({
               className={`yut-match-stage ${settling || pending === "throw" ? "is-tossing" : ""}`}
             >
               <div className="yut-players" aria-label="참가자 현황">
-                {(displayRoom || room).players.map((person) => {
+                {(displayRoom || room).players.map((person, index) => {
+                  const seat =
+                    (displayRoom || room).players.length === 2
+                      ? index + 2
+                      : YUT_ROLES.indexOf(person.role);
                   const activeTurn =
                     displayRoom?.turnUid === person.uid &&
                     room.status !== "finished";
@@ -2310,7 +2314,7 @@ export default function YutGame({
                   const nameParts = person.name.match(/^(.*?)\s*\(([^()]+)\)$/);
                   return (
                     <div
-                      className={`yut-player yut-player--seat-${YUT_ROLES.indexOf(person.role)} ${activeTurn ? "is-turn" : ""} ${!person.active ? "is-left" : ""}`}
+                      className={`yut-player yut-player--seat-${seat} ${activeTurn ? "is-turn" : ""} ${!person.active ? "is-left" : ""}`}
                       key={person.uid}
                     >
                       <div className="yut-avatar">

@@ -32,6 +32,8 @@ const params=new URLSearchParams(location.search), scenario=params.get('case')||
 const listeners=new Set();
 const qa=window.yutAccessQA={calls:[],enabled:scenario==='open'||scenario==='pending',hold:scenario==='pending',fail:scenario==='failure',missing:scenario==='missing',settings:{enabled:false,version:0,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25},rooms:[{id:'room-a',code:'AB2345',status:'playing',revision:4,hostUid:'student-a',createdAtMs:Date.now()-60000,expiresAtMs:Date.now()+60000,turnUid:'student-a',players:[{uid:'student-a',name:'검증 학생',role:'sa',classLabel:'3학년 2반',studentNumber:7,active:true},{uid:'student-b',name:'둘째 학생',role:'nong',classLabel:'3학년 2반',studentNumber:8,active:true}]}],auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-user',email:'qa@example.invalid'},userData:{role:scenario==='readonly'?'student':scenario==='denied'?'student':params.get('portal')==='student'?'student':'teacher',teacherPortalEnabled:scenario==='readonly',staffPermissions:scenario==='readonly'?['lesson_read']:[]}}};
 qa.changeAuth=next=>{qa.auth={...qa.auth,...next};listeners.forEach(fn=>fn());};
+qa.rooms[0].standings=[{uid:'student-a',finishedPieces:1,totalPieces:2,progress:-11},{uid:'student-b',finishedPieces:0,totalPieces:2,progress:-16}];
+qa.rooms[0].leadingUids=['student-a'];
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.auth);
 export async function getYutLobby(config){qa.calls.push({name:'getYutLobby',config:structuredClone(config)});const result={enabled:qa.enabled,settings:{...structuredClone(qa.settings),enabled:qa.enabled},room:null,classes:[],classId:'',serverNowMs:Date.now()};if(qa.hold){qa.hold=false;await new Promise(resolve=>qa.release=resolve);}if(qa.fail)throw Object.assign(new Error('연결을 확인해 주세요.'),{code:'functions/unavailable'});if(qa.missing)delete result.enabled;return result;}
 export async function getYutManagement(config){qa.calls.push({name:'getYutManagement',config:structuredClone(config)});if(qa.fail)throw new Error('관리 정보를 확인하지 못했습니다.');return {settings:structuredClone(qa.settings),rooms:structuredClone(qa.rooms),truncated:false,serverNowMs:Date.now()};}
@@ -445,7 +447,9 @@ try {
       .isEnabled(),
     false,
   );
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
   await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await page.getByRole("button", { name: "모니터링 닫기", exact: true }).click();
   assert.equal(
     await page.getByRole("checkbox", { name: "학생에게 공개" }).isChecked(),
     true,
@@ -514,9 +518,14 @@ try {
     .getByRole("button", { name: "최신 설정 불러오기", exact: true })
     .click();
   await page.getByRole("checkbox", { name: "학생에게 공개" }).check();
-  await page.getByText("3학년 2반 · 7번", { exact: true }).waitFor();
+  assert.equal(await page.locator(".yut-management-room-list").count(), 0);
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  await page.getByRole("dialog", { name: "학생 플레이 모니터링" }).waitFor();
+  await page.getByText("7번", { exact: true }).waitFor();
   await page.getByText("현재 차례", { exact: true }).waitFor();
   await page.getByText("비공개 방", { exact: true }).waitFor();
+  await page.getByText("선두 검증 학생", { exact: true }).waitFor();
+  await page.getByText("완주 1/2", { exact: true }).waitFor();
   await page.evaluate(() => {
     window.yutAccessQA.rooms[0].visibility = "public";
     window.yutAccessQA.rooms[0].maxPlayers = 3;
@@ -526,6 +535,7 @@ try {
   await page.getByRole("button", { name: "새로고침", exact: true }).click();
   await page.getByText("공개 방", { exact: true }).waitFor();
   await page.getByText("2/3명", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "모니터링 닫기", exact: true }).click();
   assert.equal(
     await page.getByRole("checkbox", { name: "학생에게 공개" }).isChecked(),
     false,
@@ -568,6 +578,76 @@ try {
       fullPage: true,
     });
   }
+  await page.evaluate(() => {
+    const source = window.yutAccessQA.rooms[0];
+    window.yutAccessQA.rooms.push(
+      { ...structuredClone(source), id: "room-b", code: "CD2345", leadingUids: ["student-a", "student-b"] },
+      ...Array.from({ length: 10 }, (_, index) => ({ ...structuredClone(source), id: "room-" + index, code: "EF234" + index })),
+    );
+  });
+  // Deliberate conflict toasts must not cover monitoring screenshots.
+  while (await page.getByRole("button", { name: /알림 닫기$/ }).count()) {
+    await page.getByRole("button", { name: /알림 닫기$/ }).first().click();
+  }
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const opener = page.getByRole("button", { name: "플레이 모니터링", exact: true });
+    await opener.click();
+    const monitor = page.getByRole("dialog", { name: "학생 플레이 모니터링" });
+    await monitor.waitFor();
+    await monitor.getByText("공동 선두 검증 학생, 둘째 학생", { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelectorAll(".yut-management-room-list > li").length === 12);
+    const layout = await monitor.evaluate((node) => {
+      const body = node.querySelector(".yut-management-monitor-body");
+      const cards = [...node.querySelectorAll(".yut-management-room-list > li")].map((card) => card.getBoundingClientRect());
+      return { first: { x: cards[0].x, y: cards[0].y }, second: { x: cards[1].x, y: cards[1].y }, overflow: body.scrollWidth > body.clientWidth + 1, scrolls: body.scrollHeight > body.clientHeight, pageLocked: document.body.style.overflowY === "hidden", focusedInside: node.contains(document.activeElement) };
+    });
+    assert.equal(layout.overflow, false);
+    assert.equal(layout.scrolls, true);
+    assert.equal(layout.pageLocked, true);
+    assert.equal(layout.focusedInside, true);
+    if (width >= 1280) {
+      assert.equal(layout.first.y, layout.second.y);
+      assert.ok(layout.second.x > layout.first.x);
+    } else {
+      assert.equal(layout.first.x, layout.second.x);
+      assert.ok(layout.second.y > layout.first.y);
+    }
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(await monitor.evaluate(node => node.contains(document.activeElement)), true);
+    await monitor.getByRole("button", { name: "모니터링 닫기", exact: true }).focus();
+    await monitor.locator(".yut-management-monitor-body").evaluate(node => { node.scrollTop = 0; });
+    await page.mouse.move(0, 0);
+    await page.screenshot({ path: path.join(evidence, "teacher-monitor-" + width + ".png") });
+    await page.keyboard.press("Escape");
+    assert.equal(await monitor.count(), 0);
+    assert.equal(await opener.evaluate(node => node === document.activeElement), true);
+    assert.equal(await page.evaluate(() => document.body.style.overflowY), "");
+  }
+  const idleReads = await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.waitForTimeout(50);
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length), idleReads);
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "commandYutRoom").length), 0);
+  await page.evaluate(() => { window.yutAccessQA.rooms = window.yutAccessQA.rooms.slice(0, 1); });
+  await page.clock.install();
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  await page.getByText("선두 검증 학생", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "선두 기준", exact: true }).click();
+  const leadHelp = page.getByRole("tooltip").filter({ hasText: "완주한 말 수" });
+  await leadHelp.waitFor();
+  assert.equal(await leadHelp.evaluate(node => !!node.closest("dialog")), true);
+  await page.keyboard.press("Escape");
+  assert.equal(await page.getByRole("dialog", { name: "학생 플레이 모니터링" }).count(), 1);
+  const openReads = await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length);
+  await page.clock.fastForward(15010);
+  await page.waitForFunction((reads) => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length > reads, openReads);
+  await page.mouse.click(5, 5);
+  assert.equal(await page.getByRole("dialog", { name: "학생 플레이 모니터링" }).count(), 0);
+  const closedReads = await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length);
+  await page.clock.fastForward(30010);
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length), closedReads);
+  checks.push("Monitoring opens in a modal, shows leaders/co-leaders/completed pieces and uses two desktop columns/one mobile column; 12 rooms share one scroll area with focus containment, Escape/backdrop focus restoration and native-modal tooltips. The 15s refresh runs only while open; inspecting rooms performs no room commands.");
   // Earlier deliberate save conflicts leave global toasts; dismiss them before the intro.
   while (await page.getByRole("button", { name: /알림 닫기$/ }).count()) {
     await page
@@ -601,9 +681,15 @@ try {
     await page.getByLabel("윷 던지기 제한 시간", { exact: true }).inputValue(),
     "9",
   );
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
   await page
     .getByRole("button", { name: "AB2345 방 닫기", exact: true })
     .click();
+  await page.getByText("AB2345 방을 닫으면 참여 중인 학생의 게임이 종료됩니다.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "commandYutRoom").length), 0);
+  await page.getByRole("button", { name: "취소", exact: true }).click();
+  assert.equal(await page.locator(".yut-management-close-confirm").count(), 0);
+  await page.getByRole("button", { name: "AB2345 방 닫기", exact: true }).click();
   await page.getByRole("button", { name: "방 닫기", exact: true }).click();
   await page
     .getByText("대기 중이거나 진행 중인 방이 없습니다.", { exact: true })
@@ -639,6 +725,8 @@ try {
       .count(),
     0,
   );
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  await page.getByRole("dialog", { name: "학생 플레이 모니터링" }).waitFor();
   assert.equal(
     await page
       .getByRole("button", { name: "AB2345 방 닫기", exact: true })

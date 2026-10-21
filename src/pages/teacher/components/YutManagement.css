@@ -37,13 +37,23 @@
 .yut-management-preview-actions > * { flex: 1 1 auto; }
 .yut-management-muted { color: var(--ws-text-muted, #6b7280); font-size: 14px; }
 .yut-management-error { color: var(--ws-danger-text, #b91c1c); background: var(--ws-danger-soft, #fef2f2); padding: 12px 16px; border-radius: 8px; }
-.yut-management-room-list { display: grid; gap: 16px; padding: 0; list-style: none; margin-top: 16px; }
-.yut-management-room-list > li { padding: 16px; }
+.yut-management-monitor { width: min(1152px, calc(100% - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 12px; background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font: inherit; }
+.yut-management-monitor[open] { display: flex; flex-direction: column; }
+.yut-management-monitor::backdrop { background: var(--ws-overlay, rgba(15, 23, 42, .62)); }
+.yut-management-monitor-header { flex: 0 0 auto; padding: 16px 24px; border-bottom: 1px solid var(--ws-border, #e5e7eb); }
+.yut-management-monitor-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 24px; container-type: inline-size; }
+.yut-management-room-list { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; padding: 0; list-style: none; margin: 16px 0 0; }
+.yut-management-room-list > li { min-width: 0; padding: 16px; }
+.yut-management-leader { overflow-wrap: anywhere; }
+.yut-management-leader > strong { color: var(--ws-primary, #2563eb); }
+.yut-management-close-confirm { padding: 12px 0; color: var(--ws-danger-text, #b91c1c); }
+.yut-management-close-confirm p { margin-top: 0; }
 .yut-management-room-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .yut-management-room-heading > span { color: var(--ws-text-muted, #6b7280); font-size: 14px; }
 .yut-management-players { list-style: none; padding: 0; margin: 12px 0 0; }
 .yut-management-players > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-height: 44px; border-top: 1px solid var(--ws-border, #e5e7eb); overflow-wrap: anywhere; }
 .yut-management-turn { color: var(--ws-primary, #2563eb); font-weight: 700; }
 @container (min-width: 600px) { .yut-management-number-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 800px) { .yut-management-room-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (min-width: 800px) { .yut-management-layout { grid-template-columns: minmax(0, 2fr) minmax(256px, 1fr); } }
-@media (max-width: 767px) { .yut-management-settings, .yut-management-preview { padding: 16px; } }
+@media (max-width: 767px) { .yut-management-settings, .yut-management-preview, .yut-management-monitor-header, .yut-management-monitor-body { padding: 16px; } }
