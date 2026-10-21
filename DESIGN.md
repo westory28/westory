@@ -574,7 +574,7 @@ Layout tokens:
 
 ### Header
 
-- Mobile account blocks place the bold 16px profile directly above one unbroken row of notification, countdown/extension and logout controls, with 8px row spacing and 40px minimum targets. Countdown text stays centered with equal-width icon/extension columns. Keep desktop placement unchanged. Notification panels anchor 8px below their bell, clamp horizontally to 12px viewport margins, and scroll within the remaining viewport height; never cover the trigger. Reuse the existing 360px popover width.
+- Mobile account blocks place the bold 16px profile directly above one unbroken row of notification and logout controls, with 8px row spacing and 40px minimum targets. The 30-day retention policy renews automatically with activity; omit countdown badges and manual extension controls on mobile and desktop. Keep desktop placement unchanged. Notification panels anchor 8px below their bell, clamp horizontally to 12px viewport margins, and scroll within the remaining viewport height; never cover the trigger. Reuse the existing 360px popover width.
 - Mobile student-list filters and points grade/class/sort selectors share one row using flexible equal columns and existing 4/8px gaps, 40px controls and 12/14px text. Search expands into its own row on request. Student pagination uses one row, the existing 32px minimum number width with 40px height and 4px gaps, with ellipses replacing distant pages (first four plus final two initially; current neighbors and end anchors afterward).
 
 - Teacher header: keep the existing 64px row height and center the logo, navigation labels, and account actions on the same axis.

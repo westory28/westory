@@ -10,23 +10,18 @@ interface DeviceSession {
   expiresAt: number;
 }
 
+// A browser can allow reads while rejecting writes (for example, at quota).
+// Keep an unsaved update only until another tab changes the persisted value.
+const pendingWrites = new Map<
+  string,
+  { session: DeviceSession; persistedValue: string | null | undefined }
+>();
+
 export const getDeviceSessionKey = (uid: string) =>
   `westoryDeviceSession:v1:${uid}`;
 
-const readSession = (uid: string): DeviceSession | null => {
+const parseSession = (raw: string | null): DeviceSession | null => {
   try {
-    const key = getDeviceSessionKey(uid);
-    let raw: string | null;
-    try {
-      raw =
-        typeof window !== "undefined" && !isSemesterArchive
-          ? window.localStorage.getItem(key)
-          : readLocalOnly(key);
-    } catch {
-      raw = readLocalOnly(key);
-    }
-    // A missing local value is authoritative after another tab signs out.
-    // Only blocked storage uses safeStorage's in-memory fallback.
     const saved = JSON.parse(raw || "null");
     return saved &&
       Number.isFinite(saved.authTime) &&
@@ -40,8 +35,69 @@ const readSession = (uid: string): DeviceSession | null => {
   }
 };
 
+const readSession = (uid: string): DeviceSession | null => {
+  try {
+    const key = getDeviceSessionKey(uid);
+    let raw: string | null;
+    try {
+      raw =
+        typeof window !== "undefined" && !isSemesterArchive
+          ? window.localStorage.getItem(key)
+          : readLocalOnly(key);
+      const pending = pendingWrites.get(key);
+      if (pending) {
+        const persisted = parseSession(raw);
+        // After blocked reads recover, retain only a newer local deadline for
+        // the same login. A removed key or different login remains authoritative.
+        if (
+          raw === pending.persistedValue ||
+          (pending.persistedValue === undefined &&
+            persisted?.authTime === pending.session.authTime &&
+            persisted.expiresAt < pending.session.expiresAt)
+        ) {
+          pending.persistedValue = raw;
+          return pending.session;
+        }
+        pendingWrites.delete(key);
+      }
+    } catch {
+      raw = readLocalOnly(key);
+    }
+    // A missing local value is authoritative after another tab signs out.
+    // Blocked reads continue to use safeStorage's in-memory fallback.
+    return parseSession(raw);
+  } catch {
+    return null;
+  }
+};
+
 const writeSession = (uid: string, session: DeviceSession) => {
-  writeLocalOnly(getDeviceSessionKey(uid), JSON.stringify(session));
+  const key = getDeviceSessionKey(uid);
+  const serialized = JSON.stringify(session);
+  let persistedValue: string | null | undefined;
+  if (typeof window !== "undefined" && !isSemesterArchive) {
+    try {
+      persistedValue = window.localStorage.getItem(key);
+    } catch {
+      persistedValue = pendingWrites.get(key)?.persistedValue;
+    }
+  }
+  writeLocalOnly(key, serialized);
+  if (typeof window !== "undefined" && !isSemesterArchive) {
+    try {
+      const saved = window.localStorage.getItem(key);
+      if (
+        saved === serialized ||
+        (persistedValue !== undefined && saved !== persistedValue)
+      ) {
+        pendingWrites.delete(key);
+      } else {
+        pendingWrites.set(key, { session, persistedValue: saved });
+      }
+    } catch {
+      pendingWrites.set(key, { session, persistedValue });
+    }
+  }
   return session;
 };
 
@@ -101,13 +157,8 @@ export const extendDeviceSession = (
 };
 
 export const clearDeviceSession = (uid: string) => {
-  removeStorage(getDeviceSessionKey(uid));
+  const key = getDeviceSessionKey(uid);
+  pendingWrites.delete(key);
+  removeStorage(key);
   removeStorage("sessionExpiry");
-};
-
-export const formatDeviceSessionRemaining = (seconds: number) => {
-  if (seconds <= 0) return "만료";
-  if (seconds >= 24 * 60 * 60) return `${Math.ceil(seconds / 86400)}일`;
-  if (seconds >= 60 * 60) return `${Math.ceil(seconds / 3600)}시간`;
-  return `${Math.ceil(seconds / 60)}분`;
 };

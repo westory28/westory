@@ -47,7 +47,6 @@ const fixture = () => {
     logouts: 0,
     tokenCalls: 0,
     epoch: 1799990000,
-    remaining: 0,
     tokenHold: null,
     tokenError: null,
   };
@@ -128,7 +127,6 @@ const fixture = () => {
     },
   };
   const auth = { currentUser };
-  const extendSessionRef = { current: () => {} };
   const context = vm.createContext({
     ...api,
     currentUser,
@@ -137,13 +135,11 @@ const fixture = () => {
     window,
     Date: Clock,
     isSemesterArchive: false,
-    extendSessionRef,
     logoutRef: {
       current: async () => {
         state.logouts++;
       },
     },
-    setRemainingSeconds: (seconds) => (state.remaining = seconds),
     getSessionActivityTarget: (target) => target?.activity === true,
     getSessionChangeActivityTarget: (target) => target?.activity === true,
     isSessionActivityIgnored: (target) => target?.ignored === true,
@@ -158,7 +154,6 @@ const fixture = () => {
     auth,
     window,
     document,
-    extendSessionRef,
     start: context.start,
   };
 };
@@ -241,7 +236,11 @@ const fixture = () => {
   );
   f.document.hidden = false;
   f.document.emit("visibilitychange");
-  assert.equal(f.state.remaining, 29 * 86400);
+  assert.equal(
+    f.api.readDeviceSession(f.currentUser.uid, f.state.epoch).expiresAt,
+    f.state.now + 30 * 86400000,
+    "Returning to a visible page renews an unexpired session",
+  );
   f.document.emit("input", { isTrusted: true, target: { activity: true } });
   const active = f.api.readDeviceSession(f.currentUser.uid, f.state.epoch);
   assert.equal(active.expiresAt, f.state.now + 30 * 86400000);
@@ -274,7 +273,8 @@ const fixture = () => {
     0,
     "A resumed tab respects another active deadline",
   );
-  f.state.now = drawing.expiresAt + 1;
+  f.state.now =
+    f.api.readDeviceSession(f.currentUser.uid, f.state.epoch).expiresAt + 1;
   f.window.emit("pageshow");
   await flush();
   assert.equal(f.state.logouts, 1, "A genuinely idle session expires");
@@ -331,14 +331,92 @@ for (const change of [
   assert.equal(f.state.logouts, 0, `${change} must not trigger a stale logout`);
   cleanup();
 }
+for (const uid of ["teacher-a", "student-b"]) {
+  for (const expired of [false, true]) {
+    const f = fixture();
+    f.currentUser.uid = uid;
+    const saved = f.api.initializeDeviceSession(uid, f.state.epoch);
+    f.state.now += (expired ? 30 : 29) * 86400000;
+    const cleanup = f.start();
+    await flush();
+    assert.equal(
+      f.api.readDeviceSession(uid, f.state.epoch).expiresAt,
+      expired ? saved.expiresAt : f.state.now + 30 * 86400000,
+      "Foreground return renews only a session that is still valid",
+    );
+    assert.equal(f.state.logouts, expired ? 1 : 0);
+    cleanup();
+  }
+}
+for (const event of ["wheel", "touchstart", "keydown"]) {
+  const f = fixture();
+  const cleanup = f.start();
+  await flush();
+  const initial = f.api.readDeviceSession(f.currentUser.uid, f.state.epoch);
+  f.state.now += 86400000;
+  f.document.emit(event, { isTrusted: false, target: {} });
+  f.document.emit(event, { isTrusted: true, target: { ignored: true } });
+  f.document.hidden = true;
+  f.document.emit(event, { isTrusted: true, target: {} });
+  assert.equal(
+    f.api.readDeviceSession(f.currentUser.uid, f.state.epoch).expiresAt,
+    initial.expiresAt,
+    `${event}: synthetic, ignored, and hidden activity cannot renew`,
+  );
+  f.document.hidden = false;
+  f.document.emit(event, { isTrusted: true, target: {} });
+  assert.equal(
+    f.api.readDeviceSession(f.currentUser.uid, f.state.epoch).expiresAt,
+    f.state.now + 30 * 86400000,
+    `${event}: reading and keyboard navigation count as active use`,
+  );
+  const reads = f.state.reads;
+  const writes = f.state.writes;
+  for (let index = 0; index < 1000; index++)
+    f.document.emit(event, { isTrusted: true, target: {} });
+  assert.equal(f.state.reads, reads, `${event}: burst reads are throttled`);
+  assert.equal(f.state.writes, writes, `${event}: burst writes are throttled`);
+  assert.equal(f.state.tokenCalls, 1, `${event}: no additional token request`);
+  f.state.now += 30 * 86400000;
+  f.document.emit(event, { isTrusted: true, target: {} });
+  await flush();
+  assert.equal(f.state.logouts, 1, `${event}: expired sessions stay expired`);
+  cleanup();
+}
 {
   const f = fixture();
-  assert.equal(f.api.formatDeviceSessionRemaining(30 * 86400), "30일");
-  assert.equal(f.api.formatDeviceSessionRemaining(3600), "1시간");
-  assert.equal(f.api.formatDeviceSessionRemaining(30), "1분");
-  assert.equal(f.api.formatDeviceSessionRemaining(0), "만료");
+  const cleanup = f.start();
+  await flush();
+  const initial = f.api.readDeviceSession(f.currentUser.uid, f.state.epoch);
+  f.state.now += 29 * 86400000;
+  for (const { callback } of f.window.timers.values()) callback();
+  f.window.emit("storage", {
+    key: f.api.getDeviceSessionKey(f.currentUser.uid),
+  });
+  f.document.emit("scroll", { isTrusted: true, target: {} });
+  assert.equal(
+    f.api.readDeviceSession(f.currentUser.uid, f.state.epoch).expiresAt,
+    initial.expiresAt,
+    "Periodic checks, storage synchronization and automatic scrolling do not renew",
+  );
+  assert.equal(
+    f.state.tokenCalls,
+    1,
+    "Valid idle checks use no token requests",
+  );
+  f.document.hidden = true;
+  f.state.now = initial.expiresAt;
+  f.window.emit("pageshow");
+  for (const { callback } of f.window.timers.values()) callback();
+  await flush();
+  assert.equal(f.state.logouts, 0, "Hidden tabs cannot log out active tabs");
+  f.document.hidden = false;
+  f.document.emit("visibilitychange");
+  await flush();
+  assert.equal(f.state.logouts, 1, "A visible expired return logs out once");
+  cleanup();
 }
 
 console.log(
-  "PASS: 30-day device inactivity, one-time migration, reload/expired-session behavior, account/auth epoch isolation, explicit login/logout, storage fallback, resume synchronization, typing/handwriting throttling, stale expiry races, and cleanup.",
+  "PASS: 30-day device inactivity, migration, foreground visits, valid/expired resume, teacher/student isolation, explicit login/logout, storage fallback, trusted reading/typing/pointer activity, throttling, zero activity auth requests, stale expiry races, and cleanup.",
 );

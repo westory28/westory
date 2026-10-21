@@ -33,9 +33,7 @@ import {
   clearDeviceSession,
   DEVICE_SESSION_ACTIVITY_THROTTLE_MS,
   DEVICE_SESSION_CHECK_MS,
-  DEVICE_SESSION_DURATION_MS,
   extendDeviceSession,
-  formatDeviceSessionRemaining,
   getDeviceSessionKey,
   initializeDeviceSession,
   readDeviceSession,
@@ -153,9 +151,6 @@ const Header: React.FC<{
     () => window.matchMedia("(max-width: 1023px)").matches,
   );
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
-  const [remainingSeconds, setRemainingSeconds] = useState(
-    DEVICE_SESSION_DURATION_MS / 1000,
-  );
   const [studentEmojiPolicy, setStudentEmojiPolicy] =
     useState<PointRankPolicy | null>(null);
   const [studentRank, setStudentRank] = useState<PointRankDisplay | null>(null);
@@ -172,7 +167,6 @@ const Header: React.FC<{
     getDefaultProfileEmojiValue(),
   );
   const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
-  const extendSessionRef = useRef<() => void>(() => {});
   const logoutRef = useRef<(isTimeout: boolean) => Promise<void>>(
     async () => {},
   );
@@ -559,7 +553,6 @@ const Header: React.FC<{
   };
 
   logoutRef.current = performLogout;
-  const extendSession = () => extendSessionRef.current();
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -592,12 +585,6 @@ const Header: React.FC<{
     let timeoutHandled = false;
     let nextActivityAt = 0;
     const isCurrent = () => !disposed && auth.currentUser === owner;
-    const updateRemaining = (expiresAt: number) => {
-      // The label uses days/hours/minutes; no whole-header render every second.
-      setRemainingSeconds(
-        Math.max(0, Math.ceil((expiresAt - Date.now()) / 60000) * 60),
-      );
-    };
     const checkSession = () => {
       if (!isCurrent() || document.hidden) return;
       if (authTime === null) {
@@ -608,7 +595,6 @@ const Header: React.FC<{
       // tab's activity and must not log every tab out with an old deadline.
       const saved = readDeviceSession(owner.uid, authTime);
       if (!saved) return;
-      updateRemaining(saved.expiresAt);
       if (saved.expiresAt > Date.now() || checkingExpiry || timeoutHandled)
         return;
       checkingExpiry = true;
@@ -648,6 +634,9 @@ const Header: React.FC<{
           authTime = epoch;
           initializeDeviceSession(owner.uid, epoch);
           checkSession();
+          // A foreground visit counts as use, but never revives an expired
+          // deadline. Background restoration and timer checks do not renew it.
+          recordActivity();
         })
         .catch(() => {})
         .finally(() => {
@@ -660,10 +649,8 @@ const Header: React.FC<{
       if (now < nextActivityAt) return;
       nextActivityAt = now + DEVICE_SESSION_ACTIVITY_THROTTLE_MS;
       const saved = extendDeviceSession(owner.uid, authTime);
-      if (saved) updateRemaining(saved.expiresAt);
       if (saved && saved.expiresAt <= Date.now()) checkSession();
     };
-    extendSessionRef.current = recordActivity;
     initializeSession();
 
     const handleMeaningfulClick = (event: MouseEvent) => {
@@ -690,6 +677,14 @@ const Header: React.FC<{
       )
         recordActivity();
     };
+    const handleReadingActivity = (event: Event) => {
+      if (event.isTrusted && !isSessionActivityIgnored(event.target))
+        recordActivity();
+    };
+    const handleForeground = () => {
+      checkSession();
+      recordActivity();
+    };
     const handleStorage = (event: StorageEvent) => {
       if (event.key !== getDeviceSessionKey(owner.uid) && event.key !== null)
         return;
@@ -702,14 +697,24 @@ const Header: React.FC<{
     document.addEventListener("submit", handleSubmit, true);
     document.addEventListener("pointerdown", handlePointerActivity, true);
     document.addEventListener("pointermove", handlePointerActivity, true);
-    document.addEventListener("visibilitychange", checkSession);
-    window.addEventListener("pageshow", checkSession);
+    // Listen to user input, not scroll events: automatic scrolling also emits
+    // trusted scroll events and must not keep an abandoned browser signed in.
+    document.addEventListener("wheel", handleReadingActivity, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("touchstart", handleReadingActivity, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("keydown", handleReadingActivity, true);
+    document.addEventListener("visibilitychange", handleForeground);
+    window.addEventListener("pageshow", handleForeground);
     window.addEventListener("storage", handleStorage);
     window.addEventListener(SESSION_ACTIVITY_EVENT, recordActivity);
     const timerId = window.setInterval(checkSession, DEVICE_SESSION_CHECK_MS);
     return () => {
       disposed = true;
-      extendSessionRef.current = () => {};
       window.clearInterval(timerId);
       document.removeEventListener("click", handleMeaningfulClick, true);
       document.removeEventListener("input", handleMeaningfulChange, true);
@@ -717,8 +722,11 @@ const Header: React.FC<{
       document.removeEventListener("submit", handleSubmit, true);
       document.removeEventListener("pointerdown", handlePointerActivity, true);
       document.removeEventListener("pointermove", handlePointerActivity, true);
-      document.removeEventListener("visibilitychange", checkSession);
-      window.removeEventListener("pageshow", checkSession);
+      document.removeEventListener("wheel", handleReadingActivity, true);
+      document.removeEventListener("touchstart", handleReadingActivity, true);
+      document.removeEventListener("keydown", handleReadingActivity, true);
+      document.removeEventListener("visibilitychange", handleForeground);
+      window.removeEventListener("pageshow", handleForeground);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(SESSION_ACTIVITY_EVENT, recordActivity);
     };
@@ -869,42 +877,6 @@ const Header: React.FC<{
             onUnreadCountChange={setMobileUnreadCount}
           />
         </React.Suspense>
-
-        {mobile ? (
-          <button
-            type="button"
-            onClick={extendSession}
-            data-session-ignore="true"
-            className={`mobile-account-session ${remainingSeconds < 300 ? "is-warning" : ""}`}
-            title="로그인 유지 기간 연장"
-            aria-label={`로그인 유지 ${formatDeviceSessionRemaining(remainingSeconds)} 남음, 기간 연장`}
-          >
-            <i className="fas fa-stopwatch" aria-hidden="true" />
-            <span>{formatDeviceSessionRemaining(remainingSeconds)}</span>
-            <i className="fas fa-redo-alt" aria-hidden="true" />
-          </button>
-        ) : (
-          <div
-            className={`${usePortalSidebar ? "teacher-account-session" : "hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1"} bg-stone-100 rounded-full border border-stone-200`}
-          >
-            <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
-            <span
-              className={`${usePortalSidebar ? "teacher-account-countdown" : ""} font-mono font-bold text-sm min-w-[42px] whitespace-nowrap text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
-              aria-label={`로그인 유지 ${formatDeviceSessionRemaining(remainingSeconds)} 남음`}
-            >
-              {formatDeviceSessionRemaining(remainingSeconds)}
-            </span>
-            <button
-              onClick={extendSession}
-              data-session-ignore="true"
-              className="text-stone-400 hover:text-blue-600 transition p-1"
-              title="로그인 유지 기간 연장"
-              aria-label="로그인 유지 기간 연장"
-            >
-              <i className="fas fa-redo-alt text-xs"></i>
-            </button>
-          </div>
-        )}
 
         <button
           onClick={handleLogout}

@@ -22,7 +22,8 @@ samp {
 .desktop-account-actions { display: contents; }
 .mobile-account-actions {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px auto;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -33,29 +34,6 @@ samp {
   width: 40px;
   height: 40px;
 }
-.mobile-account-session {
-  display: grid;
-  grid-template-columns: 12px minmax(42px, 1fr) 12px;
-  align-items: center;
-  justify-items: center;
-  gap: 4px;
-  min-height: 40px;
-  padding: 0 8px;
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: var(--radius-full, 9999px);
-  background: var(--ws-surface-subtle, #f8fafc);
-  color: var(--ws-text-muted, #6b7280);
-}
-.mobile-account-session > span {
-  font-family: ui-monospace, monospace;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.mobile-account-session > i { font-size: 12px; }
-.mobile-account-session.is-warning { color: var(--ws-danger, #ef4444); }
 .mobile-account-actions .btn-logout {
   display: inline-flex;
   align-items: center;

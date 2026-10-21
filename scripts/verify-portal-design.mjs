@@ -323,18 +323,63 @@ async function sidebarChecks(page, portal, width) {
     await checkMobileReturn();
   };
   await openMobile();
-  const sessionLabel = page.locator(
-    mobile ? ".mobile-account-session > span" : ".teacher-account-countdown",
-  );
-  assert.equal(await sessionLabel.textContent(), "30일");
   assert.equal(
-    await sessionLabel.evaluate(
-      (element) => element.scrollWidth <= element.clientWidth + 1,
-    ),
-    true,
-    "The login retention label fits on desktop and mobile",
+    await page
+      .locator(
+        ".mobile-account-session, .teacher-account-session, .teacher-account-countdown",
+      )
+      .count(),
+    0,
+    "Desktop and mobile omit the login retention badge",
   );
-  await noOverflow(page, `${portal}-session-${width}`);
+  assert.equal(
+    await page.getByRole("button", { name: /로그인 유지.*연장/ }).count(),
+    0,
+    "Login retention needs no manual renewal control",
+  );
+  const accountActions = page.locator(
+    mobile ? ".mobile-account-actions" : ".desktop-account-actions",
+  );
+  const notification = accountActions.getByRole("button", {
+    name: "알림",
+    exact: true,
+  });
+  const logout = accountActions.getByRole("button", {
+    name: "로그아웃",
+    exact: true,
+  });
+  for (const control of [notification, logout]) {
+    // Trial clicks check visibility, enabled state and hit targets without
+    // signing out or opening the synthetic notification widget.
+    await control.click({ trial: true });
+    const box = await control.boundingBox();
+    const viewport = page.viewportSize();
+    assert(
+      box &&
+        box.x >= 0 &&
+        box.y >= 0 &&
+        box.x + box.width <= viewport.width + 1 &&
+        box.y + box.height <= viewport.height + 1,
+      "Account controls remain fully inside the viewport",
+    );
+  }
+  const notificationBox = await notification.boundingBox();
+  const logoutBox = await logout.boundingBox();
+  assert(
+    notificationBox.x + notificationBox.width <= logoutBox.x ||
+      logoutBox.x + logoutBox.width <= notificationBox.x ||
+      notificationBox.y + notificationBox.height <= logoutBox.y ||
+      logoutBox.y + logoutBox.height <= notificationBox.y,
+    "Notification and logout targets do not overlap",
+  );
+  await notification.focus();
+  await notification.press("Tab");
+  assert.equal(
+    await logout.evaluate((element) => element === document.activeElement),
+    true,
+    "Logout remains reachable by keyboard after notifications",
+  );
+  await noOverflow(page, `${portal}-account-${width}`);
   await expanded(group, true, "An initial deep link opens its selected group");
   assert.equal(
     await sidebar.getByRole("link", { name: "역사 지도", exact: true }).count(),
@@ -494,6 +539,8 @@ async function sidebarChecks(page, portal, width) {
     backForward: true,
     manualFold: true,
     mobileFocus: mobile,
+    sessionBadgeAbsent: true,
+    accountControlsAccessible: true,
   });
 }
 try {

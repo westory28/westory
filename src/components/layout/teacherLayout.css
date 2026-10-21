@@ -336,28 +336,6 @@
 :is(.teacher-layout, .student-layout) .teacher-account-notification {
   display: block;
 }
-:is(.teacher-layout, .student-layout) .teacher-account-session {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-}
-:is(.teacher-layout, .student-layout) .teacher-account-session button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  min-height: 32px;
-}
-.teacher-account-countdown {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  align-self: stretch;
-  flex-shrink: 0;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
 .teacher-mobile-account {
   display: none;
 }
@@ -525,10 +503,6 @@
   .teacher-account-header .header-user-name {
     max-width: 128px;
   }
-  :is(.teacher-layout, .student-layout) .teacher-account-session button {
-    min-width: 40px;
-    min-height: 40px;
-  }
   .teacher-sidebar.is-mobile-open {
     padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
@@ -610,13 +584,6 @@
   }
   .teacher-account-header .header-user-name {
     max-width: 80px;
-  }
-  :is(.teacher-layout, .student-layout) .teacher-account-session {
-    gap: 4px;
-    padding-inline: 8px;
-  }
-  :is(.teacher-layout, .student-layout) .teacher-account-session > i {
-    display: none;
   }
   :is(.teacher-layout, .student-layout) .btn-logout {
     padding-inline: 4px;
