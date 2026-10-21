@@ -116,6 +116,14 @@ export interface YutManagedRoom {
   phaseStartsAtMs?: number;
   turnDeadlineMs?: number;
   phase?: "throw" | "move";
+  standings?: {
+    uid: string;
+    finishedPieces: number;
+    totalPieces: number;
+    // Display-only: negative remaining shortest-path steps; higher is ahead.
+    progress: number;
+  }[];
+  leadingUids?: string[];
   players: {
     uid: string;
     name: string;

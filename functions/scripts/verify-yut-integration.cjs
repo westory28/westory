@@ -228,6 +228,12 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     assert.equal(managed.rooms[0].players[0].studentNumber, '7');
     assert.equal(managed.rooms[0].players[0].classLabel, '1학년 1반');
     assert.equal(Object.hasOwn(managed.rooms[0], 'enrollmentIds'), false);
+    assert.deepEqual(managed.rooms[0].leadingUids, room.players.map(player => player.uid), 'new game has tied leaders');
+    assert.equal(managed.rooms[0].standings.every(player => player.finishedPieces === 0 && player.totalPieces === 2), true);
+    const monitorRoomRef = db.doc(`${base}/yut_rooms/${room.id}`);
+    const beforeMonitor = (await monitorRoomRef.get()).data();
+    await deployed.getYutManagement.run(request('teacher'));
+    assert.deepEqual((await monitorRoomRef.get()).data(), beforeMonitor, 'monitor summary never changes gameplay, revision or clocks');
     await denied(deployed.getYutManagement.run(request('a')));
     await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: true });
     await denied(roomCommand('staff', room, 'close'));

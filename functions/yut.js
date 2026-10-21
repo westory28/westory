@@ -154,6 +154,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
   const getYutManagement = async (request) => {
     await assertSession(request);
     const scope = scopeFrom(request.data);
+    const { getYutManagementProgress } = await import('./yutManagement.mjs');
     return db.runTransaction(async (transaction) => {
       const actor = await authority(transaction, request, scope);
       if (!actor.manager) fail('permission-denied', '게임 관리 권한이 필요합니다.');
@@ -176,6 +177,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         pieceCount: room.pieceCount || room.players[0]?.pieces.length || 1,
         throwSeconds: room.throwSeconds || 5, moveSeconds: room.moveSeconds || 25,
         phaseStartsAtMs: room.phaseStartsAtMs || 0, turnDeadlineMs: room.turnDeadlineMs, phase: room.phase,
+        ...getYutManagementProgress(room),
         players: await Promise.all(room.players.map(async (player) => {
           const result = { uid: player.uid, name: player.name, role: player.role, classLabel: '', studentNumber: '', active: player.active };
           const profile = await read(`users/${player.uid}`);
