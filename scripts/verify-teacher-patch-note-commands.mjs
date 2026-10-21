@@ -172,7 +172,11 @@ await check(
 
 await check("Repeated saves reuse the session handshake", async () => {
   const h = gatewayHarness();
-  await h.prepare();
+  assert.equal(
+    await h.prepare(),
+    123,
+    "Read subscribers receive the verified session epoch",
+  );
   await h.run();
   await h.run({ content: { ...commandPayload.content, body: "다음 메모" } });
   assert.equal(

@@ -258,11 +258,12 @@
       "sourceFile": "routineContentWrites.json",
       "file": "routineContentWrites.json",
       "originalSha256": "edb30ba0f1bd8014d6a85331c7e084dae0edb7289a010064be6515d4b3faea52",
-      "sha256": "37a8fbf213251415846a71f461dec34f19608ec28a8df15dfdaf1c73fa52fe41",
+      "sha256": "9b7b28b682bd70eabe44e993b7eb4fa5bc6244a30fbfd39fed06007bda14c29c",
       "changes": [
         "2026-10-15: exemption grant/review/revoke use the existing routine teacher session policy; actor, semester and enrollment checks remain enforced.",
         "2026-10-15: atomic History Classroom save and audited teacher-direct exemption.",
-        "2026-10-16: atomic quiz settings/publication, student-scoped attempt reads and revision-checked answer-free presentation recovery."
+        "2026-10-16: atomic quiz settings/publication, student-scoped attempt reads and revision-checked answer-free presentation recovery.",
+        "2026-10-21: History Classroom soft deletion uses the valid general teacher session; source CAS, actor, semester, receipt and submitted records remain protected."
       ]
     },
     {

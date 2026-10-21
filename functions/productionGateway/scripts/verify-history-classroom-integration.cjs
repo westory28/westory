@@ -637,10 +637,56 @@ const probeGrant = async (payload, failedBatch = 0) => {
   assert.equal(resetRepair.assignments[0].projections, 0, "a reset lock is never recreated as a current teacher-check event");
   assert.equal(await get(`${root}/history_classroom_results/${staleLockId}`), undefined, "a later canonical pass supersedes an old lock even without a reset marker");
   console.log("PASS bounded history repair: explicit sources, dry-run, pass/fail/lock reconstruction, notification cutoff/clear preservation, idempotence, immutable scores and reward account unchanged, reset and superseded locks skipped");
+  // Deleting hides a classroom; it never deletes a student's submitted work.
+  // The original ten-minute-old teacher session has an expired high-risk
+  // window, so both exported callables must use its still-valid general session.
+  const deletionType = "deleteHistoryClassroomSource";
+  const sourceBeforeDeletion = await get(`${root}/history_classrooms/${syncSourceId}`);
+  const deletionPayload = { semesterId, sourceId: syncSourceId,
+    expectedRevision: sourceBeforeDeletion.contentRevision, reason: "합성 교사 과제 삭제" };
+  const immutablePaths = [...[syncPassed, failedStart].flatMap(started => {
+    const id = started.result.attemptId;
+    return [`semester_assessment_attempts/${id}`, `semester_assessment_results/${id}`,
+      `semester_assessment_submissions/${id}`, `${root}/history_classroom_results/${id}`];
+  }), ...[students[30], students[31]].map(uid => `${wis.WIS_ACCOUNT_COLLECTION}/${wis.accountIdFor(semesterId, uid)}`)];
+  const immutableBeforeDelete = await Promise.all(immutablePaths.map(async path => {
+    const data = await get(path);
+    assert.ok(data, `Existing student evidence before deletion: ${path}`);
+    return JSON.stringify(data);
+  }));
+  await assert.rejects(executeAuthenticated(student(), deletionType, deletionPayload), expectCode("permission-denied"));
+  await assert.rejects(production.executeCommand.run({ auth: teacher,
+    data: { commandId: randomUUID(), commandType: deletionType, payload: deletionPayload } }),
+    error => error.details?.reason === "SESSION_PROOF_INVALID");
+  await teacherSessionRef.update({ generalExpiresAt: Timestamp.fromMillis(Date.now() - 1000) });
+  await assert.rejects(executeAuthenticated(teacher, deletionType, deletionPayload),
+    error => error.details?.reason === "SESSION_EXPIRED");
+  await teacherSessionRef.update({ generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000), status: "revoked" });
+  await assert.rejects(executeAuthenticated(teacher, deletionType, deletionPayload),
+    error => error.details?.reason === "SESSION_EXPIRED");
+  await teacherSessionRef.update({ status: "active" });
+  await assert.rejects(executeAuthenticated(teacher, deletionType, { ...deletionPayload, expectedRevision: deletionPayload.expectedRevision + 1 }),
+    error => error.details?.reason === "ASSESSMENT_CONTENT_REVISION_CONFLICT");
+  const deletionCommandId = randomUUID();
+  const deleted = await executeAuthenticated(teacher, deletionType, deletionPayload, deletionCommandId);
+  assert.equal(deleted.result.deleted, true);
+  assert.equal((await authenticatedStatus(teacher, deletionType, deletionCommandId)).result.deleted, true);
+  assert.equal((await executeAuthenticated(teacher, deletionType, deletionPayload, deletionCommandId)).replayed, true);
+  const deletedSource = await get(`${root}/history_classrooms/${syncSourceId}`);
+  assert.equal(deletedSource.contentRevision, sourceBeforeDeletion.contentRevision + 1);
+  assert.equal(deletedSource.isPublished, false);
+  assert.equal(deletedSource.deletedByUid, teacher.uid);
+  assert.ok(deletedSource.deletedAt);
+  assert.deepEqual(await Promise.all(immutablePaths.map(async path => JSON.stringify(await get(path)))), immutableBeforeDelete);
+  await assert.rejects(authenticatedStatus(student(), deletionType, deletionCommandId), expectCode("permission-denied"));
+  await assert.rejects(executeAuthenticated(teacher, "resetAssessmentAttempt", { definitionId: syncDefinitionId, studentUid: students[31], reason: "재인증 경계 검증" }),
+    error => error.details?.reason === "RECENT_AUTH_REQUIRED" || error.details?.reason === "HIGH_RISK_SESSION_EXPIRED");
+  console.log("PASS History Classroom soft deletion: old general session, no high-risk renewal, role/proof/expiry/revocation/CAS guards, exported status/replay, immutable attempts/submissions/results/projections preserved");
   await db.doc(`semester_manifests/${semesterId}`).update({ status: "ARCHIVED" });
   await assert.rejects(execute(teacher, "grantHistoryClassroomExemptions", grantPayload), expectCode("failed-precondition"));
   await assert.rejects(applyDirect(4), expectCode("failed-precondition"));
   await assert.rejects(executeAuthenticated(teacher, "saveHistoryClassroomAssignment", { ...sourceSavePayload, sourceId: "archived-save" }), expectCode("failed-precondition"));
+  await assert.rejects(executeAuthenticated(teacher, deletionType, { ...deletionPayload, expectedRevision: deletedSource.contentRevision }), expectCode("failed-precondition"));
   await assert.rejects(core.getStatus({ auth: runner, data: { commandId: lockCommandId, commandType: "lockHistoryClassroomAttempt" } }), expectCode("permission-denied"));
   console.log("PASS history classroom emulator: 32/34 class grant, receipt replay, ownership, atomic rejection, request/revoke/approve/reject, exemption/result atomicity, no exemption reward, offline resume/deadline, violation lock, teacher reset, submitted-result preservation, archive fence");
 })().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => { await db.terminate(); await deleteApp(app); });

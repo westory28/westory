@@ -29,6 +29,7 @@ vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
     if (name === "./semesterCore") return semesterCore;
     if (name === "./historyClassroomExemptions") return exemptionModule.exports;
     if (name === "./assessmentLearning") return require("../functions/productionGateway/assessmentLearning.js");
+    if (name === "./historyClassroomSync") return require("../functions/productionGateway/historyClassroomSync.js");
     if (name === "./archiveEnrollment") return { SEMESTER_CLASS_COLLECTION: "semester_classes" };
     if (["./cutoverAuthorization", "./sessionAuthority", "./studentMaintenance"].includes(name)) return {};
     throw new Error(name);

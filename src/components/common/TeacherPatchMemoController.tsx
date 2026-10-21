@@ -266,7 +266,7 @@ const getElementRect = (element: HTMLElement): TeacherPatchNoteTargetRect => {
 type FilterKey = "open" | "all" | "done";
 
 const TeacherPatchMemoController: React.FC = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData, authGeneration } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
   const currentPath = useMemo(() => getCurrentPath(location), [location]);
@@ -309,6 +309,11 @@ const TeacherPatchMemoController: React.FC = () => {
   const uid = currentUser?.uid || "";
   const activeUid = useRef(uid);
   activeUid.current = uid;
+  const activeSession = useRef({
+    user: currentUser,
+    generation: authGeneration,
+  });
+  activeSession.current = { user: currentUser, generation: authGeneration };
 
   useEffect(() => {
     setNotes([]);
@@ -335,15 +340,46 @@ const TeacherPatchMemoController: React.FC = () => {
   }, [open, uid, isTeacherRoute, canUsePatchMemo]);
 
   useEffect(() => {
-    if (!uid || !isTeacherRoute || !canUsePatchMemo) {
+    if (!uid || !currentUser || !isTeacherRoute || !canUsePatchMemo) {
       setNotes([]);
       return undefined;
     }
     let cancelled = false;
+    let subscriptionAuthTime: number | null = null;
     let unsubscribe: (() => void) | undefined;
-    const handleError = () => {
-      if (cancelled) return;
+    const isCurrent = () =>
+      !cancelled &&
+      activeSession.current.user === currentUser &&
+      activeSession.current.generation === authGeneration;
+    const handleError = async (error: unknown) => {
+      if (!isCurrent()) return;
       retryNotesSubscription.current = true;
+      if (
+        subscriptionAuthTime !== null &&
+        /(?:^|\/)(?:permission-denied|unauthenticated)$/.test(
+          String((error as { code?: string })?.code || ""),
+        )
+      ) {
+        try {
+          const token = await currentUser.getIdTokenResult();
+          if (!isCurrent()) return;
+          const authTime = Number(token.claims.auth_time);
+          if (
+            Number.isSafeInteger(authTime) &&
+            authTime > subscriptionAuthTime
+          ) {
+            // A listener from the previous epoch can terminate before the
+            // AuthContext generation update renders. Reconnect only after a
+            // verified token change; ordinary denials still surface below.
+            retryNotesSubscription.current = false;
+            setSubscriptionAttempt((attempt) => attempt + 1);
+            return;
+          }
+        } catch {
+          // A failed token check cannot establish a normal epoch transition.
+        }
+        if (!isCurrent()) return;
+      }
       showToast({
         tone: "error",
         title: "패치 메모를 불러오지 못했습니다.",
@@ -353,12 +389,14 @@ const TeacherPatchMemoController: React.FC = () => {
     // Production reads require an active application session, including on
     // initial login before the memo panel is opened.
     void prepareTeacherPatchNoteSession(uid)
-      .then(() => {
-        if (cancelled) return;
+      .then((authTime) => {
+        if (!isCurrent()) return;
+        subscriptionAuthTime = authTime;
+        retryNotesSubscription.current = false;
         unsubscribe = subscribeTeacherPatchNotes(
           uid,
           (nextNotes) => {
-            if (!cancelled) setNotes(nextNotes);
+            if (isCurrent()) setNotes(nextNotes);
           },
           handleError,
         );
@@ -368,7 +406,15 @@ const TeacherPatchMemoController: React.FC = () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [canUsePatchMemo, isTeacherRoute, showToast, uid, subscriptionAttempt]);
+  }, [
+    authGeneration,
+    canUsePatchMemo,
+    currentUser,
+    isTeacherRoute,
+    showToast,
+    uid,
+    subscriptionAttempt,
+  ]);
 
   useEffect(() => {
     if (!open) return undefined;

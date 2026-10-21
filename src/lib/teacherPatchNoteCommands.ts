@@ -101,7 +101,8 @@ const getPatchNoteSession = async (ownerUid: string) => {
 
 // Prepare before memo reads; concurrent reads and saves share this handshake.
 export const prepareTeacherPatchNoteSession = async (ownerUid: string) => {
-  await getPatchNoteSession(ownerUid);
+  const { authTime } = await getPatchNoteSession(ownerUid);
+  return authTime;
 };
 
 // Production denies direct memo writes. Use its existing owner-scoped Gateway

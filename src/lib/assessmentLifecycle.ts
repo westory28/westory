@@ -234,6 +234,7 @@ export const executeAssessmentManagementCommand = async <T>(
     "applyHistoryClassroomExemption",
     "upsertHistoryClassroomSource",
     "saveHistoryClassroomAssignment",
+    "deleteHistoryClassroomSource",
     "createAssessmentDefinition",
     "updateAssessmentDefinition",
     "saveQuizAssessmentSettings",

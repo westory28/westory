@@ -90,6 +90,10 @@ PC에는 코드와 개발 도구가 있고 실제 로그인 처리는 공통 Fir
 
 로그인 함수 4개의 복구가 다른 모든 운영 Functions의 소스 복구를 뜻하지는 않는다. PC 환경을 맞추기 위한 Functions/rules 일괄 배포는 하지 않고, 다른 백엔드 패치는 대상 운영 소스부터 대조한다.
 
+## 역사교실 삭제와 재인증 (2026-10-21)
+
+역사교실 과제 삭제(`deleteHistoryClassroomSource`)도 유효한 일반 교사 세션을 사용한다(2026-10-21). 과제 비공개·삭제 표시만 수행하고 제출 결과를 보존하는 작업이므로 로그인 후 시간이 지났다는 이유로 Google 팝업을 다시 열지 않는다. 프론트 allowlist와 서버 `routineContentWrites.json`을 함께 유지하며 executeCommand와 getCommandStatus에 같은 정책을 배포한다. [삭제·인증 검증 기록](../reviews/history-classroom-delete-auth-20261021.md)을 따른다.
+
 ## 학사 일정 저장과 재인증 (2026-10-18)
 
 `manageAcademicCalendar`의 일정 등록·수정(`SAVE_EVENT`), 분류 저장(`SAVE_CATEGORIES`), 공휴일 동기화(`SYNC_HOLIDAYS`)는 유효한 일반 애플리케이션 세션을 사용한다. 영구 삭제(`DELETE_EVENT`)만 고위험 세션과 최근 5분 이내 인증을 요구한다. 관리자 제한, App Check 운영 모드, 세션 상태·epoch·증명·만료, 현재 학기, revision 충돌, 요청 영수증 검사는 유지한다. 일반 저장에 최근 인증 제한을 다시 추가하지 않는다. 기존 gateway의 일정 생성·수정도 일반 세션 정책이다.

@@ -91,7 +91,7 @@ assert.equal(sensitive, 0);
 sensitiveFailure = new Error('운영 인증 설정을 확인해야 합니다.');
 const grantPayload = { semesterId: '2026-2', recipientUids: ['student-a'], reason: '학급 활동' };
 const routineClassroomCommands = ['grantHistoryClassroomExemptions', 'revokeHistoryClassroomExemptions', 'reviewHistoryClassroomExemptionRequest',
-  'upsertHistoryClassroomSource', 'saveHistoryClassroomAssignment', 'applyHistoryClassroomExemption', 'createAssessmentDefinition', 'updateAssessmentDefinition', 'transitionAssessmentDefinition', 'saveQuizAssessmentSettings', 'upsertQuizQuestion'];
+  'upsertHistoryClassroomSource', 'saveHistoryClassroomAssignment', 'deleteHistoryClassroomSource', 'applyHistoryClassroomExemption', 'createAssessmentDefinition', 'updateAssessmentDefinition', 'transitionAssessmentDefinition', 'saveQuizAssessmentSettings', 'upsertQuizQuestion'];
 const serverRoutine = JSON.parse(readFileSync('functions/productionGateway/routineContentWrites.json', 'utf8')).commands;
 for (const commandType of routineClassroomCommands) {
   assert.ok(serverRoutine.includes(commandType), `${commandType} must have the same general-session server policy`);
@@ -99,7 +99,7 @@ for (const commandType of routineClassroomCommands) {
   assert.equal((await exports.executeAssessmentManagementCommand(commandType, grantPayload)).revision, 2);
   assert.equal(sensitive, before, `${commandType} uses the routine classroom session policy`);
 }
-for (const commandType of ['deleteHistoryClassroomSource', 'resetAssessmentAttempt', 'resetAssessmentAttemptsByClassV2']) {
+for (const commandType of ['resetAssessmentAttempt', 'resetAssessmentAttemptsByClassV2']) {
   await assert.rejects(exports.executeAssessmentManagementCommand(commandType, { definitionId: 'protected' }), /운영 인증 설정/);
 }
 sensitiveFailure = null;

@@ -59,9 +59,16 @@ const harness = async (operations = {}, options = {}) => {
   let errorListener;
   let subscriptions = 0;
   let preparations = 0;
+  let authTime = 123;
+  const streams = [];
+  const user = (uid) => ({
+    uid,
+    getIdTokenResult: async () => ({ claims: { auth_time: authTime } }),
+  });
   const authState = {
-    currentUser: { uid: "teacher" },
+    currentUser: user("teacher"),
     userData: { role: "admin" },
+    authGeneration: 1,
   };
   const sameDeps = (a, b) =>
     a &&
@@ -146,7 +153,9 @@ const harness = async (operations = {}, options = {}) => {
     "../../lib/teacherPatchNoteCommands": {
       prepareTeacherPatchNoteSession: async (uid) => {
         preparations += 1;
+        const epoch = authTime;
         await operations.prepareTeacherPatchNoteSession?.(uid);
+        return epoch;
       },
       getTeacherPatchNoteErrorMessage: () => "저장 오류",
     },
@@ -156,6 +165,7 @@ const harness = async (operations = {}, options = {}) => {
         subscriptions += 1;
         listener = next;
         errorListener = onError;
+        streams.push({ next, onError });
         next([note("A"), note("B")]);
         return () => {
           listener = undefined;
@@ -254,18 +264,27 @@ const harness = async (operations = {}, options = {}) => {
       listener(notes);
       render();
     },
-    failSubscription: () => {
+    failSubscription: (error = new Error("offline")) => {
       assert.ok(errorListener);
-      errorListener(new Error("offline"));
+      errorListener(error);
       render();
     },
+    streams,
     subscriptionCount: () => subscriptions,
     preparationCount: () => preparations,
     changeUser: (uid, role = "admin") => {
-      authState.currentUser = uid ? { uid } : null;
+      authState.currentUser = uid ? user(uid) : null;
       authState.userData = uid ? { role } : null;
       dirty = true;
       render();
+    },
+    changeEpoch: (epoch, publishGeneration = true) => {
+      authTime = epoch;
+      if (publishGeneration) {
+        authState.authGeneration += 1;
+        dirty = true;
+        render();
+      }
     },
     changeRoute: (pathname) => {
       location.pathname = pathname;
@@ -389,6 +408,87 @@ await check(
       h.textarea().props.value,
       "Keep draft during subscription recovery",
     );
+  },
+);
+
+await check(
+  "Same-account session generation reconnects once and ignores the previous stream",
+  async () => {
+    const h = await harness();
+    h.type("Keep draft across reauthentication");
+    const previous = h.streams[0];
+    h.changeEpoch(124);
+    previous.onError(
+      Object.assign(new Error("Old epoch"), { code: "permission-denied" }),
+    );
+    previous.next([note("stale")]);
+    await h.settle();
+    assert.equal(h.preparationCount(), 2);
+    assert.equal(h.subscriptionCount(), 2);
+    assert.equal(h.toasts.length, 0);
+    assert.equal(
+      h.textarea().props.value,
+      "Keep draft across reauthentication",
+    );
+    h.article("A");
+  },
+);
+
+await check(
+  "An old-epoch denial arriving before AuthContext renders reconnects without hiding a current denial",
+  async () => {
+    const h = await harness();
+    h.type("Keep draft during token rollover");
+    h.changeEpoch(124, false);
+    h.failSubscription(
+      Object.assign(new Error("Old epoch"), { code: "permission-denied" }),
+    );
+    await h.settle();
+    assert.equal(h.subscriptionCount(), 2);
+    assert.equal(h.toasts.length, 0);
+    assert.equal(h.textarea().props.value, "Keep draft during token rollover");
+    h.failSubscription(
+      Object.assign(new Error("Access revoked"), { code: "permission-denied" }),
+    );
+    await h.settle();
+    assert.equal(
+      h.subscriptionCount(),
+      2,
+      "Current-epoch denial must not auto-retry",
+    );
+    assert.equal(h.toasts.length, 1, "Actual denial remains visible");
+    assert.equal(h.toasts[0].tone, "error");
+  },
+);
+
+await check(
+  "Network subscription failures remain visible without automatic reconnect",
+  async () => {
+    const h = await harness();
+    h.failSubscription(
+      Object.assign(new Error("Offline"), { code: "unavailable" }),
+    );
+    await h.settle();
+    assert.equal(h.subscriptionCount(), 1);
+    assert.equal(h.toasts.length, 1);
+    assert.equal(h.toasts[0].tone, "error");
+  },
+);
+
+await check(
+  "A same-UID replacement SDK user restarts reads without losing the editor",
+  async () => {
+    const h = await harness();
+    h.type("Same account editor");
+    const previous = h.streams[0];
+    h.changeUser("teacher");
+    previous.onError(
+      Object.assign(new Error("Old identity"), { code: "unauthenticated" }),
+    );
+    await h.settle();
+    assert.equal(h.subscriptionCount(), 2);
+    assert.equal(h.toasts.length, 0);
+    assert.equal(h.textarea().props.value, "Same account editor");
   },
 );
 
