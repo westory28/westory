@@ -95,6 +95,7 @@ if(params.get('resultCase')==='long'&&!stored){
  }));
 }
 if(params.get('untimed')==='1')fixture.assignment.timeLimitMinutes=0;
+if(params.get('lowerBlank')==='1'&&!stored)fixture.assignment.blanks[0].top=1150;
 if(params.get('due')==='1'&&!stored)fixture.assignment.dueAt={seconds:(Date.now()+6000)/1000};
 const persist=()=>localStorage.setItem('runnerFixtureBackend',JSON.stringify(fixture));
 window.__persistBackend=persist;
@@ -246,7 +247,12 @@ const server = http.createServer((req, res) => {
         ? tailwind
         : url === "/worksheet.svg"
           ? svg
-          : html,
+          : req.url.includes("accountHeader=1")
+            ? html.replace(
+                '<div id="root">',
+                '<header style="height:48px">계정 영역 검증</header><div id="root">',
+              )
+            : html,
   );
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -741,6 +747,132 @@ try {
         .getByRole("timer", { name: "남은 시간", exact: true })
         .isVisible(),
     );
+    await finish(t);
+  }
+  for (const [width, height] of [
+    [390, 844],
+    [768, 1024],
+    [1280, 800],
+  ]) {
+    const t = await open(
+      `worksheet-keyboard-${width}`,
+      width,
+      height,
+      "?lowerBlank=1&accountHeader=1",
+    );
+    const frame = t.page.locator("[data-history-viewport]");
+    const canvas = frame.locator(":scope > div").first();
+    assert.equal(
+      await t.page.locator("[data-history-student-view] aside").count(),
+      0,
+      "student worksheet has no unit footer",
+    );
+    const initial = await frame.boundingBox();
+    const image = await frame.getByRole("img").boundingBox();
+    assert(
+      initial.y + initial.height <= height - 4,
+      "worksheet fits below the actual account header",
+    );
+    assert(
+      image.width >= Math.min(1000, initial.width - 20),
+      "worksheet fits width, not the full-page height",
+    );
+    const hasOverflow = await canvas.evaluate(
+      (element) => element.scrollHeight > element.clientHeight + 30,
+    );
+    if (hasOverflow) {
+      const beforePan = await canvas.evaluate((element) => element.scrollTop);
+      await canvas.dispatchEvent("touchstart", {
+        touches: [
+          { identifier: 1, clientX: initial.x + 10, clientY: initial.y + 100 },
+        ],
+      });
+      await canvas.dispatchEvent("touchmove", {
+        touches: [
+          { identifier: 1, clientX: initial.x + 10, clientY: initial.y + 50 },
+        ],
+      });
+      await canvas.dispatchEvent("touchend", { touches: [] });
+      assert(
+        (await canvas.evaluate((element) => element.scrollTop)) >
+          beforePan + 20,
+        "one-finger pan works at width-fit base scale",
+      );
+    }
+    await firstInput(t.page).focus();
+    await firstInput(t.page).fill("가독성 검증");
+    const before = await firstInput(t.page).boundingBox();
+    const visibleHeight = Math.floor(height / 2);
+    await t.page.evaluate((nextHeight) => {
+      Object.defineProperties(window.visualViewport, {
+        height: { configurable: true, value: nextHeight },
+        offsetTop: { configurable: true, value: 0 },
+      });
+      window.visualViewport.dispatchEvent(new Event("resize"));
+    }, visibleHeight);
+    await advance(t.page, 150);
+    const reduced = await frame.boundingBox();
+    const after = await firstInput(t.page).boundingBox();
+    assert(reduced.height < initial.height - 100);
+    assert(
+      reduced.y + reduced.height <= visibleHeight - 4,
+      "worksheet stays above the virtual keyboard",
+    );
+    assert(
+      Math.abs(after.width - before.width) < 1,
+      "virtual keyboard keeps the readable answer scale",
+    );
+    assert(
+      after.y >= reduced.y &&
+        after.y + after.height <= reduced.y + reduced.height,
+      "lower-page focused answer remains visible",
+    );
+    assert.equal(await firstInput(t.page).inputValue(), "가독성 검증");
+    assert.equal(
+      (await callsOf(t.page, "lock")).length,
+      0,
+      "keyboard is not an exit violation",
+    );
+    await t.page.screenshot({
+      path: path.join(evidence, `runner-${t.label}-open.png`),
+      fullPage: false,
+    });
+    await t.page.evaluate(() => {
+      Object.defineProperty(window.visualViewport, "offsetTop", {
+        configurable: true,
+        value: 24,
+      });
+      window.visualViewport.dispatchEvent(new Event("scroll"));
+    });
+    await advance(t.page, 100);
+    const panned = await frame.boundingBox();
+    assert(
+      panned.y + panned.height <= visibleHeight + 24 - 4,
+      "visual viewport panning preserves keyboard clearance",
+    );
+    await t.page.evaluate(() => {
+      delete window.visualViewport.height;
+      delete window.visualViewport.offsetTop;
+      window.visualViewport.dispatchEvent(new Event("resize"));
+    });
+    await advance(t.page, 150);
+    const restored = await frame.boundingBox();
+    assert(
+      restored.height > reduced.height + 100,
+      "dismissing keyboard restores worksheet space",
+    );
+    assert.equal(await firstInput(t.page).inputValue(), "가독성 검증");
+    const scrollBeforeWords = await canvas.evaluate(
+      (element) => element.scrollTop,
+    );
+    await t.page.getByRole("button", { name: /^단어 목록/ }).click();
+    await advance(t.page, 150);
+    assert(
+      (await canvas.evaluate((element) => element.scrollTop)) >=
+        scrollBeforeWords - 1,
+      "opening reference words preserves the current worksheet position",
+    );
+    await t.page.getByRole("button", { name: /^단어 목록/ }).click();
     await finish(t);
   }
   for (const width of [390, 768, 1280]) {

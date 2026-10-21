@@ -40,7 +40,7 @@ interface HistoryClassroomAssignmentViewProps {
   dueStatusTone?: "slate" | "amber" | "rose";
   headerAction?: React.ReactNode;
   helperItems?: string[];
-  layoutVariant?: "default" | "modalPreview";
+  layoutVariant?: "default" | "modalPreview" | "studentSolve";
   interactiveViewport?: boolean;
   resolveBlankOverlap?: boolean;
   answerChecks?: HistoryClassroomAnswerCheck[];
@@ -312,6 +312,7 @@ const HistoryClassroomAssignmentView: React.FC<
   onUseHint,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
+  const isStudentSolve = layoutVariant === "studentSolve";
   const showStartOverlay = Boolean(onStart) && !readOnly && !completed;
   const pages = assignment.pdfPageImages || [];
   const pageCount = pages.length;
@@ -451,6 +452,8 @@ const HistoryClassroomAssignmentView: React.FC<
     };
   }, [hintOpen]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const worksheetFrameRef = useRef<HTMLDivElement | null>(null);
+  const [worksheetTop, setWorksheetTop] = useState<number | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(144);
   const fitScaleRef = useRef(1);
@@ -580,34 +583,65 @@ const HistoryClassroomAssignmentView: React.FC<
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
   }, [imageLoadError]);
-  const viewportHeight = Math.min(
-    1000,
-    Math.max(
-      160,
-      (isModalPreview
-        ? modalAvailableHeight || floatingViewport.height * 0.9 - 80
-        : floatingViewport.height) -
-        toolbarHeight -
-        32,
-    ),
-  );
+  const viewportHeight = isStudentSolve
+    ? Math.max(
+        80,
+        floatingViewport.offsetTop +
+          floatingViewport.height -
+          (worksheetTop ?? toolbarHeight + 16) -
+          8,
+      )
+    : Math.min(
+        1000,
+        Math.max(
+          160,
+          (isModalPreview
+            ? modalAvailableHeight || floatingViewport.height * 0.9 - 80
+            : floatingViewport.height) -
+            toolbarHeight -
+            32,
+        ),
+      );
   const answeredCount = assignment.blanks.filter((blank) =>
     String(answers[blank.id] || "").trim(),
   ).length;
   useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
     if (!toolbar) return;
-    const measure = () =>
+    const measure = () => {
       setToolbarHeight(toolbar.getBoundingClientRect().height);
+      if (isStudentSolve && worksheetFrameRef.current)
+        setWorksheetTop(
+          Math.max(
+            worksheetFrameRef.current.getBoundingClientRect().top,
+            toolbar.getBoundingClientRect().bottom + 4,
+          ),
+        );
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(toolbar);
-    return () => observer.disconnect();
-  }, []);
+    if (isStudentSolve) {
+      if (containerRef.current?.parentElement)
+        observer.observe(containerRef.current.parentElement);
+      window.addEventListener("resize", measure);
+      window.visualViewport?.addEventListener("resize", measure);
+      window.visualViewport?.addEventListener("scroll", measure);
+    }
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
+    };
+  }, [isStudentSolve]);
   const totalScale = enableInteractiveViewport ? fitScale * userScale : 1;
   const scaledPageWidth = pageImage ? pageImage.width * totalScale : 0;
   const scaledPageHeight = pageImage ? pageImage.height * totalScale : 0;
-  const canPanViewport = enableInteractiveViewport && userScale > 1.01;
+  const canPanViewport =
+    enableInteractiveViewport &&
+    (userScale > 1.01 ||
+      (isStudentSolve && scaledPageHeight > viewportHeight - 8));
   const displayZoomPercent = Math.max(100, Math.round(userScale * 100));
   const displayWidth = pageImage?.width || 0;
   const displayHeight = pageImage?.height || 0;
@@ -785,10 +819,8 @@ const HistoryClassroomAssignmentView: React.FC<
           viewport.scrollTop += fieldRect.top - viewportRect.top - 12;
         return;
       }
-      const availableWidth = Math.max(
-        0,
-        viewport.clientWidth - VIEWPORT_FIT_PADDING,
-      );
+      const fitPadding = isStudentSolve ? 8 : VIEWPORT_FIT_PADDING;
+      const availableWidth = Math.max(0, viewport.clientWidth - fitPadding);
       const availableHeight = Math.max(
         0,
         viewport.clientHeight - VIEWPORT_FIT_PADDING,
@@ -801,13 +833,15 @@ const HistoryClassroomAssignmentView: React.FC<
           0.01,
           Math.min(
             availableWidth / Math.max(pageImage.width, 1),
-            availableHeight / Math.max(pageImage.height, 1),
+            isStudentSolve
+              ? 1
+              : availableHeight / Math.max(pageImage.height, 1),
           ),
         ),
       );
 
       setFitScale(nextFitScale);
-      if (userScaleRef.current <= 1.01) {
+      if (!isStudentSolve && userScaleRef.current <= 1.01) {
         viewport.scrollTo({ left: 0, top: 0 });
       }
     };
@@ -823,7 +857,7 @@ const HistoryClassroomAssignmentView: React.FC<
       observer.disconnect();
       window.removeEventListener("resize", updateFitScale);
     };
-  }, [enableInteractiveViewport, pageImage]);
+  }, [enableInteractiveViewport, isStudentSolve, pageImage]);
 
   const clearViewportGestureState = () => {
     dragStateRef.current = null;
@@ -928,6 +962,7 @@ const HistoryClassroomAssignmentView: React.FC<
     if (!enableInteractiveViewport || isInteractiveFieldTarget(event.target)) {
       return;
     }
+    if (isStudentSolve && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     nudgeViewportZoom(event.deltaY < 0 ? 0.16 : -0.16, {
       anchorClientX: event.clientX,
@@ -1122,16 +1157,19 @@ const HistoryClassroomAssignmentView: React.FC<
   return (
     <div
       ref={containerRef}
+      data-history-student-view={isStudentSolve || undefined}
       className={
         isModalPreview
           ? "mx-auto w-full max-w-[108rem] px-3 py-2"
-          : "mx-auto w-full px-2 py-2 sm:px-3"
+          : isStudentSolve
+            ? "mx-auto w-full px-1 py-1"
+            : "mx-auto w-full px-2 py-2 sm:px-3"
       }
     >
       <div
         ref={toolbarRef}
         data-history-toolbar="true"
-        className="sticky top-0 z-30 mb-2 rounded-xl border border-gray-200 bg-white px-2 py-1 shadow-sm sm:px-3"
+        className={`sticky top-0 z-30 rounded-xl border border-gray-200 bg-white px-2 py-1 shadow-sm sm:px-3 ${isStudentSolve ? "mb-1" : "mb-2"}`}
       >
         <div
           data-history-actions="true"
@@ -1389,13 +1427,15 @@ const HistoryClassroomAssignmentView: React.FC<
                 </button>
                 <button
                   type="button"
-                  aria-label="전체 보기"
+                  aria-label={isStudentSolve ? "너비 맞춤" : "전체 보기"}
                   onClick={resetViewportScale}
                   disabled={userScale <= MIN_VIEWPORT_USER_SCALE}
                   className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-xs font-bold text-gray-700 disabled:opacity-40"
                 >
                   <span className="sm:hidden">맞춤</span>
-                  <span className="hidden sm:inline">전체 보기</span>
+                  <span className="hidden sm:inline">
+                    {isStudentSolve ? "너비 맞춤" : "전체 보기"}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1523,6 +1563,7 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
           {pageImage && (
             <div
+              ref={worksheetFrameRef}
               data-history-viewport="true"
               className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-1"
               style={{ height: viewportHeight }}
@@ -1590,7 +1631,9 @@ const HistoryClassroomAssignmentView: React.FC<
                   className={`flex min-h-full min-w-full ${
                     enableInteractiveViewport && !canPanViewport
                       ? "items-center justify-center"
-                      : "items-start justify-start"
+                      : isStudentSolve && userScale <= 1.01
+                        ? "items-start justify-center"
+                        : "items-start justify-start"
                   }`}
                 >
                   <div
@@ -1808,12 +1851,14 @@ const HistoryClassroomAssignmentView: React.FC<
           )}
         </section>
 
-        <aside className="space-y-2">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 text-xs font-bold text-gray-600">
-            {lessonPath && <span>{lessonPath}</span>}
-            <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
-          </div>
-        </aside>
+        {!isStudentSolve && (
+          <aside className="space-y-2">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 px-2 text-xs font-bold text-gray-600">
+              {lessonPath && <span>{lessonPath}</span>}
+              <span>통과 기준 {assignment.passThresholdPercent}% 이상</span>
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

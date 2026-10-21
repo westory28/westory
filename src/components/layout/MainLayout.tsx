@@ -138,6 +138,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [location.pathname]);
 
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
+  const isStudentHistoryClassroomRunRoute =
+    /^\/student\/history-classroom\/run\/?$/.test(location.pathname);
   const canUseTeacherPatchMemo = Boolean(
     !isSemesterArchive &&
     portalAllowed &&
@@ -387,10 +389,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             children
           )}
         </main>
-        {(!/^\/teacher\/settings\/?$/.test(location.pathname) ||
-          isArchiveUnavailableRoute(location.pathname)) && (
-          <PortalFallbackFooter teacher={isTeacherRoute || useStudentLayout} />
-        )}
+        {!isStudentHistoryClassroomRunRoute &&
+          (!/^\/teacher\/settings\/?$/.test(location.pathname) ||
+            isArchiveUnavailableRoute(location.pathname)) && (
+            <PortalFallbackFooter
+              teacher={isTeacherRoute || useStudentLayout}
+            />
+          )}
       </div>
     </PortalWorkspaceFooterProvider>
   );

@@ -1916,6 +1916,7 @@ const HistoryClassroomRunner: React.FC = () => {
         onCurrentPageChange={handleCurrentPageChange}
         answers={answers}
         interactiveViewport
+        layoutVariant="studentSolve"
         answerChecks={resultSummary?.answerChecks || []}
         onAnswerChange={handleAnswerChange}
         hintUseCount={hintUseCount}
