@@ -81,9 +81,13 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const canUseTeacherPortal = Boolean(
     profileReady && canAccessTeacherPortal(userData, currentUser?.email),
   );
+  const isDeveloperLogRoute = /^\/developer-log(?:\/|$)/.test(
+    location.pathname,
+  );
+  const useTeacherLayout =
+    isTeacherRoute || (isDeveloperLogRoute && canUseTeacherPortal);
   const useStudentLayout =
-    isStudentRoute ||
-    (location.pathname.startsWith("/developer-log") && !canUseTeacherPortal);
+    isStudentRoute || (isDeveloperLogRoute && !canUseTeacherPortal);
   const savedRole = profileReady ? readStorage(ROLE_SESSION_KEY) : null;
   let permissionRedirect: string | null = null;
   if (profileReady && isTeacherRoute) {
@@ -358,10 +362,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <PortalWorkspaceFooterProvider>
       <div
-        className={`flex min-h-screen flex-col bg-gray-50 ${isTeacherRoute ? "teacher-layout" : useStudentLayout ? "student-layout" : ""} ${isStudentWeplayRoute ? "student-weplay-layout" : ""} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
+        className={`flex min-h-screen flex-col bg-gray-50 ${useTeacherLayout ? "teacher-layout" : useStudentLayout ? "student-layout" : ""} ${isStudentWeplayRoute ? "student-weplay-layout" : ""} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}
       >
         <Header
-          teacherLayout={isTeacherRoute}
+          teacherLayout={useTeacherLayout}
           studentLayout={useStudentLayout}
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
@@ -393,7 +397,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           (!/^\/teacher\/settings\/?$/.test(location.pathname) ||
             isArchiveUnavailableRoute(location.pathname)) && (
             <PortalFallbackFooter
-              teacher={isTeacherRoute || useStudentLayout}
+              teacher={useTeacherLayout || useStudentLayout}
             />
           )}
       </div>

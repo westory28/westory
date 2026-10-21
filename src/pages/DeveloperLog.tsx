@@ -1193,68 +1193,20 @@ const DeveloperLog: React.FC = () => {
   }
 
   return (
-    <div
-      className={
-        canLike
-          ? "ws-page ws-page--reading"
-          : "mx-auto w-full max-w-[96rem] px-4 py-5 sm:py-8"
-      }
-    >
-      {canLike ? (
-        <header className="ws-page-header mb-5">
-          <h1>개발자 일지</h1>
-        </header>
-      ) : (
-        <section className="mb-5 px-1 py-2">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600">
-                <i className="fas fa-book text-xl" aria-hidden="true"></i>
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-2xl font-black text-gray-900">
-                    개발자 일지
-                  </h1>
-                  {postId && selectedPost && (
-                    <>
-                      <i
-                        className="fas fa-chevron-right text-xs text-gray-300"
-                        aria-hidden="true"
-                      ></i>
-                      <span className="max-w-xl truncate text-sm font-black text-gray-700">
-                        {getDisplayTitle(selectedPost)}
-                      </span>
-                    </>
-                  )}
-                </div>
-                <p className="mt-2 break-keep text-sm leading-6 text-gray-600">
-                  최근 업데이트와 패치 내역을 기록합니다.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-black text-blue-700">
-                    <i className="fas fa-lock mr-1.5" aria-hidden="true"></i>
-                    작성 권한: 개발자 전용
-                  </span>
-                  <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-black text-gray-600">
-                    학생은 좋아요만 가능
-                  </span>
-                </div>
-              </div>
-            </div>
-            {canManage && mode !== "write" && mode !== "edit" && (
-              <button
-                type="button"
-                onClick={startWrite}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
-              >
-                <i className="fas fa-pen" aria-hidden="true"></i>
-                글쓰기
-              </button>
-            )}
-          </div>
-        </section>
-      )}
+    <div className="ws-page ws-page--reading">
+      <header className="ws-page-header mb-5">
+        <h1>개발자 일지</h1>
+        {canManage && mode !== "write" && mode !== "edit" && (
+          <button
+            type="button"
+            onClick={startWrite}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            <i className="fas fa-pen" aria-hidden="true"></i>
+            글쓰기
+          </button>
+        )}
+      </header>
 
       <div className="w-full">
         {mode === "write" || mode === "edit" ? (
@@ -1262,39 +1214,14 @@ const DeveloperLog: React.FC = () => {
         ) : postId && selectedPost ? (
           renderPostDetail(selectedPost)
         ) : (
-          <section
-            className={
-              canLike
-                ? ""
-                : "rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6"
-            }
-          >
-            {!canLike && (
-              <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm font-black text-blue-700">
-                <i className="fas fa-info-circle mr-2" aria-hidden="true"></i>
-                학생은 게시글에 좋아요만 누를 수 있습니다.
-              </div>
-            )}
-
+          <section>
             <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div
-                className={canLike ? "ws-page-tabs" : "flex flex-wrap gap-2"}
-              >
+              <div className="ws-page-tabs">
                 <button
                   type="button"
                   onClick={() => setCategoryFilter("all")}
                   aria-pressed={categoryFilter === "all"}
-                  className={
-                    canLike
-                      ? categoryFilter === "all"
-                        ? "is-active"
-                        : ""
-                      : `rounded-full border px-4 py-2 text-sm font-black transition ${
-                          categoryFilter === "all"
-                            ? "border-blue-300 bg-blue-50 text-blue-700"
-                            : "border-gray-200 bg-white text-slate-600 hover:bg-gray-50"
-                        }`
-                  }
+                  className={categoryFilter === "all" ? "is-active" : ""}
                 >
                   전체
                 </button>
@@ -1305,15 +1232,7 @@ const DeveloperLog: React.FC = () => {
                     onClick={() => setCategoryFilter(category.value)}
                     aria-pressed={categoryFilter === category.value}
                     className={
-                      canLike
-                        ? categoryFilter === category.value
-                          ? "is-active"
-                          : ""
-                        : `rounded-full border px-4 py-2 text-sm font-black transition ${
-                            categoryFilter === category.value
-                              ? "border-blue-300 bg-blue-50 text-blue-700"
-                              : "border-gray-200 bg-white text-slate-600 hover:bg-gray-50"
-                          }`
+                      categoryFilter === category.value ? "is-active" : ""
                     }
                   >
                     {category.label}

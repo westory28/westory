@@ -48,12 +48,25 @@ for (const small of [false, true]) {
     assert(urls(html).includes("/student/mypage"));
     assert(urls(html).includes("/developer-log"));
     assert(!urls(html).some((url) => url.startsWith("/teacher/")));
-    setup("teacher", pathname);
-    const teacherHtml = renderToStaticMarkup(React.createElement(MainLayout, null, React.createElement("h1", null, "개발자 일지")));
-    assert(!teacherHtml.includes('aria-label="학생 메뉴"'), "Teacher common route must not gain student controls");
+    for (const identity of ["developer", "teacher", "staff"]) {
+      setup("teacher", pathname);
+      if (identity !== "developer") {
+        auth.currentUser.email = auth.userData.email = "fixture@example.invalid";
+      }
+      if (identity === "staff") {
+        auth.userData.role = "student";
+        auth.userData.teacherPortalEnabled = true;
+        auth.userData.staffPermissions = ["lesson_read"];
+      }
+      const teacherHtml = renderToStaticMarkup(React.createElement(MainLayout, null, React.createElement("h1", null, "개발자 일지")));
+      assert(teacherHtml.includes('class="teacher-layout'), identity + pathname + ": teacher layout class");
+      assert(teacherHtml.includes('aria-label="교사 메뉴"'), identity + pathname + ": teacher sidebar");
+      assert(teacherHtml.includes('teacher-layout-footer'), identity + pathname + ": compact footer");
+      assert(!teacherHtml.includes('aria-label="학생 메뉴"'), identity + pathname + ": no student controls");
+    }
   }
 }
-console.log("PASS MainLayout + Header + Footer: student developer-log list/detail retain desktop/mobile student navigation; teacher controls unchanged.");
+console.log("PASS MainLayout + Header + Footer: student, developer, teacher and staff developer-log list/detail retain the correct desktop/mobile portal shell.");
 `;
 const code = ts.transpileModule(source, {
   compilerOptions: {
