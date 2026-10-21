@@ -30,13 +30,106 @@ async function roomCommand(label, room, action, data = {}) {
   return command(label, action, { roomId: room.id, expectedRevision: room.revision, ...data });
 }
 const denied = (promise, codes = ['permission-denied']) => assert.rejects(promise, (error) => codes.includes(error.code));
-const token = (label) => {
+const token = (label, claims = {}) => {
   const enc = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${enc({ alg: 'none', typ: 'JWT' })}.${enc({ sub: uid(label), user_id: uid(label), email: label === 'admin' ? 'westoria28@gmail.com' : `${label}@yongshin-ms.ms.kr`, email_verified: true, aud: projectId, iss: `https://securetoken.google.com/${projectId}`, iat: authTime, exp: authTime + 7200, auth_time: authTime, firebase: { sign_in_provider: 'google.com' } })}.`;
+  return `${enc({ alg: 'none', typ: 'JWT' })}.${enc({ sub: uid(label), user_id: uid(label), email: label === 'admin' ? 'westoria28@gmail.com' : `${label}@yongshin-ms.ms.kr`, email_verified: true, aud: projectId, iss: `https://securetoken.google.com/${projectId}`, iat: authTime, exp: authTime + 7200, auth_time: authTime, firebase: { sign_in_provider: 'google.com' }, ...claims })}.`;
 };
 const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/${projectId}/databases/(default)/documents/${path}`, {
   ...options, headers: { Authorization: `Bearer ${token(label)}`, 'Content-Type': 'application/json', ...options.headers },
 });
+
+async function verifySpectatorRules(roomRef) {
+  const managers = ['teacher', 'admin', 'staff'];
+  const roomBefore = (await roomRef.get()).data();
+  const fixtureRef = db.doc(`${base}/yut_rooms/spectator-rules-fixture`);
+  const fixture = { ...roomBefore, id: fixtureRef.id };
+  const restorePaths = [
+    ...managers.map(label => `users/${uid(label)}`),
+    sessionPath('teacher'), `${base}/weplay_games/joseon-yut`,
+    'site_settings/config', 'site_settings/semester_active',
+    'semester_manifests/2026-2', 'site_settings/student_maintenance',
+  ];
+  const originals = new Map(await Promise.all(restorePaths.map(async path => [path, (await db.doc(path).get()).data()])));
+  const pointersBefore = await Promise.all(managers.map(async label => (await db.doc(`${base}/yut_players/${uid(label)}`).get()).data()));
+  const expectRead = async (label, status, message, options) => {
+    const response = await rest(label, fixtureRef.path, options);
+    assert.equal(response.status, status, `${message}: ${await response.text()}`);
+  };
+  try {
+    await fixtureRef.set(fixture);
+    assert.equal(managers.some(label => fixture.participantUids.includes(uid(label))), false);
+    for (const label of ['teacher', 'admin']) await expectRead(label, 200, `${label} may observe a playing room without joining`);
+    await expectRead('outsider', 403, 'an active student cannot observe another room');
+    await expectRead('staff', 403, 'disabled teacher portal prevents staff observation');
+    await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: true });
+    await expectRead('staff', 200, 'staff lesson_read permits observation under the full maintenance configuration');
+    for (const permissions of [[], ['quiz_read'], 'lesson_read']) {
+      await db.doc(`users/${uid('staff')}`).update({ staffPermissions: permissions });
+      await expectRead('staff', 403, 'missing or malformed lesson_read permission denies observation');
+    }
+    await db.doc(`users/${uid('staff')}`).update({ staffPermissions: ['lesson_read'] });
+    for (const label of managers) {
+      assert.equal((await rest(label, `${base}/yut_rooms`)).status, 403, `${label} cannot enumerate rooms`);
+      for (const [path, options] of [
+        [fixtureRef.path, { method: 'PATCH', body: JSON.stringify({ fields: { revision: { integerValue: '999' } } }) }],
+        [fixtureRef.path, { method: 'DELETE' }],
+        [`${base}/yut_rooms/spectator-client-create`, { method: 'PATCH', body: JSON.stringify({ fields: { status: { stringValue: 'waiting' } } }) }],
+      ]) assert.equal((await rest(label, path, options)).status, 403, `${label} observation never grants client create/update/delete`);
+    }
+    assert.deepEqual((await fixtureRef.get()).data(), fixture, 'observer reads and denied writes leave every playing-room field unchanged');
+    assert.deepEqual((await roomRef.get()).data(), roomBefore, 'observation leaves the active game, revision and clocks untouched');
+    assert.deepEqual(await Promise.all(managers.map(async label => (await db.doc(`${base}/yut_players/${uid(label)}`).get()).data())), pointersBefore, 'observation never creates player pointers, heartbeat or command receipts');
+    for (const patch of [
+      { registrationApprovalStatus: 'PENDING' }, { registrationApprovalStatus: null },
+      { isDeleted: true }, { deletedAt: Timestamp.now() }, { weplayDeletionPending: true },
+    ]) {
+      await db.doc(`users/${uid('teacher')}`).set({ ...originals.get(`users/${uid('teacher')}`), ...patch });
+      await expectRead('teacher', 403, 'pending registration or a deleted account cannot observe');
+    }
+    await db.doc(`users/${uid('teacher')}`).set(originals.get(`users/${uid('teacher')}`));
+    await expectRead('teacher', 403, 'school identity remains required', { headers: { Authorization: `Bearer ${token('teacher', { email: 'teacher@example.com' })}` } });
+    for (const patch of [{ status: 'pending' }, { status: 'revoked' }, { generalExpiresAt: Timestamp.fromMillis(Date.now() - 1) }]) {
+      await db.doc(sessionPath('teacher')).set({ ...originals.get(sessionPath('teacher')), ...patch });
+      await expectRead('teacher', 403, 'pending, revoked or expired application sessions cannot observe');
+    }
+    await db.doc(sessionPath('teacher')).set(originals.get(sessionPath('teacher')));
+    await db.doc('site_settings/student_maintenance').update({ enabled: true, startedAt: Timestamp.now() });
+    for (const label of managers) await expectRead(label, 200, 'valid student maintenance retains authorized teacher observation');
+    await expectRead('a', 403, 'maintenance still denies an ordinary student participant');
+    await db.doc('site_settings/student_maintenance').update({ bypassUids: [1] });
+    await expectRead('teacher', 403, 'malformed maintenance configuration fails closed for observers');
+    await db.doc('site_settings/student_maintenance').set(originals.get('site_settings/student_maintenance'));
+    await db.doc(`${base}/weplay_games/joseon-yut`).update({ enabled: false });
+    for (const label of managers) await expectRead(label, 200, 'teacher observation is independent of student publication');
+    await expectRead('a', 403, 'closed publication still denies student participants');
+    await db.doc(`${base}/weplay_games/joseon-yut`).set(originals.get(`${base}/weplay_games/joseon-yut`));
+    for (const [path, patch] of [
+      ['site_settings/config', { semester: '1' }],
+      ['site_settings/semester_active', { revision: 2 }],
+      ['semester_manifests/2026-2', { readOnly: true }],
+    ]) {
+      await db.doc(path).update(patch);
+      await expectRead('teacher', 403, 'inactive, mismatched or read-only semester scope denies observers');
+      await db.doc(path).set(originals.get(path));
+    }
+    await fixtureRef.update({ expiresAtMs: Date.now() - 1 });
+    await expectRead('teacher', 403, 'an expired room cannot be observed');
+    await fixtureRef.set({ ...fixture, status: 'waiting' });
+    for (const label of managers) await expectRead(label, 200, 'authorized observers may read a waiting room');
+    await fixtureRef.update({ createdAtMs: Date.now() - 600001 });
+    await expectRead('teacher', 403, 'an abandoned waiting room cannot be observed even before expiresAtMs');
+    await fixtureRef.set({ ...fixture, status: 'finished' });
+    for (const label of managers) await expectRead(label, 200, 'authorized observers may read a finished room');
+    await fixtureRef.update({ status: 'closed' });
+    for (const label of managers) await expectRead(label, 403, 'nonparticipant observers cannot read a closed room');
+    await fixtureRef.update({ participantUids: [...fixture.participantUids, ...managers.map(uid)] });
+    for (const label of managers) await expectRead(label, 200, 'existing manager-participant closed-room access remains compatible');
+    await expectRead('a', 200, 'existing student-participant closed-room access remains compatible');
+  } finally {
+    for (const [path, original] of originals) await db.doc(path).set(original);
+    await fixtureRef.delete();
+  }
+}
 
 (async () => {
   assert.deepEqual(deployed.commandYutRoom.__endpoint.region, ['asia-northeast3']);
@@ -234,6 +327,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     const beforeMonitor = (await monitorRoomRef.get()).data();
     await deployed.getYutManagement.run(request('teacher'));
     assert.deepEqual((await monitorRoomRef.get()).data(), beforeMonitor, 'monitor summary never changes gameplay, revision or clocks');
+    await verifySpectatorRules(monitorRoomRef);
     await denied(deployed.getYutManagement.run(request('a')));
     await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: true });
     await denied(roomCommand('staff', room, 'close'));
@@ -327,7 +421,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: closedSettings.settings.version }));
     assert.equal((await rest('a', path)).status, 200, 'member room read');
     assert.equal((await rest('outsider', path)).status, 403, 'nonparticipant read');
-    assert.equal((await rest('teacher', path)).status, 403, 'teacher nonparticipant read');
+    assert.equal((await rest('teacher', path)).status, 200, 'teacher nonparticipant observation');
     assert.equal((await rest('a', `${base}/yut_rooms`)).status, 403, 'room enumeration');
     assert.equal((await rest('a', `${base}/yut_codes/${room.code}`)).status, 403, 'join code lookup');
     assert.equal((await rest('a', `${base}/weplay_games/joseon-yut`, { method: 'PATCH', body: JSON.stringify({ fields: { enabled: { booleanValue: true }, version: { integerValue: '99' } } }) })).status, 403, 'client publication write');
@@ -501,7 +595,7 @@ const rest = (label, path, options = {}) => fetch(`http://${process.env.FIRESTOR
     await roomCommand('p1', publicTwo, 'leave');
     assert.equal((await db.doc(`${base}/yut_rooms/${publicOne.id}`).get()).data().participantUids.includes(uid('p1')), false, 'leave still cleans up when multiplayer is disabled');
     await saveModes({ enabled: false });
-    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, two-piece explicit stacks and idempotent move choices, phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
+    console.log('PASS Yut publication/mode gates, settings CAS, bounded management, read-only teacher/staff/admin observation and unchanged active games, two-piece explicit stacks and idempotent move choices, phase timing, seats/emotes, KST private-start quota, idempotent reconnect, concurrent public matchmaking, canonical session/enrollment guards, Firestore privacy and revocation');
   } finally {
     // This emulator/project was checked before importing any Admin SDK code.
     await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' });

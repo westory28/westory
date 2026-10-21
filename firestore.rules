@@ -1314,8 +1314,8 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
-      // Only participants may subscribe to a single room. All mutations and
-      // join-code lookups are server commands; collection discovery stays shut.
+      // Participants and authorized teacher observers may subscribe to one room.
+      // Mutations, join-code lookups and room discovery stay server commands.
       match /yut_rooms/{roomId} {
         function currentYutMaintenance() {
           let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
@@ -1355,23 +1355,27 @@ service cloud.firestore {
                 request.auth.uid, year + '-' + semester, enrollmentId, 'ACTIVE',
                 year + '-' + semester, 'ACTIVE', false];
         }
-        function currentYutMember() {
+        function currentYutReader() {
           let profile = userProfile();
+          let participant = request.auth.uid in resource.data.participantUids;
+          // Reuse the shared fences below instead of re-entering hasPermission
+          // and evaluating session/maintenance authorization a second time.
           return (request.auth.token.email == 'westoria28@gmail.com' || approvedRegistrationProfile(profile))
             && profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
             && profile.get('weplayDeletionPending', false) == false
-            && (request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
-              || (profile.role == 'staff' && hasPermission('lesson_read'))
-              || (profile.role == 'student' && currentYutStudentMember()));
+            && (((request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
+                  || (profile.role == 'staff' && profile.get('teacherPortalEnabled', false) == true
+                    && profile.get('staffPermissions', []) is list && 'lesson_read' in profile.staffPermissions))
+                && (participant || resource.data.status in ['waiting', 'playing', 'finished']))
+              || (profile.role == 'student' && participant && currentYutStudentMember()));
         }
         // Same Westory fences, with the active-session branch evaluated once;
         // a pending reauthentication transition alone cannot read game state.
         allow get: if hasWestoryIdentity() && hasActiveApplicationSession()
           && currentYutMaintenance()
-          && request.auth.uid in resource.data.participantUids
           && resource.data.expiresAtMs > request.time.toMillis()
           && (resource.data.status != 'waiting' || resource.data.createdAtMs + 600000 > request.time.toMillis())
-          && currentYutScope() && currentYutMember();
+          && currentYutScope() && currentYutReader();
         allow list, create, update, delete: if false;
       }
 
