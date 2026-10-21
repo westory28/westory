@@ -1,6 +1,6 @@
 import NumericInput from "../../components/common/NumericInput";
 import "./ManageHistoryClassroom.css";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -953,6 +953,134 @@ const HistoryClassroomSourceSelect: React.FC<{
   );
 };
 
+const AssignmentReasonInput: React.FC<{
+  id: string;
+  studentName: string;
+  value: string;
+  invalid: boolean;
+  describedBy?: string;
+  className?: string;
+  onChange: (value: string) => void;
+}> = ({
+  id,
+  studentName,
+  value,
+  invalid,
+  describedBy,
+  className = "",
+  onChange,
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const listId = `${id}-options`;
+  const chooseReason = (reason: string) => {
+    onChange(reason);
+    inputRef.current?.focus();
+    setOpen(false);
+    setActiveIndex(-1);
+  };
+
+  return (
+    <div
+      className={`history-reason-control ${className}`}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+          setActiveIndex(-1);
+        }
+      }}
+    >
+      <input
+        ref={inputRef}
+        id={id}
+        className="history-reason-input"
+        role="combobox"
+        aria-label={`${studentName} 배정 사유`}
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={
+          open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined
+        }
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+        autoComplete="off"
+        title={value || "배정 사유 선택 또는 직접 입력"}
+        value={value}
+        placeholder="배정 사유"
+        required
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(false);
+          setActiveIndex(-1);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            setActiveIndex((current) =>
+              !open || current < 0
+                ? direction === 1
+                  ? 0
+                  : ASSIGNMENT_REASONS.length - 1
+                : (current + direction + ASSIGNMENT_REASONS.length) %
+                  ASSIGNMENT_REASONS.length,
+            );
+            setOpen(true);
+          } else if (open && event.key === "Enter" && activeIndex >= 0) {
+            event.preventDefault();
+            chooseReason(ASSIGNMENT_REASONS[activeIndex]);
+          } else if (open && event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            setActiveIndex(-1);
+          }
+        }}
+      />
+      <svg
+        className="history-reason-chevron"
+        viewBox="0 0 20 20"
+        aria-hidden="true"
+      >
+        <path
+          d="m6 8 4 4 4-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </svg>
+      {open && (
+        <div
+          id={listId}
+          role="listbox"
+          aria-label={`${studentName} 배정 사유 목록`}
+          className="history-reason-options"
+        >
+          {ASSIGNMENT_REASONS.map((reason, index) => (
+            <button
+              key={reason}
+              id={`${listId}-${index}`}
+              type="button"
+              role="option"
+              tabIndex={-1}
+              aria-selected={value === reason}
+              className={activeIndex === index ? "is-active" : undefined}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => chooseReason(reason)}
+            >
+              {reason}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AssignmentReasonField: React.FC<{
   id: string;
   studentName: string;
@@ -976,23 +1104,15 @@ const AssignmentReasonField: React.FC<{
   if (compact) {
     return (
       <div className="history-entry-reason min-w-0">
-        <input
+        <AssignmentReasonInput
           id={id}
-          aria-label={`${studentName} 배정 사유`}
-          title={value || "배정 사유 선택 또는 직접 입력"}
-          list="history-assignment-reasons"
+          studentName={studentName}
           value={value}
-          placeholder="배정 사유"
-          required
-          aria-invalid={invalid}
-          aria-describedby={invalid ? `${id}-error` : undefined}
-          onChange={(event) =>
-            onChange(
-              event.target.value,
-              !ASSIGNMENT_REASONS.includes(event.target.value),
-            )
+          invalid={invalid}
+          describedBy={invalid ? `${id}-error` : undefined}
+          onChange={(nextValue) =>
+            onChange(nextValue, !ASSIGNMENT_REASONS.includes(nextValue))
           }
-          className="min-h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-2 py-2 text-xs"
         />
         {invalid && (
           <p
@@ -1312,17 +1432,14 @@ const AssignedStudentRow: React.FC<{
         </span>
         <span className="history-student-name">{student.name}</span>
       </div>
-      <input
+      <AssignmentReasonInput
         id={`${id}-other`}
         className="history-student-reason"
-        aria-label={`${student.name} 배정 사유`}
-        title={reason || "사유 미입력"}
-        list="history-assignment-reasons"
+        studentName={student.name}
         value={reason}
-        placeholder="사유 미입력"
-        aria-invalid={invalid}
-        aria-describedby={invalid ? `${id}-error` : undefined}
-        onChange={(event) => onReasonChange(event.target.value)}
+        invalid={invalid}
+        describedBy={invalid ? `${id}-error` : undefined}
+        onChange={onReasonChange}
       />
       <HistoryActionButton
         icon="trash"
@@ -4114,11 +4231,6 @@ const ManageHistoryClassroom: React.FC = () => {
 
   return (
     <div className="history-classroom ws-page">
-      <datalist id="history-assignment-reasons">
-        {ASSIGNMENT_REASONS.map((reason) => (
-          <option key={reason} value={reason} />
-        ))}
-      </datalist>
       <section className="history-dashboard mb-4">
         <div className="history-heading ws-page-header">
           <div className="flex items-start gap-4">
@@ -5732,7 +5844,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     />
                   </div>
 
-                  <div className="rounded-2xl border border-gray-200 bg-white p-3 md:col-span-2 xl:col-span-2">
+                  <div className="history-student-roster rounded-2xl border border-gray-200 bg-white p-3 md:col-span-2 xl:col-span-2">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="text-sm font-bold text-gray-700">
                         배정 학생
@@ -5741,7 +5853,7 @@ const ManageHistoryClassroom: React.FC = () => {
                         {selectedStudents.length}명
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="history-student-list">
                       {selectedStudents.map((student) => (
                         <AssignedStudentRow
                           key={student.uid}
@@ -6262,7 +6374,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="rounded-2xl bg-gray-50 p-4">
+                    <div className="history-student-roster rounded-2xl bg-gray-50 p-4">
                       <div className="mb-3 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <div className="text-sm font-bold text-gray-700">
@@ -6321,7 +6433,7 @@ const ManageHistoryClassroom: React.FC = () => {
                           />
                         </div>
                       )}
-                      <div className="space-y-2">
+                      <div className="history-student-list">
                         {editingStudents.map((student) => (
                           <AssignedStudentRow
                             key={student.uid}
@@ -6392,7 +6504,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       </span>
                     </div>
                     <div className="history-results-table mt-3 min-w-0">
-                      <table className="history-attempt-table text-left text-xs">
+                      <table className="history-attempt-table text-center text-xs">
                         <thead className="bg-gray-50 text-gray-500">
                           <tr>
                             {["학생", "응시 결과", "관리"].map((label) => (

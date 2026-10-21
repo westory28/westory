@@ -599,12 +599,129 @@ const assertNewDefaults = async (page) => {
     "2",
   );
 };
+const assignmentReasons = [
+  "1인 1역 및 청소 안함",
+  "지각",
+  "수업 태도",
+  "교사 지시 불이행",
+];
+const assertReasonCombobox = async (page, input, blurTarget) => {
+  const originalValue = await input.inputValue();
+  assert.equal(await input.getAttribute("role"), "combobox");
+  assert.equal(await input.getAttribute("aria-autocomplete"), "list");
+  assert.equal(await input.getAttribute("list"), null);
+  await input.click();
+  assert.equal(await input.getAttribute("aria-expanded"), "true");
+  const listId = await input.getAttribute("aria-controls");
+  assert(listId, "an open reason field identifies its own listbox");
+  const list = page.locator(`[id="${listId}"]`);
+  assert.equal(await list.getAttribute("role"), "listbox");
+  assert.deepEqual(await list.getByRole("option").allTextContents(), assignmentReasons);
+  const geometry = await input.evaluate((element) => {
+    const anchor = element.getBoundingClientRect();
+    const options = document.getElementById(element.getAttribute("aria-controls")).getBoundingClientRect();
+    return {
+      anchor: { left: anchor.left, right: anchor.right, bottom: anchor.bottom, width: anchor.width },
+      options: { left: options.left, right: options.right, top: options.top, width: options.width },
+      viewport: innerWidth,
+    };
+  });
+  assert(
+    Math.abs(geometry.anchor.left - geometry.options.left) <= 1 &&
+      Math.abs(geometry.anchor.right - geometry.options.right) <= 1 &&
+      Math.abs(geometry.anchor.width - geometry.options.width) <= 1 &&
+      geometry.options.top >= geometry.anchor.bottom &&
+      geometry.options.top <= geometry.anchor.bottom + 8 &&
+      geometry.options.left >= 0 && geometry.options.right <= geometry.viewport,
+    `reason options stay immediately below their field at the same width: ${JSON.stringify(geometry)}`,
+  );
+  await input.press("ArrowDown");
+  let activeId = await input.getAttribute("aria-activedescendant");
+  assert.equal(await page.locator(`[id="${activeId}"]`).textContent(), assignmentReasons[0]);
+  await input.press("ArrowDown");
+  activeId = await input.getAttribute("aria-activedescendant");
+  assert.equal(await page.locator(`[id="${activeId}"]`).textContent(), assignmentReasons[1]);
+  await input.press("Enter");
+  assert.equal(await input.inputValue(), assignmentReasons[1]);
+  assert.equal(await input.getAttribute("aria-expanded"), "false");
+  assert.equal(await list.count(), 0, "keyboard selection closes the reason list");
+  assert(await input.evaluate((element) => document.activeElement === element));
+  await input.click();
+  await input.press("ArrowDown");
+  await input.press("Escape");
+  assert.equal(await input.getAttribute("aria-expanded"), "false");
+  assert.equal(await list.count(), 0);
+  assert(await input.evaluate((element) => document.activeElement === element && !!element.closest('[role="dialog"]')),
+    "Escape closes only the reason list and keeps the dialog input focused");
+  await input.click();
+  await list.getByRole("option", { name: assignmentReasons[3], exact: true }).click();
+  assert.equal(await input.inputValue(), assignmentReasons[3]);
+  assert.equal(await input.getAttribute("aria-expanded"), "false");
+  assert.equal(await list.count(), 0, "pointer selection closes the reason list");
+  assert(await input.evaluate((element) => document.activeElement === element));
+  await input.click();
+  assert.equal(await list.count(), 1);
+  await blurTarget.focus();
+  assert.equal(await input.getAttribute("aria-expanded"), "false");
+  assert.equal(await list.count(), 0, "moving focus outside the field closes its list");
+  await input.fill(originalValue);
+  if (await input.getAttribute("aria-expanded") === "true") {
+    await input.press("Escape");
+  }
+  await blurTarget.focus();
+  return geometry;
+};
+const assertAttemptColumnAlignment = async (panel) => {
+  const geometry = await panel.locator(".history-attempt-table").evaluate((table) => {
+    const headers = [...table.querySelectorAll("thead th")].map((header) => {
+      const box = header.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(header);
+      const text = range.getBoundingClientRect();
+      return { label: header.textContent, left: box.left, right: box.right, center: box.left + box.width / 2, textCenter: text.left + text.width / 2 };
+    });
+    const rows = [...table.querySelectorAll(".history-attempt-row")].map((row) => ({
+      label: row.getAttribute("aria-label"),
+      cells: [...row.children].map((cell) => {
+        const box = cell.getBoundingClientRect();
+        const visibleContents = [...cell.children]
+          .filter((child) => getComputedStyle(child).position !== "absolute")
+          .map((child) => child.getBoundingClientRect())
+          .filter((child) => child.width > 0 && child.height > 0);
+        const contentLeft = visibleContents.length ? Math.min(...visibleContents.map((child) => child.left)) : null;
+        const contentRight = visibleContents.length ? Math.max(...visibleContents.map((child) => child.right)) : null;
+        return { left: box.left, right: box.right, center: box.left + box.width / 2, contentCenter: contentLeft === null ? null : (contentLeft + contentRight) / 2 };
+      }),
+    }));
+    return { headers, rows };
+  });
+  assert.equal(geometry.headers.length, 3);
+  for (const header of geometry.headers) {
+    assert(Math.abs(header.textCenter - header.center) <= 1,
+      `${header.label} header is centered in its column: ${JSON.stringify(header)}`);
+  }
+  for (const row of geometry.rows) {
+    assert.equal(row.cells.length, geometry.headers.length);
+    row.cells.forEach((cell, index) => {
+      const header = geometry.headers[index];
+      assert(
+        Math.abs(cell.left - header.left) <= 1 &&
+          Math.abs(cell.right - header.right) <= 1 &&
+          Math.abs(cell.center - header.center) <= 1 &&
+          (cell.contentCenter === null || Math.abs(cell.contentCenter - header.center) <= 1),
+        `${row.label} ${header.label} content shares its header's width and center: ${JSON.stringify({ header, cell })}`,
+      );
+    });
+  }
+  return geometry;
+};
 try {
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
     { width: 1024, height: 768 },
     { width: 1280, height: 900 },
+    { width: 1366, height: 768 },
   ]) {
     const page = await browser.newPage({ viewport, hasTouch: true });
     const errors = [],
@@ -708,13 +825,8 @@ try {
     assert.equal(await page.getByLabel("검증학생 배정 사유", { exact: true }).count(), 0, "A student is not added without a reason");
     await page.getByText("배정 사유를 입력해 주세요.", { exact: true }).waitFor();
     const reasonInput = page.getByLabel("추가할 학생 배정 사유", { exact: true });
-    assert.equal(await reasonInput.getAttribute("list"), "history-assignment-reasons");
-    assert.deepEqual(await page.locator("#history-assignment-reasons option").evaluateAll((options) => options.map((option) => option.value)), [
-      "1인 1역 및 청소 안함",
-      "지각",
-      "수업 태도",
-      "교사 지시 불이행",
-    ]);
+    const reasonGeometry = await assertReasonCombobox(page, reasonInput,
+      page.getByLabel("전체 학생 이름 검색", { exact: true }));
     await reasonInput.fill("   ");
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     assert.equal(
@@ -745,6 +857,8 @@ try {
     await page.getByRole("button", { name: /검증학생.*3-2/ }).click();
     const assignedReason = page.getByLabel("검증학생 배정 사유", { exact: true });
     assert.equal(await assignedReason.inputValue(), "지각");
+    const assignedReasonGeometry = await assertReasonCombobox(page, assignedReason,
+      page.getByLabel("전체 학생 이름 검색", { exact: true }));
     await assignedReason.fill("같은 행에서 직접 수정한 사유");
     assert.equal(await assignedReason.inputValue(), "같은 행에서 직접 수정한 사유");
     await assignedReason.fill("지각");
@@ -876,6 +990,9 @@ try {
       await page.getByLabel("검증학생 배정 사유", { exact: true }).inputValue(),
       "지각",
     );
+    const editReasonGeometry = await assertReasonCombobox(page,
+      page.getByLabel("검증학생 배정 사유", { exact: true }),
+      page.locator('input[type="number"]').first());
     await page
       .getByLabel("검증학생 배정 사유", { exact: true })
       .fill("");
@@ -1082,6 +1199,7 @@ try {
       "응시 결과",
       "관리",
     ]);
+    const attemptColumnGeometry = await assertAttemptColumnAlignment(panel);
     for (const row of [pending, cancelled, passed]) {
       const geometry = await row.boundingBox();
       assert(
@@ -1511,6 +1629,10 @@ try {
       viewport,
       options,
       geometry,
+      reasonGeometry,
+      assignedReasonGeometry,
+      editReasonGeometry,
+      attemptColumnGeometry,
       dashboardGeometry,
       editGeometry,
       statusGeometry,

@@ -63,10 +63,29 @@
   white-space: nowrap;
 }
 
+.history-student-roster {
+  container: history-roster / inline-size;
+  min-width: 0;
+}
+
+.history-student-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+@container history-roster (min-width: 640px) {
+  .history-student-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .history-student-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(64px, 1fr) minmax(0, 2fr) 44px;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
   padding: 4px 8px;
   border: 1px solid var(--ws-border, #e5e7eb);
@@ -75,42 +94,102 @@
 }
 
 .history-student-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 1 auto;
+  display: contents;
   min-width: 0;
   font-size: 12px;
   font-weight: 700;
-  white-space: nowrap;
+  text-align: center;
 }
 
 .history-student-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.history-student-reason {
-  flex: 1 1 96px;
-  width: 0;
-  min-width: 56px;
-  min-height: 44px;
-  padding: 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ws-primary-text, #1e3a8a);
+.history-reason-control {
+  position: relative;
+  min-width: 0;
+}
+
+.history-reason-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 8px 24px 8px 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
   font-size: 12px;
   text-overflow: ellipsis;
 }
 
-.history-student-reason:focus {
+.history-reason-input:focus {
   outline: 2px solid var(--ws-ring, #3b82f6);
-  background: var(--ws-surface, #fff);
 }
 
-.history-student-reason[aria-invalid="true"] {
+.history-reason-input[aria-invalid="true"] {
   border-color: var(--ws-danger, #ef4444);
+}
+
+.history-reason-chevron {
+  position: absolute;
+  top: 16px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+}
+
+.history-reason-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 4px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  box-shadow: var(--ws-shadow-sm, 0 1px 2px rgb(0 0 0 / 5%));
+}
+
+.history-reason-options button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 12px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.history-reason-options button:hover,
+.history-reason-options button.is-active,
+.history-reason-options button[aria-selected="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.history-student-reason .history-reason-input {
+  text-align: center;
+  color: var(--ws-primary-text, #1e3a8a);
+}
+
+@container history-roster (max-width: 359px) {
+  .history-student-row {
+    grid-template-columns: repeat(2, minmax(64px, 1fr)) 44px;
+  }
+
+  .history-student-reason {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  .history-student-remove {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
 }
 
 .history-student-remove {
@@ -223,16 +302,18 @@
 
 .history-attempt-table thead th {
   padding: 8px 4px;
+  text-align: center;
   white-space: nowrap;
 }
 
 .history-attempt-table .history-attempt-student,
 .history-attempt-table .history-attempt-result {
+  justify-content: center;
   padding: 4px;
 }
 
 .history-attempt-table .history-attempt-actions {
-  justify-content: flex-end;
+  justify-content: center;
   padding: 3px 4px;
 }
 
