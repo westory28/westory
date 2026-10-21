@@ -137,7 +137,7 @@ const failure=(code='functions/unavailable')=>Object.assign(new Error(code),{cod
 const online=()=>{if(!navigator.onLine)throw failure();};
 const record=(kind,input)=>{fixture.calls.push({kind,...structuredClone(input)});persist();};
 export const getAssessmentState=async()=>{online();return {status:fixture.attempt?fixture.attempt.status==='SUBMITTED'?'SUBMITTED':'RECOVERABLE':'READY',definition:{definitionId:'history_classroom:2026-2:assignment-1'},attempt:fixture.attempt||null,serverNowIso:new Date().toISOString()};};
-export const startAssessmentAttempt=async(input)=>{online();record('start',input);if(fixture.attempt)return fixture.attempt;fixture.attempt={attemptId:fixture.nextAttemptId||'attempt-1',definitionId:input.definitionId,semesterId:'2026-2',assessmentKind:'HISTORY_CLASSROOM',attemptNumber:1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:fixture.assignment.blanks.map(b=>b.id),startedAtIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+60000).toISOString(),lastSavedAtIso:new Date().toISOString(),resultRef:''};persist();return fixture.attempt;};
+export const startAssessmentAttempt=async(input)=>{online();record('start',input);if(fixture.failStart){fixture.failStart=false;persist();throw failure();}if(fixture.holdStart)await new Promise(resolve=>{window.__releaseStart=resolve;});if(fixture.attempt)return fixture.attempt;fixture.attempt={attemptId:fixture.nextAttemptId||'attempt-1',definitionId:input.definitionId,semesterId:'2026-2',assessmentKind:'HISTORY_CLASSROOM',attemptNumber:1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:fixture.assignment.blanks.map(b=>b.id),startedAtIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+60000).toISOString(),lastSavedAtIso:new Date().toISOString(),resultRef:''};persist();return fixture.attempt;};
 export const saveAssessmentProgress=async(input)=>{
  online();record('save',input);const key=JSON.stringify(input);fixture.saves||={};if(fixture.saves[key])return fixture.saves[key];
  if(fixture.failSave){fixture.failSave=false;persist();throw failure();}
@@ -222,7 +222,10 @@ const css = (
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
-const importedCss = bundle.outputFiles.filter(file => file.path.endsWith(".css")).map(file => file.text).join("\n");
+const importedCss = bundle.outputFiles
+  .filter((file) => file.path.endsWith(".css"))
+  .map((file) => file.text)
+  .join("\n");
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}\n${importedCss}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1400"><rect width="1000" height="1400" fill="white"/><text x="100" y="100" font-size="36">인터넷 연결과 답안 복구 검증</text></svg>';
@@ -238,7 +241,7 @@ const server = http.createServer((req, res) => {
   );
   res.end(
     url === "/fixture.js"
-      ? bundle.outputFiles.find(file => file.path.endsWith(".js")).text
+      ? bundle.outputFiles.find((file) => file.path.endsWith(".js")).text
       : url === "/tailwind.js"
         ? tailwind
         : url === "/worksheet.svg"
@@ -330,6 +333,161 @@ const visibility = (page, state) =>
     document.dispatchEvent(new Event("visibilitychange"));
   }, state);
 try {
+  for (const [width, height] of [
+    [390, 844],
+    [768, 1024],
+    [1280, 800],
+    [1366, 768],
+  ]) {
+    const t = await open(
+      `start-overlay-${width}x${height}`,
+      width,
+      height,
+      "",
+      false,
+    );
+    const start = t.page.getByRole("button", {
+      name: "응시 시작",
+      exact: true,
+    });
+    const overlay = t.page.locator("[data-history-start-overlay]");
+    const viewport = t.page.locator("[data-history-viewport]");
+    const [buttonRect, viewportRect] = await Promise.all([
+      start.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    assert(buttonRect && viewportRect);
+    assert(
+      Math.abs(
+        buttonRect.x +
+          buttonRect.width / 2 -
+          viewportRect.x -
+          viewportRect.width / 2,
+      ) < 2,
+    );
+    assert(
+      Math.abs(
+        buttonRect.y +
+          buttonRect.height / 2 -
+          viewportRect.y -
+          viewportRect.height / 2,
+      ) < 2,
+    );
+    assert(buttonRect.y >= 0 && buttonRect.y + buttonRect.height <= height);
+    assert.equal(
+      await overlay.evaluate(
+        (element) => getComputedStyle(element).backdropFilter,
+      ),
+      "blur(2px)",
+    );
+    assert.equal(await viewport.locator("[inert]").count(), 1);
+    assert.equal(
+      await t.page.getByRole("textbox").count(),
+      0,
+      "unstarted blanks are not keyboard targets",
+    );
+    assert.equal(
+      await t.page
+        .getByRole("button", { name: "제출하기", exact: true })
+        .count(),
+      0,
+    );
+    await advance(t.page, 5000);
+    assert.equal(
+      (await getCalls(t.page)).length,
+      0,
+      "waiting before start never creates an attempt",
+    );
+    assert.equal(
+      await t.page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .count(),
+      0,
+    );
+    const disclosure = t.page.getByRole("button", { name: /^단어 목록/ });
+    assert.equal(
+      await disclosure.locator('svg[aria-hidden="true"]').count(),
+      1,
+    );
+    assert(!/[∨∧]/u.test(await disclosure.innerText()));
+    await disclosure.click();
+    assert.equal(await disclosure.getAttribute("aria-expanded"), "true");
+    assert(
+      (await disclosure.locator("svg").getAttribute("class")).includes(
+        "rotate-180",
+      ),
+    );
+    await disclosure.click();
+    await t.page.screenshot({
+      path: path.join(evidence, `runner-${t.label}-ready.png`),
+      fullPage: true,
+    });
+    await start.click();
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal((await callsOf(t.page, "start")).length, 1);
+    assert.equal(await overlay.count(), 0);
+    assert.equal(await viewport.locator("[inert]").count(), 0);
+    await firstInput(t.page).fill("고조선");
+    assert.equal(await firstInput(t.page).inputValue(), "고조선");
+    const timer = t.page.getByRole("timer", { name: "남은 시간", exact: true });
+    const before = await timer.innerText();
+    await advance(t.page, 2100);
+    assert.notEqual(
+      await timer.innerText(),
+      before,
+      "the same start click enables answers and countdown",
+    );
+    await finish(t);
+  }
+  {
+    const t = await open("start-overlay-request-failure", 768, 1024, "", false);
+    await t.page.evaluate(() => {
+      window.__fixture.failStart = true;
+    });
+    await t.page
+      .getByRole("button", { name: "응시 시작", exact: true })
+      .click();
+    await t.page
+      .getByRole("status")
+      .filter({ hasText: "functions/unavailable" })
+      .waitFor();
+    assert.equal(
+      await t.page.locator("[data-history-start-overlay]").count(),
+      1,
+    );
+    assert.equal(
+      await t.page
+        .getByRole("timer", { name: "남은 시간", exact: true })
+        .count(),
+      0,
+    );
+    await t.page.evaluate(() => {
+      window.__fixture.holdStart = true;
+    });
+    await t.page
+      .getByRole("button", { name: "응시 시작", exact: true })
+      .click();
+    const pending = t.page.getByRole("button", {
+      name: "시작 중...",
+      exact: true,
+    });
+    await pending.waitFor();
+    assert.equal(await pending.isDisabled(), true);
+    await advance(t.page, 3000);
+    assert.equal((await callsOf(t.page, "start")).length, 2);
+    assert.equal(await t.page.getByRole("textbox").count(), 0);
+    await t.page.evaluate(() => window.__releaseStart());
+    await t.page
+      .getByRole("button", { name: "제출하기", exact: true })
+      .waitFor();
+    assert.equal(
+      await t.page.locator("[data-history-start-overlay]").count(),
+      0,
+    );
+    await finish(t);
+  }
   for (const [width, height] of [
     [390, 844],
     [768, 1024],

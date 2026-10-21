@@ -1920,18 +1920,15 @@ const HistoryClassroomRunner: React.FC = () => {
         onAnswerChange={handleAnswerChange}
         hintUseCount={hintUseCount}
         onUseHint={handleUseHint}
-        onSubmit={() =>
-          void (attemptStarted ? submitAnswers() : beginCanonicalAttempt())
+        onSubmit={() => void submitAnswers()}
+        onStart={
+          !attemptStarted && !completed
+            ? () => void beginCanonicalAttempt()
+            : undefined
         }
         submitting={submitting || startingAttempt}
         answersLocked={!attemptStarted || pendingSubmitAfterOnline}
-        submitLabel={
-          !attemptStarted
-            ? "응시 시작"
-            : pendingSubmitAfterOnline
-              ? "다시 제출"
-              : undefined
-        }
+        submitLabel={pendingSubmitAfterOnline ? "다시 제출" : undefined}
         completed={completed}
         resultText={resultSummary ? "" : resultText}
         pointNotice={pointNotice}

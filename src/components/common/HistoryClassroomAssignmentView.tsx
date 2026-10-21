@@ -26,6 +26,7 @@ interface HistoryClassroomAssignmentViewProps {
   answers: Record<string, string>;
   onAnswerChange?: (blankId: string, value: string) => void;
   onSubmit?: () => void;
+  onStart?: () => void;
   submitting?: boolean;
   completed?: boolean;
   readOnly?: boolean;
@@ -289,6 +290,7 @@ const HistoryClassroomAssignmentView: React.FC<
   answers,
   onAnswerChange,
   onSubmit,
+  onStart,
   submitting = false,
   completed = false,
   readOnly = false,
@@ -310,6 +312,7 @@ const HistoryClassroomAssignmentView: React.FC<
   onUseHint,
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
+  const showStartOverlay = Boolean(onStart) && !readOnly && !completed;
   const pages = assignment.pdfPageImages || [];
   const pageCount = pages.length;
   const currentPageIndex = pages.findIndex((page) => page.page === currentPage);
@@ -1218,20 +1221,22 @@ const HistoryClassroomAssignmentView: React.FC<
             )}
           </div>
           {headerAction}
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={readOnly || submitting || completed || !onSubmit}
-            className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
-          >
-            {readOnly
-              ? "읽기 전용 미리보기"
-              : submitting
-                ? "제출 중..."
-                : completed
-                  ? "제출 완료"
-                  : submitLabel}
-          </button>
+          {!showStartOverlay && (
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={readOnly || submitting || completed || !onSubmit}
+              className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+            >
+              {readOnly
+                ? "읽기 전용 미리보기"
+                : submitting
+                  ? "제출 중..."
+                  : completed
+                    ? "제출 완료"
+                    : submitLabel}
+            </button>
+          )}
         </div>
         {showHelp && helpOpen && (
           <div
@@ -1441,9 +1446,18 @@ const HistoryClassroomAssignmentView: React.FC<
                 {assignment.answerOptions.length}개
               </span>
             </span>
-            <span aria-hidden="true">
-              {wordListOpen ? "접기 ∧" : "펼치기 ∨"}
-            </span>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`h-5 w-5 shrink-0 ${wordListOpen ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
           </button>
           <div
             id={wordListId}
@@ -1510,11 +1524,13 @@ const HistoryClassroomAssignmentView: React.FC<
           {pageImage && (
             <div
               data-history-viewport="true"
-              className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-1"
+              className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-100 p-1"
               style={{ height: viewportHeight }}
             >
               <div
                 ref={enableInteractiveViewport ? viewportRef : undefined}
+                aria-hidden={showStartOverlay || undefined}
+                {...(showStartOverlay ? { inert: "" } : {})}
                 className="h-full min-h-0 overflow-auto"
                 style={
                   enableInteractiveViewport
@@ -1772,6 +1788,22 @@ const HistoryClassroomAssignmentView: React.FC<
                   </div>
                 </div>
               </div>
+              {showStartOverlay && (
+                <div
+                  data-history-start-overlay="true"
+                  className="absolute inset-0 z-20 flex items-center justify-center bg-white/30 p-4 backdrop-blur-[2px]"
+                >
+                  <button
+                    type="button"
+                    onClick={onStart}
+                    disabled={submitting || imageLoadError}
+                    aria-busy={submitting}
+                    className="min-h-12 rounded-lg bg-blue-600 px-6 py-3 text-lg font-bold text-white shadow-md hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {submitting ? "시작 중..." : "응시 시작"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>
