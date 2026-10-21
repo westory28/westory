@@ -146,11 +146,17 @@
   top: calc(100% + 4px);
   left: 0;
   right: 0;
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 12px;
   background: var(--ws-surface, #fff);
   box-shadow: var(--ws-shadow-sm, 0 1px 2px rgb(0 0 0 / 5%));
+}
+
+.history-reason-options.is-above {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .history-reason-options button {

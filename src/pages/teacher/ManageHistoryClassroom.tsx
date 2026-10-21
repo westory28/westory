@@ -1,6 +1,12 @@
 import NumericInput from "../../components/common/NumericInput";
 import "./ManageHistoryClassroom.css";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   collection,
   doc,
@@ -971,9 +977,34 @@ const AssignmentReasonInput: React.FC<{
   onChange,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [openAbove, setOpenAbove] = useState(false);
+  const [optionsMaxHeight, setOptionsMaxHeight] = useState<number>();
   const [activeIndex, setActiveIndex] = useState(-1);
   const listId = `${id}-options`;
+  useLayoutEffect(() => {
+    if (!open || !inputRef.current || !optionsRef.current) return;
+    const anchor = inputRef.current.getBoundingClientRect();
+    let top = 0;
+    let bottom = window.innerHeight;
+    let ancestor = inputRef.current.parentElement;
+    while (ancestor) {
+      if (
+        /(auto|scroll|hidden|clip)/.test(getComputedStyle(ancestor).overflowY)
+      ) {
+        const bounds = ancestor.getBoundingClientRect();
+        top = Math.max(top, bounds.top);
+        bottom = Math.min(bottom, bounds.bottom);
+      }
+      ancestor = ancestor.parentElement;
+    }
+    const below = Math.max(0, bottom - anchor.bottom - 4);
+    const above = Math.max(0, anchor.top - top - 4);
+    const flip = optionsRef.current.scrollHeight > below && above > below;
+    setOpenAbove(flip);
+    setOptionsMaxHeight(Math.max(44, flip ? above : below));
+  }, [open]);
   const chooseReason = (reason: string) => {
     onChange(reason);
     inputRef.current?.focus();
@@ -1018,6 +1049,7 @@ const AssignmentReasonInput: React.FC<{
           setActiveIndex(-1);
         }}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return;
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
             const direction = event.key === "ArrowDown" ? 1 : -1;
@@ -1055,10 +1087,12 @@ const AssignmentReasonInput: React.FC<{
       </svg>
       {open && (
         <div
+          ref={optionsRef}
           id={listId}
           role="listbox"
           aria-label={`${studentName} 배정 사유 목록`}
-          className="history-reason-options"
+          className={`history-reason-options${openAbove ? " is-above" : ""}`}
+          style={{ maxHeight: optionsMaxHeight }}
         >
           {ASSIGNMENT_REASONS.map((reason, index) => (
             <button

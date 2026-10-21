@@ -621,8 +621,8 @@ const assertReasonCombobox = async (page, input, blurTarget) => {
     const anchor = element.getBoundingClientRect();
     const options = document.getElementById(element.getAttribute("aria-controls")).getBoundingClientRect();
     return {
-      anchor: { left: anchor.left, right: anchor.right, bottom: anchor.bottom, width: anchor.width },
-      options: { left: options.left, right: options.right, top: options.top, width: options.width },
+      anchor: { left: anchor.left, right: anchor.right, top: anchor.top, bottom: anchor.bottom, width: anchor.width },
+      options: { left: options.left, right: options.right, top: options.top, bottom: options.bottom, width: options.width },
       viewport: innerWidth,
     };
   });
@@ -630,10 +630,10 @@ const assertReasonCombobox = async (page, input, blurTarget) => {
     Math.abs(geometry.anchor.left - geometry.options.left) <= 1 &&
       Math.abs(geometry.anchor.right - geometry.options.right) <= 1 &&
       Math.abs(geometry.anchor.width - geometry.options.width) <= 1 &&
-      geometry.options.top >= geometry.anchor.bottom &&
-      geometry.options.top <= geometry.anchor.bottom + 8 &&
+      ((geometry.options.top >= geometry.anchor.bottom && geometry.options.top <= geometry.anchor.bottom + 8) ||
+        (geometry.options.bottom <= geometry.anchor.top && geometry.options.bottom >= geometry.anchor.top - 8)) &&
       geometry.options.left >= 0 && geometry.options.right <= geometry.viewport,
-    `reason options stay immediately below their field at the same width: ${JSON.stringify(geometry)}`,
+    `reason options stay attached above or below their field at the same width: ${JSON.stringify(geometry)}`,
   );
   await input.press("ArrowDown");
   let activeId = await input.getAttribute("aria-activedescendant");
@@ -646,6 +646,12 @@ const assertReasonCombobox = async (page, input, blurTarget) => {
   assert.equal(await input.getAttribute("aria-expanded"), "false");
   assert.equal(await list.count(), 0, "keyboard selection closes the reason list");
   assert(await input.evaluate((element) => document.activeElement === element));
+  const composingKey = await input.evaluate((element) => {
+    const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true, isComposing: true });
+    element.dispatchEvent(event);
+    return { prevented: event.defaultPrevented, expanded: element.getAttribute("aria-expanded") };
+  });
+  assert.deepEqual(composingKey, { prevented: false, expanded: "false" }, "Korean composition keys do not open or select reason presets");
   await input.click();
   await input.press("ArrowDown");
   await input.press("Escape");
