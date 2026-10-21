@@ -31,19 +31,20 @@ import {useSyncExternalStore} from 'react';
 const params=new URLSearchParams(location.search), scenario=params.get('case')||'closed';
 const listeners=new Set();
 const qa=window.yutAccessQA={calls:[],enabled:scenario==='open'||scenario==='pending',hold:scenario==='pending',fail:scenario==='failure',missing:scenario==='missing',settings:{enabled:false,version:0,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25},rooms:[{id:'room-a',code:'AB2345',status:'playing',revision:4,hostUid:'student-a',createdAtMs:Date.now()-60000,expiresAtMs:Date.now()+60000,turnUid:'student-a',players:[{uid:'student-a',name:'검증 학생',role:'sa',classLabel:'3학년 2반',studentNumber:7,active:true},{uid:'student-b',name:'둘째 학생',role:'nong',classLabel:'3학년 2반',studentNumber:8,active:true}]}],auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-user',email:'qa@example.invalid'},userData:{role:scenario==='readonly'?'student':scenario==='denied'?'student':params.get('portal')==='student'?'student':'teacher',teacherPortalEnabled:scenario==='readonly',staffPermissions:scenario==='readonly'?['lesson_read']:[]}}};
+qa.spectatorEvents=[];qa.activeSpectators=[];
 qa.changeAuth=next=>{qa.auth={...qa.auth,...next};listeners.forEach(fn=>fn());};
 qa.rooms[0].standings=[{uid:'student-a',finishedPieces:1,totalPieces:2,progress:-11},{uid:'student-b',finishedPieces:0,totalPieces:2,progress:-16}];
 qa.rooms[0].leadingUids=['student-a'];
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.auth);
 export async function getYutLobby(config){qa.calls.push({name:'getYutLobby',config:structuredClone(config)});const result={enabled:qa.enabled,settings:{...structuredClone(qa.settings),enabled:qa.enabled},room:null,classes:[],classId:'',serverNowMs:Date.now()};if(qa.hold){qa.hold=false;await new Promise(resolve=>qa.release=resolve);}if(qa.fail)throw Object.assign(new Error('연결을 확인해 주세요.'),{code:'functions/unavailable'});if(qa.missing)delete result.enabled;return result;}
-export async function getYutManagement(config){qa.calls.push({name:'getYutManagement',config:structuredClone(config)});if(qa.fail)throw new Error('관리 정보를 확인하지 못했습니다.');return {settings:structuredClone(qa.settings),rooms:structuredClone(qa.rooms),truncated:false,serverNowMs:Date.now()};}
+export async function getYutManagement(config){qa.calls.push({name:'getYutManagement',config:structuredClone(config)});if(qa.fail)throw new Error('관리 정보를 확인하지 못했습니다.');return {settings:structuredClone(qa.settings),rooms:structuredClone(qa.rooms),truncated:false,serverNowMs:Date.now()+120000};}
 export async function saveYutSettings(config,data){qa.calls.push({name:'saveYutSettings',config:structuredClone(config),data});if(qa.fail)throw new Error('저장하지 못했습니다.');if(data.expectedVersion!==qa.settings.version)throw Object.assign(new Error('conflict'),{code:'functions/aborted'});const {expectedVersion,...options}=data;qa.settings={...qa.settings,...options,version:qa.settings.version+1,updatedAtMs:Date.now()};return {settings:structuredClone(qa.settings),serverNowMs:Date.now()};}
 export async function commandYutRoom(config,data){qa.calls.push({name:'commandYutRoom',config:structuredClone(config),data});qa.rooms=qa.rooms.filter(room=>room.id!==data.roomId);return {room:null,serverNowMs:Date.now()};}
 export const YUT_PRIVATE_DAILY_LIMIT=5;export const yutErrorMessage=error=>error.message;
 export const WEPLAY_GAMES=[{id:'history-rain',name:'내가 충무공이라고?!'},{id:'joseon-yut',name:'마우저구 윷놀이'}];
 `;
 const entry = `
-import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,useSearchParams} from 'react-router-dom';
+import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,useNavigate,useSearchParams} from 'react-router-dom';
 import Entry from ${modulePath("src/components/common/weplay/YutGameEntry.tsx")};
 import Management from ${modulePath("src/pages/teacher/components/YutManagement.tsx")};
 import Catalog from ${modulePath("src/components/common/weplay/WeplayGameCatalog.tsx")};
@@ -52,7 +53,7 @@ import {AppToastProvider} from ${modulePath("src/components/common/AppToastProvi
 import ${modulePath("src/components/common/portalPage.css")};
 import ${modulePath("src/assets/index.css")};
 const query=new URLSearchParams(location.search),portal=query.get('portal')==='student'?'student':'teacher';
-function App(){const [params]=useSearchParams();return params.get('game')==='joseon-yut'?portal==='teacher'?<Management/>:<Entry portal='student'/>:<main className='ws-page'><Catalog portal={portal} gameTitle='내가 충무공이라고?!'/></main>;}
+function App(){const [params]=useSearchParams();window.yutAccessQA.navigate=useNavigate();return params.get('game')==='joseon-yut'?portal==='teacher'?<Management/>:<Entry portal='student'/>:<main className='ws-page'><Catalog portal={portal} gameTitle='내가 충무공이라고?!'/></main>;}
 createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/'+portal+'/weplay'+(query.has('catalog')?'':'?game=joseon-yut')]}><AppToastProvider><AppDialogProvider><App/></AppDialogProvider></AppToastProvider></MemoryRouter>);
 `;
 const bundled = await build({
@@ -87,6 +88,10 @@ const bundled = await build({
           path: "game",
           namespace: "fixture",
         }));
+        plugin.onResolve({ filter: /YutSpectator$/ }, () => ({
+          path: "spectator",
+          namespace: "fixture",
+        }));
         plugin.onResolve({ filter: /useYutMusic$/ }, () => ({
           path: "music",
           namespace: "fixture",
@@ -101,6 +106,8 @@ const bundled = await build({
               ? service
               : args.path === "game"
                 ? `import React from 'react';export default function Game({onBack,preview,initialSettings}){window.yutAccessQA.preview=initialSettings;return <section data-testid='game-mounted'><h1>검증용 게임 대기</h1><span>{preview?'교사 체험':'온라인 대기'}</span><button onClick={onBack}>게임 관리</button></section>}`
+                : args.path === "spectator"
+                  ? `import React,{useEffect} from 'react';export default function Spectator({roomId,actorKey,config,serverOffsetMs}){window.yutAccessQA.spectatorOffset=serverOffsetMs;useEffect(()=>{const qa=window.yutAccessQA;qa.activeSpectators.push(roomId);qa.spectatorEvents.push({kind:'subscribe',roomId,actorKey,config,serverOffsetMs});return()=>{qa.activeSpectators=qa.activeSpectators.filter(id=>id!==roomId);qa.spectatorEvents.push({kind:'unsubscribe',roomId});};},[roomId,actorKey,config.year,config.semester,serverOffsetMs]);return <section data-testid='spectator-mounted' data-room-id={roomId} style={{minHeight:'100%'}}>읽기 전용 관전 화면</section>}`
                 : args.path === "music"
                   ? `export default function useMusic(){return {start(){},toggle(){},enabled:false,failed:false};}`
                   : `export default function Footer(){return null;}`,
@@ -334,6 +341,8 @@ try {
   await goto("portal=teacher&catalog=1");
   await page.getByRole("link", { name: /마우저구 윷놀이.*게임 관리/ }).click();
   await page.getByRole("checkbox", { name: "학생에게 공개" }).waitFor();
+  assert.equal(await page.locator(".yut-management-preview-actions").getByRole("button", { name: "플레이 모니터링", exact: true }).count(), 1);
+  assert.equal(await page.locator(".yut-management-rooms").count(), 0);
   assert.equal(
     await page.locator(".yut-management-settings strong").textContent(),
     "비공개",
@@ -648,6 +657,47 @@ try {
   await page.clock.fastForward(30010);
   assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length), closedReads);
   checks.push("Monitoring opens in a modal, shows leaders/co-leaders/completed pieces and uses two desktop columns/one mobile column; 12 rooms share one scroll area with focus containment, Escape/backdrop focus restoration and native-modal tooltips. The 15s refresh runs only while open; inspecting rooms performs no room commands.");
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  await page.getByRole("button", { name: "AB2345 관전", exact: true }).click();
+  await page.getByTestId("spectator-mounted").waitFor();
+  assert.equal(await page.getByTestId("spectator-mounted").getAttribute("data-room-id"), "room-a");
+  assert.equal(await page.getByRole("dialog", { name: "AB2345 관전" }).count(), 1);
+  assert.equal(await page.locator("dialog").count(), 1);
+  await page.getByText("읽기 전용", { exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.yutAccessQA.activeSpectators), ["room-a"]);
+  const spectatorOffset = await page.evaluate(() => window.yutAccessQA.spectatorOffset);
+  assert.ok(Number.isFinite(spectatorOffset) && Math.abs(spectatorOffset - 120000) < 100);
+  const spectatorReads = await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length);
+  await page.clock.fastForward(45010);
+  await page.evaluate(() => window.yutAccessQA.changeAuth({ currentUser: { ...window.yutAccessQA.auth.currentUser } }));
+  assert.equal(await page.evaluate(() => window.yutAccessQA.spectatorOffset), spectatorOffset);
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length), spectatorReads);
+  assert.equal(await page.evaluate(() => window.yutAccessQA.calls.filter(call => call.name === "commandYutRoom").length), 0);
+  await page.getByRole("button", { name: "목록으로", exact: true }).click();
+  await page.getByRole("dialog", { name: "학생 플레이 모니터링" }).waitFor();
+  assert.equal(await page.getByTestId("spectator-mounted").count(), 0);
+  assert.deepEqual(await page.evaluate(() => window.yutAccessQA.activeSpectators), []);
+  await page.waitForFunction(reads => window.yutAccessQA.calls.filter(call => call.name === "getYutManagement").length > reads, spectatorReads);
+  await page.evaluate(() => { window.yutAccessQA.rooms[0].status = "waiting"; });
+  await page.getByRole("button", { name: "새로고침", exact: true }).click();
+  await page.getByText("대기 중", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "AB2345 관전", exact: true }).click();
+  await page.getByTestId("spectator-mounted").waitFor();
+  await page.getByRole("button", { name: "모니터링 닫기", exact: true }).click();
+  assert.deepEqual(await page.evaluate(() => window.yutAccessQA.activeSpectators), []);
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  assert.equal(await page.getByTestId("spectator-mounted").count(), 0);
+  await page.getByRole("button", { name: "AB2345 관전", exact: true }).click();
+  await page.getByTestId("spectator-mounted").waitFor();
+  await page.evaluate(() => window.yutAccessQA.navigate("/teacher/weplay?game=joseon-yut&view=preview"));
+  await page.waitForFunction(() => window.yutAccessQA.activeSpectators.length === 0);
+  assert.equal(await page.locator(".yut-management-monitor").count(), 0);
+  await page.evaluate(() => window.yutAccessQA.navigate("/teacher/weplay?game=joseon-yut"));
+  await page.getByRole("checkbox", { name: "학생에게 공개" }).waitFor();
+  assert.equal(await page.locator(".yut-management-monitor").count(), 0);
+  await page.evaluate(() => { window.yutAccessQA.rooms[0].status = "playing"; });
+  checks.push("Monitoring button is next to teacher preview actions. Watching waiting/playing rooms swaps content inside one modal, mounts one read-only viewer, pauses list polling, and performs no room commands. Back refreshes the list; close/reopen and view changes discard the selection and unmount the viewer.");
   // Earlier deliberate save conflicts leave global toasts; dismiss them before the intro.
   while (await page.getByRole("button", { name: /알림 닫기$/ }).count()) {
     await page
@@ -733,6 +783,19 @@ try {
       .count(),
     0,
   );
+  await page.getByRole("button", { name: "AB2345 관전", exact: true }).click();
+  await page.getByTestId("spectator-mounted").waitFor();
+  await page.evaluate(() => window.yutAccessQA.changeAuth({ currentUser: { uid: "qa-next", email: "qa@example.invalid" } }));
+  await page.waitForFunction(() => window.yutAccessQA.activeSpectators.length === 0);
+  assert.equal(await page.locator(".yut-management-monitor").count(), 0);
+  await page.getByRole("button", { name: "플레이 모니터링", exact: true }).click();
+  await page.getByRole("button", { name: "AB2345 관전", exact: true }).click();
+  await page.getByTestId("spectator-mounted").waitFor();
+  await page.evaluate(() => window.yutAccessQA.changeAuth({ config: { year: "2026", semester: "1" } }));
+  await page.waitForFunction(() => window.yutAccessQA.activeSpectators.length === 0);
+  assert.equal(await page.locator(".yut-management-monitor").count(), 0);
+  assert.equal(await page.evaluate(() => document.body.style.overflowY), "");
+  checks.push("Read-only management can spectate; identity and semester changes unmount the viewer, clear selection, close the modal and restore the page scroll lock.");
   await goto("portal=teacher&case=denied");
   await page
     .getByText("위플레이 관리 화면을 볼 권한이 없습니다.", { exact: true })

@@ -1,0 +1,15 @@
+.yut-spectator.yut-game { width: 100%; max-width: none; min-width: 0; height: auto; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; color: var(--ws-text, #1f2937); font: inherit; container-type: inline-size; }
+.yut-spectator-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; font-size: 14px; }
+.yut-spectator-status > strong { font-size: 16px; }
+.yut-spectator-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+.yut-spectator-board { min-width: 0; padding: 16px; border-radius: 12px; background: url('/assets/weplay/yut/courtyard.webp') center / cover; --yut-board-ratio: 9 / 7; }
+.yut-spectator-board .yut-isometric-board-wrap { padding-top: 24px; }
+.yut-spectator-players { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; list-style: none; padding: 0; margin: 0; }
+.yut-spectator-players > li { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--ws-border, #e5e7eb); }
+.yut-spectator-players > li:first-child { padding-top: 0; }
+.yut-spectator-players > li > div { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.yut-spectator-players strong { font-size: 16px; }
+.yut-spectator-players li > div > span { color: var(--ws-text-muted, #6b7280); font-size: 14px; }
+.yut-spectator-message { display: grid; justify-items: start; gap: 16px; padding-block: 24px; }
+.yut-spectator-message > p { margin: 0; }
+@container (min-width: 800px) { .yut-spectator-layout { grid-template-columns: minmax(0, 1fr) 256px; } .yut-spectator-board { --yut-board-ratio: 5 / 2; } }

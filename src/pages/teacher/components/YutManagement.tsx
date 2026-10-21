@@ -27,6 +27,7 @@ import { InfoHelp } from "../../../components/common/InfoHelp";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import YutGameEntry from "../../../components/common/weplay/YutGameEntry";
+import YutSpectator from "./YutSpectator";
 import WeplayMusicButton from "../../../components/common/weplay/WeplayMusicButton";
 import {
   isWeplayAudioMuted,
@@ -109,16 +110,25 @@ export default function YutManagement() {
   const savingRef = useRef(false);
   const inFlight = useRef(false);
   const [data, setData] = useState<YutManagement | null>(null);
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [loadedScope, setLoadedScope] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState("");
   const [monitorOpen, setMonitorOpen] = useState(false);
+  const [spectating, setSpectating] = useState<{
+    id: string;
+    code: string;
+  } | null>(null);
   const [pendingClose, setPendingClose] = useState("");
   const monitorRef = useRef<HTMLDialogElement>(null);
+  const monitorCloseRef = useRef<HTMLButtonElement>(null);
+  const spectatorBackRef = useRef<HTMLButtonElement>(null);
   const monitorOpenRef = useRef(false);
   monitorOpenRef.current = monitorOpen;
+  const spectatingRef = useRef(false);
+  spectatingRef.current = !!spectating;
   const [readError, setReadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [conflict, setConflict] = useState(false);
@@ -161,6 +171,11 @@ export default function YutManagement() {
       try {
         const response = await getYutManagement(config);
         if (token !== generation.current || scopeRef.current !== scope) return;
+        setServerOffsetMs(
+          Number.isFinite(response.serverNowMs)
+            ? response.serverNowMs - Date.now()
+            : 0,
+        );
         setData(response);
         setLoadedScope(scope);
         setReadError("");
@@ -188,6 +203,7 @@ export default function YutManagement() {
 
   useEffect(() => {
     setData(null);
+    setServerOffsetMs(0);
     setDraft(null);
     setLoadedScope("");
     setReadError("");
@@ -195,6 +211,7 @@ export default function YutManagement() {
     setConflict(false);
     setClosing("");
     setMonitorOpen(false);
+    setSpectating(null);
     setPendingClose("");
     setSaving(false);
     inFlight.current = false;
@@ -204,6 +221,7 @@ export default function YutManagement() {
       if (
         !document.hidden &&
         monitorOpenRef.current &&
+        !spectatingRef.current &&
         !["preview", "online"].includes(viewRef.current || "")
       )
         void load();
@@ -216,6 +234,11 @@ export default function YutManagement() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [load]);
+  useEffect(() => {
+    setSpectating(null);
+    setPendingClose("");
+    setMonitorOpen(false);
+  }, [view]);
   const monitorVisible =
     monitorOpen && !!current && !["preview", "online"].includes(view || "");
   useEffect(() => {
@@ -232,6 +255,14 @@ export default function YutManagement() {
       opener?.focus();
     };
   }, [monitorVisible, load]);
+  useEffect(() => {
+    if (!monitorVisible) return;
+    const body = monitorRef.current?.querySelector<HTMLElement>(
+      ".yut-management-monitor-body",
+    );
+    if (body) body.scrollTop = 0;
+    (spectating ? spectatorBackRef.current : monitorCloseRef.current)?.focus();
+  }, [monitorVisible, spectating?.id]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -668,6 +699,15 @@ export default function YutManagement() {
                 >
                   온라인 대기방
                 </Link>
+                <button
+                  type="button"
+                  className="yut-management-button"
+                  aria-haspopup="dialog"
+                  aria-expanded={monitorVisible}
+                  onClick={() => setMonitorOpen(true)}
+                >
+                  플레이 모니터링
+                </button>
               </div>
               {dirty && validDraft && (
                 <p className="yut-management-muted">
@@ -676,29 +716,10 @@ export default function YutManagement() {
               )}
             </section>
           </div>
-          <section
-            className="yut-management-rooms"
-            aria-labelledby="yut-monitor-title"
-          >
-            <div className="yut-management-row">
-              <h2 id="yut-monitor-title">
-                대기·진행 중인 방 {current.rooms.length}개
-              </h2>
-              <button
-                type="button"
-                className="yut-management-button"
-                aria-haspopup="dialog"
-                aria-expanded={monitorVisible}
-                onClick={() => setMonitorOpen(true)}
-              >
-                플레이 모니터링
-              </button>
-            </div>
-          </section>
           {monitorOpen && (
             <dialog
               ref={monitorRef}
-              className="yut-management-monitor"
+              className={`yut-management-monitor${spectating ? " is-spectating" : ""}`}
               aria-labelledby="yut-monitor-dialog-title"
               onKeyDown={(event) => {
                 if (event.key !== "Tab" || event.defaultPrevented) return;
@@ -725,6 +746,7 @@ export default function YutManagement() {
               onCancel={(event) => {
                 event.preventDefault();
                 setMonitorOpen(false);
+                setSpectating(null);
                 setPendingClose("");
               }}
               onClick={(event) => {
@@ -737,174 +759,239 @@ export default function YutManagement() {
                   event.clientY > bounds.bottom
                 ) {
                   setMonitorOpen(false);
+                  setSpectating(null);
                   setPendingClose("");
                 }
               }}
             >
               <div className="yut-management-monitor-header yut-management-row">
-                <h2 id="yut-monitor-dialog-title">학생 플레이 모니터링</h2>
-                <button
-                  type="button"
-                  className="yut-management-button"
-                  autoFocus
-                  onClick={() => {
-                    setMonitorOpen(false);
-                    setPendingClose("");
-                  }}
-                >
-                  모니터링 닫기
-                </button>
-              </div>
-              <div className="yut-management-monitor-body">
-                <div className="yut-management-row">
-                  <strong>대기·진행 중인 방 {current.rooms.length}개</strong>
-                  <div className="yut-management-actions">
-                    <span className="yut-management-muted">
-                      마지막 확인 {timeLabel(current.serverNowMs)}
-                    </span>
-                    <InfoHelp label="방 현황 갱신 안내">
-                      모니터링 창이 열려 있을 때 15초마다 갱신합니다.
-                    </InfoHelp>
-                    <button
-                      className="yut-management-button"
-                      disabled={refreshing || saving}
-                      onClick={() => void load()}
-                    >
-                      {refreshing ? "확인 중…" : "새로고침"}
-                    </button>
-                  </div>
+                <div className="yut-management-monitor-heading">
+                  <h2 id="yut-monitor-dialog-title">
+                    {spectating
+                      ? `${spectating.code} 관전`
+                      : "학생 플레이 모니터링"}
+                  </h2>
+                  {spectating && (
+                    <span className="yut-management-muted">읽기 전용</span>
+                  )}
                 </div>
-                {readError && (
-                  <p className="yut-management-error" role="alert">
-                    {readError}
-                  </p>
-                )}
-                {current.truncated && <p>최근 방 100개를 표시합니다.</p>}
-                {current.rooms.length === 0 ? (
-                  <p>대기 중이거나 진행 중인 방이 없습니다.</p>
+                <div className="yut-management-actions">
+                  {spectating && (
+                    <button
+                      ref={spectatorBackRef}
+                      type="button"
+                      className="yut-management-button"
+                      onClick={() => {
+                        setSpectating(null);
+                        void load();
+                      }}
+                    >
+                      목록으로
+                    </button>
+                  )}
+                  <button
+                    ref={monitorCloseRef}
+                    type="button"
+                    className="yut-management-button"
+                    autoFocus
+                    onClick={() => {
+                      setMonitorOpen(false);
+                      setSpectating(null);
+                      setPendingClose("");
+                    }}
+                  >
+                    모니터링 닫기
+                  </button>
+                </div>
+              </div>
+              <div
+                className={`yut-management-monitor-body${spectating ? " is-spectating" : ""}`}
+              >
+                {spectating ? (
+                  <YutSpectator
+                    key={`${scope}/${spectating.id}`}
+                    config={config}
+                    roomId={spectating.id}
+                    actorKey={scope}
+                    serverOffsetMs={serverOffsetMs}
+                  />
                 ) : (
-                  <ul className="yut-management-room-list">
-                    {current.rooms.map((room) => {
-                      const leaders = room.players.filter(
-                        (player) =>
-                          player.active &&
-                          room.leadingUids?.includes(player.uid),
-                      );
-                      return (
-                        <li className="ws-surface" key={room.id}>
-                          <div className="yut-management-row">
-                            <div className="yut-management-room-heading">
-                              <h3>{room.code}</h3>
-                              <span>
-                                {room.visibility === "public"
-                                  ? "공개 방"
-                                  : "비공개 방"}
-                              </span>
-                              <span>
-                                {
-                                  room.players.filter((player) => player.active)
-                                    .length
-                                }
-                                /{room.maxPlayers || 4}명
-                              </span>
-                              <span>
-                                {room.status === "playing"
-                                  ? "진행 중"
-                                  : "대기 중"}
-                              </span>
-                            </div>
-                            {canWrite && (
-                              <button
-                                className="yut-management-button is-danger"
-                                disabled={!!closing}
-                                onClick={() => setPendingClose(room.id)}
-                              >
-                                {closing === room.id
-                                  ? "닫는 중…"
-                                  : `${room.code} 방 닫기`}
-                              </button>
-                            )}
-                          </div>
-                          {room.status === "playing" && leaders.length > 0 && (
-                            <p className="yut-management-leader">
-                              <strong>
-                                {leaders.length > 1 ? "공동 선두" : "선두"}
-                              </strong>
-                              <InfoHelp label="선두 기준">
-                                완주한 말 수가 우선이며, 같으면 남은 최단 이동
-                                거리의 합으로 비교합니다. 마지막 확인 시각
-                                기준입니다.
-                              </InfoHelp>{" "}
-                              {leaders.map((player) => player.name).join(", ")}
-                            </p>
-                          )}
-                          {pendingClose === room.id && (
-                            <div
-                              className="yut-management-close-confirm"
-                              role="group"
-                              aria-label={`${room.code} 방 닫기 확인`}
-                            >
-                              <p>
-                                {room.code} 방을 닫으면 참여 중인 학생의 게임이
-                                종료됩니다.
-                              </p>
-                              <div className="yut-management-actions">
-                                <button
-                                  type="button"
-                                  className="yut-management-button"
-                                  onClick={() => setPendingClose("")}
-                                >
-                                  취소
-                                </button>
-                                <button
-                                  type="button"
-                                  className="yut-management-button is-danger"
-                                  onClick={() => void closeRoom(room)}
-                                >
-                                  방 닫기
-                                </button>
+                  <>
+                    <div className="yut-management-row">
+                      <strong>
+                        대기·진행 중인 방 {current.rooms.length}개
+                      </strong>
+                      <div className="yut-management-actions">
+                        <span className="yut-management-muted">
+                          마지막 확인 {timeLabel(current.serverNowMs)}
+                        </span>
+                        <InfoHelp label="방 현황 갱신 안내">
+                          모니터링 창이 열려 있을 때 15초마다 갱신합니다.
+                        </InfoHelp>
+                        <button
+                          className="yut-management-button"
+                          disabled={refreshing || saving}
+                          onClick={() => void load()}
+                        >
+                          {refreshing ? "확인 중…" : "새로고침"}
+                        </button>
+                      </div>
+                    </div>
+                    {readError && (
+                      <p className="yut-management-error" role="alert">
+                        {readError}
+                      </p>
+                    )}
+                    {current.truncated && <p>최근 방 100개를 표시합니다.</p>}
+                    {current.rooms.length === 0 ? (
+                      <p>대기 중이거나 진행 중인 방이 없습니다.</p>
+                    ) : (
+                      <ul className="yut-management-room-list">
+                        {current.rooms.map((room) => {
+                          const leaders = room.players.filter(
+                            (player) =>
+                              player.active &&
+                              room.leadingUids?.includes(player.uid),
+                          );
+                          return (
+                            <li className="ws-surface" key={room.id}>
+                              <div className="yut-management-row">
+                                <div className="yut-management-room-heading">
+                                  <h3>{room.code}</h3>
+                                  <span>
+                                    {room.visibility === "public"
+                                      ? "공개 방"
+                                      : "비공개 방"}
+                                  </span>
+                                  <span>
+                                    {
+                                      room.players.filter(
+                                        (player) => player.active,
+                                      ).length
+                                    }
+                                    /{room.maxPlayers || 4}명
+                                  </span>
+                                  <span>
+                                    {room.status === "playing"
+                                      ? "진행 중"
+                                      : "대기 중"}
+                                  </span>
+                                </div>
+                                <div className="yut-management-actions">
+                                  <button
+                                    type="button"
+                                    className="yut-management-button"
+                                    onClick={() => {
+                                      setPendingClose("");
+                                      setSpectating({
+                                        id: room.id,
+                                        code: room.code,
+                                      });
+                                    }}
+                                  >
+                                    {room.code} 관전
+                                  </button>
+                                  {canWrite && (
+                                    <button
+                                      className="yut-management-button is-danger"
+                                      disabled={!!closing}
+                                      onClick={() => setPendingClose(room.id)}
+                                    >
+                                      {closing === room.id
+                                        ? "닫는 중…"
+                                        : `${room.code} 방 닫기`}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          <ul className="yut-management-players">
-                            {room.players
-                              .filter((player) => player.active)
-                              .map((player) => {
-                                const standing = room.standings?.find(
-                                  (entry) => entry.uid === player.uid,
-                                );
-                                return (
-                                  <li key={player.uid}>
-                                    <strong>{player.name}</strong>
-                                    <span>
-                                      {[
-                                        player.studentNumber
-                                          ? `${player.studentNumber}번`
-                                          : "",
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    </span>
-                                    {room.status === "playing" && standing && (
-                                      <span className="yut-management-muted">
-                                        완주 {standing.finishedPieces}/
-                                        {standing.totalPieces}
-                                      </span>
-                                    )}
-                                    {room.turnUid === player.uid &&
-                                      room.status === "playing" && (
-                                        <span className="yut-management-turn">
-                                          현재 차례
+                              {room.status === "playing" &&
+                                leaders.length > 0 && (
+                                  <p className="yut-management-leader">
+                                    <strong>
+                                      {leaders.length > 1
+                                        ? "공동 선두"
+                                        : "선두"}
+                                    </strong>
+                                    <InfoHelp label="선두 기준">
+                                      완주한 말 수가 우선이며, 같으면 남은 최단
+                                      이동 거리의 합으로 비교합니다. 마지막 확인
+                                      시각 기준입니다.
+                                    </InfoHelp>{" "}
+                                    {leaders
+                                      .map((player) => player.name)
+                                      .join(", ")}
+                                  </p>
+                                )}
+                              {pendingClose === room.id && (
+                                <div
+                                  className="yut-management-close-confirm"
+                                  role="group"
+                                  aria-label={`${room.code} 방 닫기 확인`}
+                                >
+                                  <p>
+                                    {room.code} 방을 닫으면 참여 중인 학생의
+                                    게임이 종료됩니다.
+                                  </p>
+                                  <div className="yut-management-actions">
+                                    <button
+                                      type="button"
+                                      className="yut-management-button"
+                                      onClick={() => setPendingClose("")}
+                                    >
+                                      취소
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="yut-management-button is-danger"
+                                      onClick={() => void closeRoom(room)}
+                                    >
+                                      방 닫기
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              <ul className="yut-management-players">
+                                {room.players
+                                  .filter((player) => player.active)
+                                  .map((player) => {
+                                    const standing = room.standings?.find(
+                                      (entry) => entry.uid === player.uid,
+                                    );
+                                    return (
+                                      <li key={player.uid}>
+                                        <strong>{player.name}</strong>
+                                        <span>
+                                          {[
+                                            player.studentNumber
+                                              ? `${player.studentNumber}번`
+                                              : "",
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" · ")}
                                         </span>
-                                      )}
-                                  </li>
-                                );
-                              })}
-                          </ul>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                                        {room.status === "playing" &&
+                                          standing && (
+                                            <span className="yut-management-muted">
+                                              완주 {standing.finishedPieces}/
+                                              {standing.totalPieces}
+                                            </span>
+                                          )}
+                                        {room.turnUid === player.uid &&
+                                          room.status === "playing" && (
+                                            <span className="yut-management-turn">
+                                              현재 차례
+                                            </span>
+                                          )}
+                                      </li>
+                                    );
+                                  })}
+                              </ul>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </>
                 )}
               </div>
             </dialog>
