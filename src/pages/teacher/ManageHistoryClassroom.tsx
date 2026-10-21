@@ -6032,7 +6032,7 @@ const ManageHistoryClassroom: React.FC = () => {
             aria-modal="true"
             aria-labelledby="history-create-title"
             tabIndex={-1}
-            className="history-modal flex max-h-[94vh] w-full max-w-[min(96vw,96rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+            className="history-modal flex max-h-[94vh] w-full max-w-[min(96vw,74rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
           >
             <div className="history-modal-header flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
               <div>
