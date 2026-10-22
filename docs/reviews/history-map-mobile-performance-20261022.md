@@ -80,3 +80,15 @@ Google Earth/NAVER의 비공개 구현을 추정하거나 복제하지 않았다
 - 터치 증거는 작업 공간 `output/globe-touch-20261022/validated.json`에 원시 파일 출처와 함께 기록했다. 최초 하네스가 CDP touchEnd에 남을 손가락을 전달한 3조건은 제외하고, 뗄 손가락만 전달하도록 고친 `after-pinch-transition.json`의 3조건을 `after.json`의 유효 21조건과 합쳤다.
 - `npm run verify:portal-design -- --kind=map`은 학생·교사 × 320/390/768/1280/1366/1440px의 12항목, 브라우저 오류 0건으로 통과했다. 증거는 `output/globe-touch-20261022/portal/`이다. 기존 독도 지명 UI 검증의 제스처 입력에도 시작 좌표를 제공하도록 보완했으며 해당 검증을 통과했다.
 - 전체 `npm run build`를 prebuild 포함 통과했다. 수정 TSX·검증 스크립트 4개의 Prettier 검사와 `git diff --check`도 통과했다. Vite의 기존 500kB 청크 크기 경고는 남는다.
+
+## 후속: iOS 홈 화면 웹앱의 지명 탭 (2026-10-22)
+
+- 사용자 환경은 iPhone·iPad의 Chrome에서 홈 화면에 추가한 웹앱이다. 기준 운영 커밋은 `de8f1721`이며 학생·교사가 공유하는 지구본 입력만 수정한다.
+- Windows Playwright WebKit 26.5의 모바일·터치 모드에서 원본 독도 글자의 실제 touchscreen.tap은 설명을 열지 못했고 마우스 클릭은 열었다. 원본 터치 로그는 `pointerdown(touch, label) → pointerup(touch, label) → click(mouse, detail=1, label)`이었다. 종료 이벤트가 canvas로 이전되지 않는데 라벨에는 pointerup 처리기가 없고 일반 click은 중복 방지를 위해 무시되어 선택이 누락됐다. 운영 Chrome에서 정상이라는 사실만으로 iOS 동작을 검증할 수 없었다.
+- 포인터는 처음 누른 canvas 또는 SVG 라벨에서 캡처하고, 라벨도 공통 move/up/cancel 처리를 사용한다. 공유 포인터 목록·5px 이동 구분·멀티터치 플래그는 유지한다. 라벨의 capture loss는 라벨 자신을 대상으로 한 경우에만 취소로 처리해 자식 SVG에서 버블링하는 이전 이벤트와 구별한다.
+- 실제 JSX의 라벨 종료·캡처 손실 처리기를 실행하는 VM 회귀에 지명 탭, 자식 캡처 이전, 라벨 자체 캡처 손실을 추가했다. 기존 한 손가락 배율 고정·혼합 핀치·취소 검증도 유지한다. 별도 코드 리뷰에서 추가 P1/P2는 없었다.
+- Windows WebKit은 Safari 계열 엔진 비교이며 실제 iOS 홈 화면 앱을 원격 조작한 검증은 아니다. 운영 데이터·권한·저장·지도 배치는 변경하지 않는다.
+- 원본 WebKit 대조 5조건은 글자·점 마우스 클릭과 점 터치 3건 통과, 지명 글자·국가명 터치 2건 실패였다. 수정본은 WebKit 390px 지명 글자 터치 1건과 768px 지명 글자·점·국가명 터치 및 글자 마우스 드래그 4건을 모두 통과했다. Chromium 390px에서도 글자 마우스·터치, 점 터치, 글자 드래그, 국가명 한 손가락·짧은 드래그, 라벨+canvas 핀치와 2→1 전환의 7조건을 통과했다.
+- 증거는 `output/globe-touch-20261022/label-baseline-webkit.json`, `label-after-webkit-tap.json`, `label-after-webkit-tablet.json`, `label-after-chromium.json`에 남겼다. `GLOBE_TOUCH_ENGINE=webkit`으로 재실행할 수 있고, WebKit에서 지원하지 않는 CDP 멀티터치는 성공으로 세지 않고 명시적으로 제외한다.
+- `npm run verify:portal-design -- --kind=map`의 학생·교사 × 6개 폭, 총 12항목을 통과했다(`output/globe-label-20261022/portal/`). 수정 TSX·검증 스크립트 3개의 Prettier 검사, 스크립트 문법 검사, `git diff --check`도 통과했다.
+- 전체 `npm run build`를 타입 검사·필수 prebuild·Vite 번들 생성까지 통과했다. 기존 대형 청크 경고만 남는다(`output/globe-label-build-20261022.log`).

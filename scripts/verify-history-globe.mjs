@@ -698,7 +698,10 @@ const globeAst = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 let regionHandler, chooseEntryHandler;
-let globeCloseClick, globePopupKeyDown;
+let globeCloseClick,
+  globePopupKeyDown,
+  globeLabelPointerUp,
+  globeLabelLostCapture;
 const globeDeclarations = new Map();
 const globeEffects = [];
 const visitGlobe = (node) => {
@@ -720,6 +723,13 @@ const visitGlobe = (node) => {
       globeCloseClick = attribute("onClick").expression.getText(globeAst);
     if (attribute("className")?.text === "history-globe__popup")
       globePopupKeyDown = attribute("onKeyDown").expression.getText(globeAst);
+    if (node.tagName.getText(globeAst) === "g" && attribute("onPointerDown")) {
+      globeLabelPointerUp =
+        attribute("onPointerUp")?.expression.getText(globeAst);
+      globeLabelLostCapture = attribute(
+        "onLostPointerCapture",
+      )?.expression.getText(globeAst);
+    }
   }
   ts.forEachChild(node, visitGlobe);
 };
@@ -1388,21 +1398,21 @@ const endPointerExpression = globeDeclarations
 // Execute the shared production gesture handlers. Labels must use the same
 // capture and pinch state as the canvas instead of selecting after a drag.
 const touchSelections = [];
-const capturedPointers = new Set();
+const capturedPointers = new Map();
 const touchCanvas = {
   dataset: {},
   focus() {},
   setPointerCapture(id) {
-    capturedPointers.add(id);
+    capturedPointers.set(id, this);
   },
   hasPointerCapture(id) {
-    return capturedPointers.has(id);
+    return capturedPointers.get(id) === this;
   },
   releasePointerCapture(id) {
     capturedPointers.delete(id);
   },
 };
-const touchLabel = { dataset: { globeCountry: "RUS" }, focus() {} };
+const touchLabel = { ...touchCanvas, dataset: { globeCountry: "RUS" } };
 const touchView = {
   current: { longitude: 105, latitude: 25, roll: 0, zoom: 2 },
 };
@@ -1444,7 +1454,19 @@ const touchMove = evaluateGlobe(
   touchScope,
 );
 const touchEnd = evaluateGlobe(endPointerExpression, touchScope);
-const touchEvent = (id, x, y, target = touchCanvas) => ({
+assert(globeLabelPointerUp, "Labels receive release without a canvas transfer");
+const labelTouchEnd = evaluateGlobe(globeLabelPointerUp, {
+  endPointer: touchEnd,
+});
+const labelLostCapture = evaluateGlobe(globeLabelLostCapture, {
+  endPointer: touchEnd,
+});
+const touchEvent = (
+  id,
+  x,
+  y,
+  target = capturedPointers.get(id) || touchCanvas,
+) => ({
   pointerType: "touch",
   pointerId: id,
   clientX: x,
@@ -1452,9 +1474,10 @@ const touchEvent = (id, x, y, target = touchCanvas) => ({
   currentTarget: target,
 });
 touchDown(touchEvent(1, 100, 100, touchLabel));
-assert(
-  capturedPointers.has(1),
-  "A label transfers pointer capture to the canvas",
+assert.equal(
+  capturedPointers.get(1),
+  touchLabel,
+  "A label keeps capture and receives its own release on WebKit",
 );
 touchMove(touchEvent(1, 160, 130));
 assert.notEqual(
@@ -1518,6 +1541,27 @@ assert.deepEqual(
   touchSelections,
   ["country:RUS"],
   "A genuine tap selects the original label even if its drawing node was reused",
+);
+touchLabel.dataset = { globeLabel: "dokdo-entry" };
+touchDown(touchEvent(6, 100, 100, touchLabel));
+labelLostCapture({ ...touchEvent(6, 100, 100), target: {} });
+assert.equal(
+  touchScope.pointers.current.size,
+  1,
+  "Child capture transfer is not a cancelled label gesture",
+);
+labelTouchEnd(touchEvent(6, 100, 100));
+assert.equal(
+  touchSelections.at(-1),
+  "entry:dokdo-entry",
+  "A place label's own release opens its explanation, like the point",
+);
+touchDown(touchEvent(7, 100, 100, touchLabel));
+labelLostCapture({ ...touchEvent(7, 100, 100), target: touchLabel });
+assert.equal(
+  touchSelections.length,
+  2,
+  "Losing the label's own capture cancels without selection",
 );
 assert.equal(touchScope.pointers.current.size, 0);
 assert.equal(touchScope.gesture.current, null);

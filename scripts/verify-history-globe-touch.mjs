@@ -10,6 +10,20 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const baseline = process.env.GLOBE_TOUCH_BASELINE === "1";
 const label = process.env.GLOBE_TOUCH_LABEL || "after";
+const engine = process.env.GLOBE_TOUCH_ENGINE || "chromium";
+assert(
+  ["chromium", "webkit"].includes(engine),
+  "Supported engines: chromium, webkit",
+);
+const webkitNativeCases = new Set([
+  "place-text-mouse",
+  "place-text-touch",
+  "place-point-mouse",
+  "place-point-touch",
+  "place-text-mouse-drag",
+  "genuine-label-tap",
+  "keyboard-label-selection",
+]);
 const selectedCases = process.env.GLOBE_TOUCH_CASES?.split(",");
 const widths = (process.env.GLOBE_TOUCH_WIDTHS || "390,768,1280")
   .split(",")
@@ -73,16 +87,22 @@ try {
 const report = {
   label,
   baseline,
+  engine,
   origin,
   input:
-    "CDP Input.dispatchTouchEvent with actual browser touch/pointer/click synthesis",
+    engine === "webkit"
+      ? "Native mouse/touchscreen.tap on Windows WebKit; not physical iOS or an installed PWA"
+      : "Native mouse/touchscreen.tap and CDP multi-contact touch with browser pointer/click synthesis",
   widths,
+  unsupportedCaseNames: [],
   cases: [],
 };
 let browser;
 try {
-  browser = await playwright.chromium.launch({
-    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+  browser = await playwright[engine].launch({
+    ...(engine === "chromium"
+      ? { channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge" }
+      : {}),
     headless: true,
   });
   for (const width of widths) {
@@ -98,7 +118,14 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.addInitScript(() => {
       window.__touchEvents = [];
-      for (const type of ["pointerdown", "pointerup", "pointercancel", "click"])
+      for (const type of [
+        "pointerdown",
+        "pointerup",
+        "pointercancel",
+        "gotpointercapture",
+        "lostpointercapture",
+        "click",
+      ])
         document.addEventListener(
           type,
           (event) => {
@@ -109,6 +136,7 @@ try {
               type,
               id: event.pointerId,
               pointerType: event.pointerType,
+              targetTag: event.target.tagName,
               detail: event.detail,
               label:
                 group?.getAttribute("data-globe-label") ||
@@ -124,7 +152,8 @@ try {
         ? route.continue()
         : route.abort(),
     );
-    const session = await context.newCDPSession(page);
+    const session =
+      engine === "chromium" ? await context.newCDPSession(page) : null;
     const canvas = page.locator(".history-globe canvas");
     const state = () =>
       page.evaluate(() => ({
@@ -148,8 +177,12 @@ try {
           ?.getAttribute("aria-label")
           .includes("선택한"),
       }));
-    const touch = (type, points = []) =>
-      session.send("Input.dispatchTouchEvent", {
+    const touch = (type, points = []) => {
+      assert(
+        session,
+        "Multi-contact CDP cases require Chromium; WebKit uses native touchscreen.tap cases",
+      );
+      return session.send("Input.dispatchTouchEvent", {
         type,
         touchPoints: points.map((point) => ({
           ...point,
@@ -158,6 +191,7 @@ try {
           force: 1,
         })),
       });
+    };
     const settle = () => page.waitForTimeout(350);
     const pickLabel = () =>
       page.evaluate(() => {
@@ -183,7 +217,7 @@ try {
                 x > 20 &&
                 x < innerWidth - 20 &&
                 (hit === node || node.contains(hit)),
-              named: !!(node.dataset.globeCountry || node.dataset.globeLabel),
+              named: !!node.dataset.globeCountry,
               distance: Math.hypot(
                 x - canvas.x - canvas.width / 2,
                 y - canvas.y - canvas.height / 2,
@@ -213,6 +247,98 @@ try {
           }
         return null;
       }, away);
+    const pickPlaceText = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector(".history-globe canvas");
+        const bounds = canvas.getBoundingClientRect();
+        const context = canvas.getContext("2d");
+        const candidates = Array.from(
+          document.querySelectorAll(
+            ".history-globe__labels g[data-globe-label]",
+          ),
+        )
+          .map((node) => {
+            const text = node.querySelector("text");
+            const box = text.getBoundingClientRect();
+            const name = text.textContent;
+            const x = box.left + box.width / 2,
+              y = box.top + box.height / 2;
+            const hit = document.elementFromPoint(x, y);
+            if (
+              !box.width ||
+              y < 5 ||
+              y > innerHeight - 5 ||
+              !node.contains(hit)
+            )
+              return null;
+            // Inactive place labels sit ten CSS pixels right of their actual dot.
+            // Dokdo may use one of three vertical offsets to avoid collisions.
+            const matrix = node.getCTM();
+            const dotX = matrix.e - 10;
+            let dot;
+            for (const dotY of [matrix.f + 18, matrix.f - 32, matrix.f + 32]) {
+              if (
+                dotY < 0 ||
+                dotY >= bounds.height ||
+                dotX < 0 ||
+                dotX >= bounds.width
+              )
+                continue;
+              const rgb = context.getImageData(
+                Math.round((dotX * canvas.width) / bounds.width),
+                Math.round((dotY * canvas.height) / bounds.height),
+                1,
+                1,
+              ).data;
+              if (
+                rgb[2] > rgb[0] + 80 &&
+                rgb[2] > rgb[1] + 60 &&
+                document.elementFromPoint(bounds.x + dotX, bounds.y + dotY) ===
+                  canvas
+              ) {
+                dot = { x: bounds.x + dotX, y: bounds.y + dotY };
+                break;
+              }
+            }
+            return {
+              name,
+              x,
+              y,
+              entryId: node.dataset.globeLabel,
+              dot,
+              priority: ["독도", "강남", "가르강"].indexOf(name),
+            };
+          })
+          .filter((item) => item && item.priority >= 0)
+          .sort((a, b) => a.priority - b.priority);
+        return candidates[0];
+      });
+    const selectPlace = async (input, surface) => {
+      const target = await pickPlaceText();
+      assert(target, "A real Dokdo/Gangnam/Gardon place text is visible");
+      const position = surface === "point" ? target.dot : target;
+      assert(
+        position,
+        `${target.name}: the actual painted map point is uncovered`,
+      );
+      if (input === "touch") await page.touchscreen.tap(position.x, position.y);
+      else await page.mouse.click(position.x, position.y);
+      await page.waitForFunction(
+        (name) =>
+          document
+            .querySelector(".history-globe__popup")
+            ?.getAttribute("aria-label") === `${name} 장소 설명`,
+        target.name,
+        { timeout: 5000 },
+      );
+      assert(
+        (await canvas.getAttribute("aria-label")).includes(
+          `선택한 장소: ${target.name}`,
+        ),
+        "Point and text select the same place",
+      );
+      return { place: target.name, entryId: target.entryId, input, surface };
+    };
     const point = (position, id) => ({ x: position.x, y: position.y, id });
     const moveOne = async (start, dx, dy, steps = 6, id = 11) => {
       await touch("touchStart", [point(start, id)]);
@@ -252,6 +378,24 @@ try {
       );
     };
     const cases = [
+      ["place-text-mouse", () => selectPlace("mouse", "text")],
+      ["place-text-touch", () => selectPlace("touch", "text")],
+      ["place-point-mouse", () => selectPlace("mouse", "point")],
+      ["place-point-touch", () => selectPlace("touch", "point")],
+      [
+        "place-text-mouse-drag",
+        async () => {
+          const before = await state();
+          const target = await pickPlaceText();
+          assert(target, "A real place text is visible");
+          await page.mouse.move(target.x, target.y);
+          await page.mouse.down();
+          await page.mouse.move(target.x + 55, target.y + 20, { steps: 6 });
+          await page.mouse.up();
+          await settle();
+          rotationOnly(before, await state());
+        },
+      ],
       [
         "canvas-one-finger",
         async () => {
@@ -336,9 +480,8 @@ try {
       [
         "genuine-label-tap",
         async () => {
-          const target = point(await pickLabel(), 31);
-          await touch("touchStart", [target]);
-          await touch("touchEnd");
+          const target = await pickLabel();
+          await page.touchscreen.tap(target.x, target.y);
           await page.waitForFunction(() =>
             document
               .querySelector(".history-globe canvas")
@@ -393,6 +536,11 @@ try {
     ];
     for (const [name, action] of cases) {
       if (selectedCases && !selectedCases.includes(name)) continue;
+      if (engine === "webkit" && !webkitNativeCases.has(name)) {
+        if (!report.unsupportedCaseNames.includes(name))
+          report.unsupportedCaseNames.push(name);
+        continue;
+      }
       const result = { width, name, passed: false };
       try {
         await page.goto(
@@ -401,13 +549,12 @@ try {
         await canvas.waitFor();
         await page.waitForLoadState("networkidle");
         await canvas.scrollIntoViewIfNeeded();
-        await page.waitForFunction(
-          () =>
-            document.querySelector(".history-globe canvas")?.dataset
-              .globeTextureReady === "true",
-        );
+        await page
+          .locator(".history-globe__labels g[data-globe-label]")
+          .first()
+          .waitFor();
         await settle();
-        await action();
+        result.selectionProbe = await action();
         assert.deepEqual(errors, [], "No browser runtime errors");
         result.passed = true;
       } catch (error) {
@@ -424,7 +571,7 @@ try {
           .evaluate(() => window.__touchEvents)
           .catch(() => []);
         report.cases.push(result);
-        await touch("touchCancel").catch(() => {});
+        if (session) await touch("touchCancel").catch(() => {});
         await fs.writeFile(
           path.join(out, `${label}.json`),
           JSON.stringify(report, null, 2) + "\n",
@@ -434,6 +581,7 @@ try {
     await context.close();
   }
   const failures = report.cases.filter((result) => !result.passed);
+  assert(report.cases.length > 0, "At least one supported case was requested");
   console.log(
     `Globe touch: ${report.cases.length - failures.length}/${report.cases.length} passed; ${path.join(out, `${label}.json`)}`,
   );

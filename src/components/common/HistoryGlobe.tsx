@@ -2065,9 +2065,8 @@ export default function HistoryGlobe({
     if (!canvas) return;
     cancelCamera();
     event.currentTarget.focus({ preventScroll: true });
-    // Labels and the bare globe share one gesture, even when a pinch starts
-    // with one finger on a label. Canvas owns move/up/cancel for both.
-    canvas.setPointerCapture(event.pointerId);
+    // Keep gesture events on the pressed surface, including SVG label touches.
+    event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, localPointer(event));
     startGesture(gesture.current || undefined);
     if (pointers.current.size === 1 && event.currentTarget !== canvas) {
@@ -2081,7 +2080,9 @@ export default function HistoryGlobe({
       };
     }
   };
-  const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const onPointerMove = (
+    event: React.PointerEvent<HTMLCanvasElement | SVGGElement>,
+  ) => {
     const original = gesture.current;
     if (!original || !pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, localPointer(event));
@@ -2109,7 +2110,7 @@ export default function HistoryGlobe({
     }
   };
   const endPointer = (
-    event: React.PointerEvent<HTMLCanvasElement>,
+    event: React.PointerEvent<HTMLCanvasElement | SVGGElement>,
     cancelled = false,
   ) => {
     const original = gesture.current;
@@ -2607,6 +2608,13 @@ export default function HistoryGlobe({
                 role="button"
                 tabIndex={-1}
                 onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={(event) => endPointer(event)}
+                onPointerCancel={(event) => endPointer(event, true)}
+                onLostPointerCapture={(event) => {
+                  if (event.target === event.currentTarget)
+                    endPointer(event, true);
+                }}
                 onClick={(event) => {
                   // Pointer taps are handled on release; keep keyboard/AT click.
                   if (event.detail > 0) return;
