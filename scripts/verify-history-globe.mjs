@@ -381,13 +381,13 @@ const Atlas = () => null;
 const Globe = () => null;
 let lazyRegistrations = 0;
 const wrapperExports = {};
-let terrainPreference = true;
+let terrainPreference;
 const dependencies = {
   react: {
     ...React,
     default: React,
-    useState: () => [
-      terrainPreference,
+    useState: (initial) => [
+      (terrainPreference ??= initial),
       (value) => {
         terrainPreference =
           typeof value === "function" ? value(terrainPreference) : value;
@@ -462,19 +462,19 @@ let rendered = renderMaps();
 assert.equal(lazyRegistrations, 1);
 assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
 assert.equal(rendered.props.initialSubject, "korea");
-assert.equal(rendered.props.showTerrain, true);
+assert.equal(rendered.props.showTerrain, false, "Terrain starts disabled");
 assert.equal(rendered.props.toolbar.type, "button");
-assert.equal(rendered.props.toolbar.props["aria-pressed"], true);
+assert.equal(rendered.props.toolbar.props["aria-pressed"], false);
 rendered.props.toolbar.props.onClick();
 rendered = renderMaps();
-assert.equal(rendered.props.showTerrain, false);
+assert.equal(rendered.props.showTerrain, true);
 assert.equal(rendered.props.onOpenOriginals, undefined);
 press(rendered, "세계사");
 rendered = renderMaps();
 assert.equal(rendered.props.initialSubject, "world");
 assert.equal(
   rendered.props.showTerrain,
-  false,
+  true,
   "Flat view changes preserve terrain preference",
 );
 const worldKey = rendered.key;
@@ -482,7 +482,7 @@ press(rendered, "지구본");
 rendered = renderMaps();
 assert.equal(
   contentOf(rendered).props.showTerrain,
-  false,
+  true,
   "The globe shares the same terrain preference",
 );
 assert.equal(
@@ -811,6 +811,45 @@ assert(
     .includes("popupSize"),
   "Source detail resizing must redraw labels and selection anchors",
 );
+const terrainLoadEffect = globeEffects.find((effect) =>
+  effect.arguments[0]
+    .getText(globeAst)
+    .includes("if (!needsTerrain || terrain)"),
+);
+assert(
+  terrainLoadEffect,
+  "Physical terrain loads independently of the basemap",
+);
+let terrainRequests = 0;
+let loadedTerrain = null;
+let failedTerrain = false;
+const runTerrainLoad = (needsTerrain, terrain = null, fail = false) =>
+  evaluateGlobe(terrainLoadEffect.arguments[0].getText(globeAst), {
+    needsTerrain,
+    terrain,
+    loadAtlasTerrainGeometry: async () => {
+      terrainRequests += 1;
+      if (fail) throw new Error("offline");
+      return { type: "FeatureCollection", features: [] };
+    },
+    setTerrain: (value) => {
+      loadedTerrain = value;
+    },
+    setTerrainError: (value) => {
+      failedTerrain = value;
+    },
+  })();
+runTerrainLoad(false);
+assert.equal(terrainRequests, 0, "Disabled terrain makes no terrain request");
+runTerrainLoad(true);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(terrainRequests, 1);
+assert(loadedTerrain, "Enabling terrain loads its physical layer");
+runTerrainLoad(true, loadedTerrain);
+assert.equal(terrainRequests, 1, "Toggling terrain reuses loaded geometry");
+runTerrainLoad(true, null, true);
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert(failedTerrain, "A terrain failure leaves a retryable layer error");
 // Exercise the actual current frame calculation against physical top-left cards,
 // including the wide-layout/narrow-map case and both sides of the 650px cutoff.
 for (const width of [286, 343, 344, 356, 624, 649, 650, 920]) {
@@ -1755,7 +1794,8 @@ assert.equal(
   "Reduced motion applies the final camera without animation",
 );
 
-const { globeInteractionGeometry } = load("src/lib/historyGlobeRendering.ts");
+const { globeInteractionGeometry, globeVisibleTerrain, globeVisibleLines } =
+  load("src/lib/historyGlobeRendering.ts");
 const detailedBorders = JSON.parse(
   readFileSync("src/data/atlas/countries-world.json", "utf8"),
 ).borders;
@@ -1851,6 +1891,205 @@ for (let index = 0; index < terrainSource.features.length; index += 1) {
       equal(ring[0], ring.at(-1));
     }
 }
+
+const terrainPolygons = {
+  type: "MultiPolygon",
+  coordinates: terrainSource.features.flatMap((feature) =>
+    feature.geometry.type === "Polygon"
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates,
+  ),
+};
+let culledTerrainPolygons = 0;
+let culledBorderPoints = 0;
+for (const [longitude, latitude] of [
+  [105, 25],
+  [127, 37],
+  [12, 50],
+  [-70, -30],
+  [179, 0],
+  [-179, 0],
+  [0, 85],
+  [0, -85],
+]) {
+  for (const zoom of [1, 2, 6]) {
+    const roll = zoom === 1 ? 0 : zoom === 2 ? 60 : -120;
+    const camera = { longitude, latitude, zoom, roll };
+    const projection = geoOrthographic()
+      .translate([224, 240])
+      .scale(172 * zoom)
+      .rotate([-longitude, -latitude, roll])
+      .clipAngle(90)
+      .clipExtent([
+        [0, 0],
+        [390, 480],
+      ]);
+    const detail = globeInteractionGeometry(
+      terrainPolygons,
+      projection.scale(),
+      true,
+    );
+    const visible = globeVisibleTerrain(detail, projection, camera, 390, 480);
+    const retained = new Set(visible.coordinates);
+    for (const polygon of detail.coordinates) {
+      if (retained.has(polygon)) continue;
+      culledTerrainPolygons += 1;
+      assert.equal(
+        d3Geography.geoPath(projection)({
+          type: "Polygon",
+          coordinates: polygon,
+        }),
+        null,
+        "Culling never removes terrain intersecting the viewport, including dateline and polar views",
+      );
+    }
+    const borders = globeInteractionGeometry(
+      detailedBorders,
+      projection.scale(),
+    );
+    const visibleBorders = globeVisibleLines(
+      borders,
+      projection,
+      camera,
+      390,
+      480,
+    );
+    culledBorderPoints +=
+      pointCount(borders.coordinates) - pointCount(visibleBorders.coordinates);
+    const projected = d3Geography.geoPath(projection);
+    assert.equal(
+      projected(visibleBorders),
+      projected(borders),
+      "Skipping offscreen boundaries leaves every visible border segment unchanged",
+    );
+  }
+}
+assert(
+  culledTerrainPolygons > terrainPolygons.coordinates.length * 10,
+  "Viewport culling skips a substantial share of terrain projection work",
+);
+assert(
+  culledBorderPoints > pointCount(detailedBorders.coordinates) * 4,
+  "Viewport culling also reduces base map work when terrain is disabled",
+);
+
+const surfaceSource = ts.createSourceFile(
+  "historyGlobeSurface.ts",
+  readFileSync("src/lib/historyGlobeSurface.ts", "utf8"),
+  ts.ScriptTarget.Latest,
+  true,
+);
+const surfaceFactory = surfaceSource.statements
+  .find(
+    (node) =>
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === "createGlobeSurface",
+  )
+  .getText(surfaceSource)
+  .replace(/^export /u, "");
+const surfaceUniforms = new Map();
+const surfaceEvents = new Map();
+let restoredSurfaces = 0;
+const surfaceGl = new Proxy(
+  {
+    getParameter: () => 4096,
+    getShaderParameter: () => true,
+    getProgramParameter: () => true,
+    createShader: () => ({}),
+    createProgram: () => ({}),
+    createBuffer: () => ({}),
+    createTexture: () => ({}),
+    isContextLost: () => false,
+    getUniformLocation: (_, name) => name,
+    uniform3f: (name, ...values) => surfaceUniforms.set(name, values),
+    getExtension: () => ({ loseContext() {} }),
+  },
+  { get: (object, key) => object[key] ?? (() => {}) },
+);
+const surfaceCanvas = {
+  width: 1,
+  height: 1,
+  getContext: () => surfaceGl,
+  addEventListener: (name, handler) => surfaceEvents.set(name, handler),
+  removeEventListener: (name) => surfaceEvents.delete(name),
+};
+const makeSurface = (canvas) =>
+  evaluateGlobe(surfaceFactory, {
+    document: { createElement: () => canvas },
+    GLOBE_SURFACE_WIDTH: 2048,
+  });
+assert.equal(
+  makeSurface({ getContext: () => null })(() => {}),
+  null,
+  "WebGL absence preserves the Canvas fallback",
+);
+const surface = makeSurface(surfaceCanvas)(() => {
+  restoredSurfaces += 1;
+});
+assert.equal(
+  surface.render(390, 480, start, { x: 0.5, y: 0.5 }),
+  null,
+  "An unprepared moving surface cannot replace the precise map",
+);
+surface.updateTexture({ width: 2048, height: 1024 });
+for (const [longitude, latitude, roll] of [
+  [105, 25, 0],
+  [179, 80, 60],
+  [-179, -70, -120],
+  [-70, 30, 175],
+]) {
+  const camera = { longitude, latitude, roll, zoom: 3 };
+  surface.render(390, 480, camera, { x: 0.7, y: 0.6 });
+  const projection = geoOrthographic()
+    .scale(1)
+    .translate([0, 0])
+    .rotate([-longitude, -latitude, roll]);
+  for (const offset of [-20, 0, 20]) {
+    const point = [longitude + offset, latitude * 0.8];
+    const [x, y] = projection(point);
+    const depth = Math.sqrt(Math.max(0, 1 - x * x - y * y));
+    const world = surfaceUniforms
+      .get("facing")
+      .map(
+        (value, axis) =>
+          value * depth +
+          surfaceUniforms.get("east")[axis] * x -
+          surfaceUniforms.get("north")[axis] * y,
+      );
+    const lon = (point[0] * Math.PI) / 180,
+      lat = (point[1] * Math.PI) / 180;
+    const expected = [
+      Math.cos(lat) * Math.cos(lon),
+      Math.cos(lat) * Math.sin(lon),
+      Math.sin(lat),
+    ];
+    assert(
+      world.every((value, axis) => Math.abs(value - expected[axis]) < 1e-8),
+      "Moving texture and precise projection share the same longitude, latitude and roll",
+    );
+  }
+}
+surfaceEvents.get("webglcontextlost")({ preventDefault() {} });
+assert.equal(surface.render(390, 480, start, { x: 0.5, y: 0.5 }), null);
+surfaceEvents.get("webglcontextrestored")();
+assert.equal(
+  restoredSurfaces,
+  2,
+  "Context loss and recovery refresh the visible renderer",
+);
+assert.equal(
+  surface.render(390, 480, start, { x: 0.5, y: 0.5 }),
+  surfaceCanvas,
+  "Restored WebGL uploads the retained texture before resuming",
+);
+surface.invalidate();
+assert.equal(
+  surface.render(390, 480, start, { x: 0.5, y: 0.5 }),
+  null,
+  "Terrain and filter changes cannot display stale textures",
+);
+surface.dispose();
+assert.equal(surfaceEvents.size, 0, "Unmount removes context listeners");
 
 console.log(
   `History globe projection, hemisphere, interaction, compass, ${regionCameraCases} region camera fits, ${globeDismissalCases} explanation dismissals with no residual selection or camera movement, actual all-subject filter/tag and river/desert hit handlers, pixel-budget, assets, menu migration and access checks passed.`,

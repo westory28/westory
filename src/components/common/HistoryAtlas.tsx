@@ -53,6 +53,8 @@ import AtlasCountryDetails from "./AtlasCountryDetails";
 import AtlasRegionFilters from "./AtlasRegionFilters";
 import AtlasFilterReset from "./AtlasFilterReset";
 import AtlasCompass from "./AtlasCompass";
+import AtlasTerrainRaster from "./AtlasTerrainRaster";
+import AtlasGestureSurface from "./AtlasGestureSurface";
 import InfoHelp from "./InfoHelp";
 import {
   atlasTerrainCreditItems,
@@ -94,10 +96,6 @@ import {
   ATLAS_DOKDO_COORDINATES,
   ATLAS_DOKDO_ID,
 } from "../../data/historyAtlasDokdo";
-import {
-  ATLAS_MOUNTAIN_TEXTURE_SIZE,
-  getAtlasMountainTexture,
-} from "../../lib/historyAtlasTerrainTexture";
 
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
@@ -292,10 +290,8 @@ const AtlasBackground = memo(function AtlasBackground({
           <path d={paths.land} />
         </clipPath>
       </defs>
-      <g clipPath={`url(#${clipId})`}>
-        {terrain}
-        {countries}
-      </g>
+      {terrain}
+      <g clipPath={`url(#${clipId})`}>{countries}</g>
       <path className="history-atlas__rivers" d={paths.rivers} />
       {selectedRiver && (
         <>
@@ -472,7 +468,7 @@ function placeLabelLayout(
 export default function HistoryAtlas({
   dataset,
   toolbar,
-  showTerrain = true,
+  showTerrain = false,
   initialSubject = "korea",
   navigation,
   onSubjectChange,
@@ -512,15 +508,6 @@ export default function HistoryAtlas({
     ReturnType<typeof loadAtlasTerrainGeometry>
   > | null>(null);
   const [terrainError, setTerrainError] = useState(false);
-  const [mountainTexture, setMountainTexture] = useState<string>();
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const color = getComputedStyle(root)
-      .getPropertyValue("--atlas-terrain-ridge")
-      .trim();
-    setMountainTexture(getAtlasMountainTexture(color || undefined)?.dataUrl);
-  }, []);
   const [countryGeometry, setCountryGeometry] =
     useState<AtlasCountryGeometry | null>(null);
   const [countryError, setCountryError] = useState(false);
@@ -557,11 +544,20 @@ export default function HistoryAtlas({
   const gestureEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gestureSnapshotRef = useRef<{
     transform: AtlasTransform;
-    surface: SVGSVGElement | null;
+    surface: SVGSVGElement | HTMLCanvasElement | null;
+    vector: SVGSVGElement | null;
+    surfaceTransform: AtlasTransform;
     labels: { node: HTMLElement; x: number; y: number }[];
     zoom: Element | null;
     paintedScale: number;
+    width: number;
+    height: number;
   } | null>(null);
+  const isInteracting = useCallback(
+    () =>
+      gestureSnapshotRef.current !== null || cameraFrameRef.current !== null,
+    [],
+  );
   const resetProjectionRef = useRef(false);
   const regionOverviewRef = useRef(false);
   const movedRef = useRef(false);
@@ -794,16 +790,6 @@ export default function HistoryAtlas({
       disputedBorders: path(countryGeometry.disputedBorders) || "",
     };
   }, [subject, countryGeometry, projection]);
-  const terrainPaths = useMemo(() => {
-    if (!showTerrain) return [];
-    const path = geoPath(projection).digits(2);
-    return (
-      terrainGeometry?.features.map((feature) => ({
-        feature,
-        path: path(feature) || "",
-      })) || []
-    );
-  }, [terrainGeometry, projection, showTerrain]);
   const traditionalPaths = useMemo(() => {
     const path = geoPath(projection).digits(2);
     return (
@@ -1290,10 +1276,11 @@ export default function HistoryAtlas({
     if (snapshot.surface) {
       snapshot.surface.style.transform = "";
       snapshot.surface.style.willChange = "";
+      if (snapshot.vector) snapshot.surface.style.display = "none";
     }
+    if (snapshot.vector) snapshot.vector.style.opacity = "";
     for (const label of snapshot.labels) {
-      label.node.style.left = `${label.x}px`;
-      label.node.style.top = `${label.y}px`;
+      label.node.style.translate = "";
     }
     if (snapshot.paintedScale !== previous.scale) {
       if (snapshot.zoom)
@@ -1316,9 +1303,17 @@ export default function HistoryAtlas({
     (value: AtlasTransform, settle = false, immediate = false) => {
       const map = mapRef.current;
       if (!map) return;
+      const vector = map.querySelector<SVGSVGElement>(":scope > svg");
+      const bitmap = map.querySelector<HTMLCanvasElement>(
+        ':scope > canvas[data-atlas-gesture-ready="true"]',
+      );
       gestureSnapshotRef.current ??= {
         transform: transformRef.current,
-        surface: map.querySelector<SVGSVGElement>(":scope > svg"),
+        surface: bitmap || vector,
+        vector: bitmap ? vector : null,
+        surfaceTransform: bitmap?.dataset.atlasGestureCamera
+          ? (JSON.parse(bitmap.dataset.atlasGestureCamera) as AtlasTransform)
+          : transformRef.current,
         labels: Array.from(
           map.querySelectorAll<HTMLElement>(
             ".history-atlas__terrain-label, .history-atlas__traditional-label, .history-atlas__country-label, .history-atlas__province-label, .history-atlas__point, .history-atlas__label-anchor",
@@ -1330,6 +1325,8 @@ export default function HistoryAtlas({
         })),
         zoom: map.parentElement?.querySelector(".history-atlas__zoom") || null,
         paintedScale: transformRef.current.scale,
+        width: map.clientWidth,
+        height: map.clientHeight,
       };
       transformRef.current = value;
       const paint = () => {
@@ -1340,15 +1337,39 @@ export default function HistoryAtlas({
         const ratio = next.scale / snapshot.transform.scale;
         const x = next.x - snapshot.transform.x * ratio;
         const y = next.y - snapshot.transform.y * ratio;
+        const surfaceRatio = next.scale / snapshot.surfaceTransform.scale;
+        const surfaceX = next.x - snapshot.surfaceTransform.x * surfaceRatio;
+        const surfaceY = next.y - snapshot.surfaceTransform.y * surfaceRatio;
+        // Refresh only when a long drag/zoom-out exhausts the buffered surface,
+        // before its clipped edge can enter the visible map.
+        if (
+          surfaceX > 300 * surfaceRatio ||
+          surfaceY > 300 * surfaceRatio ||
+          (snapshot.width - surfaceX) / surfaceRatio > snapshot.width + 300 ||
+          (snapshot.height - surfaceY) / surfaceRatio > snapshot.height + 300
+        ) {
+          // The next input uses freshly committed vectors until a new bounded
+          // bitmap is prepared; never keep reusing an exhausted old image.
+          if (snapshot.vector && snapshot.surface)
+            delete (snapshot.surface as HTMLCanvasElement).dataset
+              .atlasGestureReady;
+          finishGesture(true);
+          return;
+        }
         // Move the already painted SVG as one composited surface. Mutating
         // hundreds of SVG paths/groups re-rasterized the world on every frame.
         if (snapshot.surface) {
+          if (snapshot.vector) {
+            snapshot.surface.style.display = "block";
+            snapshot.vector.style.opacity = "0";
+          }
           snapshot.surface.style.willChange = "transform";
-          snapshot.surface.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${ratio})`;
+          snapshot.surface.style.transform = `translate3d(${surfaceX}px, ${surfaceY}px, 0) scale(${surfaceRatio})`;
         }
         for (const label of snapshot.labels) {
-          label.node.style.left = `${label.x * ratio + x}px`;
-          label.node.style.top = `${label.y * ratio + y}px`;
+          // Individual translate preserves each label's CSS centering and
+          // fixed text size without invalidating layout on every touch sample.
+          label.node.style.translate = `${label.x * (ratio - 1) + x}px ${label.y * (ratio - 1) + y}px`;
         }
         // Texture/stroke sizing is reconciled once on release. Rewriting SVG
         // patterns during a pinch invalidates the composited surface's cache.
@@ -1559,7 +1580,12 @@ export default function HistoryAtlas({
     setTraditionalRegionId("");
   }, [subject]);
 
+  const needsReferenceTerrain = Boolean(
+    selected?.entry.geographicReference &&
+    ["desert", "mountain"].includes(selected.place.kind || ""),
+  );
   useEffect(() => {
+    if (!showTerrain && !needsReferenceTerrain) return;
     let disposed = false;
     setTerrainError(false);
     loadAtlasTerrainGeometry()
@@ -1572,7 +1598,7 @@ export default function HistoryAtlas({
     return () => {
       disposed = true;
     };
-  }, [geometryAttempt]);
+  }, [geometryAttempt, showTerrain, needsReferenceTerrain]);
 
   useEffect(() => {
     let disposed = false;
@@ -1803,7 +1829,8 @@ export default function HistoryAtlas({
     if (
       selected.entry.geographicReference &&
       ["desert", "mountain"].includes(selected.place.kind || "") &&
-      !terrainGeometry
+      !terrainGeometry &&
+      !terrainError
     )
       return;
     if (isAtlasAreaPlace(selected.place) && !areaGeometry) return;
@@ -1860,6 +1887,7 @@ export default function HistoryAtlas({
     selectedShape,
     landformGeometry,
     terrainGeometry,
+    terrainError,
     areaGeometry,
     geometry,
     subject,
@@ -2709,6 +2737,14 @@ export default function HistoryAtlas({
                   · 설명
                 </button>
               ) : null)}
+            <AtlasGestureSurface
+              mapRef={mapRef}
+              width={mapWidth}
+              height={mapHeight}
+              isInteracting={isInteracting}
+              projectionKey={projection}
+              selectionKey={`${showTerrain}:${selectedId}:${countryId}:${provinceArea?.properties.id || ""}`}
+            />
             <svg
               width="100%"
               height="100%"
@@ -2716,171 +2752,141 @@ export default function HistoryAtlas({
               aria-label="지도에 표시된 장소"
             >
               <defs>
-                <pattern
-                  id={`${id}-sand`}
-                  width="8"
-                  height="8"
-                  patternUnits="userSpaceOnUse"
-                  patternTransform={`scale(${1 / transform.scale})`}
-                >
-                  <circle
-                    cx="2"
-                    cy="2"
-                    r="0.7"
-                    className="history-atlas__sand-grain"
+                <clipPath id={`${id}-viewport`} clipPathUnits="userSpaceOnUse">
+                  <rect
+                    x={-320}
+                    y={-320}
+                    width={mapWidth + 640}
+                    height={mapHeight + 640}
                   />
-                  <circle
-                    cx="6"
-                    cy="6"
-                    r="0.7"
-                    className="history-atlas__sand-grain"
-                  />
-                </pattern>
-                <pattern
-                  id={`${id}-ridge`}
-                  width={ATLAS_MOUNTAIN_TEXTURE_SIZE}
-                  height={ATLAS_MOUNTAIN_TEXTURE_SIZE}
-                  patternUnits="userSpaceOnUse"
-                  patternTransform={`scale(${1 / transform.scale})`}
-                >
-                  {mountainTexture && (
-                    <image
-                      href={mountainTexture}
-                      width={ATLAS_MOUNTAIN_TEXTURE_SIZE}
-                      height={ATLAS_MOUNTAIN_TEXTURE_SIZE}
-                      opacity="0.45"
-                    />
-                  )}
-                </pattern>
+                </clipPath>
               </defs>
-              <AtlasBackground
-                paths={paths}
-                transform={transform}
-                selectedRiver={selectedRiverPath}
-                clipId={`${id}-land-clip`}
-                terrain={
-                  <g className="history-atlas__terrain" aria-hidden="true">
-                    {terrainPaths.map(({ feature, path }) => (
-                      <g
-                        key={feature.properties.id}
-                        data-terrain-id={feature.properties.id}
-                      >
-                        <path
-                          d={path}
-                          className={`history-atlas__terrain-fill is-${feature.properties.kind}`}
+              {/* Bound the composited surface, including overseas shapes in a
+                  close Korean projection. The buffer covers ordinary drags. */}
+              <g clipPath={`url(#${id}-viewport)`}>
+                <AtlasBackground
+                  paths={paths}
+                  transform={transform}
+                  selectedRiver={selectedRiverPath}
+                  clipId={`${id}-land-clip`}
+                  terrain={
+                    <g className="history-atlas__terrain" aria-hidden="true">
+                      {showTerrain && terrainGeometry && paths && (
+                        <AtlasTerrainRaster
+                          terrain={terrainGeometry}
+                          projection={projection}
+                          land={paths.land}
+                          transform={transform}
+                          width={mapWidth}
+                          height={mapHeight}
+                          isInteracting={isInteracting}
                         />
-                        {(feature.properties.kind === "desert" ||
-                          feature.properties.kind === "mountain") && (
-                          <path
-                            d={path}
-                            fill={`url(#${id}-${feature.properties.kind === "desert" ? "sand" : "ridge"})`}
-                          />
-                        )}
-                      </g>
-                    ))}
-                    {traditionalPaths.map(({ feature, path }) => (
-                      <path
-                        key={feature.properties.id}
-                        d={path}
-                        data-traditional-region={feature.properties.regionId}
-                        className="history-atlas__traditional-boundary"
-                      />
-                    ))}
-                  </g>
-                }
-                countries={
-                  countryPaths && (
-                    <g className="history-atlas__countries">
-                      {countryPaths.countries.map(({ country, path }) => (
+                      )}
+                      {traditionalPaths.map(({ feature, path }) => (
                         <path
-                          key={country.properties.id}
-                          data-country-id={country.properties.id}
-                          className={`history-atlas__country${country.properties.id === countryId ? " is-active" : ""}`}
+                          key={feature.properties.id}
                           d={path}
-                        >
-                          <title>{country.properties.name}</title>
-                        </path>
+                          data-traditional-region={feature.properties.regionId}
+                          className="history-atlas__traditional-boundary"
+                          clipPath={`url(#${id}-land-clip)`}
+                        />
                       ))}
-                      <path
-                        className="history-atlas__country-border"
-                        d={countryPaths.borders}
-                      />
-                      <path
-                        className="history-atlas__country-border is-disputed"
-                        d={countryPaths.disputedBorders}
-                      />
                     </g>
-                  )
-                }
-              />
-              {paths && (
-                <g
-                  data-atlas-camera-features=""
-                  transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
-                >
-                  {landformPaths.map(({ placeId, path }) => (
-                    <path
-                      key={placeId}
-                      data-place-id={placeId}
-                      clipPath={`url(#${id}-land-clip)`}
-                      className={`history-atlas__landform${areaGeometry && findAtlasArea(placesById.get(placeId)!, areaGeometry) ? " is-area" : ""}${selected?.place.id === placeId ? " is-active" : ""}`}
-                      d={path}
-                      onClick={() => focusPlace(placeId)}
-                    />
-                  ))}
-                  {provinceArea && (
-                    <path
-                      className="history-atlas__landform is-area is-active"
-                      clipPath={
-                        regionId === "water" || regionId === "arctic"
-                          ? undefined
-                          : `url(#${id}-land-clip)`
-                      }
-                      d={provincePath}
-                      onClick={() => {
-                        setProvinceDetailOpen(true);
-                        setDetailOpen(true);
-                      }}
-                    >
-                      <title>{provinceArea.properties.locationNote}</title>
-                    </path>
-                  )}
-                  {riverPaths.map(({ placeId, path }) => (
-                    <path
-                      key={placeId}
-                      data-place-id={placeId}
-                      className="history-atlas__river-hit"
-                      d={path}
-                      onClick={() => focusPlace(placeId)}
-                    />
-                  ))}
-                  <path className="history-atlas__coastline" d={paths.land} />
-                </g>
-              )}
-              {paths && (
-                <path
-                  className="history-atlas__minor-dots"
-                  d={minorDotsPath}
-                  aria-hidden="true"
+                  }
+                  countries={
+                    countryPaths && (
+                      <g className="history-atlas__countries">
+                        {countryPaths.countries.map(({ country, path }) => (
+                          <path
+                            key={country.properties.id}
+                            data-country-id={country.properties.id}
+                            className={`history-atlas__country${country.properties.id === countryId ? " is-active" : ""}`}
+                            d={path}
+                          >
+                            <title>{country.properties.name}</title>
+                          </path>
+                        ))}
+                        <path
+                          className="history-atlas__country-border"
+                          d={countryPaths.borders}
+                        />
+                        <path
+                          className="history-atlas__country-border is-disputed"
+                          d={countryPaths.disputedBorders}
+                        />
+                      </g>
+                    )
+                  }
                 />
-              )}
-              {paths &&
-                geographyLabels
-                  .filter(
-                    (label) =>
-                      label.x !== label.anchorX || label.y !== label.anchorY,
-                  )
-                  .map((label) => (
-                    <line
-                      key={label.id}
-                      className="history-atlas__terrain-leader"
-                      x1={label.anchorX}
-                      y1={label.anchorY}
-                      x2={label.x}
-                      y2={label.y}
-                      aria-hidden="true"
-                    />
-                  ))}
+                {paths && (
+                  <g
+                    data-atlas-camera-features=""
+                    transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}
+                  >
+                    {landformPaths.map(({ placeId, path }) => (
+                      <path
+                        key={placeId}
+                        data-place-id={placeId}
+                        clipPath={`url(#${id}-land-clip)`}
+                        className={`history-atlas__landform${areaGeometry && findAtlasArea(placesById.get(placeId)!, areaGeometry) ? " is-area" : ""}${selected?.place.id === placeId ? " is-active" : ""}`}
+                        d={path}
+                        onClick={() => focusPlace(placeId)}
+                      />
+                    ))}
+                    {provinceArea && (
+                      <path
+                        className="history-atlas__landform is-area is-active"
+                        clipPath={
+                          regionId === "water" || regionId === "arctic"
+                            ? undefined
+                            : `url(#${id}-land-clip)`
+                        }
+                        d={provincePath}
+                        onClick={() => {
+                          setProvinceDetailOpen(true);
+                          setDetailOpen(true);
+                        }}
+                      >
+                        <title>{provinceArea.properties.locationNote}</title>
+                      </path>
+                    )}
+                    {riverPaths.map(({ placeId, path }) => (
+                      <path
+                        key={placeId}
+                        data-place-id={placeId}
+                        className="history-atlas__river-hit"
+                        d={path}
+                        onClick={() => focusPlace(placeId)}
+                      />
+                    ))}
+                    <path className="history-atlas__coastline" d={paths.land} />
+                  </g>
+                )}
+                {paths && (
+                  <path
+                    className="history-atlas__minor-dots"
+                    d={minorDotsPath}
+                    aria-hidden="true"
+                  />
+                )}
+                {paths &&
+                  geographyLabels
+                    .filter(
+                      (label) =>
+                        label.x !== label.anchorX || label.y !== label.anchorY,
+                    )
+                    .map((label) => (
+                      <line
+                        key={label.id}
+                        className="history-atlas__terrain-leader"
+                        x1={label.anchorX}
+                        y1={label.anchorY}
+                        x2={label.x}
+                        y2={label.y}
+                        aria-hidden="true"
+                      />
+                    ))}
+              </g>
             </svg>
             {paths &&
               geographyLabels.map((label) =>
@@ -3067,7 +3073,7 @@ export default function HistoryAtlas({
                 </div>
               )}
             <AtlasCompass />
-            {showTerrain && terrainError && (
+            {(showTerrain || needsReferenceTerrain) && terrainError && (
               <div className="history-atlas__country-error" role="alert">
                 지형을 불러오지 못했습니다.
                 <button

@@ -11,6 +11,8 @@ const require = createRequire(import.meta.url);
 const label = process.env.HISTORY_MAP_SELECTION_LABEL || "after";
 const baseline = process.env.HISTORY_MAP_SELECTION_BASELINE === "1";
 const includeDrag = process.env.HISTORY_MAP_SELECTION_DRAG !== "0";
+const representative = process.env.HISTORY_MAP_SELECTION_REPRESENTATIVE === "1";
+const profile = process.env.HISTORY_MAP_SELECTION_PROFILE === "1";
 const slowdown = Number(process.env.HISTORY_MAP_SELECTION_CPU || 4);
 const widths = (process.env.HISTORY_MAP_SELECTION_WIDTHS || "390,768,1280")
   .split(",")
@@ -18,10 +20,13 @@ const widths = (process.env.HISTORY_MAP_SELECTION_WIDTHS || "390,768,1280")
 const views = (process.env.HISTORY_MAP_SELECTION_VIEWS || "korea,world").split(
   ",",
 );
+const terrains = (process.env.HISTORY_MAP_SELECTION_TERRAIN || "off,on")
+  .split(",")
+  .map((value) => value === "on");
 const output = path.resolve(
   root,
   process.env.HISTORY_MAP_SELECTION_OUTPUT ||
-    `output/atlas-selection-performance-20261020/${label}.json`,
+    `output/atlas-selection-performance-20261022/${label}.json`,
 );
 const round = (number) => Math.round(number * 1000) / 1000;
 const percentile = (values, fraction) => {
@@ -102,8 +107,11 @@ const report = {
   label,
   baseline,
   includeDrag,
+  representative,
+  profile,
   widths,
   views,
+  terrainStates: terrains,
   origin,
   measuredAt: new Date().toISOString(),
   cpuSlowdown: slowdown,
@@ -200,6 +208,10 @@ async function measure(
 ) {
   await settled(page);
   const before = await geography(page, view);
+  if (profile) {
+    await session.send("Profiler.enable");
+    await session.send("Profiler.start");
+  }
   await page.evaluate(() => {
     window.__selectionStart = performance.now();
     window.__selectionFrames = [];
@@ -218,8 +230,8 @@ async function measure(
   const initial = await session.send("Performance.getMetrics");
   await action();
   await settled(page);
-  const final = await session.send("Performance.getMetrics");
-  const after = await geography(page, view);
+  // Stop observing before the verification reads SVG geometry. A forced
+  // getBBox/layout and unrelated idle cache work must not extend input timing.
   const measured = await page.evaluate(() => {
     window.__selectionMeasuring = false;
     return {
@@ -229,6 +241,38 @@ async function measure(
       longTasks: window.__selectionLongTasks,
     };
   });
+  const final = await session.send("Performance.getMetrics");
+  let profileTopFunctionsMs;
+  if (profile) {
+    const { profile: captured } = await session.send("Profiler.stop");
+    const nodes = new Map(
+      captured.nodes.map((node) => [node.id, node.callFrame]),
+    );
+    const durations = new Map();
+    captured.samples?.forEach((nodeId, index) => {
+      const frame = nodes.get(nodeId);
+      const key = `${frame.functionName || "(anonymous)"} ${frame.url}:${frame.lineNumber + 1}`;
+      durations.set(
+        key,
+        (durations.get(key) || 0) + captured.timeDeltas[index] / 1000,
+      );
+    });
+    profileTopFunctionsMs = [...durations.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 25)
+      .map(([name, durationMs]) => ({ name, durationMs: round(durationMs) }));
+    const terrain = await page
+      .getByRole("button", { name: "지형", exact: true })
+      .getAttribute("aria-pressed");
+    await fs.writeFile(
+      path.join(
+        path.dirname(output),
+        `${label}-${view}-${width}-${terrain}-${name}.cpuprofile`,
+      ),
+      JSON.stringify(captured),
+    );
+  }
+  const after = await geography(page, view);
   const metrics = (value) =>
     Object.fromEntries(value.metrics.map(({ name, value }) => [name, value]));
   const first = metrics(initial),
@@ -239,6 +283,10 @@ async function measure(
     view,
     width,
     deviceScaleFactor: width === 390 ? 3 : 2,
+    terrainEnabled:
+      (await page
+        .getByRole("button", { name: "지형", exact: true })
+        .getAttribute("aria-pressed")) === "true",
     preserveScale,
     scaleRatio: round(ratio),
     scalePreserved: !preserveScale || ratio >= 0.99,
@@ -248,9 +296,11 @@ async function measure(
     reactCommits: measured.commits.length,
     commitTimesMs: measured.commits.map(round),
     longTasks: measured.longTasks,
+    profileTopFunctionsMs,
     p50FrameMs: round(percentile(measured.frames, 0.5)),
     p95FrameMs: round(percentile(measured.frames, 0.95)),
     maxFrameMs: round(Math.max(0, ...measured.frames)),
+    over50msFrames: measured.frames.filter((value) => value > 50).length,
     frameIntervalsMs: measured.frames.map(round),
     metricsDeltaMs: Object.fromEntries(
       [
@@ -264,7 +314,7 @@ async function measure(
   report.cases.push(result);
   await save();
   console.log(
-    `${label} ${view} ${width}px ${name}: scale=${result.scaleRatio} commits=${result.reactCommits} p95=${result.p95FrameMs}ms Task=${result.metricsDeltaMs.TaskDuration}ms`,
+    `${label} ${view} terrain=${result.terrainEnabled} ${width}px ${name}: scale=${result.scaleRatio} commits=${result.reactCommits} p95=${result.p95FrameMs}ms Task=${result.metricsDeltaMs.TaskDuration}ms`,
   );
   return result;
 }
@@ -276,7 +326,9 @@ try {
   });
   report.browserVersion = browser.version();
   for (const width of widths)
-    for (const view of views) {
+    for (const { view, terrainEnabled } of views.flatMap((view) =>
+      terrains.map((terrainEnabled) => ({ view, terrainEnabled })),
+    )) {
       const page = await browser.newPage({
         viewport: { width, height: width === 390 ? 844 : 900 },
         deviceScaleFactor: width === 390 ? 3 : 2,
@@ -313,6 +365,16 @@ try {
       );
       await page.goto(`${origin}/#/teacher/lesson/maps?view=${view}`);
       await page.waitForLoadState("networkidle");
+      const terrainToggle = page.getByRole("button", {
+        name: "지형",
+        exact: true,
+      });
+      if (
+        (await terrainToggle.getAttribute("aria-pressed")) !==
+        String(terrainEnabled)
+      )
+        await terrainToggle.click();
+      await page.waitForLoadState("networkidle");
       await page
         .locator(
           view === "world"
@@ -323,13 +385,19 @@ try {
         .waitFor({ state: "attached" });
       const session = await page.context().newCDPSession(page);
       await session.send("Performance.enable");
-      await session.send("Emulation.setCPUThrottlingRate", { rate: slowdown });
+      await session.send("Emulation.setCPUThrottlingRate", {
+        rate: slowdown,
+      });
       const place = view === "korea" ? "종묘" : "로마";
       const river = view === "korea" ? "한강" : "나일강";
-      for (const [name, query] of [
-        ["place-reselection", place],
-        ["river-reselection", river],
-      ]) {
+      for (const [name, query] of representative
+        ? view === "korea"
+          ? [["place-reselection", place]]
+          : []
+        : [
+            ["place-reselection", place],
+            ["river-reselection", river],
+          ]) {
         await clear(page);
         await search(page).fill(query);
         await settled(page);
@@ -359,16 +427,18 @@ try {
           await page.locator(".history-atlas__country.is-active").count(),
           1,
         );
-        await clear(page);
-        await page
-          .getByRole("combobox", { name: "지역", exact: true })
-          .selectOption("africa");
-        await settled(page);
-        await zoom(page, 2);
-        await measure(page, session, view, width, "region-description", () =>
-          page.locator(".history-atlas__province-label").press("Enter"),
-        );
-      } else {
+        if (!representative) {
+          await clear(page);
+          await page
+            .getByRole("combobox", { name: "지역", exact: true })
+            .selectOption("africa");
+          await settled(page);
+          await zoom(page, 2);
+          await measure(page, session, view, width, "region-description", () =>
+            page.locator(".history-atlas__province-label").press("Enter"),
+          );
+        }
+      } else if (!representative) {
         await page
           .getByRole("combobox", { name: "지역 · 8도", exact: true })
           .selectOption("area:giho");
@@ -376,31 +446,49 @@ try {
         await page
           .getByRole("button", { name: "장소 설명 닫기", exact: true })
           .click();
-        await zoom(page, 2);
-        await measure(page, session, view, width, "region-description", () =>
-          page.locator(".history-atlas__province-label").press("Enter"),
+        {
+          // Dismissing a description intentionally clears the selected region.
+          // Reopen through the filter instead of targeting its removed label.
+          // Filter navigation may intentionally fit the region's extent.
+          const region = page.getByRole("combobox", {
+            name: "지역 · 8도",
+            exact: true,
+          });
+          await region.selectOption("");
+          await settled(page);
+          await measure(
+            page,
+            session,
+            view,
+            width,
+            "region-filter-description",
+            () => region.selectOption("area:giho"),
+            false,
+          );
+        }
+      }
+      if (!representative) {
+        await clear(page);
+        await measure(
+          page,
+          session,
+          view,
+          width,
+          "rapid-selections",
+          async () => {
+            await search(page).fill(place);
+            await search(page).fill(river);
+            await search(page).fill(place);
+          },
+        );
+        assert(
+          (
+            await page.locator(".history-atlas__overlay").textContent()
+          ).includes(place),
+          "Rapid selections retain the last requested place",
         );
       }
-      await clear(page);
-      await measure(
-        page,
-        session,
-        view,
-        width,
-        "rapid-selections",
-        async () => {
-          await search(page).fill(place);
-          await search(page).fill(river);
-          await search(page).fill(place);
-        },
-      );
-      assert(
-        (await page.locator(".history-atlas__overlay").textContent()).includes(
-          place,
-        ),
-        "Rapid selections retain the last requested place",
-      );
-      if (includeDrag) {
+      if (includeDrag && !representative) {
         await clear(page);
         const map = page.locator(".history-atlas__map");
         await map.scrollIntoViewIfNeeded();

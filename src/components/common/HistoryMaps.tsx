@@ -20,7 +20,7 @@ const VIEWS: { id: MapView; label: string }[] = [
 export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showTerrain, setShowTerrain] = useState(true);
+  const [showTerrain, setShowTerrain] = useState(false);
   const requestedView = searchParams.get("view");
   const view: MapView =
     requestedView === "world" || requestedView === "globe"

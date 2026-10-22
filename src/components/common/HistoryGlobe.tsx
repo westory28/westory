@@ -10,6 +10,7 @@ import React, {
 import { useMapViewportHeight } from "./useMapViewportHeight";
 import {
   geoCentroid,
+  geoEquirectangular,
   geoGraticule10,
   geoOrthographic,
   geoPath,
@@ -37,7 +38,17 @@ import {
   pinchGlobeView,
   type GlobeView,
 } from "../../lib/historyGlobeMath";
-import { globeInteractionGeometry } from "../../lib/historyGlobeRendering";
+import {
+  globeInteractionGeometry,
+  globeVisibleLines,
+  globeVisibleTerrain,
+} from "../../lib/historyGlobeRendering";
+import {
+  createGlobeSurface,
+  GLOBE_SURFACE_WIDTH,
+  GLOBE_SURFACE_HEIGHT,
+  type GlobeSurface,
+} from "../../lib/historyGlobeSurface";
 import { getAtlasMountainTexture } from "../../lib/historyAtlasTerrainTexture";
 import {
   findAtlasReferenceTerrain,
@@ -243,7 +254,7 @@ export default function HistoryGlobe({
   initialSubject = "all",
   navigation,
   toolbar,
-  showTerrain = true,
+  showTerrain = false,
 }: HistoryGlobeProps) {
   const id = useId();
   const rootRef = useRef<HTMLElement>(null);
@@ -285,6 +296,7 @@ export default function HistoryGlobe({
   const [land, setLand] = useState<GeoPermissibleObjects | null>(null);
   const [geography, setGeography] = useState<GlobeGeography | null>(null);
   const [terrain, setTerrain] = useState<AtlasTerrainCollection | null>(null);
+  const [terrainError, setTerrainError] = useState(false);
   const [countries, setCountries] = useState<AtlasCountryGeometry | null>(null);
   const [landError, setLandError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -316,6 +328,8 @@ export default function HistoryGlobe({
   const wheelActive = useRef(false);
   const dirty = useRef(true);
   const inView = useRef(true);
+  const movingSurface = useRef<GlobeSurface | null>(null);
+  const surfaceUnavailable = useRef(false);
 
   const units = useMemo(
     () => new Map(dataset.units.map((unit) => [unit.id, unit])),
@@ -358,6 +372,12 @@ export default function HistoryGlobe({
     [items],
   );
   const selected = selectedId ? itemsById.get(selectedId) : undefined;
+  const needsTerrain =
+    showTerrain ||
+    !!(
+      selected?.entry.geographicReference &&
+      ["mountain", "desert"].includes(selected.place.kind || "")
+    );
   const selectedCountry = useMemo(
     () =>
       countries?.countries.features.find(
@@ -541,9 +561,9 @@ export default function HistoryGlobe({
     );
   }, [geographyLabels, mapItems]);
   const terrainLayers = useMemo(() => {
-    if (!showTerrain) return [];
+    if (!terrain) return [];
     const layers = new Map<AtlasTerrainKind, MultiPolygon>();
-    for (const feature of terrain?.features || []) {
+    for (const feature of terrain.features) {
       const kind = feature.properties.kind;
       const layer = layers.get(kind) || {
         type: "MultiPolygon",
@@ -557,7 +577,7 @@ export default function HistoryGlobe({
       layers.set(kind, layer);
     }
     return [...layers].map(([kind, geometry]) => ({ kind, geometry }));
-  }, [terrain, showTerrain]);
+  }, [terrain]);
 
   const cancelDraw = useCallback(() => {
     if (raf.current !== null) cancelAnimationFrame(raf.current);
@@ -625,18 +645,12 @@ export default function HistoryGlobe({
   useEffect(() => {
     let active = true;
     setLandError(false);
-    Promise.all([
-      loadLand(),
-      loadGeography(),
-      loadAtlasCountryGeometry(),
-      loadAtlasTerrainGeometry(),
-    ])
-      .then(([value, detail, countryGeometry, terrainGeometry]) => {
+    Promise.all([loadLand(), loadGeography(), loadAtlasCountryGeometry()])
+      .then(([value, detail, countryGeometry]) => {
         if (active) {
           setLand(value);
           setGeography(detail);
           setCountries(countryGeometry);
-          setTerrain(terrainGeometry);
         }
       })
       .catch(() => {
@@ -646,6 +660,21 @@ export default function HistoryGlobe({
       active = false;
     };
   }, [loadAttempt]);
+  useEffect(() => {
+    if (!needsTerrain || terrain) return;
+    let active = true;
+    setTerrainError(false);
+    loadAtlasTerrainGeometry()
+      .then((value) => {
+        if (active) setTerrain(value);
+      })
+      .catch(() => {
+        if (active) setTerrainError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [needsTerrain, terrain, loadAttempt]);
   useEffect(() => {
     let active = true;
     setRiverError(false);
@@ -797,6 +826,131 @@ export default function HistoryGlobe({
     };
   }, [cancelDraw, cancelCamera, requestDraw]);
 
+  useEffect(
+    () => () => {
+      movingSurface.current?.dispose();
+      movingSurface.current = null;
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!land || !geography || !countries || surfaceUnavailable.current) return;
+    // Bake once after the map settles, never in an input/draw callback. The
+    // fixed texture budget also bounds GPU memory on phones and tablets.
+    let cancelled = false;
+    let prepared = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const prepare = () => {
+      if (cancelled || prepared || document.hidden) return;
+      if (
+        gesture.current?.moved ||
+        wheelActive.current ||
+        cameraFrame.current !== null
+      ) {
+        timer = setTimeout(prepare, 160);
+        return;
+      }
+      const root = rootRef.current;
+      if (!root) return;
+      const tokens = getComputedStyle(root);
+      const color = (token: keyof typeof GLOBE_COLORS) =>
+        tokens.getPropertyValue(token).trim() || GLOBE_COLORS[token];
+      const texture = document.createElement("canvas");
+      texture.width = GLOBE_SURFACE_WIDTH;
+      texture.height = GLOBE_SURFACE_HEIGHT;
+      const context = texture.getContext("2d", { alpha: false });
+      if (!context) return;
+      const projection = geoEquirectangular()
+        .translate([texture.width / 2, texture.height / 2])
+        .scale(texture.width / (2 * Math.PI))
+        .precision(0.5);
+      const path = geoPath(projection, context);
+      context.fillStyle = color("--ws-primary-soft");
+      context.fillRect(0, 0, texture.width, texture.height);
+      context.beginPath();
+      path(grid);
+      context.strokeStyle = color("--ws-border-blue");
+      context.lineWidth = 0.7;
+      context.stroke();
+      context.beginPath();
+      path(land);
+      context.fillStyle = color("--ws-surface");
+      context.fill();
+      context.save();
+      context.clip();
+      for (const { kind, geometry } of showTerrain ? terrainLayers : []) {
+        context.beginPath();
+        path(globeInteractionGeometry(geometry, projection.scale(), true));
+        context.fillStyle = color(
+          kind === "mountain"
+            ? "--atlas-terrain-mountain"
+            : kind === "desert"
+              ? "--atlas-terrain-desert"
+              : kind === "plateau"
+                ? "--atlas-terrain-plateau"
+                : "--atlas-terrain-plain",
+        );
+        context.fill();
+      }
+      context.beginPath();
+      path(globeInteractionGeometry(countries.borders, projection.scale()));
+      context.strokeStyle = color("--ws-accent-text");
+      context.globalAlpha = 0.45;
+      context.lineWidth = 0.9;
+      context.stroke();
+      context.beginPath();
+      path(countries.disputedBorders);
+      context.setLineDash([4, 4]);
+      context.stroke();
+      context.setLineDash([]);
+      context.beginPath();
+      path(globeInteractionGeometry(geography.rivers, projection.scale()));
+      for (const feature of selectableGeography) {
+        if (!feature.area)
+          path(globeInteractionGeometry(feature.shape, projection.scale()));
+      }
+      context.strokeStyle = color("--ws-primary");
+      context.lineWidth = 1.3;
+      context.stroke();
+      context.restore();
+      context.beginPath();
+      path(land);
+      context.strokeStyle = color("--ws-text-soft");
+      context.lineWidth = 0.7;
+      context.stroke();
+      movingSurface.current ||= createGlobeSurface(requestDraw);
+      if (!movingSurface.current) surfaceUnavailable.current = true;
+      else movingSurface.current.updateTexture(texture);
+      if (canvasRef.current)
+        canvasRef.current.dataset.globeTextureReady = String(
+          movingSurface.current?.isReady() || false,
+        );
+      prepared = true;
+    };
+    const resumePreparation = () => {
+      if (!document.hidden && !prepared) timer = setTimeout(prepare, 160);
+    };
+    document.addEventListener("visibilitychange", resumePreparation);
+    timer = setTimeout(prepare, 160);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", resumePreparation);
+      // Never reuse a texture with stale terrain visibility or filtered rivers.
+      movingSurface.current?.invalidate();
+      if (canvasRef.current)
+        canvasRef.current.dataset.globeTextureReady = "false";
+    };
+  }, [
+    land,
+    geography,
+    countries,
+    terrainLayers,
+    showTerrain,
+    selectableGeography,
+    requestDraw,
+  ]);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -822,16 +976,23 @@ export default function HistoryGlobe({
           ?.createPattern(tile, "repeat") || null
       );
     };
-    const mountainTile = getAtlasMountainTexture(
-      palette["--atlas-terrain-ridge"],
-    );
+    const mountainTile = showTerrain
+      ? getAtlasMountainTexture(palette["--atlas-terrain-ridge"])
+      : null;
     const mountainTexture = mountainTile
       ? canvasRef.current
           ?.getContext("2d", { alpha: false })
           ?.createPattern(mountainTile.canvas, "repeat") || null
       : null;
-    const desertTexture = desertPattern();
+    const desertTexture = showTerrain ? desertPattern() : null;
     const textWidths = new Map<string, number>();
+    const motionLabels: {
+      group: SVGGElement;
+      coordinates: [number, number];
+      offsetX: number;
+      offsetY: number;
+      width: number;
+    }[] = [];
     const refreshTextWidths = () => {
       textWidths.clear();
       requestDraw();
@@ -844,10 +1005,14 @@ export default function HistoryGlobe({
       const context = canvas.getContext("2d", { alpha: false });
       if (!context) return;
       const { width, height } = size;
+      const interacting =
+        !!gesture.current?.moved ||
+        wheelActive.current ||
+        cameraFrame.current !== null;
       const backing = globeCanvasSize(
         width,
         height,
-        window.devicePixelRatio || 1,
+        interacting ? 1 : window.devicePixelRatio || 1,
       );
       if (
         canvas.width !== backing.pixelWidth ||
@@ -873,15 +1038,34 @@ export default function HistoryGlobe({
         .scale(Math.min(width, height) * 0.44 * camera.zoom)
         .rotate([-camera.longitude, -camera.latitude, camera.roll])
         .clipAngle(90)
+        .clipExtent([
+          [-8, -8],
+          [width + 8, height + 8],
+        ])
         .precision(0.5);
       compassRef.current?.style.setProperty(
         "--atlas-compass-bearing",
         `${atlasProjectedNorthBearing(projection, [camera.longitude, camera.latitude])}deg`,
       );
       const path = geoPath(projection, context);
+      const movingCanvas = interacting
+        ? movingSurface.current?.render(
+            backing.pixelWidth,
+            backing.pixelHeight,
+            camera,
+            projectionCenter.current,
+          )
+        : null;
+      const renderer = movingCanvas ? "webgl" : "canvas";
+      canvas.dataset.globeTextureReady = String(
+        movingSurface.current?.isReady() || false,
+      );
+      if (canvas.dataset.globeRenderer !== renderer)
+        canvas.dataset.globeRenderer = renderer;
       // Reuse the exact projected coast for filling, clipping and stroking.
       // Projecting it into the current canvas path repeated all work each time.
-      const landPath = land ? new Path2D() : null;
+      const landPath =
+        land && (!movingCanvas || highlightedArea) ? new Path2D() : null;
       if (land && landPath)
         geoPath(projection, {
           beginPath() {},
@@ -890,7 +1074,11 @@ export default function HistoryGlobe({
           arc: (x, y, radius, start, end, anticlockwise) =>
             landPath.arc(x, y, radius, start, end, anticlockwise),
           closePath: () => landPath.closePath(),
-        })(land);
+        })(
+          interacting
+            ? globeInteractionGeometry(land, projection.scale(), true, 1)
+            : land,
+        );
       const measureLabelWidth = (text: string) => {
         const key = `${context.font}\0${text}`;
         let value = textWidths.get(key);
@@ -900,116 +1088,143 @@ export default function HistoryGlobe({
         }
         return value;
       };
-      const interacting =
-        !!gesture.current?.moved ||
-        wheelActive.current ||
-        cameraFrame.current !== null;
       const lineGeometry = <T extends GeoPermissibleObjects>(shape: T): T =>
-        interacting
-          ? globeInteractionGeometry(shape, projection.scale())
-          : shape;
+        globeVisibleLines(
+          globeInteractionGeometry(
+            shape,
+            projection.scale(),
+            false,
+            interacting ? 1 : 0.35,
+          ),
+          projection,
+          camera,
+          width,
+          height,
+        );
       context.fillStyle = color("--ws-surface-subtle");
       context.fillRect(0, 0, width, height);
-      context.beginPath();
-      path({ type: "Sphere" });
-      context.fillStyle = color("--ws-primary-soft");
-      context.fill();
-      context.strokeStyle = color("--ws-border-blue");
-      context.lineWidth = 1;
-      context.stroke();
-      context.beginPath();
-      path(grid);
-      context.strokeStyle = color("--ws-border-blue");
-      context.lineWidth = 0.6;
-      context.stroke();
-      if (landPath) {
-        context.fillStyle = color("--ws-surface");
-        context.fill(landPath);
-      }
-      // All terrestrial fills share the visible coast. Different source
-      // resolutions must never paint a second coast into the sea.
-      context.save();
-      if (landPath) context.clip(landPath);
-      if (showTerrain && geography && !terrain) {
+      if (movingCanvas) context.drawImage(movingCanvas, 0, 0, width, height);
+      else {
         context.beginPath();
-        path(geography.deserts);
-        context.fillStyle = color("--atlas-terrain-desert");
+        path({ type: "Sphere" });
+        context.fillStyle = color("--ws-primary-soft");
         context.fill();
-      }
-      for (const { kind, geometry } of terrainLayers) {
+        context.strokeStyle = color("--ws-border-blue");
+        context.lineWidth = 1;
+        context.stroke();
         context.beginPath();
-        path(
-          interacting
-            ? globeInteractionGeometry(geometry, projection.scale(), true)
-            : geometry,
-        );
-        context.fillStyle = color(
-          kind === "mountain"
-            ? "--atlas-terrain-mountain"
-            : kind === "desert"
-              ? "--atlas-terrain-desert"
-              : kind === "plateau"
-                ? "--atlas-terrain-plateau"
-                : "--atlas-terrain-plain",
-        );
-        context.fill();
-        const pattern =
-          kind === "mountain"
-            ? mountainTexture
-            : kind === "desert"
-              ? desertTexture
-              : null;
-        if (pattern) {
-          context.fillStyle = pattern;
-          context.globalAlpha = 0.45;
+        path(grid);
+        context.strokeStyle = color("--ws-border-blue");
+        context.lineWidth = 0.6;
+        context.stroke();
+        if (landPath) {
+          context.fillStyle = color("--ws-surface");
+          context.fill(landPath);
+        }
+        // All terrestrial fills share the visible coast. Different source
+        // resolutions must never paint a second coast into the sea.
+        context.save();
+        if (landPath) context.clip(landPath);
+        if (showTerrain && geography && !terrain) {
+          context.beginPath();
+          path(geography.deserts);
+          context.fillStyle = color("--atlas-terrain-desert");
+          context.fill();
+        }
+        for (const { kind, geometry } of showTerrain ? terrainLayers : []) {
+          context.beginPath();
+          path(
+            globeVisibleTerrain(
+              globeInteractionGeometry(
+                geometry,
+                projection.scale(),
+                true,
+                interacting ? 1 : 0.35,
+              ),
+              projection,
+              camera,
+              width,
+              height,
+            ),
+          );
+          context.fillStyle = color(
+            kind === "mountain"
+              ? "--atlas-terrain-mountain"
+              : kind === "desert"
+                ? "--atlas-terrain-desert"
+                : kind === "plateau"
+                  ? "--atlas-terrain-plateau"
+                  : "--atlas-terrain-plain",
+          );
+          context.fill();
+          const pattern =
+            kind === "mountain"
+              ? mountainTexture
+              : kind === "desert"
+                ? desertTexture
+                : null;
+          if (pattern && !interacting) {
+            context.fillStyle = pattern;
+            context.globalAlpha = 0.45;
+            context.fill();
+            context.globalAlpha = 1;
+          }
+        }
+        if (highlightedCountry) {
+          context.beginPath();
+          path(highlightedCountry);
+          context.fillStyle = color("--ws-accent-soft");
+          context.globalAlpha = 0.35;
           context.fill();
           context.globalAlpha = 1;
         }
-      }
-      if (highlightedCountry) {
+        if (countries) {
+          context.beginPath();
+          path(lineGeometry(countries.borders));
+          context.strokeStyle = color("--ws-accent-text");
+          context.globalAlpha = 0.45;
+          context.lineWidth = 0.9;
+          context.stroke();
+          context.beginPath();
+          path(lineGeometry(countries.disputedBorders));
+          context.setLineDash([4, 4]);
+          context.stroke();
+          context.setLineDash([]);
+          context.globalAlpha = 1;
+        }
+        if (geography) {
+          context.beginPath();
+          path(lineGeometry(geography.rivers));
+          context.strokeStyle = color("--ws-primary");
+          context.globalAlpha = 0.45;
+          context.lineWidth = 1.3;
+          context.stroke();
+          context.globalAlpha = 1;
+        }
+        // Draw the same verified courses that are used for hit testing. The
+        // overview layer alone omits small rivers and cannot identify a place.
         context.beginPath();
-        path(highlightedCountry);
-        context.fillStyle = color("--ws-accent-soft");
-        context.globalAlpha = 0.35;
-        context.fill();
-        context.globalAlpha = 1;
-      }
-      if (countries) {
-        context.beginPath();
-        path(lineGeometry(countries.borders));
-        context.strokeStyle = color("--ws-accent-text");
-        context.globalAlpha = 0.45;
-        context.lineWidth = 0.9;
-        context.stroke();
-        context.beginPath();
-        path(lineGeometry(countries.disputedBorders));
-        context.setLineDash([4, 4]);
-        context.stroke();
-        context.setLineDash([]);
-        context.globalAlpha = 1;
-      }
-      if (geography) {
-        context.beginPath();
-        path(lineGeometry(geography.rivers));
+        for (const feature of selectableGeography) {
+          if (feature.area) continue;
+          path(lineGeometry(feature.shape));
+        }
         context.strokeStyle = color("--ws-primary");
         context.globalAlpha = 0.45;
         context.lineWidth = 1.3;
         context.stroke();
         context.globalAlpha = 1;
+        context.restore();
       }
-      // Draw the same verified courses that are used for hit testing. The
-      // overview layer alone omits small rivers and cannot identify a place.
-      context.beginPath();
-      for (const feature of selectableGeography) {
-        if (feature.area) continue;
-        path(lineGeometry(feature.shape));
+      if (movingCanvas && highlightedCountry) {
+        context.save();
+        if (landPath) context.clip(landPath);
+        context.beginPath();
+        path(highlightedCountry);
+        context.fillStyle = color("--ws-accent-soft");
+        context.globalAlpha = 0.35;
+        context.fill();
+        context.restore();
       }
-      context.strokeStyle = color("--ws-primary");
-      context.globalAlpha = 0.45;
-      context.lineWidth = 1.3;
-      context.stroke();
-      context.globalAlpha = 1;
-      context.restore();
       const marineRegion =
         provinceArea?.properties.regionId?.startsWith("water");
       if (highlightedShape && !highlightedCountry) {
@@ -1161,6 +1376,46 @@ export default function HistoryGlobe({
           halo.style.top = active.y + "px";
         }
       }
+      // Keep labels attached to their geographic anchors during gestures.
+      // Reuse the settled layout instead of measuring text, finding collision
+      // slots and rewriting the entire SVG pool for every pointer frame.
+      if (interacting && motionLabels.length) {
+        for (const label of motionLabels) {
+          const point = isGlobePointVisible(label.coordinates, camera)
+            ? projection(label.coordinates)
+            : null;
+          const x = (point?.[0] || 0) + label.offsetX;
+          const y = (point?.[1] || 0) + label.offsetY;
+          const visible =
+            point &&
+            x >= 8 &&
+            x + label.width <= width - 8 &&
+            y >= 80 &&
+            y <= height - 36;
+          label.group.style.display = visible ? "" : "none";
+          if (visible)
+            label.group.setAttribute("transform", `translate(${x},${y})`);
+        }
+        return;
+      }
+      motionLabels.length = 0;
+      const rememberLabel = (
+        group: SVGGElement,
+        coordinates: [number, number] | null,
+        x: number,
+        y: number,
+        textWidth: number,
+      ) => {
+        const anchor = coordinates && projection(coordinates);
+        if (coordinates && anchor)
+          motionLabels.push({
+            group,
+            coordinates,
+            offsetX: x - anchor[0],
+            offsetY: y - anchor[1],
+            width: textWidth,
+          });
+      };
       const labels = ordered.slice(
         0,
         Math.max(4, Math.min(18, Math.floor(width / 60))),
@@ -1293,6 +1548,13 @@ export default function HistoryGlobe({
         boxes.push({ x, y, w: textWidth, h: 44 });
         const group = claimLabel(`country:${countryId}`);
         if (!group) return false;
+        rememberLabel(
+          group,
+          active ? shapeLabelCoordinates : coordinates,
+          x,
+          y,
+          textWidth,
+        );
         group.style.display = "";
         group.classList.toggle("is-active", active);
         group.setAttribute("data-globe-country", countryId);
@@ -1362,6 +1624,17 @@ export default function HistoryGlobe({
         boxes.push({ x, y, w: textWidth, h: labelHeight });
         const group = claimLabel(`place:${point.item.entry.id}`);
         if (!group) continue;
+        rememberLabel(
+          group,
+          onShape
+            ? shapeLabelCoordinates
+            : isDokdo
+              ? ATLAS_DOKDO_COORDINATES
+              : point.item.place.coordinates,
+          x,
+          y,
+          textWidth,
+        );
         const background = group.children[0] as SVGRectElement;
         const text = group.children[1] as SVGTextElement;
         const ripple = group.children[2] as SVGRectElement;
@@ -1393,6 +1666,7 @@ export default function HistoryGlobe({
         const { x, y, textWidth } = provinceLabel;
         const group = claimLabel(`region:${provinceArea.properties.regionId}`);
         if (!group) return;
+        rememberLabel(group, shapeLabelCoordinates, x, y, textWidth);
         group.style.display = "";
         group.classList.add("is-active");
         group.setAttribute(
@@ -1468,6 +1742,7 @@ export default function HistoryGlobe({
         if (labelItem) {
           const group = claimLabel(`place:${labelItem.entry.id}`);
           if (!group) continue;
+          rememberLabel(group, label.coordinates, left, y, textWidth);
           group.style.display = "";
           group.setAttribute("data-globe-label", labelItem.entry.id);
           group.setAttribute("data-geography-kind", label.kind);
@@ -2417,7 +2692,7 @@ export default function HistoryGlobe({
               지형을 불러오는 중이다.
             </div>
           )}
-          {landError && (
+          {(landError || (needsTerrain && terrainError)) && (
             <div className="history-globe__loading" role="alert">
               <span>지형을 불러오지 못했다.</span>
               <button onClick={() => setLoadAttempt((value) => value + 1)}>

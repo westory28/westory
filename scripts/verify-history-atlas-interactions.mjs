@@ -130,7 +130,7 @@ class Element {
       : null;
   }
 }
-function gestureHarness(node, transformRef, updates) {
+function gestureHarness(node, transformRef, updates, bitmapReady = false) {
   const attributeNode = (attributes = {}) => ({
     attributes,
     writes: new Map(),
@@ -149,8 +149,13 @@ function gestureHarness(node, transformRef, updates) {
   const camera = attributeNode({
     transform: `translate(${original.x} ${original.y}) scale(${original.scale})`,
   });
-  const surface = { style: { transform: "", willChange: "" } };
-  const label = { style: { left: "40px", top: "60px" } };
+  const vector = { style: { transform: "", willChange: "", opacity: "" } };
+  const bitmap = {
+    style: { transform: "", willChange: "", display: "none" },
+    dataset: { atlasGestureReady: "true" },
+  };
+  const surface = bitmapReady ? bitmap : vector;
+  const label = { style: { left: "40px", top: "60px", translate: "" } };
   const screenPath = attributeNode();
   const pattern = attributeNode({
     patternTransform: `scale(${1 / original.scale})`,
@@ -175,7 +180,13 @@ function gestureHarness(node, transformRef, updates) {
           ? [camera]
           : [label];
   node.querySelector = (selector) =>
-    selector === ":scope > svg" ? surface : null;
+    selector === ":scope > svg"
+      ? vector
+      : bitmapReady &&
+          bitmap.dataset.atlasGestureReady === "true" &&
+          selector.includes("canvas")
+        ? bitmap
+        : null;
   node.parentElement = { querySelector: () => zoom };
   const frames = new Map(),
     timers = new Map();
@@ -221,6 +232,8 @@ function gestureHarness(node, transformRef, updates) {
     ...dependencies,
     camera,
     surface,
+    vector,
+    bitmap,
     label,
     screenPath,
     pattern,
@@ -238,6 +251,77 @@ function gestureHarness(node, transformRef, updates) {
       pending.forEach((callback) => callback());
     },
   };
+}
+
+for (const width of [356, 720]) {
+  const original = { scale: 2, x: 0, y: 0 };
+  const updates = [];
+  const camera = gestureHarness(
+    { clientWidth: width, clientHeight: 480 },
+    { current: original },
+    updates,
+    true,
+  );
+  camera.moveGesture({ ...original, x: 80 });
+  camera.draw();
+  assert.equal(
+    camera.surface.style.display,
+    "block",
+    "A prepared bitmap is used while moving",
+  );
+  assert.equal(
+    camera.vector.style.opacity,
+    "0",
+    "The expensive SVG is hidden while the bitmap moves",
+  );
+  assert.equal(updates.length, 0, "Ordinary bitmap frames avoid React commits");
+  camera.moveGesture({ ...original, x: 700 });
+  camera.draw();
+  assert.equal(
+    updates.at(-1).x,
+    700,
+    "A long captured drag rebases before exposing a clipped edge",
+  );
+  assert.equal(camera.surface.style.display, "none");
+  assert.equal(
+    camera.vector.style.opacity,
+    "",
+    "Rebasing restores the exact SVG surface",
+  );
+  camera.moveGesture(original);
+  camera.finishGesture(true);
+  same(updates.at(-1), original);
+  assert.equal(
+    camera.surface.style.display,
+    "none",
+    "Release hides the temporary bitmap",
+  );
+  assert.equal(
+    camera.vector.style.opacity,
+    "",
+    "Release restores the vector geometry",
+  );
+  const recent = { scale: 2, x: -width / 2, y: -240 };
+  const cached = gestureHarness(
+    { clientWidth: width, clientHeight: 480 },
+    { current: recent },
+    [],
+    true,
+  );
+  cached.bitmap.dataset.atlasGestureCamera = JSON.stringify({
+    scale: 1,
+    x: 0,
+    y: 0,
+  });
+  const continued = { scale: 2.1, x: recent.x + 20, y: recent.y + 10 };
+  cached.moveGesture(continued);
+  cached.draw();
+  assert.equal(
+    cached.surface.style.transform,
+    `translate3d(${continued.x}px, ${continued.y}px, 0) scale(2.1)`,
+    "Rapid input positions a retained bitmap using the camera it was actually captured with",
+  );
+  cached.finishGesture(true);
 }
 // Invoke the real native event handlers with mobile/tablet geometry. This checks
 // the gesture transitions themselves; CSS alone cannot prove touch dragging.
@@ -553,7 +637,17 @@ for (const mapWidth of [356, 720]) {
     0,
     "Pinching retains the painted texture until the camera is committed",
   );
-  assert.notEqual(camera.label.style.left, "40px");
+  assert.notEqual(camera.label.style.translate, "");
+  assert.equal(
+    camera.label.style.left,
+    "40px",
+    "Gesture samples preserve layout positions",
+  );
+  assert.equal(
+    camera.label.style.top,
+    "60px",
+    "Gesture samples use compositor translation",
+  );
   assert.equal(camera.screenPath.writes.size, 0);
 
   // The last sample can return to the existing React props and be released
@@ -576,6 +670,11 @@ for (const mapWidth of [356, 720]) {
   );
   assert.equal(camera.label.style.left, "40px");
   assert.equal(camera.label.style.top, "60px");
+  assert.equal(
+    camera.label.style.translate,
+    "",
+    "Release clears the temporary label translation",
+  );
   assert.equal(
     camera.pattern.attributes.patternTransform,
     `scale(${1 / original.scale})`,

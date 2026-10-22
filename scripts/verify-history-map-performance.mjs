@@ -15,15 +15,23 @@ const label = process.env.HISTORY_MAP_PERFORMANCE_LABEL || "after";
 const output = path.resolve(
   root,
   process.env.HISTORY_MAP_PERFORMANCE_OUTPUT ||
-    `output/atlas-performance-20261019/${label}.json`,
+    `output/atlas-performance-20261022/${label}.json`,
 );
 const slowdown = Number(process.env.HISTORY_MAP_PERFORMANCE_CPU || 4);
 const frames = Number(process.env.HISTORY_MAP_PERFORMANCE_FRAMES || 60);
 const repeats = Number(process.env.HISTORY_MAP_PERFORMANCE_REPEATS || 2);
+const profile = process.env.HISTORY_MAP_PERFORMANCE_PROFILE === "1";
 const views = (
-  process.env.HISTORY_MAP_PERFORMANCE_VIEWS || "world,globe"
+  process.env.HISTORY_MAP_PERFORMANCE_VIEWS || "korea,world,globe"
 ).split(",");
-assert(views.every((view) => ["world", "globe"].includes(view)));
+const terrains = (process.env.HISTORY_MAP_PERFORMANCE_TERRAIN || "off,on")
+  .split(",")
+  .map((value) => value === "on");
+const operations = (
+  process.env.HISTORY_MAP_PERFORMANCE_OPERATIONS || "drag,zoom"
+).split(",");
+assert(views.every((view) => ["korea", "world", "globe"].includes(view)));
+assert(operations.every((operation) => ["drag", "zoom"].includes(operation)));
 assert(Number.isFinite(slowdown) && slowdown >= 1);
 assert(Number.isInteger(frames) && frames >= 10);
 assert(Number.isInteger(repeats) && repeats > 0);
@@ -36,7 +44,14 @@ const metricsNames = [
 const conditions = [
   { width: 390, height: 844, deviceScaleFactor: 3 },
   { width: 1024, height: 768, deviceScaleFactor: 2 },
-];
+].filter(
+  (condition) =>
+    !process.env.HISTORY_MAP_PERFORMANCE_WIDTHS ||
+    process.env.HISTORY_MAP_PERFORMANCE_WIDTHS.split(",")
+      .map(Number)
+      .includes(condition.width),
+);
+assert(conditions.length > 0, "At least one benchmark viewport is selected");
 const percentile = (values, p) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * p) - 1)];
@@ -147,6 +162,18 @@ async function drag(page, surface, count) {
           let previous;
           const tick = (timestamp) => {
             if (previous !== undefined) intervals.push(timestamp - previous);
+            if (window.__mapSurfaceFrames) {
+              const bitmap = document.querySelector(
+                "[data-atlas-gesture-surface]",
+              );
+              window.__mapSurfaceFrames[
+                document.querySelector('[data-globe-renderer="webgl"]')
+                  ? "webgl"
+                  : bitmap?.style.display === "block"
+                    ? "bitmap"
+                    : "vector"
+              ]++;
+            }
             previous = timestamp;
             if (step === steps) {
               resolve(intervals);
@@ -176,6 +203,48 @@ async function drag(page, surface, count) {
   }
 }
 
+async function wheelZoom(surface, count) {
+  return surface.evaluate(
+    (target, steps) =>
+      new Promise((resolve) => {
+        const bounds = target.getBoundingClientRect();
+        const intervals = [];
+        let step = 0,
+          previous;
+        const tick = (timestamp) => {
+          if (previous !== undefined) intervals.push(timestamp - previous);
+          if (window.__mapSurfaceFrames) {
+            const bitmap = document.querySelector(
+              "[data-atlas-gesture-surface]",
+            );
+            window.__mapSurfaceFrames[
+              document.querySelector('[data-globe-renderer="webgl"]')
+                ? "webgl"
+                : bitmap?.style.display === "block"
+                  ? "bitmap"
+                  : "vector"
+            ]++;
+          }
+          previous = timestamp;
+          if (step === steps) return resolve(intervals);
+          step++;
+          target.dispatchEvent(
+            new WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              clientX: bounds.x + bounds.width / 2,
+              clientY: bounds.y + bounds.height / 2,
+              deltaY: -6,
+            }),
+          );
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    count,
+  );
+}
+
 let playwright;
 try {
   playwright = require("playwright");
@@ -197,8 +266,10 @@ const report = {
   measuredAt: new Date().toISOString(),
   browser: "Microsoft Edge headless (desktop Chromium)",
   cpuSlowdown: slowdown,
-  input: `${frames} mouse pointer moves, one per requestAnimationFrame`,
-  terrainEnabled: true,
+  input: `${frames} pointer moves or wheel events, one per requestAnimationFrame`,
+  terrainStates: terrains,
+  operations,
+  profile,
   repeats,
   caveat:
     "Desktop browser CPU emulation with viewport/DPR settings; these are not physical iPhone or Galaxy Tab measurements. Frame timestamps do not measure device GPU cost or full touch-to-photon latency.",
@@ -211,8 +282,18 @@ try {
   });
   report.browserVersion = browser.version();
   for (const condition of conditions) {
-    for (const view of views) {
-      const result = { view, ...condition, samples: [] };
+    for (const { view, terrainEnabled, operation } of views.flatMap((view) =>
+      terrains.flatMap((terrainEnabled) =>
+        operations.map((operation) => ({ view, terrainEnabled, operation })),
+      ),
+    )) {
+      const result = {
+        view,
+        terrainEnabled,
+        operation,
+        ...condition,
+        samples: [],
+      };
       for (let repeat = 1; repeat <= repeats; repeat++) {
         const page = await browser.newPage({
           viewport: { width: condition.width, height: condition.height },
@@ -221,6 +302,18 @@ try {
         page.setDefaultTimeout(60_000);
         const errors = [];
         page.on("pageerror", (error) => errors.push(error.message));
+        await page.addInitScript(() => {
+          window.__mapLongTasks = [];
+          new PerformanceObserver((entries) => {
+            if (window.__mapMeasuring)
+              window.__mapLongTasks.push(
+                ...entries.getEntries().map((entry) => ({
+                  startMs: entry.startTime - window.__mapMeasurementStart,
+                  durationMs: entry.duration,
+                })),
+              );
+          }).observe({ type: "longtask", buffered: false });
+        });
         await page.route("**/*", (route) =>
           route.request().url().startsWith(origin)
             ? route.continue()
@@ -231,7 +324,7 @@ try {
         await page.goto(`${origin}/#/teacher/lesson/maps?view=${view}`);
         await page.waitForLoadState("networkidle");
         const surface = page.locator(
-          view === "world" ? ".history-atlas__map" : ".history-globe canvas",
+          view !== "globe" ? ".history-atlas__map" : ".history-globe canvas",
         );
         await surface.waitFor();
         await page.waitForFunction(
@@ -240,29 +333,50 @@ try {
             !document.body.textContent.includes("지도를 불러오는 중") &&
             !document.body.textContent.includes("지형을 불러오는 중"),
         );
+        const terrainToggle = page.getByRole("button", {
+          name: "지형",
+          exact: true,
+        });
+        if (
+          (await terrainToggle.getAttribute("aria-pressed")) !==
+          String(terrainEnabled)
+        )
+          await terrainToggle.click();
+        await page.waitForLoadState("networkidle");
         assert.equal(
-          await page
-            .getByRole("button", { name: "지형", exact: true })
-            .getAttribute("aria-pressed"),
-          "true",
-          "Terrain stays on throughout performance measurements",
+          await terrainToggle.getAttribute("aria-pressed"),
+          String(terrainEnabled),
         );
-        if (view === "world")
-          await page
-            .locator("[data-terrain-id]")
-            .first()
-            .waitFor({ state: "attached" });
-        else await page.locator("[data-globe-country]").first().waitFor();
+        if (view !== "globe" && terrainEnabled)
+          await page.waitForFunction(() =>
+            document.querySelector(
+              "[data-terrain-id], [data-atlas-terrain-raster]",
+            ),
+          );
+        if (view === "globe")
+          await page.locator("[data-globe-country]").first().waitFor();
         await surface.scrollIntoViewIfNeeded();
         await drag(page, surface, 12);
         await surface.press("Home");
         await page.waitForTimeout(350);
+        const bitmap = page.locator("[data-atlas-gesture-surface]");
+        if (await bitmap.count())
+          await page
+            .locator('[data-atlas-gesture-current="true"]')
+            .waitFor({ state: "attached" });
+        if (
+          view === "globe" &&
+          (await surface.getAttribute("data-globe-texture-ready")) !== null
+        )
+          await page
+            .locator('[data-globe-texture-ready="true"]')
+            .waitFor({ state: "attached" });
         await session.send("Emulation.setCPUThrottlingRate", {
           rate: slowdown,
         });
         await page.waitForTimeout(200);
         const camera = page.locator(
-          view === "world"
+          view !== "globe"
             ? ".history-atlas__geography"
             : ".history-globe__labels [data-globe-country]",
         );
@@ -273,11 +387,67 @@ try {
               .join("|"),
           );
         const beforeCamera = await cameraState();
+        if (profile) {
+          await session.send("Profiler.enable");
+          await session.send("Profiler.start");
+        }
+        await page.evaluate(() => {
+          window.__mapMeasurementStart = performance.now();
+          window.__mapLongTasks = [];
+          window.__mapMeasuring = true;
+          window.__mapSurfaceFrames = { bitmap: 0, vector: 0, webgl: 0 };
+        });
         const before = metricMap(await session.send("Performance.getMetrics"));
         const started = performance.now();
-        const intervals = await drag(page, surface, frames);
+        const intervals =
+          operation === "drag"
+            ? await drag(page, surface, frames)
+            : await wheelZoom(surface, frames);
+        // Include the final high-detail redraw after interaction ends in task cost.
+        await page.waitForTimeout(300);
+        if (await bitmap.count())
+          await page
+            .locator('[data-atlas-gesture-current="true"]')
+            .waitFor({ state: "attached" });
         const elapsedMs = performance.now() - started;
         const after = metricMap(await session.send("Performance.getMetrics"));
+        let profileTopFunctionsMs;
+        if (profile) {
+          const { profile: captured } = await session.send("Profiler.stop");
+          const nodes = new Map(
+            captured.nodes.map((node) => [node.id, node.callFrame]),
+          );
+          const durations = new Map();
+          captured.samples?.forEach((nodeId, index) => {
+            const frame = nodes.get(nodeId);
+            const name = `${frame.functionName || "(anonymous)"} ${frame.url}:${frame.lineNumber + 1}`;
+            durations.set(
+              name,
+              (durations.get(name) || 0) + captured.timeDeltas[index] / 1000,
+            );
+          });
+          profileTopFunctionsMs = [...durations.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 25)
+            .map(([name, durationMs]) => ({
+              name,
+              durationMs: round(durationMs),
+            }));
+          await fs.writeFile(
+            path.join(
+              path.dirname(output),
+              `${label}-${view}-${condition.width}-${terrainEnabled}-${operation}-${repeat}.cpuprofile`,
+            ),
+            JSON.stringify(captured),
+          );
+        }
+        const longTasks = await page.evaluate(() => {
+          window.__mapMeasuring = false;
+          return window.__mapLongTasks;
+        });
+        const surfaceFrames = await page.evaluate(
+          () => window.__mapSurfaceFrames,
+        );
         assert.notEqual(
           await cameraState(),
           beforeCamera,
@@ -298,6 +468,10 @@ try {
           p95FrameMs: round(percentile(intervals, 0.95)),
           maxFrameMs: round(Math.max(...intervals)),
           over34msFrames: intervals.filter((value) => value > 34).length,
+          over50msFrames: intervals.filter((value) => value > 50).length,
+          longTasks,
+          surfaceFrames,
+          profileTopFunctionsMs,
           elapsedMs: round(elapsedMs),
           metricsDeltaMs: Object.fromEntries(
             metricsNames.map((name) => [
@@ -309,7 +483,7 @@ try {
         };
         result.samples.push(sample);
         console.log(
-          `${label} ${view} ${condition.width}px DPR${condition.deviceScaleFactor} CPU${slowdown} run${repeat}: p50=${sample.p50FrameMs}ms p95=${sample.p95FrameMs}ms Task=${sample.metricsDeltaMs.TaskDuration}ms`,
+          `${label} ${view} terrain=${terrainEnabled} ${operation} ${condition.width}px DPR${condition.deviceScaleFactor} CPU${slowdown} run${repeat}: p50=${sample.p50FrameMs}ms p95=${sample.p95FrameMs}ms Task=${sample.metricsDeltaMs.TaskDuration}ms longTasks=${longTasks.length}`,
         );
         await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
         await page.close();

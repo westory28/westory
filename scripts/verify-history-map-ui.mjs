@@ -112,7 +112,7 @@ async function expectFilterReset(page, view) {
       if (!globe) {
         const matrix = document
           .querySelector(".history-atlas__geography")
-          .transform.baseVal.consolidate().matrix;
+          .getCTM();
         return {
           zoom: document.querySelector(".history-atlas__zoom").textContent,
           transform: [matrix.a, matrix.e, matrix.f].map(
@@ -346,7 +346,7 @@ async function expectFreePanning(page, view) {
   const homeLand = await page.locator(".history-atlas__land").getAttribute("d");
   const camera = () =>
     page.locator(".history-atlas__geography").evaluate((element) => {
-      const matrix = element.transform.baseVal.consolidate().matrix;
+      const matrix = element.getCTM();
       return { x: matrix.e, y: matrix.f, scale: matrix.a };
     });
   for (const [dx, dy] of [
@@ -390,6 +390,215 @@ async function expectFreePanning(page, view) {
       document.querySelector(".history-atlas__land")?.getAttribute("d") ===
       land,
     homeLand,
+  );
+}
+async function waitForTerrainRaster(page) {
+  await page
+    .locator("[data-atlas-terrain-raster]")
+    .first()
+    .waitFor({ state: "attached" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector(".history-atlas__terrain")
+        ?.getAttribute("data-atlas-terrain-ready") !== "false",
+  );
+}
+async function terrainTileState(page, includeBuffer = true) {
+  return page.evaluate((buffer) => {
+    const map = document
+      .querySelector(".history-atlas__map")
+      .getBoundingClientRect();
+    const tiles = Array.from(
+      document.querySelectorAll("[data-atlas-terrain-tile]"),
+    ).map((image) => {
+      const bounds = image.getBoundingClientRect();
+      return {
+        key: image.getAttribute("data-atlas-terrain-tile"),
+        href: image.getAttribute("href"),
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+      };
+    });
+    const covered =
+      tiles.length > 0 &&
+      (buffer
+        ? [-300, 4, map.width / 2, map.width - 4, map.width + 300]
+        : [4, map.width / 2, map.width - 4]
+      ).every((x) =>
+        (buffer
+          ? [-300, 4, map.height / 2, map.height - 4, map.height + 300]
+          : [4, map.height / 2, map.height - 4]
+        ).every((y) =>
+          tiles.some(
+            (tile) =>
+              tile.left <= map.left + x &&
+              tile.right >= map.left + x &&
+              tile.top <= map.top + y &&
+              tile.bottom >= map.top + y,
+          ),
+        ),
+      );
+    return { tiles, covered, encoded: window.__terrainEncodeCalls };
+  }, includeBuffer);
+}
+async function expectBufferedNavigation(page, view) {
+  const map = page.locator(".history-atlas__map");
+  await page.getByRole("button", { name: "전체 보기", exact: true }).click();
+  await map.scrollIntoViewIfNeeded();
+  const bitmap = page.locator('[data-atlas-gesture-current="true"]');
+  await bitmap.waitFor({ state: "attached" });
+  const pixels = await bitmap.evaluate((canvas) => {
+    const data = canvas
+      .getContext("2d")
+      .getImageData(0, 0, canvas.width, canvas.height).data;
+    const colors = new Set();
+    let painted = 0;
+    for (let offset = 0; offset < data.length; offset += 4) {
+      if (!data[offset + 3]) continue;
+      painted++;
+      if (colors.size < 256)
+        colors.add(`${data[offset]},${data[offset + 1]},${data[offset + 2]}`);
+    }
+    return {
+      colors: colors.size,
+      painted,
+      width: canvas.width,
+      height: canvas.height,
+    };
+  });
+  assert(
+    pixels.width * pixels.height <= 2_000_000,
+    "The gesture bitmap stays within its pixel budget",
+  );
+  assert(
+    pixels.painted > 1000 && pixels.colors > 10,
+    "The prepared gesture image contains geographic detail",
+  );
+  const width = page.viewportSize().width;
+  await map.screenshot({
+    path: path.join(out, `${view}-${width}-settled-map.png`),
+  });
+  const camera = () =>
+    page.locator(".history-atlas__geography").evaluate((element) => {
+      const matrix = element.getCTM();
+      return { x: matrix.e, y: matrix.f, scale: matrix.a };
+    });
+  const before = await camera();
+  const box = await map.boundingBox();
+  const start = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.8 };
+  const initialTiles = await terrainTileState(page);
+  if (initialTiles.tiles.length) {
+    assert(
+      initialTiles.covered,
+      "Terrain tiles cover the viewport and its pan buffer",
+    );
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 48, start.y, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(50);
+    await waitForTerrainRaster(page);
+    await bitmap.waitFor({ state: "attached" });
+    const afterPan = await terrainTileState(page);
+    const originals = new Map(
+      initialTiles.tiles.map((tile) => [tile.key, tile.href]),
+    );
+    const reused = afterPan.tiles.filter((tile) => originals.has(tile.key));
+    const added = afterPan.tiles.filter((tile) => !originals.has(tile.key));
+    assert(
+      reused.length > 0 &&
+        reused.every((tile) => originals.get(tile.key) === tile.href),
+      "Panning reuses the same encoded terrain tiles",
+    );
+    assert(
+      afterPan.encoded - initialTiles.encoded <= added.length,
+      "Panning encodes only newly exposed tiles",
+    );
+    assert(
+      afterPan.covered,
+      "New terrain tiles complete the translated viewport and buffer",
+    );
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x - 48, start.y, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(50);
+    await waitForTerrainRaster(page);
+    await bitmap.waitFor({ state: "attached" });
+  }
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 8, start.y + 8);
+  await page.mouse.move(start.x, start.y);
+  await page.waitForFunction(
+    () =>
+      document.querySelector("[data-atlas-gesture-surface]")?.style.display ===
+      "block",
+  );
+  await map.screenshot({
+    path: path.join(out, `${view}-${width}-moving-map.png`),
+  });
+  // A single captured pointer crosses the clip buffer and then comes back.
+  // Separate short drags would never exercise the mid-gesture buffer refresh.
+  await page.mouse.move(start.x + 700, start.y, { steps: 18 });
+  await page.waitForFunction((originX) => {
+    const element = document.querySelector(".history-atlas__geography");
+    return Math.abs(element.getCTM().e - originX) >= 300;
+  }, before.x);
+  if (initialTiles.tiles.length) {
+    await waitForTerrainRaster(page);
+    assert(
+      (await terrainTileState(page, false)).covered,
+      "Terrain coverage remains complete while a captured long drag is held",
+    );
+  }
+  await page.mouse.move(start.x, start.y, { steps: 18 });
+  await page.mouse.up();
+  const restored = await camera();
+  assert(
+    Math.abs(restored.x - before.x) < 2 && Math.abs(restored.y - before.y) < 2,
+    `${view}: a 700px drag out and back retains the pointer's original anchor`,
+  );
+  for (let index = 0; index < 3; index++)
+    await page.getByRole("button", { name: "지도 확대", exact: true }).click();
+  await map.evaluate(
+    (target) =>
+      new Promise((resolve) => {
+        const box = target.getBoundingClientRect();
+        let step = 0;
+        const zoomOut = () => {
+          target.dispatchEvent(
+            new WheelEvent("wheel", {
+              bubbles: true,
+              cancelable: true,
+              clientX: box.x + box.width / 2,
+              clientY: box.y + box.height / 2,
+              deltaY: 40,
+            }),
+          );
+          if (++step < 24) requestAnimationFrame(zoomOut);
+          else resolve();
+        };
+        requestAnimationFrame(zoomOut);
+      }),
+  );
+  await page.waitForTimeout(250);
+  await map.press("Home");
+  assert.deepEqual(await camera(), { x: 0, y: 0, scale: 1 });
+  assert(
+    (await page.locator(".history-atlas__land").getAttribute("d")).length > 100,
+    `${view}: Home restores the geographic surface after buffered navigation`,
+  );
+  await waitForTerrainRaster(page);
+  assert.equal(
+    await page
+      .locator("[data-atlas-gesture-surface]")
+      .evaluate((canvas) => canvas.style.display),
+    "none",
+    "Home restores the exact SVG and hides the temporary bitmap",
   );
 }
 async function expectKoreanForeignPlaces(page) {
@@ -438,6 +647,67 @@ async function expectKoreanForeignPlaces(page) {
     .click();
   await page.getByRole("button", { name: "전체 보기", exact: true }).click();
 }
+async function expectSelectedCountryBitmap(page) {
+  await page.locator(".history-atlas__country-label").first().press("Enter");
+  await page.waitForFunction(
+    () => !document.querySelector(".history-atlas--focusing"),
+  );
+  await waitForTerrainRaster(page);
+  await page
+    .locator('[data-atlas-gesture-current="true"]')
+    .waitFor({ state: "attached" });
+  const active = page.locator(".history-atlas__country.is-active");
+  assert.equal(await active.count(), 1);
+  assert(
+    await active.evaluate((path) => !!path.closest("[clip-path]")),
+    "The selected country keeps its land clip",
+  );
+  const map = page.locator(".history-atlas__map");
+  await map.scrollIntoViewIfNeeded();
+  const width = page.viewportSize().width;
+  await map.screenshot({
+    path: path.join(out, `world-${width}-selected-settled-map.png`),
+  });
+  const start = await map.evaluate((target) => {
+    const bounds = target.getBoundingClientRect();
+    for (const y of [0.2, 0.5, 0.8])
+      for (const x of [0.2, 0.5, 0.8]) {
+        const point = {
+          x: bounds.left + bounds.width * x,
+          y: bounds.top + bounds.height * y,
+        };
+        const hit = document.elementFromPoint(point.x, point.y);
+        if (
+          hit === target ||
+          (hit instanceof SVGElement && target.contains(hit))
+        )
+          return point;
+      }
+    return null;
+  });
+  assert(
+    start,
+    "An uncovered map point can start the selected-country gesture",
+  );
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 8, start.y + 8);
+  await page.mouse.move(start.x, start.y);
+  await page.waitForFunction(
+    () =>
+      document.querySelector("[data-atlas-gesture-surface]")?.style.display ===
+      "block",
+  );
+  await map.screenshot({
+    path: path.join(out, `world-${width}-selected-moving-map.png`),
+  });
+  await page.mouse.up();
+  assert.equal(
+    await active.count(),
+    1,
+    "The selected country remains active after bitmap navigation",
+  );
+}
 const terrainPixelCount = () => {
   const canvas = document.querySelector(".history-globe canvas");
   if (!canvas) return 0;
@@ -446,14 +716,176 @@ const terrainPixelCount = () => {
     .getImageData(0, 0, canvas.width, canvas.height).data;
   let count = 0;
   for (let index = 0; index < pixels.length; index += 4) {
-    const rgb = `${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`;
     if (
-      ["203,216,202", "222,215,200", "237,213,165", "230,237,223"].includes(rgb)
+      (pixels[index] === 203 &&
+        pixels[index + 1] === 216 &&
+        pixels[index + 2] === 202) ||
+      (pixels[index] === 222 &&
+        pixels[index + 1] === 215 &&
+        pixels[index + 2] === 200) ||
+      (pixels[index] === 237 &&
+        pixels[index + 1] === 213 &&
+        pixels[index + 2] === 165) ||
+      (pixels[index] === 230 &&
+        pixels[index + 1] === 237 &&
+        pixels[index + 2] === 223)
     )
       count++;
   }
   return count;
 };
+async function expectGlobeRendering(
+  page,
+  width,
+  contextLoss = false,
+  suffix = "gpu",
+) {
+  const canvas = page.locator(".history-globe canvas");
+  await canvas.scrollIntoViewIfNeeded();
+  if (suffix === "gpu")
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".history-globe canvas")
+          ?.getAttribute("data-globe-texture-ready") === "true",
+    );
+  else await page.waitForTimeout(2000);
+  await canvas.screenshot({
+    path: path.join(out, `globe-${width}-${suffix}-settled.png`),
+  });
+  const point = await canvas.evaluate((target) => {
+    const box = target.getBoundingClientRect();
+    for (const y of [0.5, 0.65, 0.35])
+      for (const x of [0.45, 0.6, 0.3]) {
+        const point = { x: box.x + box.width * x, y: box.y + box.height * y };
+        if (document.elementFromPoint(point.x, point.y) === target)
+          return point;
+      }
+  });
+  assert(point, "A visible globe surface receives the captured pointer");
+  const paintedPixels = () =>
+    canvas.evaluate((target) => {
+      const pixels = target
+        .getContext("2d")
+        .getImageData(0, 0, target.width, target.height).data;
+      let painted = 0;
+      const colors = new Set();
+      for (let index = 0; index < pixels.length; index += 4)
+        if (pixels[index + 3]) {
+          painted++;
+          if (colors.size < 256)
+            colors.add(
+              `${pixels[index]},${pixels[index + 1]},${pixels[index + 2]}`,
+            );
+        }
+      return { painted, colors: colors.size };
+    });
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 12, point.y + 8);
+  await page.mouse.move(point.x, point.y);
+  await canvas.screenshot({
+    path: path.join(out, `globe-${width}-${suffix}-moving.png`),
+  });
+  let pixels = await paintedPixels();
+  assert.equal(
+    await canvas.getAttribute("data-globe-renderer"),
+    suffix === "gpu" ? "webgl" : "canvas",
+    "The measured gesture uses its intended renderer",
+  );
+  assert(
+    pixels.painted > 1000 && pixels.colors > 10,
+    "The moving globe retains visible geographic detail",
+  );
+  if (contextLoss) {
+    const contexts = await page.evaluate(() => window.__globeContexts.length);
+    checks.push({ globeWebGLContexts: contexts, width });
+    assert(
+      contexts > 0,
+      "The normal Chromium fixture can exercise WebGL context recovery",
+    );
+    await page.evaluate(() => {
+      window.__globeRecovery = window.__globeContexts.map((context) =>
+        context.getExtension("WEBGL_lose_context"),
+      );
+      window.__globeRecovery.forEach((extension) => extension?.loseContext());
+    });
+    await page.waitForFunction(() =>
+      window.__globeContexts.every((context) => context.isContextLost()),
+    );
+    await page.mouse.move(point.x + 18, point.y + 8);
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".history-globe canvas")
+          ?.getAttribute("data-globe-renderer") === "canvas",
+    );
+    pixels = await paintedPixels();
+    assert(
+      pixels.painted > 1000 && pixels.colors > 10,
+      "Context loss keeps a visible CPU fallback",
+    );
+    await canvas.screenshot({
+      path: path.join(out, `globe-${width}-context-lost.png`),
+    });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    await page.evaluate(() =>
+      window.__globeRecovery.forEach((extension) =>
+        extension?.restoreContext(),
+      ),
+    );
+    await page.waitForFunction(() =>
+      window.__globeContexts.every((context) => !context.isContextLost()),
+    );
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".history-globe canvas")
+          ?.getAttribute("data-globe-texture-ready") === "true",
+    );
+    const restart = await canvas.evaluate((target) => {
+      const bounds = target.getBoundingClientRect();
+      for (const [x, y] of [
+        [0.1, 0.8],
+        [0.85, 0.8],
+        [0.1, 0.2],
+      ]) {
+        const point = {
+          x: bounds.x + bounds.width * x,
+          y: bounds.y + bounds.height * y,
+        };
+        if (document.elementFromPoint(point.x, point.y) === target)
+          return point;
+      }
+    });
+    assert(
+      restart,
+      "Restored interaction starts on uncovered canvas, not a moved country label",
+    );
+    await page.mouse.move(restart.x, restart.y);
+    await page.mouse.down();
+    await page.mouse.move(restart.x + 20, restart.y + 12);
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector(".history-globe canvas")
+          ?.getAttribute("data-globe-renderer") === "webgl",
+    );
+    pixels = await paintedPixels();
+    assert.equal(
+      await canvas.getAttribute("data-globe-renderer"),
+      "webgl",
+      "Restoration returns interaction to the accelerated renderer",
+    );
+    assert(
+      pixels.painted > 1000 && pixels.colors > 10,
+      "The globe remains usable after context restoration",
+    );
+  }
+  await page.mouse.up();
+  await canvas.press("Home");
+}
 try {
   for (const width of process.env.ATLAS_UI_WIDTHS
     ? process.env.ATLAS_UI_WIDTHS.split(",").map(Number)
@@ -462,6 +894,22 @@ try {
       viewport: { width, height: width === 1366 ? 768 : 900 },
     });
     activePage = page;
+    await page.addInitScript(() => {
+      window.__globeContexts = [];
+      window.__terrainEncodeCalls = 0;
+      const toBlob = HTMLCanvasElement.prototype.toBlob;
+      HTMLCanvasElement.prototype.toBlob = function (...args) {
+        window.__terrainEncodeCalls++;
+        return toBlob.apply(this, args);
+      };
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+        const context = getContext.call(this, type, ...args);
+        if (context && (type === "webgl" || type === "webgl2"))
+          window.__globeContexts.push(context);
+        return context;
+      };
+    });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.route("**/*", (route) =>
@@ -469,13 +917,16 @@ try {
         ? route.continue()
         : route.abort(),
     );
-    for (const view of ["korea", "world", "globe"]) {
+    for (const view of (
+      process.env.ATLAS_UI_VIEWS || "korea,world,globe"
+    ).split(",")) {
       await page.goto(`${origin}/#/teacher/lesson/maps?view=${view}`);
+      await page.reload();
       if (view === "globe")
         await page.locator(".history-globe canvas").waitFor();
       else
         await page
-          .locator('[data-terrain-id="korea-taebaek"]')
+          .locator(".history-atlas__land")
           .waitFor({ state: "attached" });
       await page.waitForFunction(
         () =>
@@ -494,8 +945,8 @@ try {
       });
       assert.equal(
         await terrainToggle.getAttribute("aria-pressed"),
-        "true",
-        `${view}/${width}: terrain defaults on`,
+        "false",
+        `${view}/${width}: terrain defaults off`,
       );
       const target = await terrainToggle.boundingBox();
       const title = await page.getByRole("heading", { level: 1 }).boundingBox();
@@ -508,20 +959,21 @@ try {
       );
       assert.equal(
         await terrainToggle.locator("[data-terrain-eye-slash]").count(),
-        0,
+        1,
       );
       assert(
         target.width >= 44 && target.height >= 44,
         "Terrain toggle has a touch target",
       );
       if (view === "globe") {
-        await page.waitForFunction(terrainPixelCount);
-        await terrainToggle.click();
         await page.waitForFunction(`(${terrainPixelCount.toString()})() === 0`);
       } else {
-        await terrainToggle.click();
         assert.equal(
-          await page.locator("[data-terrain-id], [data-terrain-label]").count(),
+          await page
+            .locator(
+              "[data-terrain-id], [data-terrain-label], [data-atlas-terrain-raster]",
+            )
+            .count(),
           0,
         );
         if (view === "korea")
@@ -530,6 +982,17 @@ try {
           );
       }
       assert.equal(await terrainToggle.getAttribute("aria-pressed"), "false");
+      assert.equal(
+        await page.evaluate(
+          () =>
+            performance
+              .getEntriesByType("resource")
+              .filter((entry) => entry.name.endsWith("/assets/terrain.json"))
+              .length,
+        ),
+        0,
+        "The default map does not request the optional terrain payload",
+      );
       assert.equal(
         await terrainToggle.locator("[data-terrain-eye-slash]").count(),
         1,
@@ -545,11 +1008,90 @@ try {
         0,
       );
       if (view === "globe") await page.waitForFunction(terrainPixelCount);
+      else await waitForTerrainRaster(page);
+      // Toggling back off must remove geometry as well as names, then a second
+      // enable must recover the cached terrain without leaving an empty image.
+      await terrainToggle.click();
+      if (view === "globe")
+        await page.waitForFunction(`(${terrainPixelCount.toString()})() === 0`);
       else
-        await page
-          .locator('[data-terrain-id="korea-taebaek"]')
-          .waitFor({ state: "attached" });
+        assert.equal(
+          await page
+            .locator("[data-atlas-terrain-raster], [data-terrain-label]")
+            .count(),
+          0,
+        );
+      await terrainToggle.click();
+      if (view === "globe") await page.waitForFunction(terrainPixelCount);
+      else {
+        const raster = page.locator("[data-atlas-terrain-raster]");
+        await waitForTerrainRaster(page);
+        const rasterPixels = await raster.evaluateAll(async (elements) => {
+          let painted = 0;
+          let pixels = 0;
+          for (const element of elements) {
+            const image = new Image();
+            image.src = element.getAttribute("href");
+            await image.decode();
+            const canvas = document.createElement("canvas");
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            pixels += canvas.width * canvas.height;
+            const context = canvas.getContext("2d");
+            context.drawImage(image, 0, 0);
+            const data = context.getImageData(
+              0,
+              0,
+              canvas.width,
+              canvas.height,
+            ).data;
+            for (let index = 3; index < data.length; index += 4)
+              if (data[index]) painted++;
+          }
+          return { painted, pixels };
+        });
+        assert(
+          rasterPixels.painted > 100,
+          `${view}/${width}: restored terrain contains painted pixels`,
+        );
+        assert(
+          rasterPixels.pixels <= 2_005_000,
+          "Decoded terrain tiles stay within their bounded pixel budget",
+        );
+      }
+      for (const enabled of [false, true, false]) {
+        await terrainToggle.click();
+        assert.equal(
+          await terrainToggle.getAttribute("aria-pressed"),
+          String(enabled),
+        );
+      }
+      await page.waitForTimeout(250);
+      if (view === "globe")
+        await page.waitForFunction(`(${terrainPixelCount.toString()})() === 0`);
+      else
+        assert.equal(
+          await page
+            .locator("[data-atlas-terrain-raster], [data-terrain-label]")
+            .count(),
+          0,
+          "Canceled terrain work does not reappear after rapid toggles",
+        );
+      await terrainToggle.click();
+      if (view === "globe") await page.waitForFunction(terrainPixelCount);
+      else await waitForTerrainRaster(page);
       if (view === "korea") {
+        if (process.env.ATLAS_UI_RENDERING_ONLY === "1") {
+          await expectBufferedNavigation(page, view);
+          assert.deepEqual(
+            errors,
+            [],
+            `${view}/${width}: rendering runtime errors`,
+          );
+          checks.push({ view, width, rendering: true, passed: true });
+          continue;
+        }
+        await expectBufferedNavigation(page, view);
         if (width === 1280) await expectFreePanning(page, view);
         await expectKoreanForeignPlaces(page);
         assert((await page.locator("[data-traditional-region]").count()) >= 9);
@@ -568,6 +1110,18 @@ try {
           .click();
       }
       if (view === "world") {
+        if (process.env.ATLAS_UI_RENDERING_ONLY === "1") {
+          await expectBufferedNavigation(page, view);
+          await expectSelectedCountryBitmap(page);
+          assert.deepEqual(
+            errors,
+            [],
+            `${view}/${width}: rendering runtime errors`,
+          );
+          checks.push({ view, width, rendering: true, passed: true });
+          continue;
+        }
+        await expectBufferedNavigation(page, view);
         if (width === 1280) await expectFreePanning(page, view);
         await page
           .getByRole("combobox", { name: "지역", exact: true })
@@ -677,6 +1231,7 @@ try {
         );
       }
       if (view === "globe") {
+        await expectGlobeRendering(page, width, width === 390);
         const countryLabel = page
           .locator(
             '[data-globe-country]:not([data-globe-country="KOR"]):visible',
@@ -773,6 +1328,7 @@ try {
       : route.continue(),
   );
   await retry.goto(`${origin}/#/student/lesson/maps`);
+  await retry.getByRole("button", { name: "지형", exact: true }).click();
   await retry
     .getByRole("alert")
     .filter({ hasText: "지형을 불러오지 못했습니다." })
@@ -782,9 +1338,7 @@ try {
     .getByRole("alert")
     .getByRole("button", { name: "다시 시도" })
     .click();
-  await retry
-    .locator('[data-terrain-id="korea-taebaek"]')
-    .waitFor({ state: "attached" });
+  await waitForTerrainRaster(retry);
   await retry.getByRole("alert").waitFor({ state: "hidden" });
   checks.push({ retry: true, passed: true });
   await retry.getByRole("button", { name: "지형", exact: true }).click();
@@ -800,6 +1354,36 @@ try {
   }
   checks.push({ terrainPreferenceAcrossViews: true, passed: true });
   await retry.close();
+  if (
+    !process.env.ATLAS_UI_VIEWS ||
+    process.env.ATLAS_UI_VIEWS.includes("globe")
+  ) {
+    const fallback = await browser.newPage({
+      viewport: { width: 390, height: 900 },
+    });
+    activePage = fallback;
+    const errors = [];
+    fallback.on("pageerror", (error) => errors.push(error.message));
+    await fallback.addInitScript(() => {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+        return type === "webgl" || type === "webgl2"
+          ? null
+          : getContext.call(this, type, ...args);
+      };
+    });
+    await fallback.goto(`${origin}/#/student/lesson/maps?view=globe`);
+    await fallback.getByRole("button", { name: "지형", exact: true }).click();
+    await fallback.waitForFunction(terrainPixelCount);
+    await expectGlobeRendering(fallback, 390, false, "forced-fallback");
+    assert.deepEqual(
+      errors,
+      [],
+      "WebGL-unavailable devices retain a working globe",
+    );
+    checks.push({ globeForcedFallback: true, passed: true });
+    await fallback.close();
+  }
   await fs.writeFile(
     path.join(out, "report.json"),
     JSON.stringify({ checks }, null, 2),
