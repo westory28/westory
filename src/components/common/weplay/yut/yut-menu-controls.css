@@ -906,16 +906,21 @@
 .yut-throw-overlay {
   position: absolute;
   z-index: 12;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  aspect-ratio: var(--yut-board-ratio);
   pointer-events: none;
 }
 .yut-throw-overlay[hidden] {
   display: none;
 }
 .yut-throw-overlay .yut-power-control {
+  position: absolute;
+  /* The start pad is at (360, 455) in the board's 720 × 560 viewBox. */
+  top: calc(81.25% + 24px);
+  left: 50%;
+  transform: translate(-50%, -50%);
   pointer-events: auto;
 }
 .yut-throw-overlay .yut-throw-button {
@@ -962,12 +967,6 @@
   bottom: 0;
   left: 0;
   padding-top: 12px;
-}
-.yut-game[data-short-stage] .yut-throw-overlay {
-  top: auto;
-  width: 100%;
-  height: auto;
-  aspect-ratio: var(--yut-board-ratio);
 }
 .yut-game[data-short-stage] .yut-throw-overlay .yut-power-control {
   width: 230px;

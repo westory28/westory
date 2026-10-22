@@ -98,7 +98,7 @@ qa.prepareThrow=value=>{const room={...qa.room,turnUid:'qa',phase:'throw',phaseS
 qa.preparePiece=(pieceId,node,value)=>{const room=JSON.parse(JSON.stringify(qa.room));if(node)room.players[0].pieces.find(piece=>piece.id===pieceId).node=node;Object.assign(room,{turnUid:'qa',phase:'throw',phaseStartsAtMs:Date.now()-5000,turnDeadlineMs:Date.now()+25000});qa.emit(core.throwYut(room,'qa',sticks(value),Date.now()-4000));};
 export const getYutLobby=async()=>{if(params.has('hold-lobby')&&!qa.lobbyReleased)await new Promise(resolve=>qa.resolveLobby=()=>{qa.lobbyReleased=true;resolve()});if(params.has('slow-lobby'))await new Promise(r=>setTimeout(r,700));return{enabled:true,settings:DEFAULT_YUT_SETTINGS,privatePlaysRemaining:5,playerName:'김테스트(3학년 2반)',room:qa.room,classes:[],classId:'',serverNowMs:Date.now()}};
 export const subscribeYutRoom=(_config,_id,onRoom)=>{listeners.add(onRoom);return()=>listeners.delete(onRoom)};
-export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error(qa.errorMessage||'검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
+export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(data.action==="throw"&&qa.holdThrow)await new Promise(resolve=>qa.releaseThrow=resolve);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error(qa.errorMessage||'검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
 export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
 `;
@@ -3174,7 +3174,7 @@ async function boardGeometry(page, label) {
       });
     const toolbar = rectangle(".yut-floating-controls");
     const profiles = [...document.querySelectorAll(".yut-player")].map(node => { const box = node.getBoundingClientRect(); return { text: node.textContent, box: box.toJSON(), logical: local(box) }; });
-    return { board: rectangle(".yut-board"), stage: rectangle(".yut-match-stage"), game: rectangle(".yut-game"), toolbar, logicalToolbar: local(toolbar), logicalCanvas: { width: canvas.offsetWidth, height: canvas.offsetHeight }, controls, profiles, overlay: document.querySelector(".yut-throw-overlay") ? getComputedStyle(document.querySelector(".yut-throw-overlay")).position : null, rotated, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
+    return { board: rectangle(".yut-board"), logicalBoard: local(rectangle(".yut-board")), stage: rectangle(".yut-match-stage"), game: rectangle(".yut-game"), toolbar, logicalToolbar: local(toolbar), logicalCanvas: { width: canvas.offsetWidth, height: canvas.offsetHeight }, controls, profiles, overlay: document.querySelector(".yut-throw-overlay") ? getComputedStyle(document.querySelector(".yut-throw-overlay")).position : null, rotated, overflow: document.documentElement.scrollWidth > innerWidth + 1 };
   });
   report.paths[label] = geometry;
   return geometry;
@@ -3275,7 +3275,11 @@ async function verifyBoardLayout() {
       const throwButton = initial.controls.find(control => /던지기|던져/.test(control.label));
       assert.ok(throwButton, label + ": primary throw target exists");
       assert.notEqual(throwButton.shadow, "none", label + ": floating throw button has a visible shadow");
-      assert.ok(overlapArea(throwButton.box, initial.board) >= throwButton.box.width * throwButton.box.height * .5 && throwButton.box.x + throwButton.box.width / 2 >= initial.board.left && throwButton.box.x + throwButton.box.width / 2 <= initial.board.right && throwButton.box.y + throwButton.box.height / 2 >= initial.board.top && throwButton.box.y + throwButton.box.height / 2 <= initial.board.bottom, label + ": floating throw target is centered over the board (compact views may overhang its edges)");
+      const startX = initial.logicalBoard.x + initial.logicalBoard.width * .5;
+      const startY = initial.logicalBoard.y + initial.logicalBoard.height * 455 / 560;
+      const throwCenterX = throwButton.logical.x + throwButton.logical.width / 2;
+      const throwCenterY = throwButton.logical.y + throwButton.logical.height / 2;
+      assert.ok(Math.abs(throwCenterX - startX) <= .75 && throwCenterY > startY && throwCenterY - startY <= 24, label + ": throw button stays just below the start pad, including rotated fullscreen");
       await verifyBoardMenu(page, label, width <= 740 && width > height && count === 4);
       await page.evaluate(() => {
         const qa = window.qa;
@@ -3289,7 +3293,7 @@ async function verifyBoardLayout() {
         };
         requestAnimationFrame(sample);
       });
-      await page.evaluate(() => { window.qa.throwValue = 2; window.qa.delay = 800; });
+      await page.evaluate(() => { window.qa.throwValue = 2; window.qa.holdThrow = true; });
       const action = page.locator(".yut-throw-button");
       await action.focus();
       await page.keyboard.down("Space");
@@ -3299,6 +3303,7 @@ async function verifyBoardLayout() {
       assert.equal(await page.evaluate(() => window.qa.room.phase), "throw", label + ": throw response remains pending during the delay check");
       assert.equal(await page.locator(".yut-throw-overlay").isVisible(), false, label + ": delayed response cannot leave the floating button over the toss animation");
       verifyBoardGeometry(await boardGeometry(page, label + "-throw-pending"), initial, label + "-throw-pending");
+      await page.evaluate(() => { window.qa.holdThrow = false; window.qa.releaseThrow(); });
       await page.waitForFunction(() => window.qa.room.phase === "move");
       await page.locator(".yut-match-stage.is-tossing").waitFor();
       verifyBoardGeometry(await boardGeometry(page, label + "-toss"), initial, label + "-toss");
