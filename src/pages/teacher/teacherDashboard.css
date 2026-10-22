@@ -22,6 +22,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  max-height: clamp(620px, calc(100dvh - 140px), 880px);
   gap: 12px;
 }
 
@@ -69,7 +70,7 @@
 }
 
 .teacher-layout .teacher-week-events {
-  padding-inline: 12px;
+  padding: 8px 12px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: var(--radius-lg, 12px);
   background: var(--ws-surface, #fff);
@@ -387,10 +388,18 @@
 }
 
 .teacher-week-events {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   margin-top: 8px;
+  overflow: hidden;
+}
+
+.teacher-week-events__list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -423,6 +432,7 @@
   min-height: 80px;
   padding: 8px 4px;
   border-bottom: 1px solid var(--ws-border-soft, #f3f4f6);
+  border-radius: var(--radius-md, 8px);
   text-align: left;
 }
 
@@ -477,15 +487,14 @@
 .teacher-week-event__metadata {
   display: flex;
   align-items: center;
-  flex-shrink: 1;
+  flex-shrink: 0;
   min-width: 0;
-  max-width: calc(100% - 92px);
   gap: 8px;
   white-space: nowrap;
 }
 .teacher-week-event__category {
+  flex-shrink: 0;
   min-width: 0;
-  max-width: 120px;
   padding-inline: 8px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: var(--radius-sm, 4px);
@@ -531,6 +540,10 @@
 .teacher-weekly-dashboard :is(button, a, select):focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);
   outline-offset: 2px;
+}
+
+.teacher-weekly-dashboard .teacher-week-event:focus-visible {
+  outline-offset: -2px;
 }
 
 /* Keep the production notice editor and image carousel; only size its dashboard presentation. */
@@ -634,6 +647,9 @@
   .teacher-weekly-dashboard__ranking {
     grid-column: auto;
     grid-row: auto;
+  }
+  .teacher-weekly-dashboard__schedule {
+    max-height: none;
   }
   .teacher-week-schedule {
     min-height: 416px;
