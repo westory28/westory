@@ -186,13 +186,11 @@ await check(
     await h
       .load("studentProfileCommands")
       .callStudentDataService("getStudentData", {});
-    await h
-      .load("academicCalendar")
-      .mutateAcademicCalendar({
-        ...scope,
-        action: "SAVE_CATEGORIES",
-        items: [],
-      });
+    await h.load("academicCalendar").mutateAcademicCalendar({
+      ...scope,
+      action: "SAVE_CATEGORIES",
+      items: [],
+    });
     assert.equal(
       await h.load("noticeImages").tryDeleteNoticeImage("notice/image"),
       true,
@@ -256,7 +254,7 @@ await check("Fresh proof explicitly revalidates at the server", async () => {
   assert.equal(h.opens(), 2);
 });
 await check(
-  "An old epoch flight cannot invalidate a newer fresh request while draining",
+  "A new epoch verifies immediately and retains its proof after the old flight settles",
   async () => {
     const h = harness(),
       gate = deferred();
@@ -265,15 +263,21 @@ await check(
     const rejected = assert.rejects(old);
     await flush();
     h.state.epoch++;
+    h.state.holdOpen = null;
     const fresh = h.api.prepareApplicationSession(h.auth.currentUser, {
       fresh: true,
     });
     await flush();
-    assert.equal(h.opens(), 1);
-    h.state.holdOpen = null;
+    assert.equal(
+      h.opens(),
+      2,
+      "An earlier auth epoch cannot hold up a new login",
+    );
+    await fresh;
+    const proof = await h.api.ensureApplicationSessionProof();
     gate.resolve();
-    await Promise.all([rejected, fresh]);
-    await h.api.ensureApplicationSessionProof();
+    await rejected;
+    assert.equal(await h.api.ensureApplicationSessionProof(), proof);
     assert.equal(h.opens(), 2);
   },
 );

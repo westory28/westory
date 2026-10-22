@@ -91,7 +91,7 @@ export const useAuth = () => {
 const mocks = {
   "qa-auth": fakeAuth,
   "qa-firebase": `export {auth} from "qa-auth";import {events} from "qa-auth";export const db={};export const authPersistenceReady=Promise.resolve();export const configuredAuthDomain="127.0.0.1";export const getFirebaseFunctions=async()=>{events.push("functions-sdk-prepared");return {};};`,
-  "qa-firebase-auth": `import {auth,phase,user,events} from "qa-auth";export class GoogleAuthProvider {setCustomParameters(){}addScope(){}};export const getRedirectResult=async()=>{if(new URLSearchParams(location.search).get("scenario")==="redirect-timeout"){events.push("redirect-result-pending");return new Promise(()=>{});}return null};export const signInWithPopup=async()=>{events.push("popup");const scenario=new URLSearchParams(location.search).get("scenario");if(scenario==="popup-cancel")throw Object.assign(new Error("synthetic popup cancelled"),{code:"auth/popup-closed-by-user"});phase("onboarding");return {user}};export const signInWithRedirect=async()=>{throw new Error("Unexpected redirect in localhost fixture")};export const signOut=async()=>{events.push("sdk-signout");phase("signed-out")};`,
+  "qa-firebase-auth": `import {auth,phase,user,events} from "qa-auth";export class GoogleAuthProvider {setCustomParameters(){}addScope(){}};export const getRedirectResult=async()=>{const scenario=new URLSearchParams(location.search).get("scenario");if(scenario==="redirect-timeout"){events.push("redirect-result-pending");return new Promise(()=>{});}if(scenario==="redirect-delayed"){events.push("redirect-result-pending");await new Promise(resolve=>setTimeout(resolve,30000));phase("ready");events.push("redirect-result-ready");return {user};}return null};export const signInWithPopup=async()=>{events.push("popup");const scenario=new URLSearchParams(location.search).get("scenario");if(scenario==="popup-cancel")throw Object.assign(new Error("synthetic popup cancelled"),{code:"auth/popup-closed-by-user"});phase("onboarding");return {user}};export const signInWithRedirect=async()=>{throw new Error("Unexpected redirect in localhost fixture")};export const signOut=async()=>{events.push("sdk-signout");phase("signed-out")};`,
   "qa-firestore": `import {events,profileWritten} from "qa-auth";export const doc=(db,...parts)=>({parts});export const collection=(db,...parts)=>({parts});export const query=(base,...filters)=>({...base,filters});export const where=(...parts)=>parts;export const limit=(n)=>n;export const orderBy=(...parts)=>parts;export const serverTimestamp=()=>({synthetic:true});export const getDoc=async()=>({exists:()=>false,data:()=>({})});export const getDocs=async(ref)=>{const consent=ref.parts?.includes("consent");const docs=consent?[{id:"fixture-consent",data:()=>({title:"합성 개인정보 동의",text:"로컬 QA를 위한 합성 동의 내용입니다.",required:true,order:1})}]:[];return {empty:!docs.length,docs,forEach:fn=>docs.forEach(fn)}};export const setDoc=async(ref,payload)=>{profileWritten(payload)};`,
   "qa-settings": `export const readSiteSettingDoc=async()=>null;`,
   "qa-toast": `export const useAppToast=()=>({showToast:()=>{}});export const inferToastFromAlertMessage=()=>null;`,
@@ -130,11 +130,12 @@ import {createRoot} from "react-dom/client";
 import {HashRouter,Routes,Route} from "react-router-dom";
 import Login from ${source("pages/Login.tsx")};
 import MainLayout from ${source("components/layout/MainLayout.tsx")};
+import {AUTH_STARTUP_DEADLINE_MS} from ${source("lib/authStartup.ts")};
 import {phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,profile,releaseBootstrap} from "qa-auth";
-window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,releaseBootstrap};
+window.authQa={phase,timeout,forced,serverProfile,offline,events,ackProfile,writtenProfile,releaseBootstrap,startupDeadlineMs:AUTH_STARTUP_DEADLINE_MS};
 const scenario=new URLSearchParams(location.search).get("scenario") || "loading";
-if(scenario==="redirect-timeout")localStorage.setItem("westoryRedirectAttempt",JSON.stringify({mode:"student",startedAt:Date.now()}));
-if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="registration-pending")phase("registration-pending",{userData:{...profile,registrationApprovalStatus:"PENDING"}});else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="resume-ready")phase("ready");else if(scenario==="teacher-ready")phase("ready",{userData:{...profile,role:"teacher"}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario==="redirect-timeout")phase("signed-out");else phase("opening-session");
+if(scenario.startsWith("redirect-"))localStorage.setItem("westoryRedirectAttempt",JSON.stringify({mode:"student",startedAt:Date.now()}));
+if(scenario==="timeout")timeout();else if(scenario==="forced")forced();else if(scenario==="registration-pending")phase("registration-pending",{userData:{...profile,registrationApprovalStatus:"PENDING"}});else if(scenario==="onboarding-complete")phase("ready",{userData:{uid:"synthetic-student",role:"student",privacyAgreed:true}});else if(scenario==="resume-ready")phase("ready");else if(scenario==="teacher-ready")phase("ready",{userData:{...profile,role:"teacher"}});else if(scenario==="onboarding")phase("onboarding");else if(scenario==="signed-out" || scenario.startsWith("popup") || scenario.startsWith("redirect-"))phase("signed-out");else phase("opening-session");
 function Protected(){return <MainLayout><section data-testid="protected-child" className="p-6"><h1 className="text-2xl font-bold">합성 학생 포털</h1><button className="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-white">합성 학습 시작</button></section></MainLayout>}
 createRoot(document.getElementById("root")).render(<HashRouter><Routes><Route path="/" element={<Login/>}/><Route path="/student/*" element={<Protected/>}/><Route path="/teacher/*" element={<Protected/>}/></Routes></HashRouter>);
 `;
@@ -365,6 +366,7 @@ const newPage = async (
     viewport: { width, height: 900 },
     hasTouch: touch,
   });
+  if (scenario.startsWith("redirect-")) await page.clock.install();
   page.on("pageerror", (error) => report.pageErrors.push(error.message));
   page.on("dialog", (dialog) => dialog.dismiss());
   // Observe commits from before React mounts, including nodes removed before a
@@ -905,8 +907,37 @@ try {
     check("classic-login-cancel-recovery", { width });
     await fallback.close();
   }
+  for (const width of [390, 768]) {
+    const delayedRedirect = await newPage(width, "redirect-delayed");
+    await delayedRedirect.waitForFunction(() =>
+      window.authQa.events.includes("redirect-result-pending"),
+    );
+    await delayedRedirect.clock.fastForward(16000);
+    await delayedRedirect.getByRole("status").waitFor();
+    await noProtected(delayedRedirect);
+    assert.equal(await delayedRedirect.locator(".public-entry").count(), 0);
+    assert.equal(
+      await delayedRedirect.getByText(/auth\/startup-timeout/).count(),
+      0,
+    );
+    await delayedRedirect.clock.fastForward(15000);
+    await delayedRedirect.getByTestId("protected-child").waitFor();
+    assert.equal(
+      await delayedRedirect.evaluate(() => location.hash),
+      "#/student/dashboard",
+    );
+    assert.equal(
+      await delayedRedirect.evaluate(() => window.authEntryMounts),
+      0,
+    );
+    check("mobile-30-second-redirect-result-enters-portal", {
+      width,
+      synthetic: true,
+      virtualClock: true,
+    });
+    await delayedRedirect.close();
+  }
   const redirectPage = await newPage(390, "redirect-timeout");
-  const redirectStarted = Date.now();
   await redirectPage.waitForFunction(() =>
     window.authQa.events.includes("redirect-result-pending"),
   );
@@ -916,9 +947,11 @@ try {
   assert.equal(await redirectPage.evaluate(() => window.authEntryMounts), 0);
   check("redirect-recovery-does-not-mount-public-entry", { width: 390 });
   await capture(redirectPage, "redirect-pending", 390);
-  await redirectPage
-    .getByText(/auth\/startup-timeout/)
-    .waitFor({ timeout: 20000 });
+  const startupDeadlineMs = await redirectPage.evaluate(
+    () => window.authQa.startupDeadlineMs,
+  );
+  await redirectPage.clock.fastForward(startupDeadlineMs + 100);
+  await redirectPage.getByText(/auth\/startup-timeout/).waitFor();
   await redirectPage
     .getByRole("button", { name: /학생 로그인/ })
     .first()
@@ -938,9 +971,10 @@ try {
     0,
   );
   await noProtected(redirectPage);
-  check("redirect-acquisition-real-15-second-deadline-restores-actions", {
+  check("redirect-acquisition-shared-deadline-restores-actions", {
     width: 390,
-    elapsedMs: Date.now() - redirectStarted,
+    startupDeadlineMs,
+    virtualClock: true,
     synthetic: true,
   });
   await capture(redirectPage, "redirect-timeout", 390);

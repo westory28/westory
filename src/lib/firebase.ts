@@ -10,7 +10,11 @@ import {
 } from "firebase/auth";
 import type { Analytics } from "firebase/analytics";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
-import type { Functions, HttpsCallable } from "firebase/functions";
+import type {
+  Functions,
+  HttpsCallable,
+  HttpsCallableOptions,
+} from "firebase/functions";
 import type { FirebaseStorage } from "firebase/storage";
 import { markLoginPerf } from "./loginPerf";
 
@@ -201,6 +205,7 @@ const getFirebaseFunctions = () => {
 
 const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
   name: string,
+  options?: HttpsCallableOptions,
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
@@ -225,7 +230,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       : getFirebaseFunctions(),
     import("firebase/functions"),
   ]);
-  return httpsCallable<RequestData, ResponseData>(functions, name);
+  return httpsCallable<RequestData, ResponseData>(functions, name, options);
 };
 
 const getFirebaseStorage = () => {

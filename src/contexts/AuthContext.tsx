@@ -22,6 +22,7 @@ import {
   prepareApplicationSession,
 } from "../lib/applicationSession";
 import { clearDeviceSession } from "../lib/deviceSession";
+import { clearAuthDeadline, setAuthDeadline } from "../lib/authDeadline";
 import {
   AuthStartupController,
   type AuthPhase,
@@ -339,8 +340,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             );
           }
         },
-        setTimer: (callback, delay) => window.setTimeout(callback, delay),
-        clearTimer: (timer) => window.clearTimeout(timer),
+        setTimer: setAuthDeadline,
+        clearTimer: clearAuthDeadline,
       },
       authGenerationRef.current + 1,
     );

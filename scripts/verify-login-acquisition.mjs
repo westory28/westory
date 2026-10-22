@@ -9,6 +9,10 @@ const source = fs.readFileSync(
   new URL("../src/pages/Login.tsx", import.meta.url),
   "utf8",
 );
+const deadlineSource = fs
+  .readFileSync(new URL("../src/lib/authStartup.ts", import.meta.url), "utf8")
+  .match(/^export const AUTH_STARTUP_DEADLINE_MS = .+;$/m)?.[0];
+assert.ok(deadlineSource, "Shared startup deadline must exist");
 const parsed = ts.createSourceFile(
   "Login.tsx",
   source,
@@ -45,6 +49,7 @@ const exportedNames = [
   "cancelPopupLogin",
   "retryPopupWithRedirect",
   "GooglePopupPending",
+  "awaitLoginNetwork",
 ];
 const selected = new Map();
 const include = (declaration) => {
@@ -58,13 +63,8 @@ const include = (declaration) => {
         (exportedNames.includes(node.text)
           ? componentHelpers.get(node.text)
           : undefined);
-      // Network deadline behavior has its own startup regression coverage.
       if (
-        ![
-          "awaitLoginNetwork",
-          "markRedirectAttempt",
-          "clearRedirectAttempt",
-        ].includes(node.text) &&
+        !["markRedirectAttempt", "clearRedirectAttempt"].includes(node.text) &&
         dependency?.initializer &&
         (ts.isArrowFunction(dependency.initializer) ||
           ts.isFunctionExpression(dependency.initializer))
@@ -81,7 +81,7 @@ for (const name of exportedNames) {
   include(declaration);
 }
 const code = ts.transpileModule(
-  `${[...selected.values()]
+  `${deadlineSource}\n${[...selected.values()]
     .map((declaration) => `const ${declaration.getText(parsed)};`)
     .join("\n")}\nexport { ${exportedNames.join(", ")} };`,
   {
@@ -103,6 +103,30 @@ const deferred = () => {
 };
 const flush = async () => {
   for (let index = 0; index < 20; index++) await Promise.resolve();
+};
+const clock = () => {
+  let now = 0,
+    nextId = 0;
+  const timers = new Map();
+  return {
+    set: (callback, delay) => {
+      const id = ++nextId;
+      timers.set(id, { callback, due: now + delay });
+      return id;
+    },
+    clear: (id) => timers.delete(id),
+    advance: (duration) => {
+      now += duration;
+      for (const [id, timer] of [...timers]) {
+        if (timer.due > now) continue;
+        timers.delete(id);
+        timer.callback();
+      }
+    },
+    get size() {
+      return timers.size;
+    },
+  };
 };
 const authError = (code) =>
   Object.assign(new Error("Synthetic failure"), { code });
@@ -156,6 +180,7 @@ function harness({
     ),
   };
   const persistence = deferred();
+  const timer = clock();
   const refs = {
     mountedRef: { current: true },
     resumeFlowRef: { current: null },
@@ -164,7 +189,11 @@ function harness({
     authActionLockRef: { current: true },
     popupLoginRef: { current: null },
   };
-  const browserWindow = { location: { hostname, protocol } };
+  const browserWindow = {
+    location: { hostname, protocol },
+    setTimeout: timer.set,
+    clearTimeout: timer.clear,
+  };
   browserWindow.self = browserWindow;
   browserWindow.top = embedded ? {} : browserWindow;
   if (webview) browserWindow.chrome = { webview: {} };
@@ -199,6 +228,8 @@ function harness({
       userAgentData: { platform: uaPlatform, mobile: false },
     },
     window: browserWindow,
+    setAuthDeadline: timer.set,
+    clearAuthDeadline: timer.clear,
     console: { info() {}, error() {}, warn() {} },
     ALLOWED_SCHOOL_EMAIL_DOMAIN: "school.example",
     configuredAuthDomain: "www.westory.kr",
@@ -208,7 +239,6 @@ function harness({
     ...refs,
     auth: sdkAuth,
     authPersistenceReady: persistence.promise,
-    awaitLoginNetwork: (promise) => promise,
     beginLoginFlow: () => ++state.flow,
     abandonLoginFlow: (flow) => {
       assert.equal(
@@ -272,7 +302,7 @@ function harness({
       return redirect ? redirect() : Promise.resolve();
     },
   });
-  return { ...exports, state, persistence, refs, account };
+  return { ...exports, state, persistence, refs, account, timer };
 }
 
 let cases = 0;
@@ -487,6 +517,95 @@ for (const mode of ["student", "teacher"])
       assert.equal(h.refs.authActionLockRef.current, false);
     },
   );
+
+for (const [label, options] of [
+  ["desktop popup", {}],
+  ["mobile redirect", { ua: `${CHROME} Android Mobile` }],
+]) {
+  await check(
+    `30-second ${label} persistence delay preserves login`,
+    async () => {
+      const h = harness(options);
+      const pending = h.startGoogleLogin("student");
+      await flush();
+      h.timer.advance(30000);
+      await flush();
+      assert.equal(h.state.busy, true);
+      assert.equal(h.state.failures.length, 0);
+      assert.equal(h.state.completed.length, 0);
+      h.persistence.resolve();
+      await pending;
+      assert.equal(h.state.failures.length, 0);
+      assert.equal(h.state.busy, false);
+      assert.equal(h.timer.size, 0);
+      assert.equal(
+        h.state.calls.includes("redirect"),
+        label === "mobile redirect",
+      );
+      assert.equal(h.state.completed.length, label === "desktop popup" ? 1 : 0);
+    },
+  );
+  await check(
+    `Stalled ${label} persistence still expires at shared deadline`,
+    async () => {
+      const h = harness(options);
+      const pending = h.startGoogleLogin("student");
+      await flush();
+      h.timer.advance(h.AUTH_STARTUP_DEADLINE_MS - 1);
+      await flush();
+      assert.equal(h.state.failures.length, 0);
+      h.timer.advance(1);
+      await pending;
+      assert.equal(h.state.failures.length, 1);
+      assert.equal(h.state.failures[0].error.code, "auth/startup-timeout");
+      h.persistence.resolve();
+      await flush();
+      assert.equal(h.state.completed.length, 0);
+      assert.equal(h.state.calls.includes("redirect"), false);
+      assert.equal(h.state.busy, false);
+      assert.equal(h.timer.size, 0);
+    },
+  );
+}
+
+await check("OAuth chooser time is not a network deadline", async () => {
+  const popup = deferred();
+  const h = harness({ popup: () => popup.promise });
+  const pending = h.startGoogleLogin("student");
+  h.timer.advance(h.AUTH_STARTUP_DEADLINE_MS * 2);
+  await flush();
+  assert.equal(h.state.failures.length, 0);
+  assert.equal(h.state.busy, true);
+  h.persistence.resolve();
+  popup.resolve({ user: h.account });
+  await pending;
+  assert.equal(h.state.completed.length, 1);
+  assert.equal(h.timer.size, 0);
+});
+
+await check(
+  "30-second mobile redirect setup remains owned by its login flow",
+  async () => {
+    const redirect = deferred();
+    const h = harness({
+      ua: `${CHROME} Android Mobile`,
+      redirect: () => redirect.promise,
+    });
+    h.persistence.resolve();
+    const pending = h.startGoogleLogin("student");
+    await flush();
+    assert.deepEqual(h.state.calls, ["mark-redirect", "redirect"]);
+    h.timer.advance(30000);
+    await flush();
+    assert.equal(h.state.busy, true);
+    assert.equal(h.state.failures.length, 0);
+    assert.equal(h.state.pendingMode, "student");
+    redirect.resolve();
+    await pending;
+    assert.equal(h.state.failures.length, 0);
+    assert.equal(h.timer.size, 0);
+  },
+);
 
 for (const code of [
   "auth/popup-closed-by-user",

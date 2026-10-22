@@ -9,6 +9,10 @@ const source = fs.readFileSync(
   new URL("../src/pages/Login.tsx", import.meta.url),
   "utf8",
 );
+const deadlineSource = fs
+  .readFileSync(new URL("../src/lib/authStartup.ts", import.meta.url), "utf8")
+  .match(/^export const AUTH_STARTUP_DEADLINE_MS = .+;$/m)?.[0];
+assert.ok(deadlineSource, "Shared startup deadline must exist");
 const storageSource = fs.readFileSync(
   new URL("../src/lib/safeStorage.ts", import.meta.url),
   "utf8",
@@ -78,9 +82,11 @@ assert.ok(redirectEffect, "Actual redirect-return effect must exist");
 for (const name of wanted)
   assert.ok(declarations.has(name), "Missing actual helper: " + name);
 const code = compile(
-  [...declarations.values()]
-    .map((declaration) => "const " + declaration + ";")
-    .join("\n") +
+  deadlineSource +
+    "\n" +
+    [...declarations.values()]
+      .map((declaration) => "const " + declaration + ";")
+      .join("\n") +
     "\nexport {" +
     [...wanted].join(",") +
     "};\nexport const runEffect = " +
@@ -200,6 +206,8 @@ function harness({
   vm.runInNewContext(code, {
     exports,
     window,
+    setAuthDeadline: timer.set,
+    clearAuthDeadline: timer.clear,
     navigator: { userAgent: ua, maxTouchPoints: touch },
     Date,
     console: { warn() {}, error() {}, info() {} },
@@ -361,7 +369,38 @@ for (const boundary of ["unmount", "new-action"]) {
 }
 for (const stalled of ["redirect", "persistence"]) {
   await check(
-    "15-second " + stalled + " deadline ignores late completion",
+    "30-second mobile " + stalled + " recovery keeps the acquired account",
+    async () => {
+      const gate = deferred();
+      const h = harness({
+        marker: "student",
+        pending: "student",
+        ...(stalled === "redirect"
+          ? { redirect: () => gate.promise }
+          : {
+              persistence: gate.promise,
+              redirect: async () => ({ user: account }),
+            }),
+      });
+      h.runEffect();
+      await flush();
+      h.timer.advance(30000);
+      await flush();
+      assert.equal(h.state.recovery, true);
+      assert.equal(h.state.busy, true);
+      assert.equal(h.state.failures.length, 0);
+      assert.equal(h.state.forwarded.length, 0);
+      gate.resolve({ user: account });
+      await flush();
+      assert.equal(h.state.forwarded.length, 1);
+      assert.equal(h.state.forwarded[0].account, account);
+      assert.equal(h.state.forwarded[0].mode, "student");
+      assert.equal(h.state.recovery, false);
+      assert.equal(h.timer.size, 0);
+    },
+  );
+  await check(
+    "Shared " + stalled + " deadline ignores late completion",
     async () => {
       const gate = deferred();
       const h = harness({
@@ -373,7 +412,7 @@ for (const stalled of ["redirect", "persistence"]) {
       });
       h.runEffect();
       await flush();
-      h.timer.advance(14999);
+      h.timer.advance(h.AUTH_STARTUP_DEADLINE_MS - 1);
       await flush();
       assert.equal(h.state.recovery, true);
       h.timer.advance(1);

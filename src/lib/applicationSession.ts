@@ -5,6 +5,8 @@ import { isSemesterArchive } from "./semesterArchive";
 
 const GENERATION = "w1r2-2026-08-09";
 const PROTOCOL = 2;
+// Leave time inside the startup deadline for token and profile verification.
+const SESSION_OPEN_TIMEOUT_MS = 45_000;
 export interface ApplicationSessionProof {
   authorityGeneration: string;
   protocolVersion: number;
@@ -135,19 +137,19 @@ const openVerifiedSession = async (
     options.isCurrent?.() !== false;
   if (!current()) throw sessionError();
   const existing = flights.get(user);
-  if (existing) {
-    if (
-      !options.fresh &&
-      existing.version === version &&
-      existing.isCurrent?.() !== false
-    ) {
+  if (
+    existing &&
+    existing.version === version &&
+    existing.isCurrent?.() !== false
+  ) {
+    if (!options.fresh) {
       const verified = await existing.promise;
       if ((await authTimeFor(user)) !== verified.authTime || !current())
         throw sessionError();
       return verified;
     }
-    // A timed-out callable cannot be aborted by the SDK. Drain it before a
-    // manual retry, then ask the server again; its result is never reused.
+    // Serialize live requests. An abandoned attempt or older auth epoch must
+    // not block recovery: its own current/entry guards reject late results.
     await existing.promise.catch(() => undefined);
     if (!current()) throw sessionError();
     return openVerifiedSession(user, options);
@@ -158,7 +160,7 @@ const openVerifiedSession = async (
     const open = await getHttpsCallable<
       { authorityGeneration: string; protocolVersion: number },
       ApplicationSession
-    >("openApplicationSession");
+    >("openApplicationSession", { timeout: SESSION_OPEN_TIMEOUT_MS });
     if (!current()) throw sessionError();
     const { data } = await open({
       authorityGeneration: GENERATION,

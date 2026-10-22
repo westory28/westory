@@ -41,6 +41,8 @@ import {
   writeStorage,
 } from "../lib/safeStorage";
 import { useAuth } from "../contexts/AuthContext";
+import { AUTH_STARTUP_DEADLINE_MS } from "../lib/authStartup";
+import { clearAuthDeadline, setAuthDeadline } from "../lib/authDeadline";
 import type { UserData } from "../types";
 import {
   canAccessTeacherPortal,
@@ -69,19 +71,19 @@ const awaitLoginNetwork = async <T,>(promise: Promise<T>): Promise<T> => {
     return await Promise.race([
       promise,
       new Promise<never>((_, reject) => {
-        timer = window.setTimeout(
+        timer = setAuthDeadline(
           () =>
             reject(
               Object.assign(new Error("로그인 응답이 지연되고 있습니다."), {
                 code: "auth/startup-timeout",
               }),
             ),
-          15000,
+          AUTH_STARTUP_DEADLINE_MS,
         );
       }),
     ]);
   } finally {
-    if (timer !== undefined) window.clearTimeout(timer);
+    if (timer !== undefined) clearAuthDeadline(timer);
   }
 };
 
@@ -1650,7 +1652,7 @@ const Login: React.FC = () => {
           result = await Promise.race([
             redirectResultRef.current,
             new Promise<never>((_, reject) => {
-              timer = window.setTimeout(
+              timer = setAuthDeadline(
                 () =>
                   reject(
                     Object.assign(
@@ -1658,7 +1660,7 @@ const Login: React.FC = () => {
                       { code: "auth/startup-timeout" },
                     ),
                   ),
-                15000,
+                AUTH_STARTUP_DEADLINE_MS,
               );
             }),
           ]);
@@ -1728,7 +1730,7 @@ const Login: React.FC = () => {
         clearPendingLoginMode();
         setLoginNotice(getLoginFailureMessage(error));
       } finally {
-        if (timer !== undefined) window.clearTimeout(timer);
+        if (timer !== undefined) clearAuthDeadline(timer);
         if (ownsAction()) {
           activeActionFlowRef.current = null;
           setAuthBusy(false);
@@ -1739,7 +1741,7 @@ const Login: React.FC = () => {
     void resolveRedirect();
     return () => {
       cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
+      if (timer !== undefined) clearAuthDeadline(timer);
     };
   }, [redirectRecoveryPending]);
 

@@ -3,7 +3,9 @@ import type { UserData } from "../types";
 import { normalizeStaffPermissions } from "./permissions";
 import { isStudentRegistrationPending } from "./studentRegistrationStatus";
 
-export const AUTH_STARTUP_DEADLINE_MS = 15_000;
+// Include mobile persistence, redirect restoration and the server handshake.
+// A short page deadline must not discard an otherwise valid mobile sign-in.
+export const AUTH_STARTUP_DEADLINE_MS = 60_000;
 export type AuthPhase =
   | "resolving"
   | "opening-session"

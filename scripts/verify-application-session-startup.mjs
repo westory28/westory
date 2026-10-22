@@ -256,35 +256,46 @@ await check("Read-only archive preserves no-call contract", async () => {
   await h.prepareApplicationSession(h.auth.currentUser);
   assert.equal(h.calls.length, 0);
 });
-await check(
-  "Fresh retry drains old work and performs a new handshake",
-  async () => {
-    const old = deferred(),
-      h = sessionHarness({
-        reply: (count) => (count === 1 ? old.promise : valid),
+for (const lateResult of ["success", "auth-failure"])
+  await check(
+    `Fresh retry bypasses retired work and retains its proof after late ${lateResult}`,
+    async () => {
+      const old = deferred(),
+        renewed = { ...valid, revision: "b".repeat(64) },
+        h = sessionHarness({
+          reply: (count) => (count === 1 ? old.promise : renewed),
+        });
+      let current = true;
+      const previous = h.prepareApplicationSession(h.auth.currentUser, {
+        isCurrent: () => current,
       });
-    let current = true;
-    const previous = h.prepareApplicationSession(h.auth.currentUser, {
-      isCurrent: () => current,
-    });
-    const rejected = assert.rejects(previous);
-    await flush();
-    current = false;
-    const retry = h.prepareApplicationSession(h.auth.currentUser, {
-      fresh: true,
-      isCurrent: () => true,
-    });
-    await flush();
-    assert.equal(
-      h.calls.length,
-      1,
-      "Retry must not race an old server mutation",
-    );
-    old.resolve(valid);
-    await Promise.all([rejected, retry]);
-    assert.equal(h.calls.length, 2, "Old success cannot satisfy fresh retry");
-  },
-);
+      const rejected = assert.rejects(previous);
+      await flush();
+      current = false;
+      const retry = h.prepareApplicationSession(h.auth.currentUser, {
+        fresh: true,
+        isCurrent: () => true,
+      });
+      await flush();
+      assert.equal(
+        h.calls.length,
+        2,
+        "Retired transport cannot block a user's fresh server verification",
+      );
+      await retry;
+      const proof = await h.ensureApplicationSessionProof(h.auth.currentUser);
+      assert.equal(proof.revision, renewed.revision);
+      if (lateResult === "success") old.resolve(valid);
+      else old.reject({ code: "functions/unauthenticated" });
+      await rejected;
+      assert.equal(
+        await h.ensureApplicationSessionProof(h.auth.currentUser),
+        proof,
+        "Retired success or rejection cannot replace or invalidate the new proof",
+      );
+      assert.equal(h.calls.length, 2);
+    },
+  );
 await check(
   "Initial SDK restoration is bounded and late callback cannot revive it",
   async () => {
@@ -694,7 +705,7 @@ await check(
     await h.observe(user("synthetic-first"));
     h.timer.advance(10_000);
     await h.observe(user("synthetic-second"));
-    h.timer.advance(14_999);
+    h.timer.advance(startup.AUTH_STARTUP_DEADLINE_MS - 1);
     assert.equal(h.state.phase, "opening-session");
     h.timer.advance(1);
     assert.equal(h.state.phase, "error");
@@ -1015,11 +1026,13 @@ await check(
   },
 );
 await check(
-  "Restoration with superseded in-flight owner also opens fresh authority",
+  "Superseded restoration cannot delete or satisfy its replacement flight",
   async () => {
     const old = deferred(),
+      latest = deferred(),
+      renewed = { ...valid, revision: "b".repeat(64) },
       h = sessionHarness({
-        reply: (count) => (count === 1 ? old.promise : valid),
+        reply: (count) => (count === 1 ? old.promise : latest.promise),
       });
     let ownerActive = true;
     const pending = h.prepareApplicationSession(h.auth.currentUser, {
@@ -1033,9 +1046,23 @@ await check(
       isCurrent: () => true,
     });
     await flush();
-    assert.equal(h.calls.length, 1);
+    assert.equal(h.calls.length, 2);
     old.resolve(valid);
-    await Promise.all([rejected, restored]);
+    await rejected;
+    const shared = h.ensureApplicationSessionProof(h.auth.currentUser);
+    await flush();
+    assert.equal(
+      h.calls.length,
+      2,
+      "Old cleanup retains the replacement flight",
+    );
+    latest.resolve(renewed);
+    const [, proof] = await Promise.all([restored, shared]);
+    assert.equal(proof.revision, renewed.revision);
+    assert.equal(
+      await h.ensureApplicationSessionProof(h.auth.currentUser),
+      proof,
+    );
     assert.equal(h.calls.length, 2);
   },
 );
@@ -1335,6 +1362,10 @@ function providerHarness({ readSetting } = {}) {
         },
       },
       "../lib/authStartup": startup,
+      "../lib/authDeadline": {
+        setAuthDeadline: timer.set,
+        clearAuthDeadline: timer.clear,
+      },
       "../lib/deviceSession": { clearDeviceSession: noop },
       "../constants/menus": {
         cloneDefaultMenus: () => ({}),
