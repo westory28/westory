@@ -99,6 +99,13 @@ const TeacherWeekSchedule: React.FC<Props> = ({
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const swipeRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    horizontal: boolean;
+  } | null>(null);
+  const suppressSwipeClick = useRef(false);
   const searchTerm = searchOpen ? query.trim().toLowerCase() : "";
   const searchResults = useMemo(
     () =>
@@ -337,7 +344,64 @@ const TeacherWeekSchedule: React.FC<Props> = ({
       </div>
       <div className="teacher-week-schedule__viewport">
         <div ref={contentRef} className="teacher-week-schedule__content">
-          <div className="teacher-week-strip" aria-label="주간 날짜">
+          <div
+            className="teacher-week-strip"
+            aria-label="주간 날짜"
+            onPointerDown={(event) => {
+              suppressSwipeClick.current = false;
+              swipeRef.current =
+                event.pointerType === "touch" && event.isPrimary
+                  ? {
+                      pointerId: event.pointerId,
+                      x: event.clientX,
+                      y: event.clientY,
+                      horizontal: false,
+                    }
+                  : null;
+            }}
+            onPointerMove={(event) => {
+              const swipe = swipeRef.current;
+              if (!swipe || swipe.pointerId !== event.pointerId) return;
+              const dx = Math.abs(event.clientX - swipe.x);
+              const dy = Math.abs(event.clientY - swipe.y);
+              if (!swipe.horizontal) {
+                if (dy > 12 && dy >= dx) {
+                  swipeRef.current = null;
+                  return;
+                }
+                if (dx < 12 || dx <= dy * 1.5) return;
+                swipe.horizontal = true;
+                suppressSwipeClick.current = true;
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }
+            }}
+            onPointerUp={(event) => {
+              const swipe = swipeRef.current;
+              swipeRef.current = null;
+              if (!swipe || swipe.pointerId !== event.pointerId) return;
+              const dx = event.clientX - swipe.x;
+              const dy = event.clientY - swipe.y;
+              if (
+                swipe.horizontal &&
+                Math.abs(dx) >= 48 &&
+                Math.abs(dx) > Math.abs(dy) * 1.5
+              ) {
+                onWeekChange(shiftCalendarDate(weekStart, dx < 0 ? 7 : -7));
+              }
+            }}
+            onPointerCancel={() => {
+              swipeRef.current = null;
+            }}
+            onLostPointerCapture={(event) => {
+              if (event.target === event.currentTarget) swipeRef.current = null;
+            }}
+            onClickCapture={(event) => {
+              if (!suppressSwipeClick.current || event.detail === 0) return;
+              suppressSwipeClick.current = false;
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
             <button
               type="button"
               className="teacher-week-strip__previous"

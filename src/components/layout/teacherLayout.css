@@ -483,6 +483,37 @@
     font-weight: 800;
     padding-inline: 12px;
   }
+  .teacher-layout .teacher-mobile-account {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
+  .teacher-layout .teacher-mobile-account .header-user-link {
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: 0;
+    flex-wrap: nowrap;
+  }
+  .teacher-layout .teacher-mobile-account .header-user-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .teacher-layout .teacher-mobile-account .mobile-account-actions {
+    display: flex;
+    gap: 4px;
+    width: auto;
+  }
+  .teacher-layout .teacher-mobile-account .teacher-account-notification > button {
+    width: 44px;
+    height: 44px;
+  }
+  .teacher-layout .teacher-mobile-account .btn-logout {
+    min-height: 44px;
+  }
   .teacher-mobile-account .teacher-account-notification > button {
     width: 40px;
     height: 40px;

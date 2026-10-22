@@ -26,7 +26,7 @@ export const config={year:"2026",semester:"2",showLesson:true,showQuiz:true,show
 const fixtureAuthTime=Math.floor(Date.now()/1000);
 const fixtureUser={uid:"portal-design-fixture",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{auth_time:fixtureAuthTime}})};
 export const auth={currentUser:fixtureUser};
-export const useAuth=()=>{const student=location.hash.startsWith("#/student");return {currentUser:fixtureUser,authGeneration:1,userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":"검증교사",staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
+export const useAuth=()=>{const student=location.hash.startsWith("#/student");const teacherName=new URLSearchParams(location.search).get("teacherName")||"검증교사";return {currentUser:fixtureUser,authGeneration:1,userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":teacherName,staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
 export const getDoc=async(ref)=>({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
@@ -76,7 +76,7 @@ const bundle = await build({
         }));
         plugin.onLoad({ filter: /.*/, namespace: "notification" }, () => ({
           contents:
-            'import React from "react"; export default function Bell(){return <button type="button" aria-label="알림" style={{width:40,height:40}}>♧</button>}',
+            'import React from "react"; export default function Bell({className}){return <div className={className}><button type="button" aria-label="알림" className="inline-flex h-9 w-9 items-center justify-center">♧</button></div>}',
           loader: "tsx",
           resolveDir: root,
         }));
@@ -322,7 +322,94 @@ async function sidebarChecks(page, portal, width) {
     await page.waitForFunction((next) => location.hash === next, hash);
     await checkMobileReturn();
   };
+  const checkMobileAccountRow = async (label, expectedName) => {
+    const account = page.locator(".teacher-mobile-account");
+    const profile = account.locator(".header-user-link");
+    const name = profile.locator(".header-user-name");
+    const notification = account.getByRole("button", {
+      name: "알림",
+      exact: true,
+    });
+    const logout = account.getByRole("button", {
+      name: "로그아웃",
+      exact: true,
+    });
+    assert.equal(await name.textContent(), expectedName);
+    const row = await account.boundingBox();
+    const boxes = await Promise.all(
+      [profile, notification, logout].map((control) => control.boundingBox()),
+    );
+    for (const box of boxes) {
+      assert(box, `${label}: account target is visible`);
+      assert(
+        box.width >= 44 && box.height >= 44,
+        `${label}: account target is at least 44px (${JSON.stringify(box)})`,
+      );
+      assert(
+        box.x >= row.x - 1 && box.x + box.width <= row.x + row.width + 1,
+        `${label}: account target stays inside the account row`,
+      );
+    }
+    const centers = boxes.map((box) => box.y + box.height / 2);
+    assert(
+      Math.max(...centers) - Math.min(...centers) <= 1,
+      `${label}: profile, notifications and logout share one row`,
+    );
+    assert(
+      boxes[0].x + boxes[0].width <= boxes[1].x + 1 &&
+        boxes[1].x + boxes[1].width <= boxes[2].x + 1,
+      `${label}: profile and account controls do not overlap`,
+    );
+    const nameLayout = await name.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        height: element.getBoundingClientRect().height,
+        lineHeight: Number.parseFloat(style.lineHeight),
+        lineCount: new Set(
+          Array.from(range.getClientRects(), (rect) => Math.round(rect.y)),
+        ).size,
+        width: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        whiteSpace: style.whiteSpace,
+        overflow: style.overflow,
+        textOverflow: style.textOverflow,
+      };
+    });
+    assert.equal(
+      nameLayout.whiteSpace,
+      "nowrap",
+      `${label}: name stays on one line`,
+    );
+    assert.equal(
+      nameLayout.lineCount,
+      1,
+      `${label}: name has one rendered line`,
+    );
+    assert(
+      nameLayout.height <= nameLayout.lineHeight + 1,
+      `${label}: name does not grow into a second line`,
+    );
+    if (label.includes("long-name")) {
+      assert(
+        nameLayout.scrollWidth > nameLayout.width,
+        `${label}: fixture exercises actual name truncation`,
+      );
+    }
+    if (nameLayout.scrollWidth > nameLayout.width + 1) {
+      assert.equal(nameLayout.overflow, "hidden");
+      assert.equal(nameLayout.textOverflow, "ellipsis");
+    }
+    await noOverflow(page, label);
+    checks.push({ label, accountSingleRow: true, boxes, nameLayout });
+  };
   await openMobile();
+  if (mobile)
+    await checkMobileAccountRow(
+      `${portal}-account-${width}`,
+      portal === "teacher" ? "검증교사 교사" : "검증학생 학생",
+    );
   assert.equal(
     await page
       .locator(
@@ -530,6 +617,22 @@ async function sidebarChecks(page, portal, width) {
       true,
       "Escape returns focus to the menu toggle",
     );
+  }
+  if (mobile && portal === "teacher") {
+    const teacherName = "매우긴한글이름을가진교사의계정정렬검증";
+    const url = new URL(page.url());
+    url.searchParams.set("teacherName", teacherName);
+    await page.goto(url.href);
+    await openMobile();
+    await checkMobileAccountRow(
+      `teacher-account-long-name-${width}`,
+      `${teacherName} 교사`,
+    );
+    await page.screenshot({
+      path: path.join(evidence, `teacher-account-long-name-${width}.png`),
+      fullPage: true,
+    });
+    await page.keyboard.press("Escape");
   }
   checks.push({
     label: `${portal}-sidebar-${width}`,

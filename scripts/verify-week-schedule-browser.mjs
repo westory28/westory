@@ -56,10 +56,12 @@ function Calendar({role}) {
  const [weekStart,setWeekStart]=useState(new URLSearchParams(location.search).get('week')||'2026-10-18');
  const [selectedDate,setSelectedDate]=useState(null);
  const [clicked,setClicked]=useState('');
+ const [weekChanges,setWeekChanges]=useState(0);
+ const [dateClicks,setDateClicks]=useState(0);
  const state=new URLSearchParams(location.search).get('state');
  const markers=new URLSearchParams(location.search).get('scenario')==='markers';
- const shared={events:state==='empty'?[]:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:setWeekStart,onDateClick:setSelectedDate,onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
- return <><output data-clicked={role}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
+ const shared={events:state==='empty'?[]:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:next=>{setWeekStart(next);setWeekChanges(count=>count+1);},onDateClick:date=>{setSelectedDate(date);setDateClicks(count=>count+1);},onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
+ return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
 const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
 createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
@@ -153,9 +155,287 @@ const browser = await playwright.chromium.launch({
   headless: true,
 });
 const results = [];
+async function verifyTeacherNavigation(page, width) {
+  await page.goto(origin);
+  await page.evaluate(() => document.fonts.ready);
+  const section = page.locator(".teacher-week-schedule");
+  const strip = section.locator(".teacher-week-strip");
+  const days = strip.locator(".teacher-week-strip__day");
+  const state = () =>
+    page.locator('output[data-clicked="teacher"]').evaluate((element) => ({
+      week: element.dataset.week,
+      selected: element.dataset.selected,
+      weekChanges: Number(element.dataset.weekChanges),
+      dateClicks: Number(element.dataset.dateClicks),
+    }));
+  const settle = () =>
+    page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(resolve)),
+    );
+  const layout = await section.evaluate((element) => {
+    const row = element.querySelector(".teacher-week-strip");
+    const bounds = row.getBoundingClientRect();
+    const controls = Array.from(row.children, (button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        center: (rect.top + rect.bottom) / 2,
+        height: rect.height,
+        width: rect.width,
+      };
+    });
+    const today = element.querySelector(".teacher-week-schedule__today");
+    const range = element.querySelector(".teacher-week-schedule__range");
+    const todayBounds = today.getBoundingClientRect();
+    const rangeBounds = range.getBoundingClientRect();
+    const todayStyle = getComputedStyle(today);
+    return {
+      controls,
+      inside: controls.every(
+        (button) =>
+          button.left >= bounds.left && button.right <= bounds.right + 1,
+      ),
+      oneRow: controls.every(
+        (button) => Math.abs(button.center - controls[0].center) < 1,
+      ),
+      today: {
+        height: todayBounds.height,
+        borderWidth: parseFloat(todayStyle.borderTopWidth),
+        borderStyle: todayStyle.borderTopStyle,
+        background: todayStyle.backgroundColor,
+        distinctBackground:
+          todayStyle.backgroundColor !==
+          getComputedStyle(range).backgroundColor,
+        separateFromRange: todayBounds.left >= rangeBounds.right + 4,
+        sameRow:
+          Math.abs(
+            todayBounds.top +
+              todayBounds.bottom -
+              rangeBounds.top -
+              rangeBounds.bottom,
+          ) < 2,
+      },
+      touchAction: getComputedStyle(row).touchAction,
+    };
+  });
+  assert.equal(
+    layout.controls.length,
+    9,
+    `Seven dates and two arrows at ${width}`,
+  );
+  assert(layout.inside && layout.oneRow, JSON.stringify({ width, layout }));
+  assert(
+    layout.controls[0].height >= 44 &&
+      layout.controls[0].width >= 44 &&
+      layout.controls[8].height >= 44 &&
+      layout.controls[8].width >= 44,
+    `Week arrows retain 44px touch targets at ${width}`,
+  );
+  assert(
+    layout.today.height >= 44 &&
+      layout.today.borderWidth >= 1 &&
+      layout.today.borderStyle === "solid" &&
+      layout.today.distinctBackground &&
+      layout.today.separateFromRange &&
+      layout.today.sameRow,
+    JSON.stringify({ width, today: layout.today }),
+  );
+  assert(layout.touchAction.includes("pan-y"));
+  await section.getByRole("button", { name: "이전 주", exact: true }).click();
+  assert.deepEqual(await state(), {
+    week: "2026-10-11",
+    selected: "",
+    weekChanges: 1,
+    dateClicks: 0,
+  });
+  await section.getByRole("button", { name: "다음 주", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  assert.equal((await state()).week, "2026-10-18");
+  await section.getByRole("button", { name: "이전 주", exact: true }).focus();
+  await page.keyboard.press("Space");
+  assert.equal((await state()).week, "2026-10-11");
+  await section.getByRole("button", { name: "이번 주", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  assert.deepEqual(await state(), {
+    week: "2026-10-18",
+    selected: "2026-10-20",
+    weekChanges: 4,
+    dateClicks: 1,
+  });
+
+  await page.goto(origin);
+  await strip.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    window.weekPointerEvents = [];
+    const strip = document.querySelector(".teacher-week-strip");
+    for (const type of [
+      "pointerdown",
+      "pointermove",
+      "pointerup",
+      "pointercancel",
+      "gotpointercapture",
+      "lostpointercapture",
+    ])
+      strip.addEventListener(type, (event) =>
+        window.weekPointerEvents.push({
+          type,
+          trusted: event.isTrusted,
+          pointerType: event.pointerType,
+          x: event.clientX,
+          y: event.clientY,
+          pointerId: event.pointerId,
+          primary: event.isPrimary,
+          target: event.target.className,
+        }),
+      );
+  });
+  const cdp = await page.context().newCDPSession(page);
+  const points = async (index = 3) => {
+    await strip.scrollIntoViewIfNeeded();
+    const box = await days.nth(index).boundingBox();
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const touch = (type, touchPoints) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints });
+  const gesture = async (
+    dx,
+    dy = 0,
+    { cancel = false, multiple = false } = {},
+  ) => {
+    const start = await points();
+    const point = (step, id = 1) => ({
+      id,
+      x: start.x + (dx * step) / 6 + (id - 1) * 16,
+      y: start.y + (dy * step) / 6,
+    });
+    await touch("touchStart", [point(0)]);
+    if (multiple) await touch("touchStart", [point(0), point(0, 2)]);
+    for (let step = 1; step <= 6; step++)
+      await touch(
+        "touchMove",
+        multiple ? [point(step), point(step, 2)] : [point(step)],
+      );
+    await touch(cancel ? "touchCancel" : "touchEnd", []);
+    await settle();
+  };
+  await gesture(-80);
+  await fs.writeFile(
+    path.join(evidence, `${width}-touch-events.json`),
+    JSON.stringify(
+      await page.evaluate(() => window.weekPointerEvents),
+      null,
+      2,
+    ),
+  );
+  assert.deepEqual(
+    await state(),
+    {
+      week: "2026-10-25",
+      selected: "",
+      weekChanges: 1,
+      dateClicks: 0,
+    },
+    `One left touch swipe advances exactly one week without selecting a date at ${width}`,
+  );
+  await gesture(80);
+  assert.deepEqual(
+    await state(),
+    {
+      week: "2026-10-18",
+      selected: "",
+      weekChanges: 2,
+      dateClicks: 0,
+    },
+    `One right touch swipe returns exactly one week at ${width}`,
+  );
+  for (const [name, dx, dy, options] of [
+    ["short", 24, 0, {}],
+    ["vertical", 4, -80, {}],
+    ["diagonal", 60, -60, {}],
+    ["multitouch", -80, 0, { multiple: true }],
+    ["cancelled", -80, 0, { cancel: true }],
+  ]) {
+    const before = await state();
+    await gesture(dx, dy, options);
+    assert.equal(
+      (await state()).week,
+      before.week,
+      `${name} touch cannot change weeks at ${width}`,
+    );
+    assert.equal(
+      (await state()).weekChanges,
+      before.weekChanges,
+      `${name} touch never calls onWeekChange at ${width}`,
+    );
+  }
+  const tap = await points(1);
+  const beforeTap = await state();
+  await touch("touchStart", [{ id: 1, ...tap }]);
+  await touch("touchEnd", []);
+  await settle();
+  assert.deepEqual(
+    await state(),
+    {
+      ...beforeTap,
+      selected: "2026-10-19",
+      dateClicks: beforeTap.dateClicks + 1,
+    },
+    `A touch tap selects a date without navigating after cancelled gestures at ${width}`,
+  );
+  const pointerEvents = await page.evaluate(() => window.weekPointerEvents);
+  await fs.writeFile(
+    path.join(evidence, `${width}-touch-events.json`),
+    JSON.stringify(pointerEvents, null, 2),
+  );
+  assert(pointerEvents.some((event) => event.type === "pointermove"));
+  assert(
+    pointerEvents.every(
+      (event) => event.trusted && event.pointerType === "touch",
+    ),
+  );
+  await cdp.detach();
+  await section.getByRole("button", { name: "이전 주", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  assert.equal((await state()).week, "2026-10-11");
+  await section.getByRole("button", { name: "다음 주", exact: true }).click();
+  assert.deepEqual(
+    await state(),
+    {
+      ...beforeTap,
+      selected: "2026-10-19",
+      weekChanges: 4,
+      dateClicks: beforeTap.dateClicks + 1,
+    },
+    `Keyboard and arrow buttons remain usable after touch gestures at ${width}`,
+  );
+  await strip.screenshot({
+    path: path.join(evidence, `${width}-teacher-week-navigation.png`),
+  });
+  results.push({
+    width,
+    teacherWeekNavigation: true,
+    layout,
+    nativeTouchSwipes: true,
+    ignoredTouchGestures: [
+      "short",
+      "vertical",
+      "diagonal",
+      "multitouch",
+      "cancelled",
+    ],
+    swipeDoesNotSelectDates: true,
+    touchTap: true,
+    keyboardAndToday: true,
+    trustedTouchPointerEvents: pointerEvents.length,
+  });
+}
 try {
   for (const width of [320, 390, 768, 1120, 1280, 1366, 1440]) {
-    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    const page = await browser.newPage({
+      viewport: { width, height: 900 },
+      hasTouch: true,
+    });
     await page.clock.setFixedTime(new Date("2026-10-20T12:00:00+09:00"));
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -254,6 +534,7 @@ try {
         fullPage: true,
       });
     }
+    await verifyTeacherNavigation(page, width);
     await page.clock.install({ time: new Date("2026-10-19T03:00:00Z") });
     await page.goto(`${origin}/?scenario=markers`);
     await page.evaluate(() => document.fonts.ready);
@@ -399,7 +680,7 @@ try {
               .getBoundingClientRect();
             return {
               height: day.height,
-              circleTop: circle.top - day.top,
+              circleCenter: circle.top + circle.height / 2 - day.top,
               weekdayCenterOffset:
                 (weekdayText.left +
                   weekdayText.right -
@@ -438,7 +719,7 @@ try {
         `Attendance never shifts weekday text: ${JSON.stringify({ width, index, student })}`,
       );
       assert(
-        Math.abs(student.circleTop - teacher.circleTop) < 1,
+        Math.abs(student.circleCenter - teacher.circleCenter) < 1,
         `Attendance does not displace student dates: ${JSON.stringify({ width, index, student, teacher })}`,
       );
       const day = page.locator(".student-week-strip__day").nth(index);
@@ -689,7 +970,7 @@ try {
     JSON.stringify(results, null, 2),
   );
   console.log(
-    `Week schedule browser checks passed: ${results.length} desktop/mobile range and priority-marker cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
+    `Week schedule browser checks passed: ${results.length} desktop/mobile range, priority-marker and native touch navigation cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
   );
 } finally {
   await browser.close();

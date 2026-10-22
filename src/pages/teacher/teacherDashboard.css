@@ -147,11 +147,14 @@
 
 .teacher-week-schedule__today {
   min-height: 44px;
-  padding: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
   border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
   color: var(--ws-primary, #2563eb);
   font-size: var(--ws-type-body, 1rem);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .teacher-week-strip__previous,
@@ -190,6 +193,13 @@
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: var(--radius-md, 8px);
   background: var(--ws-surface-subtle, #f8fafc);
+  touch-action: pan-y pinch-zoom;
+}
+
+.teacher-week-schedule__today:focus-visible,
+.teacher-week-strip button:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
 }
 
 .teacher-week-strip__day {
@@ -685,20 +695,7 @@
     gap: 4px;
   }
   .teacher-week-strip {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
     padding-inline: 0;
-  }
-  .teacher-week-strip__previous {
-    grid-column: 1 / 3;
-    grid-row: 1;
-  }
-  .teacher-week-strip__next {
-    grid-column: 6 / 8;
-    grid-row: 1;
-    justify-self: end;
-  }
-  .teacher-week-strip__day {
-    grid-row: 2;
   }
   .teacher-week-strip__day strong {
     width: 32px;
@@ -714,6 +711,14 @@
   .teacher-week-schedule__actions {
     min-width: 0;
     margin-left: auto;
+  }
+}
+
+@media (max-width: 359px) {
+  .teacher-week-strip__day strong {
+    width: 24px;
+    height: 24px;
+    font-size: var(--ws-type-body, 1rem);
   }
 }
 
