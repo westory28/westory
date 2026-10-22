@@ -282,6 +282,7 @@
   inset: 0;
   z-index: 2;
   pointer-events: none;
+  touch-action: none;
   font:
     500 14px "Noto Sans KR",
     sans-serif;

@@ -785,6 +785,7 @@ assert(
 let unwantedRefit = false;
 const guardedShape = { type: "Sphere" };
 evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+  pointers: { current: new Map() },
   highlightedShape: guardedShape,
   mapRef: { current: {} },
   focusedSelection: {
@@ -802,6 +803,12 @@ assert.equal(
   false,
   "Popup resizing after camera completion or a drag preserves the displayed view",
 );
+evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+  pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
+  setCamera() {
+    throw new Error("Late geometry must not zoom during a touch gesture");
+  },
+})();
 assert(
   globeEffects
     .find((effect) =>
@@ -1125,6 +1132,7 @@ for (const kind of ["place", "country", "province"]) {
   )();
   assert.equal(provinceArea, null, "Retained region filters cannot reselect");
   evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+    pointers: { current: new Map() },
     highlightedShape: null,
     selected: undefined,
     setCamera: () => assert.fail("Closing cannot refocus the globe"),
@@ -1190,6 +1198,7 @@ for (const [regionSubject, collection] of Object.entries(areaCollections)) {
       for (const popupHeight of [100, 202]) {
         let camera;
         evaluateGlobe(shapeCameraEffect.arguments[0].getText(globeAst), {
+          pointers: { current: new Map() },
           highlightedShape: feature,
           selected: undefined,
           focusedSelection: { current: null },
@@ -1376,10 +1385,150 @@ let selectedShapeEntry;
 const endPointerExpression = globeDeclarations
   .get("endPointer")
   .getText(globeAst);
+// Execute the shared production gesture handlers. Labels must use the same
+// capture and pinch state as the canvas instead of selecting after a drag.
+const touchSelections = [];
+const capturedPointers = new Set();
+const touchCanvas = {
+  dataset: {},
+  focus() {},
+  setPointerCapture(id) {
+    capturedPointers.add(id);
+  },
+  hasPointerCapture(id) {
+    return capturedPointers.has(id);
+  },
+  releasePointerCapture(id) {
+    capturedPointers.delete(id);
+  },
+};
+const touchLabel = { dataset: { globeCountry: "RUS" }, focus() {} };
+const touchView = {
+  current: { longitude: 105, latitude: 25, roll: 0, zoom: 2 },
+};
+let touchCameraCancels = 0;
+const touchScope = {
+  pointers: { current: new Map() },
+  gesture: { current: null },
+  viewRef: touchView,
+  canvasRef: { current: touchCanvas },
+  size: { width: 390, height: 600 },
+  localPointer: (event) => ({ x: event.clientX, y: event.clientY }),
+  cancelCamera() {
+    touchCameraCancels++;
+  },
+  updateView(next) {
+    touchView.current = next;
+  },
+  commitView() {},
+  dragGlobeView: m.dragGlobeView,
+  pinchGlobeView: m.pinchGlobeView,
+  chooseEntry: (id) => touchSelections.push(`entry:${id}`),
+  chooseCountry: (id) => touchSelections.push(`country:${id}`),
+  openProvinceDetails: () => touchSelections.push("region"),
+  drawnPoints: { current: [] },
+  nearestGlobePoint: () => undefined,
+  hitGeography: { current: () => null },
+  setSelectedCountryId() {},
+};
+touchScope.startGesture = evaluateGlobe(
+  globeDeclarations.get("startGesture").getText(globeAst),
+  touchScope,
+);
+const touchDown = evaluateGlobe(
+  globeDeclarations.get("onPointerDown").getText(globeAst),
+  touchScope,
+);
+const touchMove = evaluateGlobe(
+  globeDeclarations.get("onPointerMove").getText(globeAst),
+  touchScope,
+);
+const touchEnd = evaluateGlobe(endPointerExpression, touchScope);
+const touchEvent = (id, x, y, target = touchCanvas) => ({
+  pointerType: "touch",
+  pointerId: id,
+  clientX: x,
+  clientY: y,
+  currentTarget: target,
+});
+touchDown(touchEvent(1, 100, 100, touchLabel));
+assert(
+  capturedPointers.has(1),
+  "A label transfers pointer capture to the canvas",
+);
+touchMove(touchEvent(1, 160, 130));
+assert.notEqual(
+  touchView.current.longitude,
+  105,
+  "A label drag rotates the globe",
+);
+assert.equal(touchView.current.zoom, 2, "One-finger label drag preserves zoom");
+touchEnd(touchEvent(1, 160, 130));
+assert.equal(
+  touchSelections.length,
+  0,
+  "Dragging a label never selects or refocuses it",
+);
+assert.equal(
+  touchCameraCancels,
+  1,
+  "Label input interrupts automatic camera motion",
+);
+
+touchDown(touchEvent(1, 100, 100, touchLabel));
+touchDown(touchEvent(2, 200, 100));
+touchMove(touchEvent(2, 250, 100));
+assert(
+  touchView.current.zoom > 2,
+  "A label/canvas two-finger pinch changes zoom",
+);
+touchEnd(touchEvent(2, 250, 100));
+const pinchedZoom = touchView.current.zoom;
+touchMove(touchEvent(1, 130, 140));
+assert.equal(
+  touchView.current.zoom,
+  pinchedZoom,
+  "The remaining finger only rotates after a pinch",
+);
+touchEnd(touchEvent(1, 130, 140));
+assert.equal(
+  touchSelections.length,
+  0,
+  "Pinch release never selects the starting label",
+);
+
+touchDown(touchEvent(3, 100, 100, touchLabel));
+touchEnd(touchEvent(3, 140, 100));
+assert.equal(
+  touchSelections.length,
+  0,
+  "Fast swipe without a delivered move event is not a tap",
+);
+touchDown(touchEvent(4, 100, 100, touchLabel));
+touchEnd(touchEvent(4, 100, 100), true);
+assert.equal(
+  touchSelections.length,
+  0,
+  "Cancelled label gestures never select",
+);
+touchDown(touchEvent(5, 100, 100, touchLabel));
+touchLabel.dataset.globeCountry = "CHN";
+touchEnd(touchEvent(5, 100, 100));
+assert.deepEqual(
+  touchSelections,
+  ["country:RUS"],
+  "A genuine tap selects the original label even if its drawing node was reused",
+);
+assert.equal(touchScope.pointers.current.size, 0);
+assert.equal(touchScope.gesture.current, null);
+assert.equal(capturedPointers.size, 0);
+
 for (const moved of [false, true]) {
   selectedShapeEntry = undefined;
   evaluateGlobe(endPointerExpression, {
-    gesture: { current: { moved, multiple: false } },
+    gesture: {
+      current: { moved, multiple: false, points: [{ x: 100, y: 100 }] },
+    },
     pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
     localPointer: () => ({ x: 100, y: 100 }),
     drawnPoints: { current: [] },
@@ -1446,7 +1595,9 @@ assert.equal(
 for (const moved of [false, true]) {
   let selectedCountry;
   evaluateGlobe(endPointerExpression, {
-    gesture: { current: { moved, multiple: false } },
+    gesture: {
+      current: { moved, multiple: false, points: [{ x: 100, y: 100 }] },
+    },
     pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
     localPointer: () => ({ x: 100, y: 100 }),
     drawnPoints: { current: [] },

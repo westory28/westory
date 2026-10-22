@@ -143,6 +143,7 @@ type Gesture = {
   view: GlobeView;
   moved: boolean;
   multiple: boolean;
+  label?: { entryId?: string; countryId?: string; region?: string };
 };
 const PAGE_SIZE = 40;
 function selectionViewport(
@@ -704,6 +705,8 @@ export default function HistoryGlobe({
     };
   }, [areaAttempt]);
   useEffect(() => {
+    // Late geometry must not restart automatic zoom while a finger is down.
+    if (pointers.current.size) return;
     if ((!highlightedShape && !selected?.place.coordinates) || !mapRef.current)
       return;
     const previous = focusedSelection.current;
@@ -2051,15 +2054,32 @@ export default function HistoryGlobe({
       view: { ...viewRef.current },
       moved: previous?.moved || false,
       multiple: values.length > 1 || !!previous?.multiple,
+      label: previous?.label,
     };
   };
-  const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+  const onPointerDown = (
+    event: React.PointerEvent<HTMLCanvasElement | SVGGElement>,
+  ) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     cancelCamera();
     event.currentTarget.focus({ preventScroll: true });
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // Labels and the bare globe share one gesture, even when a pinch starts
+    // with one finger on a label. Canvas owns move/up/cancel for both.
+    canvas.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, localPointer(event));
     startGesture(gesture.current || undefined);
+    if (pointers.current.size === 1 && event.currentTarget !== canvas) {
+      const { globeLabel, globeCountry, globeRegion } =
+        event.currentTarget.dataset;
+      // The drawing pool can reuse this label node during a gesture.
+      gesture.current!.label = {
+        entryId: globeLabel,
+        countryId: globeCountry,
+        region: globeRegion,
+      };
+    }
   };
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const original = gesture.current;
@@ -2095,17 +2115,36 @@ export default function HistoryGlobe({
     const original = gesture.current;
     if (!pointers.current.has(event.pointerId)) return;
     const pointer = localPointer(event);
+    if (
+      original?.points.length === 1 &&
+      Math.hypot(
+        pointer.x - original.points[0].x,
+        pointer.y - original.points[0].y,
+      ) > 5
+    )
+      original.moved = true;
     pointers.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
     if (!cancelled && original && !original.moved && !original.multiple) {
-      const hit = nearestGlobePoint(drawnPoints.current, pointer.x, pointer.y);
-      if (hit) {
-        chooseEntry(hit.item.entry.id);
+      if (original.label) {
+        const { entryId, countryId, region } = original.label;
+        if (entryId) chooseEntry(entryId);
+        else if (countryId) chooseCountry(countryId);
+        else if (region) openProvinceDetails();
       } else {
-        const feature = hitGeography.current(pointer.x, pointer.y);
-        if (feature) chooseEntry(feature.entry.id);
-        else setSelectedCountryId(null);
+        const hit = nearestGlobePoint(
+          drawnPoints.current,
+          pointer.x,
+          pointer.y,
+        );
+        if (hit) {
+          chooseEntry(hit.item.entry.id);
+        } else {
+          const feature = hitGeography.current(pointer.x, pointer.y);
+          if (feature) chooseEntry(feature.entry.id);
+          else setSelectedCountryId(null);
+        }
       }
     }
     if (pointers.current.size) startGesture(original || undefined);
@@ -2567,10 +2606,10 @@ export default function HistoryGlobe({
                 style={{ display: "none" }}
                 role="button"
                 tabIndex={-1}
-                onPointerDown={(event) =>
-                  event.currentTarget.focus({ preventScroll: true })
-                }
+                onPointerDown={onPointerDown}
                 onClick={(event) => {
+                  // Pointer taps are handled on release; keep keyboard/AT click.
+                  if (event.detail > 0) return;
                   const entryId = event.currentTarget.dataset.globeLabel;
                   if (entryId) chooseEntry(entryId);
                   else if (event.currentTarget.dataset.globeCountry)

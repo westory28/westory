@@ -710,7 +710,9 @@ assert.equal(
 );
 let pointEntry;
 evaluate(sphere.expression("endPointer"), {
-  gesture: { current: { moved: false, multiple: false } },
+  gesture: {
+    current: { moved: false, multiple: false, points: [{ x: 100, y: 100 }] },
+  },
   pointers: { current: new Map([[1, { x: 100, y: 100 }]]) },
   localPointer: () => ({ x: 100, y: 100 }),
   drawnPoints: { current: [{ item: dokdoItem, x: 100, y: 100 }] },
