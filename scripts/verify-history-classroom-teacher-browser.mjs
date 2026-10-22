@@ -623,6 +623,135 @@ const assignmentReasons = [
   "수업 태도",
   "교사 지시 불이행",
 ];
+const assertInlineReasonGeometry = async (page, customInput) => {
+  const geometry = await customInput.evaluate((element) => {
+    const bounds = node => {
+      const box = node.getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom,
+        width: box.width, height: box.height, centerY: box.top + box.height / 2 };
+    };
+    const control = element.closest(".history-reason-control");
+    const row = element.closest(".history-student-row");
+    return { input: bounds(element), control: bounds(control),
+      inputTextRight: element.getBoundingClientRect().right - parseFloat(getComputedStyle(element).paddingRight),
+      select: bounds(control.querySelector("select")),
+      row: row ? bounds(row) : null,
+      identity: row ? [...row.querySelectorAll(".history-student-info > span")].map(bounds) : [],
+      remove: row ? bounds(row.querySelector(".history-student-remove")) : null,
+      textareaCount: control.querySelectorAll("textarea").length,
+      outerOverflow: document.documentElement.scrollWidth > innerWidth + 1 };
+  });
+  assert.equal(await customInput.evaluate(element => element.tagName), "INPUT");
+  assert.equal(await customInput.getAttribute("type"), "text");
+  assert.equal(geometry.textareaCount, 0, "Direct input uses no lower textarea");
+  assert.equal(await page.locator(".history-reason-custom").count(), 0,
+    "Direct input does not add a separate reason row");
+  assert.equal(geometry.outerOverflow, false, "An inline reason never widens the document");
+  assert(geometry.input.height >= 44 && geometry.select.height >= 44 &&
+    geometry.select.width >= 44 && geometry.select.width <= 45 &&
+    Math.abs(geometry.input.centerY - geometry.select.centerY) <= 1 &&
+    Math.abs(geometry.input.left - geometry.control.left) <= 1 &&
+    Math.abs(geometry.select.right - geometry.control.right) <= 1 &&
+    geometry.inputTextRight <= geometry.select.left + 1,
+    `Custom input and the 44px preset selector share one control: ${JSON.stringify(geometry)}`);
+  if (geometry.row) {
+    assert.equal(geometry.identity.length, 2);
+    assert(geometry.identity.every(info => info.width >= 64 &&
+      Math.abs(info.centerY - geometry.input.centerY) <= 1) &&
+      Math.abs(geometry.remove.centerY - geometry.input.centerY) <= 1 &&
+      geometry.remove.width >= 44 && geometry.remove.height >= 44 && geometry.row.height <= 64,
+      `Student identity, editable reason and delete stay on a single row: ${JSON.stringify(geometry)}`);
+  }
+  return geometry;
+};
+const assertReasonMarquee = async (page, customInput, blurTarget) => {
+  const longReason = "교사가 직접 작성한 긴 역사교실 배정 사유를 앞부분부터 끝부분까지 확인합니다. ".repeat(4);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await customInput.fill(longReason);
+  await blurTarget.focus();
+  await page.mouse.move(0, 0);
+  await customInput.scrollIntoViewIfNeeded();
+  const control = page.locator(".history-reason-control").filter({ has: customInput });
+  assert.equal(await control.getAttribute("title"), longReason, "The complete reason remains available without animation");
+  const text = control.locator(".history-reason-marquee-text");
+  await text.waitFor({ state: "visible" });
+  await page.waitForFunction(id => document.getElementById(id)?.closest(".history-reason-control")
+    ?.querySelector(".history-reason-marquee-text")?.getAnimations().length > 0,
+    await customInput.getAttribute("id"));
+  const motion = await text.evaluate(element => {
+    const frame = element.closest(".history-reason-marquee");
+    const animation = element.getAnimations().find(item => Number(item.effect?.getComputedTiming().duration) > 0);
+    if (!animation) return { hasAnimation: false, textWidth: element.scrollWidth, frameWidth: frame.clientWidth };
+    const timing = animation.effect.getTiming();
+    const duration = Number(animation.effect.getComputedTiming().duration);
+    const delay = Number(timing.delay) || 0;
+    const frames = animation.effect.getKeyframes();
+    const holdEndOffset = frames.slice(1).find(frame => frame.transform === frames[0].transform)?.computedOffset || 0;
+    const x = () => {
+      const transform = getComputedStyle(element).transform;
+      return transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m41;
+    };
+    animation.pause();
+    animation.currentTime = 0;
+    const initialX = x();
+    animation.currentTime = delay > 0 ? delay / 2 : duration * holdEndOffset / 2;
+    const heldX = x();
+    animation.currentTime = delay + duration - 1;
+    const endingX = x();
+    const textBox = element.getBoundingClientRect(), frameBox = frame.getBoundingClientRect();
+    const result = { hasAnimation: true, initialX, heldX, endingX, duration, delay, holdEndOffset,
+      textWidth: element.scrollWidth, frameWidth: frame.clientWidth,
+      endingRight: textBox.right, frameRight: frameBox.right,
+      frameOverflowX: getComputedStyle(frame).overflowX,
+      outerOverflow: document.documentElement.scrollWidth > innerWidth + 1 };
+    animation.currentTime = 0;
+    animation.play();
+    return result;
+  });
+  assert(motion.hasAnimation && motion.textWidth > motion.frameWidth &&
+    (motion.delay > 0 || motion.holdEndOffset > 0) &&
+    Math.abs(motion.initialX) <= 1 && Math.abs(motion.heldX) <= 1 &&
+    motion.endingX < -1 && Math.abs(motion.endingRight - motion.frameRight) <= 2 &&
+    ["hidden", "clip"].includes(motion.frameOverflowX) && !motion.outerOverflow,
+    `Overflowing reason starts with a hold and moves left until its ending is visible: ${JSON.stringify(motion)}`);
+  const stopped = async mode => {
+    const first = await text.evaluate(element => {
+      let visible = element.getClientRects().length > 0;
+      for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor);
+        if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) visible = false;
+      }
+      return { transform: getComputedStyle(element).transform, visible,
+        animations: element.getAnimations().map(animation => animation.playState) };
+    });
+    await page.waitForTimeout(160);
+    const second = await text.evaluate(element => getComputedStyle(element).transform);
+    assert(!first.visible || first.animations.every(state => state !== "running") && first.transform === second,
+      `${mode} stops the displayed reason motion: ${JSON.stringify({ ...first, second })}`);
+    return first;
+  };
+  await customInput.focus();
+  assert.equal(await customInput.inputValue(), longReason, "Focusing keeps the complete editable reason");
+  const focus = await stopped("Keyboard focus");
+  await blurTarget.focus();
+  await control.hover();
+  const hover = await stopped("Pointer hover");
+  await page.mouse.move(0, 0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const reduced = await stopped("Reduced motion");
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await customInput.fill("가");
+  await blurTarget.focus();
+  await page.mouse.move(0, 0);
+  await customInput.scrollIntoViewIfNeeded();
+  await text.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const shortReason = await text.evaluate(element => ({ textWidth: element.scrollWidth,
+    frameWidth: element.closest(".history-reason-marquee").clientWidth,
+    animations: element.getAnimations().map(animation => animation.playState) }));
+  assert(shortReason.textWidth <= shortReason.frameWidth && shortReason.animations.every(state => state !== "running"),
+    `Reasons that fit stay still: ${JSON.stringify(shortReason)}`);
+  return { motion, focus, hover, reduced, shortReason };
+};
 const assertReasonDropdown = async (page, input, customInput, blurTarget) => {
   const originalValue = await input.inputValue();
   assert.equal(await input.evaluate((element) => element.tagName), "SELECT");
@@ -634,23 +763,10 @@ const assertReasonDropdown = async (page, input, customInput, blurTarget) => {
   assert.equal(await input.inputValue(), "__other__", "Keyboard selection can choose direct input");
   await input.press("Tab");
   await customInput.waitFor();
-  const geometry = await customInput.evaluate((element) => {
-    const field = element.getBoundingClientRect();
-    const row = element.closest(".history-student-row, .history-student-entry");
-    const rowBox = row.getBoundingClientRect();
-    const select = row.querySelector(".history-reason-input").getBoundingClientRect();
-    return { left: field.left, right: field.right, top: field.top, width: field.width,
-      rowLeft: rowBox.left, rowRight: rowBox.right, selectBottom: select.bottom,
-      selectHeight: select.height, height: field.height, viewport: innerWidth };
-  });
-  assert(geometry.top >= geometry.selectBottom && geometry.left >= geometry.rowLeft &&
-    geometry.right <= geometry.rowRight + 1 && geometry.left - geometry.rowLeft <= 12 &&
-    geometry.rowRight - geometry.right <= 12 && geometry.selectHeight >= 44 &&
-    geometry.height >= 44 && geometry.left >= 0 && geometry.right <= geometry.viewport,
-    `Direct input fills the row below its dropdown: ${JSON.stringify(geometry)}`);
+  const geometry = await assertInlineReasonGeometry(page, customInput);
   assert.equal(await customInput.getAttribute("required"), "");
   assert.equal(await customInput.getAttribute("lang"), "ko");
-  await customInput.fill("한글 조합 중인 직접 입력 사유\n둘째 줄");
+  await customInput.fill("한글 조합 중인 직접 입력 사유");
   const composingKey = await customInput.evaluate((element) => {
     element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
     const key = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true });
@@ -658,14 +774,15 @@ const assertReasonDropdown = async (page, input, customInput, blurTarget) => {
     element.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "사유" }));
     return { prevented: key.defaultPrevented, value: element.value };
   });
-  assert.deepEqual(composingKey, { prevented: false, value: "한글 조합 중인 직접 입력 사유\n둘째 줄" },
-    "Korean composition and multiline input remain intact");
+  assert.deepEqual(composingKey, { prevented: false, value: "한글 조합 중인 직접 입력 사유" },
+    "Korean composition remains intact in the inline input");
+  const marquee = await assertReasonMarquee(page, customInput, blurTarget);
   await input.selectOption(assignmentReasons[3]);
   assert.equal(await customInput.count(), 0, "Selecting a preset hides direct input");
   assert.equal(await input.inputValue(), assignmentReasons[3]);
   await input.selectOption(originalValue || assignmentReasons[0]);
   await blurTarget.focus();
-  return geometry;
+  return { ...geometry, marquee };
 };
 const assertAttemptColumnAlignment = async (panel) => {
   const geometry = await panel.locator(".history-attempt-table").evaluate((table) => {
@@ -859,8 +976,16 @@ try {
     const assignedReasonGeometry = await assertReasonDropdown(page, assignedReason, assignedReasonText,
       page.getByLabel("전체 학생 이름 검색", { exact: true }));
     await assignedReason.selectOption("__other__");
-    await assignedReasonText.fill("아래 행에서 직접 수정한 사유");
-    assert.equal(await assignedReasonText.inputValue(), "아래 행에서 직접 수정한 사유");
+    await assignedReasonText.fill("같은 행에서 직접 수정한 사유");
+    assert.equal(await assignedReasonText.inputValue(), "같은 행에서 직접 수정한 사유");
+    await page.screenshot({ path: path.join(evidence, `teacher-inline-custom-reason-${viewport.width}.png`), fullPage: true });
+    if (process.argv.includes("--reason-layout-only")) {
+      assert.deepEqual(errors, [], "Inline reason editing has no runtime errors");
+      reports.push({ viewport, reasonGeometry, assignedReasonGeometry, errors });
+      await page.close();
+      console.log(`teacher ${viewport.width}px inline/custom reason, same-row layout and marquee: passed`);
+      continue;
+    }
     await assignedReason.selectOption("지각");
     await page
       .getByRole("button", { name: "역사교실 저장", exact: true })
@@ -1653,7 +1778,7 @@ try {
       `teacher ${viewport.width}px create/edit/source-switch/snapshot/attempt-history/reset: passed`,
     );
   }
-  if (!process.argv.includes("--results-only")) {
+  if (!process.argv.includes("--results-only") && !process.argv.includes("--reason-layout-only")) {
     const reasonPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await reasonPage.route("**/*", route => route.request().url().startsWith(`http://127.0.0.1:${server.address().port}`) ? route.continue() : route.abort());
     await reasonPage.goto(`http://127.0.0.1:${server.address().port}/`);
@@ -1698,7 +1823,7 @@ try {
     await reasonPage.getByRole("button", { name: new RegExp(`${assignedStudents[0].name}.*3-2`) }).click();
     assert.equal(await reasonPage.getByLabel(reasonName, { exact: true }).inputValue(), "__other__");
     assert.equal(await reasonPage.getByLabel(textName, { exact: true }).inputValue(), "신규 등록에 직접 작성한 사유",
-      "Adding a student copies the custom reason and selection to that student's lower input row");
+      "Adding a student copies the custom reason and selection to that student's inline field");
     await reasonPage.getByRole("button", { name: "역사교실 저장", exact: true }).click();
     await reasonPage.getByText("역사교실 과제를 저장했습니다.", { exact: true }).waitFor();
     await dismissToasts(reasonPage);
@@ -1713,7 +1838,7 @@ try {
     await reasonPage.close();
     console.log("teacher custom-reason save, unresolved timestamps, dated list retention and reload: passed");
   }
-  if (!process.argv.includes("--reasons-only")) {
+  if (!process.argv.includes("--reasons-only") && !process.argv.includes("--reason-layout-only")) {
   const resultPage = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const resultErrors = [];
   resultPage.on("pageerror", error => resultErrors.push(error.message));
@@ -1802,7 +1927,8 @@ try {
   }
 } finally {
   await fs.writeFile(
-    path.join(evidence, process.argv.includes("--reasons-only") ? "teacher-reasons-browser-report.json" : "teacher-browser-report.json"),
+    path.join(evidence, process.argv.includes("--reasons-only") ? "teacher-reasons-browser-report.json" :
+      process.argv.includes("--reason-layout-only") ? "teacher-reason-layout-browser-report.json" : "teacher-browser-report.json"),
     JSON.stringify(
       {
         recordedAt: new Date().toISOString(),

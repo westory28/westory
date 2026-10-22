@@ -1007,16 +1007,77 @@ const AssignmentReasonInput: React.FC<{
 }) => {
   const other =
     explicitOther || (!!value && !ASSIGNMENT_REASONS.includes(value));
+  const textViewportRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [focused, setFocused] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    const viewport = textViewportRef.current;
+    const text = textRef.current;
+    if (!other || !value || !viewport || !text || focused || hovered) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animation: Animation | undefined;
+    let visible = false;
+    const update = () => {
+      animation?.cancel();
+      animation = undefined;
+      const distance = text.scrollWidth - viewport.clientWidth;
+      if (distance <= 1 || !visible || document.hidden || reducedMotion.matches)
+        return;
+      const travel = (distance / 24) * 1000;
+      const duration = travel + 2400;
+      animation = text.animate(
+        [
+          { transform: "translateX(0)", offset: 0 },
+          { transform: "translateX(0)", offset: 1200 / duration },
+          {
+            transform: `translateX(${-distance}px)`,
+            offset: (1200 + travel) / duration,
+          },
+          { transform: `translateX(${-distance}px)`, offset: 1 },
+        ],
+        { duration, iterations: Infinity, easing: "linear" },
+      );
+    };
+    const resize = new ResizeObserver(update);
+    resize.observe(viewport);
+    resize.observe(text);
+    const intersection = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      update();
+    });
+    intersection.observe(viewport);
+    reducedMotion.addEventListener("change", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      animation?.cancel();
+      resize.disconnect();
+      intersection.disconnect();
+      reducedMotion.removeEventListener("change", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [other, value, focused, hovered]);
 
   return (
-    <div className={`history-reason-control ${className}`}>
+    <div
+      className={`history-reason-control ${other ? "history-reason-control--custom" : ""} ${className}`}
+      title={value || "배정 사유 선택"}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget))
+          setFocused(false);
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <select
         id={id}
         className="history-reason-input"
         aria-label={`${studentName} 배정 사유`}
         aria-invalid={invalid}
         aria-describedby={describedBy}
-        title={other ? "직접 입력" : value || "배정 사유 선택"}
+        title={value || "배정 사유 선택"}
         value={other ? OTHER_ASSIGNMENT_REASON : value}
         required
         onChange={(event) => {
@@ -1037,6 +1098,33 @@ const AssignmentReasonInput: React.FC<{
         ))}
         <option value={OTHER_ASSIGNMENT_REASON}>직접 입력</option>
       </select>
+      {other && (
+        <>
+          <input
+            id={`${id}-other`}
+            className="history-reason-text"
+            type="text"
+            lang="ko"
+            inputMode="text"
+            required
+            value={value}
+            placeholder="직접 입력"
+            aria-label={`${studentName} 직접 입력 사유`}
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
+            onChange={(event) => onChange(event.target.value, true)}
+          />
+          <span
+            ref={textViewportRef}
+            className="history-reason-marquee"
+            aria-hidden="true"
+          >
+            <span ref={textRef} className="history-reason-marquee-text">
+              {value.replace(/[\r\n]+/g, " ")}
+            </span>
+          </span>
+        </>
+      )}
       <svg
         className="history-reason-chevron"
         viewBox="0 0 20 20"
@@ -1052,42 +1140,6 @@ const AssignmentReasonInput: React.FC<{
     </div>
   );
 };
-
-const AssignmentReasonText: React.FC<{
-  id: string;
-  studentName: string;
-  value: string;
-  invalid: boolean;
-  onChange: (value: string) => void;
-}> = ({ id, studentName, value, invalid, onChange }) => (
-  <label className="history-reason-custom" htmlFor={`${id}-other`}>
-    <span className="mb-1 block text-xs font-bold text-gray-500">
-      직접 입력 (필수)
-    </span>
-    <textarea
-      id={`${id}-other`}
-      lang="ko"
-      inputMode="text"
-      rows={2}
-      required
-      value={value}
-      aria-label={`${studentName} 직접 입력 사유`}
-      aria-invalid={invalid}
-      aria-describedby={invalid ? `${id}-error` : undefined}
-      onChange={(event) => onChange(event.target.value)}
-      className="history-reason-text"
-    />
-    {invalid && (
-      <span
-        id={`${id}-error`}
-        role="alert"
-        className="mt-1 block text-sm text-red-600"
-      >
-        배정 사유를 입력해 주세요.
-      </span>
-    )}
-  </label>
-);
 
 const HistoryActionButton: React.FC<
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -1168,8 +1220,6 @@ const AssignmentStudentPicker: React.FC<{
         )
         .slice(0, 8)
     : [];
-  const otherReason =
-    reasonOther || (!!reason && !ASSIGNMENT_REASONS.includes(reason));
   const addStudent = (student: StudentOption) => {
     if (!onAdd(student)) return;
     setGrade(student.grade);
@@ -1284,24 +1334,14 @@ const AssignmentStudentPicker: React.FC<{
           />
         </div>
       </div>
-      {otherReason ? (
-        <AssignmentReasonText
-          id={id}
-          studentName="추가할 학생"
-          value={reason}
-          invalid={reasonError && !reason.trim()}
-          onChange={(value) => onReasonChange(value, true)}
-        />
-      ) : (
-        reasonError && (
-          <p
-            id={`${id}-error`}
-            role="alert"
-            className="mt-1 text-sm text-red-600"
-          >
-            배정 사유를 입력해 주세요.
-          </p>
-        )
+      {reasonError && (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1 text-sm text-red-600"
+        >
+          배정 사유를 입력해 주세요.
+        </p>
       )}
       {search.trim() && (
         <div className="mt-2 rounded-xl border border-gray-200 bg-white p-2">
@@ -1347,8 +1387,6 @@ const AssignedStudentRow: React.FC<{
   onReasonChange,
   onRemove,
 }) => {
-  const otherReason =
-    explicitOther || (!!reason && !ASSIGNMENT_REASONS.includes(reason));
   return (
     <div className="history-student-row">
       <div
@@ -1376,16 +1414,7 @@ const AssignedStudentRow: React.FC<{
         onClick={onRemove}
         className="history-student-remove text-red-500 hover:bg-red-50 rounded-xl"
       />
-      {otherReason && (
-        <AssignmentReasonText
-          id={id}
-          studentName={student.name}
-          value={reason}
-          invalid={invalid}
-          onChange={(value) => onReasonChange(value, true)}
-        />
-      )}
-      {invalid && !otherReason && (
+      {invalid && (
         <p
           id={`${id}-error`}
           role="alert"
@@ -3749,7 +3778,9 @@ const ManageHistoryClassroom: React.FC = () => {
           `history-edit-reason-${missingReasonUid}-other`,
         );
         input?.focus({ preventScroll: true });
-        input?.closest("label")?.scrollIntoView({ block: "center" });
+        input
+          ?.closest(".history-reason-control")
+          ?.scrollIntoView({ block: "center" });
       });
       return;
     }
@@ -4175,7 +4206,9 @@ const ManageHistoryClassroom: React.FC = () => {
           `history-create-reason-${missingReasonUid}-other`,
         );
         input?.focus({ preventScroll: true });
-        input?.closest("label")?.scrollIntoView({ block: "center" });
+        input
+          ?.closest(".history-reason-control")
+          ?.scrollIntoView({ block: "center" });
       });
       return;
     }
