@@ -52,13 +52,50 @@
   position: relative;
 }
 
-.student-layout .teacher-mobile-account .header-user-link {
-  flex-wrap: wrap;
-}
+@media (max-width: 1023px) {
+  .student-layout .teacher-mobile-account {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 12px;
+  }
 
-.student-layout .teacher-mobile-account .header-user-name {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  .student-layout .teacher-mobile-account .header-student-profile {
+    width: auto;
+    gap: 4px;
+    padding-inline: 0;
+  }
+
+  .student-layout .teacher-mobile-account .header-user-link {
+    min-height: 44px;
+    flex-wrap: nowrap;
+    font-size: 14px;
+  }
+
+  .student-layout .teacher-mobile-account .header-user-link > span:first-child {
+    flex-shrink: 0;
+    margin-right: 0;
+  }
+
+  .student-layout .teacher-mobile-account .header-user-name {
+    min-width: 0;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .student-layout .teacher-mobile-account .mobile-account-actions {
+    display: flex;
+    gap: 4px;
+    width: auto;
+  }
+
+  .student-layout .teacher-mobile-account .teacher-account-notification > button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .student-layout .teacher-mobile-account .btn-logout {
+    min-height: 44px;
+  }
 }
 
 .student-lesson-page {
