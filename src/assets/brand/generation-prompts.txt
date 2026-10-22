@@ -1,0 +1,21 @@
+Built-in image_gen; white-background app and transparent browser icons approved by the user on 2026-10-22 Asia/Seoul.
+
+APP
+Use case: precise-object-edit / logo-brand.
+Edit target: the referenced Westory icon. Make ONLY the following color changes: replace the entire blue background with pure opaque white #ffffff, and replace the white uppercase W with Westory royal blue #2563eb. Keep the lowercase e warm amber #f59e0b.
+Preserve the existing We monogram exactly: same letter shapes, bold geometric rounded strokes, open counters, letter sizes, kerning, relative positions, baseline and overall centered composition. Do not redraw the design or add anything.
+The entire square canvas must be opaque white extending edge to edge and into all four sharp corners. No pre-rounded app tile, no outer frame, no border, no shadow, no margin outside the white square. No 3D, no bevel, no texture, no gradient, no outline. Flat crisp graphic artwork.
+Keep both letters entirely within the central circular safe zone of radius 39 percent of the image width. ONE square app icon master only, no mockup, no labels. Exact text: "We". Blue W, amber e, white background.
+
+BROWSER
+Use case: background-extraction.
+Edit target: the supplied Westory logo with blue W and amber e on a white background.
+Remove ONLY the entire white background, including the white counter inside the lowercase e and the negative space between the W strokes. Produce a true transparent RGBA PNG with alpha channel. Every area other than the two letters must be fully transparent; do not render a white backdrop, black backdrop, checkerboard or shadow.
+Preserve the existing monogram precisely: same capital W and lowercase e outlines, same bright royal blue W (#2563eb), same warm amber e (#f59e0b), same stroke widths, same relative size and kerning, same baseline and centered position, same square canvas. Crisp antialiased letter edges with no white matte fringe.
+The two colored letters are the ONLY visible pixels. Do not change the logo design, add elements, add a frame, round the canvas, add a solid background, or add text. This is the transparent foreground master for a browser favicon, intended to sit directly on both light and dark browser tabs.
+
+EDGE REPAIR
+Use case: precise-object-edit.
+Edit target: the referenced transparent Westory We logo. Preserve its two-letter design, positions, colors and transparent background. Repair only the extraction artifacts at the edges.
+The current lowercase amber e has conspicuous stray yellow dots, flecks and rough halo along its perimeter, in its upper counter, between the W and e, in the bottom opening and below its baseline. Remove ALL these stray artifacts. The e must be a perfectly clean flat warm amber #f59e0b geometric letter with smooth, sharp, antialiased contours; every counter and open negative space is clean transparent alpha. Likewise repair stray blue fringe pixels near the royal blue W. Use only the two letter silhouettes, no extra pixels outside them. Make foreground fills uniform; no texture, no grain, no gradient, no highlight, no shadows and no outline.
+Keep the bold rounded uppercase W in royal blue #2563eb and the large lowercase e in warm amber #f59e0b. Keep their type shapes and kerning. True transparent RGBA PNG; preserve transparency; no background, no checkerboard, no white matte. Same square canvas and composition. This is a production favicon master and clean silhouettes are critical.
