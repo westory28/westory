@@ -22,7 +22,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  max-height: clamp(620px, calc(100dvh - 140px), 880px);
+  contain: size;
   gap: 12px;
 }
 
@@ -439,6 +439,9 @@
 .teacher-week-event:last-child {
   border-bottom: 0;
 }
+.teacher-week-event + .teacher-week-event {
+  margin-top: 4px;
+}
 .teacher-week-event:hover,
 .teacher-week-event.is-selected {
   background: var(--ws-surface-subtle, #f8fafc);
@@ -649,7 +652,7 @@
     grid-row: auto;
   }
   .teacher-weekly-dashboard__schedule {
-    max-height: none;
+    contain: none;
   }
   .teacher-week-schedule {
     min-height: 416px;
