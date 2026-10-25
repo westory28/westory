@@ -15,6 +15,7 @@ import EntryMyPageScene from "./EntryMyPageScene";
 import EntryGlow from "./EntryGlow";
 import EntryMobileDashboard from "./EntryMobileDashboard";
 import EntryHeroLaptop from "./EntryHeroLaptop";
+import BrandLogo from "../common/BrandLogo";
 import { useEntryMotion } from "./useEntryMotion";
 import { useEntryFinale } from "./useEntryFinale";
 import {
@@ -45,12 +46,7 @@ interface Props {
 }
 
 function Wordmark() {
-  return (
-    <span className="entry-wordmark" aria-label="Westory">
-      <span>We</span>
-      <span>story</span>
-    </span>
-  );
+  return <BrandLogo className="entry-wordmark" />;
 }
 
 /** Presentation only: no application, auth, database or game imports. */

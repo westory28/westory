@@ -1,4 +1,4 @@
-import wordmarkUrl from "../assets/brand/westory-wordmark.png";
+import wordmarkUrl from "../assets/brand/westory-wordmark.webp";
 
 let wordmark: HTMLCanvasElement | null = null;
 let wordmarkFlight: Promise<void> | null = null;

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
+import BrandLogo from "../../../components/common/BrandLogo";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
@@ -932,8 +933,8 @@ const SettingsNotifications: React.FC = () => {
             </div>
             <div className="mt-3 max-w-full rounded-xl border border-gray-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700">
-                  W
+                <span className="flex h-6 w-6 items-center justify-center">
+                  <BrandLogo variant="mark" decorative />
                 </span>
                 Westory
                 <span className="ml-auto">지금</span>

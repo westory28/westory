@@ -64,16 +64,12 @@
   border-bottom: 1px solid rgb(229 231 235 / 65%);
 }
 .entry-wordmark {
-  display: inline-flex;
+  display: block;
   flex-shrink: 0;
-  color: var(--entry-blue);
+  width: 3.75em;
+  height: auto;
+  object-fit: contain;
   font-size: 40px;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: -0.055em;
-}
-.entry-wordmark > span:last-child {
-  color: var(--entry-orange);
 }
 .entry-primary {
   min-height: 48px;

@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { MENUS } from "../../constants/menus";
+import wordmarkUrl from "../../assets/brand/westory-wordmark.webp";
 import "./entry-mobile-dashboard.css";
 
 const week = [
@@ -68,10 +69,15 @@ export default function EntryMobileDashboard({
             <path d="M335 36h12v4h-12z" fill="currentColor" stroke="none" />
           </g>
 
-          <text className="emd-wordmark" x="30" y="97">
-            <tspan>We</tspan>
-            <tspan className="emd-accent">story</tspan>
-          </text>
+          <image
+            className="emd-wordmark"
+            href={wordmarkUrl}
+            x="30"
+            y="69"
+            width="136"
+            height="32"
+            preserveAspectRatio="xMinYMid meet"
+          />
           <g
             className="emd-menu-icon"
             fill="none"

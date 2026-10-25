@@ -20,6 +20,7 @@ const { chromium } = require(
 const core = require("../functions/weplayCore.js");
 const audioOnly = process.argv.includes("--audio-only");
 const frameOnly = process.argv.includes("--frame-only");
+const introOnly = process.argv.includes("--intro-only");
 const evidence = path.resolve(
   process.env.WEPLAY_QA_EVIDENCE_DIR ||
     path.join(
@@ -73,7 +74,7 @@ import {MENUS} from ${source("src/constants/menus.ts")};
 const params=new URLSearchParams(location.search),teacher=params.has('teacher');
 export const qa=window.openingQa={calls:[],writes:[],settings:${JSON.stringify({ ...core.DEFAULT_GAME_SETTINGS, enabled: true })}};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
-export const auth={currentUser:{uid:'opening-qa',email:teacher?'westoria28@gmail.com':'student@example.invalid'}};
+export const auth={currentUser:{uid:'opening-qa',email:teacher?'westoria28@gmail.com':'student@example.invalid',getIdTokenResult:async()=>({claims:{auth_time:Math.floor(Date.now()/1000)}})}};
 const state={config,currentUser:auth.currentUser,userData:{uid:'opening-qa',role:teacher?'teacher':'student',teacherPortalEnabled:teacher,staffPermissions:[],name:'검증 계정',weplayGuideCompleted:!params.has('guide')},loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,menuConfig:MENUS,settingsLoadedAt:Date.now(),refreshConfig:async()=>{},refreshMenuConfig:async()=>{},refreshInterfaceConfig:async()=>{},logout:async()=>{}};
 export const useAuth=()=>state;
 export const db={};
@@ -93,6 +94,7 @@ export const getYutManagement=async()=>{qa.calls.push({name:'getYutManagement'})
 export const saveYutSettings=async()=>{throw new Error('Unexpected Yut settings write')};
 export const commandYutRoom=async()=>{throw new Error('Unexpected Yut command')};
 export const subscribeYutRoom=()=>()=>{};
+export const subscribeYutManagement=(_config,onChange,_onError,onConnectionChange)=>{let active=true;queueMicrotask(()=>{if(active){onConnectionChange?.(true);onChange();}});return()=>{active=false;};};
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
 export const YUT_PRIVATE_DAILY_LIMIT=5;
 export const normalizeYutSettings=value=>({enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25,...(value||{})});
@@ -643,6 +645,9 @@ async function verifyLinkedIntro() {
         reducedMotion,
       );
       await page.locator("[data-intro-point]").waitFor();
+      await page
+        .locator(".weplay-studio-intro__westory")
+        .evaluate((image) => image.decode());
       await page.clock.runFor(500);
       await page.evaluate(() => {
         const intro = document.querySelector(".weplay-studio-intro");
@@ -677,7 +682,9 @@ async function verifyLinkedIntro() {
           )
             .matrixTransform(currentDot.getScreenCTM())
             .matrixTransform(svg.getScreenCTM().inverse());
-          const rect = currentPrefix.getBoundingClientRect();
+          const rect = intro
+            .querySelector(".weplay-studio-intro__wordmarks")
+            .getBoundingClientRect();
           const story = intro.querySelector(".weplay-studio-intro__westory");
           const play = intro.querySelector(".weplay-studio-intro__weplay");
           samples.push({
@@ -692,7 +699,7 @@ async function verifyLinkedIntro() {
             prefixCount: intro.querySelectorAll(".weplay-studio-intro__prefix")
               .length,
             prefixText: currentPrefix.textContent,
-            prefixBox: {
+            wordmarkBox: {
               x: rect.x,
               y: rect.y,
               width: rect.width,
@@ -700,7 +707,12 @@ async function verifyLinkedIntro() {
             },
             prefixOpacity: opacity(currentPrefix),
             story: {
-              text: story.textContent,
+              tagName: story.tagName,
+              complete: story.complete && story.naturalWidth > 0,
+              aspectRatio: story.naturalWidth / story.naturalHeight,
+              renderedRatio:
+                story.getBoundingClientRect().width /
+                story.getBoundingClientRect().height,
               opacity: opacity(story),
               transform: getComputedStyle(story).transform,
             },
@@ -743,14 +755,21 @@ async function verifyLinkedIntro() {
             sample.prefixCount === 1 &&
             sample.prefixText === "We",
         );
-        assert(sample.prefixOpacity > 0.99, JSON.stringify(sample));
         for (const key of ["x", "y", "width", "height"])
           assert(
-            Math.abs(sample.prefixBox[key] - first.prefixBox[key]) < 0.1,
-            "The shared We box must remain fixed: " + JSON.stringify(sample),
+            Math.abs(sample.wordmarkBox[key] - first.wordmarkBox[key]) < 0.1,
+            "The logo transition must not shift its layout: " +
+              JSON.stringify(sample),
           );
-        assert.equal(sample.story.text, "story");
-        assert.equal(sample.play.text, "play");
+        assert.equal(sample.story.tagName, "IMG");
+        assert(sample.story.complete, "The supplied Westory logo must decode");
+        assert(
+          Math.abs(sample.story.renderedRatio - sample.story.aspectRatio) <
+            0.01,
+          "The supplied logo must keep its original proportions",
+        );
+        assert.equal(sample.play.text, "Weplay");
+        assert.equal(sample.prefixOpacity, sample.play.opacity);
         if (index) {
           const previous = samples[index - 1];
           const step = Math.hypot(sample.x - previous.x, sample.y - previous.y);
@@ -811,7 +830,7 @@ async function verifyLinkedIntro() {
     }
   }
   checks.push(
-    "390/768/1280px normal/reduced motion: the identical fully-visible orbit dot travels continuously to (233,166), radius 8; a single fixed We stays visible while story exits before play rises; secondary button appears afterward.",
+    "390/768/1280/1366px normal/reduced motion: the identical fully-visible orbit dot travels continuously to (233,166), radius 8; the supplied Westory image retains its proportions and its stage stays fixed while it fades into Weplay; the secondary button appears afterward.",
   );
 }
 async function verifyOpeningLayout() {
@@ -1175,6 +1194,7 @@ async function verifyCommonGameFrame() {
 try {
   if (audioOnly) await verifyAudioBrowser();
   else if(frameOnly) await verifyCommonGameFrame();
+  else if(introOnly) await verifyLinkedIntro();
   else await verifyOpeningLayout();
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);

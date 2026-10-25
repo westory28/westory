@@ -1,0 +1,13 @@
+.ws-brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.logo-text .ws-brand-logo {
+  width: 128px;
+}
+.ws-brand-logo--login {
+  width: 320px;
+}

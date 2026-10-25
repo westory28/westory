@@ -24,10 +24,6 @@ const LoadingContent: React.FC<{ className?: string }> = ({
     aria-busy="true"
   >
     <LoadingGlobe />
-    <div className="ws-loading__wordmark" aria-hidden="true">
-      <span className="ws-loading__we">We</span>
-      <span className="ws-loading__story">story</span>
-    </div>
     <div className="ws-loading__message" aria-hidden="true">
       처리 중
       <span className="ws-loading__dots">

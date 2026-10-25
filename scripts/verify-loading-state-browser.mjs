@@ -305,7 +305,7 @@ async function checkLayout(page, width, label, directory) {
   assert.equal(await page.getByRole("status", { name: "처리 중" }).count(), 1);
   assert.equal(
     (await page.locator("#root").textContent()).replace(/\s+/g, ""),
-    "Westory처리중...",
+    "처리중...",
   );
   assert.equal(
     await page.evaluate(

@@ -1,14 +1,28 @@
 # Westory application and browser icons
 
-## Upload watermark wordmark (2026-10-25)
+## Current site identity (2026-10-25)
 
-`westory-wordmark.png` extends the approved rounded We mark into Westory using the built-in `image_gen` tool. The user requested blue **We**, orange **story**, balanced optical letter spacing and deliberate letter angles. This transparent master is preserved unchanged; `brandWatermark.ts` trims transparent margins in memory and applies it once after each eligible upload's final crop/resize. Worksheet PDF/page/footnote assets and signatures are excluded. This does not replace the portal headers or application icons.
+The user supplied `위스토리 로고_full.png` (2163×727, 627,336 bytes) and `위스토리 로고_we.png` (830×423, 229,663 bytes). These supersede the previous text wordmarks and icons throughout the running site. Preserve their artwork and colors; do not redraw or stretch them.
+
+- `westory-wordmark.webp`: cropped transparent full logo, 1024×237, 45,068 bytes. Shared by portal navigation, classic login, public entry, responsive dashboard illustration, game intro and upload watermarks.
+- `westory-mark.webp`: cropped transparent We, 256×127, 11,206 bytes. Used by collapsed navigation and the notification preview.
+- `public/icons/westory-icon-{180,192,512,1024}.png`: white square, We at 94% of the canvas width. The 1024px tablet-management export is not requested by the site or manifest.
+- `public/icons/westory-icon-maskable-512.png`: separate white adaptive icon with the entire artwork inside the central 80%-diameter safe circle.
+- `public/icons/westory-favicon-{16,32,48}.png` and `public/favicon.ico`: matching transparent browser exports.
+
+Reproduce with Pillow using `python scripts/export-brand-assets.py <full.png> <we.png>`. Source PNGs remain outside the deployed bundle. Vite fingerprints both WebP URLs; Vercel gives those hashed assets a one-year immutable cache. Public icon URLs use revision `20261025` with a one-day revalidated cache. Manifest identity, start URL, scope and routing are unchanged. Installed apps may refresh their icons on the device's next manifest update.
+
+The shared loading components deliberately display no wordmark. Existing uploaded images are not reprocessed; new uploads use the shared optimized logo.
+
+## Archived upload watermark master (2026-10-25)
+
+`westory-wordmark.png` is the archived full-resolution master, preserved unchanged and no longer imported at runtime. The previous generation used blue **We**, orange **story**, balanced optical letter spacing and deliberate letter angles. Worksheet PDF/page/footnote assets and signatures remain excluded from upload watermarking.
 
 Generation prompt: “Extend the rounded We identity into Westory. We is blue #2563EB; story is orange #F59E0B. Refine optical kerning, consistent negative space and individual letter angles; preserve substantial rounded weight and a modest tilted e. Clean transparent background, no tagline or container.”
 
-## Application and browser icons (2026-10-22)
+## Archived application and browser icon provenance (2026-10-22)
 
-Approved by the user on 2026-10-22 after the white-background revision.
+The previous revision was approved by the user on 2026-10-22 after the white-background revision. The following records its historical exports; the current files follow the 2026-10-25 contract above.
 Created and edited with the built-in `image_gen` tool. No third-party logo or font file is embedded.
 
 - `westory-app-master.png`: original generated 1254 × 1254 opaque RGB artwork; blue W, amber e, white full-bleed background. No pre-rounded tile, frame or border.

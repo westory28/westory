@@ -20,6 +20,7 @@ import {
   where,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import BrandLogo from "../components/common/BrandLogo";
 import {
   auth,
   authPersistenceReady,
@@ -2222,9 +2223,8 @@ const Login: React.FC = () => {
             <div className="text-5xl mb-4 animate-bounce">
               {interfaceConfig?.mainEmoji || "\u{1F4DA}"}
             </div>
-            <h1 className="text-6xl font-black tracking-tight mb-3">
-              <span className="text-blue-600">We</span>
-              <span className="text-amber-500">story</span>
+            <h1 className="mb-3 max-w-full">
+              <BrandLogo className="ws-brand-logo--login" />
             </h1>
             <p className="text-gray-500 text-xl font-medium mb-8">
               {interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"}

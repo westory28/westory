@@ -84,15 +84,10 @@
   transform: rotateY(180deg) translateZ(2px);
 }
 
-.entry-opening-lid-back > span {
-  font-size: clamp(15px, 2.2vw, 26px);
-  font-weight: 800;
-  letter-spacing: -0.06em;
-  opacity: 0.65;
-}
-
-.entry-opening-lid-back > span > span {
-  font-weight: 500;
+.entry-opening-lid-back .entry-opening-logo {
+  width: 24%;
+  height: auto;
+  object-fit: contain;
 }
 
 .entry-opening-base {

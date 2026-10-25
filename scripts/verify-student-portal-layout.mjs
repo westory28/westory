@@ -44,6 +44,12 @@ const load = (filename) => {
     URLSearchParams,
     window: { matchMedia: () => ({ matches: mobile }) },
     require: (name) => {
+      if (name.endsWith(".css")) return {};
+      if (/\.(webp|png|svg)$/.test(name)) {
+        const asset = path.resolve(path.dirname(file), name);
+        assert(fs.existsSync(asset), `Missing image asset: ${name}`);
+        return { __esModule: true, default: asset };
+      }
       if (name === "react") return React;
       if (name === "react-router-dom") return router;
       const stub = stubs[path.basename(name)];

@@ -122,7 +122,7 @@ const compile = async () => {
     write: false,
     format: "esm",
     platform: "browser",
-    loader: { ".png": "dataurl" },
+    loader: { ".png": "dataurl", ".webp": "dataurl" },
     plugins: [
       {
         name: "isolate-production-services",

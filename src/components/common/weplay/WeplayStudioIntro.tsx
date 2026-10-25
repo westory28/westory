@@ -6,6 +6,7 @@ import {
   type GeoPermissibleObjects,
 } from "d3-geo";
 import land from "../../../data/atlas/land-globe.json";
+import BrandLogo from "../BrandLogo";
 import { createWeplayIntroAudio } from "./weplayIntroAudio";
 import "./weplay-studio-intro.css";
 
@@ -243,10 +244,10 @@ export default function WeplayStudioIntro({
           />
         </svg>
         <div className="weplay-studio-intro__wordmarks">
-          <span className="weplay-studio-intro__prefix">We</span>
-          <span className="weplay-studio-intro__suffix">
-            <span className="weplay-studio-intro__westory">story</span>
-            <span className="weplay-studio-intro__weplay">play</span>
+          <BrandLogo className="weplay-studio-intro__westory" decorative />
+          <span className="weplay-studio-intro__weplay">
+            <span className="weplay-studio-intro__prefix">We</span>
+            <span className="weplay-studio-intro__suffix">play</span>
           </span>
         </div>
       </div>

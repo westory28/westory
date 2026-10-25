@@ -1,5 +1,6 @@
 import React from "react";
 import heroLesson from "../../assets/public-entry/hero-lesson-real.webp";
+import BrandLogo from "../common/BrandLogo";
 import "./entry-hero-laptop.css";
 
 interface EntryHeroLaptopProps {
@@ -36,9 +37,7 @@ export default function EntryHeroLaptop({
           </div>
         </div>
         <div className="entry-opening-lid-back" aria-hidden="true">
-          <span>
-            We<span>story</span>
-          </span>
+          <BrandLogo className="entry-opening-logo" decorative />
         </div>
       </div>
       <span className="entry-opening-hinge" aria-hidden="true" />

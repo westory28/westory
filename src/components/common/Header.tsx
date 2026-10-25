@@ -3,6 +3,7 @@ import { isSemesterArchive } from "../../lib/semesterArchive";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import HeaderStudentWis from "./HeaderStudentWis";
+import BrandLogo from "./BrandLogo";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -948,16 +949,18 @@ const Header: React.FC<{
                 className="logo-text"
                 aria-label="Westory 첫 화면"
               >
-                <span className="logo-we">We</span>
-                <span className="logo-story">story</span>
+                <BrandLogo decorative />
               </Link>
             </div>
           )}
           {!usePortalSidebar && (
             <div className="flex items-center gap-4 h-full">
-              <Link to={home} className="logo-text">
-                <span className="logo-we">We</span>
-                <span className="logo-story">story</span>
+              <Link
+                to={home}
+                className="logo-text"
+                aria-label="Westory 첫 화면"
+              >
+                <BrandLogo decorative />
               </Link>
 
               <nav

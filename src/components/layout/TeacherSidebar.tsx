@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import BrandLogo from "../common/BrandLogo";
 import { preloadStudentWeplay } from "../../lib/weplayPreload";
 import TeacherNavigationIcon, {
   type TeacherIconName,
@@ -214,10 +215,11 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
               aria-label="Westory 첫 화면"
               title={collapsed ? semesterLabel : undefined}
             >
-              <span className="teacher-sidebar-wordmark">
-                <span className="logo-we">We</span>
-                <span className="logo-story">story</span>
-              </span>
+              <BrandLogo
+                variant={collapsed && !mobileOpen ? "mark" : "full"}
+                className="teacher-sidebar-wordmark"
+                decorative
+              />
               <span className="teacher-sidebar-tagline">
                 우리가 써 내려가는 이야기
               </span>

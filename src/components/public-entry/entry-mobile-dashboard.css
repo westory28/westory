@@ -41,12 +41,6 @@
 .public-entry .entry-mobile-dashboard .emd-menu-icon {
   stroke: var(--entry-ink);
 }
-.public-entry .entry-mobile-dashboard .emd-wordmark {
-  fill: var(--entry-blue);
-  font-size: 28px;
-  font-weight: 900;
-  letter-spacing: -1px;
-}
 .public-entry .entry-mobile-dashboard .emd-accent {
   fill: var(--entry-orange);
 }

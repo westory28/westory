@@ -1,4 +1,4 @@
-/* One brand handover, timed from the letters entering the viewport. */
+/* Reveal the supplied wordmark as one image when the finale enters the viewport. */
 .public-entry .entry-finale-brand {
   position: relative;
   display: grid;
@@ -6,31 +6,19 @@
   isolation: isolate;
   perspective: 900px;
 }
-.entry-finale-latin,
-.entry-finale-korean {
+.entry-finale-latin {
   grid-area: 1 / 1;
+  display: flex;
   justify-content: center;
   align-items: center;
-  white-space: nowrap;
+  min-width: 0;
 }
-.entry-finale-latin {
-  display: none;
-  font-size: 0.88em;
-  letter-spacing: -0.075em;
-}
-.entry-finale-korean {
-  display: flex;
-}
-.entry-finale-latin > span,
-.entry-finale-korean > span {
-  display: inline-block;
-  color: var(--entry-orange);
+.entry-finale-latin .entry-finale-logo {
+  width: min(4.25em, 100%);
+  height: auto;
+  object-fit: contain;
   transform-origin: 50% 65%;
   backface-visibility: hidden;
-}
-.entry-finale-latin > span:nth-child(-n + 2),
-.entry-finale-korean > span:first-child {
-  color: var(--entry-blue);
 }
 .public-entry .entry-finale-brand::before {
   content: "";
@@ -84,11 +72,7 @@
   bottom: -8%;
   background: var(--entry-blue);
 }
-.public-entry[data-motion="on"] .entry-finale-latin {
-  display: flex;
-}
-.public-entry[data-motion="on"] .entry-finale-latin > span,
-.public-entry[data-motion="on"] .entry-finale-korean > span {
+.public-entry[data-motion="on"] .entry-finale-logo {
   opacity: 0;
 }
 .public-entry[data-motion="on"]
@@ -98,17 +82,8 @@
 }
 .public-entry[data-motion="on"]
   .entry-finish[data-entered="true"]
-  .entry-finale-latin
-  > span {
-  animation: entry-brand-latin 1700ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--glyph) * 55ms);
-}
-.public-entry[data-motion="on"]
-  .entry-finish[data-entered="true"]
-  .entry-finale-korean
-  > span {
-  animation: entry-brand-korean 1000ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(1200ms + var(--glyph) * 90ms);
+  .entry-finale-logo {
+  animation: entry-brand-latin 1000ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .public-entry[data-motion="on"]
   .entry-finish[data-entered="true"]
@@ -140,35 +115,10 @@
     transform: translate3d(0, -26px, 0) rotateX(55deg) scale(0.92);
     filter: blur(6px);
   }
-  24%,
-  58% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) rotateX(0) scale(1);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(0, -34px, 0) rotateX(78deg) scale(1.04);
-    filter: blur(6px);
-  }
-}
-@keyframes entry-brand-korean {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 40px, 0) rotateX(-80deg) scale(0.8);
-    filter: blur(8px);
-  }
-  60% {
-    opacity: 1;
-    transform: translate3d(0, -6px, 0) rotateX(4deg) scale(1.08);
-    filter: blur(0);
-    text-shadow: 0 0 24px rgb(245 158 11 / 24%);
-  }
   100% {
     opacity: 1;
     transform: translate3d(0, 0, 0) rotateX(0) scale(1);
     filter: blur(0);
-    text-shadow: 0 0 0 transparent;
   }
 }
 @keyframes entry-brand-bloom {

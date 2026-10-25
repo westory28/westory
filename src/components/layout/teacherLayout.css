@@ -60,10 +60,8 @@
   text-decoration: none;
 }
 .teacher-sidebar-wordmark {
-  font-size: var(--ws-type-teacher-logo, 2rem);
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 1;
+  width: 160px;
+  height: auto;
 }
 .teacher-sidebar-tagline {
   color: var(--ws-text-muted, #6b7280);
@@ -258,9 +256,8 @@
   justify-content: center;
 }
 .teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-wordmark {
-  font-size: var(--ws-type-teacher-logo-compact, 1.62rem);
+  width: 56px;
 }
-.teacher-sidebar.is-collapsed:not(.is-mobile-open) .logo-story,
 .teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-semester,
 .teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-tagline {
   display: none;
@@ -430,9 +427,8 @@
     justify-content: initial;
   }
   .teacher-sidebar.is-mobile-open .teacher-sidebar-wordmark {
-    font-size: var(--ws-type-teacher-logo, 2rem);
+    width: 160px;
   }
-  .teacher-sidebar.is-mobile-open .logo-story,
   .teacher-sidebar.is-mobile-open .teacher-sidebar-tagline,
   .teacher-sidebar.is-mobile-open .teacher-sidebar-label,
   .teacher-sidebar.is-mobile-open .teacher-sidebar-chevron {
