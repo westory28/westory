@@ -119,7 +119,7 @@ try {
     const table = dialog.locator(".qa-question-table");
     await table.locator("tbody tr").first().waitFor();
     assert.deepEqual(await table.locator("th").allTextContents(), [
-      "문항",
+      "번호",
       "핵심 개념",
       "유형",
       "정답률",
@@ -174,7 +174,9 @@ try {
       fullPage: true,
     });
     const first = table.locator("tbody").getByRole("button").first();
-    assert.equal(await first.getAttribute("title"), questions[0].question);
+    assert.equal(await first.getAttribute("title"), questions[0].concepts.join(" · "));
+    assert.equal(await first.innerText(), questions[0].concepts.join(" · "));
+    assert.ok(!(await table.innerText()).includes("고르세요"), "list contains concepts, not copied prompts");
     await first.focus();
     await page.keyboard.press("Enter");
     const detail = dialog.getByRole("region", {
@@ -182,6 +184,7 @@ try {
       exact: true,
     });
     await detail.waitFor();
+    assert.ok((await detail.innerText()).includes(questions[0].question), "expanded detail preserves the full prompt");
     assert(
       await detail.evaluate((element) => document.activeElement === element),
     );
@@ -217,6 +220,29 @@ try {
       ["99점", "99점"],
       "Normal assessments preserve recorded official scores",
     );
+    await page.screenshot({path:path.join(evidence,`students-${width}.png`),fullPage:true});
+    if(width>=768){
+      const emptySpace=await dialog.evaluate(d=>d.getBoundingClientRect().bottom-d.querySelector('.qa-student-table').getBoundingClientRect().bottom);
+      assert.ok(emptySpace<=40, `short student list has no oversized blank area: ${emptySpace}`);
+    }
+    if(width>=1280){
+      const behavior=await dialog.getByRole("combobox",{name:"학생 풀이 분류",exact:true}).boundingBox();
+      const submission=await dialog.getByRole("combobox",{name:"학생 응시 상태",exact:true}).boundingBox();
+      const search=await dialog.getByRole("searchbox",{name:"학생 검색",exact:true}).boundingBox();
+      assert.ok(Math.abs(behavior.y-submission.y)<1 && Math.abs(behavior.y-search.y)<1, "student filter controls share one baseline");
+      assert.ok((await dialog.getByRole("combobox",{name:"분석할 소단원",exact:true}).boundingBox()).width<=361);
+    }
+    await dialog.locator(".qa-student-table tbody button").first().click();
+    const savedAnswers=dialog.locator(".qa-student-answers");
+    assert.ok((await savedAnswers.locator("summary").first().innerText()).includes(questions[0].concepts[0]));
+    assert.ok(!(await savedAnswers.locator("summary").first().innerText()).includes("고르세요"));
+    await savedAnswers.locator("summary").first().click();
+    assert.ok((await savedAnswers.locator("details").first().innerText()).includes(questions[0].question));
+    await page.screenshot({path:path.join(evidence,`records-${width}.png`),fullPage:true});
+    await dialog.getByText("분포 보기",{exact:true}).click();
+    assert.ok(!(await dialog.locator(".qa-rate-list").innerText()).includes("고르세요"));
+    assert.ok((await dialog.locator(".qa-rate-list").innerText()).includes(questions[0].concepts[0]));
+    await page.screenshot({path:path.join(evidence,`distributions-${width}.png`),fullPage:true});
     checks.push({
       width,
       headerAlignment: true,

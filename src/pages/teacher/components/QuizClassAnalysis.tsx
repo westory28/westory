@@ -25,6 +25,7 @@ import type { Question, TreeUnit } from "./QuizBankTab";
 import QuizAnalysisView, { QuizBehaviorHelp } from "./QuizAnalysisView";
 import { adaptQuizAnalysisRecords } from "./useQuizAnalysisData";
 import "./QuizClassAnalysis.css";
+import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
 
 const percent = (part: number, total: number) =>
   total ? `${Math.round((part / total) * 100)}%` : "—";
@@ -1378,7 +1379,7 @@ function LearningSummary({ row }: { row: QuizClassSummary }) {
                 <table className="qca-table qca-question-table">
                   <thead>
                     <tr>
-                      <th scope="col">정답률이 낮은 문항</th>
+                      <th scope="col">다시 볼 핵심 개념</th>
                       <th scope="col">정답률</th>
                       <th scope="col">응답 학생</th>
                     </tr>
@@ -1386,9 +1387,7 @@ function LearningSummary({ row }: { row: QuizClassSummary }) {
                   <tbody>
                     {questions.map((entry) => (
                       <tr key={entry.id}>
-                        <th scope="row">
-                          {entry.question || `문항 ${entry.id}`}
-                        </th>
+                        <th scope="row">{quizQuestionFocus(entry)}</th>
                         <td>
                           <strong>
                             {entry.correctRate === null

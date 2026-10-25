@@ -20,6 +20,7 @@ import QuizItemStatistics from "./QuizItemStatistics";
 import type { Question, TreeUnit } from "./QuizBankTab";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import type { QuizReviewSnapshots } from "./useQuizAnalysisData";
+import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
 import "./QuizAnalysis.css";
 
 type Assessment = {
@@ -853,11 +854,13 @@ export default function QuizAnalysisView({
               </section>
               <section className="qa-chart" aria-label="문항별 정답률">
                 <div className="qa-section-head">
-                  <h3>정답률이 낮은 문항 · 최대 8개</h3>
+                  <h3>정답률이 낮은 문항</h3>
                   <InfoHelp label="문항 정답률 집계 기준">
                     현재 문항과 같은 버전에 응답한 학생별 최근 결과입니다. 정답
                     학생 수를 정오답이 확인된 학생 수로 나눕니다. 낮은
-                    정답률부터 최대 8문항을 표시합니다.
+                    정답률부터 최대 8문항을 표시합니다. 문항의 핵심 개념을 짧게
+                    표시하며, 같은 개념의 문항을 합산한 수치는 아닙니다. 항목을
+                    열면 원문을 확인할 수 있습니다.
                   </InfoHelp>
                 </div>
                 {rateRows.length ? (
@@ -875,7 +878,7 @@ export default function QuizAnalysisView({
                             onClick={() => openQuestion(row.id)}
                           >
                             <span className="qa-chart-label">
-                              {q?.question || "문항 원문 없음"}
+                              {quizQuestionFocus(q || {})}
                             </span>
                             <span className="qa-rate-track">
                               <span style={{ width: `${row.correctRate}%` }} />
@@ -1004,7 +1007,7 @@ export default function QuizAnalysisView({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <label>
+            <label className="qa-sort">
               <span className="sr-only">정렬</span>
               <select
                 aria-label="분석 목록 정렬"
@@ -1034,7 +1037,9 @@ export default function QuizAnalysisView({
             {view === "questions" && (
               <InfoHelp label="문항표 집계 기준">
                 응답 학생은 현재 문항 버전의 정오답이 확인된 학생 수입니다.
-                정답률은 이 학생 수를 기준으로 계산합니다.
+                정답률은 이 학생 수를 기준으로 계산합니다. 핵심 개념이 같은 행도
+                각각 다른 문항입니다. 번호는 현재 목록의 순서이며, 항목을 열면
+                문항 원문을 확인할 수 있습니다.
               </InfoHelp>
             )}
           </div>
@@ -1052,7 +1057,7 @@ export default function QuizAnalysisView({
                   {isKeywordScope ? "검색 문항 정답률" : "문항별 정답률"}
                 </caption>
                 <colgroup>
-                  <col className="qa-col-question" />
+                  <col className="qa-col-number" />
                   <col className="qa-col-concepts" />
                   <col className="qa-col-type" />
                   <col className="qa-col-rate" />
@@ -1060,7 +1065,9 @@ export default function QuizAnalysisView({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">문항</th>
+                    <th scope="col" className="qa-centered">
+                      번호
+                    </th>
                     <th scope="col">핵심 개념</th>
                     <th scope="col" className="qa-centered">
                       유형
@@ -1076,7 +1083,7 @@ export default function QuizAnalysisView({
                 <tbody>
                   {visibleQuestions
                     .slice((page - 1) * size, page * size)
-                    .map((q) => {
+                    .map((q, index) => {
                       const stat = byQuestion.get(String(q.id));
                       return (
                         <tr
@@ -1087,11 +1094,15 @@ export default function QuizAnalysisView({
                               : ""
                           }
                         >
+                          <td className="qa-centered">
+                            {(page - 1) * size + index + 1}
+                          </td>
                           <td>
                             <button
                               type="button"
                               className="qa-text-button qa-ellipsis"
-                              title={q.question || "발문 미등록"}
+                              title={quizQuestionFocus(q)}
+                              aria-label={`${quizQuestionFocus(q)} · ${(page - 1) * size + index + 1}번 문항 상세`}
                               aria-expanded={
                                 selectedQuestionId === String(q.id)
                               }
@@ -1102,16 +1113,8 @@ export default function QuizAnalysisView({
                               }
                               onClick={() => openQuestion(String(q.id))}
                             >
-                              {q.question || "발문 미등록"}
+                              {quizQuestionFocus(q)}
                             </button>
-                          </td>
-                          <td>
-                            <span
-                              className="qa-ellipsis"
-                              title={q.concepts?.join(" · ") || "개념 미등록"}
-                            >
-                              {q.concepts?.join(" · ") || "—"}
-                            </span>
                           </td>
                           <td className="qa-centered">{typeName(q.type)}</td>
                           <td className="qa-numeric">
@@ -1565,8 +1568,30 @@ function StudentDetail({
               return (
                 <details key={`${item.questionId}-${index}`}>
                   <summary>
+                    <svg
+                      className="qa-answer-chevron"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="m7 4 6 6-6 6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                     <span>
-                      {index + 1}. {snapshot?.question || "원문 미보관"}
+                      {index + 1}.{" "}
+                      {quizQuestionFocus({
+                        ...snapshot,
+                        concepts: item.concepts?.length
+                          ? item.concepts
+                          : snapshot?.concepts,
+                      })}
                     </span>
                     <strong>
                       {item.correct === true
