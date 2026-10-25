@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   collection,
   limit,
@@ -49,6 +50,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   onManagerOpened,
 }) => {
   const { config } = useAuth();
+  const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNotice, setSelectedNotice] = useState<Notice | undefined>();
@@ -147,6 +149,9 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   }, [notices.length]);
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
+  const activeLinkedPostId = String(
+    activeNotice?.developerLogPostId || "",
+  ).trim();
   const showCarousel = notices.length > 1;
 
   const handleCreate = () => {
@@ -183,6 +188,11 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h3>
+        {!loading && activeNotice && (
+          <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white">
+            {getCategoryLabel(activeNotice.category)}
+          </span>
+        )}
       </div>
 
       <div
@@ -212,9 +222,22 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
           <>
             <button
               type="button"
-              onClick={() => handleEdit(activeNotice)}
-              className="group block h-full w-full text-left"
-              title="알림장 이미지 수정"
+              onClick={() =>
+                activeLinkedPostId
+                  ? navigate(`/developer-log/${activeLinkedPostId}`)
+                  : handleEdit(activeNotice)
+              }
+              className="group block h-full w-full text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-blue-100"
+              title={
+                activeLinkedPostId
+                  ? "연결된 개발자 일지 열기"
+                  : "알림장 이미지 수정"
+              }
+              aria-label={
+                activeLinkedPostId
+                  ? "연결된 개발자 일지 열기"
+                  : "알림장 이미지 수정"
+              }
             >
               <div
                 className="teacher-notice-board__image-track flex h-full w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
@@ -234,9 +257,6 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
                 ))}
               </div>
             </button>
-            <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
-              {getCategoryLabel(activeNotice.category)}
-            </span>
           </>
         )}
       </div>

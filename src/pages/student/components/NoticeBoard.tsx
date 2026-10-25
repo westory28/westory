@@ -157,6 +157,11 @@ const NoticeBoard: React.FC = () => {
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
         </h2>
+        {!loading && activeNotice && (
+          <span className="shrink-0 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white">
+            {getCategoryLabel(activeNotice.category)}
+          </span>
+        )}
       </div>
 
       <div className="student-notice-board__body min-h-0 flex-1">
@@ -236,14 +241,6 @@ const NoticeBoard: React.FC = () => {
                     }
                   }}
                 />
-              )}
-              <span className="absolute bottom-4 left-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
-                {getCategoryLabel(activeNotice.category)}
-              </span>
-              {activeNotice.developerLogPostId && (
-                <span className="absolute bottom-4 right-4 rounded-full bg-slate-950/80 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
-                  게시물 보기
-                </span>
               )}
             </button>
 
