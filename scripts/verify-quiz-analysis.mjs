@@ -1196,4 +1196,48 @@ test("Missing originals and submitted answers never become fabricated question c
   }
 });
 
+test("global keyword scope recomputes matched item scores across units", () => {
+  const analysis = run([
+    record("a-old", "a", 10, 99, [item(1, false), item(2, true)]),
+    record("a-new", "a", 20, 10, [item(1, true)]),
+    record("a-other-unit", "a", 30, 80, [item(3, false)], { unitId: "unit-b", category: "formative" }),
+    record("b-other", "b", 40, 100, [item(2, true)]),
+  ], { scope: { questionIds: ["1", "3"], scoreBasis: "latest_current_revision_items", classId: "3-1" } });
+  assert.equal(student(analysis).latestScore, 50);
+  assert.equal(student(analysis).attemptCount, 3);
+  assert.equal(student(analysis, "b").attemptCount, 0);
+  assert.equal(student(analysis, "b").latestScore, null);
+  assert.equal(analysis.averageScore, 50);
+  assert.equal(analysis.scoreBasis, "latest_current_revision_items");
+  assert.equal(analysis.scoreHistogram.find(row => row.lower === 40).count, 1);
+  assert.deepEqual(analysis.questions.map(row => row.id), ["1", "3"]);
+});
+
+test("empty keyword match excludes all attempts and scores", () => {
+  const analysis = run([record("a", "a", 10, 100)], { scope: { questionIds: [], scoreBasis: "latest_current_revision_items" } });
+  assert.equal(analysis.participantCount, 0);
+  assert.equal(analysis.averageScore, null);
+  assert.equal(analysis.questions.length, 0);
+});
+
+test("keyword scores exclude old revisions, unknown outcomes and ambiguous chronology", () => {
+  const analysis = run([
+    record("old-revision", "a", 10, 100, [item(1, true, "선지 A", { sourceRevision: "1" }), item(2, null)]),
+    record("same-time-a", "a", 20, 100, [item(3, true)]),
+    record("same-time-b", "a", 20, 0, [item(3, false)]),
+  ], { scope: { questionIds: ["1", "2", "3"], scoreBasis: "latest_current_revision_items" } });
+  assert.equal(student(analysis).latestScore, null);
+  assert.equal(analysis.averageScore, null);
+  assert.equal(analysis.scoredStudentCount, 0);
+});
+
+test("keyword filtering follows canonical deduplication", () => {
+  const analysis = run([
+    record("canonical", "a", 10, 100, [item(2, true)]),
+    record("mirror", "a", 10, 0, [item(1, false)], { source: "legacy", canonicalAttemptId: "canonical" }),
+  ], { scope: { questionIds: ["1"], scoreBasis: "latest_current_revision_items" } });
+  assert.equal(analysis.participantCount, 0);
+  assert.equal(analysis.averageScore, null);
+});
+
 console.log(`quiz analysis verified: ${cases} scenarios`);

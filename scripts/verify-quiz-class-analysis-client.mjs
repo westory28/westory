@@ -60,6 +60,11 @@ const detail = exports.getQuizClassDetail({ ...scope, classIds: ["3-1"] }, "teac
 assert.deepEqual(JSON.parse(JSON.stringify(calls[6].input)), { ...scope, classIds: ["3-1"], mode: "detail", forceRefresh: false });
 resolveRequest({ data: { students: [] } });
 await detail;
+const keywordDetail = exports.getQuizClassDetail({ ...scope, unitId: "", category: "", classIds: ["3-1"], keyword: "사화", comparisonGrade: "3" }, "teacher-a:1");
+assert.equal(Object.hasOwn(calls[7].input, "comparisonGrade"), false, "summary-only grade must be absent, not undefined/null in the Firebase wire payload");
+assert.equal(calls[7].input.keyword, "사화");
+resolveRequest({ data: { students: [] } });
+await keywordDetail;
 assert.match(exports.quizClassAnalysisError(denied), /권한/);
 assert.match(exports.quizClassAnalysisError({ code: "functions/unauthenticated" }), /로그인/);
 console.log("PASS class analysis client: session-only reads, concurrent deduplication, no retained result cache, isolated identities, permission denial, explicit refresh, single-class detail");

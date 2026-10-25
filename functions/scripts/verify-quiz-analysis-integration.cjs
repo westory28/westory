@@ -72,9 +72,34 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   const updated = await deployed.getQuizClassAnalysis.run(request(teacher, scope));
   assert.equal(updated.classes[0].averageScore, 100);
   assert.equal((await deployed.getMyQuizHistory.run(request(student, { mode: 'list' }))).rows[0].score, 100);
+  await db.doc('years/2026/semesters/2/quiz_questions/2').set({ id: 2, unitId: 'unit-b', category: 'diagnostic',
+    type: 'choice', question: '광해군의 정치', explanation: '사화 이후의 정치 변화', answer: '정답', options: ['정답', '오답'], contentRevision: 1, concepts: ['광해군'] });
+  await db.doc(`semester_assessment_results/search_${student}`).set({ semesterId, studentUid: student, classId: 'class_1',
+    assessmentKind: 'QUIZ', attemptId: `search_${student}`, sourceId: 'unit-b', category: 'diagnostic', total: 10, percent: 90,
+    submittedAtIso: new Date(now + 1000).toISOString(), answers: { 2: '오답' },
+    answerChecks: [{ id: '2', correct: false }], learningSnapshot: [{ id: '2', sourceRevision: '1', concepts: ['광해군'] }] });
+  await createQuizAnalysisInvalidation({ db }).invalidate(semesterId, ['contentGeneration', 'catalogGeneration']);
+  const searchScope = { ...scope, keyword: '광해군', comparisonGrade: '3', classIds: ['class_1'] };
+  const keyword = await deployed.getQuizClassAnalysis.run(request(teacher, searchScope));
+  assert.equal(keyword.unitId, ''); assert.equal(keyword.category, '');
+  assert.deepEqual(keyword.search.questionIds, ['2']);
+  assert.equal(keyword.classes[0].averageScore, 0, 'search must not show the 90% full-assessment score');
+  assert.equal(keyword.gradeComparison.classCount, 2);
+  assert.equal(keyword.gradeComparison.rosterCount, 2);
+  assert.equal(keyword.gradeComparison.scoredCount, 1);
+  assert.equal(keyword.gradeComparison.averageScore, 0, 'nonrespondents must not contribute fabricated zeros');
+  assert.ok(!JSON.stringify(keyword).includes(student) && !JSON.stringify(keyword).includes('가상학생'));
+  const searchDetail = await deployed.getQuizClassAnalysis.run(request(teacher, { ...scope, mode: 'detail', keyword: '사화', classIds: ['class_1'] }));
+  assert.deepEqual(searchDetail.search.questionIds, ['2']);
+  assert.equal(searchDetail.questions[0].unitId, 'unit-b');
+  assert.ok(searchDetail.rawRows.every(row => row.raw.answerChecks.every(check => String(check.id) === '2')));
+  const noMatch = await deployed.getQuizClassAnalysis.run(request(teacher, { ...searchScope, keyword: '검색결과없는가상키워드' }));
+  assert.equal(noMatch.search.matchedQuestionCount, 0);
+  assert.equal(noMatch.classes[0].averageScore, null);
+  await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, searchScope)), e => e.code === 'permission-denied');
   await db.doc(`application_sessions/${teacher}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, scope)), e => e.code === 'unauthenticated');
   await db.doc(`application_sessions/${student}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getMyQuizHistory.run(request(student, { mode: 'list' })), e => e.code === 'unauthenticated');
-  console.log('PASS real exported callables + Firestore: 20-minute session, class isolation/comparison/cache, result invalidation, own history/detail, cross-owner and revoked-session denial');
+  console.log('PASS real exported callables + Firestore: session/auth, class cache, history, global keyword current-item scores/detail, grade benchmark, no-match and permission denial');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => db.terminate());

@@ -4,6 +4,17 @@
   font-size: 16px;
   line-height: 1.6;
 }
+.quiz-analysis .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .quiz-analysis :is(button, select, input) {
   min-height: 44px;
   font: inherit;
@@ -322,6 +333,7 @@
 }
 .qa-switch button {
   min-width: 88px;
+  border: 0;
   border-bottom: 3px solid transparent;
   padding: 8px 16px;
   color: var(--ws-text-muted, #6b7280);
@@ -352,7 +364,104 @@
 .qa-table {
   border-collapse: collapse;
   width: 100%;
+  min-width: 800px;
+  table-layout: fixed;
   text-align: left;
+}
+.qa-col-question {
+  width: 40%;
+}
+.qa-col-concepts {
+  width: 22%;
+}
+.qa-col-type {
+  width: 10%;
+}
+.qa-col-rate {
+  width: 12%;
+}
+.qa-col-responses {
+  width: 16%;
+}
+.qa-col-student {
+  width: 40%;
+}
+.qa-table :is(th, td).qa-numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.qa-table :is(th, td).qa-centered {
+  text-align: center;
+  white-space: nowrap;
+}
+.qa-table .qa-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qa-table.qa-question-table td {
+  padding-block: 8px;
+}
+.qa-locked-scope {
+  font-size: 14px;
+  font-weight: 700;
+}
+.qa-distributions {
+  margin: 16px 0 24px;
+  border-block: 1px solid var(--ws-border, #e5e7eb);
+}
+.qa-distributions > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  min-height: 44px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+.qa-distributions > summary::-webkit-details-marker {
+  display: none;
+}
+.qa-distributions[open] > summary svg {
+  transform: rotate(90deg);
+}
+.qa-distributions[open] > summary {
+  margin-bottom: 16px;
+}
+.qa-distributions .qa-charts {
+  padding-bottom: 16px;
+}
+.qa-distributions .qa-chart {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.qa-question-meta {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.qa-question-meta > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+}
+.qa-question-meta dt {
+  color: var(--ws-text-muted, #6b7280);
+}
+.qa-question-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.qa-student-answers > h4 {
+  margin-block: 16px;
+  font-weight: 700;
 }
 .qa-table th {
   padding: 12px 16px;
@@ -375,6 +484,7 @@
   background: var(--ws-primary-soft, #eff6ff);
 }
 .qa-text-button {
+  border: 0;
   text-align: left;
   width: 100%;
   padding: 0;
@@ -536,6 +646,9 @@
   .qa-filterbar .qa-assessment-filter {
     flex: 1 1 144px;
   }
+  .quiz-analysis--locked .qa-filterbar .qa-subunit-filter {
+    flex: 1 1 180px;
+  }
   .qa-filterbar > button {
     padding: 8px 12px;
   }
@@ -565,74 +678,7 @@
     width: 100%;
   }
   .qa-listbar > label:last-child {
-    order: 3;
-  }
-  .qa-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-  .qa-table,
-  .qa-table tbody {
-    display: block;
-  }
-  .qa-table tr {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: 12px;
-    border-bottom: 1px solid var(--ws-border, #e5e7eb);
-  }
-  .qa-table tr:last-child {
-    border-bottom: 0;
-  }
-  .qa-table td {
-    display: block;
-    border: 0;
-    padding: 4px;
-    font-size: 14px;
-  }
-  .qa-table td:first-child {
-    grid-column: 1/-1;
-    width: 100%;
-    padding-bottom: 8px;
-  }
-  .qa-table td:nth-child(3) {
-    text-align: center;
-  }
-  .qa-table td:nth-child(4) {
-    text-align: right;
-  }
-  .qa-table-region[aria-label="학생 분석 목록"] td:nth-child(2)::before {
-    content: "최근 점수";
-    display: block;
-    color: var(--ws-text-muted, #6b7280);
-    font-size: 12px;
-  }
-  .qa-table-region[aria-label="학생 분석 목록"] td:nth-child(3)::before {
-    content: "문항 결과";
-    display: block;
-    color: var(--ws-text-muted, #6b7280);
-    font-size: 12px;
-  }
-  .qa-table-region[aria-label="학생 분석 목록"] td:nth-child(4)::before {
-    content: "제출";
-    display: block;
-    color: var(--ws-text-muted, #6b7280);
-    font-size: 12px;
-  }
-  .qa-table-region[aria-label="문항 분석 목록"] td:nth-child(3)::before {
-    content: "정답률";
-    display: block;
-    color: var(--ws-text-muted, #6b7280);
-    font-size: 12px;
-  }
-  .qa-table-region[aria-label="문항 분석 목록"] td:nth-child(4)::before {
-    content: "응답";
-    display: block;
-    color: var(--ws-text-muted, #6b7280);
-    font-size: 12px;
+    order: 1;
   }
   .qa-detail {
     padding: 16px;

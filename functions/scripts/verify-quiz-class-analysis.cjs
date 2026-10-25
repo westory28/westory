@@ -189,3 +189,168 @@ test('profile presentation changes invalidate roster but unrelated last-login wr
   await service.onUser({ data: { before: snapshot({ role: 'student', name: 'A' }), after: snapshot({ role: 'student', name: 'B' }) } });
   assert.ok(f.data.get(`quiz_class_analysis_state/${SCOPE}`).rosterGeneration);
 });
+
+const keywordFixture = () => {
+  const data = fixture();
+  data[`${ROOT}/quiz_questions/2`] = { id: 2, unitId: 'unit-b', category: 'diagnostic', question: '<p>광해군</p>', passage: '사화의 원인을 찾으세요', contentRevision: 3 };
+  data[`${ROOT}/quiz_questions/3`] = { id: 3, unitId: 'unit-c', category: 'exam_prep', question: '보기 고르기', options: ['광해군', '선조'], contentRevision: 1 };
+  data[`${ROOT}/quiz_questions/4`] = { id: 4, unitId: 'unit-c', category: 'formative', question: '해설 확인', explanation: '광해군 시기', contentRevision: 1 };
+  data[`${ROOT}/quiz_questions/5`] = { id: 5, unitId: 'unit-c', category: 'formative', question: '개념 확인', concepts: ['광해군'], contentRevision: 1 };
+  data[`${ROOT}/quiz_questions/6`] = { id: 6, unitId: 'unit-c', category: 'formative', question: '연결하기', matchingPairs: [{ left: '광해군', right: '중립 외교', rightImage: 'PRIVATE_PAIR_IMAGE' }], contentRevision: 1 };
+  for (const [uid, classId] of [['c', 'class_a'], ['d', 'class_c']]) {
+    data[`semester_enrollments/en_${uid}`] = { semesterId: SCOPE, studentUid: uid, classId, enrollmentStatus: 'ACTIVE', studentName: `개인명 ${uid}` };
+    data[`semester_enrollment_slots/${buildEnrollmentSlotId(SCOPE, uid)}`] = { semesterId: SCOPE, studentUid: uid, activeEnrollmentId: `en_${uid}`, status: 'ACTIVE' };
+  }
+  data['semester_classes/class_c'] = { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: '3' };
+  const result = (uid, checks, date) => ({ assessmentKind: 'QUIZ', semesterId: SCOPE, sourceId: 'unit-b', category: 'diagnostic', studentUid: uid,
+    percent: 100, answerChecks: checks, learningSnapshot: checks.map(item => ({ id: item.id, sourceRevision: item.id === 2 ? '3' : '1' })), submittedAtIso: date });
+  data['semester_assessment_results/search_old'] = result('a', [{ id: 2, correct: true }], '2026-10-24T02:00:00Z');
+  data['semester_assessment_results/search_a'] = result('a', [{ id: 2, correct: false }, { id: 3, correct: true }, { id: 999, correct: true }], '2026-10-25T02:00:00Z');
+  data['semester_assessment_results/search_b'] = result('b', [{ id: 2, correct: true }], '2026-10-25T02:00:00Z');
+  data['semester_assessment_results/search_c'] = result('c', [{ id: 2, correct: false }], '2026-10-25T02:00:00Z');
+  return data;
+};
+const keywordQuery = patch => normalizeQuery({ ...q, keyword: '광해군', ...patch });
+
+test('keyword validates Unicode and whitespace, ignores assessment fields, and bounds comparison mode', () => {
+  const value = normalizeQuery({ ...q, keyword: '  광해군   사화  ', unitId: '', category: '' });
+  assert.equal(value.keyword, '광해군 사화');
+  assert.equal(normalizeQuery({ ...q, keyword: '광해군\t\n사화' }).keyword, '광해군 사화');
+  assert.equal(value.unitId, ''); assert.equal(value.category, ''); assert.equal(value.examRound, '');
+  assert.equal(normalizeQuery({ ...q, keyword: '광해군' }).keyword, '광해군');
+  for (const patch of [{ keyword: '' }, { keyword: ' ' }, { keyword: '<b> </b>' }, { keyword: '&nbsp;' }, { keyword: '가'.repeat(81) }, { keyword: 3 },
+    { comparisonGrade: 3 }, { comparisonGrade: '03' }, { mode: 'detail', comparisonGrade: '3' }]) {
+    assert.throws(() => normalizeQuery({ ...q, ...patch }), error => error.code === 'invalid-argument');
+  }
+});
+
+test('keyword searches all units and saved text fields, scores only latest current matching answers', async () => {
+  const f = memory(keywordFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const response = await service.query(keywordQuery());
+  assert.deepEqual(response.search.questionIds, ['2', '3', '4', '5', '6']);
+  assert.equal(response.search.unitCount, 2);
+  assert.equal(response.classes[0].basis, 'latest_current_revision_keyword_items');
+  assert.equal(response.classes[0].averageScore, 25, '50% and 0%, never original 100-point assessment scores');
+  assert.equal(response.classes[0].submittedCount, 2);
+  assert.equal(response.classes[0].relearning.correctToWrongCount, 1);
+  assert.equal(JSON.stringify(response).includes('PRIVATE_PAIR_IMAGE'), false);
+  const sourceSearchCount = () => f.queries.filter(query => query.path.endsWith('/quiz_questions')).length;
+  const count = sourceSearchCount();
+  const andResponse = await service.query(keywordQuery({ keyword: '광해군 사화' }));
+  assert.deepEqual(andResponse.search.questionIds, ['2']);
+  assert.equal(andResponse.classes[0].averageScore, 0);
+  assert.equal(sourceSearchCount(), count, 'a new keyword reuses the text catalog without another full question scan');
+  const readCount = f.queries.length;
+  await service.query(keywordQuery({ keyword: '광해군 사화' }));
+  assert.equal(f.queries.length, readCount, 'warm summary performs no source collection queries');
+});
+
+test('grade comparison weights actual respondents, includes empty classes without zero imputation, and stays anonymous', async () => {
+  const f = memory(keywordFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const response = await service.query(keywordQuery({ comparisonGrade: '3' })), grade = response.gradeComparison;
+  assert.equal(response.classes.length, 1);
+  assert.equal(grade.classId, 'grade:3'); assert.equal(grade.classCount, 3); assert.equal(grade.respondingClassCount, 2);
+  assert.equal(grade.rosterCount, 4); assert.equal(grade.scoredCount, 3); assert.equal(grade.unsubmittedCount, 1);
+  assert.equal(grade.averageScore, 50); assert.equal(grade.scoreHistogram.reduce((sum, band) => sum + band.count, 0), 3);
+  assert.equal(grade.questions.find(item => item.id === '2').respondentCount, 3);
+  assert.equal(JSON.stringify(grade).includes('개인명'), false); assert.equal(JSON.stringify(grade).includes('학생 A'), false);
+  assert.equal(Object.hasOwn(grade, 'students'), false); assert.equal(Object.hasOwn(grade, 'rawRows'), false);
+  const reads = f.queries.length;
+  await service.query(keywordQuery({ comparisonGrade: '3' }));
+  assert.equal(f.queries.length, reads);
+  const empty = await service.query(keywordQuery({ keyword: '일치하는문항없음', comparisonGrade: '3' }));
+  assert.equal(empty.gradeComparison.averageScore, null); assert.equal(empty.gradeComparison.scoredCount, 0);
+  assert.equal(empty.gradeComparison.respondingClassCount, 0); assert.equal(empty.search.matchedQuestionCount, 0);
+});
+
+test('question changes invalidate the shared search catalog; result changes preserve it but refresh class and grade', async () => {
+  const f = memory(keywordFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  await service.query(keywordQuery({ comparisonGrade: '3' }));
+  const invalidation = createQuizAnalysisInvalidation({ db: f.db });
+  const questionCount = f.queries.filter(query => query.path.endsWith('/quiz_questions')).length;
+  const updated = { ...f.data.get('semester_assessment_results/search_c'), answerChecks: [{ id: 2, correct: true }] };
+  f.data.set('semester_assessment_results/search_c', updated);
+  await invalidation.invalidateResult(SCOPE, updated);
+  const result = await service.query(keywordQuery({ comparisonGrade: '3' }));
+  assert.ok(Math.abs(result.gradeComparison.averageScore - 250 / 3) < 1e-9);
+  assert.equal(f.queries.filter(query => query.path.endsWith('/quiz_questions')).length, questionCount);
+  f.data.set(`${ROOT}/quiz_questions/2`, { ...f.data.get(`${ROOT}/quiz_questions/2`), question: '다른 문제', passage: '다른 지문', contentRevision: 4 });
+  await invalidation.invalidate(SCOPE, ['contentGeneration', 'catalogGeneration']);
+  const changed = await service.query(keywordQuery());
+  assert.deepEqual(changed.search.questionIds, ['3', '4', '5', '6']);
+  assert.equal(changed.classes[0].averageScore, 100);
+});
+
+test('keyword detail retains dedupe metadata and only selected question snapshots and answers', async () => {
+  const initial = keywordFixture();
+  initial['semester_assessment_results/search_a'].answers = { 2: '검색 답', 999: '범위 밖 답' };
+  initial['semester_assessment_results/search_a'].questionSnapshots = [{ id: 2, question: '검색 문항' }, { id: 999, question: '범위 밖 문제' }];
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const detail = await service.query(keywordQuery({ mode: 'detail', keyword: '광해군 사화' }));
+  assert.equal(detail.complete, true); assert.equal(detail.basis, 'latest_current_revision_keyword_items');
+  assert.deepEqual(detail.questions.map(row => row.id), [2]);
+  assert.ok(detail.rawRows.some(row => row.id === 'r1'), 'canonical metadata stays for deduplication before question filtering');
+  assert.ok(detail.rawRows.every(row => !['search_b', 'rb'].includes(row.id)));
+  assert.equal(JSON.stringify(detail).includes('범위 밖'), false);
+  assert.deepEqual(detail.rawRows.find(row => row.id === 'search_a').raw.answers, { 2: '검색 답' });
+});
+
+test('grade and broad keyword bounds fail explicitly without truncated comparison', async () => {
+  const initial = keywordFixture();
+  for (let i = 7; i < 507; i++) initial[`${ROOT}/quiz_questions/${i}`] = { id: i, unitId: 'unit-x', category: 'formative', question: '광해군' };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  await assert.rejects(service.query(keywordQuery()), error => error.code === 'resource-exhausted' && error.details.reason === 'QUIZ_ANALYSIS_SEARCH_LIMIT');
+  await assert.rejects(service.query(keywordQuery({ keyword: '검색어', comparisonGrade: '9' })), error => error.code === 'invalid-argument');
+  const bound = { documents: 30000, bytes: 0 };
+  await assert.rejects(readBounded(f.db.collection('semester_classes'), 100, '학급', bound), error => error.code === 'resource-exhausted' && error.details.reason === 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+});
+
+test('grade concept denominators include all-correct classes and only deduped latest outcomes with known chronology', async () => {
+  const initial = keywordFixture();
+  for (const id of ['search_a', 'search_b', 'search_c']) initial[`semester_assessment_results/${id}`].learningSnapshot[0].concepts = ['사화'];
+  initial['semester_assessment_results/search_old'].learningSnapshot[0].concepts = ['과거 개념'];
+  for (const [id, correct] of [['ambiguous_a', true], ['ambiguous_b', false]]) {
+    initial[`semester_assessment_results/${id}`] = { ...initial['semester_assessment_results/search_b'], studentUid: 'd',
+      answerChecks: [{ id: 2, correct }], submittedAtIso: '2026-10-25T05:00:00Z' };
+  }
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const correctClass = await service.query(keywordQuery({ classIds: ['class_b'], keyword: '사화' }));
+  assert.deepEqual(correctClass.classes[0].concepts, [], 'all-correct concepts stay out of the public weakness list');
+  const result = await service.query(keywordQuery({ keyword: '사화', comparisonGrade: '3' }));
+  assert.deepEqual(result.gradeComparison.concepts.map(({ concept, wrongCount, respondentCount }) => ({ concept, wrongCount, respondentCount })),
+    [{ concept: '사화', wrongCount: 2, respondentCount: 3 }]);
+  assert.equal(result.gradeComparison.scoredCount, 3, 'equal-time outcomes are unavailable, not a fourth respondent');
+});
+
+test('keyword excludes incomplete canonical records without an explicit current semester', async () => {
+  const initial = keywordFixture();
+  initial['semester_assessment_results/unspecified_term'] = { ...initial['semester_assessment_results/search_a'],
+    semesterId: undefined, answerChecks: [{ id: 2, correct: true }], submittedAtIso: '2026-10-26T01:00:00Z' };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(keywordQuery({ keyword: '사화' }));
+  assert.equal(result.classes[0].averageScore, 0);
+});
+
+test('cold grade aggregation uses at most three concurrent class builds and preserves requested class order', async () => {
+  const initial = keywordFixture();
+  for (let i = 4; i <= 8; i++) initial[`semester_classes/class_${i}`] = { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: String(i) };
+  const f = memory(initial), originalCollection = f.db.collection;
+  let active = 0, maximum = 0;
+  f.db.collection = path => {
+    const query = originalCollection(path), get = query.get;
+    query.get = async () => {
+      if (path !== 'semester_enrollments') return get();
+      active++; maximum = Math.max(maximum, active);
+      await new Promise(resolve => setImmediate(resolve));
+      try { return await get(); } finally { active--; }
+    };
+    return query;
+  };
+  const service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(keywordQuery({ comparisonGrade: '3', classIds: ['class_b', 'class_a'] }));
+  assert.equal(maximum, 3);
+  assert.equal(active, 0);
+  assert.equal(result.gradeComparison.classCount, 8);
+  assert.equal(result.gradeComparison.averageScore, 50);
+  assert.deepEqual(result.classes.map(row => row.classId), ['class_b', 'class_a']);
+});

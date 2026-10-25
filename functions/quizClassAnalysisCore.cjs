@@ -1,5 +1,5 @@
 // Generated from src/lib/quizAnalysis.ts. Do not edit.
-// source-sha256: f9624adb18dda5e8cbf7cab599f0614fb137bea3b192c57903001e88f5a699d8
+// source-sha256: 723d158326364463fff652d8b7b76adc867c78ec78337480c88b4f59acf6dc9c
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildQuizItemStatistics = exports.buildQuizAnalysis = exports.deduplicateQuizAnalysisRecords = void 0;
@@ -101,7 +101,8 @@ const questionInScope = (question, scope) => {
         question.refMid,
         question.refSmall,
     ].map(text);
-    return ((!scope.unitIds || scope.unitIds.some((id) => units.includes(text(id)))) &&
+    return ((!scope.questionIds || scope.questionIds.includes(text(question.id))) &&
+        (!scope.unitIds || scope.unitIds.some((id) => units.includes(text(id)))) &&
         (!scope.category || text(question.category) === scope.category) &&
         (!scope.examRound ||
             !text(question.examRound) ||
@@ -262,7 +263,9 @@ const buildQuizAnalysis = (input) => {
     // Deduplicate before filtering by assessment metadata so a stale mirror cannot
     // make a canonical record appear in a scope it does not belong to.
     const unique = (0, exports.deduplicateQuizAnalysisRecords)(candidates);
-    const records = unique.filter((record) => (!scope.category || text(record.category) === scope.category) &&
+    const records = unique.filter((record) => (!scope.questionIds ||
+        record.items.some((item) => questionIds.has(text(item.questionId)))) &&
+        (!scope.category || text(record.category) === scope.category) &&
         (!scope.examRound || text(record.examRound) === scope.examRound) &&
         (!scope.unitIds ||
             scope.unitIds.includes(text(record.unitId)) ||
@@ -275,12 +278,17 @@ const buildQuizAnalysis = (input) => {
         const selected = latest(studentRecords);
         const entireScope = !scope.unitIds ||
             (!!selected.value && scope.unitIds.includes(text(selected.value.unitId)));
-        const latestScore = entireScope
-            ? score(selected.value?.scorePercent)
-            : null;
         const items = rows.flatMap((row) => (row.latest ? [row.latest.item] : []));
         const correctCount = items.filter((item) => item.correct === true).length;
         const wrongCount = items.filter((item) => item.correct === false).length;
+        const itemScore = scope.scoreBasis === "latest_current_revision_items";
+        const latestScore = itemScore
+            ? correctCount + wrongCount > 0
+                ? (100 * correctCount) / (correctCount + wrongCount)
+                : null
+            : entireScope
+                ? score(selected.value?.scorePercent)
+                : null;
         return {
             ...student,
             uid: text(student.uid),
@@ -289,13 +297,15 @@ const buildQuizAnalysis = (input) => {
             latestScore,
             scoreUnavailableReason: !studentRecords.length
                 ? "no_attempt"
-                : selected.chronologyUnknown
-                    ? "chronology_unknown"
-                    : !entireScope
-                        ? "partial_scope"
-                        : latestScore === null
-                            ? "missing_score"
-                            : null,
+                : itemScore && latestScore !== null
+                    ? null
+                    : selected.chronologyUnknown
+                        ? "chronology_unknown"
+                        : !entireScope
+                            ? "partial_scope"
+                            : latestScore === null
+                                ? "missing_score"
+                                : null,
             correctCount,
             wrongCount,
             unknownCount: items.filter((item) => typeof item.correct !== "boolean").length +
@@ -306,6 +316,9 @@ const buildQuizAnalysis = (input) => {
             revisionUnknownCount: rows.filter((row) => row.revisionUnknown).length,
             missingConceptQuestionCount: items.filter((item) => typeof item.correct === "boolean" &&
                 !uniqueText(item.concepts).length).length,
+            assessedConcepts: uniqueText(items
+                .filter((item) => typeof item.correct === "boolean")
+                .flatMap((item) => item.concepts || [])),
             wrongConcepts: conceptsFor(rows),
             changes: changesFor(rows),
         };
@@ -375,7 +388,7 @@ const buildQuizAnalysis = (input) => {
         recordCount: records.length,
         duplicateRecordCount: candidates.length - unique.length,
         excludedRecordCount: input.records.length - candidates.length + unique.length - records.length,
-        scoreBasis: "latest_recorded_attempt",
+        scoreBasis: scope.scoreBasis || "latest_recorded_attempt",
         rosterAvailable,
     };
 };

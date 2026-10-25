@@ -78,10 +78,30 @@ export interface QuizClassSummaryResponse {
   category: string;
   examRound: string;
   classes: QuizClassSummary[];
+  keyword?: string;
+  search?: QuizClassSearch;
+  gradeComparison?: QuizClassSummary & {
+    grade: string;
+    classCount: number;
+    respondingClassCount: number;
+    weighting: "scored_students";
+  };
+  generatedAt: string;
+}
+
+export interface QuizClassSearch {
+  keyword: string;
+  matchedQuestionCount: number;
+  unitCount: number;
+  questionIds: string[];
   generatedAt: string;
 }
 
 export interface QuizClassDetail {
+  semesterId?: string;
+  keyword?: string;
+  search?: QuizClassSearch;
+  basis?: string;
   complete?: boolean;
   students: Array<QuizAnalysisStudent & { email?: string }>;
   rawRows: Array<{
@@ -102,6 +122,8 @@ export interface QuizClassScope {
   category: string;
   examRound: string;
   classIds: string[];
+  keyword?: string;
+  comparisonGrade?: string;
 }
 
 // Only concurrent requests are shared. No student records, names or session
@@ -143,11 +165,14 @@ export const getQuizClassDetail = (
   scope: QuizClassScope,
   identityKey: string,
   forceRefresh = false,
-) =>
-  read<QuizClassDetail>(
-    { ...scope, mode: "detail", forceRefresh },
+) => {
+  // Firebase encodes undefined as null. Summary-only fields must be absent.
+  const { comparisonGrade: _comparisonGrade, ...detailScope } = scope;
+  return read<QuizClassDetail>(
+    { ...detailScope, mode: "detail", forceRefresh },
     identityKey,
   );
+};
 
 export function quizClassAnalysisError(error: unknown) {
   const failure = error as {

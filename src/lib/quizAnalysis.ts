@@ -58,6 +58,10 @@ export interface QuizAnalysisRecord {
 export interface QuizAnalysisScope {
   /** Selected unit and its descendants. An empty array selects no units. */
   unitIds?: string[];
+  /** Explicit search results. An empty array selects no questions. */
+  questionIds?: string[];
+  /** Search-only percentage from each current question's latest known outcome. */
+  scoreBasis?: "latest_current_revision_items";
   category?: string;
   examRound?: string;
   classId?: string;
@@ -108,6 +112,8 @@ export interface QuizAnalysisStudentRow extends QuizAnalysisStudent {
   revisionExcludedCount: number;
   revisionUnknownCount: number;
   missingConceptQuestionCount: number;
+  /** Concepts with a latest current-version, known outcome (including correct). */
+  assessedConcepts: string[];
   wrongConcepts: QuizAnalysisConcept[];
   changes: QuizAnalysisChanges;
 }
@@ -151,7 +157,7 @@ export interface QuizAnalysisSummary {
   recordCount: number;
   duplicateRecordCount: number;
   excludedRecordCount: number;
-  scoreBasis: "latest_recorded_attempt";
+  scoreBasis: "latest_recorded_attempt" | "latest_current_revision_items";
   rosterAvailable: boolean;
 }
 
@@ -328,6 +334,7 @@ const questionInScope = (
     question.refSmall,
   ].map(text);
   return (
+    (!scope.questionIds || scope.questionIds.includes(text(question.id))) &&
     (!scope.unitIds || scope.unitIds.some((id) => units.includes(text(id)))) &&
     (!scope.category || text(question.category) === scope.category) &&
     (!scope.examRound ||
@@ -552,6 +559,8 @@ export const buildQuizAnalysis = (input: {
   const unique = deduplicateQuizAnalysisRecords(candidates);
   const records = unique.filter(
     (record) =>
+      (!scope.questionIds ||
+        record.items.some((item) => questionIds.has(text(item.questionId)))) &&
       (!scope.category || text(record.category) === scope.category) &&
       (!scope.examRound || text(record.examRound) === scope.examRound) &&
       (!scope.unitIds ||
@@ -569,12 +578,17 @@ export const buildQuizAnalysis = (input: {
     const entireScope =
       !scope.unitIds ||
       (!!selected.value && scope.unitIds.includes(text(selected.value.unitId)));
-    const latestScore = entireScope
-      ? score(selected.value?.scorePercent)
-      : null;
     const items = rows.flatMap((row) => (row.latest ? [row.latest.item] : []));
     const correctCount = items.filter((item) => item.correct === true).length;
     const wrongCount = items.filter((item) => item.correct === false).length;
+    const itemScore = scope.scoreBasis === "latest_current_revision_items";
+    const latestScore = itemScore
+      ? correctCount + wrongCount > 0
+        ? (100 * correctCount) / (correctCount + wrongCount)
+        : null
+      : entireScope
+        ? score(selected.value?.scorePercent)
+        : null;
     return {
       ...student,
       uid: text(student.uid),
@@ -583,13 +597,15 @@ export const buildQuizAnalysis = (input: {
       latestScore,
       scoreUnavailableReason: !studentRecords.length
         ? "no_attempt"
-        : selected.chronologyUnknown
-          ? "chronology_unknown"
-          : !entireScope
-            ? "partial_scope"
-            : latestScore === null
-              ? "missing_score"
-              : null,
+        : itemScore && latestScore !== null
+          ? null
+          : selected.chronologyUnknown
+            ? "chronology_unknown"
+            : !entireScope
+              ? "partial_scope"
+              : latestScore === null
+                ? "missing_score"
+                : null,
       correctCount,
       wrongCount,
       unknownCount:
@@ -604,6 +620,11 @@ export const buildQuizAnalysis = (input: {
           typeof item.correct === "boolean" &&
           !uniqueText(item.concepts).length,
       ).length,
+      assessedConcepts: uniqueText(
+        items
+          .filter((item) => typeof item.correct === "boolean")
+          .flatMap((item) => item.concepts || []),
+      ),
       wrongConcepts: conceptsFor(rows),
       changes: changesFor(rows),
     };
@@ -703,7 +724,7 @@ export const buildQuizAnalysis = (input: {
     duplicateRecordCount: candidates.length - unique.length,
     excludedRecordCount:
       input.records.length - candidates.length + unique.length - records.length,
-    scoreBasis: "latest_recorded_attempt",
+    scoreBasis: scope.scoreBasis || "latest_recorded_attempt",
     rosterAvailable,
   };
 };

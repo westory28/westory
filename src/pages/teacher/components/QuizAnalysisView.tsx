@@ -129,8 +129,25 @@ export default function QuizAnalysisView({
     category: string;
     examRound: string;
     classId: string;
+    keyword?: string;
+    questionIds?: string[];
   };
 }) {
+  const keyword = lockedScope?.keyword?.trim() || "";
+  const isKeywordScope = Boolean(keyword);
+  const searchQuestionIds = useMemo(
+    () =>
+      lockedScope?.questionIds
+        ? new Set(lockedScope.questionIds.map(String))
+        : null,
+    [lockedScope?.questionIds],
+  );
+  const metricLabel = (value: number | null) =>
+    isKeywordScope
+      ? value === null
+        ? "—"
+        : `${Math.round(value)}%`
+      : scoreLabel(value);
   const [assessmentKey, setAssessmentKey] = useState(
     lockedScope
       ? JSON.stringify([
@@ -151,6 +168,7 @@ export default function QuizAnalysisView({
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const detailRef = useRef<HTMLElement>(null);
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
   const labels = useMemo(() => {
     const result = new Map<string, string>();
     const visit = (nodes: TreeUnit[]) =>
@@ -209,13 +227,14 @@ export default function QuizAnalysisView({
       )
         add(question.unitId, question.category);
     });
-    if (lockedScope)
+    if (lockedScope && !isKeywordScope)
       add(lockedScope.unitId, lockedScope.category, lockedScope.examRound);
     const unitOrder = [...labels.keys()];
     return [...found.values()]
       .filter(
         (item) =>
           !lockedScope ||
+          isKeywordScope ||
           (item.unitId === lockedScope.unitId &&
             item.category === lockedScope.category &&
             item.examRound === lockedScope.examRound),
@@ -231,7 +250,7 @@ export default function QuizAnalysisView({
               : unitOrder.indexOf(b.unitId)) ||
           a.key.localeCompare(b.key, "ko", { numeric: true }),
       );
-  }, [records, questions, labels, lockedScope]);
+  }, [records, questions, labels, lockedScope, isKeywordScope]);
   const unitOptions = useMemo(() => {
     const units = new Map<
       string,
@@ -264,20 +283,21 @@ export default function QuizAnalysisView({
     [assessments, unitId],
   );
   useEffect(() => {
+    if (isKeywordScope) return;
     if (
       !loading &&
       (!unitId || !unitOptions.some((unit) => unit.id === unitId))
     )
       setUnitId(assessments[0]?.unitId || unitOptions[0]?.id || "");
-  }, [loading, unitId, unitOptions, assessments]);
+  }, [loading, unitId, unitOptions, assessments, isKeywordScope]);
   useEffect(() => {
-    if (loading) return;
+    if (loading || isKeywordScope) return;
     if (
       !assessmentKey ||
       !availableAssessments.some((item) => item.key === assessmentKey)
     )
       setAssessmentKey(availableAssessments[0]?.key || "");
-  }, [availableAssessments, assessmentKey, loading]);
+  }, [availableAssessments, assessmentKey, loading, isKeywordScope]);
   const assessment = availableAssessments.find(
     (item) => item.key === assessmentKey,
   );
@@ -301,13 +321,14 @@ export default function QuizAnalysisView({
   }, [loading, classId, classes, lockedScope]);
   const assessmentQuestions = useMemo(
     () =>
-      questions.filter(
-        (q) =>
-          !!assessment &&
-          q.unitId === assessment.unitId &&
-          normalizeMockExamCategory(q.category) === assessment.category,
+      questions.filter((q) =>
+        isKeywordScope
+          ? !searchQuestionIds || searchQuestionIds.has(String(q.id))
+          : !!assessment &&
+            q.unitId === assessment.unitId &&
+            normalizeMockExamCategory(q.category) === assessment.category,
       ),
-    [questions, assessment],
+    [questions, assessment, isKeywordScope, searchQuestionIds],
   );
   const questionSubUnit = (q: Question) => q.subUnitId || q.refSmall || "";
   const hasUnassignedQuestions = assessmentQuestions.some(
@@ -317,16 +338,35 @@ export default function QuizAnalysisView({
     () =>
       assessmentQuestions.filter(
         (q) =>
+          isKeywordScope ||
           !subUnitId ||
           (subUnitId === "__unassigned__"
             ? !subUnits.some((unit) => unit.id === questionSubUnit(q))
             : questionSubUnit(q) === subUnitId),
       ),
-    [assessmentQuestions, subUnitId, subUnits],
+    [assessmentQuestions, subUnitId, subUnits, isKeywordScope],
   );
   useEffect(() => {
     setSubUnitId("");
   }, [unitId]);
+  const analysisScope = useMemo(
+    () =>
+      isKeywordScope
+        ? {
+            questionIds: assessmentQuestions.map((question) =>
+              String(question.id),
+            ),
+            scoreBasis: "latest_current_revision_items" as const,
+            classId: classId || undefined,
+          }
+        : {
+            unitIds: assessment ? [assessment.unitId] : [],
+            category: assessment?.category,
+            examRound: assessment?.examRound,
+            classId: classId || undefined,
+          },
+    [isKeywordScope, assessmentQuestions, assessment, classId],
+  );
   const fullAnalysis = useMemo(
     () =>
       buildQuizAnalysis({
@@ -335,12 +375,7 @@ export default function QuizAnalysisView({
         questions: assessmentQuestions,
         records,
         rosterAvailable: !errors.includes("학생 명단을 불러오지 못했습니다."),
-        scope: {
-          unitIds: assessment ? [assessment.unitId] : [],
-          category: assessment?.category,
-          examRound: assessment?.examRound,
-          classId: classId || undefined,
-        },
+        scope: analysisScope,
       }),
     [
       semesterId,
@@ -350,6 +385,7 @@ export default function QuizAnalysisView({
       assessment,
       classId,
       errors,
+      analysisScope,
     ],
   );
   const itemStatistics = useMemo(
@@ -360,12 +396,7 @@ export default function QuizAnalysisView({
         questions: assessmentQuestions,
         records,
         rosterAvailable: !errors.includes("학생 명단을 불러오지 못했습니다."),
-        scope: {
-          unitIds: assessment ? [assessment.unitId] : [],
-          category: assessment?.category,
-          examRound: assessment?.examRound,
-          classId: classId || undefined,
-        },
+        scope: analysisScope,
       }),
     [
       semesterId,
@@ -375,6 +406,7 @@ export default function QuizAnalysisView({
       errors,
       assessment,
       classId,
+      analysisScope,
     ],
   );
   const itemAnalysis = useMemo(
@@ -388,12 +420,7 @@ export default function QuizAnalysisView({
             records,
             rosterAvailable:
               !errors.includes("학생 명단을 불러오지 못했습니다."),
-            scope: {
-              unitIds: assessment ? [assessment.unitId] : [],
-              category: assessment?.category,
-              examRound: assessment?.examRound,
-              classId: classId || undefined,
-            },
+            scope: analysisScope,
           }),
     [
       subUnitId,
@@ -405,6 +432,7 @@ export default function QuizAnalysisView({
       errors,
       assessment,
       classId,
+      analysisScope,
     ],
   );
   // A randomly drawn assessment may contain no question from this subunit.
@@ -476,16 +504,33 @@ export default function QuizAnalysisView({
     setPage(1);
     setSelectedQuestionId("");
     setSelectedStudentId("");
-  }, [assessmentKey, subUnitId, classId, submissionFilter, view, search, sort]);
+  }, [
+    assessmentKey,
+    subUnitId,
+    classId,
+    submissionFilter,
+    view,
+    search,
+    sort,
+    keyword,
+  ]);
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
   const openQuestion = (id: string) => {
+    detailTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setSelectedQuestionId(id);
     setSelectedStudentId("");
     requestAnimationFrame(() => detailRef.current?.focus());
   };
   const openStudent = (id: string) => {
+    detailTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setSelectedStudentId(id);
     setSelectedQuestionId("");
     requestAnimationFrame(() => detailRef.current?.focus());
@@ -502,7 +547,7 @@ export default function QuizAnalysisView({
     (sum, row) => sum + row.revisionUnknownCount + row.revisionExcludedCount,
     0,
   );
-  if (!loading && !assessments.length)
+  if (!loading && !isKeywordScope && !assessments.length)
     return (
       <section className="quiz-analysis" aria-label="평가 분석">
         {errors.length ? (
@@ -518,90 +563,110 @@ export default function QuizAnalysisView({
       </section>
     );
   return (
-    <section className="quiz-analysis" aria-label="평가 분석">
+    <section
+      className={`quiz-analysis${lockedScope ? " quiz-analysis--locked" : ""}`}
+      aria-label="평가 분석"
+    >
       <div className="qa-filterbar">
-        <label className="qa-unit-filter">
-          중단원
-          <select
-            aria-label="분석할 중단원"
-            value={unitId}
-            onChange={(e) => {
-              setUnitId(e.target.value);
-              setSubUnitId("");
-            }}
-            disabled={!!lockedScope || loading || !unitOptions.length}
-          >
-            <option value="" disabled>
-              단원 선택
-            </option>
-            {unitOptions.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="qa-assessment-filter">
-          평가
-          <select
-            aria-label="분석할 평가"
-            value={assessmentKey}
-            onChange={(e) => setAssessmentKey(e.target.value)}
-            disabled={!!lockedScope || loading || !availableAssessments.length}
-          >
-            <option value="" disabled>
-              {availableAssessments.length ? "평가 선택" : "등록된 평가 없음"}
-            </option>
-            {availableAssessments.map((item) => (
-              <option key={item.key} value={item.key}>
-                {categoryName(item.category)}
-                {item.examRound
-                  ? ` · ${formatMockExamRoundLabel(item.examRound)}`
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="qa-subunit-filter">
-          소단원
-          <select
-            aria-label="분석할 소단원"
-            value={subUnitId}
-            onChange={(e) => setSubUnitId(e.target.value)}
-            disabled={loading || (!subUnits.length && !hasUnassignedQuestions)}
-          >
-            <option value="">전체 소단원</option>
-            {subUnits.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.title}
-              </option>
-            ))}
-            {hasUnassignedQuestions && (
-              <option value="__unassigned__">소단원 미지정</option>
-            )}
-          </select>
-        </label>
-        <label>
-          학급
-          <select
-            aria-label="분석할 학급"
-            value={classId}
-            onChange={(e) => setClassId(e.target.value)}
-            disabled={
-              !!lockedScope ||
-              loading ||
-              errors.includes("학생 명단을 불러오지 못했습니다.")
-            }
-          >
-            {!lockedScope && <option value="">전체 학급</option>}
-            {classes.map((id) => (
-              <option key={id} value={id}>
-                {configuredClasses.find((item) => item.id === id)?.label ||
-                  classLabel(id)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isKeywordScope && (
+          <span className="qa-locked-scope">평가 · 전체 검색 문항</span>
+        )}
+        {!lockedScope && (
+          <>
+            <label className="qa-unit-filter">
+              중단원
+              <select
+                aria-label="분석할 중단원"
+                value={unitId}
+                onChange={(e) => {
+                  setUnitId(e.target.value);
+                  setSubUnitId("");
+                }}
+                disabled={!!lockedScope || loading || !unitOptions.length}
+              >
+                <option value="" disabled>
+                  단원 선택
+                </option>
+                {unitOptions.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="qa-assessment-filter">
+              평가
+              <select
+                aria-label="분석할 평가"
+                value={assessmentKey}
+                onChange={(e) => setAssessmentKey(e.target.value)}
+                disabled={
+                  !!lockedScope || loading || !availableAssessments.length
+                }
+              >
+                <option value="" disabled>
+                  {availableAssessments.length
+                    ? "평가 선택"
+                    : "등록된 평가 없음"}
+                </option>
+                {availableAssessments.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {categoryName(item.category)}
+                    {item.examRound
+                      ? ` · ${formatMockExamRoundLabel(item.examRound)}`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        {!isKeywordScope && (
+          <label className="qa-subunit-filter">
+            소단원
+            <select
+              aria-label="분석할 소단원"
+              value={subUnitId}
+              onChange={(e) => setSubUnitId(e.target.value)}
+              disabled={
+                loading || (!subUnits.length && !hasUnassignedQuestions)
+              }
+            >
+              <option value="">전체 소단원</option>
+              {subUnits.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.title}
+                </option>
+              ))}
+              {hasUnassignedQuestions && (
+                <option value="__unassigned__">소단원 미지정</option>
+              )}
+            </select>
+          </label>
+        )}
+        {!lockedScope && (
+          <label>
+            학급
+            <select
+              aria-label="분석할 학급"
+              value={classId}
+              onChange={(e) => setClassId(e.target.value)}
+              disabled={
+                !!lockedScope ||
+                loading ||
+                errors.includes("학생 명단을 불러오지 못했습니다.")
+              }
+            >
+              {!lockedScope && <option value="">전체 학급</option>}
+              {classes.map((id) => (
+                <option key={id} value={id}>
+                  {configuredClasses.find((item) => item.id === id)?.label ||
+                    classLabel(id)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" onClick={onReload} disabled={loading}>
           새로고침
         </button>
@@ -619,7 +684,7 @@ export default function QuizAnalysisView({
         <div role="status" className="qa-empty">
           평가 자료를 불러오는 중입니다.
         </div>
-      ) : !assessment ? (
+      ) : !isKeywordScope && !assessment ? (
         <p className="qa-empty">이 중단원에는 등록된 평가가 없습니다.</p>
       ) : (
         <>
@@ -628,7 +693,8 @@ export default function QuizAnalysisView({
               문항 <strong>{scopedQuestions.length}</strong>개
             </span>
             <span>
-              제출 기록 <strong>{analysis.participantCount}</strong>명
+              {isKeywordScope ? "검색 문항 응시" : "제출 기록"}{" "}
+              <strong>{analysis.participantCount}</strong>명
             </span>
             {legacyLimited && (
               <span className="qa-muted">이전 기록 최근 500개 포함</span>
@@ -649,118 +715,172 @@ export default function QuizAnalysisView({
               </InfoHelp>
             )}
           </div>
-          <div className="qa-charts">
-            <section
-              className="qa-chart"
-              aria-label="학생별 최근 평가 점수 분포"
-            >
-              <div className="qa-section-head">
-                <h3>최근 제출 점수</h3>
-                <InfoHelp label="최근 평가 점수 집계 기준">
-                  선택한 평가의 학생별 최근 제출 점수입니다. 다른 평가의 점수를
-                  합치지 않습니다. 점수나 제출 순서를 확인할 수 없는 기록은
-                  제외합니다. 소단원 필터는 문항 결과에만 적용하며, 점수와 제출
-                  여부는 선택한 평가 전체를 기준으로 합니다. 학급은 현재 학생
-                  명단의 반을 기준으로 구분합니다.
-                </InfoHelp>
-              </div>
-              {analysis.scoredStudentCount > 0 ? (
-                <>
-                  <div className="qa-chart-summary">
-                    평균 <strong>{scoreLabel(analysis.averageScore)}</strong>
-                    <span>{analysis.scoredStudentCount}명</span>
-                  </div>
-                  <div
-                    className="qa-histogram"
-                    role="img"
-                    aria-label={analysis.scoreHistogram
-                      .map((bucket) => `${bucket.label} ${bucket.count}명`)
-                      .join(", ")}
+          <details className="qa-distributions" open={!lockedScope}>
+            <summary>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 20 20"
+                aria-hidden="true"
+              >
+                <path
+                  d="m7 4 6 6-6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              분포 보기
+            </summary>
+            <div className="qa-charts">
+              <section
+                className="qa-chart"
+                aria-label={
+                  isKeywordScope
+                    ? "학생별 검색 문항 정답률 분포"
+                    : "학생별 최근 평가 점수 분포"
+                }
+              >
+                <div className="qa-section-head">
+                  <h3>
+                    {isKeywordScope ? "검색 문항 정답률" : "최근 제출 점수"}
+                  </h3>
+                  <InfoHelp
+                    label={
+                      isKeywordScope
+                        ? "검색 문항 정답률 집계 기준"
+                        : "최근 평가 점수 집계 기준"
+                    }
                   >
-                    {analysis.scoreHistogram.map((bucket) => (
-                      <div className="qa-histogram-column" key={bucket.label}>
-                        <span>{bucket.count}명</span>
-                        <div className="qa-histogram-track">
-                          <div
-                            style={{
-                              height: `${(bucket.count / maxHistogram) * 100}%`,
-                            }}
-                          />
+                    {isKeywordScope ? (
+                      "각 학생의 검색 문항별 현재 버전 최신 정오답으로 계산한 정답률입니다. 평가의 원래 제출 점수와 다르며, 결과를 확인할 수 없는 문항은 제외합니다."
+                    ) : (
+                      <>
+                        선택한 평가의 학생별 최근 제출 점수입니다. 다른 평가의
+                        점수를 합치지 않습니다. 점수나 제출 순서를 확인할 수
+                        없는 기록은 제외합니다. 소단원 필터는 문항 결과에만
+                        적용하며, 점수와 제출 여부는 선택한 평가 전체를 기준으로
+                        합니다. 학급은 현재 학생 명단의 반을 기준으로
+                        구분합니다.
+                      </>
+                    )}
+                  </InfoHelp>
+                </div>
+                {analysis.scoredStudentCount > 0 ? (
+                  <>
+                    <div className="qa-chart-summary">
+                      평균 <strong>{metricLabel(analysis.averageScore)}</strong>
+                      <span>{analysis.scoredStudentCount}명</span>
+                    </div>
+                    <div
+                      className="qa-histogram"
+                      role="img"
+                      aria-label={analysis.scoreHistogram
+                        .map(
+                          (bucket) =>
+                            `${isKeywordScope ? bucket.label.replace(/점/g, "%") : bucket.label} ${bucket.count}명`,
+                        )
+                        .join(", ")}
+                    >
+                      {analysis.scoreHistogram.map((bucket) => (
+                        <div className="qa-histogram-column" key={bucket.label}>
+                          <span>{bucket.count}명</span>
+                          <div className="qa-histogram-track">
+                            <div
+                              style={{
+                                height: `${(bucket.count / maxHistogram) * 100}%`,
+                              }}
+                            />
+                          </div>
+                          <span
+                            title={
+                              isKeywordScope
+                                ? bucket.label.replace(/점/g, "%")
+                                : bucket.label
+                            }
+                          >
+                            {bucket.lower}–{bucket.upper > 100 ? "" : "<"}
+                            {Math.min(bucket.upper, 100)}
+                          </span>
                         </div>
-                        <span title={bucket.label}>
-                          {bucket.lower}–{bucket.upper > 100 ? "" : "<"}
-                          {Math.min(bucket.upper, 100)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="qa-legend">
-                    <span>
-                      <i className="qa-key-blue" />
-                      학생 수
-                    </span>
-                    <span>가로축: 점수</span>
-                  </div>
-                </>
-              ) : (
-                <p className="qa-empty">표시할 점수가 없습니다.</p>
-              )}
-            </section>
-            <section className="qa-chart" aria-label="문항별 정답률">
-              <div className="qa-section-head">
-                <h3>정답률이 낮은 문항 · 최대 8개</h3>
-                <InfoHelp label="문항 정답률 집계 기준">
-                  현재 문항과 같은 버전에 응답한 학생별 최근 결과입니다. 정답
-                  학생 수를 정오답이 확인된 학생 수로 나눕니다. 낮은 정답률부터
-                  최대 8문항을 표시합니다.
-                </InfoHelp>
-              </div>
-              {rateRows.length ? (
-                <>
-                  <div className="qa-rate-list">
-                    {rateRows.map((row) => {
-                      const q = scopedQuestions.find(
-                        (q) => String(q.id) === row.id,
-                      );
-                      return (
-                        <button
-                          type="button"
-                          key={row.id}
-                          className="qa-rate-row"
-                          onClick={() => openQuestion(row.id)}
-                        >
-                          <span className="qa-chart-label">
-                            {q?.question || "문항 원문 없음"}
-                          </span>
-                          <span className="qa-rate-track">
-                            <span style={{ width: `${row.correctRate}%` }} />
-                          </span>
-                          <strong>
-                            {Math.round(row.correctRate || 0)}%{" "}
-                            <small>
-                              {row.correctCount}/{row.assessedStudentCount}명
-                            </small>
-                          </strong>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="qa-legend">
-                    <span>
-                      <i className="qa-key-blue" />
-                      정답
-                    </span>
-                    <span>
-                      <i className="qa-key-gray" />
-                      오답
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <p className="qa-empty">현재 문항 버전의 응답이 없습니다.</p>
-              )}
-            </section>
-          </div>
+                      ))}
+                    </div>
+                    <div className="qa-legend">
+                      <span>
+                        <i className="qa-key-blue" />
+                        학생 수
+                      </span>
+                      <span>
+                        가로축: {isKeywordScope ? "정답률(%)" : "점수"}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="qa-empty">
+                    {isKeywordScope
+                      ? "현재 문항 버전의 정오답 기록이 없습니다."
+                      : "표시할 점수가 없습니다."}
+                  </p>
+                )}
+              </section>
+              <section className="qa-chart" aria-label="문항별 정답률">
+                <div className="qa-section-head">
+                  <h3>정답률이 낮은 문항 · 최대 8개</h3>
+                  <InfoHelp label="문항 정답률 집계 기준">
+                    현재 문항과 같은 버전에 응답한 학생별 최근 결과입니다. 정답
+                    학생 수를 정오답이 확인된 학생 수로 나눕니다. 낮은
+                    정답률부터 최대 8문항을 표시합니다.
+                  </InfoHelp>
+                </div>
+                {rateRows.length ? (
+                  <>
+                    <div className="qa-rate-list">
+                      {rateRows.map((row) => {
+                        const q = scopedQuestions.find(
+                          (q) => String(q.id) === row.id,
+                        );
+                        return (
+                          <button
+                            type="button"
+                            key={row.id}
+                            className="qa-rate-row"
+                            onClick={() => openQuestion(row.id)}
+                          >
+                            <span className="qa-chart-label">
+                              {q?.question || "문항 원문 없음"}
+                            </span>
+                            <span className="qa-rate-track">
+                              <span style={{ width: `${row.correctRate}%` }} />
+                            </span>
+                            <strong>
+                              {Math.round(row.correctRate || 0)}%{" "}
+                              <small>
+                                {row.correctCount}/{row.assessedStudentCount}명
+                              </small>
+                            </strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="qa-legend">
+                      <span>
+                        <i className="qa-key-blue" />
+                        정답
+                      </span>
+                      <span>
+                        <i className="qa-key-gray" />
+                        오답
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="qa-empty">현재 문항 버전의 응답이 없습니다.</p>
+                )}
+              </section>
+            </div>
+          </details>
           <div className="qa-listbar">
             <div role="group" aria-label="분석 대상" className="qa-switch">
               <button
@@ -789,11 +909,18 @@ export default function QuizAnalysisView({
             {view === "students" && (
               <label className="qa-submission-filter">
                 <span className="qa-filter-label">
-                  응시 상태{" "}
+                  {isKeywordScope ? "기록 유무" : "응시 상태"}{" "}
                   <InfoHelp label="응시 상태 구분 기준">
-                    선택한 평가에 제출 기록이 있으면 응시 완료로 구분합니다.
-                    미응시·미제출에는 아직 시작하지 않았거나 풀이 중인 학생이
-                    포함됩니다. 소단원 필터로 미응시 여부를 바꾸지 않습니다.
+                    {isKeywordScope ? (
+                      "검색한 문항이 포함된 제출 기록의 유무입니다. 문항별 정답률에는 현재 버전의 정오답 기록만 포함합니다."
+                    ) : (
+                      <>
+                        선택한 평가에 제출 기록이 있으면 응시 완료로 구분합니다.
+                        미응시·미제출에는 아직 시작하지 않았거나 풀이 중인
+                        학생이 포함됩니다. 소단원 필터로 미응시 여부를 바꾸지
+                        않습니다.
+                      </>
+                    )}
                   </InfoHelp>
                 </span>
                 <select
@@ -803,8 +930,12 @@ export default function QuizAnalysisView({
                   onChange={(e) => setSubmissionFilter(e.target.value)}
                 >
                   <option value="all">전체 학생</option>
-                  <option value="submitted">응시 완료</option>
-                  <option value="not_submitted">미응시·미제출</option>
+                  <option value="submitted">
+                    {isKeywordScope ? "기록 있음" : "응시 완료"}
+                  </option>
+                  <option value="not_submitted">
+                    {isKeywordScope ? "기록 없음" : "미응시·미제출"}
+                  </option>
                 </select>
               </label>
             )}
@@ -840,13 +971,23 @@ export default function QuizAnalysisView({
                     <option value="responses">응답 학생 많은 순</option>
                   </>
                 ) : (
-                  <option value="score">최근 점수 낮은 순</option>
+                  <option value="score">
+                    {isKeywordScope ? "정답률 낮은 순" : "최근 점수 낮은 순"}
+                  </option>
                 )}
               </select>
             </label>
           </div>
           <div className="qa-list-count" role="status">
-            {view === "questions" ? `문항 ${total}개` : `학생 ${total}명`}
+            {view === "questions"
+              ? `${isKeywordScope ? "검색 문항" : "문항"} ${total}개`
+              : `학생 ${total}명`}
+            {view === "questions" && (
+              <InfoHelp label="문항표 집계 기준">
+                응답 학생은 현재 문항 버전의 정오답이 확인된 학생 수입니다.
+                정답률은 이 학생 수를 기준으로 계산합니다.
+              </InfoHelp>
+            )}
           </div>
           <div
             className="qa-table-region"
@@ -857,13 +998,30 @@ export default function QuizAnalysisView({
             tabIndex={0}
           >
             {view === "questions" ? (
-              <table className="qa-table">
+              <table className="qa-table qa-question-table">
+                <caption className="sr-only">
+                  {isKeywordScope ? "검색 문항 정답률" : "문항별 정답률"}
+                </caption>
+                <colgroup>
+                  <col className="qa-col-question" />
+                  <col className="qa-col-concepts" />
+                  <col className="qa-col-type" />
+                  <col className="qa-col-rate" />
+                  <col className="qa-col-responses" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>문항</th>
-                    <th>유형</th>
-                    <th>정답률</th>
-                    <th>응답</th>
+                    <th scope="col">문항</th>
+                    <th scope="col">핵심 개념</th>
+                    <th scope="col" className="qa-centered">
+                      유형
+                    </th>
+                    <th scope="col" className="qa-numeric">
+                      정답률
+                    </th>
+                    <th scope="col" className="qa-numeric">
+                      응답 학생
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -883,51 +1041,43 @@ export default function QuizAnalysisView({
                           <td>
                             <button
                               type="button"
-                              className="qa-text-button"
+                              className="qa-text-button qa-ellipsis"
+                              title={q.question || "발문 미등록"}
+                              aria-expanded={
+                                selectedQuestionId === String(q.id)
+                              }
+                              aria-controls={
+                                selectedQuestionId === String(q.id)
+                                  ? "qa-selected-detail"
+                                  : undefined
+                              }
                               onClick={() => openQuestion(String(q.id))}
                             >
                               {q.question || "발문 미등록"}
                             </button>
-                            <span className="qa-row-meta">
-                              {labels.get(questionSubUnit(q)) ||
-                                "소단원 미지정"}
-                            </span>
-                            {!!q.concepts?.length && (
-                              <span className="qa-row-meta">
-                                {q.concepts.join(" · ")}
-                              </span>
-                            )}
                           </td>
-                          <td>{typeName(q.type)}</td>
                           <td>
+                            <span
+                              className="qa-ellipsis"
+                              title={q.concepts?.join(" · ") || "개념 미등록"}
+                            >
+                              {q.concepts?.join(" · ") || "—"}
+                            </span>
+                          </td>
+                          <td className="qa-centered">{typeName(q.type)}</td>
+                          <td className="qa-numeric">
                             {stat?.correctRate == null ? (
                               "—"
                             ) : (
-                              <>
-                                <strong>{Math.round(stat.correctRate)}%</strong>
-                                <span className="qa-row-meta">
-                                  {stat.correctCount}/
-                                  {stat.assessedStudentCount}명
-                                </span>
-                              </>
+                              <strong>{Math.round(stat.correctRate)}%</strong>
                             )}
                           </td>
-                          <td>
+                          <td className="qa-numeric">
                             {stat?.assessedStudentCount
                               ? `${stat.assessedStudentCount}명`
                               : stat?.attemptedStudentCount
                                 ? "결과 미확인"
                                 : "기록 없음"}
-                            {!!stat?.revisionUnknownCount && (
-                              <span className="qa-row-meta">
-                                버전 미확인 {stat.revisionUnknownCount}명
-                              </span>
-                            )}
-                            {!!stat?.revisionExcludedCount && (
-                              <span className="qa-row-meta">
-                                이전 버전 기록 {stat.revisionExcludedCount}명
-                              </span>
-                            )}
                           </td>
                         </tr>
                       );
@@ -935,19 +1085,29 @@ export default function QuizAnalysisView({
                 </tbody>
               </table>
             ) : (
-              <table className="qa-table">
+              <table className="qa-table qa-student-table">
+                <colgroup>
+                  <col className="qa-col-student" />
+                  <col />
+                  <col />
+                  <col />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>학생</th>
-                    <th>최근 점수</th>
-                    <th>
+                    <th scope="col">학생</th>
+                    <th scope="col" className="qa-numeric">
+                      {isKeywordScope ? "검색 문항 정답률" : "최근 점수"}
+                    </th>
+                    <th scope="col" className="qa-numeric">
                       문항 결과
                       <InfoHelp label="학생 문항 결과 기준">
                         현재 문항과 같은 버전의 학생별 최근 결과입니다. 정답
                         수/정오답이 확인된 문항 수로 표시합니다.
                       </InfoHelp>
                     </th>
-                    <th>제출</th>
+                    <th scope="col" className="qa-numeric">
+                      제출
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -963,7 +1123,8 @@ export default function QuizAnalysisView({
                         <td>
                           <button
                             type="button"
-                            className="qa-text-button"
+                            className="qa-text-button qa-ellipsis"
+                            title={`${configuredClasses.find((entry) => entry.id === student.classId)?.label || classLabel(student.classId || "")} ${student.number || ""}번 ${student.name || "이름 미등록"}`}
                             onClick={() => openStudent(student.uid)}
                           >
                             {student.classId
@@ -973,20 +1134,25 @@ export default function QuizAnalysisView({
                             {student.name || "이름 미등록"}
                           </button>
                         </td>
-                        <td>
-                          <strong>{scoreLabel(student.latestScore)}</strong>
+                        <td className="qa-numeric">
+                          <strong>{metricLabel(student.latestScore)}</strong>
                           {student.latestScore === null && (
                             <span className="qa-row-meta">
-                              {noScore(student)}
+                              {isKeywordScope &&
+                              student.attemptCount > 0 &&
+                              student.scoreUnavailableReason !==
+                                "chronology_unknown"
+                                ? "현재 버전 정오답 없음"
+                                : noScore(student)}
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td className="qa-numeric">
                           {student.assessedQuestionCount
                             ? `${student.correctCount}/${student.assessedQuestionCount}`
                             : "—"}
                         </td>
-                        <td>
+                        <td className="qa-numeric">
                           {student.attemptCount
                             ? `${student.attemptCount}회`
                             : submissionDataAvailable
@@ -1031,6 +1197,7 @@ export default function QuizAnalysisView({
           {(selectedQuestion || selectedStudent) && (
             <section
               className="qa-detail"
+              id="qa-selected-detail"
               ref={detailRef}
               tabIndex={-1}
               aria-label={selectedQuestion ? "문항 상세" : "학생 상세"}
@@ -1039,7 +1206,7 @@ export default function QuizAnalysisView({
                 <h3>
                   {selectedQuestion
                     ? "문항 상세"
-                    : `${selectedStudent?.name || "학생"} · 최근 제출`}
+                    : `${selectedStudent?.name || "학생"} · ${isKeywordScope ? "검색 문항 결과" : "최근 제출"}`}
                 </h3>
                 <button
                   type="button"
@@ -1047,6 +1214,9 @@ export default function QuizAnalysisView({
                   onClick={() => {
                     setSelectedQuestionId("");
                     setSelectedStudentId("");
+                    requestAnimationFrame(() =>
+                      detailTriggerRef.current?.focus(),
+                    );
                   }}
                 >
                   닫기
@@ -1080,6 +1250,41 @@ export default function QuizAnalysisView({
                       </button>
                     )}
                   </div>
+                  <dl className="qa-question-meta">
+                    <div>
+                      <dt>단원</dt>
+                      <dd>
+                        {labels.get(selectedQuestion.unitId) || "단원명 미등록"}
+                        {labels.get(questionSubUnit(selectedQuestion))
+                          ? ` · ${labels.get(questionSubUnit(selectedQuestion))}`
+                          : ""}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>핵심 개념</dt>
+                      <dd>
+                        {selectedQuestion.concepts?.join(" · ") ||
+                          "개념 미등록"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>정답 학생</dt>
+                      <dd>
+                        {questionStat?.correctRate == null
+                          ? "정오답 기록 없음"
+                          : `${questionStat.correctCount} / ${questionStat.assessedStudentCount}명`}
+                      </dd>
+                    </div>
+                  </dl>
+                  {!!questionStat &&
+                    (questionStat.revisionUnknownCount > 0 ||
+                      questionStat.revisionExcludedCount > 0) && (
+                      <p className="qa-muted">
+                        집계 제외 · 버전 미확인{" "}
+                        {questionStat.revisionUnknownCount}명 · 이전 버전{" "}
+                        {questionStat.revisionExcludedCount}명
+                      </p>
+                    )}
                   <QuestionContent question={selectedQuestion} />
                   <QuizItemStatistics
                     key={`${selectedQuestion.id}:${assessmentKey}:${classId}`}
@@ -1142,7 +1347,8 @@ export default function QuizAnalysisView({
                   questions={scopedQuestions}
                   snapshots={snapshots}
                   onOpenQuestion={openQuestion}
-                  filterQuestions={Boolean(subUnitId)}
+                  filterQuestions={Boolean(subUnitId) || isKeywordScope}
+                  searchScope={isKeywordScope}
                 />
               )}
             </section>
@@ -1219,12 +1425,14 @@ function StudentDetail({
   snapshots,
   onOpenQuestion,
   filterQuestions = false,
+  searchScope = false,
 }: {
   student: QuizAnalysisStudentRow;
   questions: Question[];
   snapshots: QuizReviewSnapshots;
   onOpenQuestion: (id: string) => void;
   filterQuestions?: boolean;
+  searchScope?: boolean;
 }) {
   const record = student.latestRecord;
   const visibleItems =
@@ -1239,7 +1447,11 @@ function StudentDetail({
         <>
           <div className="qa-summaryline">
             <span>{dateLabel(record.submittedAt)}</span>
-            <strong>{scoreLabel(student.latestScore)}</strong>
+            <strong>
+              {searchScope
+                ? `검색 문항 정답률 ${student.latestScore == null ? "—" : `${Math.round(student.latestScore)}%`}`
+                : scoreLabel(student.latestScore)}
+            </strong>
           </div>
           {!!student.wrongConcepts.length && (
             <div className="qa-concepts">
@@ -1270,9 +1482,12 @@ function StudentDetail({
             </div>
           )}
           <div className="qa-student-answers">
+            {searchScope && <h4>최근 제출에 포함된 검색 문항</h4>}
             {filterQuestions && !visibleItems.length && (
               <p className="qa-empty">
-                최근 제출에는 선택한 소단원의 문항이 없습니다.
+                {searchScope
+                  ? "최근 제출에는 검색 문항이 없습니다."
+                  : "최근 제출에는 선택한 소단원의 문항이 없습니다."}
               </p>
             )}
             {visibleItems.map((item, index) => {
@@ -1320,6 +1535,15 @@ function StudentDetail({
               );
             })}
           </div>
+        </>
+      ) : searchScope && student.latestScore !== null ? (
+        <>
+          <div className="qa-summaryline">
+            <strong>검색 문항 정답률 {Math.round(student.latestScore)}%</strong>
+          </div>
+          <p className="qa-empty">
+            최근 제출 순서를 확인할 수 없어 답안 묶음을 표시할 수 없습니다.
+          </p>
         </>
       ) : (
         <p className="qa-empty">{noScore(student)}</p>
