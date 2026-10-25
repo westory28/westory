@@ -185,12 +185,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .student-notice-board__image {
-    transition: none !important;
-  }
-}
-
 .student-attendance-history-error {
   display: flex;
   align-items: center;

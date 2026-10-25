@@ -203,7 +203,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`student-notice-board__image absolute inset-0 h-full w-full object-contain object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-cover object-center will-change-transform ${
                     isSliding
                       ? slideDirection === 1
                         ? "-translate-x-full"
@@ -224,7 +224,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`student-notice-board__image absolute inset-0 h-full w-full object-contain object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-cover object-center will-change-transform ${
                     isSliding
                       ? "translate-x-0"
                       : slideDirection === 1

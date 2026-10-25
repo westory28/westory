@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import "./developerEventArticles.css";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   addDoc,
@@ -1363,7 +1364,7 @@ const DeveloperLog: React.FC = () => {
                     <Link
                       key={post.id}
                       to={`/developer-log/${post.id}`}
-                      className="developer-log-list-grid developer-log-list-row px-5 py-4 transition hover:bg-blue-50/40"
+                      className="developer-log-list-grid developer-log-list-row px-4 py-3 transition hover:bg-blue-50/40 lg:px-5 lg:py-4"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -1377,11 +1378,6 @@ const DeveloperLog: React.FC = () => {
                             {getDisplayTitle(post)}
                           </span>
                         </div>
-                        {post.summary && (
-                          <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-slate-500 lg:hidden">
-                            {post.summary}
-                          </p>
-                        )}
                       </div>
                       <div className="text-left lg:text-center">
                         {renderCategoryBadge(post.category)}

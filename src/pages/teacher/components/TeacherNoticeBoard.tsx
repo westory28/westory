@@ -197,7 +197,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
 
       <div
         ref={viewportRef}
-        className="teacher-notice-board__viewport relative min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white"
+        className="teacher-notice-board__viewport relative aspect-[16/9] w-full min-h-0 flex-none overflow-hidden rounded-xl bg-white"
       >
         {loading && (
           <InlineLoading
@@ -252,7 +252,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
                     alt="알림장"
                     loading={notice.id === activeNotice.id ? "eager" : "lazy"}
                     decoding="async"
-                    className="teacher-notice-board__image h-full w-full shrink-0 object-contain"
+                    className="teacher-notice-board__image block h-full w-full shrink-0 object-cover"
                   />
                 ))}
               </div>

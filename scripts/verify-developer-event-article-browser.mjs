@@ -66,15 +66,48 @@ const builtCssFile = assets.find((name) => /^main-.*\.css$/.test(name));
 const builtCss = builtCssFile
   ? await fs.readFile(path.join(root, "dist/assets", builtCssFile), "utf8")
   : "";
+const articleArt = {
+  performance: ["performance-flow", "performance-check"],
+  exam: ["exam-clues", "exam-practice"],
+  reopen: ["reopen-explore", "reopen-play"],
+};
+const readOptionalArticle = async (relativePath) => {
+  try {
+    return await fs.readFile(path.join(root, relativePath), "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+};
 const actualArticles = await Promise.all(
-  ["performance", "exam"].map(async (name) => [
-    name,
-    await fs
-      .readFile(path.join(root, `output/notice-20261025/${name}.html`), "utf8")
-      .then((html) => html.replaceAll("{{HERO}}", `/${name}.webp`))
-      .catch(() => null),
-  ]),
+  Object.entries(articleArt).map(async ([name, art]) => {
+    const source =
+      (await readOptionalArticle(
+        `output/notice-20261025/article-v2/${name}.html`,
+      )) ??
+      (await readOptionalArticle(`output/notice-20261025/${name}.html`));
+    return [
+      name,
+      source
+        ?.replaceAll("{{HERO}}", `/${name}.webp`)
+        .replaceAll("{{ART1}}", `/article-v2/${art[0]}.webp`)
+        .replaceAll("{{ART2}}", `/article-v2/${art[1]}.webp`) ?? null,
+    ];
+  }),
 );
+const imageRoutes = new Map([
+  ["/banner.png", "output/notice-20261025/performance.png"],
+  ...Object.keys(articleArt).map((name) => [
+    `/${name}.webp`,
+    `output/notice-20261025/${name}.webp`,
+  ]),
+  ...Object.values(articleArt).flatMap((art) =>
+    art.map((name) => [
+      `/article-v2/${name}.webp`,
+      `output/notice-20261025/article-v2/${name}.webp`,
+    ]),
+  ),
+]);
 const entry = `
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -93,7 +126,7 @@ const actualArticles=${JSON.stringify(Object.fromEntries(actualArticles))};
 function App(){
  const [html,setHtml]=useState(source),[mode,setMode]=useState('preview'),[checks,setChecks]=useState('대기'),[legacy,setLegacy]=useState(false);
  const saveAndReopen=()=>{const saved=JSON.parse(JSON.stringify({bodyHtml:html})).bodyHtml;const dom=new DOMParser().parseFromString(saved,'text/html');const ok=dom.querySelector('article.westory-event-article')&&dom.querySelector('table thead th[scope="col"]')&&dom.querySelector('table tbody td')?.textContent==='3학년 1반'&&dom.querySelector('img')?.getAttribute('alt')==='수행평가 안내 이미지'&&dom.querySelector('.westory-event-table[tabindex="0"]')&&dom.querySelector('blockquote')&&saved===html;setChecks((ok?'PASS':'FAIL')+' · 저장 후 본문 구조·표·이미지·접근성 속성 보존');setHtml(saved);setMode('saved');};
- return <><nav aria-label="검증 도구"><button onClick={()=>{setMode(mode==='preview'?'edit':'preview');setLegacy(false)}}>{mode==='preview'?'본문 편집':'미리보기'}</button><button onClick={saveAndReopen}>저장 후 다시 열기</button><button onClick={()=>{setLegacy(!legacy);setMode('preview')}}>기존 글 전환</button><button onClick={()=>setMode('list')}>목록 확인</button>{Object.keys(actualArticles).map(key=><button key={key} onClick={()=>{setHtml(actualArticles[key]||source);setMode('preview');setLegacy(false)}}>{key==='exam'?'시험범위 실제 글':'수행평가 실제 글'}</button>)}</nav><p role="status">{checks}</p><main className="ws-page developer-log-page"><header className="ws-page-header"><h1>개발자 일지</h1></header>{mode==='list'?<ListFixture/>:mode==='edit'?<EventArticleEditor value={html} onChange={setHtml}/>:renderPostDetail({...base,bodyHtml:legacy?'<h2>기존 개발자 일지</h2><p>기존 글의 본문과 카드뉴스 구성을 유지합니다.</p>':html},true)}</main></>;
+ return <><nav aria-label="검증 도구"><button onClick={()=>{setMode(mode==='preview'?'edit':'preview');setLegacy(false)}}>{mode==='preview'?'본문 편집':'미리보기'}</button><button onClick={saveAndReopen}>저장 후 다시 열기</button><button onClick={()=>{setLegacy(!legacy);setMode('preview')}}>기존 글 전환</button><button onClick={()=>setMode('list')}>목록 확인</button>{Object.keys(actualArticles).map(key=><button key={key} onClick={()=>{setHtml(actualArticles[key]||source);setMode('preview');setLegacy(false)}}>{{performance:'수행평가 실제 글',exam:'시험범위 실제 글',reopen:'재오픈 실제 글'}[key]}</button>)}</nav><p role="status">{checks}</p><main className="ws-page developer-log-page"><header className="ws-page-header"><h1>개발자 일지</h1></header>{mode==='list'?<ListFixture/>:mode==='edit'?<EventArticleEditor value={html} onChange={setHtml}/>:renderPostDetail({...base,bodyHtml:legacy?'<h2>기존 개발자 일지</h2><p>기존 글의 본문과 카드뉴스 구성을 유지합니다.</p>':html},true)}</main></>;
 }
 createRoot(document.getElementById('root')).render(<App/>);
 `;
@@ -108,7 +141,7 @@ const result = await build({
 const fixture = result.outputFiles[0].text;
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>공지 본문 편집·반응형 검증</title><script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>
 *{box-sizing:border-box}body{margin:0;padding:16px;font:16px/1.6 'Noto Sans KR',sans-serif;color:#1f2937;word-break:keep-all;overflow-wrap:anywhere;background:#f9fafb}main{max-width:1152px;margin:auto;background:white}nav{display:flex;flex-wrap:wrap;gap:8px}button{font:inherit;padding:8px 16px;min-height:44px}h1{font-size:28px}img{max-width:100%}[hidden]{display:none!important}.min-w-0{min-width:0}.py-8{padding-block:32px}.grid{display:grid;gap:32px}.p-5{padding:20px}.flex{display:flex}.flex-col{flex-direction:column}.gap-4{gap:16px}.gap-3{gap:12px}.gap-2{gap:8px}.flex-wrap{flex-wrap:wrap}.border-b{border-bottom:1px solid #e5e7eb}.pb-6{padding-bottom:24px}.mb-3{margin-bottom:12px}.mt-3{margin-top:12px}.mt-4{margin-top:16px}.rounded-2xl{border-radius:16px}.text-center{text-align:center}.border-dashed{border-style:dashed}.border{border-width:1px;border-color:#e5e7eb}.px-5{padding-inline:20px}.py-8{padding-block:32px}.text-gray-400{color:#9ca3af}.bg-gray-50{background:#f9fafb}.hidden{display:none}.shrink-0{flex-shrink:0}@media(min-width:1024px){.lg\\:grid-cols-\\[minmax\\(0\\,1fr\\)_minmax\\(280px\\,420px\\)\\]{grid-template-columns:minmax(0,1fr) minmax(280px,420px)}}
-${builtCss}\n${portalCss}\n${articleCss}\nbody{padding:0}main{background:white}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+${builtCss}\n${portalCss}\n${articleCss}\nbody{padding:0}main{background:white}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}</style><link rel="stylesheet" href="/developerEventArticles.css"><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 if (process.argv.includes("--check")) {
   console.log(
     "Event article fixture bundle PASS; no application services imported.",
@@ -117,31 +150,44 @@ if (process.argv.includes("--check")) {
 }
 const server = http.createServer(async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (req.url === "/banner.png") {
-    res.setHeader("Content-Type", "image/png");
+  const pathname = new URL(req.url || "/", "http://127.0.0.1").pathname;
+  if (imageRoutes.has(pathname)) {
+    try {
+      const image = await fs.readFile(path.join(root, imageRoutes.get(pathname)));
+      res.setHeader(
+        "Content-Type",
+        pathname.endsWith(".png") ? "image/png" : "image/webp",
+      );
+      res.end(image);
+    } catch (error) {
+      res.statusCode = error.code === "ENOENT" ? 404 : 500;
+      res.setHeader("Content-Type", "text/plain;charset=utf-8");
+      res.end("Fixture image unavailable");
+    }
+    return;
+  }
+  if (pathname === "/developerEventArticles.css") {
+    res.setHeader("Content-Type", "text/css;charset=utf-8");
     res.end(
       await fs.readFile(
-        path.join(root, "output/notice-20261025/performance.png"),
+        path.join(root, "src/pages/developerEventArticles.css"),
+        "utf8",
       ),
     );
     return;
   }
-  if (req.url === "/performance.webp" || req.url === "/exam.webp") {
-    res.setHeader("Content-Type", "image/webp");
-    res.end(
-      await fs.readFile(
-        path.join(root, "output/notice-20261025", req.url.slice(1)),
-      ),
-    );
+  if (pathname !== "/" && pathname !== "/fixture.js") {
+    res.statusCode = 404;
+    res.end("Not found");
     return;
   }
   res.setHeader(
     "Content-Type",
-    req.url === "/fixture.js"
+    pathname === "/fixture.js"
       ? "text/javascript;charset=utf-8"
       : "text/html;charset=utf-8",
   );
-  res.end(req.url === "/fixture.js" ? fixture : html);
+  res.end(pathname === "/fixture.js" ? fixture : html);
 });
 await new Promise((resolve) => server.listen(4341, "127.0.0.1", resolve));
 console.log("Event article fixture: http://127.0.0.1:4341");

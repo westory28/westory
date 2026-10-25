@@ -3638,24 +3638,22 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .developer-log-list-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3, 12px) var(--space-4, 16px);
+  display: block;
+  min-height: 48px;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
 }
 
-.developer-log-list-row > :first-child {
-  flex-basis: 100%;
+.developer-log-list-row > :not(:first-child) {
+  display: none;
 }
 
 .developer-log-list-title {
-  display: -webkit-box;
+  display: block;
   min-width: 0;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 
 .developer-log-list-row:focus-visible {
@@ -3673,6 +3671,22 @@ button.lesson-core-point-floating-status:disabled {
     grid-template-columns: minmax(0, 1fr) 128px 128px 88px 88px;
     column-gap: var(--space-4, 16px);
     align-items: center;
+  }
+
+  .developer-log-list-row {
+    padding: var(--space-4, 16px) var(--space-5, 20px);
+  }
+
+  .developer-log-list-row > :not(:first-child) {
+    display: block;
+  }
+
+  .developer-log-list-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 

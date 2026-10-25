@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const mocks = {
-  state: `let mode='linked';export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const setMode=value=>{mode=value};export const getNotices=()=>mode==='empty'?[]:[{id:'notice-fixture',category:mode==='exam'?'exam':mode==='reopen'?'notice':'performance',content:'알림 안내',imageUrl:'/'+(mode==='exam'||mode==='reopen'?mode:'performance')+'.webp',developerLogPostId:mode==='unlinked'?'':'performance-fixture',createdAt:null}];`,
+  state: `let mode='linked';export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const setMode=value=>{mode=value};export const getNotices=()=>mode==='empty'?[]:(mode==='carousel'?['performance','exam','reopen']:[mode==='exam'||mode==='reopen'?mode:'performance']).map((name,index)=>({id:'notice-fixture-'+index,category:name==='reopen'?'notice':name,content:'알림 안내',imageUrl:'/'+name+'.webp',developerLogPostId:mode==='unlinked'?'':name+'-fixture',createdAt:null}));`,
   auth: `import {config,userData} from 'fixture:state';export const useAuth=()=>({config,userData});`,
   firebase: `export const db={};`,
   firestore: `import {getNotices} from 'fixture:state';export const collection=()=>({}),limit=()=>({}),orderBy=()=>({}),query=()=>({});export const onSnapshot=(_,next)=>{next({docs:getNotices().map(n=>({id:n.id,data:()=>n}))});return()=>{}};`,
@@ -57,13 +57,13 @@ const fixturePlugin = {
   },
 };
 const entry = `
-import React,{useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {MemoryRouter,useLocation} from 'react-router-dom';
 import NoticeBoard from './src/pages/student/components/NoticeBoard';
 import TeacherNoticeBoard from './src/pages/teacher/components/TeacherNoticeBoard';
 import {setMode as setFixtureMode} from 'fixture:state';
-function App(){const [mode,setMode]=useState('linked');const location=useLocation();return <><nav aria-label="검증 도구">{[['linked','연결된 알림'],['unlinked','연결 없는 알림'],['empty','빈 알림'],['exam','시험범위 이미지'],['reopen','재오픈 이미지']].map(([value,label])=><button key={value} onClick={()=>{setFixtureMode(value);setMode(value)}}>{label}</button>)}</nav><output aria-live="polite">현재 경로: {location.pathname}</output><main><section aria-label="학생 알림장" className="student-portal-dashboard"><NoticeBoard key={'student-'+mode}/></section><section aria-label="교사 알림장" className="teacher-weekly-dashboard"><TeacherNoticeBoard key={'teacher-'+mode}/></section></main></>}
+function App(){const [mode,setMode]=useState('linked');const [motion,setMotion]=useState([]);useEffect(()=>{const samples=[];const timer=setInterval(()=>{const images=[...document.querySelectorAll('.student-notice-board__image')];if(images.length>1){samples.push({at:performance.now(),reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,images:images.map(el=>({src:el.getAttribute('src'),transform:getComputedStyle(el).transform,duration:getComputedStyle(el).transitionDuration}))});if(samples.length>60)samples.shift();setMotion([...samples]);}},50);return()=>clearInterval(timer)},[]);const location=useLocation();return <><nav aria-label="검증 도구">{[['linked','연결된 알림'],['unlinked','연결 없는 알림'],['empty','빈 알림'],['exam','시험범위 이미지'],['reopen','재오픈 이미지'],['carousel','슬라이드 3장']].map(([value,label])=><button key={value} onClick={()=>{setFixtureMode(value);setMode(value)}}>{label}</button>)}</nav><output aria-live="polite">현재 경로: {location.pathname}</output><main><section aria-label="학생 알림장" className="student-portal-dashboard"><NoticeBoard key={'student-'+mode}/></section><section aria-label="교사 알림장" className="teacher-weekly-dashboard"><TeacherNoticeBoard key={'teacher-'+mode}/></section></main><details><summary>슬라이드 측정</summary><pre data-motion-evidence>{JSON.stringify(motion,null,2)}</pre></details></>}
 createRoot(document.getElementById('root')).render(<MemoryRouter><App/></MemoryRouter>);`;
 const bundle = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -102,5 +102,6 @@ const server = http.createServer(async (req, res) => {
   );
   res.end(req.url === "/fixture.js" ? bundle.outputFiles[0].text : html);
 });
-await new Promise((resolve) => server.listen(4342, "127.0.0.1", resolve));
-console.log("Notice board fixture: http://127.0.0.1:4342");
+const port = Number(process.env.NOTICE_FIXTURE_PORT || 4342);
+await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
+console.log(`Notice board fixture: http://127.0.0.1:${port}`);

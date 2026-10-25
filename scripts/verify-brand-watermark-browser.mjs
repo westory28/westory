@@ -2,10 +2,29 @@
 import { build } from "esbuild";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const articleAssetsEnabled = process.argv.includes("--article-assets");
+const articleAssetsButton = articleAssetsEnabled
+  ? '<button id="load-article-assets">본문 이미지 6개 불러오기</button>'
+  : "";
+const articleAssetNames = [
+  "performance-flow",
+  "performance-check",
+  "exam-clues",
+  "exam-practice",
+  "reopen-explore",
+  "reopen-play",
+];
+const articleAssets = new Map(
+  articleAssetNames.map((name) => [
+    `/article-assets/${name}.png`,
+    path.join(root, "output", "notice-20261025", "article-v2", `${name}.png`),
+  ]),
+);
 const entry = String.raw`
 import {prepareBrandWatermark, watermarkImageBlob} from './src/lib/brandWatermark';
 import {compressNoticeImage} from './src/lib/noticeImages';
@@ -20,14 +39,20 @@ const summary=document.getElementById('summary');
 let cases=[];
 let checkedInitialLoad=false;
 const fileInput=document.getElementById('image-files');
+const compressionType=document.getElementById('compression-type');
 const compressButton=document.getElementById('compress-files');
+const articleButton=document.getElementById('load-article-assets');
 const downloads=document.getElementById('downloads');
 const compressStatus=document.getElementById('compress-status');
 let downloadUrls=[];
 fileInput.addEventListener('change',()=>{compressButton.disabled=!fileInput.files?.length;});
-compressButton.addEventListener('click',async()=>{
- const files=Array.from(fileInput.files||[]);if(!files.length)return;
- compressButton.disabled=true;fileInput.disabled=true;downloads.replaceChildren();
+const compressFiles=async(files)=>{
+ if(!files.length)return;
+ const isDeveloperLog=compressionType.value==='developer-log';
+ const compressImage=isDeveloperLog?compressDeveloperLogImage:compressNoticeImage;
+ const modeLabel=isDeveloperLog?'개발자 일지':'알림장';
+ compressButton.disabled=true;fileInput.disabled=true;compressionType.disabled=true;downloads.replaceChildren();
+ if(articleButton)articleButton.disabled=true;
  downloadUrls.forEach(url=>URL.revokeObjectURL(url));downloadUrls=[];
  checkedInitialLoad=true;
  let succeeded=0;
@@ -35,8 +60,8 @@ compressButton.addEventListener('click',async()=>{
   compressStatus.textContent=file.name+' 압축 중';
   const section=document.createElement('section');const heading=document.createElement('h3');heading.textContent=file.name;section.append(heading);downloads.append(section);
   try{
-   const result=await compressNoticeImage(file);const url=URL.createObjectURL(result.blob);downloadUrls.push(url);
-   const name=file.name.replace(/\.[^.]+$/,'')||'notice';
+   const result=await compressImage(file);const url=URL.createObjectURL(result.blob);downloadUrls.push(url);
+   const name=file.name.replace(/\.[^.]+$/,'')||(isDeveloperLog?'developer-log':'notice');
    const extension=result.mimeType==='image/webp'?'webp':result.mimeType==='image/jpeg'?'jpg':'png';
    const filename=name+'.'+extension;
    const exported=await fetch('/export',{method:'POST',headers:{'Content-Type':result.mimeType,'X-File-Name':encodeURIComponent(filename)},body:result.blob});
@@ -49,8 +74,26 @@ compressButton.addEventListener('click',async()=>{
    succeeded++;
   }catch(error){const message=document.createElement('p');message.setAttribute('role','alert');message.textContent='압축하지 못했습니다: '+String(error);section.append(message);}
  }
- compressStatus.textContent=succeeded+'/'+files.length+'개 압축 완료';
- compressButton.disabled=false;fileInput.disabled=false;
+ compressStatus.textContent=modeLabel+' '+succeeded+'/'+files.length+'개 압축 완료';
+ compressButton.disabled=false;fileInput.disabled=false;compressionType.disabled=false;
+ if(articleButton)articleButton.disabled=false;
+};
+compressButton.addEventListener('click',()=>compressFiles(Array.from(fileInput.files||[])));
+articleButton?.addEventListener('click',async()=>{
+ articleButton.disabled=true;compressButton.disabled=true;fileInput.disabled=true;compressionType.disabled=true;
+ compressStatus.textContent='본문 이미지 6개 불러오는 중';
+ try{
+  const manifest=await fetch('/article-assets');
+  if(!manifest.ok)throw new Error('본문 이미지 목록을 불러오지 못했습니다.');
+  const entries=await manifest.json();const files=[];
+  for(const {name,href} of entries){
+   const response=await fetch(href);
+   if(!response.ok)throw new Error(name+' 파일을 불러오지 못했습니다.');
+   files.push(new File([await response.blob()],name,{type:'image/png'}));
+  }
+  compressionType.value='developer-log';await compressFiles(files);
+ }catch(error){compressStatus.textContent=String(error);}
+ finally{articleButton.disabled=false;compressButton.disabled=!fileInput.files?.length;fileInput.disabled=false;compressionType.disabled=false;}
 });
 const add=(name,passed,details,blob)=>{
  cases.push({name,passed,details});
@@ -145,7 +188,7 @@ const compile = async () => {
   return result.outputFiles[0].text;
 };
 
-const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>신규 등록 이미지 워터마크 검증</title><style>body{margin:24px;font:16px/1.5 sans-serif;color:#1f2937;background:#f9fafb}button{font:inherit;min-height:44px;padding:8px 16px}#results,#downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}section{min-width:0}h2,h3{font-size:16px}img{max-width:100%;max-height:300px;object-fit:contain;border:1px solid #cbd5e1}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}.file-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}a{display:inline-block;padding:8px 0;color:#2563eb}#downloads{margin-bottom:32px}</style><h1>신규 등록 이미지 워터마크 검증</h1><p>이미지는 이 PC에서만 처리합니다. 운영 연결·등록 없음.</p><section aria-labelledby="compress-title"><h2 id="compress-title">알림장 이미지 준비</h2><div class="file-tools"><label for="image-files">원본 이미지 선택</label><input id="image-files" type="file" accept="image/*" multiple><button id="compress-files" disabled>선택 이미지 압축</button></div><p role="status" id="compress-status">선택한 파일마다 실제 알림장 압축과 워터마크를 적용합니다.</p><div id="downloads"></div></section><h2>합성 이미지 회귀 검사</h2><button id="run">이미지 검증 실행</button><p role="status" id="summary">대기</p><div id="results"></div><script type="module" src="/fixture.js"></script></html>`;
+const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>신규 등록 이미지 워터마크 검증</title><style>body{margin:24px;font:16px/1.5 sans-serif;color:#1f2937;background:#f9fafb}button,select{font:inherit;min-height:44px;padding:8px 16px}#results,#downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:24px}section{min-width:0}h2,h3{font-size:16px}img{max-width:100%;max-height:300px;object-fit:contain;border:1px solid #cbd5e1}pre{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}.file-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}a{display:inline-block;padding:8px 0;color:#2563eb}#downloads{margin-bottom:32px}</style><h1>신규 등록 이미지 워터마크 검증</h1><p>이미지는 이 PC에서만 처리합니다. 운영 연결·등록 없음.</p><section aria-labelledby="compress-title"><h2 id="compress-title">게시 이미지 준비</h2><div class="file-tools"><label for="compression-type">이미지 용도</label><select id="compression-type"><option value="notice" selected>알림장(16:9)</option><option value="developer-log">개발자 일지(원본 비율)</option></select><label for="image-files">원본 이미지 선택</label><input id="image-files" type="file" accept="image/*" multiple><button id="compress-files" disabled>선택 이미지 압축</button>${articleAssetsButton}</div><p role="status" id="compress-status">선택한 용도의 실제 압축과 워터마크를 적용합니다.</p><div id="downloads"></div></section><h2>합성 이미지 회귀 검사</h2><button id="run">이미지 검증 실행</button><p role="status" id="summary">대기</p><div id="results"></div><script type="module" src="/fixture.js"></script></html>`;
 let compiled = await compile();
 if (process.argv.includes("--check")) {
   console.log(
@@ -157,6 +200,34 @@ if (process.argv.includes("--check")) {
 const preparedDownloads = new Map();
 const server = http.createServer(async (req, res) => {
   try {
+    if (req.url?.startsWith("/article-assets")) {
+      const host = `127.0.0.1:${server.address().port}`;
+      if (!articleAssetsEnabled || req.method !== "GET" || req.headers.host !== host) {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      if (req.url === "/article-assets") {
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(articleAssetNames.map((name) => ({
+          name: `${name}.png`, href: `/article-assets/${name}.png`,
+        }))));
+        return;
+      }
+      const assetPath = articleAssets.get(req.url);
+      if (!assetPath) {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+      const bytes = await readFile(assetPath);
+      res.setHeader("Content-Type", "image/png");
+      res.end(bytes);
+      return;
+    }
     if (req.method === "POST" && req.url === "/export") {
       const origin = `http://127.0.0.1:${server.address().port}`;
       const mime = String(req.headers["content-type"] || "");
