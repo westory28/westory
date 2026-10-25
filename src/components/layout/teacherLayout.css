@@ -63,11 +63,6 @@
   width: 160px;
   height: auto;
 }
-.teacher-sidebar-tagline {
-  color: var(--ws-text-muted, #6b7280);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
 .teacher-sidebar-nav {
   display: flex;
   flex: 1;
@@ -258,8 +253,7 @@
 .teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-wordmark {
   width: 56px;
 }
-.teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-semester,
-.teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-tagline {
+.teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-semester {
   display: none;
 }
 .teacher-sidebar.is-collapsed:not(.is-mobile-open) .teacher-sidebar-full-label,
@@ -429,7 +423,6 @@
   .teacher-sidebar.is-mobile-open .teacher-sidebar-wordmark {
     width: 160px;
   }
-  .teacher-sidebar.is-mobile-open .teacher-sidebar-tagline,
   .teacher-sidebar.is-mobile-open .teacher-sidebar-label,
   .teacher-sidebar.is-mobile-open .teacher-sidebar-chevron {
     display: initial;

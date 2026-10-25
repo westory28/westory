@@ -220,9 +220,6 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                 className="teacher-sidebar-wordmark"
                 decorative
               />
-              <span className="teacher-sidebar-tagline">
-                우리가 써 내려가는 이야기
-              </span>
             </Link>
             {semesterLabel && (
               <span className="teacher-brand-semester teacher-sidebar-semester">
