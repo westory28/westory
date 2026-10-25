@@ -207,9 +207,12 @@ try {
     await dialog.getByRole("button", { name: "학생", exact: true }).click();
     await dialog.locator(".qa-student-table tbody tr").first().waitFor();
     assert.equal(await dialog.locator(".qa-student-table tbody tr").count(), 2);
+    const scoreColumn = (await dialog.locator(".qa-student-table thead th").allTextContents())
+      .findIndex((label) => label.trim() === "최근 점수") + 1;
+    assert.ok(scoreColumn > 0);
     assert.deepEqual(
       await dialog
-        .locator(".qa-student-table tbody tr td:nth-child(2) strong")
+        .locator(`.qa-student-table tbody tr td:nth-child(${scoreColumn}) strong`)
         .allTextContents(),
       ["99점", "99점"],
       "Normal assessments preserve recorded official scores",
@@ -245,9 +248,12 @@ try {
     "50%",
   );
   await dialog.getByRole("button", { name: "학생", exact: true }).click();
+  const keywordScoreColumn = (await dialog.locator(".qa-student-table thead th").allTextContents())
+    .findIndex((label) => label.trim() === "검색 문항 정답률") + 1;
+  assert.ok(keywordScoreColumn > 0);
   assert.deepEqual(
     await dialog
-      .locator(".qa-student-table tbody tr td:nth-child(2) strong")
+      .locator(`.qa-student-table tbody tr td:nth-child(${keywordScoreColumn}) strong`)
       .allTextContents(),
     ["0%", "100%"],
   );

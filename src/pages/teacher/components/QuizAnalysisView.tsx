@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildQuizAnalysis,
   buildQuizItemStatistics,
+  QUIZ_BEHAVIOR_LABELS,
   type QuizAnalysisRecord,
   type QuizAnalysisStudent,
   type QuizAnalysisStudentRow,
+  type QuizResponseBehavior,
 } from "../../../lib/quizAnalysis";
 import {
   DEFAULT_MOCK_EXAM_ROUND,
@@ -28,6 +30,17 @@ type Assessment = {
   label: string;
   latestMs: number;
 };
+type BehaviorCategory = QuizResponseBehavior["category"];
+const behaviorCategories: BehaviorCategory[] = [
+  "suspected_guessing",
+  "repeated_choice",
+  "unflagged",
+  "insufficient",
+  "no_attempt",
+];
+const behaviorCategory = (student: QuizAnalysisStudentRow): BehaviorCategory =>
+  student.behavior?.category ||
+  (student.attemptCount > 0 ? "insufficient" : "no_attempt");
 const classLabel = (id: string) => {
   const [grade, room] = id.split("-");
   return room
@@ -109,6 +122,7 @@ export default function QuizAnalysisView({
   onDerive,
   onReload,
   lockedScope,
+  initialBehaviorFilter,
 }: {
   questions: Question[];
   tree: TreeUnit[];
@@ -124,6 +138,7 @@ export default function QuizAnalysisView({
   onEdit: (question: Question) => void;
   onDerive?: (question: QuizQuestionDraft) => void;
   onReload: () => void;
+  initialBehaviorFilter?: BehaviorCategory;
   lockedScope?: {
     unitId: string;
     category: string;
@@ -161,7 +176,12 @@ export default function QuizAnalysisView({
   const [subUnitId, setSubUnitId] = useState("");
   const [classId, setClassId] = useState(lockedScope?.classId || "");
   const [submissionFilter, setSubmissionFilter] = useState("all");
-  const [view, setView] = useState<"questions" | "students">("questions");
+  const [view, setView] = useState<"questions" | "students">(
+    initialBehaviorFilter ? "students" : "questions",
+  );
+  const [behaviorFilter, setBehaviorFilter] = useState<
+    BehaviorCategory | "all"
+  >(initialBehaviorFilter || "all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("default");
   const [page, setPage] = useState(1);
@@ -477,6 +497,11 @@ export default function QuizAnalysisView({
   const visibleStudents = analysis.students
     .filter(
       (student) =>
+        behaviorFilter === "all" ||
+        behaviorCategory(student) === behaviorFilter,
+    )
+    .filter(
+      (student) =>
         submissionFilter === "all" ||
         !submissionDataAvailable ||
         (submissionFilter === "submitted"
@@ -509,6 +534,7 @@ export default function QuizAnalysisView({
     subUnitId,
     classId,
     submissionFilter,
+    behaviorFilter,
     view,
     search,
     sort,
@@ -907,6 +933,29 @@ export default function QuizAnalysisView({
               </button>
             </div>
             {view === "students" && (
+              <label className="qa-behavior-filter">
+                <span className="qa-filter-label">
+                  풀이 분류 <QuizBehaviorHelp label="풀이 분류 기준" />
+                </span>
+                <select
+                  aria-label="학생 풀이 분류"
+                  value={behaviorFilter}
+                  onChange={(event) =>
+                    setBehaviorFilter(
+                      event.target.value as BehaviorCategory | "all",
+                    )
+                  }
+                >
+                  <option value="all">전체</option>
+                  {behaviorCategories.map((category) => (
+                    <option value={category} key={category}>
+                      {QUIZ_BEHAVIOR_LABELS[category]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {view === "students" && (
               <label className="qa-submission-filter">
                 <span className="qa-filter-label">
                   {isKeywordScope ? "기록 유무" : "응시 상태"}{" "}
@@ -1088,6 +1137,7 @@ export default function QuizAnalysisView({
               <table className="qa-table qa-student-table">
                 <colgroup>
                   <col className="qa-col-student" />
+                  <col className="qa-col-behavior" />
                   <col />
                   <col />
                   <col />
@@ -1095,6 +1145,9 @@ export default function QuizAnalysisView({
                 <thead>
                   <tr>
                     <th scope="col">학생</th>
+                    <th scope="col" className="qa-numeric">
+                      풀이 분류
+                    </th>
                     <th scope="col" className="qa-numeric">
                       {isKeywordScope ? "검색 문항 정답률" : "최근 점수"}
                     </th>
@@ -1133,6 +1186,13 @@ export default function QuizAnalysisView({
                             {student.number ? `${student.number}번 ` : ""}
                             {student.name || "이름 미등록"}
                           </button>
+                        </td>
+                        <td className="qa-numeric">
+                          <span
+                            className={`qa-behavior-label qa-behavior-label--${behaviorCategory(student)}`}
+                          >
+                            {QUIZ_BEHAVIOR_LABELS[behaviorCategory(student)]}
+                          </span>
                         </td>
                         <td className="qa-numeric">
                           <strong>{metricLabel(student.latestScore)}</strong>
@@ -1443,6 +1503,10 @@ function StudentDetail({
     ) || [];
   return (
     <>
+      <BehaviorEvidence
+        behavior={student.behavior}
+        category={behaviorCategory(student)}
+      />
       {record ? (
         <>
           <div className="qa-summaryline">
@@ -1549,5 +1613,118 @@ function StudentDetail({
         <p className="qa-empty">{noScore(student)}</p>
       )}
     </>
+  );
+}
+
+export function QuizBehaviorHelp({
+  label,
+  reason,
+}: {
+  label: string;
+  reason?: string | null;
+}) {
+  return (
+    <InfoHelp label={label}>
+      {reason && <strong className="qa-behavior-help-reason">{reason}</strong>}
+      최근 실제 제출의 현재 버전 객관식·O/X 응답만 봅니다. 찍기 추정은 확정
+      판정이 아니며 학생과 풀이 과정을 함께 확인하는 참고 자료입니다. 화면이
+      숨겨진 기록 없이 3초 이내에 수정·재방문·힌트 없이 답한 문항이 5개 이상이고
+      선택형의 60% 이상일 때, 정오답이 확인된 빠른 응답 중 오답이 3개 이상·50%
+      이상이거나 같은 보기 반복이 함께 있으면 찍기 추정으로 표시합니다. 반복
+      선택은 객관식 또는 O/X에서 같은 보기를 5회 이상·80% 이상 선택한
+      경우입니다. 시간 관측이 5문항 미만이거나 선택형의 80% 미만이면 속도로
+      분류하지 않습니다. 기록 부족은 0초나 미해당을 뜻하지 않습니다. 점수와
+      보상에는 영향을 주지 않습니다.
+    </InfoHelp>
+  );
+}
+
+function BehaviorEvidence({
+  behavior,
+  category,
+}: {
+  behavior?: QuizResponseBehavior;
+  category: BehaviorCategory;
+}) {
+  const count = (value: number | null | undefined, unit: string) =>
+    value == null ? "—" : `${value}${unit}`;
+  return (
+    <section className="qa-behavior-evidence" aria-label="풀이 분류 근거">
+      <div className="qa-section-head">
+        <h4>풀이 분류</h4>
+        <strong className={`qa-behavior-label qa-behavior-label--${category}`}>
+          {QUIZ_BEHAVIOR_LABELS[category]}
+        </strong>
+        <QuizBehaviorHelp
+          label="학생 풀이 분류 근거 설명"
+          reason={behavior?.reason}
+        />
+      </div>
+      <dl className="qa-behavior-metrics">
+        <div>
+          <dt>관측 문항</dt>
+          <dd>
+            {behavior && behavior.eligibleQuestionCount > 0
+              ? `${behavior.observedQuestionCount}/${behavior.eligibleQuestionCount}문항`
+              : "—"}
+            {behavior?.coveragePercent != null && (
+              <span className="qa-muted">
+                {" "}
+                ({Math.round(behavior.coveragePercent)}%)
+              </span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>
+            문항 시간{" "}
+            <InfoHelp label="문항 시간 기준">
+              관측된 선택형 응답 시간의 중앙값입니다. 기록되지 않은 시간은 0초로
+              바꾸지 않습니다.
+            </InfoHelp>
+          </dt>
+          <dd>
+            {behavior?.medianActiveMs == null
+              ? "—"
+              : `${Math.round(behavior.medianActiveMs / 100) / 10}초`}
+          </dd>
+        </div>
+        <div>
+          <dt>수정</dt>
+          <dd>{count(behavior?.answerChangeCount, "회")}</dd>
+        </div>
+        <div>
+          <dt>재방문</dt>
+          <dd>{count(behavior?.revisitCount, "회")}</dd>
+        </div>
+        <div>
+          <dt>빠른 응답</dt>
+          <dd>
+            {count(
+              behavior?.observedQuestionCount
+                ? behavior.fastQuestionCount
+                : null,
+              "문항",
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>빠른 응답 정답률</dt>
+          <dd>
+            {behavior?.fastAccuracy == null
+              ? "—"
+              : `${Math.round(behavior.fastAccuracy)}% (${behavior.fastCorrectCount}/${behavior.fastCorrectCount + behavior.fastWrongCount})`}
+          </dd>
+        </div>
+        <div className="qa-behavior-repeat">
+          <dt>많이 고른 보기</dt>
+          <dd>
+            {behavior?.repeatedChoice
+              ? `${behavior.repeatedChoice.label} · ${behavior.repeatedChoice.count}/${behavior.repeatedChoice.total}문항 (${Math.round(behavior.repeatedChoice.percent)}%)`
+              : "—"}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }

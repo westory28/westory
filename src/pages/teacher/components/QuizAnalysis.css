@@ -384,7 +384,66 @@
   width: 16%;
 }
 .qa-col-student {
-  width: 40%;
+  width: 30%;
+}
+.qa-col-behavior {
+  width: 15%;
+}
+.qa-table.qa-student-table {
+  min-width: 960px;
+}
+.qa-behavior-label {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.qa-behavior-label--insufficient,
+.qa-behavior-label--no_attempt {
+  color: var(--ws-text-muted, #6b7280);
+  font-weight: 400;
+}
+.qa-behavior-evidence {
+  margin: 0 0 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.qa-behavior-evidence .qa-section-head {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.qa-behavior-evidence h4 {
+  margin: 0;
+  font-size: 16px;
+}
+.qa-behavior-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0 0;
+}
+.qa-behavior-metrics dt {
+  display: flex;
+  align-items: center;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  min-height: 28px;
+}
+.qa-behavior-metrics dd {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.qa-behavior-repeat {
+  grid-column: span 2;
+}
+.qa-behavior-help-reason {
+  display: block;
+  margin-bottom: 8px;
+}
+@media (max-width: 767px) {
+  .qa-behavior-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .qa-table :is(th, td).qa-numeric {
   text-align: right;

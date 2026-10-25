@@ -25,7 +25,7 @@
     "verify:assessment-attempt-safety": "node scripts/verify-assessment-attempt-safety.mjs",
     "verify:assessment-release": "node scripts/verify-assessment-release.mjs",
     "verify:quiz-settings": "node scripts/verify-quiz-settings-browser.mjs",
-    "verify:quiz-analysis": "node scripts/verify-quiz-analysis.mjs",
+    "verify:quiz-analysis": "node scripts/verify-quiz-analysis.mjs && node scripts/verify-quiz-behavior.mjs",
     "verify:student-quiz-result": "node scripts/verify-student-quiz-result.mjs",
     "verify:quiz-score-comparison": "node scripts/verify-quiz-score-comparison.mjs",
     "verify:think-cloud-lifecycle": "node scripts/verify-think-cloud-lifecycle.mjs",

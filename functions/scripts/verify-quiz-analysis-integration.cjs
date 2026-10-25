@@ -97,9 +97,49 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   assert.equal(noMatch.search.matchedQuestionCount, 0);
   assert.equal(noMatch.classes[0].averageScore, null);
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, searchScope)), e => e.code === 'permission-denied');
+  // Actual Firestore projections/cache + exported authenticated callable. No production writes.
+  const behaviorBatch = db.batch(), behaviorAnswers = {}, behaviorChecks = [], behaviorSnapshot = [], behaviorTimes = {};
+  for (let i = 101; i <= 110; i++) {
+    const id = String(i);
+    behaviorBatch.set(db.doc(`years/2026/semesters/2/quiz_questions/${id}`), {
+      id: i, unitId: 'unit-a', category: 'formative', type: 'choice', question: `풀이분류검증 ${i}`,
+      options: ['보기 A', '보기 B', '보기 C', '보기 D'], answer: '보기 B', contentRevision: 1,
+    });
+    behaviorAnswers[id] = '보기 A'; behaviorChecks.push({ id, correct: false });
+    behaviorSnapshot.push({ id, sourceRevision: '1' });
+    behaviorTimes[id] = { activeMs: 1000, hiddenMs: 0, firstResponseMs: 500, finalResponseMs: 800,
+      answerChangeCount: 0, revisitCount: 0, quality: 'complete' };
+  }
+  const behaviorRecord = { semesterId, studentUid: student, classId: 'class_1', assessmentKind: 'QUIZ',
+    attemptId: 'behavior-attempt', sourceId: 'unit-a', category: 'formative', total: 10, percent: 0,
+    submittedAtIso: new Date(now + 2000).toISOString(), answers: behaviorAnswers, answerChecks: behaviorChecks,
+    learningSnapshot: behaviorSnapshot, analytics: { version: 1, quality: 'complete', questions: behaviorTimes } };
+  behaviorBatch.set(db.doc('semester_assessment_results/behavior-attempt'), behaviorRecord);
+  await behaviorBatch.commit();
+  await createQuizAnalysisInvalidation({ db }).invalidate(semesterId, ['contentGeneration', 'catalogGeneration']);
+  await createQuizAnalysisInvalidation({ db }).invalidateResult(semesterId, behaviorRecord);
+  const behaviorScope = { ...scope, comparisonGrade: '3' };
+  const behaviorSummary = await deployed.getQuizClassAnalysis.run(request(teacher, behaviorScope));
+  assert.equal(behaviorSummary.classes[0].behaviorCounts.suspected_guessing, 1);
+  assert.equal(behaviorSummary.classes[1].behaviorCounts.insufficient, 1);
+  assert.equal(behaviorSummary.gradeComparison.behaviorCounts.suspected_guessing, 1);
+  assert.equal(behaviorSummary.gradeComparison.behaviorCounts.insufficient, 1);
+  assert.equal(behaviorSummary.gradeComparison.averageScore, 50);
+  assert.ok(!JSON.stringify(behaviorSummary).includes('behavior-attempt') && !JSON.stringify(behaviorSummary).includes('activeMs'));
+  const behaviorDetail = await deployed.getQuizClassAnalysis.run(request(teacher, { ...scope, mode: 'detail', classIds: ['class_1'] }));
+  const selectedBehavior = behaviorDetail.rawRows.find(row => row.id === 'behavior-attempt').raw;
+  assert.equal(selectedBehavior.behaviorAnswersAvailable, true);
+  assert.equal(selectedBehavior.analytics.questions['101'].activeMs, 1000);
+  const updatedTimes = Object.fromEntries(Object.entries(behaviorTimes).map(([id, value]) => [id, { ...value, activeMs: 40000 }]));
+  await db.doc('semester_assessment_results/behavior-attempt').update({ analytics: { version: 1, quality: 'complete', questions: updatedTimes } });
+  await createQuizAnalysisInvalidation({ db }).invalidateResult(semesterId, behaviorRecord);
+  const repeated = await deployed.getQuizClassAnalysis.run(request(teacher, behaviorScope));
+  assert.equal(repeated.classes[0].behaviorCounts.suspected_guessing, 0);
+  assert.equal(repeated.classes[0].behaviorCounts.repeated_choice, 1);
+  assert.equal(repeated.gradeComparison.averageScore, 50);
   await db.doc(`application_sessions/${teacher}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, scope)), e => e.code === 'unauthenticated');
   await db.doc(`application_sessions/${student}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getMyQuizHistory.run(request(student, { mode: 'list' })), e => e.code === 'unauthenticated');
-  console.log('PASS real exported callables + Firestore: session/auth, class cache, history, global keyword current-item scores/detail, grade benchmark, no-match and permission denial');
+  console.log('PASS real exported callables + Firestore: session/auth, class cache, history, keyword, grade, response classification/counts/detail/cache invalidation, unchanged scores and permission denial');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => db.terminate());

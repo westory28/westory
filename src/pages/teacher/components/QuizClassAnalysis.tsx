@@ -6,6 +6,10 @@ import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import { formatMockExamRoundLabel } from "../../../lib/mockExamRounds";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import {
+  QUIZ_BEHAVIOR_LABELS,
+  type QuizResponseBehavior,
+} from "../../../lib/quizAnalysis";
+import {
   getQuizClassCatalog,
   getQuizClassDetail,
   getQuizClassSummary,
@@ -18,7 +22,7 @@ import {
 } from "../../../lib/quizClassAnalysis";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import type { Question, TreeUnit } from "./QuizBankTab";
-import QuizAnalysisView from "./QuizAnalysisView";
+import QuizAnalysisView, { QuizBehaviorHelp } from "./QuizAnalysisView";
 import { adaptQuizAnalysisRecords } from "./useQuizAnalysisData";
 import "./QuizClassAnalysis.css";
 
@@ -50,7 +54,14 @@ interface DetailState {
   classLabel: string;
   scope: QuizClassScope;
   data: QuizClassDetail;
+  behaviorFilter?: QuizResponseBehavior["category"];
 }
+const behaviorColumns: QuizResponseBehavior["category"][] = [
+  "suspected_guessing",
+  "repeated_choice",
+  "unflagged",
+  "insufficient",
+];
 
 export default function QuizClassAnalysis({
   canEdit,
@@ -97,6 +108,8 @@ export default function QuizClassAnalysis({
   const [failedDetailId, setFailedDetailId] = useState("");
   const detailRef = useRef<HTMLDialogElement>(null);
   const detailOpeners = useRef(new Map<string, HTMLButtonElement>());
+  const detailTrigger = useRef<HTMLElement | null>(null);
+  const detailFilter = useRef<QuizResponseBehavior["category"]>();
   const comparisonButton = useRef<HTMLButtonElement>(null);
   const comparisonPanel = useRef<HTMLDivElement>(null);
   const searchButton = useRef<HTMLButtonElement>(null);
@@ -296,11 +309,18 @@ export default function QuizClassAnalysis({
         setLoading(false);
     }
   };
-  const loadDetail = async (row: QuizClassSummary, forceRefresh = false) => {
+  const loadDetail = async (
+    row: QuizClassSummary,
+    forceRefresh = false,
+    behaviorFilter?: QuizResponseBehavior["category"],
+  ) => {
     if (!loadedScope) return;
     const run = ++detailRequestId.current;
     const { comparisonGrade: _comparisonGrade, ...detailScope } = loadedScope;
     const scope = { ...detailScope, classIds: [row.classId] };
+    detailFilter.current = behaviorFilter || detail?.behaviorFilter;
+    if (!detail && document.activeElement instanceof HTMLElement)
+      detailTrigger.current = document.activeElement;
     setComparisonOpen(false);
     setDetailLoading(row.classId);
     setDetailError("");
@@ -319,7 +339,13 @@ export default function QuizClassAnalysis({
       )
         throw new Error("Detail scope mismatch");
       onDetailData(data.questions, data.treeData);
-      setDetail({ classId: row.classId, classLabel: row.label, scope, data });
+      setDetail({
+        classId: row.classId,
+        classLabel: row.label,
+        scope,
+        data,
+        behaviorFilter: detailFilter.current,
+      });
     } catch (failure) {
       if (
         run === detailRequestId.current &&
@@ -353,7 +379,10 @@ export default function QuizClassAnalysis({
     return () => {
       dialog.close();
       release();
-      detailOpeners.current.get(detailClassId)?.focus({ preventScroll: true });
+      const opener = detailTrigger.current?.isConnected
+        ? detailTrigger.current
+        : detailOpeners.current.get(detailClassId);
+      opener?.focus({ preventScroll: true });
     };
   }, [detailClassId]);
   useEffect(() => {
@@ -942,6 +971,82 @@ export default function QuizClassAnalysis({
                   </table>
                 </div>
               </section>
+              <section className="qca-section" aria-label="풀이 분류">
+                <div className="qca-section-heading">
+                  <h3>풀이 분류</h3>
+                  <QuizBehaviorHelp label="학급 풀이 분류 기준" />
+                </div>
+                <div
+                  className="qca-table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="학급별 풀이 분류 표"
+                >
+                  <table className="qca-table qca-behavior-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">학급</th>
+                        {behaviorColumns.map((category) => (
+                          <th scope="col" key={category}>
+                            {QUIZ_BEHAVIOR_LABELS[category]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row) => {
+                        const aggregate =
+                          row.classId === summary.gradeComparison?.classId;
+                        const counts = row.behaviorCounts;
+                        return (
+                          <tr
+                            key={row.classId}
+                            className={
+                              aggregate ? "qca-benchmark-row" : undefined
+                            }
+                          >
+                            <th scope="row">
+                              {row.label}
+                              {row.rosterCount === 0 ? (
+                                <span className="qca-inline-note">
+                                  학생 없음
+                                </span>
+                              ) : counts?.no_attempt === row.rosterCount ? (
+                                <span className="qca-inline-note">미응시</span>
+                              ) : !counts ? (
+                                <span className="qca-inline-note">
+                                  집계 미확인
+                                </span>
+                              ) : null}
+                            </th>
+                            {behaviorColumns.map((category) => (
+                              <td key={category}>
+                                {counts == null ? (
+                                  "—"
+                                ) : !aggregate && counts[category] > 0 ? (
+                                  <button
+                                    type="button"
+                                    className="qca-count-button"
+                                    aria-label={`${row.label} ${QUIZ_BEHAVIOR_LABELS[category]} ${counts[category]}명 보기`}
+                                    onClick={() =>
+                                      void loadDetail(row, false, category)
+                                    }
+                                    disabled={!!detailLoading}
+                                  >
+                                    {counts[category]}명
+                                  </button>
+                                ) : (
+                                  `${counts[category]}명`
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
               <section
                 className="qca-section"
                 aria-label="다시 살펴볼 개념과 문항"
@@ -1019,7 +1124,7 @@ export default function QuizClassAnalysis({
               const row = summary?.classes.find(
                 (item) => item.classId === failedDetailId,
               );
-              if (row) void loadDetail(row);
+              if (row) void loadDetail(row, false, detailFilter.current);
             }}
           >
             상세 다시 조회
@@ -1059,7 +1164,8 @@ export default function QuizClassAnalysis({
               </div>
             )}
             <QuizAnalysisView
-              key={`${identityKey}:${detail.scope.unitId}:${detail.scope.category}:${detail.scope.examRound}:${detail.scope.keyword || ""}:${detail.classId}:${detail.data.version}`}
+              key={`${identityKey}:${detail.scope.unitId}:${detail.scope.category}:${detail.scope.examRound}:${detail.scope.keyword || ""}:${detail.classId}:${detail.data.version}:${detail.behaviorFilter || "all"}`}
+              initialBehaviorFilter={detail.behaviorFilter}
               questions={editedQuestions}
               tree={detail.data.treeData}
               students={detail.data.students}

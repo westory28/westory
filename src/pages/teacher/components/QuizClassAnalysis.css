@@ -415,6 +415,24 @@
 .qca-relearning-table {
   min-width: 560px;
 }
+.qca-behavior-table {
+  min-width: 640px;
+}
+.qca-behavior-table :is(th, td) {
+  padding-block: 8px;
+}
+.qca-count-button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 8px;
+  background: transparent;
+  color: var(--ws-primary-hover, #1d4ed8);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
 .qca-detail-dialog {
   width: min(1280px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);

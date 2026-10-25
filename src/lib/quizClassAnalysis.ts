@@ -1,5 +1,5 @@
 import { callWithApplicationSession } from "./applicationSession";
-import type { QuizAnalysisStudent } from "./quizAnalysis";
+import type { QuizAnalysisStudent, QuizBehaviorCategory } from "./quizAnalysis";
 import type {
   Question,
   TreeUnit,
@@ -36,6 +36,7 @@ export interface QuizClassSummary {
   unsubmittedCount: number;
   scoredCount: number;
   missingScoreCount?: number;
+  behaviorCounts?: Record<QuizBehaviorCategory, number>;
   averageScore: number | null;
   scoreHistogram: Array<{
     label: string;

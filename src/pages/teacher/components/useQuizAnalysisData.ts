@@ -212,6 +212,15 @@ export function adaptQuizAnalysisRecords(
       scorePercent:
         typeof score === "number" && Number.isFinite(score) ? score : null,
       items,
+      analytics: raw.analytics,
+      behaviorAnswersAvailable:
+        typeof raw.behaviorAnswersAvailable === "boolean"
+          ? raw.behaviorAnswersAvailable
+          : Boolean(
+              raw.answers &&
+              typeof raw.answers === "object" &&
+              !Array.isArray(raw.answers),
+            ),
       attemptId: raw.attemptId,
       canonicalAttemptId: raw.canonicalAttemptId,
       submissionRef: raw.submissionRef,

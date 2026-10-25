@@ -914,6 +914,123 @@ test("Actual adapter preserves missing legacy data and source-qualified snapshot
   );
 });
 
+test("Actual adapter retains complete, partial and unavailable behavior observations without inventing evidence", () => {
+  const analyticsValues = [
+    {
+      version: 1,
+      quality: "complete",
+      questions: {
+        1: {
+          activeMs: 1500,
+          hiddenMs: 0,
+          firstResponseMs: 1000,
+          finalResponseMs: 1000,
+          answerChangeCount: 0,
+          revisitCount: 0,
+          hintViewed: false,
+          quality: "complete",
+        },
+      },
+    },
+    { version: 1, quality: "partial", questions: {} },
+    { version: 2, questions: {} },
+    null,
+    undefined,
+    "invalid observation",
+  ];
+  const rows = analyticsValues.map((analytics, index) => ({
+    id: `behavior-${index}`,
+    source: "canonical",
+    raw: {
+      assessmentKind: "QUIZ",
+      studentUid: "a",
+      answers: { 1: "선지 A" },
+      answerChecks: [{ id: "1", correct: true }],
+      analytics,
+    },
+  }));
+  const before = structuredClone(rows);
+  const { records } = adaptQuizAnalysisRecords(rows, students, semesterId);
+  records.forEach((entry, index) => {
+    assert.equal(entry.analytics, analyticsValues[index]);
+    assert.equal(entry.behaviorAnswersAvailable, true);
+  });
+  assert.deepEqual(rows, before);
+});
+
+test("Backend behavior answer availability survives the detail-only immutable submission answer join", () => {
+  const { records } = adaptQuizAnalysisRecords(
+    [
+      {
+        id: "joined-old-result",
+        source: "canonical",
+        raw: {
+          assessmentKind: "QUIZ",
+          studentUid: "a",
+          answers: { 1: "선지 B" },
+          answerChecks: [{ id: "1", correct: false }],
+          behaviorAnswersAvailable: false,
+        },
+      },
+      {
+        id: "summary-projection",
+        source: "canonical",
+        raw: {
+          assessmentKind: "QUIZ",
+          studentUid: "b",
+          answerChecks: [{ id: "1", correct: true }],
+          behaviorAnswersAvailable: true,
+        },
+      },
+    ],
+    students,
+    semesterId,
+  );
+  assert.equal(records[0].behaviorAnswersAvailable, false);
+  assert.equal(records[0].items[0].answer, "선지 B");
+  assert.equal(records[1].behaviorAnswersAvailable, true);
+  assert.equal(Object.hasOwn(records[1].items[0], "answer"), false);
+});
+
+test("Behavior availability fallback accepts an answer map and rejects absent or malformed answer storage", () => {
+  for (const [answers, expected] of [
+    [{}, true],
+    [{ 1: "" }, true],
+    [undefined, false],
+    [null, false],
+    [[], false],
+    ["선지 A", false],
+    [false, false],
+    [1, false],
+  ]) {
+    const { records } = adaptQuizAnalysisRecords(
+      [
+        {
+          id: "answer-map",
+          source: "canonical",
+          raw: {
+            assessmentKind: "QUIZ",
+            studentUid: "a",
+            answerChecks: [{ id: "1", correct: false }],
+            answers,
+            behaviorAnswersAvailable: "false",
+          },
+        },
+        {
+          id: "legacy-detail-only",
+          source: "legacy",
+          raw: { uid: "b", details: [{ id: 1, correct: true, u: "선지 A" }] },
+        },
+      ],
+      students,
+      semesterId,
+    );
+    assert.equal(records[0].behaviorAnswersAvailable, expected);
+    assert.equal(records[1].behaviorAnswersAvailable, false);
+    assert.equal(records[1].items[0].answer, "선지 A");
+  }
+});
+
 test("Canonical absent answer keys are non-answers only when the submitted answer map exists", () => {
   const rawResult = (studentUid, answers) => ({
     assessmentKind: "QUIZ",

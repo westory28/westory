@@ -1,8 +1,9 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
+const { buildQuizAnalysis } = require('../quizClassAnalysisCore.cjs');
 const { normalizeQuery, createQuizClassAnalysisService, createQuizClassAnalysisHandler,
-  createQuizAnalysisInvalidation, summarizeClass, readBounded, hash } = require('../quizClassAnalysis');
+  createQuizAnalysisInvalidation, summarizeClass, adaptRecords, readBounded, hash } = require('../quizClassAnalysis');
 
 const SCOPE = '2026-2';
 const ROOT = 'years/2026/semesters/2';
@@ -353,4 +354,117 @@ test('cold grade aggregation uses at most three concurrent class builds and pres
   assert.equal(result.gradeComparison.classCount, 8);
   assert.equal(result.gradeComparison.averageScore, 50);
   assert.deepEqual(result.classes.map(row => row.classId), ['class_b', 'class_a']);
+});
+
+test('behavior inputs use result projections without extra summary reads and keyword detail trims observations', async () => {
+  const initial = fixture();
+  const observation = { activeMs: 10000, hiddenMs: 0, firstResponseMs: 6000, finalResponseMs: 6000, answerChangeCount: 0, revisitCount: 0, quality: 'complete' };
+  initial['semester_assessment_results/r2'].answers = { 1: '원본 답안' };
+  initial['semester_assessment_results/r2'].analytics = { version: 1, quality: 'complete', questions: { 1: observation, 999: observation } };
+  initial['semester_assessment_results/r1'].submissionRef = 'semester_assessment_submissions/r1';
+  initial['semester_assessment_submissions/r1'] = { attemptId: 'r1', studentUid: 'a', semesterId: SCOPE, answers: { 1: '상세 보완 답안' } };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const summary = await service.query(q);
+  assert.ok(f.queries.filter(query => query.path.endsWith('results')).every(query => query.projection.includes('analytics')
+    && query.projection.includes('answers') && !query.projection.includes('questionSnapshots')));
+  assert.equal(f.reads.some(path => path.startsWith('semester_assessment_submissions/')), false);
+  assert.equal(JSON.stringify(summary).includes('원본 답안'), false);
+  assert.equal(JSON.stringify(summary).includes('firstResponseMs'), false);
+  const detail = await service.query(normalizeQuery({ ...q, mode: 'detail', keyword: '사림' }));
+  const joined = detail.rawRows.find(row => row.id === 'r1');
+  assert.equal(joined.raw.answers[1], '상세 보완 답안');
+  assert.equal(joined.raw.behaviorAnswersAvailable, false, 'joining an old submission never invents original behavior input');
+  const original = detail.rawRows.find(row => row.id === 'r2');
+  assert.equal(original.raw.behaviorAnswersAvailable, true);
+  assert.deepEqual(Object.keys(original.raw.analytics.questions), ['1']);
+  const adapted = adaptRecords(detail.rawRows, detail.students, SCOPE);
+  assert.equal(adapted.find(row => row.id === 'r1').behaviorAnswersAvailable, false);
+  assert.equal(adapted.find(row => row.id === 'r2').behaviorAnswersAvailable, true);
+  assert.deepEqual(adapted.find(row => row.id === 'r2').analytics.questions[1], observation);
+});
+
+test('missing historical behavior stays insufficient, never zero or unflagged, and grade counts cover the roster once', async () => {
+  const f = memory(keywordFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(keywordQuery({ comparisonGrade: '3' }));
+  assert.deepEqual(result.classes[0].behaviorCounts, { suspected_guessing: 0, repeated_choice: 0, unflagged: 0, insufficient: 2, no_attempt: 0 });
+  assert.deepEqual(result.gradeComparison.behaviorCounts, { suspected_guessing: 0, repeated_choice: 0, unflagged: 0, insufficient: 3, no_attempt: 1 });
+  assert.equal(Object.values(result.gradeComparison.behaviorCounts).reduce((sum, count) => sum + count, 0), result.gradeComparison.rosterCount);
+  assert.equal(result.gradeComparison.averageScore, 50, 'observation categories never modify official or keyword scores');
+  const sourceReads = f.queries.length;
+  await service.query(keywordQuery({ comparisonGrade: '3' }));
+  assert.equal(f.queries.length, sourceReads, 'warm behavior summary must retain the existing cache cost');
+});
+
+const behaviorFixture = () => {
+  const initial = fixture();
+  for (const path of Object.keys(initial)) if (path.includes('/quiz_results/') || path.startsWith('semester_assessment_results/')) delete initial[path];
+  const ids = Array.from({ length: 10 }, (_, index) => index + 1);
+  for (const id of ids) initial[`${ROOT}/quiz_questions/${id}`] = { id, unitId: 'unit-a', category: 'formative',
+    question: `광해군 ${id}번`, type: 'choice', options: ['선택 가', '선택 나', '선택 다', '선택 라'], contentRevision: 1 };
+  for (const [uid, classId] of [['c', 'class_a'], ['d', 'class_b'], ['e', 'class_a'], ['f', 'class_b']]) {
+    initial[`semester_enrollments/en_${uid}`] = { semesterId: SCOPE, studentUid: uid, classId, enrollmentStatus: 'ACTIVE' };
+    initial[`semester_enrollment_slots/${buildEnrollmentSlotId(SCOPE, uid)}`] = { semesterId: SCOPE, studentUid: uid, activeEnrollmentId: `en_${uid}`, status: 'ACTIVE' };
+  }
+  for (const uid of ['a', 'b', 'c', 'd', 'f']) {
+    const fast = uid === 'a', varied = ['c', 'd', 'f'].includes(uid);
+    const result = { assessmentKind: 'QUIZ', semesterId: SCOPE, sourceId: 'unit-a', category: 'formative', studentUid: uid,
+      attemptId: `behavior_${uid}`, percent: 80, total: 10, answerChecks: ids.map(id => ({ id, correct: id <= 8 })),
+      learningSnapshot: ids.map(id => ({ id, sourceRevision: '1' })),
+      answers: Object.fromEntries(ids.map(id => [id, varied ? ['선택 가', '선택 나', '선택 다', '선택 라'][id % 4] : '선택 가'])),
+      analytics: { version: 1, quality: uid === 'f' ? 'partial' : 'complete', questions: Object.fromEntries(ids.map(id => [id,
+        { activeMs: fast ? 500 : 50000, hiddenMs: 0, firstResponseMs: fast ? 300 : 40000, finalResponseMs: fast ? 400 : 45000,
+          answerChangeCount: 0, revisitCount: 0, hintViewed: false, quality: uid === 'f' ? 'partial' : 'complete' }])) },
+      submittedAtIso: '2026-10-25T02:00:00Z' };
+    if (uid === 'd') delete result.analytics;
+    initial[`semester_assessment_results/behavior_${uid}`] = result;
+  }
+  return initial;
+};
+
+test('server summary classifies five behavior states on current canonical responses without changing scores', async () => {
+  const f = memory(behaviorFixture());
+  const handler = createQuizClassAnalysisHandler({ db: f.db, assertSession: async () => ({ uid: 'teacher' }) });
+  const result = await handler({ auth: { uid: 'teacher', token: {} }, data: { ...q, comparisonGrade: '3' } });
+  assert.deepEqual(result.classes[0].behaviorCounts, { suspected_guessing: 1, repeated_choice: 0, unflagged: 1, insufficient: 0, no_attempt: 1 });
+  assert.deepEqual(result.gradeComparison.behaviorCounts, { suspected_guessing: 1, repeated_choice: 1, unflagged: 1, insufficient: 2, no_attempt: 1 });
+  assert.equal(result.gradeComparison.averageScore, 80);
+  assert.equal(result.gradeComparison.scoredCount, 5);
+  assert.equal(Object.values(result.gradeComparison.behaviorCounts).reduce((sum, count) => sum + count, 0), 6);
+  assert.equal(f.reads.some(path => path.startsWith('semester_assessment_submissions/')), false);
+  assert.equal(JSON.stringify(result).includes('선택 가'), false, 'private answers must not enter the class or grade payload');
+});
+
+test('behavior uses one latest attempt, reacts to result invalidation, and narrows keyword evidence', async () => {
+  const initial = behaviorFixture(), f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  assert.equal((await service.query(q)).classes[0].behaviorCounts.suspected_guessing, 1);
+  const latest = { ...initial['semester_assessment_results/behavior_c'], attemptId: 'later_a', studentUid: 'a', submittedAtIso: '2026-10-26T02:00:00Z' };
+  f.data.set('semester_assessment_results/later_a', latest);
+  await createQuizAnalysisInvalidation({ db: f.db }).invalidateResult(SCOPE, latest);
+  const current = await service.query(q);
+  assert.equal(current.classes[0].behaviorCounts.suspected_guessing, 0);
+  assert.equal(current.classes[0].behaviorCounts.unflagged, 2);
+  const narrow = await service.query(normalizeQuery({ ...q, keyword: '광해군 1번' }));
+  assert.equal(narrow.search.matchedQuestionCount, 1);
+  assert.equal(narrow.classes[0].behaviorCounts.insufficient, 2, 'one matching item cannot borrow behavior from other items or older attempts');
+});
+
+test('detail-only immutable answer recovery cannot change the original summary behavior category', async () => {
+  const initial = behaviorFixture();
+  const original = initial['semester_assessment_results/behavior_b'];
+  const answers = original.answers;
+  delete original.answers;
+  original.submissionRef = 'semester_assessment_submissions/behavior_b';
+  initial['semester_assessment_submissions/behavior_b'] = { studentUid: 'b', semesterId: SCOPE, attemptId: 'behavior_b', answers };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const scope = { ...q, classIds: ['class_b'] };
+  const summary = await service.query(scope);
+  const detail = await service.query({ ...scope, mode: 'detail' });
+  const result = detail.rawRows.find(row => row.id === 'behavior_b');
+  assert.deepEqual(result.raw.answers, answers);
+  assert.equal(result.raw.behaviorAnswersAvailable, false);
+  const analysis = buildQuizAnalysis({ semesterId: SCOPE, students: detail.students, questions: detail.questions,
+    records: adaptRecords(detail.rawRows, detail.students, SCOPE), scope: { unitIds: ['unit-a'], category: 'formative', classId: 'class_b' } });
+  const detailCounts = { suspected_guessing: 0, repeated_choice: 0, unflagged: 0, insufficient: 0, no_attempt: 0 };
+  for (const student of analysis.students) detailCounts[student.behavior.category]++;
+  assert.deepEqual(detailCounts, summary.classes[0].behaviorCounts);
 });

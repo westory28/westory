@@ -1,8 +1,15 @@
 // Generated from src/lib/quizAnalysis.ts. Do not edit.
-// source-sha256: 723d158326364463fff652d8b7b76adc867c78ec78337480c88b4f59acf6dc9c
+// source-sha256: a7b914112eca8dfb3e99161f6dc869d0efeb81ccc9b81b9536fc5b179f6cd3d6
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildQuizItemStatistics = exports.buildQuizAnalysis = exports.deduplicateQuizAnalysisRecords = void 0;
+exports.buildQuizItemStatistics = exports.buildQuizAnalysis = exports.classifyQuizResponseBehavior = exports.deduplicateQuizAnalysisRecords = exports.QUIZ_BEHAVIOR_LABELS = void 0;
+exports.QUIZ_BEHAVIOR_LABELS = {
+    suspected_guessing: "찍기 추정",
+    repeated_choice: "반복 선택",
+    unflagged: "미해당",
+    insufficient: "기록 부족",
+    no_attempt: "미응시",
+};
 const text = (value) => typeof value === "string" || typeof value === "number"
     ? String(value).trim()
     : "";
@@ -221,6 +228,195 @@ const conceptsFor = (rows) => {
         a.concept.localeCompare(b.concept));
 };
 /**
+ * Conservative review conditions, not an estimate of a student's intent.
+ * Use ONE latest actual submission, never a synthetic mixture of attempts.
+ * Unknown timing/answers/revisions cannot count as an observed normal response.
+ */
+const classifyQuizResponseBehavior = (record, questions, state = "submitted") => {
+    const result = {
+        category: state === "no_attempt" ? "no_attempt" : "insufficient",
+        eligibleQuestionCount: 0,
+        observedQuestionCount: 0,
+        coveragePercent: null,
+        medianActiveMs: null,
+        fastQuestionCount: 0,
+        fastCorrectCount: 0,
+        fastWrongCount: 0,
+        fastAccuracy: null,
+        answerChangeCount: null,
+        revisitCount: null,
+        repeatedChoice: null,
+        flags: { rapid: false, repeated: false },
+        reason: state === "no_attempt" ? null : "분류에 필요한 풀이 기록이 부족합니다.",
+    };
+    if (state === "chronology_unknown") {
+        result.reason = "최근 제출 순서를 확인할 수 없습니다.";
+        return result;
+    }
+    if (!record || state === "no_attempt")
+        return result;
+    if (record.source !== "canonical" ||
+        record.behaviorAnswersAvailable === false) {
+        result.reason = "출제 당시 답안과 문항 버전을 확인할 수 없습니다.";
+        return result;
+    }
+    const bank = new Map(questions.map((question) => [text(question.id), question]));
+    const entries = record.items.flatMap((item) => {
+        const question = bank.get(text(item.questionId));
+        return question && (question.type === "choice" || question.type === "ox")
+            ? [{ item, question }]
+            : [];
+    });
+    result.eligibleQuestionCount = entries.length;
+    if (new Set(entries.map(({ item }) => text(item.questionId))).size !==
+        entries.length) {
+        result.reason = "중복된 문항 기록이 있어 풀이 양상을 분류하지 않았습니다.";
+        return result;
+    }
+    const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : null;
+    const analytics = object(record.analytics);
+    const observations = analytics?.version === 1 && analytics.quality === "complete"
+        ? object(analytics.questions)
+        : null;
+    const count = (value, max) => typeof value === "number" &&
+        Number.isSafeInteger(value) &&
+        value >= 0 &&
+        value <= max;
+    const times = [];
+    let mappedCount = 0, changes = 0, revisits = 0;
+    // Choice positions and O/X have different meanings and must not be pooled.
+    const groups = new Map();
+    for (const { item, question } of entries) {
+        const group = groups.get(question.type) || {
+            total: 0,
+            counts: new Map(),
+        };
+        group.total += 1;
+        groups.set(question.type, group);
+        const currentRevision = revision(question.sourceRevision) || revision(question.contentRevision);
+        if (!currentRevision ||
+            revision(item.sourceRevision) !== currentRevision ||
+            typeof item.answer !== "string")
+            continue;
+        let label = null;
+        if (question.type === "ox") {
+            if (item.answer === "O" || item.answer === "X")
+                label = item.answer;
+        }
+        else if (Array.isArray(question.options) &&
+            question.options.length >= 2) {
+            const matches = question.options.flatMap((option, index) => typeof option === "string" && option.trim() && option === item.answer
+                ? [index]
+                : []);
+            if (matches.length === 1)
+                label = `${matches[0] + 1}번 보기`;
+        }
+        if (!label)
+            continue;
+        mappedCount += 1;
+        group.counts.set(label, (group.counts.get(label) || 0) + 1);
+        const observation = object(observations?.[text(item.questionId)]);
+        if (!observation || observation.quality !== "complete")
+            continue;
+        const { activeMs, hiddenMs, firstResponseMs, finalResponseMs, answerChangeCount, revisitCount, hintViewed, } = observation;
+        if (!count(activeMs, 21_600_000) ||
+            !count(hiddenMs, 21_600_000) ||
+            !count(firstResponseMs, activeMs) ||
+            !count(finalResponseMs, activeMs) ||
+            firstResponseMs > finalResponseMs ||
+            !count(answerChangeCount, 10_000) ||
+            !count(revisitCount, 10_000) ||
+            (hintViewed !== undefined && typeof hintViewed !== "boolean"))
+            continue;
+        times.push(activeMs);
+        changes += answerChangeCount;
+        revisits += revisitCount;
+        if (activeMs <= 3_000 &&
+            hiddenMs === 0 &&
+            answerChangeCount === 0 &&
+            revisitCount === 0 &&
+            hintViewed !== true) {
+            result.fastQuestionCount += 1;
+            if (item.correct === true)
+                result.fastCorrectCount += 1;
+            if (item.correct === false)
+                result.fastWrongCount += 1;
+        }
+    }
+    for (const group of groups.values()) {
+        for (const [label, frequency] of group.counts) {
+            if (group.total < 5)
+                continue;
+            const repeated = {
+                label,
+                count: frequency,
+                total: group.total,
+                percent: (100 * frequency) / group.total,
+            };
+            if (!result.repeatedChoice ||
+                repeated.percent > result.repeatedChoice.percent ||
+                (repeated.percent === result.repeatedChoice.percent &&
+                    frequency > result.repeatedChoice.count))
+                result.repeatedChoice = repeated;
+            if (frequency >= 5 && frequency / group.total >= 0.8)
+                result.flags.repeated = true;
+        }
+    }
+    result.observedQuestionCount = times.length;
+    result.coveragePercent = entries.length
+        ? (100 * times.length) / entries.length
+        : null;
+    if (times.length) {
+        times.sort((a, b) => a - b);
+        const middle = Math.floor(times.length / 2);
+        result.medianActiveMs =
+            times.length % 2
+                ? times[middle]
+                : (times[middle - 1] + times[middle]) / 2;
+        result.answerChangeCount = changes;
+        result.revisitCount = revisits;
+    }
+    const knownFast = result.fastCorrectCount + result.fastWrongCount;
+    result.fastAccuracy = knownFast
+        ? (100 * result.fastCorrectCount) / knownFast
+        : null;
+    const sufficient = entries.length >= 5 &&
+        times.length >= 5 &&
+        times.length / entries.length >= 0.8 &&
+        mappedCount / entries.length >= 0.8;
+    result.flags.rapid =
+        sufficient &&
+            result.fastQuestionCount >= 5 &&
+            result.fastQuestionCount / entries.length >= 0.6;
+    if (result.flags.rapid &&
+        (result.flags.repeated ||
+            (result.fastWrongCount >= 3 && result.fastWrongCount / knownFast >= 0.5))) {
+        result.category = "suspected_guessing";
+        result.reason =
+            "빠른 응답이 반복되고 오답 또는 같은 보기 선택이 함께 나타났습니다. 학생과 풀이 과정을 확인해 주세요.";
+    }
+    else if (result.flags.repeated) {
+        result.category = "repeated_choice";
+        result.reason =
+            "같은 유형에서 한 보기를 반복 선택했습니다. 답안 분포만으로 의도를 판단할 수는 없습니다.";
+    }
+    else if (sufficient) {
+        result.category = "unflagged";
+        result.reason =
+            "확인 가능한 기록에서 설정한 분류 조건에 해당하지 않습니다.";
+    }
+    else {
+        result.reason =
+            entries.length < 5
+                ? "현재 조회 범위의 선택형 문항이 5개 미만입니다."
+                : "문항 버전·답안 또는 온전한 시간 기록이 부족합니다. 재접속 등으로 일부만 기록된 시간은 분류에서 제외합니다.";
+    }
+    return result;
+};
+exports.classifyQuizResponseBehavior = classifyQuizResponseBehavior;
+/**
  * Callers must load authorized current-semester records and the current roster.
  * The model rechecks both boundaries; it performs no fetching or writes.
  * Unit-partial records may inform item analysis, but never masquerade as a
@@ -321,6 +517,11 @@ const buildQuizAnalysis = (input) => {
                 .flatMap((item) => item.concepts || [])),
             wrongConcepts: conceptsFor(rows),
             changes: changesFor(rows),
+            behavior: (0, exports.classifyQuizResponseBehavior)(selected.value, questions, !studentRecords.length
+                ? "no_attempt"
+                : selected.chronologyUnknown
+                    ? "chronology_unknown"
+                    : "submitted"),
         };
     });
     const questionRows = questions.map((question, index) => {

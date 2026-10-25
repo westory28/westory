@@ -7,7 +7,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 
-const SCHEMA = 2;
+const SCHEMA = 3;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 const PAGE_SIZE = 250;
 const MAX_RESULTS = 10000;
@@ -17,6 +17,7 @@ const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_GRADE_CLASSES = 30;
 const MAX_SEARCH_MATCHES = 500;
 const KEYWORD_BASIS = 'latest_current_revision_keyword_items';
+const BEHAVIOR_CATEGORIES = ['suspected_guessing', 'repeated_choice', 'unflagged', 'insufficient', 'no_attempt'];
 const REGION = 'asia-northeast3';
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const text = value => String(value ?? '').trim();
@@ -110,7 +111,7 @@ async function readBounded(query, maximum, label, budget) {
 
 const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail', 'assessmentKind',
   'semesterId', 'unitId', 'sourceId', 'category', 'examRound', 'definitionId', 'answerChecks', 'details', 'answers',
-  'learningSnapshot', 'questionSnapshots', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
+  'learningSnapshot', 'questionSnapshots', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
   'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options'];
@@ -144,6 +145,8 @@ function adaptRecords(rawRows, students, semesterId) {
       submittedAt: iso(raw.submittedAtIso || raw.timestamp || raw.createdAt),
       scorePercent: typeof (source === 'canonical' ? raw.percent : raw.score) === 'number'
         ? (source === 'canonical' ? raw.percent : raw.score) : null,
+      analytics: raw.analytics,
+      behaviorAnswersAvailable: raw.behaviorAnswersAvailable !== false && source === 'canonical' && !!answerMap,
       items: (Array.isArray(source === 'canonical' ? raw.answerChecks : raw.details) ? (source === 'canonical' ? raw.answerChecks : raw.details) : []).flatMap(item => {
         const questionId = text(item.id ?? item.qid ?? item.questionId);
         if (!questionId) return [];
@@ -176,7 +179,10 @@ function summarizeClass(query, targetClass, students, questions, rawRows, genera
       revisionExcludedCount: item.revisionExcludedCount, revisionUnknownCount: item.revisionUnknownCount };
   });
   const concepts = new Map();
+  const behaviorCounts = Object.fromEntries(BEHAVIOR_CATEGORIES.map(category => [category, 0]));
   for (const student of summary.students) {
+    const behaviorCategory = student.behavior?.category;
+    behaviorCounts[BEHAVIOR_CATEGORIES.includes(behaviorCategory) ? behaviorCategory : student.attemptCount > 0 ? 'insufficient' : 'no_attempt']++;
     for (const concept of student.assessedConcepts) {
       const value = concepts.get(concept) || { concept, wrongCount: 0, respondentCount: 0, reviewLessonIds: new Set() };
       value.respondentCount++;
@@ -192,7 +198,7 @@ function summarizeClass(query, targetClass, students, questions, rawRows, genera
   return { classId: targetClass.id, label: targetClass.label, rosterCount: students.length,
     submittedCount: summary.participantCount, unsubmittedCount: Math.max(0, students.length - summary.participantCount),
     scoredCount: summary.scoredStudentCount, averageScore: summary.averageScore, scoreHistogram: summary.scoreHistogram,
-    missingScoreCount: summary.missingScoreStudentCount, questions: questionRows,
+    missingScoreCount: summary.missingScoreStudentCount, questions: questionRows, behaviorCounts,
     concepts: [...concepts.values()].map(value => ({ ...value, reviewLessonIds: [...value.reviewLessonIds] })).sort((a, b) => b.wrongCount - a.wrongCount),
     relearning: { repeatedStudentCount: summary.students.filter(s => s.changes.comparedQuestionCount > 0).length,
       wrongToCorrectCount: summary.students.reduce((sum, s) => sum + s.changes.wrongToCorrectCount, 0),
@@ -225,6 +231,8 @@ function summarizeGrade(grade, classes, generatedAt) {
     rosterCount: sum('rosterCount'), submittedCount: sum('submittedCount'), unsubmittedCount: sum('unsubmittedCount'),
     scoredCount, missingScoreCount: sum('missingScoreCount'), averageScore: scoredCount
       ? classes.reduce((total, value) => total + (value.averageScore ?? 0) * value.scoredCount, 0) / scoredCount : null,
+    behaviorCounts: Object.fromEntries(BEHAVIOR_CATEGORIES.map(category => [category,
+      classes.reduce((total, value) => total + (value.behaviorCounts?.[category] || 0), 0)])),
     scoreHistogram: (classes[0]?.scoreHistogram || []).map((band, index) => ({ ...band,
       count: classes.reduce((total, value) => total + value.scoreHistogram[index].count, 0) })),
     questions: [...questions.values()], concepts: [...concepts.values()].filter(value => value.wrongCount > 0).sort((a, b) => b.wrongCount - a.wrongCount),
@@ -378,7 +386,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   const loadResults = async (query, students, detail = false, budget) => {
     const rows = new Map(), uids = students.map(student => student.uid), emails = students.map(student => student.email).filter(Boolean);
     const uidSet = new Set(uids);
-    const fields = detail ? RESULT_FIELDS : RESULT_FIELDS.filter(field => !['answers', 'questionSnapshots'].includes(field));
+    const fields = detail ? RESULT_FIELDS : RESULT_FIELDS.filter(field => field !== 'questionSnapshots');
     const sources = [{ source: 'canonical', path: 'semester_assessment_results', fields: ['studentUid'], ids: uids },
       { source: 'legacy', path: `${root(query.semesterId)}/quiz_results`, fields: ['uid', 'studentUid', 'studentId', 'userId'], ids: uids },
       { source: 'legacy', path: `${root(query.semesterId)}/quiz_results`, fields: ['email', 'studentEmail'], ids: emails }];
@@ -398,6 +406,10 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
                 || categoryOf(data.category || parts[3]) !== query.category
                 || roundOf(data.category || parts[3], data.examRound || parts[4]) !== query.examRound))) continue;
             const raw = json(data);
+            // Behavior uses only answers stored on the result. A later detail-only
+            // submission join must not change the summary's observation category.
+            raw.behaviorAnswersAvailable = source.source === 'canonical' && !!data.answers
+              && typeof data.answers === 'object' && !Array.isArray(data.answers);
             if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
               correct: typeof item.correct === 'boolean' ? item.correct : null, sourceRevision: item.sourceRevision || '' }));
             rows.set(`${source.source}:${doc.id}`, { id: doc.id, source: source.source, raw });
@@ -475,6 +487,10 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
             if (Array.isArray(row.raw[field])) row.raw[field] = row.raw[field].filter(item => ids.has(text(item.id ?? item.qid ?? item.questionId)));
           }
           if (row.raw.answers) row.raw.answers = Object.fromEntries(Object.entries(row.raw.answers).filter(([id]) => ids.has(id)));
+          const analyticsQuestions = row.raw.analytics?.questions;
+          if (analyticsQuestions && typeof analyticsQuestions === 'object' && !Array.isArray(analyticsQuestions)) {
+            row.raw.analytics = { ...row.raw.analytics, questions: Object.fromEntries(Object.entries(analyticsQuestions).filter(([id]) => ids.has(id))) };
+          }
         }
       }
       const result = { semesterId: input.semesterId, students, rawRows, questions: questionRows, treeData: catalog.treeData,
