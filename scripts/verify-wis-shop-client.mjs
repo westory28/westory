@@ -219,6 +219,11 @@ const commands = [];
 const adapter = load("src/lib/pointEconomyAdapter.ts", {
   "./firebase": { auth },
   "./safeStorage": storage,
+  "./wisRankingPreview": {
+    getWisHallOfFameState: () => {
+      throw new Error("Unexpected ranking request in shop checks");
+    },
+  },
   "./wisEconomyClient": {
     ...client,
     queryWisState: async () => adapterState,
@@ -591,7 +596,17 @@ await check(
   },
 );
 const images = load("src/lib/pointProductImages.ts", {
-  "./pointProductWatermark": load("src/lib/pointProductWatermark.ts", {}),
+  "./pointProductWatermark": load("src/lib/pointProductWatermark.ts", {
+    // These cases test image URL selection, not browser canvas rendering.
+    "./brandWatermark": {
+      prepareBrandWatermark: () => {
+        throw new Error("Unexpected image conversion");
+      },
+      drawBrandWatermark: () => {
+        throw new Error("Unexpected image conversion");
+      },
+    },
+  }),
 });
 await check(
   "기존 저해상도 미리보기 대신 상세이미지, 새 640px 미리보기는 목록 전용 사용",

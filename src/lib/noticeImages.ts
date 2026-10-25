@@ -2,6 +2,7 @@ import type { User } from "firebase/auth";
 import { auth } from "./firebase";
 import { callWithApplicationSession } from "./applicationSession";
 import type { SystemConfig } from "../types";
+import { drawBrandWatermark, prepareBrandWatermark } from "./brandWatermark";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
@@ -171,6 +172,7 @@ const drawNoticeImageCanvas = ({
     width,
     height,
   );
+  drawBrandWatermark(context, width, height);
   return canvas;
 };
 
@@ -180,6 +182,7 @@ export const compressNoticeImage = async (file: File) => {
   }
 
   const source = await loadImageElement(file);
+  await prepareBrandWatermark();
   const crop = getNoticeImageCenterCrop(
     source.naturalWidth,
     source.naturalHeight,

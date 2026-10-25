@@ -1,3 +1,5 @@
+import { drawBrandWatermark, prepareBrandWatermark } from "./brandWatermark";
+
 export interface QuizImageCompressionOptions {
   maxSide: number;
   targetDataUrlBytes: number;
@@ -59,6 +61,7 @@ const drawToCanvas = (
   image: HTMLImageElement,
   width: number,
   height: number,
+  withWatermark: boolean,
 ) => {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -73,6 +76,7 @@ const drawToCanvas = (
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0, width, height);
+  if (withWatermark) drawBrandWatermark(context, width, height);
   return canvas;
 };
 
@@ -124,8 +128,10 @@ const isGoodDisplayCandidate = (
 const compressDataUrl = async (
   dataUrl: string,
   options: QuizImageCompressionOptions,
+  withWatermark = false,
 ) => {
   const source = await loadImage(dataUrl);
+  if (withWatermark) await prepareBrandWatermark();
   const scale = Math.min(
     1,
     options.maxSide /
@@ -142,7 +148,7 @@ const compressDataUrl = async (
   for (const sizeStep of IMAGE_SIZE_STEPS) {
     const width = Math.max(1, Math.round(baseWidth * sizeStep));
     const height = Math.max(1, Math.round(baseHeight * sizeStep));
-    const canvas = drawToCanvas(source, width, height);
+    const canvas = drawToCanvas(source, width, height, withWatermark);
 
     for (const mimeType of IMAGE_MIME_TYPES) {
       for (const quality of IMAGE_QUALITY_STEPS) {
@@ -188,7 +194,7 @@ export const optimizeQuizImageFile = async (
   }
 
   const originalDataUrl = await readFileAsDataUrl(file);
-  return compressDataUrl(originalDataUrl, options);
+  return compressDataUrl(originalDataUrl, options, true);
 };
 
 export const optimizeQuizImageDataUrl = async (

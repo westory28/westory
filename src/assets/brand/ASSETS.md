@@ -1,5 +1,13 @@
 # Westory application and browser icons
 
+## Upload watermark wordmark (2026-10-25)
+
+`westory-wordmark.png` extends the approved rounded We mark into Westory using the built-in `image_gen` tool. The user requested blue **We**, orange **story**, balanced optical letter spacing and deliberate letter angles. This transparent master is preserved unchanged; `brandWatermark.ts` trims transparent margins in memory and applies it once after each eligible upload's final crop/resize. Worksheet PDF/page/footnote assets and signatures are excluded. This does not replace the portal headers or application icons.
+
+Generation prompt: “Extend the rounded We identity into Westory. We is blue #2563EB; story is orange #F59E0B. Refine optical kerning, consistent negative space and individual letter angles; preserve substantial rounded weight and a modest tilted e. Clean transparent background, no tagline or container.”
+
+## Application and browser icons (2026-10-22)
+
 Approved by the user on 2026-10-22 after the white-background revision.
 Created and edited with the built-in `image_gen` tool. No third-party logo or font file is embedded.
 

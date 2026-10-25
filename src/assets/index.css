@@ -3609,6 +3609,235 @@ button.lesson-core-point-floating-status:disabled {
   padding-left: 6em;
 }
 
+/* The log uses the standard portal width; only prose keeps a reading measure. */
+.developer-log-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 16px);
+  align-items: center;
+  margin-bottom: var(--space-6, 24px);
+}
+
+.developer-log-toolbar .ws-page-tabs {
+  margin-bottom: 0;
+}
+
+.developer-log-search-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2, 8px);
+  min-width: 0;
+}
+
+.developer-log-search-controls select {
+  min-width: 0;
+}
+
+.developer-log-list-header {
+  display: none;
+}
+
+.developer-log-list-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 12px) var(--space-4, 16px);
+}
+
+.developer-log-list-row > :first-child {
+  flex-basis: 100%;
+}
+
+.developer-log-list-title {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.developer-log-list-row:focus-visible {
+  outline: 3px solid var(--ws-ring, #3b82f6);
+  outline-offset: -3px;
+}
+
+@media (min-width: 1024px) {
+  .developer-log-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
+  }
+
+  .developer-log-list-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 128px 128px 88px 88px;
+    column-gap: var(--space-4, 16px);
+    align-items: center;
+  }
+}
+
+/* Explicitly authored announcement articles; existing developer posts retain
+   their two-column body and card-news presentation. */
+.developer-log-event-layout {
+  min-width: 0;
+}
+
+.developer-log-rich-text .westory-event-article {
+  width: 100%;
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.developer-log-rich-text .westory-event-article > :first-child {
+  margin-top: 0;
+}
+
+.developer-log-rich-text .westory-event-article :is(h2, h3) {
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.developer-log-rich-text .westory-event-article h2 {
+  margin: var(--space-12, 48px) 0 var(--space-6, 24px);
+  padding-bottom: var(--space-3, 12px);
+  border-bottom: var(--space-1, 4px) solid var(--ws-accent, #f59e0b);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 1.75rem;
+  line-height: 1.3;
+}
+
+.developer-log-rich-text .westory-event-article h3 {
+  margin: var(--space-6, 24px) 0 var(--space-3, 12px);
+  color: var(--ws-text-strong, #111827);
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.developer-log-rich-text .westory-event-article :is(p, ul, ol) {
+  margin-block: var(--space-3, 12px);
+}
+
+.developer-log-rich-text .westory-event-article > :is(p, ul, ol, blockquote),
+.developer-log-rich-text .westory-event-article section > :is(p, ul, ol, blockquote) {
+  max-width: 48rem;
+}
+
+.developer-log-rich-text .westory-event-article li {
+  margin-block: var(--space-2, 8px);
+}
+
+.developer-log-rich-text .westory-event-article strong {
+  font-weight: 800;
+}
+
+.developer-log-rich-text .westory-event-article img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+  border-radius: var(--space-3, 12px);
+}
+
+.developer-log-rich-text .westory-event-article figure {
+  margin: var(--space-6, 24px) 0;
+}
+
+.developer-log-rich-text .westory-event-article figcaption {
+  margin-top: var(--space-2, 8px);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.developer-log-rich-text .westory-event-article blockquote {
+  margin: var(--space-6, 24px) 0;
+  padding: var(--space-4, 16px) var(--space-6, 24px);
+  border-left: var(--space-1, 4px) solid var(--ws-accent, #f59e0b);
+  border-radius: var(--space-2, 8px);
+  background: var(--ws-accent-soft, #fffbeb);
+  color: var(--ws-accent-text, #92400e);
+}
+
+.developer-log-rich-text .westory-event-article blockquote > :first-child {
+  margin-top: 0;
+}
+
+.developer-log-rich-text .westory-event-article blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.developer-log-rich-text .westory-event-table {
+  max-width: 100%;
+  margin-block: var(--space-6, 24px);
+  overflow-x: auto;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--space-3, 12px);
+  scrollbar-width: thin;
+}
+
+.developer-log-rich-text .westory-event-article table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--ws-text, #1f2937);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.developer-log-rich-text .westory-event-article :is(th, td) {
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.developer-log-rich-text .westory-event-article th {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-weight: 800;
+}
+
+.developer-log-rich-text .westory-event-article tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.developer-log-rich-text .westory-event-article td :is(p, ul, ol) {
+  margin-block: var(--space-2, 8px);
+}
+
+.developer-log-rich-text .westory-event-article a:focus-visible,
+.developer-log-rich-text .westory-event-table:focus-visible,
+.developer-log-event-editor:focus-visible {
+  outline: 3px solid var(--ws-ring, #3b82f6);
+  outline-offset: var(--space-1, 4px);
+}
+
+.developer-log-event-editor {
+  min-width: 0;
+  min-height: 300px;
+  padding: var(--space-4, 16px);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--space-3, 12px);
+  background: var(--ws-surface, #ffffff);
+}
+
+@media (max-width: 767px) {
+  .developer-log-rich-text .westory-event-article h2 {
+    margin-top: var(--space-8, 32px);
+    font-size: 1.5rem;
+  }
+
+  .developer-log-rich-text .westory-event-article :is(th, td) {
+    padding: var(--space-3, 12px) var(--space-2, 8px);
+  }
+
+  .developer-log-rich-text .westory-event-article blockquote {
+    padding: var(--space-4, 16px);
+  }
+}
+
 @media (max-width: 1023px) {
   .dashboard-container {
     height: auto !important;

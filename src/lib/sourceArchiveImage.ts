@@ -1,3 +1,5 @@
+import { drawBrandWatermark, prepareBrandWatermark } from "./brandWatermark";
+
 const MAX_SOURCE_ARCHIVE_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 
 const UPLOAD_VARIANTS = [
@@ -92,6 +94,7 @@ const renderVariant = async (
   }
 
   context.drawImage(image, 0, 0, width, height);
+  drawBrandWatermark(context, width, height);
   const blob = await canvasToBlob(canvas, variant.mimeType, variant.quality);
 
   return {
@@ -108,6 +111,7 @@ export const buildSourceArchiveUpload = async (
   file: File,
 ): Promise<PreparedSourceArchiveUpload> => {
   const image = await loadImageElement(file);
+  await prepareBrandWatermark();
   const sourceMeta = {
     originalName: file.name,
     originalMimeType: file.type || "image/jpeg",

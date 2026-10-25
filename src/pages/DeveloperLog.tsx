@@ -128,6 +128,49 @@ const buildDraftPost = (
   publishedAt: new Date(),
 });
 
+export const hasEventArticleMarkup = (bodyHtml: string) =>
+  /<(?:article|div|section)\b[^>]*\bclass\s*=\s*(["'])[^"']*\bwestory-event-article\b[^"']*\1/i.test(
+    bodyHtml,
+  );
+
+// Keep authored tables, inline images and section markup intact while editing.
+// Quill's standard document model strips those structures on initialization.
+export const EventArticleEditor: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ value, onChange }) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor && editor.innerHTML !== value) editor.innerHTML = value;
+  }, [value]);
+
+  return (
+    <div
+      ref={editorRef}
+      className="developer-log-rich-text developer-log-event-editor"
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label="본문"
+      aria-multiline="true"
+      onInput={(event) => onChange(event.currentTarget.innerHTML)}
+      onPaste={(event) => {
+        event.preventDefault();
+        // Paste words without introducing external active HTML into the post.
+        document.execCommand(
+          "insertText",
+          false,
+          event.clipboardData.getData("text/plain"),
+        );
+        onChange(event.currentTarget.innerHTML);
+      }}
+      onDrop={(event) => event.preventDefault()}
+    />
+  );
+};
+
 const DeveloperLog: React.FC = () => {
   const { postId } = useParams();
   const navigate = useNavigate();
@@ -630,6 +673,8 @@ const DeveloperLog: React.FC = () => {
   };
 
   const renderPostDetail = (post: DeveloperLogPost, preview = false) => {
+    const eventArticle =
+      post.category === "notice" && hasEventArticleMarkup(post.bodyHtml);
     const imageCount = post.images.length;
     const activeImageIndex =
       imageCount > 0 ? Math.min(activeCardImageIndex, imageCount - 1) : 0;
@@ -699,109 +744,119 @@ const DeveloperLog: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
+        <div
+          className={
+            eventArticle
+              ? "developer-log-event-layout py-8"
+              : "grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]"
+          }
+        >
           <div
             className="developer-log-rich-text min-w-0"
             dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
           />
-          <div className="min-w-0">
-            {post.images.length > 0 ? (
-              <div
-                className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50"
-                aria-label="카드뉴스 이미지 슬라이드"
-              >
+          {!eventArticle && (
+            <div className="min-w-0">
+              {post.images.length > 0 ? (
                 <div
-                  className="relative aspect-[4/5] touch-pan-y select-none overflow-hidden bg-gray-50"
-                  onPointerDown={(event) =>
-                    handleCardSwipeStart(event, imageCount)
-                  }
-                  onPointerUp={(event) => handleCardSwipeEnd(event, imageCount)}
-                  onPointerCancel={() => {
-                    cardSwipeStartRef.current = null;
-                  }}
-                  onPointerLeave={() => {
-                    cardSwipeStartRef.current = null;
-                  }}
+                  className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50"
+                  aria-label="카드뉴스 이미지 슬라이드"
                 >
                   <div
-                    className="flex h-full transition-transform duration-500 ease-out motion-reduce:transition-none"
-                    style={{
-                      transform: `translateX(-${activeImageIndex * 100}%)`,
+                    className="relative aspect-[4/5] touch-pan-y select-none overflow-hidden bg-gray-50"
+                    onPointerDown={(event) =>
+                      handleCardSwipeStart(event, imageCount)
+                    }
+                    onPointerUp={(event) =>
+                      handleCardSwipeEnd(event, imageCount)
+                    }
+                    onPointerCancel={() => {
+                      cardSwipeStartRef.current = null;
+                    }}
+                    onPointerLeave={() => {
+                      cardSwipeStartRef.current = null;
                     }}
                   >
-                    {post.images.map((image, index) => (
-                      <figure
-                        key={image.imageStoragePath || image.imageUrl}
-                        className="h-full w-full shrink-0"
-                      >
-                        <img
-                          src={image.imageUrl}
-                          alt={
-                            image.alt || `${post.title} 카드뉴스 ${index + 1}`
-                          }
-                          className="h-full w-full object-contain"
-                          loading={index === 0 ? "eager" : "lazy"}
-                          decoding="async"
-                        />
-                      </figure>
-                    ))}
+                    <div
+                      className="flex h-full transition-transform duration-500 ease-out motion-reduce:transition-none"
+                      style={{
+                        transform: `translateX(-${activeImageIndex * 100}%)`,
+                      }}
+                    >
+                      {post.images.map((image, index) => (
+                        <figure
+                          key={image.imageStoragePath || image.imageUrl}
+                          className="h-full w-full shrink-0"
+                        >
+                          <img
+                            src={image.imageUrl}
+                            alt={
+                              image.alt || `${post.title} 카드뉴스 ${index + 1}`
+                            }
+                            className="h-full w-full object-contain"
+                            loading={index === 0 ? "eager" : "lazy"}
+                            decoding="async"
+                          />
+                        </figure>
+                      ))}
+                    </div>
+
+                    {showCarouselControls && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => moveCardImage(imageCount, -1)}
+                          className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          aria-label="이전 카드뉴스 이미지"
+                        >
+                          <i
+                            className="fas fa-chevron-left text-xs"
+                            aria-hidden="true"
+                          ></i>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCardImage(imageCount, 1)}
+                          className="absolute right-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          aria-label="다음 카드뉴스 이미지"
+                        >
+                          <i
+                            className="fas fa-chevron-right text-xs"
+                            aria-hidden="true"
+                          ></i>
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {showCarouselControls && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => moveCardImage(imageCount, -1)}
-                        className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        aria-label="이전 카드뉴스 이미지"
-                      >
-                        <i
-                          className="fas fa-chevron-left text-xs"
-                          aria-hidden="true"
-                        ></i>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveCardImage(imageCount, 1)}
-                        className="absolute right-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        aria-label="다음 카드뉴스 이미지"
-                      >
-                        <i
-                          className="fas fa-chevron-right text-xs"
-                          aria-hidden="true"
-                        ></i>
-                      </button>
-                    </>
+                    <div className="flex h-10 items-center justify-center gap-2 border-t border-gray-200 bg-white">
+                      {post.images.map((image, index) => (
+                        <button
+                          key={`${image.imageStoragePath || image.imageUrl}-dot`}
+                          type="button"
+                          onClick={() => setActiveCardImageIndex(index)}
+                          className={`h-2.5 w-2.5 rounded-full border transition ${
+                            activeImageIndex === index
+                              ? "border-blue-600 bg-blue-600"
+                              : "border-gray-300 bg-white hover:border-blue-300"
+                          }`}
+                          aria-label={`${index + 1}번째 카드뉴스 이미지 보기`}
+                          aria-current={
+                            activeImageIndex === index ? "true" : undefined
+                          }
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
-
-                {showCarouselControls && (
-                  <div className="flex h-10 items-center justify-center gap-2 border-t border-gray-200 bg-white">
-                    {post.images.map((image, index) => (
-                      <button
-                        key={`${image.imageStoragePath || image.imageUrl}-dot`}
-                        type="button"
-                        onClick={() => setActiveCardImageIndex(index)}
-                        className={`h-2.5 w-2.5 rounded-full border transition ${
-                          activeImageIndex === index
-                            ? "border-blue-600 bg-blue-600"
-                            : "border-gray-300 bg-white hover:border-blue-300"
-                        }`}
-                        aria-label={`${index + 1}번째 카드뉴스 이미지 보기`}
-                        aria-current={
-                          activeImageIndex === index ? "true" : undefined
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm font-semibold text-gray-400">
-                첨부된 카드뉴스 이미지가 없습니다.
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm font-semibold text-gray-400">
+                  첨부된 카드뉴스 이미지가 없습니다.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {!preview && (
@@ -845,6 +900,10 @@ const DeveloperLog: React.FC = () => {
   };
 
   const renderEditor = () => {
+    const preserveEventMarkup =
+      mode === "edit" &&
+      selectedPost?.category === "notice" &&
+      hasEventArticleMarkup(selectedPost.bodyHtml);
     const draftPost = buildDraftPost(
       form,
       displayName,
@@ -990,21 +1049,30 @@ const DeveloperLog: React.FC = () => {
 
               <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
                 <span className="text-sm font-black text-slate-700">본문</span>
-                <QuillEditor
-                  value={form.bodyHtml}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, bodyHtml: value }))
-                  }
-                  minHeight={300}
-                  placeholder="패치 요약, 주요 변경 사항, 기대 효과 등을 정리하세요."
-                  toolbar={[
-                    [{ header: [2, 3, false] }],
-                    ["bold", "italic", "underline"],
-                    [{ list: "ordered" }, { list: "bullet" }],
-                    ["link"],
-                    ["clean"],
-                  ]}
-                />
+                {preserveEventMarkup ? (
+                  <EventArticleEditor
+                    value={form.bodyHtml}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, bodyHtml: value }))
+                    }
+                  />
+                ) : (
+                  <QuillEditor
+                    value={form.bodyHtml}
+                    onChange={(value) =>
+                      setForm((prev) => ({ ...prev, bodyHtml: value }))
+                    }
+                    minHeight={300}
+                    placeholder="패치 요약, 주요 변경 사항, 기대 효과 등을 정리하세요."
+                    toolbar={[
+                      [{ header: [2, 3, false] }],
+                      ["bold", "italic", "underline"],
+                      [{ list: "ordered" }, { list: "bullet" }],
+                      ["link"],
+                      ["clean"],
+                    ]}
+                  />
+                )}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)]">
@@ -1193,7 +1261,7 @@ const DeveloperLog: React.FC = () => {
   }
 
   return (
-    <div className="ws-page ws-page--reading">
+    <div className="ws-page developer-log-page">
       <header className="ws-page-header mb-5">
         <h1>개발자 일지</h1>
         {canManage && mode !== "write" && mode !== "edit" && (
@@ -1215,7 +1283,7 @@ const DeveloperLog: React.FC = () => {
           renderPostDetail(selectedPost)
         ) : (
           <section>
-            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="developer-log-toolbar">
               <div className="ws-page-tabs">
                 <button
                   type="button"
@@ -1239,8 +1307,8 @@ const DeveloperLog: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <label className="relative block min-w-0 sm:w-80">
+              <div className="developer-log-search-controls">
+                <label className="relative block min-w-0">
                   <span className="sr-only">개발자 일지 검색</span>
                   <i
                     className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1283,7 +1351,7 @@ const DeveloperLog: React.FC = () => {
               </div>
             ) : (
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                <div className="hidden grid-cols-[minmax(0,1fr)_140px_140px_110px_110px] border-b border-gray-200 bg-gray-50 px-5 py-3 text-center text-sm font-black text-slate-600 lg:grid">
+                <div className="developer-log-list-grid developer-log-list-header border-b border-gray-200 bg-gray-50 px-5 py-3 text-center text-sm font-black text-slate-600">
                   <div className="text-left">제목</div>
                   <div>분류</div>
                   <div>작성일</div>
@@ -1295,7 +1363,7 @@ const DeveloperLog: React.FC = () => {
                     <Link
                       key={post.id}
                       to={`/developer-log/${post.id}`}
-                      className="grid gap-3 px-5 py-4 transition hover:bg-blue-50/40 lg:grid-cols-[minmax(0,1fr)_140px_140px_110px_110px] lg:items-center"
+                      className="developer-log-list-grid developer-log-list-row px-5 py-4 transition hover:bg-blue-50/40"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -1305,7 +1373,7 @@ const DeveloperLog: React.FC = () => {
                               aria-label="고정 게시글"
                             ></i>
                           )}
-                          <span className="truncate text-base font-black text-slate-950">
+                          <span className="developer-log-list-title text-base font-black text-slate-950">
                             {getDisplayTitle(post)}
                           </span>
                         </div>
@@ -1322,6 +1390,7 @@ const DeveloperLog: React.FC = () => {
                         {formatDate(post.publishedAt)}
                       </div>
                       <div className="text-sm font-black text-slate-700 lg:text-center">
+                        <span className="sr-only">조회수 </span>
                         <i
                           className="far fa-eye mr-1.5 text-slate-400 lg:hidden"
                           aria-hidden="true"
@@ -1329,6 +1398,7 @@ const DeveloperLog: React.FC = () => {
                         {post.viewCount}
                       </div>
                       <div className="text-sm font-black text-slate-700 lg:text-center">
+                        <span className="sr-only">좋아요 </span>
                         <i
                           className="fas fa-heart mr-1.5 text-rose-500"
                           aria-hidden="true"

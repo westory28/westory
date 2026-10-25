@@ -8,14 +8,18 @@ const ProductImageWatermark: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let cancelled = false;
-    void prepareProductWatermarkFont().then(() => {
-      if (cancelled) return;
-      const canvas = canvasRef.current;
-      const context = canvas?.getContext("2d");
-      if (!canvas || !context) return;
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      drawProductWatermark(context, canvas.width, canvas.height);
-    });
+    void prepareProductWatermarkFont()
+      .then(() => {
+        if (cancelled) return;
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d");
+        if (!canvas || !context) return;
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        drawProductWatermark(context, canvas.width, canvas.height);
+      })
+      // The upload path reports a failed logo load and blocks saving. A failed
+      // decorative preview must not cause an unhandled promise rejection.
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

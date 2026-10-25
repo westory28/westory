@@ -10,6 +10,10 @@ import WisHallOfFameStudentPreview, {
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { getFirebaseStorage } from "../../../../lib/firebase";
+import {
+  drawBrandWatermark,
+  prepareBrandWatermark,
+} from "../../../../lib/brandWatermark";
 import { ensureSensitiveOperation } from "../../../../lib/sensitiveOperation";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
@@ -166,6 +170,7 @@ const buildResizedImageBlob = async (
   quality: number,
 ) => {
   const image = await loadImageElement(file);
+  await prepareBrandWatermark();
   const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(image.width * scale));
@@ -175,6 +180,7 @@ const buildResizedImageBlob = async (
     throw new Error("명예의 전당 배경 캔버스를 준비하지 못했습니다.");
   }
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  drawBrandWatermark(context, canvas.width, canvas.height);
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => {

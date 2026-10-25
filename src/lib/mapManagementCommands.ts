@@ -1,6 +1,7 @@
 import { auth } from "./firebase";
 import { callWithApplicationSession } from "./applicationSession";
 import { ensureWestoryAppCheck } from "./appCheck";
+import { watermarkImageBlob } from "./brandWatermark";
 import {
   getLessonCommandScope,
   type LessonCommandScope,
@@ -271,17 +272,20 @@ export const uploadMapAsset = async (
 ): Promise<UploadedMapAsset> => {
   const ownerUid = auth.currentUser?.uid || "";
   assertOwner(ownerUid);
-  const contentType = validateMapUploadFile(input.file, input.kind);
+  validateMapUploadFile(input.file, input.kind);
+  const uploadFile =
+    input.kind === "IMAGE" ? await watermarkImageBlob(input.file) : input.file;
+  const contentType = validateMapUploadFile(uploadFile, input.kind);
   await ensureWestoryAppCheck();
   assertOwner(ownerUid);
   const scope = input.commandScope || (await getLessonCommandScope(config));
-  const bytes = new Uint8Array(await input.file.arrayBuffer());
+  const bytes = new Uint8Array(await uploadFile.arrayBuffer());
   const payload = {
     ...scope,
     ...input.source,
     kind: input.kind,
     contentType,
-    byteSize: input.file.size,
+    byteSize: uploadFile.size,
     sha256: await sha256(bytes),
     originalName: input.originalName,
     sourceUploadId: input.sourceUploadId || "",

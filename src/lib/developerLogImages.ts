@@ -5,6 +5,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { getFirebaseStorage } from "./firebase";
+import { drawBrandWatermark, prepareBrandWatermark } from "./brandWatermark";
 
 export interface DeveloperLogImageUploadResult {
   imageUrl: string;
@@ -81,6 +82,7 @@ const drawCanvas = (
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(source, 0, 0, width, height);
+  drawBrandWatermark(context, width, height);
   return canvas;
 };
 
@@ -90,6 +92,7 @@ export const compressDeveloperLogImage = async (file: File) => {
   }
 
   const source = await loadImageElement(file);
+  await prepareBrandWatermark();
   const scale = Math.min(
     1,
     MAX_IMAGE_WIDTH / source.naturalWidth,

@@ -117,6 +117,12 @@ function harness() {
           return { ensureSensitiveOperation: async () => {} };
         if (dependency === "./appCheck")
           return { ensureWestoryAppCheck: async () => {} };
+        if (dependency === "./brandWatermark")
+          return {
+            watermarkImageBlob: () => {
+              throw new Error("Unexpected image conversion in session checks");
+            },
+          };
         if (dependency === "firebase/auth") return { onAuthStateChanged() {} };
         if (dependency === "firebase/firestore")
           return {
