@@ -75,7 +75,22 @@ try{
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).waitFor();
  assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.at(-1).classIds),['class_1','class_2']);
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.at(-1).comparisonGrade),'3');
- for(const width of [320,390,768,1280,1366]){await page.setViewportSize({width,height:768});await page.screenshot({path:path.join(evidence,`comparison-${width}.png`),fullPage:true});screenshots.push(`comparison-${width}.png`);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`overflow ${width}`);}
+ for(const width of [320,390,768,1280,1366,1440]){
+   await page.setViewportSize({width,height:768});
+   await page.screenshot({path:path.join(evidence,`comparison-${width}.png`),fullPage:true});screenshots.push(`comparison-${width}.png`);
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`overflow ${width}`);
+   if(width>=1280){
+     const layout=await page.evaluate(()=>{
+       const fields=[...document.querySelectorAll('.qca-filters > label')].map(e=>e.getBoundingClientRect());
+       const reset=document.querySelector('.qca-reset').getBoundingClientRect();
+       const form=document.querySelector('.qca-filters').getBoundingClientRect();
+       return {unitWidths:fields.slice(0,2).map(r=>r.width),gap:fields[1].left-fields[0].right,right:form.right-reset.right};
+     });
+     assert.ok(layout.unitWidths.every(value=>value>=256),'wide unit names have room');
+     assert.ok(layout.gap>=16,'columns are separated');
+     assert.ok(Math.abs(layout.right)<=1,'reset is at the far right');
+   }
+ }
  await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();await page.getByRole('heading',{name:'3학년 1반 · 문항·학생 상세',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.at(-1).mode),'detail');assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.at(-1).classIds),['class_1']);
  const detail=page.getByRole('dialog',{name:'3학년 1반 · 문항·학생 상세',exact:true});
@@ -171,6 +186,46 @@ try{
  await page.evaluate(()=>window.quizClassQa.behaviorNoAttempt=true);await page.getByRole('button',{name:'최신 결과 조회',exact:true}).click();
  await behaviorTable.getByRole('rowheader',{name:'3학년 1반미응시',exact:true}).waitFor();
  assert.equal(await behaviorTable.getByRole('button').count(),0,'all no-attempt values are zero without personal links');
+ // Reset is a local return to the pre-query waiting screen, never an all-class query.
+ await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
+ await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('광해군');
+ await page.getByRole('button',{name:'전체 단원 검색 실행',exact:true}).click();
+ await page.getByRole('heading',{name:/전체 단원.*광해군/}).waitFor();
+ const resetButton=page.getByRole('button',{name:'조회 전체 초기화',exact:true});
+ const beforeReset=await page.evaluate(()=>window.quizClassQa.calls.length);
+ await resetButton.click();
+ const waiting=page.getByText('평가와 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true});
+ await waiting.waitFor();
+ for(const name of ['분석할 대단원','분석할 중단원','분석할 평가','분석할 학급'])
+   assert.equal(await page.getByRole('combobox',{name,exact:true}).inputValue(),'');
+ assert.equal(await page.locator('.qca-filter-count').count(),0,'class and grade comparisons are cleared');
+ assert.equal(await page.getByRole('searchbox').count(),0,'search closes and clears');
+ assert.equal(await page.locator('.qca-table').count(),0,'all results are cleared');
+ assert.equal(await page.getByRole('button',{name:'결과 조회',exact:true}).isDisabled(),true);
+ assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),beforeReset,'reset sends no server requests');
+ await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
+ assert.equal(await page.getByRole('searchbox').inputValue(),'');
+ await page.getByRole('searchbox').press('Escape');await waiting.waitFor();
+ assert.equal(await page.locator('.qca-table').count(),0,'closing search cannot restore pre-reset results');
+ for(const mode of ['summary','detail']){
+   await page.getByRole('combobox',{name:'분석할 대단원',exact:true}).selectOption('big');
+   await page.getByRole('combobox',{name:'분석할 중단원',exact:true}).selectOption('unit-a');
+   await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
+   if(mode==='detail'){
+     await page.getByRole('button',{name:'결과 조회',exact:true}).click();await behaviorTable.waitFor();
+   }
+   await page.evaluate(()=>window.quizClassQa.hold=true);
+   await page.getByRole('button',{name:mode==='summary'?'결과 조회':'문항·학생 상세 3학년 1반',exact:true}).click();
+   await page.waitForFunction(expected=>window.quizClassQa.calls.at(-1).mode===expected,mode);
+   const pendingCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
+   await resetButton.click();await waiting.waitFor();
+   await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
+   await page.waitForTimeout(100);
+   assert.equal(await page.locator('.qca-table').count(),0,`late ${mode} must not restore data`);
+   assert.equal(await page.getByRole('dialog').count(),0,`late ${mode} must not reopen detail`);
+   assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingCalls,'no automatic reload after reset');
+ }
+ await page.screenshot({path:path.join(evidence,'reset-waiting-1280.png'),fullPage:true});screenshots.push('reset-waiting-1280.png');
  assert.deepEqual(errors,[]);
- console.log('PASS catalog-only entry, class/grade comparison, explicit search, modal/focus/Escape, errors/retry, stale response discard, 320–1366px layouts, behavior counts/drilldown/five filters/nullable evidence/no grade personal access');
+ console.log('PASS catalog-only entry, class/grade comparison, explicit search, modal/focus/Escape, errors/retry, stale response discard, 320–1440px layouts, behavior filters, all-query reset without reads, cleared units/search/comparison and late summary/detail discard');
 }finally{await browser.close();server.close();await fs.writeFile(path.join(evidence,'result.json'),JSON.stringify({errors,screenshots},null,2));console.log(evidence);}

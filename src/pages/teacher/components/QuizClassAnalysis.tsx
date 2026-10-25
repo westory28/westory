@@ -249,6 +249,19 @@ export default function QuizClassAnalysis({
       searchButton.current?.focus({ preventScroll: true }),
     );
   };
+  const resetQuery = () => {
+    clearResult();
+    setBigUnitId("");
+    setUnitId("");
+    setAssessmentId("");
+    setClassId("");
+    setCompareIds([]);
+    setComparisonGrade("");
+    setComparisonOpen(false);
+    setSearchOpen(false);
+    setKeyword("");
+    detailFilter.current = undefined;
+  };
   const loadSummary = async (forceRefresh = false, reuseScope = false) => {
     if (!reuseScope && (!classId || (searchOpen ? !queryKeyword : !assessment)))
       return;
@@ -665,6 +678,27 @@ export default function QuizClassAnalysis({
                 </svg>
               </button>
             </div>
+            <button
+              type="button"
+              className="qca-icon-button qca-reset"
+              aria-label="조회 전체 초기화"
+              title="조회 전체 초기화"
+              onClick={resetQuery}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
+              </svg>
+            </button>
           </div>
         </form>
       </div>
