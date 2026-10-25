@@ -1,6 +1,9 @@
 .student-quiz-learning button:focus-visible,
 .student-quiz-learning input:focus-visible,
-.student-quiz-learning-result button:focus-visible {
+.student-quiz-learning-result button:focus-visible,
+.student-quiz-learning-result input:focus-visible,
+.student-quiz-learning-result select:focus-visible,
+.student-quiz-learning-result a:focus-visible {
   outline: 2px solid var(--ws-ring);
   outline-offset: 2px;
 }
@@ -522,6 +525,169 @@
 
 .student-quiz-result-next > button {
   flex: 1 1 200px;
+}
+
+.student-quiz-result-review-link {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--ws-text-muted);
+}
+
+.student-quiz-result-review-link button {
+  min-height: 44px;
+  color: var(--ws-primary-text);
+  text-decoration: underline;
+}
+
+.student-quiz-relearning {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 16px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.student-quiz-relearning h2 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.student-quiz-relearning h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.student-quiz-relearning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.student-quiz-relearning-header > button:last-child {
+  margin-left: auto;
+  padding-inline: 16px;
+}
+
+.student-quiz-relearning-stage,
+.student-quiz-relearning-concepts,
+.student-quiz-relearning-answers dt,
+.student-quiz-relearning-reflection legend span {
+  color: var(--ws-text-muted);
+  font-size: 14px;
+}
+
+.student-quiz-relearning-image {
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.student-quiz-relearning-answers {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.student-quiz-relearning-answers dd,
+.student-quiz-relearning-explanation p,
+.student-quiz-relearning-feedback p {
+  white-space: pre-wrap;
+}
+
+.student-quiz-relearning-reflection {
+  border: 0;
+  border-top: 1px solid var(--ws-border);
+  padding-top: 16px;
+}
+
+.student-quiz-relearning-reflection legend {
+  padding-top: 16px;
+  font-weight: 700;
+}
+
+.student-quiz-relearning-reflection label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.student-quiz-relearning-reflection input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ws-primary);
+}
+
+.student-quiz-relearning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border);
+}
+
+.student-quiz-relearning-actions > button {
+  flex: 1 1 auto;
+  white-space: normal;
+}
+
+.student-quiz-relearning .student-quiz-choice {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.student-quiz-relearning .student-quiz-choice img {
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.student-quiz-relearning .student-quiz-choice:disabled {
+  cursor: default;
+}
+
+.student-quiz-relearning-matching {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.student-quiz-relearning-matching label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.student-quiz-relearning-matching select {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--ws-surface);
+}
+
+.student-quiz-relearning-matching-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-quiz-relearning-matching-images img {
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.student-quiz-relearning-feedback {
+  border-left: 2px solid var(--ws-primary);
+  padding: 12px 16px;
+  background: var(--ws-primary-soft);
 }
 
 @media (min-width: 900px) and (orientation: landscape) {

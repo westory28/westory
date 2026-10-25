@@ -22,7 +22,8 @@ const { outputFiles } = await build({
   platform: "node",
   format: "cjs",
   jsx: "automatic",
-  external: ["react", "react/jsx-runtime"],
+  loader: { ".css": "empty" },
+  external: ["react", "react/jsx-runtime", "react-dom"],
 });
 const module = { exports: {} };
 vm.runInNewContext(outputFiles[0].text, {
@@ -85,6 +86,26 @@ assert.equal(
 const full = render({ score: 100, correctCount: 20 });
 assert.match(full, /stroke-dasharray="100 100"/);
 assert.match(full, /정답 <strong>20문제<\/strong> \/ 총 20문제/);
+const review = render({
+  reviewItems: [
+    {
+      id: "1",
+      type: "ox",
+      question: "복습 문항",
+      answer: "O",
+      submittedAnswer: "X",
+      concepts: [],
+    },
+  ],
+});
+assert.match(review, /오답 1문제 복습하기/);
+assert.match(review, /전체 답안 및 해설 보기/);
+assert.match(review, /원문이 보관된 오답 1문제만/);
+assert.doesNotMatch(
+  review,
+  /복습 문항/,
+  "Practice is opened explicitly, not rendered upfront",
+);
 const runner = await readFile(
   new URL("../src/pages/student/quiz/QuizRunner.tsx", import.meta.url),
   "utf8",

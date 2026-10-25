@@ -857,7 +857,11 @@ export const loadStudentWisProgressSummary = async (
 export const loadStudentProgressSummary = async (
   config: ConfigLike,
   uid: string,
-  options: { preloadedQuizResults?: StudentQuizResultDoc[] } = {},
+  options: {
+    preloadedQuizResults?: StudentQuizResultDoc[];
+    includeQuiz?: boolean;
+    includeHistoryClassroom?: boolean;
+  } = {},
 ): Promise<StudentProgressSummary> => {
   const safeUid = String(uid || "").trim();
   if (!safeUid) {
@@ -882,13 +886,17 @@ export const loadStudentProgressSummary = async (
 
   const [lesson, quiz, historyClassroom, wis] = await Promise.all([
     loadLessonSummary(config, safeUid, lessonCatalog),
-    loadQuizSummary(
-      config,
-      safeUid,
-      lessonCatalog,
-      options.preloadedQuizResults,
-    ),
-    loadHistoryClassroomSummary(config, safeUid),
+    options.includeQuiz === false
+      ? emptyQuizSummary("평가 기록은 응시 기록에서 확인합니다.")
+      : loadQuizSummary(
+          config,
+          safeUid,
+          lessonCatalog,
+          options.preloadedQuizResults,
+        ),
+    options.includeHistoryClassroom === false
+      ? emptyHistoryClassroomSummary("역사교실 기록은 역사교실에서 확인합니다.")
+      : loadHistoryClassroomSummary(config, safeUid),
     loadWisSummary(config, safeUid),
   ]);
 

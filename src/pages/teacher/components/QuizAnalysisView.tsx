@@ -108,6 +108,7 @@ export default function QuizAnalysisView({
   onEdit,
   onDerive,
   onReload,
+  lockedScope,
 }: {
   questions: Question[];
   tree: TreeUnit[];
@@ -123,11 +124,25 @@ export default function QuizAnalysisView({
   onEdit: (question: Question) => void;
   onDerive?: (question: QuizQuestionDraft) => void;
   onReload: () => void;
+  lockedScope?: {
+    unitId: string;
+    category: string;
+    examRound: string;
+    classId: string;
+  };
 }) {
-  const [assessmentKey, setAssessmentKey] = useState("");
-  const [unitId, setUnitId] = useState("");
+  const [assessmentKey, setAssessmentKey] = useState(
+    lockedScope
+      ? JSON.stringify([
+          lockedScope.unitId,
+          lockedScope.category,
+          lockedScope.examRound,
+        ])
+      : "",
+  );
+  const [unitId, setUnitId] = useState(lockedScope?.unitId || "");
   const [subUnitId, setSubUnitId] = useState("");
-  const [classId, setClassId] = useState("");
+  const [classId, setClassId] = useState(lockedScope?.classId || "");
   const [submissionFilter, setSubmissionFilter] = useState("all");
   const [view, setView] = useState<"questions" | "students">("questions");
   const [search, setSearch] = useState("");
@@ -194,17 +209,29 @@ export default function QuizAnalysisView({
       )
         add(question.unitId, question.category);
     });
+    if (lockedScope)
+      add(lockedScope.unitId, lockedScope.category, lockedScope.examRound);
     const unitOrder = [...labels.keys()];
-    return [...found.values()].sort(
-      (a, b) =>
-        b.latestMs - a.latestMs ||
-        (unitOrder.indexOf(a.unitId) < 0 ? 9999 : unitOrder.indexOf(a.unitId)) -
-          (unitOrder.indexOf(b.unitId) < 0
+    return [...found.values()]
+      .filter(
+        (item) =>
+          !lockedScope ||
+          (item.unitId === lockedScope.unitId &&
+            item.category === lockedScope.category &&
+            item.examRound === lockedScope.examRound),
+      )
+      .sort(
+        (a, b) =>
+          b.latestMs - a.latestMs ||
+          (unitOrder.indexOf(a.unitId) < 0
             ? 9999
-            : unitOrder.indexOf(b.unitId)) ||
-        a.key.localeCompare(b.key, "ko", { numeric: true }),
-    );
-  }, [records, questions, labels]);
+            : unitOrder.indexOf(a.unitId)) -
+            (unitOrder.indexOf(b.unitId) < 0
+              ? 9999
+              : unitOrder.indexOf(b.unitId)) ||
+          a.key.localeCompare(b.key, "ko", { numeric: true }),
+      );
+  }, [records, questions, labels, lockedScope]);
   const unitOptions = useMemo(() => {
     const units = new Map<
       string,
@@ -269,8 +296,9 @@ export default function QuizAnalysisView({
     [students, configuredClasses],
   );
   useEffect(() => {
-    if (!loading && classId && !classes.includes(classId)) setClassId("");
-  }, [loading, classId, classes]);
+    if (!lockedScope && !loading && classId && !classes.includes(classId))
+      setClassId("");
+  }, [loading, classId, classes, lockedScope]);
   const assessmentQuestions = useMemo(
     () =>
       questions.filter(
@@ -501,7 +529,7 @@ export default function QuizAnalysisView({
               setUnitId(e.target.value);
               setSubUnitId("");
             }}
-            disabled={loading || !unitOptions.length}
+            disabled={!!lockedScope || loading || !unitOptions.length}
           >
             <option value="" disabled>
               단원 선택
@@ -519,7 +547,7 @@ export default function QuizAnalysisView({
             aria-label="분석할 평가"
             value={assessmentKey}
             onChange={(e) => setAssessmentKey(e.target.value)}
-            disabled={loading || !availableAssessments.length}
+            disabled={!!lockedScope || loading || !availableAssessments.length}
           >
             <option value="" disabled>
               {availableAssessments.length ? "평가 선택" : "등록된 평가 없음"}
@@ -560,10 +588,12 @@ export default function QuizAnalysisView({
             value={classId}
             onChange={(e) => setClassId(e.target.value)}
             disabled={
-              loading || errors.includes("학생 명단을 불러오지 못했습니다.")
+              !!lockedScope ||
+              loading ||
+              errors.includes("학생 명단을 불러오지 못했습니다.")
             }
           >
-            <option value="">전체 학급</option>
+            {!lockedScope && <option value="">전체 학급</option>}
             {classes.map((id) => (
               <option key={id} value={id}>
                 {configuredClasses.find((item) => item.id === id)?.label ||
@@ -625,7 +655,7 @@ export default function QuizAnalysisView({
               aria-label="학생별 최근 평가 점수 분포"
             >
               <div className="qa-section-head">
-                <h3>최근 평가 점수</h3>
+                <h3>최근 제출 점수</h3>
                 <InfoHelp label="최근 평가 점수 집계 기준">
                   선택한 평가의 학생별 최근 제출 점수입니다. 다른 평가의 점수를
                   합치지 않습니다. 점수나 제출 순서를 확인할 수 없는 기록은
@@ -678,7 +708,7 @@ export default function QuizAnalysisView({
             </section>
             <section className="qa-chart" aria-label="문항별 정답률">
               <div className="qa-section-head">
-                <h3>문항 정답률</h3>
+                <h3>정답률이 낮은 문항 · 최대 8개</h3>
                 <InfoHelp label="문항 정답률 집계 기준">
                   현재 문항과 같은 버전에 응답한 학생별 최근 결과입니다. 정답
                   학생 수를 정오답이 확인된 학생 수로 나눕니다. 낮은 정답률부터
@@ -937,7 +967,7 @@ export default function QuizAnalysisView({
                             onClick={() => openStudent(student.uid)}
                           >
                             {student.classId
-                              ? `${classLabel(student.classId)} `
+                              ? `${configuredClasses.find((entry) => entry.id === student.classId)?.label || classLabel(student.classId)} `
                               : ""}
                             {student.number ? `${student.number}번 ` : ""}
                             {student.name || "이름 미등록"}

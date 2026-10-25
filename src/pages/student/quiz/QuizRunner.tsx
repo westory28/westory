@@ -12,6 +12,10 @@ import {
 import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
 import {
+  buildQuizRelearningItems,
+  type QuizRelearningItem,
+} from "./quizPracticeData";
+import {
   loadQuizScoreComparison,
   type QuizScoreComparison,
 } from "../../../lib/quizScoreComparison";
@@ -195,6 +199,7 @@ const QuizRunner: React.FC = () => {
   const [scoreComparison, setScoreComparison] =
     useState<QuizScoreComparison | null>(null);
   const [resultCounts, setResultCounts] = useState({ correct: 0, total: 0 });
+  const [reviewItems, setReviewItems] = useState<QuizRelearningItem[]>([]);
   const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -941,6 +946,7 @@ const QuizRunner: React.FC = () => {
       analytics: pendingSubmitAnalyticsRef.current,
     });
     setScore(submitted.percent);
+    setReviewItems(buildQuizRelearningItems(submitted, answerMap));
     setResultCounts({
       correct: submitted.answerChecks.filter((check) => check.correct === true)
         .length,
@@ -1252,6 +1258,7 @@ const QuizRunner: React.FC = () => {
   }, [finishSubmitting, view]);
 
   const initializeQuiz = async () => {
+    setReviewItems([]);
     if (!unitId || !category || !fallbackStudentUid) return;
 
     try {
@@ -2596,6 +2603,7 @@ const QuizRunner: React.FC = () => {
 
     return (
       <QuizLearningResult
+        key={finalizedResultId}
         assessmentTitle={
           assessmentTitle ||
           (category === "diagnostic"
@@ -2609,6 +2617,7 @@ const QuizRunner: React.FC = () => {
         correctCount={resultCounts.correct}
         totalCount={resultCounts.total}
         comparison={scoreComparison}
+        reviewItems={reviewItems}
         onReview={() => navigate(resultReviewUrl)}
         onRetry={() => {
           setView("loading");

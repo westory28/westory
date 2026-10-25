@@ -82,9 +82,28 @@ results.push({
   attemptId: "past-semester",
   semesterId: "2026-1",
 });
+const summaryRows = Array.from({ length: 23 }, (_, index) => ({
+  key: "canonical:attempt-" + index,
+  source: "canonical",
+  id: "attempt-" + index,
+  unitId: "mid",
+  category: index % 3 === 0 ? "formative" : "diagnostic",
+  examRound: "",
+  title:
+    index === 0
+      ? "조선의 정치·사회와 문화의 발전을 자세히 살펴보는 긴 단원명"
+      : "조선의 통치 체제 " + (index + 1),
+  score: index === 0 ? 0 : index === 1 ? null : 80,
+  submittedAtMs: 1792033200000 - index * 86400000,
+  totalCount: 3,
+  wrongCount: 2,
+}));
 const stubs = `
 import { DEFAULT_POINT_RANK_POLICY, resolvePointRankPolicy } from '${root.replaceAll("\\", "/")}/src/lib/pointRanks.ts';
-const rows=${JSON.stringify(results)};
+const rows=${JSON.stringify(results)};const summaryRows=${JSON.stringify(summaryRows)};window.myHistoryQa={list:[],detail:[]};
+let listFailed=false, detailFailed=false;
+export const loadMyQuizHistory=async(input)=>{window.myHistoryQa.list.push(input);await new Promise(resolve=>setTimeout(resolve,80));if(input.category==='all')throw Error('all must be omitted');if(new URLSearchParams(location.search).has('error')&&!listFailed){listFailed=true;throw Error('응시 기록을 불러오지 못했습니다.')};if(location.search.includes('cursor-error')&&input.cursor){throw Error('기록이 갱신되었습니다. 처음부터 새로고침해 주세요.')};const filtered=location.search.includes('empty')?[]:summaryRows.filter(row=>!input.category||row.category===input.category);const offset=Number(input.cursor||0);return {semesterId:input.semesterId,rows:filtered.slice(offset,offset+20),totalCount:filtered.length,nextCursor:offset+20<filtered.length?String(offset+20):null,generatedAt:Date.now(),version:'v1'}};
+export const loadMyQuizHistoryDetail=async(semesterId,key)=>{window.myHistoryQa.detail.push(key);await new Promise(resolve=>setTimeout(resolve,80));if(location.search.includes('detail-error')&&!detailFailed){detailFailed=true;throw Error('평가 결과를 불러오지 못했습니다.')};if(key==='canonical:old-legacy'){const error=Error('없음');error.code='functions/not-found';throw error};const index=Number(key.split('-').pop());const record=rows[Number.isFinite(index)&&index<7?index:0];return {semesterId,key,record:{...record,title:'조선의 통치 체제',...(location.search.includes('word')?{details:[{id:'word',correct:false,u:'',questionSnapshot:{type:'word',question:'조선을 건국한 사람은 누구인가요?',answer:'이성계',explanation:'이성계는 조선을 건국하였습니다.'}}]}:{})}}};
 const config={year:'2026',semester:'2',showLesson:false,showQuiz:true,showScore:true};const user={uid:'fixture-student'};const userData={name:'가상 학생',grade:'3',class:'1',number:'1'};
 export const useAuth=()=>({config,user,userData});
 export const db={};export const collection=(...args)=>args;export const doc=(...args)=>args;export const query=(...args)=>args;export const where=(...args)=>args;export const serverTimestamp=()=>null;export const setDoc=async()=>{throw Error('Fixture writes disabled')};
@@ -95,7 +114,7 @@ export const loadUserPerformanceScoreRecords=async()=>[];export const formatPerf
 let failed=false;export const loadStudentQuizResults=async()=>{await new Promise(resolve=>setTimeout(resolve,80));if(location.search.includes('error')&&!failed){failed=true;throw Error('Fixture load failure')};return location.search.includes('empty')?[]:rows};
 export const loadStudentProgressSummary=async()=>({lesson:{unavailable:false,completedUnits:0,totalLessons:0,worksheetUnits:0,units:[]},quiz:{totalAttempts:7,latestScore:0,averageScore:50},historyClassroom:{totalAttempts:0,passedCount:0,averagePercent:null}});
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {AppToastProvider} from './src/components/common/AppToastProvider';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></AppToastProvider></MemoryRouter>);`;
+const entry = `import React from 'react';import './src/components/layout/studentLayout.css';import './src/components/common/portalPage.css';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {AppToastProvider} from './src/components/common/AppToastProvider';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><div className="student-layout"><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></div></AppToastProvider></MemoryRouter>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -113,7 +132,7 @@ const built = await build({
         build.onResolve(
           {
             filter:
-              /firebase\/firestore$|lib\/firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$/,
+              /firebase\/firestore$|lib\/firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$|lib\/myQuizHistory$/,
           },
           () => ({ path: "fixture-stubs", namespace: "fixture" }),
         );

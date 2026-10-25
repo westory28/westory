@@ -35,8 +35,8 @@ source = source
     "{location.search.includes('developer-log')?<DeveloperLog/>:<MyPage/>}",
   )
   .replace(
-    "lib\\/studentProgressSummary$/",
-    "lib\\/studentProgressSummary$|lib\\/developerLogImages$|common\\/QuillEditor$/",
+    "lib\\/myQuizHistory$/",
+    "lib\\/myQuizHistory$|lib\\/developerLogImages$|common\\/QuillEditor$/",
   )
   .replace("const config={", "window.myPageQa={calls:[]};const config={")
   .replace("showLesson:false", "showLesson:true")
@@ -137,112 +137,38 @@ try {
         : route.abort(),
     );
     await page.goto("http://127.0.0.1:4197");
-    await page.getByText("점수 계산 요약", { exact: true }).waitFor();
-    await noOverflow(page, `${width}/profile`);
-    assert.equal(await page.locator(".my-assessment-summary").count(), 0);
-    const initialCalls = await page.evaluate(() => window.myPageQa.calls);
+    await page
+      .getByRole("button", { name: "응시 기록", exact: true })
+      .waitFor();
+    await noOverflow(page, width + "/profile");
+    assert.deepEqual(await page.evaluate(() => window.myHistoryQa), {
+      list: [],
+      detail: [],
+    });
     assert.equal(
-      initialCalls.filter((call) => call.kind === "performance").length,
+      await page.evaluate(
+        () =>
+          window.myPageQa.calls.filter((call) => call.kind === "performance")
+            .length,
+      ),
       0,
     );
-    const treeCall = initialCalls.find((call) =>
-      call.key?.includes("curriculum"),
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.myPageQa.calls.filter(
+            (call) => call.kind === "quiz" || call.key?.includes("curriculum"),
+          ).length,
+      ),
+      0,
     );
-    const quizCall = initialCalls.find((call) => call.kind === "quiz");
-    assert(
-      quizCall.at - treeCall.at < 150,
-      "Quiz loading must not wait for curriculum",
-    );
-    await page.screenshot({
-      path: path.join(evidence, `profile-${width}.png`),
-      fullPage: true,
-    });
     await page
       .getByRole("button", { name: "나의 성적표", exact: true })
       .click();
-    await page.locator(".my-assessment-summary__records li").first().waitFor();
-    await noOverflow(page, `${width}/score`);
-    const performanceCount = await page.evaluate(
-      () =>
-        window.myPageQa.calls.filter((call) => call.kind === "performance")
-          .length,
-    );
-    assert.equal(performanceCount, 1);
-    await page.screenshot({
-      path: path.join(evidence, `score-${width}.png`),
-      fullPage: true,
-    });
-    assert.equal(
-      await page.locator(".my-assessment-summary__records li").count(),
-      3,
-    );
     await page
-      .getByRole("button", { name: "전체 7회 보기", exact: true })
-      .click();
-    assert.equal(
-      await page.locator(".my-assessment-summary__records li").count(),
-      7,
-    );
-    await page
-      .getByRole("button", { name: "최근 3회만 보기", exact: true })
-      .click();
-    await page
-      .locator(".my-assessment-summary__records li > button")
-      .first()
-      .click();
-    await page.getByRole("dialog").waitFor();
-    await page.keyboard.press("Escape");
-    assert.equal(await page.getByRole("dialog").count(), 0);
-    await page.getByRole("button", { name: "오답 노트", exact: true }).click();
-    await page.getByRole("button", { name: "진단평가", exact: true }).click();
-    const selects = page.locator(".student-my-page__unit-filters select");
-    assert.equal(await selects.count(), 3);
-    const boxes = await selects.evaluateAll((elements) =>
-      elements.map((element) => {
-        const box = element.getBoundingClientRect();
-        return { top: box.top, height: box.height, width: box.width };
-      }),
-    );
-    assert(
-      boxes.every((box) => box.top === boxes[0].top),
-      "All unit dropdowns stay in one row",
-    );
-    assert(boxes.every((box) => box.height >= 44 && box.width >= 44));
-    await page.getByLabel("대단원", { exact: true }).selectOption("big");
-    await page.getByLabel("중단원", { exact: true }).selectOption("mid");
-    await page.getByLabel("소단원", { exact: true }).selectOption("leaf");
-    assert(
-      (await page.locator(".student-my-page__attempt-list button").count()) > 0,
-    );
-    await page.screenshot({
-      path: path.join(evidence, `wrong-note-${width}.png`),
-      fullPage: true,
-    });
-    await page.getByLabel("대단원", { exact: true }).selectOption("all");
-    assert.equal(
-      await page.getByLabel("중단원", { exact: true }).inputValue(),
-      "all",
-    );
-    assert.equal(
-      await page.getByLabel("소단원", { exact: true }).inputValue(),
-      "all",
-    );
-    assert(await page.getByLabel("중단원", { exact: true }).isDisabled());
-    await page.getByLabel("대단원", { exact: true }).focus();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-    assert.equal(
-      await page.getByLabel("대단원", { exact: true }).inputValue(),
-      "big",
-    );
-    await noOverflow(page, `${width}/wrong-note`);
-    await page.getByRole("button", { name: "전체", exact: true }).click();
-    assert.equal(await selects.count(), 3);
-    await page.getByRole("button", { name: "모의고사", exact: true }).click();
-    assert.equal(await page.getByLabel("회차", { exact: true }).count(), 1);
-    await page
-      .getByRole("button", { name: "나의 성적표", exact: true })
-      .click();
+      .getByRole("heading", { name: "내 수행평가 점수", exact: true })
+      .waitFor();
+    await noOverflow(page, width + "/score");
     assert.equal(
       await page.evaluate(
         () =>
@@ -251,19 +177,98 @@ try {
       ),
       1,
     );
+    await page.getByRole("button", { name: "응시 기록", exact: true }).click();
+    await page.locator(".my-quiz-history__list li").first().waitFor();
+    assert.equal(await page.locator(".my-quiz-history__list li").count(), 20);
+    assert.equal(
+      await page.evaluate(() => window.myHistoryQa.detail.length),
+      0,
+    );
+    await noOverflow(page, width + "/history");
+    await page.screenshot({
+      path: path.join(evidence, "history-" + width + ".png"),
+      fullPage: true,
+    });
+    const first = page.locator(".my-quiz-history__list li button").first();
+    await first.focus();
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("heading", { name: "1번 · 오답", exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.myHistoryQa.detail.length),
+      1,
+    );
+    await noOverflow(page, width + "/detail");
+    await page.screenshot({
+      path: path.join(evidence, "detail-" + width + ".png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "오답 1문제 복습하기", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "해설 가리고 다시 풀기", exact: true })
+      .click();
+    await page.getByRole("button", { name: /1\. 의정부는/ }).click();
+    await page.getByRole("button", { name: "답 확인", exact: true }).click();
+    await page
+      .getByRole("button", { name: "복습 결과 확인", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "평가 결과로", exact: true })
+      .click();
+    assert.equal(
+      await page.locator(".my-quiz-history__result-meta strong").innerText(),
+      "0점",
+    );
+    await page
+      .getByRole("button", { name: "← 응시 기록", exact: true })
+      .click();
+    assert(
+      await first.evaluate((element) => element === document.activeElement),
+    );
+    await first.click();
+    await page
+      .getByRole("heading", { name: "1번 · 오답", exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.myHistoryQa.detail.length),
+      1,
+      "same detail is reused from bounded component cache",
+    );
+    await page
+      .getByRole("button", { name: "← 응시 기록", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "이전 기록 더 보기", exact: true })
+      .click();
+    await page.getByText("조선의 통치 체제 23", { exact: true }).waitFor();
+    assert.equal(await page.locator(".my-quiz-history__list li").count(), 23);
+    assert.equal(await page.evaluate(() => window.myHistoryQa.list.length), 2);
+    await page.getByLabel("평가 종류").selectOption("formative");
+    await page.getByText("총 8회 · 최신순", { exact: true }).waitFor();
+    assert.equal(await page.locator(".my-quiz-history__list li").count(), 8);
+    await page.getByRole("button", { name: "새로고침", exact: true }).click();
+    await page.getByText("총 8회 · 최신순", { exact: true }).waitFor();
+    assert.equal(
+      await page.evaluate(() => window.myHistoryQa.list.at(-1).forceRefresh),
+      true,
+    );
     assert.deepEqual(errors, []);
     checks.push({
       width,
-      profile: "pass",
-      score: "pass",
-      unitSelects: boxes,
-      keyboard: "pass",
-      noOverflow: "pass",
-      deferredPerformanceReads: performanceCount,
+      profileNoAssessmentReads: true,
+      summaryPage: 20,
+      detailReads: 1,
+      practiceKeepsScore: true,
+      pagination: 23,
+      keyboardReturn: true,
+      noOverflow: true,
     });
     await page.close();
   }
-  for (const width of [390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280, 1366]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -302,30 +307,93 @@ try {
     });
     await page.close();
   }
-  for (const scenario of ["empty", "error"]) {
+  for (const scenario of [
+    "empty",
+    "error",
+    "cursor-error",
+    "detail-error",
+    "word",
+    "direct",
+    "legacy",
+  ]) {
     const page = await browser.newPage({
       viewport: { width: 390, height: 844 },
     });
-    await page.goto(`http://127.0.0.1:4197?${scenario}`);
-    await page.getByRole("button", { name: "오답 노트", exact: true }).click();
-    if (scenario === "error") {
+    const query =
+      scenario === "word"
+        ? "word&attemptId=attempt-0"
+        : scenario === "direct"
+          ? "attemptId=attempt-0"
+          : scenario === "legacy"
+            ? "attemptId=old-legacy"
+            : scenario === "detail-error"
+              ? "detail-error&attemptId=attempt-0"
+              : scenario;
+    await page.goto("http://127.0.0.1:4197?" + query);
+    if (["direct", "legacy", "detail-error", "word"].includes(scenario)) {
+      if (scenario === "detail-error")
+        await page
+          .getByRole("button", { name: "다시 불러오기", exact: true })
+          .click();
       await page
-        .getByRole("button", { name: "다시 불러오기", exact: true })
-        .click();
-      await page
-        .locator(".student-my-page__attempt-list button")
-        .first()
+        .getByRole("heading", { name: "1번 · 오답", exact: true })
         .waitFor();
+      assert.equal(
+        await page.evaluate(() => window.myHistoryQa.list[0].forceRefresh),
+        true,
+      );
+      if (scenario === "word") {
+        await page
+          .getByRole("button", { name: "오답 1문제 복습하기", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: "해설 가리고 다시 풀기", exact: true })
+          .click();
+        await page.getByRole("textbox").fill("이 성 계");
+        await page
+          .getByRole("button", { name: "답 확인", exact: true })
+          .click();
+        await page.getByText("다시 맞혔어요.", { exact: true }).waitFor();
+        assert.equal(
+          await page
+            .locator(".my-quiz-history__result-meta strong")
+            .innerText(),
+          "0점",
+        );
+      }
+      if (scenario === "legacy")
+        assert.deepEqual(await page.evaluate(() => window.myHistoryQa.detail), [
+          "canonical:old-legacy",
+          "legacy:old-legacy",
+        ]);
     } else {
       await page
-        .getByText("조건에 맞는 응시 기록이 없습니다.", { exact: true })
-        .waitFor();
+        .getByRole("button", { name: "응시 기록", exact: true })
+        .click();
+      if (scenario === "error") {
+        await page
+          .getByRole("button", { name: "처음부터 새로고침", exact: true })
+          .click();
+        await page.locator(".my-quiz-history__list li").first().waitFor();
+      } else if (scenario === "cursor-error") {
+        await page
+          .getByRole("button", { name: "이전 기록 더 보기", exact: true })
+          .click();
+        await page.getByRole("alert").waitFor();
+        assert.equal(
+          await page.locator(".my-quiz-history__list li").count(),
+          20,
+        );
+        await page
+          .getByRole("button", { name: "처음부터 새로고침", exact: true })
+          .click();
+        await page.locator(".my-quiz-history__list li").first().waitFor();
+      } else
+        await page
+          .getByText("아직 응시한 평가가 없습니다.", { exact: true })
+          .waitFor();
     }
     await noOverflow(page, scenario);
-    await page.screenshot({
-      path: path.join(evidence, `${scenario}-390.png`),
-      fullPage: true,
-    });
     checks.push({ scenario, result: "pass" });
     await page.close();
   }

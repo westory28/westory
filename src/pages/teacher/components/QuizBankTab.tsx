@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
@@ -29,8 +29,7 @@ import QuizLearningMetadataFields, {
 } from "./QuizLearningMetadataFields";
 import { useQuizDialog } from "./useQuizDialog";
 
-import QuizAnalysisView from "./QuizAnalysisView";
-import { useQuizAnalysisData } from "./useQuizAnalysisData";
+import QuizClassAnalysis from "./QuizClassAnalysis";
 export interface TreeUnit {
   id: string;
   title: string;
@@ -111,20 +110,18 @@ const QuizBankTab: React.FC<{
   focusedQuestionIds?: string[];
   onClearFocus?: () => void;
 }> = ({ canEdit, onDeriveQuestion }) => {
-  const { config } = useAuth();
-  const {
-    questions,
-    setQuestions,
-    treeData,
-    students,
-    records,
-    snapshots,
-    configuredClasses,
-    loading,
-    errors,
-    legacyLimited,
-    reload,
-  } = useQuizAnalysisData(config);
+  const { config, currentUser, authGeneration } = useAuth();
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [treeData, setTreeData] = useState<TreeUnit[]>([]);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const reload = useCallback(() => setRefreshVersion((value) => value + 1), []);
+  const receiveDetailData = useCallback(
+    (nextQuestions: Question[], tree: TreeUnit[]) => {
+      setQuestions(nextQuestions);
+      setTreeData(tree);
+    },
+    [],
+  );
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [editMetadata, setEditMetadata] = useState<QuizLearningMetadata>({});
   const pendingCorrectionsRef = useRef(new Set<string>());
@@ -936,16 +933,13 @@ const QuizBankTab: React.FC<{
             },
             QuestionCorrectionResult
           >("recalculateQuizResultsAfterQuestionCorrection");
-          const correction = await recalculateCorrections({
+          await recalculateCorrections({
             year,
             semester,
             questionDocId: String(editingQuestion.docId),
             questionId: Number(editingQuestion.id),
           });
           pendingCorrectionsRef.current.delete(editingQuestion.docId);
-          if (Number(correction.data?.updatedResultCount || 0) > 0) {
-            reload();
-          }
         } catch (correctionError) {
           console.error(
             "Failed to recalculate quiz results after answer correction",
@@ -961,6 +955,7 @@ const QuizBankTab: React.FC<{
         prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)),
       );
       closeEditModal(true);
+      reload();
     } catch (error: any) {
       console.error(error);
       const message =
@@ -986,21 +981,14 @@ const QuizBankTab: React.FC<{
 
   return (
     <div className="quiz-authoring-surface">
-      <QuizAnalysisView
-        questions={questions}
-        tree={treeData}
-        students={students}
-        records={records}
-        snapshots={snapshots}
-        configuredClasses={configuredClasses}
-        loading={loading}
-        errors={errors}
-        legacyLimited={legacyLimited}
-        semesterId={getAssessmentSemesterId(config)}
+      <QuizClassAnalysis
+        key={`${currentUser?.uid || ""}:${authGeneration}:${getAssessmentSemesterId(config)}`}
+        editedQuestions={questions}
+        onDetailData={receiveDetailData}
+        refreshVersion={refreshVersion}
         canEdit={canEdit}
         onEdit={openEditModal}
         onDerive={onDeriveQuestion}
-        onReload={reload}
       />
       {editingQuestion && (
         <div className="fixed inset-0 z-50" onClick={() => closeEditModal()}>

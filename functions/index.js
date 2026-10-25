@@ -20,6 +20,15 @@ exports.getQuizEditorCatalog = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   require('./quizEditorCatalog').createQuizEditorCatalogHandler({ db }),
 );
+exports.getQuizClassAnalysis = onCall(
+  { region: REGION, timeoutSeconds: 120, memory: '512MiB', maxInstances: 10 },
+  require('./quizClassAnalysis').createQuizClassAnalysisHandler({ db }),
+);
+Object.assign(exports, require('./quizClassAnalysis').createQuizAnalysisTriggers({ db }));
+exports.getMyQuizHistory = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  require('./studentQuizHistory').createStudentQuizHistoryHandler({ db }),
+);
 exports.checkStudentAttendance = onCall(
   { region: REGION },
   require('./studentAttendance').createStudentAttendanceHandler({ db }),

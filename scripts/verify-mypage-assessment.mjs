@@ -147,8 +147,16 @@ assert.ok(
   "Past reviews must not reconstruct from the mutable question bank",
 );
 assert.ok(
-  page.includes('nextParams.set("attemptId", attempt.key)'),
+  page.includes("onSelect={(key) =>") && page.includes("attemptId: key"),
   "A score entry opens its actual attempt",
+);
+assert.ok(
+  !page.includes("loadStudentQuizResults"),
+  "MyPage must not read all results or answers on entry",
+);
+assert.ok(
+  page.includes("includeQuiz: false") &&
+    page.includes("includeHistoryClassroom: false"),
 );
 assert.ok(
   !page.includes("꾸준히 노력하고 있어요") &&
