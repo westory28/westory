@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from "react";
+import React, { useId, useMemo, useRef, useState } from "react";
 
 export const hasNoticeImageArticleMarkup = (bodyHtml: string) =>
   /<article\b[^>]*\bclass\s*=\s*(["'])[^"']*\bwe-notice-images\b[^"']*\1/i.test(
@@ -57,6 +57,41 @@ const NoticeImageArticle: React.FC<{ bodyHtml: string; title: string }> = ({
   );
   const [expanded, setExpanded] = useState(false);
   const detailId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggle = (
+    <div className="we-notice-images__actions">
+      <button
+        ref={toggleRef}
+        type="button"
+        className="we-notice-images__toggle"
+        aria-expanded={expanded}
+        aria-controls={detailId}
+        onClick={() => {
+          setExpanded((value) => !value);
+          if (expanded) {
+            requestAnimationFrame(() => toggleRef.current?.focus());
+          }
+        }}
+      >
+        {expanded ? "접기" : "더보기"}
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="m6 9 6 6 6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
+  );
   const renderImage = (image: NoticeImage, index: number, isCover = false) => (
     <figure
       key={`${index}:${image.src}`}
@@ -91,40 +126,14 @@ const NoticeImageArticle: React.FC<{ bodyHtml: string; title: string }> = ({
         className={`we-notice-images__preview${cover?.src && details.length > 0 && !expanded ? " we-notice-images__preview--collapsed" : ""}`}
       >
         {cover?.src && renderImage(cover, 0, true)}
-        {details.length > 0 && (
-          <div className="we-notice-images__actions">
-            <button
-              type="button"
-              className="we-notice-images__toggle"
-              aria-expanded={expanded}
-              aria-controls={detailId}
-              onClick={() => setExpanded((value) => !value)}
-            >
-              {expanded ? "접기" : "더보기"}
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="m6 9 6 6 6-6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          </div>
-        )}
+        {details.length > 0 && !expanded && toggle}
       </div>
       {details.length > 0 && (
         <section id={detailId} className="we-notice-images__details">
           {expanded && details.map((image, index) => renderImage(image, index))}
         </section>
       )}
+      {details.length > 0 && expanded && toggle}
     </article>
   );
 };
