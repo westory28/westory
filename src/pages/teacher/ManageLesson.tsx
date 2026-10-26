@@ -2800,6 +2800,17 @@ const ManageLesson: React.FC = () => {
     openEditFootnoteEditor(matchedAnchor.footnoteId);
   };
 
+  const handleMoveFootnoteAnchor = (
+    anchorId: string,
+    position: Pick<LessonWorksheetFootnoteAnchor, "leftRatio" | "topRatio">,
+  ) => {
+    setWorksheetFootnoteAnchors((prev) =>
+      prev.map((anchor) =>
+        anchor.id === anchorId ? { ...anchor, ...position } : anchor,
+      ),
+    );
+  };
+
   const handleDeleteFootnoteAnchor = (anchorId: string) => {
     setWorksheetFootnoteAnchors((prev) =>
       prev.filter((anchor) => anchor.id !== anchorId),
@@ -3528,6 +3539,7 @@ const ManageLesson: React.FC = () => {
                         onSelectExamHighlight={handleSelectExamHighlight}
                         onDeleteExamHighlight={handleDeleteExamHighlight}
                         onSelectFootnoteAnchor={handleSelectFootnoteAnchor}
+                        onMoveFootnoteAnchor={handleMoveFootnoteAnchor}
                         onDeleteFootnoteAnchor={handleDeleteFootnoteAnchor}
                         onActivateFootnoteAnchor={
                           handleOpenFootnoteEditorFromAnchor

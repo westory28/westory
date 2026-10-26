@@ -191,6 +191,7 @@ const makeStage = (props, options = {}) => {
     react,
     "react-dom": { createPortal: () => null },
     "./WorksheetBlankInput": "WorksheetBlankInput",
+    "./WorksheetFootnoteAnchor": "WorksheetFootnoteAnchor",
     "../../lib/lessonWorksheet": worksheet,
     "../../lib/lessonBlankClip": clipModule,
     "../../lib/lessonTextSelection": {
@@ -601,6 +602,7 @@ const HistoryView = compile(
   {
     react: staticReact,
     "./WorksheetBlankInput": "WorksheetBlankInput",
+    "./WorksheetFootnoteAnchor": "WorksheetFootnoteAnchor",
     "./InfoHelp": {
       InfoHelpContent: "InfoHelpContent",
       InfoHelpIcon: "InfoHelpIcon",

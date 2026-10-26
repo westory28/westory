@@ -1033,15 +1033,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const footnoteNumberMap = new Map(
     linkedFootnotes.map((footnote, index) => [footnote.anchorKey, index + 1]),
   );
-  const activeFootnoteBadgeLabel = activeFootnote
-    ? footnoteNumberMap.get(activeFootnote.anchorKey)
+  const activeFootnoteBadgeLabel =
+    activeFootnote && footnoteNumberMap.get(activeFootnote.anchorKey)
       ? `#${footnoteNumberMap.get(activeFootnote.anchorKey)}`
-      : worksheet.footnoteAnchors.some(
-            (anchor) => anchor.footnoteId === activeFootnote.id,
-          )
-        ? "PDF"
-        : null
-    : null;
+      : null;
   const embedUrl = normalizedLesson.videoUrl
     ? normalizedLesson.videoUrl.match(
         /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/,

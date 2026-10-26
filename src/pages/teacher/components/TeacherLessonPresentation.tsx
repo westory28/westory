@@ -192,7 +192,6 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         <LessonFootnoteDialog
           open={worksheetFootnoteOpen}
           footnote={activeWorksheetFootnote}
-          badgeLabel="PDF"
           onClose={() => {
             setWorksheetFootnoteOpen(false);
             setActiveWorksheetFootnoteAnchorId(null);

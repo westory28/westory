@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import WorksheetBlankInput from "./WorksheetBlankInput";
+import WorksheetFootnoteAnchor from "./WorksheetFootnoteAnchor";
 import {
   clampRatio,
   getLessonWorksheetStageCapabilities,
@@ -55,6 +56,10 @@ interface LessonWorksheetStageProps {
   onDeleteExamHighlight?: (highlightId: string) => void;
   onFindCorePoint?: (highlightId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
+  onMoveFootnoteAnchor?: (
+    anchorId: string,
+    position: Pick<LessonWorksheetFootnoteAnchor, "leftRatio" | "topRatio">,
+  ) => void;
   onDeleteFootnoteAnchor?: (anchorId: string) => void;
   onActivateFootnoteAnchor?: (anchorId: string) => void;
   onCreateBlankFromSelection?: (
@@ -404,6 +409,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   onDeleteExamHighlight,
   onFindCorePoint,
   onSelectFootnoteAnchor,
+  onMoveFootnoteAnchor,
   onDeleteFootnoteAnchor,
   onActivateFootnoteAnchor,
   onCreateBlankFromSelection,
@@ -3187,73 +3193,20 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       </div>
                     ))}
 
-                  {pageFootnoteAnchors.map((anchor) => {
-                    const anchorTitle =
-                      footnoteTitles[anchor.footnoteId] || "각주";
-                    const isSelectedAnchor =
-                      selectedFootnoteAnchorId === anchor.id;
-                    const resolvedAnchorTitle =
-                      footnoteTitles[anchor.footnoteId] || "각주";
-                    const anchorCenterLeft =
-                      anchor.leftRatio + anchor.widthRatio / 2;
-                    const anchorCenterTop =
-                      anchor.topRatio + anchor.heightRatio / 2;
-
-                    return (
-                      <React.Fragment key={anchor.id}>
-                        {isSelectedAnchor && (
-                          <div
-                            className="pointer-events-none absolute z-[25] h-12 w-12 rounded-full border-2 border-blue-400 bg-blue-100/40 shadow-[0_0_0_6px_rgba(59,130,246,0.12)]"
-                            style={{
-                              left: `calc(${toPercent(anchorCenterLeft)} - 1.5rem)`,
-                              top: `calc(${toPercent(anchorCenterTop)} - 1.5rem)`,
-                            }}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          data-footnote-anchor="true"
-                          onPointerDown={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            if (isTeacherEditMode) {
-                              onSelectFootnoteAnchor?.(anchor.id);
-                              onActivateFootnoteAnchor?.(anchor.id);
-                              return;
-                            }
-                            onActivateFootnoteAnchor?.(anchor.id);
-                          }}
-                          onContextMenu={(event) => {
-                            if (
-                              !isTeacherEditMode ||
-                              enableTeacherRightButtonPan
-                            )
-                              return;
-                            event.preventDefault();
-                            event.stopPropagation();
-                            onDeleteFootnoteAnchor?.(anchor.id);
-                          }}
-                          className={`absolute z-[31] inline-flex h-10 w-10 items-center justify-center rounded-full border text-sm shadow-lg transition ${
-                            isSelectedAnchor
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-white/80 bg-white text-blue-700 hover:-translate-y-0.5 hover:bg-blue-50"
-                          }`}
-                          style={{
-                            left: `calc(${toPercent(anchorCenterLeft)} - 1.25rem)`,
-                            top: `calc(${toPercent(anchorCenterTop)} - 1.25rem)`,
-                          }}
-                          aria-label={`${anchorTitle} 열기`}
-                          title={resolvedAnchorTitle}
-                        >
-                          <i className="fas fa-comment-dots"></i>
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-
+                  {pageFootnoteAnchors.map((anchor) => (
+                    <WorksheetFootnoteAnchor
+                      key={anchor.id}
+                      anchor={anchor}
+                      title={footnoteTitles[anchor.footnoteId] || "각주"}
+                      selected={selectedFootnoteAnchorId === anchor.id}
+                      editable={isTeacherEditMode}
+                      allowContextDelete={!enableTeacherRightButtonPan}
+                      onSelect={onSelectFootnoteAnchor}
+                      onActivate={onActivateFootnoteAnchor}
+                      onDelete={onDeleteFootnoteAnchor}
+                      onMove={onMoveFootnoteAnchor}
+                    />
+                  ))}
                   {capabilities.enableBlankSelection &&
                     pageBlanks.map((blank) => {
                       const renderRegions = [{ key: blank.id, ...blank }];

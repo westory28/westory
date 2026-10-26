@@ -131,6 +131,10 @@ type LessonPdfSectionProps = {
   onSelectExamHighlight?: (highlightId: string) => void;
   onDeleteExamHighlight?: (highlightId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
+  onMoveFootnoteAnchor?: (
+    anchorId: string,
+    position: Pick<LessonWorksheetFootnoteAnchor, "leftRatio" | "topRatio">,
+  ) => void;
   onDeleteFootnoteAnchor?: (anchorId: string) => void;
   onActivateFootnoteAnchor?: (anchorId: string) => void;
   footnoteTitles?: Record<string, string>;
@@ -927,6 +931,7 @@ export function LessonPdfSection({
   onSelectExamHighlight,
   onDeleteExamHighlight,
   onSelectFootnoteAnchor,
+  onMoveFootnoteAnchor,
   onDeleteFootnoteAnchor,
   onActivateFootnoteAnchor,
   footnoteTitles,
@@ -1404,6 +1409,7 @@ export function LessonPdfSection({
                   onSelectExamHighlight={selectExamHighlight}
                   onDeleteExamHighlight={onDeleteExamHighlight}
                   onSelectFootnoteAnchor={onSelectFootnoteAnchor}
+                  onMoveFootnoteAnchor={onMoveFootnoteAnchor}
                   onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
                   onActivateFootnoteAnchor={onActivateFootnoteAnchor}
                   footnoteTitles={footnoteTitles}

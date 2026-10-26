@@ -904,3 +904,79 @@ console.log(
 console.log(
   "PASS actual editor OCR contour draft, confirm, save payload and reload preserve precise blank edges",
 );
+
+{
+  const anchor = {
+    id: "anchor-existing",
+    footnoteId: "note-existing",
+    page: 1,
+    leftRatio: 0.2,
+    topRatio: 0.3,
+    widthRatio: 0.04,
+    heightRatio: 0.055,
+  };
+  const app = harness(
+    makeStore({
+      [scopePath]: [
+        lesson("A", 200, {
+          pdfUrl: "https://worksheet.example/original.pdf",
+          worksheetPageImages: [
+            {
+              page: 1,
+              width: 1000,
+              height: 1400,
+              imageUrl: "https://worksheet.example/page",
+            },
+          ],
+          footnotes: [
+            {
+              id: "note-existing",
+              anchorKey: "existing",
+              title: "탕평비 건립",
+              bodyHtml: "<p>기존 설명</p>",
+            },
+          ],
+          worksheetFootnoteAnchors: [anchor],
+        }),
+      ],
+    }),
+  );
+  app.render();
+  await app.settle();
+  const before = JSON.stringify(app.find("LessonPdfSection").footnotes);
+  const moved = { leftRatio: 0.6375, topRatio: 0.4235 };
+  app.find("LessonPdfSection").onMoveFootnoteAnchor(anchor.id, moved);
+  assert.equal(
+    app.find("LessonPdfSection").worksheetFootnoteAnchors[0].leftRatio,
+    moved.leftRatio,
+  );
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(app.errors.length, 0);
+  assert.equal(app.saves.length, 1);
+  const saved = app.saves[0].input.document;
+  assert.equal(
+    JSON.stringify(saved.worksheetFootnoteAnchors),
+    JSON.stringify([{ ...anchor, ...moved }]),
+  );
+  assert.equal(
+    JSON.stringify(saved.footnotes),
+    before,
+    "Moving an anchor preserves the existing note contents",
+  );
+  const reloaded = harness(
+    makeStore({
+      [scopePath]: [lesson("A", 300, JSON.parse(JSON.stringify(saved)))],
+    }),
+  );
+  reloaded.render();
+  await reloaded.settle();
+  assert.equal(
+    JSON.stringify(reloaded.find("LessonPdfSection").worksheetFootnoteAnchors),
+    JSON.stringify(saved.worksheetFootnoteAnchors),
+  );
+  assert.equal(reloaded.errors.length, 0);
+}
+console.log(
+  "PASS actual editor footnote move, save command payload and reload preserve coordinates, identity and content",
+);
