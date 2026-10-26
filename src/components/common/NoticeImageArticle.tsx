@@ -34,7 +34,9 @@ const readNoticeImages = (bodyHtml: string) => {
   return {
     theme: article?.classList.contains("we-notice-images--exam")
       ? "exam"
-      : "performance",
+      : article?.classList.contains("we-notice-images--reopen")
+        ? "reopen"
+        : "performance",
     cover: cover ? readImage(cover) : null,
     details: Array.from(
       article?.querySelectorAll<HTMLImageElement>(

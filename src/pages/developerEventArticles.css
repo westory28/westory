@@ -6,6 +6,9 @@
 .developer-log-rich-text .we-notice-images.we-notice-images--exam {
   background: #e9fbf5;
 }
+.developer-log-rich-text .we-notice-images.we-notice-images--reopen {
+  background: #eff6ff;
+}
 .developer-log-rich-text .westory-event-article.we-notice-images figure,
 .developer-log-rich-text .westory-event-article.we-notice-images img {
   display: block;
@@ -39,6 +42,10 @@
 .we-notice-images--exam .we-notice-images__toggle {
   color: #07575b;
   background: #e9fbf5;
+}
+.we-notice-images--reopen .we-notice-images__toggle {
+  color: #1d4ed8;
+  background: #eff6ff;
 }
 .we-notice-images__toggle:hover {
   text-decoration: underline;

@@ -46,6 +46,7 @@ const article = (theme, version = 1) =>
 const entries = {
   performance: article("performance"),
   exam: article("exam"),
+  reopen: article("reopen"),
   edited: article("performance", 2),
   legacy:
     '<article class="westory-event-article we-event"><h2>기존 안내</h2><p>기존 실제 본문은 바로 보입니다.</p><table><tbody><tr><td>기존 표</td></tr></tbody></table><img src="/legacy/inline.svg" alt="기존 안내 그림"></article>',
@@ -259,6 +260,23 @@ try {
       0,
       "Changing body on same post ID resets",
     );
+    await page.locator('[data-entry="reopen"]').click();
+    await page.getByRole("button", { name: "더보기", exact: true }).waitFor();
+    assert.equal(await page.locator(".we-notice-images--reopen").count(), 1);
+    assert.equal(
+      await page.locator(".we-notice-images__details img").count(),
+      0,
+    );
+    assert.equal(
+      requests.filter((url) => url.startsWith("/detail/reopen")).length,
+      0,
+    );
+    await page.getByRole("button", { name: "더보기", exact: true }).click();
+    assert.equal(
+      await page.locator(".we-notice-images__details img").count(),
+      2,
+    );
+    await page.getByRole("button", { name: "접기", exact: true }).click();
     await page.getByRole("button", { name: "더보기", exact: true }).click();
     await page.locator("[data-preview]").click();
     await page.getByRole("button", { name: "더보기", exact: true }).waitFor();
