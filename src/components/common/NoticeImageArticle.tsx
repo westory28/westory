@@ -87,38 +87,43 @@ const NoticeImageArticle: React.FC<{ bodyHtml: string; title: string }> = ({
       className={`westory-event-article we-notice-images we-notice-images--${theme}`}
       aria-label={title}
     >
-      {cover?.src && renderImage(cover, 0, true)}
-      {details.length > 0 && (
-        <>
-          <button
-            type="button"
-            className="we-notice-images__toggle"
-            aria-expanded={expanded}
-            aria-controls={detailId}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? "접기" : "더보기"}
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
+      <div
+        className={`we-notice-images__preview${cover?.src && details.length > 0 && !expanded ? " we-notice-images__preview--collapsed" : ""}`}
+      >
+        {cover?.src && renderImage(cover, 0, true)}
+        {details.length > 0 && (
+          <div className="we-notice-images__actions">
+            <button
+              type="button"
+              className="we-notice-images__toggle"
+              aria-expanded={expanded}
+              aria-controls={detailId}
+              onClick={() => setExpanded((value) => !value)}
             >
-              <path
-                d="m6 9 6 6 6-6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <section id={detailId} className="we-notice-images__details">
-            {expanded &&
-              details.map((image, index) => renderImage(image, index))}
-          </section>
-        </>
+              {expanded ? "접기" : "더보기"}
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="m6 9 6 6 6-6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+      {details.length > 0 && (
+        <section id={detailId} className="we-notice-images__details">
+          {expanded && details.map((image, index) => renderImage(image, index))}
+        </section>
       )}
     </article>
   );
