@@ -180,6 +180,10 @@ function loadClient(handler) {
         return { ensureWestoryAppCheck: async () => {} };
       if (name === "./lessonManagement")
         return { getLessonCommandScope: async () => scope };
+      if (name === "./brandWatermark")
+        return { watermarkImageBlob: async () => {
+          throw new Error("PDF transport checks must not invoke image watermarking");
+        } };
       throw new Error(`Unexpected client dependency: ${name}`);
     },
   });

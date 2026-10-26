@@ -23,7 +23,6 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import { type AssessmentQuestionOrder } from "../../../lib/assessmentConfig";
 import {
   formatMockExamRoundLabel,
   getMockExamResultCategory,
@@ -99,8 +98,6 @@ interface QuizConfig {
   cooldown?: number;
   questionCount?: number;
   hintLimit?: number;
-  randomOrder?: boolean;
-  questionOrder?: AssessmentQuestionOrder;
 }
 
 const ORDER_DELIMITER = "||";
@@ -226,7 +223,6 @@ const QuizRunner: React.FC = () => {
   const progressChangeRef = useRef(0);
   const persistQuizProgressRef = useRef<() => Promise<void>>(async () => {});
   const timeoutHandledRef = useRef(false);
-  const unitOrderMapRef = useRef<Record<string, number>>({});
   const authIdentityRef = useRef<{ uid: string; email: string }>({
     uid: "",
     email: "",
@@ -471,131 +467,6 @@ const QuizRunner: React.FC = () => {
     return next;
   };
 
-  const compareUnitKeys = (left: string, right: string) =>
-    left.localeCompare(right, "ko", { numeric: true, sensitivity: "base" });
-
-  const buildUnitOrderMap = (tree: StudentCurriculumTreeItem[]) => {
-    const next: Record<string, number> = {};
-    let order = 0;
-    const visit = (items: StudentCurriculumTreeItem[]) => {
-      items.forEach((item) => {
-        const id = String(item.id || "").trim();
-        if (id && next[id] === undefined) {
-          next[id] = order;
-          order += 1;
-        }
-        visit(item.children || []);
-      });
-    };
-    visit(tree);
-    return next;
-  };
-
-  const compareUnitOrderIds = (left: string, right: string) => {
-    const leftOrder = unitOrderMapRef.current[left];
-    const rightOrder = unitOrderMapRef.current[right];
-    const leftHasOrder = leftOrder !== undefined;
-    const rightHasOrder = rightOrder !== undefined;
-    if (leftHasOrder && rightHasOrder && leftOrder !== rightOrder) {
-      return leftOrder - rightOrder;
-    }
-    if (leftHasOrder !== rightHasOrder) return leftHasOrder ? -1 : 1;
-    return compareUnitKeys(left, right);
-  };
-
-  const getQuestionUnitOrderKeys = (question: Question) => [
-    question.refBig || "",
-    question.refMid || question.unitId || "",
-    question.refSmall || question.subUnitId || "",
-  ];
-
-  const compareQuestionsByUnitOrder = (left: Question, right: Question) => {
-    const leftKeys = getQuestionUnitOrderKeys(left);
-    const rightKeys = getQuestionUnitOrderKeys(right);
-    for (let index = 0; index < leftKeys.length; index += 1) {
-      const gap = compareUnitOrderIds(leftKeys[index], rightKeys[index]);
-      if (gap !== 0) return gap;
-    }
-    return left.id - right.id;
-  };
-
-  const normalizeQuestionOrder = (
-    questionOrder: unknown,
-    randomOrder: unknown,
-  ): AssessmentQuestionOrder => {
-    if (
-      questionOrder === "random" ||
-      questionOrder === "created" ||
-      questionOrder === "unit"
-    ) {
-      return questionOrder;
-    }
-    return randomOrder === false ? "created" : "random";
-  };
-
-  const orderQuestions = (
-    questions: Question[],
-    questionOrder: AssessmentQuestionOrder,
-  ) => {
-    if (questionOrder === "random") return shuffleItems(questions);
-    if (questionOrder === "unit") {
-      return [...questions].sort(compareQuestionsByUnitOrder);
-    }
-    return [...questions].sort((left, right) => left.id - right.id);
-  };
-
-  const getExamPrepSmallKey = (question: Question) =>
-    question.refSmall ||
-    question.subUnitId ||
-    question.refMid ||
-    question.refBig ||
-    `question-${question.id}`;
-
-  const getExamPrepBigKey = (question: Question) =>
-    question.refBig || question.refMid || question.subUnitId || "unassigned";
-
-  const orderExamPrepGroups = <
-    T extends { bigKey: string; midKey: string; smallKey: string },
-  >(
-    groups: T[],
-    questionOrder: AssessmentQuestionOrder,
-  ) => {
-    const orderedGroups =
-      questionOrder === "random"
-        ? shuffleItems(groups)
-        : [...groups].sort(
-            (left, right) =>
-              compareUnitOrderIds(left.bigKey, right.bigKey) ||
-              compareUnitOrderIds(left.midKey, right.midKey) ||
-              compareUnitOrderIds(left.smallKey, right.smallKey),
-          );
-    const groupedByBig = new Map<string, T[]>();
-    orderedGroups.forEach((group) => {
-      const current = groupedByBig.get(group.bigKey) || [];
-      current.push(group);
-      groupedByBig.set(group.bigKey, current);
-    });
-
-    const bigKeys =
-      questionOrder === "random"
-        ? shuffleItems(Array.from(groupedByBig.keys()))
-        : Array.from(groupedByBig.keys()).sort(compareUnitOrderIds);
-    const balancedGroups: T[] = [];
-    let added = true;
-    while (added) {
-      added = false;
-      bigKeys.forEach((bigKey) => {
-        const queue = groupedByBig.get(bigKey);
-        const next = queue?.shift();
-        if (next) {
-          balancedGroups.push(next);
-          added = true;
-        }
-      });
-    }
-    return balancedGroups;
-  };
-
   const getResolvedStudentUid = () =>
     authIdentityRef.current.uid || fallbackStudentUid;
 
@@ -625,218 +496,9 @@ const QuizRunner: React.FC = () => {
     return authIdentityRef.current;
   };
 
-  const selectQuestions = (
-    all: Question[],
-    solvedIds: Set<number>,
-    targetCount: number,
-    questionOrder: AssessmentQuestionOrder,
-  ) => {
-    const safeTargetCount = Math.min(Math.max(1, targetCount || 1), all.length);
-    const selectedIds = new Set<number>();
-
-    const selectStandardQuestions = () => {
-      if (questionOrder === "unit") {
-        const groupMap = new Map<
-          string,
-          {
-            unitKey: string;
-            unusedQuestions: Question[];
-            repeatQuestions: Question[];
-          }
-        >();
-
-        all.forEach((question) => {
-          const unitKey =
-            question.subUnitId || question.unitId || `question-${question.id}`;
-          const group = groupMap.get(unitKey) || {
-            unitKey,
-            unusedQuestions: [],
-            repeatQuestions: [],
-          };
-          if (solvedIds.has(question.id)) {
-            group.repeatQuestions.push(question);
-          } else {
-            group.unusedQuestions.push(question);
-          }
-          groupMap.set(unitKey, group);
-        });
-
-        const groups = Array.from(groupMap.values()).map((group) => ({
-          ...group,
-          unusedQuestions: orderQuestions(group.unusedQuestions, questionOrder),
-          repeatQuestions: orderQuestions(group.repeatQuestions, questionOrder),
-        }));
-        const orderedGroups = () =>
-          [...groups].sort((left, right) =>
-            compareUnitOrderIds(left.unitKey, right.unitKey),
-          );
-        const selected: Question[] = [];
-
-        const takeBalanced = (
-          source: "unusedQuestions" | "repeatQuestions",
-        ) => {
-          let added = true;
-          while (added && selected.length < safeTargetCount) {
-            added = false;
-            orderedGroups().forEach((group) => {
-              if (selected.length >= safeTargetCount) return;
-              const candidate = group[source].find(
-                (question) => !selectedIds.has(question.id),
-              );
-              if (!candidate) return;
-              selected.push(candidate);
-              selectedIds.add(candidate.id);
-              added = true;
-            });
-          }
-        };
-
-        takeBalanced("unusedQuestions");
-        takeBalanced("repeatQuestions");
-        return orderQuestions(selected, questionOrder);
-      }
-
-      const unusedPool = orderQuestions(
-        all.filter((question) => !solvedIds.has(question.id)),
-        questionOrder,
-      );
-      const repeatPool = orderQuestions(
-        all.filter((question) => solvedIds.has(question.id)),
-        questionOrder,
-      );
-      const selected = [...unusedPool.slice(0, safeTargetCount)];
-      selected.forEach((question) => selectedIds.add(question.id));
-      if (selected.length < safeTargetCount) {
-        repeatPool.some((question) => {
-          if (selected.length >= safeTargetCount) return true;
-          if (selectedIds.has(question.id)) return false;
-          selected.push(question);
-          selectedIds.add(question.id);
-          return false;
-        });
-      }
-      return orderQuestions(selected, questionOrder);
-    };
-
-    const selectExamPrepQuestions = () => {
-      const groupMap = new Map<
-        string,
-        {
-          bigKey: string;
-          midKey: string;
-          smallKey: string;
-          unusedQuestions: Question[];
-          repeatQuestions: Question[];
-        }
-      >();
-
-      const orderExamPrepQuestionPool = (questions: Question[]) => {
-        if (questionOrder === "created") {
-          return orderQuestions(questions, "created");
-        }
-        return shuffleItems(questions);
-      };
-
-      const orderSelectedExamPrepQuestions = (questions: Question[]) => {
-        if (questionOrder === "created") {
-          return orderQuestions(questions, "created");
-        }
-        if (questionOrder === "random") {
-          return shuffleItems(questions);
-        }
-        return [...questions].sort((left, right) => {
-          const leftKeys = getQuestionUnitOrderKeys(left);
-          const rightKeys = getQuestionUnitOrderKeys(right);
-          for (let index = 0; index < leftKeys.length; index += 1) {
-            const gap = compareUnitOrderIds(leftKeys[index], rightKeys[index]);
-            if (gap !== 0) return gap;
-          }
-          return 0;
-        });
-      };
-
-      all.forEach((question) => {
-        const smallKey = getExamPrepSmallKey(question);
-        const group = groupMap.get(smallKey) || {
-          bigKey: getExamPrepBigKey(question),
-          midKey: question.refMid || question.subUnitId || smallKey,
-          smallKey,
-          unusedQuestions: [],
-          repeatQuestions: [],
-        };
-        if (solvedIds.has(question.id)) {
-          group.repeatQuestions.push(question);
-        } else {
-          group.unusedQuestions.push(question);
-        }
-        groupMap.set(smallKey, group);
-      });
-
-      const groups = Array.from(groupMap.values()).map((group) => ({
-        ...group,
-        unusedQuestions: orderExamPrepQuestionPool(group.unusedQuestions),
-        repeatQuestions: orderExamPrepQuestionPool(group.repeatQuestions),
-      }));
-      const selected: Question[] = [];
-      const selectedByGroup = new Map<string, number>();
-
-      const takeFromGroups = (
-        source: "unusedQuestions" | "repeatQuestions",
-        maxPerSmallUnit: number,
-      ) => {
-        for (let pass = 0; pass < maxPerSmallUnit; pass += 1) {
-          if (selected.length >= safeTargetCount) return;
-          orderExamPrepGroups(groups, questionOrder).forEach((group) => {
-            if (selected.length >= safeTargetCount) return;
-            const currentGroupCount = selectedByGroup.get(group.smallKey) || 0;
-            if (currentGroupCount > pass) return;
-            const candidate = group[source].find(
-              (question) => !selectedIds.has(question.id),
-            );
-            if (!candidate) return;
-            selected.push(candidate);
-            selectedIds.add(candidate.id);
-            selectedByGroup.set(group.smallKey, currentGroupCount + 1);
-          });
-        }
-      };
-
-      const fillRemaining = (source: "unusedQuestions" | "repeatQuestions") => {
-        let added = true;
-        while (added && selected.length < safeTargetCount) {
-          added = false;
-          orderExamPrepGroups(groups, questionOrder).forEach((group) => {
-            if (selected.length >= safeTargetCount) return;
-            const candidate = group[source].find(
-              (question) => !selectedIds.has(question.id),
-            );
-            if (!candidate) return;
-            selected.push(candidate);
-            selectedIds.add(candidate.id);
-            selectedByGroup.set(
-              group.smallKey,
-              (selectedByGroup.get(group.smallKey) || 0) + 1,
-            );
-            added = true;
-          });
-        }
-      };
-
-      takeFromGroups("unusedQuestions", 2);
-      fillRemaining("unusedQuestions");
-      takeFromGroups("repeatQuestions", 2);
-      fillRemaining("repeatQuestions");
-
-      return orderSelectedExamPrepQuestions(selected);
-    };
-
-    const selected =
-      unitId === "exam_prep"
-        ? selectExamPrepQuestions()
-        : selectStandardQuestions();
-
+  const buildOrderOptionMap = (questions: Question[]) => {
     const nextOrderMap: Record<number, string[]> = {};
-    selected.forEach((question) => {
+    questions.forEach((question) => {
       if (question.type !== "order" && question.type !== "matching") return;
       const base =
         question.type === "matching"
@@ -849,7 +511,7 @@ const QuizRunner: React.FC = () => {
       nextOrderMap[question.id] = shuffleItems(base);
     });
 
-    return { selected, orderOptionMap: nextOrderMap };
+    return nextOrderMap;
   };
 
   const restoreSubmissionState = (
@@ -1314,7 +976,6 @@ const QuizRunner: React.FC = () => {
       const curriculumResult = await curriculumRead;
       if (!curriculumResult.ok) throw curriculumResult.error;
       const curriculumTree = curriculumResult.tree;
-      unitOrderMapRef.current = buildUnitOrderMap(curriculumTree);
       const visitLabels = (items: StudentCurriculumTreeItem[]) => {
         items.forEach((item) => {
           curriculumLabelsRef.current[item.id] = item.title;
@@ -1335,10 +996,6 @@ const QuizRunner: React.FC = () => {
           definition.itemCount,
         ),
         hintLimit: Number(settings?.hintLimit) || 0,
-        questionOrder: normalizeQuestionOrder(
-          settings?.questionOrder,
-          settings?.randomOrder,
-        ),
       };
       setQuizConfig(nextQuizConfig);
 
@@ -1456,12 +1113,6 @@ const QuizRunner: React.FC = () => {
           "응시 문항이 변경되어 불러올 수 없습니다. 선생님께 확인해 주세요.",
         );
       }
-      const committedSelection = selectQuestions(
-        committedQuestions,
-        new Set<number>(),
-        committedQuestions.length,
-        quizConfig?.questionOrder || "created",
-      );
       const committedSubmission =
         mapCanonicalAttemptToSubmission(committedAttempt);
 
@@ -1471,13 +1122,14 @@ const QuizRunner: React.FC = () => {
       setRevealedHints({});
       setCanonicalAttempt(committedAttempt);
       beginTelemetry(committedAttempt, attempt.resumed);
-      setSelectedQuestions(committedSelection.selected);
       restoreSubmissionState(
         committedSubmission,
-        committedSelection.selected,
+        committedQuestions,
         startedState.serverNowIso,
       );
-      setOrderOptionMap(committedSelection.orderOptionMap);
+      // Question numbers follow the frozen server attempt in both the runner
+      // and result history. Only order/matching answer choices are shuffled.
+      setOrderOptionMap(buildOrderOptionMap(committedQuestions));
       setResumeNotice(
         attempt.resumed
           ? "서버에 저장된 진행 상태를 이어서 풀 수 있습니다."

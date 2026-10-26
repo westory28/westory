@@ -788,10 +788,91 @@ const runLifecycleCases = async () => {
   assert.deepEqual(rewardPercents, [0, 100, 100, 0]);
 };
 
+const runPresentationOrderCases = async () => {
+  const { createHash } = require("node:crypto");
+  const { canonicalDetail } = require("../../studentQuizHistory");
+  const semesterId = "2026-2", studentUid = "order-student";
+  const definitionId = "quiz:2026-2:order-unit:formative";
+  const ids = ["2", "4", "10", "21", "30"];
+  const unitById = { 2: "small-a", 4: "small-b", 10: "small-b", 21: "small-a", 30: "small-a" };
+  const rank = id => createHash("sha256").update(`${studentUid}\n${definitionId}\n1\n${id}`).digest("hex");
+  const selected = [...ids].sort((a, b) => rank(a).localeCompare(rank(b))).slice(0, 4);
+  for (const mode of ["random", "created", "unit", "legacy-created"]) {
+    const seed = {
+      [`users/${studentUid}`]: { role: "student" },
+      "site_settings/semester_active": { semesterId, revision: 1 },
+      [`semester_manifests/${semesterId}`]: { semesterId, status: "ACTIVE", revision: 1 },
+      "semester_classes/class_order": { classId: "class_order", semesterId, grade: "3", classNumber: "1", status: "ACTIVE" },
+      "semester_enrollments/order-enrollment": { semesterId, studentUid, enrollmentId: "order-enrollment", classId: "class_order", enrollmentStatus: "ACTIVE" },
+      [`semester_enrollment_slots/${buildEnrollmentSlotId(semesterId, studentUid)}`]: { semesterId, studentUid, activeEnrollmentId: "order-enrollment" },
+      "years/2026/semesters/2/curriculum/tree": { tree: [{ id: "order-unit", children: [{ id: "small-b" }, { id: "small-a" }] }] },
+    };
+    for (const id of ids) seed[`years/2026/semesters/2/quiz_questions/q${id}`] = {
+      id: Number(id), unitId: "order-unit", subUnitId: unitById[id], category: "formative",
+      type: "choice", question: `Frozen question ${id}`, answer: `Answer ${id}`, options: [`Answer ${id}`, "Other"],
+    };
+    const store = new MemoryStore(seed);
+    const now = () => new Date("2026-10-26T01:00:00Z");
+    let commandNumber = 0;
+    const adapter = assessment.createAssessmentCommandAdapter({ now,
+      wisRewards: { prepare: async () => ({ refs: [], result: { awarded: false }, apply() {} }) } });
+    const apply = async (commandType, payload, role = "student") => (await store.runTransaction(transaction => adapter.apply({
+      transaction, commandType, payload, actor: { actorUid: role === "student" ? studentUid : "order-teacher", actorRole: role },
+      commandId: `order-${++commandNumber}`, receiptId: `receipt-${commandNumber}`, timestamp: { seconds: now().getTime() / 1000 },
+    }))).result;
+    await apply("createAssessmentDefinition", {
+      definitionId, semesterId, assessmentKind: "QUIZ", title: "Order fixture", sourceId: "order-unit", category: "formative",
+      questionCount: 4, durationSeconds: 600, maxAttempts: 2, cooldownMinutes: 0, assignedClassIds: ["class_order"],
+      legacyConfigKey: "order-unit::formative", presentationSettings: mode === "legacy-created" ? { randomOrder: false } : { questionOrder: mode },
+    }, "teacher");
+    await apply("transitionAssessmentDefinition", { definitionId, expectedRevision: 1, targetStatus: "PUBLISHED", reason: "test" }, "teacher");
+    const first = await apply("startAssessmentAttempt", { definitionId });
+    const expected = mode === "random" ? selected : [...selected].sort((a, b) =>
+      mode === "unit" ? Number(unitById[a] === "small-a") - Number(unitById[b] === "small-a") || Number(a) - Number(b) : Number(a) - Number(b));
+    assert.deepEqual(first.questionIds, expected, `${mode}: freeze the configured order after selecting the same question set`);
+    assert.deepEqual([...first.questionIds].sort(), [...selected].sort(), `${mode}: ordering cannot change the selected set`);
+    assert.deepEqual(first.questionPresentation.map(q => q.id), expected);
+    const rawAttempt = store.documents.get(`semester_assessment_attempts/${first.attemptId}`);
+    assert.deepEqual(rawAttempt.gradingSnapshot.map(q => q.id), expected);
+    assert.deepEqual(rawAttempt.questionSnapshots.map(q => q.id), expected);
+    const query = assessment.createAssessmentQueryCore({ store, now, serverTimestamp: () => ({ seconds: now().getTime() / 1000 }),
+      assertSession: async request => ({ uid: request.auth.uid }) });
+    const answers = Object.fromEntries(expected.map((id, index) => [id, index === 1 ? "Other" : `Answer ${id}`]));
+    await query.saveAssessmentProgress({ auth: { uid: studentUid }, data: {
+      attemptId: first.attemptId, expectedRevision: 1, answers, currentItemId: expected[2], saveId: `saved-${mode}`,
+    } });
+    // Changing current settings and curriculum cannot reorder an existing attempt.
+    store.documents.get(`semester_assessment_definitions/${definitionId}`).presentationSettings = { questionOrder: mode === "created" ? "random" : "created" };
+    store.documents.set("years/2026/semesters/2/curriculum/tree", { tree: [{ id: "small-a" }, { id: "small-b" }] });
+    const resumed = await apply("startAssessmentAttempt", { definitionId });
+    assert.deepEqual(resumed.questionIds, expected);
+    assert.equal(resumed.currentItemId, expected[2]);
+    const restored = (await query.getAssessmentState({ auth: { uid: studentUid }, data: { attemptId: first.attemptId } })).attempt;
+    assert.deepEqual(restored.questionIds, expected);
+    assert.deepEqual(restored.questionPresentation.map(q => q.id), expected);
+    assert.deepEqual(restored.answers, answers);
+    for (const id of ids) store.documents.get(`years/2026/semesters/2/quiz_questions/q${id}`).question = "Edited current bank";
+    const submitted = await apply("submitAssessmentAttempt", { attemptId: first.attemptId, expectedRevision: restored.revision, answers, submitReason: "MANUAL" });
+    assert.equal(submitted.percent, 75);
+    assert.deepEqual(submitted.answerChecks.map(q => q.id), expected);
+    assert.deepEqual(submitted.questionSnapshots.map(q => q.id), expected);
+    const result = store.documents.get(`semester_assessment_results/${first.attemptId}`);
+    const history = canonicalDetail(first.attemptId, result, answers);
+    assert.deepEqual(history.details.map(q => q.id), expected);
+    assert.deepEqual(history.details.map(q => q.questionSnapshot.question), expected.map(id => `Frozen question ${id}`));
+    assert.deepEqual(history.details.map(q => q.u), expected.map(id => answers[id]));
+    assert.equal(history.details[1].correct, false);
+    const replayed = await apply("submitAssessmentAttempt", { attemptId: first.attemptId, expectedRevision: restored.revision, answers, submitReason: "MANUAL" });
+    assert.deepEqual(replayed.answerChecks, submitted.answerChecks);
+    assert.deepEqual(replayed.questionSnapshots, submitted.questionSnapshots);
+  }
+};
+
 (async () => {
   runNormalizerCases();
   runQuestionSnapshotCases();
   await runLifecycleCases();
+  await runPresentationOrderCases();
   console.log(
     JSON.stringify({
       suite: "assessment-learning",
@@ -813,6 +894,8 @@ const runLifecycleCases = async () => {
         "SUBMISSION_AND_RESULT_OBSERVATION_PRESERVATION",
         "GRADING_AND_REWARD_UNCHANGED",
         "LEGACY_ATTEMPT_COMPATIBILITY",
+        "FROZEN_RANDOM_CREATED_UNIT_ORDER_THROUGH_RESUME_SUBMISSION_AND_HISTORY",
+        "ORDER_SETTINGS_KEEP_SELECTION_GRADING_AND_REWARD_POLICY",
       ],
     }),
   );

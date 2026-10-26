@@ -567,6 +567,49 @@ const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumbe
     .map((item) => item.id);
 };
 
+// Selection keeps its learning priorities; presentation order is then frozen
+// once so solving, resuming, grading and historical review share one sequence.
+const orderAttemptQuestionIds = async ({ transaction, source, definition, questionIds }) => {
+  if (definition.assessmentKind !== "QUIZ") return questionIds;
+  const settings = definition.presentationSettings || {};
+  const order = ["created", "unit", "random"].includes(settings.questionOrder)
+    ? settings.questionOrder : settings.randomOrder === false ? "created" : "random";
+  // The selected sequence is already deterministically shuffled per attempt.
+  if (order === "random") return questionIds;
+  const compareIds = (left, right) => {
+    const gap = Number(left) - Number(right);
+    return Number.isFinite(gap) ? gap : left.localeCompare(right, "ko", { numeric: true, sensitivity: "base" });
+  };
+  if (order === "created") return [...questionIds].sort(compareIds);
+  const curriculum = await transaction.get(`${semesterRoot(definition.semesterId)}/curriculum/tree`);
+  const unitOrder = new Map();
+  const visit = nodes => (Array.isArray(nodes) ? nodes : []).forEach(node => {
+    const id = String(node.id || "").trim();
+    if (id && !unitOrder.has(id)) unitOrder.set(id, unitOrder.size);
+    visit(node.children);
+  });
+  visit(curriculum.data?.tree);
+  const compareUnits = (left, right) => {
+    if (unitOrder.has(left) && unitOrder.has(right) && unitOrder.get(left) !== unitOrder.get(right))
+      return unitOrder.get(left) - unitOrder.get(right);
+    if (unitOrder.has(left) !== unitOrder.has(right)) return unitOrder.has(left) ? -1 : 1;
+    return left.localeCompare(right, "ko", { numeric: true, sensitivity: "base" });
+  };
+  const metadata = new Map((source.learningSnapshot || []).map(item => [item.id, item]));
+  const keys = id => {
+    const item = metadata.get(id) || {};
+    return [item.refBig || "", item.refMid || item.unitId || "", item.refSmall || item.subUnitId || ""];
+  };
+  return [...questionIds].sort((left, right) => {
+    const leftKeys = keys(left), rightKeys = keys(right);
+    for (let index = 0; index < leftKeys.length; index++) {
+      const gap = compareUnits(leftKeys[index], rightKeys[index]);
+      if (gap) return gap;
+    }
+    return definition.sourceId === "exam_prep" ? 0 : compareIds(left, right);
+  });
+};
+
 const assertActiveEnrollment = async (transaction, semesterId, uid, assignedClassIds) => {
   const [pointer, manifest, slot] = await transaction.getAll([
     semesterCore.ACTIVE_SEMESTER_POINTER_PATH,
@@ -1061,12 +1104,15 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const attemptOrdinal = Math.max(0, ...allPrior.map((document) =>
         Number(document.data?.attemptOrdinal || document.data?.attemptNumber || 0))) + 1;
       if (!Number.isSafeInteger(attemptOrdinal)) fail("failed-precondition", "Assessment attempt sequence is invalid.", "ASSESSMENT_ATTEMPT_INVALID");
-      const selectedIds = selectAttemptQuestionIds({
-        source,
-        definition,
-        studentUid: actor.actorUid,
-        attemptNumber,
-        priorAttempts: allPrior.map(document => document.data || {}),
+      const selectedIds = await orderAttemptQuestionIds({
+        transaction, source, definition,
+        questionIds: selectAttemptQuestionIds({
+          source,
+          definition,
+          studentUid: actor.actorUid,
+          attemptNumber,
+          priorAttempts: allPrior.map(document => document.data || {}),
+        }),
       });
       const answerById = new Map(source.answerKey.map((item) => [item.id, item]));
       const gradingSnapshot = selectedIds.map((id) => answerById.get(id));
