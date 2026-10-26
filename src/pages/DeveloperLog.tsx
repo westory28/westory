@@ -20,6 +20,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAppToast } from "../components/common/AppToastProvider";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import QuillEditor from "../components/common/QuillEditor";
+import NoticeImageArticle, {
+  hasNoticeImageArticleMarkup,
+} from "../components/common/NoticeImageArticle";
 import {
   DEVELOPER_LOG_CATEGORIES,
   DEVELOPER_LOG_ITEMS_COLLECTION,
@@ -99,11 +102,13 @@ const formatDate = (value: any) => {
 };
 
 const stripHtml = (html: string) => {
-  const element = document.createElement("div");
-  element.innerHTML = html || "";
-  return (element.textContent || element.innerText || "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const template = document.createElement("template");
+  template.innerHTML = html || "";
+  // Include the image transcription in search without requesting any images.
+  template.content.querySelectorAll("img").forEach((image) => {
+    image.replaceWith(document.createTextNode(` ${image.alt} `));
+  });
+  return (template.content.textContent || "").replace(/\s+/g, " ").trim();
 };
 
 const getDisplayTitle = (post: Pick<DeveloperLogPost, "title" | "version">) =>
@@ -676,13 +681,17 @@ const DeveloperLog: React.FC = () => {
   const renderPostDetail = (post: DeveloperLogPost, preview = false) => {
     const eventArticle =
       post.category === "notice" && hasEventArticleMarkup(post.bodyHtml);
+    const imageArticle =
+      eventArticle && hasNoticeImageArticleMarkup(post.bodyHtml);
     const imageCount = post.images.length;
     const activeImageIndex =
       imageCount > 0 ? Math.min(activeCardImageIndex, imageCount - 1) : 0;
     const showCarouselControls = imageCount > 1;
 
     return (
-      <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
+      <article
+        className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle ? " developer-log-image-post" : ""}`}
+      >
         <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -752,10 +761,20 @@ const DeveloperLog: React.FC = () => {
               : "grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]"
           }
         >
-          <div
-            className="developer-log-rich-text min-w-0"
-            dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
-          />
+          {imageArticle ? (
+            <div className="developer-log-rich-text min-w-0">
+              <NoticeImageArticle
+                key={`${preview ? "preview" : "detail"}:${post.id}:${post.bodyHtml}`}
+                bodyHtml={post.bodyHtml}
+                title={post.title}
+              />
+            </div>
+          ) : (
+            <div
+              className="developer-log-rich-text min-w-0"
+              dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
+            />
+          )}
           {!eventArticle && (
             <div className="min-w-0">
               {post.images.length > 0 ? (

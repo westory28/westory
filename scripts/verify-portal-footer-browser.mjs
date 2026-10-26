@@ -92,6 +92,7 @@ const resolveMock = (input) =>
 const entry = `
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import NoticeImageArticle,{hasNoticeImageArticleMarkup} from './src/components/common/NoticeImageArticle';
 import {MemoryRouter,useLocation,useNavigate} from 'react-router-dom';
 import MainLayout from './src/components/layout/MainLayout';
 import PortalWorkspace from './src/components/common/PortalWorkspace';

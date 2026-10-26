@@ -1,3 +1,67 @@
+.developer-log-rich-text .westory-event-article.we-notice-images {
+  max-width: 720px;
+  margin-inline: auto;
+  background: #fff7e6;
+}
+.developer-log-rich-text .we-notice-images.we-notice-images--exam {
+  background: #e9fbf5;
+}
+.developer-log-rich-text .westory-event-article.we-notice-images figure,
+.developer-log-rich-text .westory-event-article.we-notice-images img {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.developer-log-rich-text .westory-event-article.we-notice-images img {
+  height: auto;
+}
+.developer-log-rich-text .we-notice-images figure a {
+  display: block;
+  cursor: zoom-in;
+}
+.we-notice-images__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 24px;
+  border: 0;
+  color: #781f28;
+  background: #fff7e6;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.we-notice-images--exam .we-notice-images__toggle {
+  color: #07575b;
+  background: #e9fbf5;
+}
+.we-notice-images__toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.we-notice-images__toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.we-notice-images__toggle:focus-visible,
+.developer-log-rich-text .we-notice-images a:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: -4px;
+}
+@media (max-width: 639px) {
+  .developer-log-image-post {
+    padding: 12px;
+  }
+  .developer-log-image-post .developer-log-event-layout {
+    margin-inline: -12px;
+    padding-block: 16px;
+  }
+}
+
 .developer-log-rich-text .westory-event-article.we-event {
   --event-bg: #eff6ff;
   --event-ink: #172554;
