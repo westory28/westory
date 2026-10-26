@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -8,6 +8,7 @@ import {
   query,
 } from "firebase/firestore";
 import { InlineLoading } from "../../../components/common/LoadingState";
+import useNoticeCarouselInteraction from "../../../components/common/useNoticeCarouselInteraction";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import NoticeManagerModal from "./NoticeManagerModal";
@@ -164,22 +165,23 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
     setIsModalOpen(true);
   };
 
-  const move = (direction: -1 | 1) => {
-    setActiveIndex((prev) => {
-      if (notices.length <= 1) return 0;
-      return (prev + direction + notices.length) % notices.length;
-    });
-  };
+  const move = useCallback(
+    (direction: -1 | 1) => {
+      setActiveIndex((prev) => {
+        if (notices.length <= 1) return 0;
+        return (prev + direction + notices.length) % notices.length;
+      });
+    },
+    [notices.length],
+  );
 
-  useEffect(() => {
-    if (!showCarousel || isPaused) return undefined;
-
-    const timerId = window.setInterval(() => {
-      move(1);
-    }, 5000);
-
-    return () => window.clearInterval(timerId);
-  }, [showCarousel, isPaused, notices.length]);
+  const carousel = useNoticeCarouselInteraction({
+    activeIndex,
+    imageUrl: activeNotice?.imageUrl,
+    count: notices.length,
+    paused: isPaused,
+    move,
+  });
 
   return (
     <div className="teacher-notice-board ws-surface flex h-full min-h-[260px] min-w-0 flex-col md:min-h-0">
@@ -222,6 +224,8 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
           <>
             <button
               type="button"
+              {...carousel.pointerHandlers}
+              style={{ touchAction: "pan-y pinch-zoom" }}
               onClick={() =>
                 activeLinkedPostId
                   ? navigate(`/developer-log/${activeLinkedPostId}`)
@@ -248,6 +252,22 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
                 {notices.map((notice) => (
                   <img
                     key={notice.id}
+                    ref={
+                      notice.id === activeNotice.id
+                        ? carousel.imageRef
+                        : undefined
+                    }
+                    onLoad={
+                      notice.id === activeNotice.id
+                        ? carousel.onImageReady
+                        : undefined
+                    }
+                    onError={
+                      notice.id === activeNotice.id
+                        ? carousel.onImageReady
+                        : undefined
+                    }
+                    draggable={false}
                     src={notice.imageUrl}
                     alt="알림장"
                     loading={notice.id === activeNotice.id ? "eager" : "lazy"}

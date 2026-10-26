@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
+import useNoticeCarouselInteraction from "../../../components/common/useNoticeCarouselInteraction";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getYearSemester } from "../../../lib/semesterScope";
@@ -110,6 +111,15 @@ const NoticeBoard: React.FC = () => {
     [activeIndex, startSlide],
   );
 
+  const carousel = useNoticeCarouselInteraction({
+    activeIndex,
+    imageUrl: activeNotice?.imageUrl,
+    count: notices.length,
+    paused: isPaused,
+    busy: isSliding || incomingIndex !== null,
+    move,
+  });
+
   const selectNotice = (index: number) => {
     if (!showCarousel || index === selectedIndex) return;
     startSlide(index, index > activeIndex ? 1 : -1);
@@ -137,18 +147,6 @@ const NoticeBoard: React.FC = () => {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!showCarousel || isPaused || isSliding || incomingIndex !== null) {
-      return undefined;
-    }
-
-    const timerId = window.setInterval(() => {
-      move(1);
-    }, 5000);
-
-    return () => window.clearInterval(timerId);
-  }, [incomingIndex, isPaused, isSliding, move, showCarousel]);
 
   return (
     <div className="student-notice-board flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
@@ -184,7 +182,10 @@ const NoticeBoard: React.FC = () => {
             <button
               type="button"
               onClick={() => openLinkedPost(activeNotice)}
-              disabled={!activeNotice.developerLogPostId}
+              {...carousel.pointerHandlers}
+              style={{ touchAction: "pan-y pinch-zoom" }}
+              aria-disabled={!activeNotice.developerLogPostId}
+              tabIndex={activeNotice.developerLogPostId ? 0 : -1}
               className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
                 activeNotice.developerLogPostId
                   ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
@@ -199,6 +200,10 @@ const NoticeBoard: React.FC = () => {
               {activeNotice && (
                 <img
                   key={`active-${activeNotice.id}`}
+                  ref={carousel.imageRef}
+                  onLoad={carousel.onImageReady}
+                  onError={carousel.onImageReady}
+                  draggable={false}
                   src={activeNotice.imageUrl}
                   alt="알림장"
                   loading="eager"
@@ -220,6 +225,7 @@ const NoticeBoard: React.FC = () => {
               {incomingNotice && (
                 <img
                   key={`incoming-${incomingNotice.id}`}
+                  draggable={false}
                   src={incomingNotice.imageUrl}
                   alt="알림장"
                   loading="eager"
