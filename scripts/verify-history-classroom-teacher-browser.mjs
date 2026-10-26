@@ -1924,6 +1924,92 @@ try {
   reports.push({ viewport: { width: 1280, height: 900 }, canonicalResults: "live pass; failed then passed; immutable review; publication and exemption toasts; preserved results on read error", errors: resultErrors });
   await resultPage.close();
   console.log("teacher canonical realtime results, retry history, deep links, publication/exemption toasts and read failure: passed");
+
+  // Completion is about every assigned student, not the number of submissions.
+  // Use the actual list at each required width; fixture records never leave localhost.
+  for (const width of [390, 768, 1280]) {
+    const completionPage = await browser.newPage({ viewport: { width, height: 900 } });
+    const completionErrors = [];
+    completionPage.on("pageerror", error => completionErrors.push(error.message));
+    await completionPage.route("**/*", route => route.request().url().startsWith(`http://127.0.0.1:${server.address().port}`) ? route.continue() : route.abort());
+    await completionPage.goto(`http://127.0.0.1:${server.address().port}/`);
+    const scenarios = [
+      { name: "all passed", statuses: ["passed", "passed"], completed: true },
+      { name: "pass and exemption", statuses: ["passed", "exempt"], completed: true },
+      { name: "all exempted", statuses: ["exempt", "exempt"], completed: true },
+      { name: "one pending", statuses: ["passed", null], completed: false },
+      { name: "one failed", statuses: ["passed", "failed"], completed: false },
+      { name: "one cancelled", statuses: ["passed", "cancelled"], completed: false },
+      { name: "no assigned students", statuses: [], completed: false },
+    ];
+    for (const scenario of scenarios) {
+      const seed = structuredClone(serveStore);
+      const recipients = assignedStudents.slice(0, scenario.statuses.length);
+      Object.assign(seed[seededAssignmentPath], {
+        targetStudentUid: recipients[0]?.uid || "",
+        targetStudentUids: recipients.map(student => student.uid),
+        targetStudentAccessMap: Object.fromEntries(recipients.map(student => [student.uid, true])),
+        targetStudentNames: recipients.map(student => student.name),
+      });
+      scenario.statuses.forEach((status, index) => {
+        if (!status) return;
+        seed[`${scope}/history_classroom_results/completion-${index}`] =
+          syntheticResult(recipients[index], status === "exempt" ? "passed" : status, status === "exempt");
+      });
+      // A later failed retry must not undo an earlier successful completion.
+      if (scenario.name === "all passed") {
+        seed[`${scope}/history_classroom_results/later-failure`] = {
+          ...syntheticResult(recipients[0], "failed"),
+          createdAt: { seconds: fixtureTimestamp.seconds + 100, nanoseconds: 0 },
+        };
+      }
+      await completionPage.evaluate(seed => {
+        window.__fixture.store = seed;
+        window.__remount();
+      }, seed);
+      const card = completionPage.locator("article").filter({ has: completionPage.getByRole("heading", { name: longTitle, exact: true }) });
+      await card.waitFor();
+      const passedCount = scenario.statuses.filter(status => status === "passed" || status === "exempt").length;
+      await card.locator(".history-card-count").first().getByText(String(passedCount), { exact: true }).waitFor();
+      await completionPage.mouse.move(0, 0);
+      await completionPage.waitForFunction(({ completed }) => {
+        const card = document.querySelector("article[data-all-passed]");
+        if (!card || card.dataset.allPassed !== String(completed)) return false;
+        const style = getComputedStyle(card);
+        return completed
+          ? Number(style.opacity) === 0.6 && style.filter === "blur(0.35px)"
+          : Number(style.opacity) === 1 && ["none", "blur(0px)"].includes(style.filter);
+      }, { completed: scenario.completed });
+      assert.equal(await card.getAttribute("data-all-passed"), String(scenario.completed), `${width}px ${scenario.name}`);
+      assert.equal(await card.evaluate(element => element.classList.contains("history-assignment-completed")), scenario.completed);
+      assert(await card.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true }).isEnabled());
+      if (scenario.name === "pass and exemption") {
+        const waitForClear = () => completionPage.waitForFunction(() => {
+          const card = document.querySelector("article[data-all-passed='true']");
+          const style = card && getComputedStyle(card);
+          return style && Number(style.opacity) === 1 && ["none", "blur(0px)"].includes(style.filter);
+        });
+        await completionPage.screenshot({ path: path.join(evidence, `teacher-completed-list-${width}.png`), fullPage: true });
+        await card.hover();
+        await waitForClear();
+        await card.getByRole("button", { name: "상세 펼치기", exact: true }).focus();
+        await completionPage.mouse.move(0, 0);
+        await waitForClear();
+        await card.getByRole("button", { name: "상세 펼치기", exact: true }).click();
+        await completionPage.getByRole("heading", { level: 1 }).click();
+        await completionPage.mouse.move(0, 0);
+        await waitForClear();
+        assert.equal(await card.evaluate(element => element.classList.contains("history-assignment-completed")), false,
+          "Expanded completed assignments remain clear without hover or focus");
+        assert.equal(await card.getByRole("button", { name: "상세 접기", exact: true }).getAttribute("aria-expanded"), "true");
+      }
+    }
+    assert.deepEqual(completionErrors, []);
+    assert.equal(await completionPage.evaluate(() => window.__fixture.commands.length), 0, "Completion styling performs no commands");
+    reports.push({ viewport: { width, height: 900 }, completedAssignments: "all passed, mixed/all exemptions, earlier pass, pending/failed/cancelled/empty; collapsed dim and hover/focus/expanded clear", errors: completionErrors });
+    await completionPage.close();
+    console.log(`teacher ${width}px assignment completion and readable expanded/interactive states: passed`);
+  }
   }
 } finally {
   await fs.writeFile(

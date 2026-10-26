@@ -3000,6 +3000,16 @@ const ManageHistoryClassroom: React.FC = () => {
 
         return {
           assignment,
+          allPassed:
+            assignedUids.length > 0 &&
+            assignedUids.every((uid) => {
+              const result = latestByStudentUid.get(uid);
+              return (
+                result?.status === "passed" ||
+                result?.passed === true ||
+                appliedExemptionKeys.includes(`${assignment.id}:${uid}`)
+              );
+            }),
           assignedCount: assignedUids.length,
           submittedCount: attemptMeta?.completed || 0,
           pendingCount: attemptMeta?.pending || 0,
@@ -3021,7 +3031,13 @@ const ManageHistoryClassroom: React.FC = () => {
           ...statusCounts,
         };
       }),
-    [assignmentAttemptMetaById, assignments, resultsByAssignment, studentByUid],
+    [
+      appliedExemptionKeys,
+      assignmentAttemptMetaById,
+      assignments,
+      resultsByAssignment,
+      studentByUid,
+    ],
   );
 
   const filteredAssignmentRows = useMemo(() => {
@@ -5026,7 +5042,12 @@ const ManageHistoryClassroom: React.FC = () => {
                 return (
                   <article
                     key={row.assignment.id}
-                    className="min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm transition hover:shadow-md"
+                    data-all-passed={row.allPassed}
+                    className={`min-w-0 flex-1 cursor-pointer rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm transition hover:shadow-md ${
+                      row.allPassed && !expanded
+                        ? "history-assignment-completed"
+                        : ""
+                    }`}
                     onClick={() =>
                       setExpandedAssignmentId((current) =>
                         current === row.assignment.id ? "" : row.assignment.id,
@@ -7548,6 +7569,15 @@ const ManageHistoryClassroom: React.FC = () => {
       )}
 
       <style>{`
+                .history-assignment-completed {
+                    opacity: 0.6;
+                    filter: blur(0.35px);
+                }
+                .history-assignment-completed:hover,
+                .history-assignment-completed:focus-within {
+                    opacity: 1;
+                    filter: none;
+                }
                 .history-assignment-card > div:last-child {
                     display: none;
                 }
