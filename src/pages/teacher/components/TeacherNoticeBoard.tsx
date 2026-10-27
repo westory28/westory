@@ -244,7 +244,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
               }
             >
               <div
-                className="teacher-notice-board__image-track flex h-full w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                className="teacher-notice-board__image-track flex h-full w-full transition-transform duration-500 ease-out will-change-transform"
                 style={{
                   transform: `translateX(-${activeIndex * 100}%)`,
                 }}
