@@ -1390,7 +1390,7 @@ service cloud.firestore {
         allow get: if hasWestoryIdentity() && hasActiveApplicationSession()
           && currentYutMaintenance()
           && resource.data.expiresAtMs > request.time.toMillis()
-          && (resource.data.status != 'waiting' || resource.data.createdAtMs + 600000 > request.time.toMillis())
+          && (resource.data.status != 'waiting' || resource.data.get('hostActivityAtMs', resource.data.createdAtMs) + 600000 > request.time.toMillis())
           && currentYutScope() && currentYutReader();
         allow list, create, update, delete: if false;
       }

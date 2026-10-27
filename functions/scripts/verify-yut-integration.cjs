@@ -147,8 +147,10 @@ async function verifySpectatorRules(roomRef) {
     await expectRead('teacher', 403, 'an expired room cannot be observed');
     await fixtureRef.set({ ...fixture, status: 'waiting' });
     for (const label of managers) await expectRead(label, 200, 'authorized observers may read a waiting room');
-    await fixtureRef.update({ createdAtMs: Date.now() - 600001 });
+    await fixtureRef.update({ createdAtMs: Date.now() - 600001, hostActivityAtMs: FieldValue.delete() });
     await expectRead('teacher', 403, 'an abandoned waiting room cannot be observed even before expiresAtMs');
+    await fixtureRef.update({ hostActivityAtMs: Date.now() });
+    await expectRead('teacher', 200, 'host activity preserves a waiting room beyond its creation deadline');
     await fixtureRef.set({ ...fixture, status: 'finished' });
     for (const label of managers) await expectRead(label, 200, 'authorized observers may read a finished room');
     await fixtureRef.update({ status: 'closed' });

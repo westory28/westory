@@ -23,7 +23,7 @@ const { build } = requireRoot('esbuild');
 let playwright;
 try { playwright = requireRoot('playwright'); }
 catch { playwright = require(path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright')); }
-const evidence = path.join(root, 'output/yut-network-20261018');
+const evidence = path.join(root, 'output/yut-network-20261027');
 const base = 'years/2026/semesters/2';
 const authTime = Math.floor(Date.now() / 1000) - 10;
 const proof = { authorityGeneration: 'w1r2-2026-08-09', protocolVersion: 2, revision: 'b'.repeat(64) };
@@ -66,7 +66,7 @@ async function createHarness() {
 import {initializeApp} from 'firebase/app';
 import {initializeFirestore,connectFirestoreEmulator,disableNetwork,enableNetwork} from 'firebase/firestore';
 const label=new URLSearchParams(location.search).get('uid')||'a';
-window.netQA={calls:[],snapshots:[],renderedRoom:null,delayAction:'',delayMs:0,dropAction:'',hangAction:'',hidden:false};
+window.netQA={calls:[],snapshots:[],events:[],renderedRoom:null,delayAction:'',delayMs:0,dropAction:'',hangAction:'',hidden:false};
 Object.defineProperty(document,'hidden',{configurable:true,get:()=>window.netQA.hidden});
 const app=initializeApp({projectId:${JSON.stringify(project)},apiKey:'emulator-only',authDomain:'localhost'});
 export const db=initializeFirestore(app,{experimentalForceLongPolling:true});
@@ -78,7 +78,7 @@ window.netQA.setHidden=value=>{window.netQA.hidden=value;document.dispatchEvent(
   const firestoreFacade = `
 export * from ${JSON.stringify(sdkPath.replaceAll('\\','/'))};
 import {onSnapshot as realSnapshot} from ${JSON.stringify(sdkPath.replaceAll('\\','/'))};
-export function onSnapshot(reference,options,next,error){return realSnapshot(reference,options,snapshot=>{window.netQA.snapshots.push(snapshot);window.netQA.injectSnapshot=index=>next(window.netQA.snapshots[index]);next(snapshot);},error);}
+export function onSnapshot(reference,options,next,error){const events=window.netQA.events,id=events.length;events.push({id,type:'subscribe',path:reference.path,at:Date.now()});const unsubscribe=realSnapshot(reference,options,snapshot=>{window.netQA.snapshots.push(snapshot);events.push({id,type:'snapshot',cache:snapshot.metadata.fromCache,revision:snapshot.data()?.revision,at:Date.now()});window.netQA.injectSnapshot=index=>next(window.netQA.snapshots[index]);next(snapshot);},failure=>{events.push({id,type:'error',code:failure.code,at:Date.now()});error(failure);});return()=>{events.push({id,type:'unsubscribe',at:Date.now()});unsubscribe();};}
 `;
   const sessionModule = `
 export async function getHistoryDictionaryCallable(name){return async data=>{
@@ -119,7 +119,7 @@ createRoot(document.getElementById('root')).render(<Harness/>);`;
       const url=new URL(req.url,'http://localhost');
       if(url.pathname.startsWith('/qa/')){
         const name=url.pathname.slice(4),label=url.searchParams.get('uid');
-        assert.ok(['getYutLobby','commandYutRoom'].includes(name)); assert.ok(['a','b','c','d'].includes(label));
+        assert.ok(['getYutLobby','commandYutRoom','commandYutRoomFast'].includes(name)); assert.ok(['a','b','c','d'].includes(label));
         let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body||'{}');const recorded={name,label,data};calls.push(recorded);
         try{const result=await run(name,label,data);recorded.result={revision:result.room?.revision,syncRevision:result.room?.syncRevision};res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(result));}
         catch(error){recorded.error=error.code;res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({code:error.code,message:error.message}));}return;
@@ -137,7 +137,7 @@ createRoot(document.getElementById('root')).render(<Harness/>);`;
 }
 async function until(fn,message,timeout=15000){const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,100));}throw new Error(message);}
 async function browserRoom(page){return page.evaluate(()=>window.netQA.renderedRoom);}
-async function awaitObservedRoom(pages,room){await until(async()=> (await Promise.all(pages.map(page=>page.evaluate(({id,revision})=>window.netQA.snapshots.some(snapshot=>!snapshot.metadata.fromCache&&snapshot.id===id&&snapshot.data()?.revision>=revision),room)))).every(Boolean),'server room revision did not reach all clients');}
+async function awaitObservedRoom(pages,room){try{await until(async()=> (await Promise.all(pages.map(page=>page.evaluate(({id,revision})=>window.netQA.snapshots.some(snapshot=>!snapshot.metadata.fromCache&&snapshot.id===id&&snapshot.data()?.revision>=revision),room)))).every(Boolean),'server room revision did not reach all clients');}catch(error){error.message+=' '+JSON.stringify(await Promise.all(pages.map(page=>page.evaluate(()=>({url:location.search,events:window.netQA.events.slice(-16)})))));throw error;}}
 async function closeRoom(room){return run('commandYutRoom','teacher',{action:'close',roomId:room.id,expectedRevision:room.revision,requestKey:randomUUID()});}
 
 (async()=>{
@@ -154,6 +154,7 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   await Promise.all(pages.map(page=>page.getByRole('heading',{name:'한 판의 인연'}).waitFor()));
   const dMatches=calls.filter(call=>call.label==='d'&&call.data.action==='match');
   assert.equal(dMatches.length,2);assert.equal(dMatches[0].data.requestKey,dMatches[1].data.requestKey);
+  assert.equal(dMatches.every(call=>call.name==='commandYutRoomFast'),true,'actual client adapter uses the fast callable');
   assert.equal(room.players.filter(player=>player.uid===uid('d')).length,1);
   checks.push('Four independent Chromium clients join one real Firestore room; lost join acknowledgement retries the identical key once without duplicate membership.');
   await awaitObservedRoom(pages,room);
@@ -162,6 +163,18 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   assert.ok(startBox && seatsBox && startBox.y + startBox.height <= seatsBox.y, 'host start action is visible above the roster');
   assert.equal(await a.locator('.yut-seat-class').first().innerText(), '3학년 1반');
   await a.screenshot({path:path.join(evidence,'host-waiting-start.png')});
+  // A removed participant loses the actual Firestore listener and returns to admission.
+  const targetName=room.players.find(player=>player.uid===uid('d')).name;
+  await a.getByRole('button',{name:targetName+' 강퇴',exact:true}).click();
+  await d.getByRole('button',{name:'여럿이서 시작',exact:true}).waitFor();
+  room=await getRoom(room.id);
+  assert.equal(room.participantUids.includes(uid('d')),false);
+  assert.equal((await db.doc(`${base}/yut_players/${uid('d')}`).get()).data().roomId,null);
+  await d.getByRole('button',{name:'여럿이서 시작',exact:true}).click();
+  await until(async()=>{room=await getRoom(room.id);return room.players.length===4;},'kicked participant could not rejoin a free seat');
+  await d.getByRole('heading',{name:'한 판의 인연'}).waitFor();
+  await awaitObservedRoom(pages,room);
+  checks.push('Host kick removes only the unready participant, clears its pointer, revokes its real Firestore listener, and reconciles the removed browser to admission without a stuck screen.');
   // Requests really remain unresolved for 15s; only the UI timeout can recover.
   await b.evaluate(()=>window.netQA.hangAction='ready');
   await c.evaluate(()=>window.netQA.hangAction='emote');
@@ -186,6 +199,16 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   assert.equal(calls.filter(call=>call.data.action==='start').length,1,'synchronous double activation sends one command');
   await until(async()=>{const states=await Promise.all(pages.map(browserRoom));return states.every(state=>state?.status==='playing'&&state.players.length===4);},'all four browser views did not converge');
   room=await getRoom(room.id);
+  await a.evaluate(()=>{window.netQA.delayAction='throw';window.netQA.delayMs=2500;});
+  await a.getByRole('button',{name:'윷 던지기',exact:true}).click();
+  await until(()=>calls.some(call=>call.label==='a'&&call.data.action==='throw'),'delayed throw command did not start');
+  assert.equal(await a.locator('.weplay-game-loading').count(),0,'gameplay command does not mount a loading overlay');
+  assert.equal(await a.locator('.yut-board').isVisible(),true,'board remains visible during delayed gameplay response');
+  assert.equal(await a.getByRole('button',{name:'게임 규칙 보기',exact:true}).isEnabled(),true,'non-gameplay controls remain available during a command');
+  await a.screenshot({path:path.join(evidence,'delayed-throw-no-loader.png')});
+  await a.waitForTimeout(2700);
+  checks.push('A 2.5-second delayed gameplay acknowledgement keeps the board visible and game tools enabled with no loading overlay; actual client commands use commandYutRoomFast.');
+  room=await getRoom(room.id);
   // Real SDK offline/online: cached snapshots cannot unlock stale actions.
   await c.evaluate(async()=>{window.netQA.setHidden(true);await window.netQA.offline();});
   const emote=await run('commandYutRoom','b',{action:'emote',kind:'hello',roomId:room.id,requestKey:randomUUID()});
@@ -199,7 +222,7 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   const count=calls.length;await c.waitForTimeout(1800);assert.equal(calls.length,count,'room state uses listeners without client request polling');
   checks.push('Real SDK disableNetwork/enableNetwork and hidden return catch up to server state; cached/reversed snapshots cannot roll back the view; room synchronization adds no polling calls.');
   // Everyone observes an expired throw; staggered client recovery advances once.
-  room=await getRoom(room.id);await db.doc(`${base}/yut_rooms/${room.id}`).update({phaseStartsAtMs:Date.now()-1000,turnDeadlineMs:Date.now()+100});
+  room=await getRoom(room.id);await db.doc(`${base}/yut_rooms/${room.id}`).update({phase:'throw',pendingThrow:null,phaseStartsAtMs:Date.now()-1000,turnDeadlineMs:Date.now()+100});
   await until(async()=>{const value=await getRoom(room.id);return value.revision===room.revision+1&&value.lastEvent.kind==='skip';},'expired turn did not advance');
   const afterSkip=await getRoom(room.id);await a.waitForTimeout(900);assert.equal((await getRoom(room.id)).revision,afterSkip.revision);
   assert.equal(calls.filter(call=>call.data.action==='skip').length,1);

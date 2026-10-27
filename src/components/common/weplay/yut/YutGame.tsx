@@ -48,6 +48,7 @@ import YutStackChoice from "./YutStackChoice";
 import { YutEntryScene } from "./YutEntryScene";
 import WeplayGameLoading from "../WeplayGameLoading";
 import useYutSoundEffects from "../useYutSoundEffects";
+import useYutFullscreenGestures from "./useYutFullscreenGestures";
 import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import "@fontsource/noto-serif-kr/600.css";
 import "./yut.css";
@@ -521,6 +522,7 @@ const EMOTES: Record<YutEmoteKind, { symbol: string; label: string }> = {
   thanks: { symbol: "🙏", label: "고마워요!" },
   gg: { symbol: "🤝", label: "즐거웠어요!" },
   angry: { symbol: "😠", label: "으으!" },
+  ready: { symbol: "🙌", label: "준비!" },
 };
 const portraitViewport = () =>
   typeof window !== "undefined" &&
@@ -597,6 +599,7 @@ export default function YutGame({
     "native" | "page" | null
   >(null);
   const fullscreen = fullscreenMode !== null;
+  useYutFullscreenGestures(shellRef, fullscreen);
   const portrait = portraitDevice && !fullscreen;
   const viewport = useRef({
     width: window.innerWidth,
@@ -640,6 +643,8 @@ export default function YutGame({
   const [pending, setPending] = useState("");
   const [throwDelayed, setThrowDelayed] = useState(false);
   const networkBusy = loading || Boolean(pending);
+  // Room updates never cover the board or move keyboard focus away from play.
+  const initialLoading = loading && !room;
   useEffect(() => {
     setThrowDelayed(false);
     if (pending !== "throw") return;
@@ -649,6 +654,7 @@ export default function YutGame({
   const [disconnected, setDisconnected] = useState(false);
   const [needsSync, setNeedsSync] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [roomSubscription, setRoomSubscription] = useState(0);
   const [code, setCode] = useState("");
   const [selectedPiece, setSelectedPiece] = useState("");
   const [pieceSelectionKey, setPieceSelectionKey] = useState("");
@@ -677,6 +683,8 @@ export default function YutGame({
   const pendingRef = useRef(false);
   const mounted = useRef(true);
   const visualRoomId = useRef<string | null>(null);
+  const loadedIdentity = useRef<string | null>(null);
+  const membershipCheckRoom = useRef<string | null>(null);
   useEffect(() => {
     onMusicActiveChange(!portrait);
     return () => onMusicActiveChange(true);
@@ -685,6 +693,7 @@ export default function YutGame({
   const accountScope = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
   useEffect(() => {
     expiryCheckRoom.current = "";
+    membershipCheckRoom.current = null;
   }, [accountScope]);
   const identity = `${accountScope}:${localMode || "online"}`;
   const singlePlayerName =
@@ -1056,11 +1065,14 @@ export default function YutGame({
   useEffect(() => {
     const run = ++generation.current;
     const scope = identity;
+    const retainedRoom =
+      loadedIdentity.current === identity && retry > 0 ? roomRef.current : null;
+    loadedIdentity.current = identity;
     roomEpoch.current++;
-    roomRef.current = null;
+    roomRef.current = retainedRoom;
     if (recoveryCommand.current?.scope !== scope)
       recoveryCommand.current = null;
-    clockSample.current = { latency: Infinity, atMs: 0 };
+    if (!retainedRoom) clockSample.current = { latency: Infinity, atMs: 0 };
     pendingRef.current = false;
     setPending("");
     setMoving(false);
@@ -1069,12 +1081,14 @@ export default function YutGame({
     setError("");
     setNote("");
     setDisconnected(false);
-    setRoom(null);
-    setLobby(null);
-    setToss(null);
-    setSettledThrow(null);
-    setLandedThrow(null);
-    setRevealedThrows({});
+    if (!retainedRoom) {
+      setRoom(null);
+      setLobby(null);
+      setToss(null);
+      setSettledThrow(null);
+      setLandedThrow(null);
+      setRevealedThrows({});
+    }
     setEmoteOpen(false);
     setSingleOpen(false);
     setEmoteError("");
@@ -1164,12 +1178,15 @@ export default function YutGame({
           setSingleCount(data.settings.defaultPlayerCount);
         }
         recordServerTime(data.serverNowMs, sentAtMs);
+        setDisconnected(false);
         setNeedsSync(false);
+        setError("");
         acceptRoom(data.room);
+        setRoomSubscription((value) => value + 1);
         if (!data.room && expiryCheckRoom.current)
-          setNote(
-            "10분 동안 시작하지 않아 방이 닫혔습니다. 새 방에 참가해 주세요.",
-          );
+          setNote("방장이 10분 동안 활동하지 않아 방이 닫혔습니다.");
+        else if (!data.room && retainedRoom)
+          setNote("방에서 나왔습니다. 새 방에 참가할 수 있습니다.");
         expiryCheckRoom.current = "";
       })
       .catch((failure) => {
@@ -1186,10 +1203,12 @@ export default function YutGame({
   }, [identity, retry, acceptRoom, recordServerTime]);
 
   useEffect(() => {
-    if (local || !room?.id || !uid || !config) return;
+    if (local || loading || !room?.id || !uid || !config) return;
     const scope = identity,
       id = room.id;
+    const epoch = roomEpoch.current;
     let active = true;
+    let serverConfirmed = false;
     return (() => {
       const unsubscribe = subscribeYutRoom(
         config,
@@ -1198,6 +1217,7 @@ export default function YutGame({
           if (
             !active ||
             identityRef.current !== scope ||
+            roomEpoch.current !== epoch ||
             roomRef.current?.id !== id
           )
             return;
@@ -1216,31 +1236,58 @@ export default function YutGame({
           ) {
             acceptRoom(next);
             setDisconnected(false);
+            membershipCheckRoom.current = null;
           } else {
             roomEpoch.current++;
             recoveryCommand.current = null;
             roomRef.current = null;
             acceptRoom(null);
-            setNote("방이 닫혔습니다. 새 판을 열 수 있습니다.");
+            setNote(
+              next && next.status !== "closed"
+                ? "방에서 나왔습니다. 새 방에 참가할 수 있습니다."
+                : "방이 닫혔습니다. 새 판을 열 수 있습니다.",
+            );
           }
         },
         (failure) => {
           if (
             active &&
             identityRef.current === scope &&
+            roomEpoch.current === epoch &&
             roomRef.current?.id === id
           ) {
             setDisconnected(true);
             setError(yutErrorMessage(failure));
+            // Revoked membership terminates the Firestore listener without a
+            // final room snapshot. Reconcile once through the authorized lobby.
+            if (
+              /permission-denied/.test(
+                String((failure as { code?: string })?.code),
+              ) &&
+              membershipCheckRoom.current !== id
+            ) {
+              membershipCheckRoom.current = id;
+              recoveryCommand.current = null;
+              setRetry((value) => value + 1);
+            }
           }
         },
         (connected) => {
           if (
             active &&
             identityRef.current === scope &&
+            roomEpoch.current === epoch &&
             roomRef.current?.id === id
-          )
-            setDisconnected(!connected);
+          ) {
+            // A cached first snapshot is not a connection failure. Keep the
+            // server-confirmed command result while Firestore connects.
+            if (connected) {
+              serverConfirmed = true;
+              setDisconnected(false);
+            } else if (serverConfirmed || !navigator.onLine) {
+              setDisconnected(true);
+            }
+          }
         },
       );
       return () => {
@@ -1251,6 +1298,8 @@ export default function YutGame({
   }, [
     room?.id,
     identity,
+    roomSubscription,
+    loading,
     local,
     uid,
     config?.year,
@@ -1267,7 +1316,10 @@ export default function YutGame({
     if (local || room?.status !== "waiting") return;
     if (
       clock + serverOffset <
-      Math.min(room.expiresAtMs, room.createdAtMs + YUT_WAITING_MS)
+      Math.min(
+        room.expiresAtMs,
+        (room.hostActivityAtMs ?? room.createdAtMs) + YUT_WAITING_MS,
+      )
     )
       return;
     if (expiryCheckRoom.current === room.id) return;
@@ -1821,7 +1873,10 @@ export default function YutGame({
       onPointerDownCapture={sounds.unlock}
       onKeyDownCapture={sounds.unlock}
     >
-      <div className="yut-game-content" {...(networkBusy ? { inert: "" } : {})}>
+      <div
+        className="yut-game-content"
+        {...(initialLoading ? { inert: "" } : {})}
+      >
         <div
           className="yut-floating-controls"
           role="group"
@@ -2253,6 +2308,19 @@ export default function YutGame({
                               ? "준비 완료"
                               : "준비 중"}
                         </span>
+                        {canChange && person.uid !== uid && !person.ready && (
+                          <button
+                            type="button"
+                            className="yut-seat-kick"
+                            aria-label={`${person.name} 강퇴`}
+                            disabled={busy}
+                            onClick={() =>
+                              void command("kick", { targetUid: person.uid })
+                            }
+                          >
+                            강퇴
+                          </button>
+                        )}
                       </>
                     ) : canChange ? (
                       <button
@@ -2483,9 +2551,11 @@ export default function YutGame({
                   <div className="yut-throw-result" role="status">
                     {settling || pending === "throw" ? (
                       <span>
-                        {celebrating
-                          ? "윷 결과를 확인하세요"
-                          : "윷을 던지는 중"}
+                        {throwDelayed
+                          ? "응답 기다리는 중"
+                          : celebrating
+                            ? "윷 결과를 확인하세요"
+                            : "윷을 던지는 중"}
                       </span>
                     ) : room.pendingThrow ? (
                       <>
@@ -2642,9 +2712,11 @@ export default function YutGame({
               </div>
             </div>
             <div className="yut-event" aria-live="polite">
-              {resultVisible && !finishing && room.lastEvent.kind !== "throw"
-                ? room.lastEvent.text
-                : ""}
+              {resultVisible &&
+                !finishing &&
+                room.lastEvent.kind !== "throw" && (
+                  <span>{room.lastEvent.text}</span>
+                )}
             </div>
           </div>
         )}
@@ -2710,19 +2782,8 @@ export default function YutGame({
           />
         )}
       </div>
-      {(loading || (pending && pending !== "throw") || throwDelayed) && (
-        <WeplayGameLoading
-          theme="yut"
-          label={
-            throwDelayed
-              ? "윷 결과를 기다리고 있습니다."
-              : pending === "claimReward"
-                ? "우승 보상을 확인하고 있습니다."
-                : loading
-                  ? "윷판을 준비하고 있습니다."
-                  : "윷판을 이어가고 있습니다."
-          }
-        />
+      {initialLoading && (
+        <WeplayGameLoading theme="yut" label="윷판을 준비하고 있습니다." />
       )}
     </section>
   );

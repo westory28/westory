@@ -153,6 +153,7 @@ export interface YutCommand {
     | "close"
     | "claimReward"
     | "seat"
+    | "kick"
     | "emote";
   requestKey: string;
   roomId?: string;
@@ -167,8 +168,17 @@ export interface YutCommand {
   stack?: boolean;
   seat?: number;
   blocked?: boolean;
+  targetUid?: string;
   power?: number;
-  kind?: "hello" | "nice" | "oops" | "wow" | "thanks" | "gg" | "angry";
+  kind?:
+    | "hello"
+    | "nice"
+    | "oops"
+    | "wow"
+    | "thanks"
+    | "gg"
+    | "angry"
+    | "ready";
 }
 async function call<T>(
   name: string,
@@ -203,7 +213,7 @@ export const saveYutSettings = (
   }));
 export const commandYutRoom = (config: WeplayConfig, data: YutCommand) =>
   call<{ room: YutRoom | null; serverNowMs: number }>(
-    "commandYutRoom",
+    "commandYutRoomFast",
     config,
     data,
   );

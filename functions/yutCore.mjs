@@ -9,7 +9,7 @@ export const YUT_START_ANIMATION_MS = 2_000;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_WAITING_MS = 10 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
-export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 'angry'];
+export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 'angry', 'ready'];
 export const YUT_EMOTE_COOLDOWN_MS = 5_000;
 export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
@@ -48,6 +48,10 @@ const event = (room, kind, text, nowMs, move) => {
   return room;
 };
 const playerFor = (room, uid) => room.players.find((player) => player.uid === uid && player.active);
+export function touchYutHostActivity(source, uid, nowMs) {
+  if (source.status !== 'waiting' || source.hostUid !== uid || !playerFor(source, uid)) return source;
+  return { ...source, hostActivityAtMs: nowMs, expiresAtMs: nowMs + YUT_WAITING_MS };
+}
 const piecesFor = (count = 2) => Array.from({ length: count }, (_, index) => ({ id: String(index + 1), node: 'home', lane: 'outer' }));
 const movingGroup = (room, player, piece) => player.pieces.filter((entry) => entry.id === piece.id || (piece.node !== 'home' && piece.node !== 'finish' && entry.node === piece.node
   && (room.rulesVersion === 2 ? Boolean(piece.stackId && entry.stackId === piece.stackId) : true)));
@@ -67,7 +71,7 @@ export function createYutRoom({ id, code, classId, classLabel, host, nowMs, visi
     participantUids: [host.uid], turnUid: null, phase: 'throw', pendingThrow: null,
     extraThrows: 0, phaseStartsAtMs: 0, turnDeadlineMs: 0, winnerUid: null,
     lastEvent: { kind: 'create', text: '새 판이 열렸습니다.', atMs: nowMs },
-    createdAtMs: nowMs, updatedAtMs: nowMs, expiresAtMs: nowMs + YUT_WAITING_MS,
+    createdAtMs: nowMs, updatedAtMs: nowMs, hostActivityAtMs: nowMs, expiresAtMs: nowMs + YUT_WAITING_MS,
   };
 }
 export function addYutEmote(source, uid, kind, id, nowMs) {
@@ -83,7 +87,7 @@ export function addYutEmote(source, uid, kind, id, nowMs) {
   room.emotes = Object.fromEntries(Object.entries(room.emotes || {}).filter(([memberUid]) => room.participantUids.includes(memberUid) && playerFor(room, memberUid)));
   room.emotes[uid] = { id, uid, kind, atMs: nowMs };
   room.syncRevision = (room.syncRevision ?? room.revision) + 1;
-  return room;
+  return touchYutHostActivity(room, uid, nowMs);
 }
 export function addYutPlayer(source, player, nowMs) {
   if (source.status !== 'waiting') fail('이미 시작되었거나 닫힌 방입니다.');
@@ -100,20 +104,34 @@ export function setYutSeat(source, uid, seat, blocked, nowMs) {
   if (!Number.isInteger(seat) || seat < 0 || seat >= YUT_ROLES.length || typeof blocked !== 'boolean') fail('변경할 자리를 확인해 주세요.');
   if (blocked && source.players.some((player) => player.role === YUT_ROLES[seat])) fail('참가자가 있는 자리는 닫을 수 없습니다.');
   const blockedSeats = new Set(source.blockedSeats || []);
-  if (blocked === blockedSeats.has(seat)) return source;
+  if (blocked === blockedSeats.has(seat)) return {
+    ...touchYutHostActivity(source, uid, nowMs), syncRevision: (source.syncRevision ?? source.revision) + 1,
+  };
   if (blocked) blockedSeats.add(seat); else blockedSeats.delete(seat);
   if (YUT_ROLES.length - blockedSeats.size < 2) fail('자리는 2개 이상 열어 두어야 합니다.');
   const room = copy(source);
   room.blockedSeats = [...blockedSeats].sort((a, b) => a - b);
   room.maxPlayers = YUT_ROLES.length - blockedSeats.size;
-  return event(room, 'seat', blocked ? '빈자리를 닫았습니다.' : '빈자리를 열었습니다.', nowMs);
+  return touchYutHostActivity(event(room, 'seat', blocked ? '빈자리를 닫았습니다.' : '빈자리를 열었습니다.', nowMs), uid, nowMs);
 }
 export function readyYutPlayer(source, uid, ready, nowMs) {
   if (source.status !== 'waiting') fail('대기실에서만 준비 상태를 바꿀 수 있습니다.');
   const room = copy(source), player = playerFor(room, uid);
   if (!player) fail('이 방의 참가자가 아닙니다.');
   player.ready = uid === room.hostUid || ready === true;
-  return event(room, 'ready', player.ready ? `${player.name} 님이 준비했습니다.` : `${player.name} 님이 준비를 취소했습니다.`, nowMs);
+  return touchYutHostActivity(event(room, 'ready', player.ready ? `${player.name} 님이 준비했습니다.` : `${player.name} 님이 준비를 취소했습니다.`, nowMs), uid, nowMs);
+}
+export function kickYutPlayer(source, uid, targetUid, nowMs) {
+  if (source.status !== 'waiting' || source.hostUid !== uid || !playerFor(source, uid)) fail('대기실의 방장만 참가자를 내보낼 수 있습니다.');
+  const target = playerFor(source, targetUid);
+  if (!target || targetUid === uid || target.ready) fail('준비하지 않은 참가자만 내보낼 수 있습니다.');
+  const room = copy(source);
+  room.players = room.players.filter((player) => player.uid !== targetUid);
+  room.participantUids = room.participantUids.filter((memberUid) => memberUid !== targetUid);
+  if (room.emotes) delete room.emotes[targetUid];
+  if (room.enrollmentIds) delete room.enrollmentIds[targetUid];
+  if (room.enrollmentSlotIds) delete room.enrollmentSlotIds[targetUid];
+  return touchYutHostActivity(event(room, 'kick', `${target.name} 님을 내보냈습니다.`, nowMs), uid, nowMs);
 }
 export function startYutGame(source, nowMs) {
   if (source.status !== 'waiting') fail('대기 중인 방에서 시작해 주세요.');
@@ -257,7 +275,16 @@ export function leaveYutRoom(source, uid, nowMs) {
   if (room.status === 'waiting') room.players = room.players.filter((entry) => entry.uid !== uid);
   else { player.active = false; player.pieces = piecesFor(player.pieces.length); }
   const remaining = room.players.filter((entry) => entry.active && entry.uid !== uid);
-  if (room.hostUid === uid) { room.hostUid = remaining[0]?.uid || ''; if (remaining[0]) remaining[0].ready = true; }
+  if (room.hostUid === uid) {
+    room.hostUid = remaining[0]?.uid || '';
+    if (remaining[0]) {
+      remaining[0].ready = true;
+      if (room.status === 'waiting') {
+        room.hostActivityAtMs = nowMs;
+        room.expiresAtMs = nowMs + YUT_WAITING_MS;
+      }
+    }
+  }
   if (!remaining.length) { room.status = 'closed'; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0; }
   else if (room.status === 'playing' && remaining.length === 1) {
     room.status = 'finished'; room.winnerUid = remaining[0].uid; room.turnUid = null; room.phaseStartsAtMs = 0; room.turnDeadlineMs = 0;

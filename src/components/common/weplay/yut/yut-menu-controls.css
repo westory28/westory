@@ -24,9 +24,32 @@
 .yut-game .yut-waiting {
   padding-top: 64px;
 }
-/* Recovery stays below the independent toolbar so its button remains reachable. */
-.yut-game:not(.yut-game--match) .yut-message {
-  margin-top: 64px;
+/* Feedback floats in the game canvas, including its rotated fullscreen view. */
+.yut-game .yut-message {
+  position: absolute;
+  z-index: 220;
+  top: calc(64px + var(--yut-safe-top, env(safe-area-inset-top)));
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 8px 12px;
+  gap: 8px;
+  border: 1px solid #bfa16a;
+  border-radius: 8px;
+  box-shadow: 0 5px 12px #0e130ecc;
+  transform: translateX(-50%);
+}
+.yut-game .yut-message > span {
+  min-width: 0;
+  max-width: 560px;
+  overflow-wrap: anywhere;
+}
+.yut-game .yut-message .yut-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  white-space: normal;
 }
 .yut-game .yut-entry {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 30%);
@@ -306,11 +329,6 @@
     padding-inline: 12px;
   }
 }
-@media (max-width: 820px) and (orientation: landscape) {
-  .yut-game--match .yut-message {
-    margin-top: 56px;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .yut-landing-result.is-bonus::before {
     animation-name: yut-bonus-ink-soft;
@@ -365,7 +383,7 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
 }
 .yut-game.yut-game--fullscreen .yut-floating-fullscreen,
 .yut-game.yut-game--fullscreen:not(.yut-game--in-room)
@@ -808,6 +826,10 @@
   max-width: 100%;
 }
 .yut-game .yut-match .yut-event {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
   height: var(--yut-event-height);
   min-height: var(--yut-event-height);
   flex-shrink: 0;
@@ -815,6 +837,18 @@
   line-height: 1.4;
   overflow: hidden;
   overflow-wrap: anywhere;
+  padding: 0;
+  background: transparent;
+}
+.yut-game .yut-event > span {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 3px;
+  background: #261d15d9;
+}
+.yut-game .yut-event > span:empty {
+  display: none;
 }
 .yut-action-status {
   display: flex;
@@ -822,6 +856,21 @@
   justify-content: center;
   gap: 8px;
   max-width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+.yut-game .yut-action-status .yut-throw-result {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  align-items: center;
+}
+.yut-game .yut-action-status .yut-throw-result > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.yut-game .yut-action-status .yut-move-hint {
+  margin: 0;
 }
 .yut-game .yut-action-status .yut-turn-gauge {
   position: relative;
@@ -1001,10 +1050,18 @@
   font-size: 14px;
 }
 .yut-game[data-short-stage] .yut-throw-result {
-  max-width: 64px;
+  max-width: 100%;
+  min-width: 0;
   gap: 4px;
   flex-wrap: wrap;
   padding-inline: 4px;
+}
+.yut-game[data-short-stage] .yut-action-status:has(.yut-move-hint) .yut-throw-result {
+  max-width: 80px;
+  flex-wrap: nowrap;
+}
+.yut-game[data-short-stage] .yut-action-status:has(.yut-move-hint) .yut-turn-gauge {
+  width: 96px;
 }
 .yut-game[data-short-stage] .yut-throw-result > strong {
   font-size: 24px;
@@ -1012,6 +1069,7 @@
 }
 .yut-game[data-short-stage] .yut-throw-result > span {
   font-size: 10px;
+  line-height: 14px;
 }
 .yut-game[data-short-stage] .yut-match .yut-move-hint {
   max-width: 64px;
@@ -1019,4 +1077,26 @@
   font-size: 10px;
   line-height: 14px;
   overflow-wrap: anywhere;
+}
+
+.yut-game .yut-seat-kick {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid var(--yut-red);
+  border-radius: 4px;
+  background: #f6dfc3;
+  color: #743d2b;
+  font-size: 12px;
+  font-weight: 700;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .yut-game .yut-event > span {
+    padding-block: 0;
+  }
+}
+@container yut-canvas (max-height: 560px) {
+  .yut-game--rotated-fullscreen .yut-event > span {
+    padding-block: 0;
+  }
 }

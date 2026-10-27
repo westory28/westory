@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, getYutThrowProbabilities, sampleYutSticks, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS } from '../yutCore.mjs';
+import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, kickYutPlayer, getYutThrowProbabilities, sampleYutSticks, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS, YUT_WAITING_MS } from '../yutCore.mjs';
 const now = 10000;
 function game(count = 2, pieces = 1, version = 1) {
   let room = createYutRoom({ id: 'room', code: 'ABC234', classId: 'class', classLabel: '1학년 1반', host: { uid: 'a', name: '가' }, nowMs: now });
@@ -16,6 +16,49 @@ function game(count = 2, pieces = 1, version = 1) {
 }
 const roll = (room, value) => throwYut(room, room.turnUid, Array.from({ length: 4 }, (_, index) => index < (value === 5 ? 0 : value)), Math.max(now + 1, room.phaseStartsAtMs || 0));
 const moveYut = (room, uid, piece, route, atMs) => coreMoveYut(room, uid, piece, route, Math.max(atMs, room.phaseStartsAtMs || 0));
+
+test('waiting expiry follows only host activity, including ready emotes and host transfer', () => {
+  const original = createYutRoom({ id: 'waiting', code: 'ABC234', classId: '', classLabel: '', host: { uid: 'a', name: '가' }, nowMs: now });
+  let room = addYutPlayer(original, { uid: 'b', name: '나' }, now + 1000);
+  room = readyYutPlayer(room, 'b', true, now + 2000);
+  room = addYutEmote(room, 'b', 'ready', 'guest_ready_0001', now + 3000);
+  assert.equal(room.expiresAtMs, now + YUT_WAITING_MS, 'guest actions do not keep an idle host room alive');
+  const revision = room.revision, event = room.lastEvent;
+  room = addYutEmote(room, 'a', 'ready', 'host_ready_00001', now + 5000);
+  assert.equal(room.hostActivityAtMs, now + 5000);
+  assert.equal(room.expiresAtMs, now + 5000 + YUT_WAITING_MS);
+  assert.equal(room.revision, revision);
+  assert.deepEqual(room.lastEvent, event);
+  assert.equal(original.expiresAtMs, now + YUT_WAITING_MS, 'source is immutable');
+  room = setYutSeat(room, 'a', 3, true, now + 6000);
+  assert.equal(room.expiresAtMs, now + 6000 + YUT_WAITING_MS);
+  room = leaveYutRoom(room, 'a', now + 7000);
+  assert.equal(room.hostUid, 'b');
+  assert.equal(room.hostActivityAtMs, now + 7000);
+  assert.equal(room.expiresAtMs, now + 7000 + YUT_WAITING_MS);
+});
+
+test('only the waiting host may kick an unready guest; memberships and emotes are removed', () => {
+  let room = createYutRoom({ id: 'waiting', code: 'ABC234', classId: '', classLabel: '', host: { uid: 'a', name: '가' }, nowMs: now });
+  room = addYutPlayer(room, { uid: 'b', name: '나' }, now);
+  room = addYutEmote(room, 'b', 'hello', 'guest_hello_0001', now);
+  room.enrollmentIds = { a: 'ea', b: 'eb' };
+  room.enrollmentSlotIds = { a: 'sa', b: 'sb' };
+  assert.throws(() => kickYutPlayer(room, 'b', 'a', now));
+  assert.throws(() => kickYutPlayer(room, 'outsider', 'b', now));
+  assert.throws(() => kickYutPlayer(room, 'a', 'a', now));
+  assert.throws(() => kickYutPlayer(readyYutPlayer(room, 'b', true, now), 'a', 'b', now));
+  assert.throws(() => kickYutPlayer(startYutGame(readyYutPlayer(room, 'b', true, now), now), 'a', 'b', now));
+  const kicked = kickYutPlayer(room, 'a', 'b', now + 1000);
+  assert.deepEqual(kicked.participantUids, ['a']);
+  assert.equal(kicked.players.length, 1);
+  assert.equal(kicked.emotes.b, undefined);
+  assert.equal(kicked.enrollmentIds.b, undefined);
+  assert.equal(kicked.enrollmentSlotIds.b, undefined);
+  assert.equal(kicked.lastEvent.kind, 'kick');
+  assert.equal(kicked.expiresAtMs, now + 1000 + YUT_WAITING_MS);
+  assert.equal(room.players.length, 2);
+});
 test('legacy matches retain independent 5-second throw / 25-second move deadlines after animations', () => {
   let room = game();
   assert.equal(room.players.every((player) => player.pieces.length === 1), true);

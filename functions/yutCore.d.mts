@@ -1,6 +1,6 @@
 export type YutRole = 'sa' | 'nong' | 'gong' | 'sang';
 export type YutRoute = 'outer' | 'a' | 'b';
-export type YutEmoteKind = 'hello' | 'nice' | 'oops' | 'wow' | 'thanks' | 'gg' | 'angry';
+export type YutEmoteKind = 'hello' | 'nice' | 'oops' | 'wow' | 'thanks' | 'gg' | 'angry' | 'ready';
 export interface YutEmote { id: string; uid: string; kind: YutEmoteKind; atMs: number }
 export type YutNode = 'home' | 'finish' | `o${number}` | 'a1' | 'a2' | 'center' | 'a4' | 'a5' | 'b1' | 'b2' | 'b4' | 'b5';
 export interface YutPiece { id: string; node: YutNode; lane: YutRoute; stackId?: string }
@@ -17,7 +17,7 @@ export interface YutRoom {
   phase: 'throw' | 'move'; pendingThrow: { value: number; label: string; sticks: boolean[] } | null;
   extraThrows: number; phaseStartsAtMs?: number; turnDeadlineMs: number; winnerUid: string | null;
   lastEvent: { kind: string; text: string; atMs: number; move?: { uid: string; pieceId: string; route: YutRoute; path: YutNode[]; capturedUids: string[]; movingPieceIds?: string[]; capturedPieces?: { uid: string; pieceId: string }[]; stacked?: boolean } };
-  createdAtMs: number; updatedAtMs: number; expiresAtMs: number;
+  createdAtMs: number; updatedAtMs: number; hostActivityAtMs?: number; expiresAtMs: number;
 }
 export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode; stackSize: number; path?: YutNode[]; canStack?: boolean; stack?: boolean }
 export function getYutThrowProbabilities(power?: number): number[];
@@ -39,6 +39,8 @@ export function createYutRoom(options: { id: string; code: string; classId: stri
 export function addYutPlayer(room: YutRoom, player: { uid: string; name: string }, nowMs: number): YutRoom;
 export function setYutSeat(room: YutRoom, uid: string, seat: number, blocked: boolean, nowMs: number): YutRoom;
 export function readyYutPlayer(room: YutRoom, uid: string, ready: boolean, nowMs: number): YutRoom;
+export function touchYutHostActivity(room: YutRoom, uid: string, nowMs: number): YutRoom;
+export function kickYutPlayer(room: YutRoom, uid: string, targetUid: string, nowMs: number): YutRoom;
 export function startYutGame(room: YutRoom, nowMs: number): YutRoom;
 export function throwYut(room: YutRoom, uid: string, sticks: boolean[], nowMs: number, power?: number): YutRoom;
 export function getLegalYutMoves(room: YutRoom, uid: string): YutMove[];

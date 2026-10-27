@@ -1,5 +1,15 @@
 # 운영 배포 절차
 
+## 윷놀이 온라인 명령 (2026-10-27)
+
+새 클라이언트는 `commandYutRoomFast`를 `us-central1`에서 호출한다. Firestore `nam5`와 가까운 곳에서 동일한 세션·학기·학적·공개 설정·방 권한·요청 영수증 검사를 수행한다. 최초 기동 지연을 줄이기 위해 이 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, 동시 요청 80개를 사용한다. 기존 서울 `commandYutRoom`은 열린 구 클라이언트의 호환 경로로 유지한다. 로그인 함수나 다른 게임의 리전은 변경하지 않는다.
+
+대기방은 마지막 방장 활동(`hostActivityAtMs`, 구 문서는 `createdAtMs`)으로부터 10분 동안 활동이 없으면 만료된다. 방장의 서버 승인 명령과 감정표현은 방·참가 코드의 만료를 함께 갱신한다. 다른 참가자 활동, 단순 조회, 같은 요청 영수증의 재실행은 시간을 연장하지 않는다. 강퇴는 대기 중인 방장이 준비하지 않은 다른 참가자에게만 실행할 수 있으며 실제 쓰기와 실시간 읽기 권한을 함께 제거한다.
+
+배포 순서는 `yut_rooms` COLLECTION_GROUP의 `status ASC, expiresAtMs ASC` 인덱스 추가 및 READY 확인 → Firestore rules → 서울 `getYutLobby`, `getYutManagement`, `commandYutRoom`, `cleanupWaitingYutRooms`와 미국 `commandYutRoomFast` → 프론트엔드다. 기존 인덱스와 서울 callable을 삭제하지 않는다. 대기방 정리 예약 함수는 새 인덱스와 방장 활동을 사용한다. 변경 파일의 함수별 운영 원본을 비교하고 위 함수들만 배포한다.
+
+검증은 `npm run build`, `npm --prefix functions run check`, 윷 core/management·만료·통합·다중 브라우저 Firestore 에뮬레이터 검사, `scripts/verify-yut-online-feedback-browser.mjs`, `scripts/verify-yut-interface-browser.mjs`를 사용한다. 실제 운영에서 두 사용자의 대전을 확인하기 전에는 합성 지연 검사를 실사용 응답 시간 측정으로 보고하지 않는다.
+
 회사와 집 컴퓨터는 같은 Git 원격과 운영 도메인을 사용한다. 로컬 폴더 또는 Vercel 빌드 완료만으로 운영 반영을 판단하지 않는다.
 
 1. 저장소 루트, 브랜치, HEAD, 미커밋 변경을 확인한다. `git fetch origin` 후 최신 `origin/main`과 비교한다. 진행 중 작업이 있으면 별도 작업 공간을 사용하고 기존 파일을 덮어쓰지 않는다.

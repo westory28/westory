@@ -209,10 +209,10 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
-    name === "getWisRankingPreview"
+    name === "getWisRankingPreview" || name === "commandYutRoomFast"
       ? (wisRankingFunctionsPromise ??= import("firebase/functions")
           .then(({ connectFunctionsEmulator, getFunctions }) => {
-            // Only the compact ranking read runs beside the nam5 database.
+            // Ranking reads and latency-sensitive Yut commands run beside nam5.
             const functions = getFunctions(app, "us-central1");
             if (import.meta.env.DEV && useFirebaseEmulators) {
               connectFunctionsEmulator(

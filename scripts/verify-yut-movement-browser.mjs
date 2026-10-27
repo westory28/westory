@@ -28,9 +28,12 @@ const readabilityOnly = process.env.YUT_MOVEMENT_QA_SECTION === "mobile-readabil
 const finishSelectionOnly =
   process.env.YUT_MOVEMENT_QA_SECTION === "finish-selection";
 const boardLayoutOnly = process.env.YUT_MOVEMENT_QA_SECTION === "board-layout";
+const interfaceOnly = process.env.YUT_MOVEMENT_QA_SECTION === "interface-stability";
 const evidence = path.join(
   root,
-  boardLayoutOnly
+  interfaceOnly
+    ? "output/yut-interface-20261027"
+    : boardLayoutOnly
     ? "output/yut-board-layout-20261021"
     : finishSelectionOnly
     ? "output/yut-finish-selection-20261019"
@@ -203,7 +206,7 @@ const twoPiecesOnly = process.env.YUT_MOVEMENT_QA_SECTION === "two-pieces";
 const artOnly = process.env.YUT_MOVEMENT_QA_SECTION === "art";
 const report = {
   passed: false,
-  section: boardLayoutOnly ? "board-layout" : finishSelectionOnly ? "finish-selection" : readabilityOnly ? "mobile-readability" : mobileViewportOnly
+  section: interfaceOnly ? "interface-stability" : boardLayoutOnly ? "board-layout" : finishSelectionOnly ? "finish-selection" : readabilityOnly ? "mobile-readability" : mobileViewportOnly
     ? "mobile-viewport"
     : motionAuditOnly
       ? "motion-audit"
@@ -2809,7 +2812,7 @@ async function verifyMobileReadability() {
       range.selectNodeContents(node);
       return {text:node.textContent, fontSize:style.fontSize, lines:range.getClientRects().length, fits:node.scrollWidth<=node.parentElement.clientWidth-10};
     }));
-    assert.equal(emoteLabels.length,7);
+    assert.equal(emoteLabels.length,8);
     for (const label of emoteLabels) {
       assert.equal(label.lines,1,`${width}: ${label.text} stays on one line`);
       assert.ok(label.fits,`${width}: ${label.text} fits its emote button`);
@@ -2994,6 +2997,7 @@ async function verifyMobileViewport() {
     await page.getByRole("button", { name: "싱글 시작", exact: true }).click();
     await page.locator(".yut-match").waitFor();
     const throwButton = page.locator(".yut-throw-button");
+    await throwButton.waitFor({ state: "visible" });
     if (height < 600) await throwButton.scrollIntoViewIfNeeded();
     const throwBox = await throwButton.boundingBox();
     assert.ok(
@@ -3218,8 +3222,8 @@ async function verifyBoardMenu(page, label, stress = false) {
   await page.screenshot({ path: path.join(evidence, label + "-menu.png") });
   assert.ok(geometry.profileOverlaps.every(area => area <= .5), label + ": opened emote menu does not obscure any player profile: " + JSON.stringify(geometry.profileOverlaps));
   assert.ok(geometry.controlOverlaps.every(area => area <= .5), label + ": opened emote menu does not obscure toolbar/fullscreen controls");
-  assert.equal(geometry.targets.length, 7);
-  assert.ok(geometry.targets.every(target => target.width >= 43.5 && target.height >= 43.5), label + ": all seven emote choices keep 44px targets");
+  assert.equal(geometry.targets.length, 8);
+  assert.ok(geometry.targets.every(target => target.width >= 43.5 && target.height >= 43.5), label + ": all eight emote choices keep 44px targets");
   assert.ok(geometry.box.left >= geometry.canvas.left - .5 && geometry.box.right <= geometry.canvas.right + .5 && geometry.box.top >= geometry.canvas.top - .5 && geometry.box.bottom <= geometry.canvas.bottom + .5, label + ": emote menu stays inside the game canvas");
   const ensureChoicesReachable = async () => {
     for (const choice of await menu.getByRole("button").all()) {
@@ -3365,8 +3369,117 @@ async function verifyBoardLayout() {
     report.checks.push(`${width}×${height}: teacher preview retains the same controls without issuing online room commands`);
   }
 }
+async function verifyInterfaceStability() {
+  for (const [width, height] of [[390, 844], [768, 1024], [568, 320], [844, 390], [1280, 800]]) {
+    const label = `interface-${width}x${height}`;
+    const page = await open("scenario=waiting-four", "no-preference", width, height);
+    if (width < height) {
+      await page.evaluate(() => { Element.prototype.requestFullscreen = undefined; });
+      await page.getByRole("button", { name: "전체 화면으로 열기", exact: true }).click();
+    }
+    await page.locator(".yut-waiting").waitFor();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => {} } });
+      const qa = window.qa;
+      qa.emit({ ...qa.room, visibility: "private", syncRevision: qa.room.syncRevision + 1 });
+    });
+    const before = await page.locator(".yut-waiting").boundingBox();
+    await page.getByRole("button", { name: "방 코드 복사", exact: true }).click();
+    await page.getByText("방 코드를 복사했습니다.", { exact: true }).waitFor();
+    assert.deepEqual(await page.locator(".yut-waiting").boundingBox(), before, label + ": copying does not move the waiting room");
+    assert.equal(await page.locator(".yut-message").evaluate(node => getComputedStyle(node).position), "absolute", label + ": copy feedback floats above the scene");
+    await page.screenshot({ path: path.join(evidence, label + "-copy.png") });
+    await page.getByRole("button", { name: "알림 닫기", exact: true }).click();
+    await page.getByRole("button", { name: "게임 시작", exact: true }).click();
+    await page.locator(".yut-match").waitFor();
+    await page.waitForTimeout(150);
+    const board = await page.locator(".yut-board").boundingBox();
+    const events = [];
+    for (const text of ["상대 학생 님의 차례입니다.", "검증 학생(3학년 2반) 님의 2번 말이 두 칸 이동했습니다. 상대 학생(3학년 2반) 님의 차례입니다. 남은 말을 골라 다음 이동을 준비합니다."]) {
+      await page.evaluate(text => {
+        const qa = window.qa;
+        qa.emit({ ...qa.room, revision: qa.room.revision + 1, syncRevision: qa.room.syncRevision + 1, lastEvent: { kind: "move", atMs: Date.now(), text } });
+      }, text);
+      await page.waitForTimeout(60);
+      const geometry = await page.locator(".yut-event").evaluate(node => {
+        const span = node.querySelector("span"), style = getComputedStyle(span), rect = span.getBoundingClientRect();
+        return { parentHeight: node.clientHeight, height: span.offsetHeight, padding: parseFloat(style.paddingTop) + parseFloat(style.paddingBottom), lineHeight: parseFloat(style.lineHeight), scrollHeight: span.scrollHeight, clientHeight: span.clientHeight, rect: rect.toJSON(), background: getComputedStyle(node).backgroundColor };
+      });
+      assert.equal(geometry.background, "rgba(0, 0, 0, 0)", label + ": reserved event row has no oversized background");
+      if (!events.length) assert.ok(geometry.height <= geometry.lineHeight + geometry.padding + 1, label + ": one-line event paints one line only");
+      assert.ok(geometry.height <= geometry.parentHeight + 1, label + ": event text fits its reserved space");
+      assert.equal(geometry.scrollHeight, geometry.clientHeight, label + ": event text is not clipped");
+      assert.deepEqual(await page.locator(".yut-board").boundingBox(), board, label + ": event length does not move the board");
+      events.push(geometry);
+    }
+    await page.evaluate(() => {
+      const qa = window.qa;
+      qa.emit({ ...qa.room, revision: qa.room.revision + 1, syncRevision: qa.room.syncRevision + 1, turnUid: "other", phase: "throw", phaseStartsAtMs: Date.now() - 1000, turnDeadlineMs: Date.now() + 60000 });
+    });
+    await page.waitForTimeout(100);
+    const status = await page.locator(".yut-action-status").evaluate(node => ({
+      rect: node.getBoundingClientRect().toJSON(),
+      children: [...node.children].filter(child => getComputedStyle(child).visibility !== "hidden").map(child => ({ rect: child.getBoundingClientRect().toJSON(), scrollHeight: child.scrollHeight, height: child.clientHeight })),
+    }));
+    for (const child of status.children) {
+      assert.ok(child.scrollHeight <= child.height + 1, label + ": bottom status is not clipped");
+      assert.ok(child.rect.top >= status.rect.top - 1 && child.rect.bottom <= status.rect.bottom + 1, label + ": bottom status stays in its own row");
+    }
+    for (let index = 1; index < status.children.length; index++) assert.ok(overlapArea(status.children[index - 1].rect, status.children[index].rect) <= .5, label + ": bottom statuses do not overlap");
+    await page.screenshot({ path: path.join(evidence, label + "-game.png") });
+    await page.evaluate(() => window.qa.prepareThrow(5));
+    await page.locator(".yut-piece-choice").first().waitFor();
+    const moveStatus = await page.locator(".yut-action-status").evaluate(node => ({
+      rect: node.getBoundingClientRect().toJSON(),
+      children: [...node.children].map(child => ({ rect: child.getBoundingClientRect().toJSON(), scrollHeight: child.scrollHeight, height: child.clientHeight })),
+    }));
+    for (const child of moveStatus.children) {
+      assert.ok(child.scrollHeight <= child.height + 1, label + ": bonus result and move hint are not clipped");
+      assert.ok(child.rect.top >= moveStatus.rect.top - 1 && child.rect.bottom <= moveStatus.rect.bottom + 1, label + ": bonus result and move hint stay in their row");
+    }
+    for (let index = 1; index < moveStatus.children.length; index++) assert.ok(overlapArea(moveStatus.children[index - 1].rect, moveStatus.children[index].rect) <= .5, label + ": result, timer and move hint do not overlap");
+    await page.screenshot({ path: path.join(evidence, label + "-move.png") });
+    if (width < height) {
+      const panBefore = await page.locator(".yut-game-content").boundingBox();
+      const gestures = await page.evaluate(() => {
+        const game = document.querySelector(".yut-game-content");
+        const gesture = (target, endX, endY) => {
+          const make = (x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y });
+          target.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [make(100, 100)] }));
+          const move = new TouchEvent("touchmove", { bubbles: true, cancelable: true, touches: [make(endX, endY)] });
+          target.dispatchEvent(move);
+          target.dispatchEvent(new TouchEvent("touchend", { bubbles: true, touches: [] }));
+          return move.defaultPrevented;
+        };
+        const boardBlocked = gesture(game, 100, 180);
+        const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 120 });
+        game.dispatchEvent(wheel);
+        const panel = document.createElement("div");
+        panel.style.cssText = "height:80px;width:80px;overflow:auto";
+        const content = document.createElement("div"); content.style.height = "300px"; panel.append(content); game.append(panel);
+        const menuAllowed = !gesture(content, 140, 100);
+        panel.scrollTop = panel.scrollHeight;
+        const boundaryBlocked = gesture(content, 140, 100);
+        panel.remove();
+        return { boardBlocked, wheelBlocked: wheel.defaultPrevented, menuAllowed, boundaryBlocked };
+      });
+      assert.deepEqual(gestures, { boardBlocked: true, wheelBlocked: true, menuAllowed: true, boundaryBlocked: true }, label + ": fullscreen contains panning while menus remain scrollable");
+      await page.mouse.move(width / 2, height / 2);
+      await page.mouse.wheel(0, 800);
+      await page.waitForTimeout(100);
+      assert.deepEqual(await page.locator(".yut-game-content").boundingBox(), panBefore, label + ": actual wheel leaves fullscreen canvas fixed");
+      report.paths[label + "-gestures"] = gestures;
+    }
+    report.paths[label] = { events, status, moveStatus };
+    await page.close();
+    report.checks.push(label + ": copy popup, text-sized event background, long Korean text, non-overlapping bottom status and fixed canvas");
+    console.log("Passed " + label);
+  }
+}
 try {
-  if (boardLayoutOnly) {
+  if (interfaceOnly) {
+    await verifyInterfaceStability();
+  } else if (boardLayoutOnly) {
     await verifyBoardLayout();
   } else if (finishSelectionOnly) {
     await verifyFinishSelection();
