@@ -182,10 +182,121 @@ const apply = async (commandType, payload, targetActor = actor) =>
     commandType,
     payload: wis.normalizeWisPayload(commandType, payload),
     receiptId: `receipt-${commandIndex}`,
-    timestamp: `timestamp-${commandIndex}`,
+    timestamp: new Date(Date.UTC(2026, 9, 27, 0, 0, commandIndex)).toISOString(),
     actor: targetActor,
   });
 const common = { semesterId: "2026-2", expectedSemesterRevision: 7 };
+
+async function verifyWalletHistoryPagination() {
+  const scope = "2026-2", uid = "history-student";
+  const accountId = wis.accountIdFor(scope, uid);
+  const documents = {
+    "site_settings/semester_active": { semesterId: scope, revision: 1 },
+    [`semester_manifests/${scope}`]: { semesterId: scope, revision: 1, status: "ACTIVE" },
+    [`semester_wis_economies/${scope}`]: { semesterId: scope, revision: 251, status: "ACTIVE_OPEN" },
+    [`users/${uid}`]: { role: "student" },
+    "users/history-teacher": { role: "teacher", staffPermissions: ["point_read"] },
+    "semester_classes/history-class": { classId: "history-class", semesterId: scope, grade: "2", classNumber: "1", status: "ACTIVE" },
+    "semester_enrollments/history-enrollment": { enrollmentId: "history-enrollment", semesterId: scope,
+      studentUid: uid, classId: "history-class", enrollmentStatus: "ACTIVE", displayName: "내역 검증 학생" },
+    [`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId(scope, uid)}`]: {
+      semesterId: scope, studentUid: uid, activeEnrollmentId: "history-enrollment" },
+    "semester_wis_ledger/foreign-account-cursor": { ledgerEntryId: "foreign-account-cursor", semesterId: scope,
+      accountId: "another-account", studentUid: "another-student", createdAt: "2026-10-27T00:00:00.000Z", delta: 999999 },
+  };
+  let balance = 500;
+  const entries = [];
+  for (let index = 0; index < 250; index += 1) {
+    const ledgerEntryId = `history-${String(index).padStart(3, "0")}`;
+    const delta = index % 3 === 0 ? -2 : 5;
+    const entry = { ledgerEntryId, semesterId: scope, accountId, studentUid: uid,
+      type: delta < 0 ? "DEDUCT" : "GRANT", activityType: delta < 0 ? "weplay_cost" : index % 2 ? "weplay_reward" : "weplay_rank_reward",
+      delta, balanceBefore: balance, balanceAfter: balance + delta, reason: "게임 거래 검증",
+      // Five entries share each timestamp, including across page boundaries.
+      createdAt: new Date(Date.UTC(2026, 9, 27, 0, 0, Math.floor(index / 5))).toISOString(),
+      actorUid: "private-system-actor", actorRole: "system", commandId: "private-command", receiptId: "private-receipt" };
+    documents[`semester_wis_ledger/${ledgerEntryId}`] = entry;
+    entries.unshift(entry); balance += delta;
+  }
+  documents[`semester_wis_accounts/${accountId}`] = { accountId, semesterId: scope, studentUid: uid,
+    enrollmentId: "history-enrollment", classId: "history-class", status: "ACTIVE", revision: 251, balance,
+    earnedTotal: 0, rankEarnedTotal: 0, spentTotal: 0, adjustedTotal: 0,
+    recentLedgerEntries: entries.slice(0, 100) };
+  const transaction = new MemoryTransaction(documents);
+  const queriedCollections = [];
+  const query = transaction.query.bind(transaction);
+  transaction.query = (collection, options) => { queriedCollections.push(collection); return query(collection, options); };
+  const core = wis.createWisQueryCore({ store: {
+    get: transaction.get.bind(transaction), runTransaction: callback => callback(transaction),
+  }, assertSession: async request => ({ uid: request.auth.uid, email: request.auth.token.email }) });
+  const read = (audience, data = {}) => core.getWisEconomyState({
+    auth: { uid: audience === "student" ? uid : "history-teacher", token: { email: "fixture@yongshin-ms.ms.kr" } },
+    data: { audience, semesterId: scope, source: "CURRENT", limit: 37,
+      ...(audience === "teacher" ? { projection: "account", studentUid: uid } : {}), ...data },
+  });
+  const before = JSON.stringify([...transaction.documents]);
+  for (const audience of ["student", "teacher"]) {
+    const received = [], seenCursors = new Set();
+    let cursor = "";
+    do {
+      const page = await read(audience, { cursor });
+      assert.equal(page.account.accountId, accountId);
+      assert.equal(page.account.balance, balance);
+      assert.ok(page.ledger.length <= 37);
+      received.push(...page.ledger);
+      cursor = page.nextCursor;
+      if (cursor) { assert.equal(seenCursors.has(cursor), false); seenCursors.add(cursor); }
+    } while (cursor);
+    assert.deepEqual(received.map(entry => entry.ledgerEntryId), entries.map(entry => entry.ledgerEntryId),
+      `${audience}: 250 rows beyond the recent 100, including equal timestamps, appear exactly once`);
+    assert.equal(new Set(received.map(entry => entry.ledgerEntryId)).size, 250);
+    assert.equal(500 + received.reduce((sum, entry) => sum + entry.delta, 0), balance);
+    assert.deepEqual(new Set(received.map(entry => entry.activityType)), new Set(["weplay_cost", "weplay_reward", "weplay_rank_reward"]));
+    assert.ok(received.some(entry => entry.delta < 0), "Game losses remain visible");
+    if (audience === "student") {
+      assert.doesNotMatch(JSON.stringify(received), /private-system-actor|private-command|private-receipt|another-student/u);
+      assert.ok(received.every(entry => !Object.hasOwn(entry, "studentUid") && !Object.hasOwn(entry, "accountId")));
+    }
+    for (const foreignCursor of ["foreign-account-cursor", "missing-cursor"]) {
+      await assert.rejects(read(audience, { cursor: foreignCursor }), error => error.details?.reason === "WIS_QUERY_INVALID");
+    }
+    const queryCount = queriedCollections.length;
+    const light = await read(audience, { includeLedger: false });
+    assert.equal(light.account.accountId, accountId);
+    assert.deepEqual(light.ledger, []); assert.equal(light.nextCursor, "");
+    assert.equal(queriedCollections.length, queryCount, `${audience}: balance-only refresh performs no ledger or roster collection query`);
+  }
+  assert.ok(transaction.readStats.maxQueryDocuments <= 38, "History reads are bounded by page limit plus one");
+  assert.ok(queriedCollections.every(collection => collection === "semester_wis_ledger"), "Teacher studentUid lookup does not scan account collections");
+  for (const [ledgerEntryId, invalidScope] of [
+    ["foreign-semester-cursor", { semesterId: "2026-1" }],
+    ["foreign-owner-cursor", { studentUid: "another-student" }],
+  ]) {
+    const path = `semester_wis_ledger/${ledgerEntryId}`;
+    transaction.set(path, { ...entries[0], ledgerEntryId, createdAt: "2026-10-27T23:00:00.000Z", ...invalidScope });
+    try {
+      for (const audience of ["student", "teacher"]) {
+        await assert.rejects(read(audience), error => error.details?.reason === "WIS_LEDGER_SCOPE_MISMATCH",
+          `${audience}: a corrupted account ledger must fail closed, never silently hide an unexplained balance change`);
+        await assert.rejects(read(audience, { cursor: ledgerEntryId }), error => error.details?.reason === "WIS_QUERY_INVALID");
+        if (audience === "teacher") {
+          await assert.rejects(read(audience, { ledgerEntryId }), error => error.details?.reason === "WIS_LEDGER_SCOPE_MISMATCH",
+            "An individual teacher ledger lookup must enforce the same scope and owner boundary");
+        }
+      }
+    } finally { transaction.documents.delete(path); }
+  }
+  const attemptedOtherAccount = await read("student", { studentUid: "another-student", accountId: "another-account", ledgerEntryId: "foreign-account-cursor" });
+  assert.equal(attemptedOtherAccount.account.accountId, accountId, "Student selectors cannot change the authenticated wallet owner");
+  assert.ok(attemptedOtherAccount.ledger.every(entry => entry.ledgerEntryId.startsWith("history-")));
+  await assert.rejects(core.getWisEconomyState({ auth: { uid, token: { email: "fixture@yongshin-ms.ms.kr" } },
+    data: { audience: "teacher", semesterId: scope, source: "CURRENT", projection: "account", studentUid: "another-student" } }),
+    error => error.details?.reason === "WIS_MANAGE_REQUIRED");
+  await assert.rejects(read("student", { includeLedger: "false" }), error => error.details?.reason === "WIS_QUERY_INVALID");
+  assert.equal(JSON.stringify([...transaction.documents]), before, "All pagination and lightweight refreshes are read-only");
+  console.log(JSON.stringify({ walletHistoryRows: 250, equalTimestampPagination: true, gameLossesVisible: true,
+    foreignCursorDenied: true, studentOwnerBoundary: true, lightweightRefreshQueries: 0, productionAccess: 0 }));
+}
 
 const run = async () => {
   const created = await apply("createSemesterEconomy", {
@@ -2163,7 +2274,7 @@ const run = async () => {
   console.log(JSON.stringify({ passed: true, cases: 50, sparseHallScenarios: 126, emojiHallScenarios, addedChecks: ["sparse hall zero-score fill, positive ties, public limits, active scope, test exclusion, stable snapshots and zero writes; hard account cap preserved", "order memo validation/storage", "review preserves request memo", "student safe activity enum", "owner order memo projections", "receipt response-loss memo replay/conflict", "pre-memo receipt compatibility", "teacher overview 321/501 bounded pages, projection limits, canonical roster and zero writes", "parallel actor reads preserve session failure priority and zero unauthenticated profile reads", "parallel student/teacher ledger reads preserve response and dependent roster chain", "canonical full name and student number ignore conflicting profile identity", "semester rank policy enforces locked/disabled/unknown/mismatched/default IDs and preserves allowed icons in all four public maps for students, teachers and archive reads", "unranked viewer retains own grade/class boundary", "exact operator test identities excluded from all public maps before limits for student/teacher viewers; partial names, managed accounts and personal wallets preserved without writes"], productionAccess: 0 }));
 };
 
-run().then(async () => {
+run().then(verifyWalletHistoryPagination).then(async () => {
   const historical = new MemoryTransaction({
     "site_settings/semester_active": { semesterId: "2026-2", revision: 1 },
     "users/teacher": { role: "teacher", staffPermissions: ["point_manage"] },

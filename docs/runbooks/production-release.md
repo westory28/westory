@@ -1,5 +1,17 @@
 # 운영 배포 절차
 
+## 위스 지갑과 전체 거래 내역 (2026-10-27)
+
+위스 지급·차감·조정·역분개·구매·취소·주문 검토는 `executeWisCommandFast`, 상태 확인은 `getWisCommandStatusFast`, 일반 지갑 조회는 `getWisEconomyStateFast`를 us-central1에서 호출한다. 기존 서울 함수와 같은 영수증·권한을 사용하며 클라이언트가 실패 시 새 요청 ID나 다른 리전으로 자동 재지급하지 않는다. 지급 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, concurrency 80이다.
+
+`semester_wis_ledger`의 accountId ASC / createdAt DESC / __name__ DESC COLLECTION 인덱스가 READY인지 먼저 확인한다. 학생·교사 전체 내역은 원장을 페이지 조회하며 최근 100건 캐시를 전체 원장으로 취급하지 않는다. 거래 조회는 읽기 전용 transaction이다. 지급은 실제 학기·경제 상태·계좌·주문·재고 revision을 확인하고, 다른 학생이 바꾼 학교 aggregate revision만으로 거부하지 않는다.
+
+검증은 `npm --prefix functions run check`, `npm --prefix functions run test:wis-wallet`, 기존 윷 보상 통합, `node scripts/verify-wis-economy-adapter.mjs`, `node scripts/verify-wis-wallet-browser.mjs`, `npm run build`를 사용한다. 운영 원장 대조는 `npm --prefix functions run audit:wis-wallet`이며 학생 이름·UID 출력과 데이터 쓰기는 없다. 불일치가 발견되면 잔액을 추측해 수정하지 말고 원장 근거부터 확인한다.
+
+배포 대상은 `executeCommand,getWisEconomyState,executeWisCommandFast,getWisCommandStatusFast,getWisEconomyStateFast` 5개다. 운영 원본 대조·검증 → 해당 Functions 배포 → 프론트엔드 배포·승격 → 방재석 Chrome 프로필에서 운영 조회 확인 순서로 진행한다. 상세 범위와 연동 계약은 [위스 지갑 검증 기록](../reviews/wis-wallet-20261027.md)을 따른다.
+
+`getWisEconomyState`는 기존 서울과 미국 두 리전을 모두 export해야 한다. Firebase CLI는 `--only`에서도 같은 함수 이름의 리전을 대조하므로 서울만 선언하면 기존 미국 함수를 삭제 대상으로 판단한다. 최소 인스턴스 비용 승인에 `--force`가 필요할 때에도 먼저 이 리전 목록을 확인한다. 이 계약은 아래 과거의 ‘서울만 배포’ 안내보다 우선한다.
+
 ## 윷놀이 온라인 명령 (2026-10-27)
 
 새 클라이언트는 `commandYutRoomFast`를 `us-central1`에서 호출한다. Firestore `nam5`와 가까운 곳에서 동일한 세션·학기·학적·공개 설정·방 권한·요청 영수증 검사를 수행한다. 최초 기동 지연을 줄이기 위해 이 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, 동시 요청 80개를 사용한다. 기존 서울 `commandYutRoom`은 열린 구 클라이언트의 호환 경로로 유지한다. 로그인 함수나 다른 게임의 리전은 변경하지 않는다.

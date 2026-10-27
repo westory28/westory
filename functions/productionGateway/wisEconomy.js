@@ -54,6 +54,19 @@ const WIS_COMMAND_TYPES = Object.freeze({
   SAVE_WIS_HALL_OF_FAME_CONFIG: "saveWisHallOfFameConfig",
 });
 
+// These commands lock the current account/order/inventory in their transaction.
+// Another student's ledger activity must not invalidate an otherwise valid
+// payment just because it advanced the school's aggregate revision.
+const WIS_TRANSACTION_COMMAND_TYPES = new Set([
+  WIS_COMMAND_TYPES.GRANT_WIS,
+  WIS_COMMAND_TYPES.DEDUCT_WIS,
+  WIS_COMMAND_TYPES.ADJUST_WIS,
+  WIS_COMMAND_TYPES.REVERSE_WIS_ENTRY,
+  WIS_COMMAND_TYPES.PLACE_WIS_ORDER,
+  WIS_COMMAND_TYPES.CANCEL_WIS_ORDER,
+  WIS_COMMAND_TYPES.REVIEW_WIS_ORDER,
+]);
+
 const STUDENT_COMMAND_TYPES = new Set([WIS_COMMAND_TYPES.PLACE_WIS_ORDER, WIS_COMMAND_TYPES.CANCEL_WIS_ORDER]);
 const HIGH_RISK_COMMAND_TYPES = new Set(
   Object.values(WIS_COMMAND_TYPES).filter(
@@ -963,11 +976,16 @@ const assertManifest = async (
       "Semester Manifest does not exist.",
       "SEMESTER_NOT_FOUND",
     );
-  if ([WIS_COMMAND_TYPES.UPSERT_WIS_PRODUCT, WIS_COMMAND_TYPES.UPSERT_WIS_INVENTORY,
-    WIS_COMMAND_TYPES.PLACE_WIS_ORDER, WIS_COMMAND_TYPES.REVIEW_WIS_ORDER, WIS_COMMAND_TYPES.CANCEL_WIS_ORDER].includes(commandType)) {
+  if (WIS_TRANSACTION_COMMAND_TYPES.has(commandType) ||
+      [WIS_COMMAND_TYPES.UPSERT_WIS_PRODUCT, WIS_COMMAND_TYPES.UPSERT_WIS_INVENTORY].includes(commandType)) {
     const activePointer = await transaction.get("site_settings/semester_active");
-    if (activePointer.exists && activePointer.data?.semesterId !== payload.semesterId)
-      fail("failed-precondition", "이전 학기 상점은 조회만 가능합니다.", "SEMESTER_ARCHIVED_WRITE_FORBIDDEN");
+    if (manifest.readOnly === true || (activePointer.exists && activePointer.data?.semesterId !== payload.semesterId))
+      fail("failed-precondition", "이전 학기 위스는 조회만 가능합니다.", "SEMESTER_ARCHIVED_WRITE_FORBIDDEN");
+    if (WIS_TRANSACTION_COMMAND_TYPES.has(commandType) &&
+        (!activePointer.exists || manifest.semesterId !== payload.semesterId ||
+          !Number.isSafeInteger(manifest.revision) || manifest.revision < 1 ||
+          activePointer.data?.revision !== manifest.revision))
+      fail("failed-precondition", "현재 학기 위스 정보를 확인해 주세요.", "WIS_ACTIVE_SEMESTER_INVALID");
   }
   if (Number(manifest.revision || 0) !== payload.expectedSemesterRevision)
     fail("aborted", "Semester revision changed.", "SEMESTER_REVISION_CONFLICT");
@@ -1007,6 +1025,7 @@ const assertEconomy = async (
   transaction,
   payload,
   statuses = ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"],
+  requireRevision = true,
 ) => {
   const snapshot = await transaction.get(economyPath(payload.semesterId));
   if (!snapshot.exists)
@@ -1016,14 +1035,17 @@ const assertEconomy = async (
       "WIS_ECONOMY_NOT_FOUND",
     );
   const economy = snapshot.data || {};
-  if (Number(economy.revision || 0) !== payload.expectedEconomyRevision)
+  if (!requireRevision && (economy.semesterId !== payload.semesterId ||
+      !Number.isSafeInteger(economy.revision) || economy.revision < 1))
+    fail("failed-precondition", "현재 학기 위스 운영 정보를 확인해 주세요.", "WIS_ECONOMY_INVALID");
+  if (requireRevision && Number(economy.revision || 0) !== payload.expectedEconomyRevision)
     fail(
       "aborted",
       "Wis economy revision changed.",
       "WIS_ECONOMY_REVISION_CONFLICT",
       { currentRevision: Number(economy.revision || 0) },
     );
-  if (!statuses.includes(economy.status))
+  if (!statuses.includes(economy.status) || (!requireRevision && economy.readOnly === true))
     fail(
       "failed-precondition",
       "Wis economy state does not allow this command.",
@@ -1237,6 +1259,7 @@ const assertLegacyLedgerProvenance = async (transaction, entries, account) => {
 const postLedger = async ({
   transaction,
   account,
+  expectedAccountId,
   delta,
   type,
   sourceId,
@@ -1249,6 +1272,13 @@ const postLedger = async ({
   reversedType = "",
   reversedDelta = 0,
 }) => {
+  if (!expectedAccountId || account.accountId !== expectedAccountId ||
+      typeof account.studentUid !== "string" || !account.studentUid ||
+      account.semesterId !== economy.semesterId ||
+      account.accountId !== accountIdFor(account.semesterId, account.studentUid) ||
+      (type !== "INITIAL_GRANT" && (account.status !== "ACTIVE" || account.readOnly === true ||
+        account.schemaVersion !== WIS_SCHEMA_VERSION || account.policyVersion !== WIS_POLICY_VERSION)))
+    fail("failed-precondition", "사용 가능한 위스 계좌인지 확인해 주세요.", "WIS_ACCOUNT_INVALID");
   const entryId = ledgerIdFor(
     account.semesterId,
     account.accountId,
@@ -1265,6 +1295,18 @@ const postLedger = async ({
     );
   const before = Number(account.balance || 0);
   const after = before + delta;
+  const totals = nextAccountTotals(account, delta, type, { reversedType, reversedDelta });
+  if (!Number.isSafeInteger(account.balance) || account.balance < 0 ||
+      !Number.isSafeInteger(account.revision) || account.revision < 1 ||
+      !Number.isSafeInteger(delta) || delta === 0 ||
+      !Number.isSafeInteger(after) || !Number.isSafeInteger(account.revision + 1) ||
+      !["earnedTotal", "rankEarnedTotal", "spentTotal"].every((field) =>
+        Number.isSafeInteger(account[field] ?? 0) && (account[field] ?? 0) >= 0 &&
+        Number.isSafeInteger(totals[field]) && totals[field] >= 0) ||
+      !Number.isSafeInteger(account.adjustedTotal ?? 0) || !Number.isSafeInteger(totals.adjustedTotal) ||
+      !Number.isSafeInteger(economy?.ledgerEntryCount ?? 0) || (economy?.ledgerEntryCount ?? 0) < 0 ||
+      !Number.isSafeInteger((economy?.ledgerEntryCount ?? 0) + 1))
+    fail("failed-precondition", "위스 계좌의 금액과 합계를 확인해 주세요.", "WIS_ACCOUNT_TOTALS_INVALID");
   if (after < 0)
     fail(
       "failed-precondition",
@@ -1298,7 +1340,7 @@ const postLedger = async ({
     after,
     timestamp,
     actor.actorUid,
-    nextAccountTotals(account, delta, type, { reversedType, reversedDelta }),
+    totals,
     [
       ledgerEntry,
       ...(Array.isArray(account.recentLedgerEntries)
@@ -1532,7 +1574,8 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
               "CLOSED",
             ]
           : ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"];
-    const economy = await assertEconomy(transaction, payload, economyStatuses);
+    const economy = await assertEconomy(transaction, payload, economyStatuses,
+      !WIS_TRANSACTION_COMMAND_TYPES.has(commandType));
     if (commandType === WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS) {
       assertTeacher(actor);
       const enrollments = await transaction.getAll(
@@ -1772,6 +1815,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
       const posted = await postLedger({
         transaction,
         account,
+        expectedAccountId: payload.accountId,
         economy,
         delta,
         type,
@@ -1852,6 +1896,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
       const posted = await postLedger({
         transaction,
         account,
+        expectedAccountId: payload.accountId,
         economy,
         delta: -Number(source.delta || 0),
         type: "REVERSAL",
@@ -2291,6 +2336,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
       const posted = await postLedger({
         transaction,
         account,
+        expectedAccountId: accountId,
         economy,
         delta: -totalPrice,
         type: "ORDER_DEBIT",
@@ -2422,7 +2468,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           !debitSnapshot.exists || debit.semesterId !== payload.semesterId || debit.accountId !== order.accountId ||
           debit.type !== "ORDER_DEBIT" || debit.studentUid !== order.studentUid || debit.sourceId !== payload.orderId || debit.delta !== -order.totalPrice)
           fail("failed-precondition", "주문 결제 내역을 확인해 주세요.", "WIS_ORDER_DEPENDENCY_INVALID");
-        const posted = await postLedger({ transaction, account, economy,
+        const posted = await postLedger({ transaction, account, economy, expectedAccountId: order.accountId,
           delta: order.totalPrice, type: "ORDER_REFUND", sourceId: payload.orderId,
           reason: payload.reason, commandId, receiptId, timestamp: projectionTimestamp, actor });
         refundLedgerEntryId = posted.ledgerEntryId;
@@ -3693,6 +3739,7 @@ module.exports = {
   WIS_ACCOUNT_COLLECTION,
   WIS_BALANCE_COLLECTION,
   WIS_COMMAND_TYPES,
+  WIS_TRANSACTION_COMMAND_TYPES,
   WIS_ECONOMY_COLLECTION,
   WIS_INVENTORY_COLLECTION,
   WIS_LEDGER_COLLECTION,

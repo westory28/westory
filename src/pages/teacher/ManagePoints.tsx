@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { getFirebaseStorage } from "../../lib/firebase";
 import { ensureSensitiveOperation } from "../../lib/sensitiveOperation";
-import { getPendingCanonicalPointAdjustment } from "../../lib/pointEconomyAdapter";
+import { latestWisWallet } from "../../lib/wisEconomyClient";
+import {
+  getPendingCanonicalPointAdjustment,
+  getCanonicalPointTransactionPage,
+} from "../../lib/pointEconomyAdapter";
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
@@ -19,7 +23,6 @@ import {
   listPointOrders,
   listPointProducts,
   listPointStudentTargetsByClass,
-  listPointTransactionsByUid,
   listPointWallets,
   POINT_POLICY_FALLBACK,
   reviewPointOrder,
@@ -318,6 +321,7 @@ const ManagePoints: React.FC = () => {
   const [loadedScope, setLoadedScope] = useState<object | null>(null);
   const [hallRefresh, setHallRefresh] = useState(0);
   const loadInFlightRef = useRef<object | null>(null);
+  const walletListRequestRef = useRef<object | null>(null);
   const scopeReady = Boolean(
     currentUser && configReady && config?.year && config?.semester,
   );
@@ -338,6 +342,23 @@ const ManagePoints: React.FC = () => {
   const [grantLoading, setGrantLoading] = useState(false);
   const [selectedUid, setSelectedUid] = useState("");
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
+  const [transactionCursor, setTransactionCursor] = useState("");
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionsError, setTransactionsError] = useState("");
+  const transactionRequestRef = useRef<object | null>(null);
+  const selectedUidRef = useRef(selectedUid);
+  selectedUidRef.current = selectedUid;
+  const walletRefreshRef = useRef(new Map<string, object>());
+  const walletRevisionsRef = useRef(new Map<string, number>());
+  for (const wallet of wallets) {
+    walletRevisionsRef.current.set(
+      wallet.uid,
+      Math.max(
+        walletRevisionsRef.current.get(wallet.uid) || 0,
+        Number(wallet.revision || 0),
+      ),
+    );
+  }
   const [savedPolicy, setSavedPolicy] = useState<PointPolicy>(EMPTY_POLICY);
   const [policyDraft, setPolicyDraft] = useState<PointPolicy>(EMPTY_POLICY);
   const [policyDirty, setPolicyDirty] = useState(false);
@@ -700,15 +721,99 @@ const ManagePoints: React.FC = () => {
     [selectedEditableTransactionId, transactions],
   );
 
-  const loadTransactionsForWallet = async (uid: string) => {
+  const loadTransactionsForWallet = async (uid: string, append = false) => {
     if (!isCurrentScope()) return;
     if (!uid) {
       setTransactions([]);
+      setTransactionCursor("");
       return;
     }
-    const nextTransactions = await listPointTransactionsByUid(config, uid, 20);
-    if (!isCurrentScope()) return;
-    setTransactions(nextTransactions);
+    if (append && (!transactionCursor || transactionsLoading)) return;
+    const request = {};
+    transactionRequestRef.current = request;
+    setTransactionsLoading(true);
+    setTransactionsError("");
+    if (!append) {
+      setTransactions([]);
+      setTransactionCursor("");
+    }
+    try {
+      const page = await getCanonicalPointTransactionPage(
+        config,
+        uid,
+        append ? transactionCursor : "",
+      );
+      if (
+        !isCurrentScope() ||
+        transactionRequestRef.current !== request ||
+        selectedUidRef.current !== uid
+      )
+        return;
+      if (
+        Number(page.wallet?.revision || 0) <
+        (walletRevisionsRef.current.get(uid) || 0)
+      ) {
+        setTransactionsError(
+          "새 위스 내역이 반영되었습니다. 새로고침해 주세요.",
+        );
+        return;
+      }
+      walletRevisionsRef.current.set(uid, Number(page.wallet?.revision || 0));
+      if (append && page.wallet?.revision !== selectedWallet?.revision) {
+        void loadTransactionsForWallet(uid);
+        return;
+      }
+      setTransactions((previous) =>
+        append
+          ? [
+              ...new Map(
+                [...previous, ...page.transactions].map((entry) => [
+                  entry.id,
+                  entry,
+                ]),
+              ).values(),
+            ]
+          : page.transactions,
+      );
+      setTransactionCursor(page.nextCursor);
+      if (!append && page.wallet)
+        setWallets((previous) =>
+          previous.map((wallet) =>
+            wallet.uid === uid ? latestWisWallet(wallet, page.wallet)! : wallet,
+          ),
+        );
+    } catch (error) {
+      if (
+        isCurrentScope() &&
+        transactionRequestRef.current === request &&
+        selectedUidRef.current === uid
+      )
+        setTransactionsError(
+          "위스 내역을 불러오지 못했습니다. 다시 불러와 주세요.",
+        );
+    } finally {
+      if (isCurrentScope() && transactionRequestRef.current === request) {
+        transactionRequestRef.current = null;
+        setTransactionsLoading(false);
+      }
+    }
+  };
+
+  const commitWalletList = (nextWallets: PointWallet[], request: object) => {
+    if (!isCurrentScope() || walletListRequestRef.current !== request)
+      return false;
+    setWallets((current) => {
+      if (!isCurrentScope() || walletListRequestRef.current !== request)
+        return current;
+      const currentByUid = new Map(
+        current.map((wallet) => [wallet.uid, wallet]),
+      );
+      return nextWallets.map(
+        (wallet) =>
+          latestWisWallet(currentByUid.get(wallet.uid) || null, wallet)!,
+      );
+    });
+    return true;
   };
 
   const loadAll = async () => {
@@ -719,6 +824,8 @@ const ManagePoints: React.FC = () => {
     }
     if (loadInFlightRef.current === requestScope) return;
     loadInFlightRef.current = requestScope;
+    const walletListRequest = {};
+    walletListRequestRef.current = walletListRequest;
 
     setLoading(true);
     setShopLoadError("");
@@ -757,7 +864,10 @@ const ManagePoints: React.FC = () => {
         : {};
 
       if (!isCurrentScope()) return;
-      setWallets(nextWallets);
+      const walletListCommitted = commitWalletList(
+        nextWallets,
+        walletListRequest,
+      );
       setGrantGradeOptions(nextSchoolOptions.grades);
       setGrantClassOptions(nextSchoolOptions.classes);
       setSavedPolicy(nextPolicy);
@@ -777,15 +887,16 @@ const ManagePoints: React.FC = () => {
       setProductOrderDirty(false);
       setProductOrderSaving(false);
       setOrders(nextOrders);
-      setRankManualAdjustEarnedPointsByUid(
-        nextRankManualAdjustEarnedPointsByUid,
-      );
-
-      const nextSelectedUid =
-        selectedUid && nextWallets.some((wallet) => wallet.uid === selectedUid)
-          ? selectedUid
-          : nextWallets[0]?.uid || "";
-      setSelectedUid(nextSelectedUid);
+      if (walletListCommitted) {
+        setRankManualAdjustEarnedPointsByUid(
+          nextRankManualAdjustEarnedPointsByUid,
+        );
+        setSelectedUid((current) =>
+          current && nextWallets.some((wallet) => wallet.uid === current)
+            ? current
+            : nextWallets[0]?.uid || "",
+        );
+      }
     } catch (error: any) {
       if (isCurrentScope())
         setShopLoadError(
@@ -812,6 +923,14 @@ const ManagePoints: React.FC = () => {
     setWallets([]);
     setStudents([]);
     setTransactions([]);
+    setTransactionCursor("");
+    setTransactionsError("");
+    setTransactionsLoading(false);
+    transactionRequestRef.current = null;
+    loadInFlightRef.current = null;
+    walletListRequestRef.current = null;
+    walletRefreshRef.current.clear();
+    walletRevisionsRef.current.clear();
     setProducts([]);
     setOrders([]);
     setSelectedUid("");
@@ -855,19 +974,9 @@ const ManagePoints: React.FC = () => {
       return;
     }
 
-    let cancelled = false;
-    const loadTransactions = async () => {
-      const nextTransactions = await listPointTransactionsByUid(
-        config,
-        selectedUid,
-        20,
-      );
-      if (!cancelled) setTransactions(nextTransactions);
-    };
-
-    void loadTransactions();
+    void loadTransactionsForWallet(selectedUid);
     return () => {
-      cancelled = true;
+      transactionRequestRef.current = null;
     };
   }, [requestScope, selectedUid, activeTab, loadedScope, canRead]);
 
@@ -1260,7 +1369,7 @@ const ManagePoints: React.FC = () => {
           key: intentKey,
           sourceId: `manual_${crypto.randomUUID()}`,
         };
-      await adjustPoints({
+      const result = await adjustPoints({
         config,
         uid: selectedGrantStudent.uid,
         delta: mode === "reclaim" ? -numericAmount : numericAmount,
@@ -1269,38 +1378,81 @@ const ManagePoints: React.FC = () => {
         mode,
         actor,
       });
+      if (!isCurrentScope()) return;
       grantIntentRef.current = null;
       setGrantAmount("");
       setGrantReason("");
-
-      const nextWallets = await listPointWallets(config);
-      const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
-        needsPointRankLegacyFallback(wallet),
-      )
-        ? await getPointRankManualAdjustEarnedPointsMap(config)
-        : {};
-      setWallets(nextWallets);
-      setRankManualAdjustEarnedPointsByUid(
-        nextRankManualAdjustEarnedPointsByUid,
+      const grantedUid = selectedGrantStudent.uid;
+      walletRevisionsRef.current.set(
+        grantedUid,
+        Math.max(
+          walletRevisionsRef.current.get(grantedUid) || 0,
+          Number(result.accountRevision || 0),
+        ),
       );
-
-      const nextSelectedUid = nextWallets.some(
-        (wallet) => wallet.uid === selectedGrantStudent.uid,
-      )
-        ? selectedGrantStudent.uid
-        : selectedUid &&
-            nextWallets.some((wallet) => wallet.uid === selectedUid)
-          ? selectedUid
-          : nextWallets[0]?.uid || "";
-      setSelectedUid(nextSelectedUid);
-      await loadTransactionsForWallet(nextSelectedUid);
+      // Only use the committed server balance. A later read failure must never
+      // turn an acknowledged grant into a failed grant or prompt a second one.
+      setWallets((previous) =>
+        previous.map((wallet) =>
+          wallet.uid === grantedUid
+            ? latestWisWallet(wallet, {
+                ...wallet,
+                balance: result.balance,
+                revision: result.accountRevision,
+              })!
+            : wallet,
+        ),
+      );
+      setSelectedUid(grantedUid);
       showToast({
         tone: "success",
         title: `${actionLabel}되었습니다.`,
-        message: `${selectedGrantStudent.studentName} 학생의 위스 현황을 최신 상태로 반영했습니다.`,
+        message: `${selectedGrantStudent.studentName} · 잔액 ${Number(result.balance).toLocaleString("ko-KR")} 위스`,
       });
+      const refreshToken = {};
+      walletRefreshRef.current.set(grantedUid, refreshToken);
+      void getCanonicalPointTransactionPage(config, grantedUid)
+        .then((page) => {
+          if (
+            !isCurrentScope() ||
+            walletRefreshRef.current.get(grantedUid) !== refreshToken
+          )
+            return;
+          if (
+            Number(page.wallet?.revision || 0) <
+            (walletRevisionsRef.current.get(grantedUid) || 0)
+          )
+            return;
+          walletRevisionsRef.current.set(
+            grantedUid,
+            Number(page.wallet?.revision || 0),
+          );
+          if (page.wallet)
+            setWallets((previous) =>
+              previous.map((wallet) =>
+                wallet.uid === grantedUid
+                  ? latestWisWallet(wallet, page.wallet)!
+                  : wallet,
+              ),
+            );
+          if (selectedUidRef.current === grantedUid) {
+            setTransactions(page.transactions);
+            setTransactionCursor(page.nextCursor);
+          }
+        })
+        .catch(() => {
+          if (
+            !isCurrentScope() ||
+            walletRefreshRef.current.get(grantedUid) !== refreshToken
+          )
+            return;
+          setGrantFeedback(
+            `${actionLabel}은 완료되었습니다. 최신 내역은 위스 현황에서 다시 불러와 주세요.`,
+          );
+        });
     } catch (error: any) {
       console.error("Failed to adjust points:", error);
+      if (!isCurrentScope()) return;
       const failureMessage = getGrantFailureMessage(error, mode);
       showToast({
         tone: "error",
@@ -1308,7 +1460,7 @@ const ManagePoints: React.FC = () => {
         message: failureMessage,
       });
     } finally {
-      setGrantSubmittingMode(null);
+      if (isCurrentScope()) setGrantSubmittingMode(null);
     }
   };
 
@@ -1811,16 +1963,20 @@ const ManagePoints: React.FC = () => {
   };
 
   const refreshOverviewData = async () => {
+    if (!isCurrentScope()) return;
+    const request = {};
+    walletListRequestRef.current = request;
     const nextWallets = await listPointWallets(config);
+    if (!isCurrentScope() || walletListRequestRef.current !== request) return;
     const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
       needsPointRankLegacyFallback(wallet),
     )
       ? await getPointRankManualAdjustEarnedPointsMap(config)
       : {};
-    setWallets(nextWallets);
+    if (!commitWalletList(nextWallets, request)) return;
     setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
-    if (selectedUid) {
-      await loadTransactionsForWallet(selectedUid);
+    if (selectedUidRef.current) {
+      await loadTransactionsForWallet(selectedUidRef.current);
     }
   };
 
@@ -2006,6 +2162,15 @@ const ManagePoints: React.FC = () => {
               classOptions={classOptions}
               numberOptions={numberOptions}
               transactions={transactions}
+              transactionsLoading={transactionsLoading}
+              transactionsError={transactionsError}
+              transactionsHasMore={!!transactionCursor}
+              onLoadMoreTransactions={() =>
+                void loadTransactionsForWallet(selectedUid, true)
+              }
+              onReloadTransactions={() =>
+                void loadTransactionsForWallet(selectedUid)
+              }
               canManage={canManage}
               selectedEditableTransactionId={selectedEditableTransactionId}
               adjustmentDraftValue={adjustmentDraftValue}

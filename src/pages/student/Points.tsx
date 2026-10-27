@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cancelCanonicalPurchase } from "../../lib/pointEconomyAdapter";
+import { latestWisWallet } from "../../lib/wisEconomyClient";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
@@ -9,7 +10,12 @@ import {
   STUDENT_POINT_TAB_LABELS,
 } from "../../constants/pointLabels";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribePointsUpdated } from "../../lib/appEvents";
+import { auth } from "../../lib/firebase";
+import {
+  notifyPointsUpdated,
+  subscribePointsUpdated,
+  subscribePointsForegroundRefresh,
+} from "../../lib/appEvents";
 import {
   createSecurePurchaseRequest,
   getPointPolicy,
@@ -20,7 +26,7 @@ import {
   getStudentPointWallet as getPointWalletByUid,
   listStudentPointOrders as listPointOrders,
   listStudentPointProducts as listPointProducts,
-  listStudentPointTransactions as listPointTransactionsByUid,
+  getStudentPointTransactionPage,
   getStudentPointHallOfFame as getWisHallOfFameSnapshot,
 } from "../../lib/studentWis";
 import {
@@ -48,9 +54,8 @@ type DeferredLoadOptions = { force?: boolean };
 type CoreLoadOptions = {
   showLoading?: boolean;
   setTransactionsFromCore?: boolean;
+  force?: boolean;
 };
-
-const STUDENT_POINT_TRANSACTION_LIMIT = 100;
 
 const DEFAULT_WALLET: PointWallet = {
   uid: "",
@@ -106,6 +111,8 @@ const Points: React.FC = () => {
       : "overview";
   const [wallet, setWallet] = useState<PointWallet | null>(null);
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
+  const [historyCursor, setHistoryCursor] = useState("");
+  const walletRevisionRef = useRef(0);
   const [products, setProducts] = useState<PointProduct[]>([]);
   const [orders, setOrders] = useState<PointOrder[]>([]);
   const [policy, setPolicy] = useState(POINT_POLICY_FALLBACK);
@@ -166,17 +173,17 @@ const Points: React.FC = () => {
   }, [searchParams, setSearchParams]);
 
   const loadCorePointData = async (includeTransactions: boolean) => {
-    const [loadedWallet, loadedTransactions, loadedPolicy] = await Promise.all([
-      getPointWalletByUid(config, uid),
+    const [page, loadedPolicy] = await Promise.all([
       includeTransactions
-        ? listPointTransactionsByUid(
-            config,
-            uid,
-            STUDENT_POINT_TRANSACTION_LIMIT,
-          )
-        : Promise.resolve([]),
+        ? getStudentPointTransactionPage(config, uid)
+        : getPointWalletByUid(config, uid).then((wallet) => ({
+            wallet,
+            transactions: [] as PointTransaction[],
+            nextCursor: "",
+          })),
       getPointPolicy(config),
     ]);
+    const loadedWallet = page.wallet;
     const loadedRankManualAdjustPoints =
       isCurrentScope() &&
       loadedWallet &&
@@ -186,7 +193,8 @@ const Points: React.FC = () => {
 
     return {
       loadedWallet,
-      loadedTransactions,
+      loadedTransactions: page.transactions,
+      nextCursor: page.nextCursor,
       loadedPolicy,
       loadedRankManualAdjustPoints,
     };
@@ -230,15 +238,18 @@ const Points: React.FC = () => {
   const loadPointData = async ({
     showLoading = true,
     setTransactionsFromCore = true,
+    force = false,
   }: CoreLoadOptions = {}) => {
     if (
       !scopeReady ||
       !isCurrentScope() ||
-      coreLoadInFlightRef.current === requestScope
+      (!force && coreLoadInFlightRef.current !== null)
     )
       return;
 
-    coreLoadInFlightRef.current = requestScope;
+    const request = {};
+    coreLoadInFlightRef.current = request;
+    if (setTransactionsFromCore) historyLoadInFlightRef.current = null;
     if (showLoading) setLoading(true);
     setErrorMessage("");
     try {
@@ -247,11 +258,17 @@ const Points: React.FC = () => {
         loadedTransactions,
         loadedPolicy,
         loadedRankManualAdjustPoints,
+        nextCursor,
       } = await loadCorePointData(setTransactionsFromCore);
-      if (!isCurrentScope()) return;
-      setWallet(loadedWallet);
+      if (!isCurrentScope() || coreLoadInFlightRef.current !== request) return;
+      if (Number(loadedWallet?.revision || 0) < walletRevisionRef.current)
+        return;
+      walletRevisionRef.current = Number(loadedWallet?.revision || 0);
+      setWallet((previous) => latestWisWallet(previous, loadedWallet));
       if (setTransactionsFromCore) {
         setTransactions(loadedTransactions);
+        setHistoryCursor(nextCursor);
+        setHistoryLoading(false);
         setHistoryLoaded(true);
         setHistoryErrorMessage("");
       }
@@ -259,53 +276,80 @@ const Points: React.FC = () => {
       setRankManualAdjustPoints(loadedRankManualAdjustPoints);
     } catch (error) {
       console.error("Failed to load student point data:", error);
-      if (isCurrentScope())
+      if (isCurrentScope() && coreLoadInFlightRef.current === request)
         setErrorMessage(
           "위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
         );
     } finally {
-      if (coreLoadInFlightRef.current === requestScope)
+      if (isCurrentScope() && coreLoadInFlightRef.current === request) {
         coreLoadInFlightRef.current = null;
-      if (isCurrentScope()) {
         setCoreOwner(requestScope);
-        if (showLoading) setLoading(false);
+        setLoading(false);
+        if (setTransactionsFromCore) setHistoryLoading(false);
       }
     }
   };
 
   const loadHistoryData = async ({
     force = false,
-  }: DeferredLoadOptions = {}) => {
+    append = false,
+  }: DeferredLoadOptions & { append?: boolean } = {}) => {
     if (
       !scopeReady ||
       !isCurrentScope() ||
-      (!force && historyLoaded) ||
-      historyLoadInFlightRef.current === requestScope
+      (!force && !append && historyLoaded) ||
+      (append && !historyCursor) ||
+      (!force && historyLoadInFlightRef.current !== null)
     )
       return;
 
-    historyLoadInFlightRef.current = requestScope;
+    const request = {};
+    historyLoadInFlightRef.current = request;
     setHistoryLoading(true);
     setHistoryErrorMessage("");
     try {
-      const loadedTransactions = await listPointTransactionsByUid(
+      const page = await getStudentPointTransactionPage(
         config,
         uid,
-        STUDENT_POINT_TRANSACTION_LIMIT,
+        append ? historyCursor : "",
       );
-      if (!isCurrentScope()) return;
-      setTransactions(loadedTransactions);
+      if (!isCurrentScope() || historyLoadInFlightRef.current !== request)
+        return;
+      if (Number(page.wallet?.revision || 0) < walletRevisionRef.current)
+        return;
+      if (append && page.wallet?.revision !== wallet?.revision) {
+        void loadPointData({ showLoading: false, force: true });
+        return;
+      }
+      setTransactions((previous) =>
+        append
+          ? [
+              ...new Map(
+                [...previous, ...page.transactions].map((entry) => [
+                  entry.id,
+                  entry,
+                ]),
+              ).values(),
+            ]
+          : page.transactions,
+      );
+      setHistoryCursor(page.nextCursor);
+      if (!append) {
+        walletRevisionRef.current = Number(page.wallet?.revision || 0);
+        setWallet((previous) => latestWisWallet(previous, page.wallet));
+      }
       setHistoryLoaded(true);
     } catch (error) {
       console.error("Failed to load student point history:", error);
-      if (isCurrentScope())
+      if (isCurrentScope() && historyLoadInFlightRef.current === request)
         setHistoryErrorMessage(
           "위스 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
         );
     } finally {
-      if (historyLoadInFlightRef.current === requestScope)
+      if (isCurrentScope() && historyLoadInFlightRef.current === request) {
         historyLoadInFlightRef.current = null;
-      if (isCurrentScope()) setHistoryLoading(false);
+        setHistoryLoading(false);
+      }
     }
   };
 
@@ -375,13 +419,12 @@ const Points: React.FC = () => {
   };
 
   const refreshLoadedPointData = async () => {
-    await loadPointData({
-      showLoading: false,
-      setTransactionsFromCore: !historyLoaded,
-    });
-    if (!isCurrentScope()) return;
     await Promise.all([
-      historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
+      loadPointData({
+        showLoading: false,
+        setTransactionsFromCore: true,
+        force: true,
+      }),
       ordersLoaded ? loadOrdersData({ force: true }) : Promise.resolve(),
       shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
     ]);
@@ -401,6 +444,10 @@ const Points: React.FC = () => {
     setOrdersLoading(false);
     setShopLoading(false);
     setTransactions([]);
+    setHistoryCursor("");
+    walletRevisionRef.current = 0;
+    coreLoadInFlightRef.current = null;
+    historyLoadInFlightRef.current = null;
     setProducts([]);
     setOrders([]);
     setHistoryLoaded(false);
@@ -440,6 +487,13 @@ const Points: React.FC = () => {
       else void refreshLoadedPointData();
     });
   }, [requestScope, activeTab, historyLoaded, ordersLoaded, shopLoaded]);
+
+  useEffect(() => {
+    if (!scopeReady || userData?.role !== "student") return;
+    return subscribePointsForegroundRefresh(
+      () => isCurrentScope() && auth.currentUser === currentUser,
+    );
+  }, [requestScope, userData?.role]);
 
   const safeWallet = wallet || DEFAULT_WALLET;
   const legacyUserData = (userData || null) as Record<string, unknown> | null;
@@ -539,26 +593,20 @@ const Points: React.FC = () => {
         memo: purchaseMemo,
         requestKey,
       });
-      await Promise.all([
-        loadPointData({
-          showLoading: false,
-          setTransactionsFromCore: !historyLoaded,
-        }),
-        loadOrdersData({ force: true }),
-        shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
-        historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
-      ]);
+      if (!isCurrentScope()) return;
       setPurchaseMemo("");
       setSelectedProductId("");
       setPurchaseRequestKey("");
       showToast({
         tone: "success",
         title: "주문이 접수되었습니다.",
-        message: `${selectedProduct.name} 요청과 위스 상태가 최신 정보로 반영되었습니다.`,
+        message: `${selectedProduct.name} 주문이 접수되었습니다.`,
       });
+      notifyPointsUpdated();
       setSearchParams({ tab: "orders" });
     } catch (error: any) {
       console.error("Failed to create point purchase request:", error);
+      if (!isCurrentScope()) return;
       if (error?.message?.includes("Insufficient point balance")) {
         showToast({
           tone: "warning",
@@ -580,7 +628,7 @@ const Points: React.FC = () => {
         });
       }
     } finally {
-      setPurchaseSubmitting(false);
+      if (isCurrentScope()) setPurchaseSubmitting(false);
     }
   };
 
@@ -602,21 +650,15 @@ const Points: React.FC = () => {
     setCancellingOrderId(order.id);
     try {
       await cancelCanonicalPurchase(config, order.id);
+      if (!isCurrentScope()) return;
       showToast({
         tone: "success",
         title: "주문 취소 완료",
         message: "주문을 취소하고 위스를 돌려받았습니다.",
       });
-      await Promise.all([
-        loadOrdersData({ force: true }),
-        loadShopData({ force: true }),
-        loadPointData({
-          showLoading: false,
-          setTransactionsFromCore: !historyLoaded,
-        }),
-        historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
-      ]);
+      notifyPointsUpdated();
     } catch (error: any) {
+      if (!isCurrentScope()) return;
       showToast({
         tone: "error",
         title: "주문 취소 실패",
@@ -624,7 +666,7 @@ const Points: React.FC = () => {
           error?.message || "주문을 취소하지 못했습니다. 다시 시도해 주세요.",
       });
     } finally {
-      setCancellingOrderId("");
+      if (isCurrentScope()) setCancellingOrderId("");
     }
   };
 
@@ -689,6 +731,13 @@ const Points: React.FC = () => {
           {!isHallOfFameTab && !loading && !!errorMessage && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
               {errorMessage}
+              <button
+                type="button"
+                className="ml-3 min-h-11 underline"
+                onClick={() => void loadPointData({ force: true })}
+              >
+                다시 불러오기
+              </button>
             </div>
           )}
 
@@ -717,6 +766,9 @@ const Points: React.FC = () => {
                 transactions={filteredTransactions}
                 historyLoading={historyLoading}
                 historyErrorMessage={historyErrorMessage}
+                historyHasMore={!!historyCursor}
+                onLoadMoreHistory={() => void loadHistoryData({ append: true })}
+                onRetryHistory={() => void loadHistoryData({ force: true })}
                 onHistoryFilterChange={setHistoryFilter}
               />
             )}

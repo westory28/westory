@@ -159,6 +159,7 @@ const seedFor = (wis) => {
     "semester_wis_economies/2026-2": { semesterId: "2026-2", status: "ACTIVE_OPEN", revision: 1,
       accountCount: 1, inventoryCount: 1, orderCount: 0, ledgerEntryCount: 0 },
     ["semester_wis_accounts/" + accountId]: { accountId, semesterId: "2026-2", studentUid: "student",
+      status: "ACTIVE", schemaVersion: 1, policyVersion: "w7-v1",
       enrollmentId: "enrollment", classId: "class", balance: 1000, revision: 1, earnedTotal: 1000, spentTotal: 0 },
     ["semester_enrollment_slots/" + archiveEnrollment.buildEnrollmentSlotId("2026-2", "student")]: {
       semesterId: "2026-2", studentUid: "student", activeEnrollmentId: "enrollment" },
@@ -292,7 +293,7 @@ const runCommands = async (moduleName) => {
   store.tx.set("site_settings/semester_active", { semesterId: "2027-1" });
   await noChange(() => editInventory(10), "SEMESTER_ARCHIVED_WRITE_FORBIDDEN");
   await noChange(() => place(), "SEMESTER_ARCHIVED_WRITE_FORBIDDEN");
-  store.tx.set("site_settings/semester_active", { semesterId: "2026-2" });
+  store.tx.set("site_settings/semester_active", { semesterId: "2026-2", revision: 7 });
 
   // A response lost after commit replays the same receipt and cannot refund twice.
   const replayId = (await place()).result.orderId;

@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "semester_wis_ledger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "accountId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "semester_wis_preview_entries",
       "queryScope": "COLLECTION",
       "fields": [

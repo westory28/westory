@@ -50,6 +50,11 @@ interface PointsOverviewTabProps {
   classOptions: string[];
   numberOptions: string[];
   transactions: PointTransaction[];
+  transactionsLoading?: boolean;
+  transactionsError?: string;
+  transactionsHasMore?: boolean;
+  onLoadMoreTransactions?: () => void;
+  onReloadTransactions?: () => void;
   canManage: boolean;
   selectedEditableTransactionId: string;
   adjustmentDraftValue: string;
@@ -126,6 +131,11 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
   classOptions,
   numberOptions,
   transactions,
+  transactionsLoading = false,
+  transactionsError = "",
+  transactionsHasMore = false,
+  onLoadMoreTransactions,
+  onReloadTransactions,
   canManage,
   selectedEditableTransactionId,
   adjustmentDraftValue,
@@ -261,7 +271,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 onClick={() => onSortChange("spentTotal")}
                 className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600"
               >
-                누적 사용
+                상점 사용
                 <i
                   className={`fas ${sortIndicatorClass("spentTotal")} text-xs`}
                   aria-hidden="true"
@@ -398,7 +408,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                 <div className="text-xs font-bold text-gray-500">
-                  누적 사용 위스
+                  상점 사용 위스
                 </div>
                 <div className="mt-1 whitespace-nowrap text-lg font-extrabold text-rose-500">
                   {formatWisAmount(selectedWallet.spentTotal || 0)}
@@ -407,8 +417,18 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             </div>
 
             <div className="mt-5">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="font-bold text-gray-800">최근 거래 내역</div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="whitespace-nowrap font-bold text-gray-800">
+                  거래 내역
+                </div>
+                <button
+                  type="button"
+                  className="min-h-11 whitespace-nowrap text-sm text-blue-700 underline disabled:opacity-50"
+                  onClick={onReloadTransactions}
+                  disabled={transactionsLoading}
+                >
+                  새로고침
+                </button>
                 {canManage && (
                   <div className="text-[11px] font-bold text-gray-400">
                     최신 교사 직접 지급/환수 항목만 수정·취소 가능
@@ -416,11 +436,23 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 )}
               </div>
               <div className="max-h-[480px] overflow-y-auto rounded-xl border border-gray-200">
-                {transactions.length === 0 && (
-                  <div className="p-6 text-center text-sm text-gray-400">
-                    거래 내역이 없습니다.
+                {transactionsError && (
+                  <div role="alert" className="p-4 text-sm text-red-700">
+                    {transactionsError}
                   </div>
                 )}
+                {transactionsLoading && (
+                  <div role="status" className="p-4 text-sm text-gray-500">
+                    불러오는 중…
+                  </div>
+                )}
+                {!transactionsLoading &&
+                  !transactionsError &&
+                  transactions.length === 0 && (
+                    <div className="p-6 text-center text-sm text-gray-400">
+                      거래 내역이 없습니다.
+                    </div>
+                  )}
                 {transactions.map((transaction, index) => {
                   const labelKey = transaction.activityType || transaction.type;
                   const label =
@@ -518,6 +550,16 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                     </div>
                   );
                 })}
+                {transactionsHasMore && (
+                  <button
+                    type="button"
+                    className="min-h-11 w-full border-t border-gray-200 bg-white px-4 text-sm font-bold text-blue-700 disabled:opacity-50"
+                    onClick={onLoadMoreTransactions}
+                    disabled={transactionsLoading}
+                  >
+                    이전 기록 더 보기
+                  </button>
+                )}
               </div>
             </div>
           </>

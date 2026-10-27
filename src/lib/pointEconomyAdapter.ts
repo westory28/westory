@@ -53,14 +53,15 @@ export const saveCanonicalWisHallOfFameConfig = async (
     },
   );
 
-const accountState = async (config: WisConfig, uid: string) => {
+const accountState = async (
+  config: WisConfig,
+  uid: string,
+  extra: WisRow = {},
+) => {
   const owner = auth.currentUser;
-  const overview = await queryAllWisState(config, "overview");
-  const account = overview.accounts.find((item) => item.studentUid === uid);
-  if (!account)
-    throw new Error("현재 학기에 등록된 학생의 위스 계정을 찾지 못했습니다.");
   const state = await queryWisState(config, "teacher", "account", {
-    accountId: account.accountId,
+    studentUid: uid,
+    ...extra,
   });
   if (auth.currentUser !== owner || state.account?.studentUid !== uid)
     throw new Error(
@@ -77,7 +78,7 @@ export const getCanonicalPointWallet = async (
   config: WisConfig,
   uid: string,
 ) => {
-  const state = await accountState(config, uid);
+  const state = await accountState(config, uid, { includeLedger: false });
   return state.account ? wisWallet(state.account) : null;
 };
 export const listCanonicalPointWallets = async (config: WisConfig) =>
@@ -97,6 +98,19 @@ export const listCanonicalPointStudentTargets = async (config: WisConfig) =>
     number: wallet.number,
     email: "",
   }));
+export const getCanonicalPointTransactionPage = async (
+  config: WisConfig,
+  uid: string,
+  cursor = "",
+  limit = 50,
+) => {
+  const state = await accountState(config, uid, { cursor, limit });
+  return {
+    wallet: state.account ? wisWallet(state.account) : null,
+    transactions: state.ledger.map((entry) => wisTransaction(entry, uid)),
+    nextCursor: state.nextCursor,
+  };
+};
 export const listCanonicalPointTransactions = async (
   config: WisConfig,
   options?: { uid?: string; type?: PointTransactionType; limitCount?: number },
@@ -162,19 +176,22 @@ export const adjustCanonicalPoints = async (input: {
   assertWisOwner(input.actor.uid);
   if (!Number.isSafeInteger(input.delta) || !input.delta)
     throw new Error("위스는 0이 아닌 정수로 입력해 주세요.");
+  // The form can issue a new local source ID after a reload. Until the server
+  // receipt resolves, the same semantic grant must reuse its saved command.
   return runWisOperation(
     [
       "adjust",
       wisSemesterId(input.config),
       input.uid,
       input.delta,
-      input.sourceId || "",
       input.sourceLabel || "",
     ],
     true,
     async (step) => {
       const result = await step("adjust", async () => {
-        const state = await accountState(input.config, input.uid),
+        const state = await accountState(input.config, input.uid, {
+            includeLedger: false,
+          }),
           account = requireAccount(state);
         return {
           commandType: input.delta > 0 ? "grantWis" : "deductWis",
@@ -192,6 +209,7 @@ export const adjustCanonicalPoints = async (input: {
         walletId: result.accountId,
         transactionId: result.ledgerEntryId,
         balance: result.balance,
+        accountRevision: result.accountRevision,
         type:
           input.delta > 0
             ? ("manual_adjust" as const)

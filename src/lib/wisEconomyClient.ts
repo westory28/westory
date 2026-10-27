@@ -73,6 +73,15 @@ const serviceError = (error: any) => {
 export const assertWisOwner = (uid: string) => {
   if (!uid || auth.currentUser?.uid !== uid) throw ownerChanged();
 };
+const fastWisCommands = new Set([
+  "grantWis",
+  "deductWis",
+  "adjustWis",
+  "reverseWisEntry",
+  "placeWisOrder",
+  "cancelWisOrder",
+  "reviewWisOrder",
+]);
 export const callWisService = async <T>(
   name: string,
   payload: WisRow,
@@ -83,7 +92,16 @@ export const callWisService = async <T>(
   const epoch = Number((await user.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== user || !Number.isFinite(epoch))
     throw ownerChanged();
-  const call = await getHistoryDictionaryCallable<WisRow, T>(name, {
+  const serviceName =
+    name === "getWisEconomyState"
+      ? "getWisEconomyStateFast"
+      : fastWisCommands.has(payload.commandType) && name === "executeCommand"
+        ? "executeWisCommandFast"
+        : fastWisCommands.has(payload.commandType) &&
+            name === "getCommandStatus"
+          ? "getWisCommandStatusFast"
+          : name;
+  const call = await getHistoryDictionaryCallable<WisRow, T>(serviceName, {
     // Read calls still validate the proof on the server on every request.
     reuseSessionProof: name === "getWisEconomyState",
   });
@@ -175,6 +193,7 @@ export const wisHallOfFame = (state: WisState): WisHallOfFameSnapshot | null =>
     : null;
 export const wisWallet = (account: WisRow): PointWallet => ({
   uid: account.studentUid,
+  revision: Number(account.revision || 0),
   studentName: account.displayName || "",
   grade: account.grade || "",
   class: account.classNumber || "",
@@ -185,7 +204,20 @@ export const wisWallet = (account: WisRow): PointWallet => ({
   spentTotal: Number(account.spentTotal || 0),
   adjustedTotal: Number(account.adjustedTotal || 0),
   rankSnapshot: null,
+  lastTransactionAt: wisTimestamp(
+    account.lastTransactionAt || account.updatedAt,
+  ),
 });
+export const latestWisWallet = (
+  current: PointWallet | null,
+  next: PointWallet | null,
+) =>
+  current &&
+  next &&
+  current.uid === next.uid &&
+  Number(current.revision || 0) > Number(next.revision || 0)
+    ? current
+    : next;
 const activities = new Set([
   "attendance",
   "attendance_monthly_bonus",

@@ -152,6 +152,7 @@ export type PointOrderStatus =
 
 export interface PointWallet {
   uid: string;
+  revision?: number;
   studentName: string;
   grade: string;
   class: string;

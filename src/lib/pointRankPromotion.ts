@@ -250,10 +250,14 @@ export const loadStudentRankPromotionSnapshot = async (
       Number((await user.getIdTokenResult()).claims.auth_time) !== epoch
     )
       throw new Error("로그인 계정이 바뀌었습니다.");
-    snapshotCache.set(cacheKey, {
-      expiresAt: Date.now() + SNAPSHOT_CACHE_TTL_MS,
-      value,
-    });
+    // An invalidated in-flight read may finish after a newer wallet request.
+    // It must never refill the cache with the pre-transaction balance.
+    if (pendingLoads.get(cacheKey) === promise) {
+      snapshotCache.set(cacheKey, {
+        expiresAt: Date.now() + SNAPSHOT_CACHE_TTL_MS,
+        value,
+      });
+    }
     return value;
   } finally {
     if (pendingLoads.get(cacheKey) === promise) pendingLoads.delete(cacheKey);

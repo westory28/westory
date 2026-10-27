@@ -7,15 +7,19 @@
   "rootExports": [
     "executeCommand",
     "getCommandStatus",
-    "executeLessonCorePointCommand"
+    "executeLessonCorePointCommand",
+    "executeWisCommandFast",
+    "getWisCommandStatusFast"
   ],
   "notes": [
     "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
-    "Only executeCommand, getCommandStatus and executeLessonCorePointCommand are attached to the root Functions entry; all other nested exports remain excluded.",
+    "Only explicitly reviewed canonical command/status, assessment and isolated query exports are attached to the root Functions entry; unrelated nested exports remain excluded.",
     "Package files are excluded; dependencies resolve from the existing functions/package.json.",
     "Original SHA-256 hashes refer to downloaded deployment bytes; restored files use LF newlines.",
-    "Isolated getWisEconomyState uses the current shared session contract; fresh live source generations verified on 2026-10-08T04:19:51.486Z. Seoul only; existing US query deployment is not a release target.",
-    "2026-10-21: Live Seoul executeCommand source (updated 2026-10-19) was compared before this fix: assessmentLifecycle, historyClassroomExemptions, productionSource and dictionaryNotifications matched the baseline; commandGateway differs only by previously reviewed opt-in ranking read-only/field-mask support."
+    "Historical capture 2026-10-08: standalone Wis query source and shared session contract were compared. As of 2026-10-27 both existing query regions must remain exported to preserve compatibility.",
+    "2026-10-21: Live Seoul executeCommand source (updated 2026-10-19) was compared before this fix: assessmentLifecycle, historyClassroomExemptions, productionSource and dictionaryNotifications matched the baseline; commandGateway differs only by previously reviewed opt-in ranking read-only/field-mask support.",
+    "2026-10-27: executeCommand live source from 2026-10-26 matches baseline commandGateway, wisEconomy, wisEconomyQuery, sessionAuthority and productionSource. The older standalone Seoul query lacks reviewed ranking additions already deployed in that newer closure. Only the changed command/status and standalone query endpoints are deployment targets.",
+    "2026-10-27: Explicitly export both existing getWisEconomyState regions. Firebase deployment reconciles regions by function name, even with --only; declaring Seoul alone would remove the US compatibility endpoint. The deployment-time removal was detected and the US endpoint was restored before frontend release."
   ],
   "files": [
     {
@@ -65,10 +69,11 @@
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "695f8471f2c38594465b5223f17bc4697f790fbcfedda8ae4c80c2f74a30ee4b",
+      "sha256": "da0728238b6847c1f13664a97523d4c0e3d84a899e1c912f44e5850eaf16c430",
       "changes": [
         "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default.",
-        "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default."
+        "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default.",
+        "2026-10-27: Add nam5-local Wis-only command/status callables using the identical session, permissions and durable receipt namespace."
       ]
     },
     {
@@ -394,11 +399,12 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "1e7843819ecc98c00fcce51b3f20200a005a4896fa88afffb829d97d0b4be3f6",
+      "sha256": "319a4dc5e18aed67ed51477de2505bdf6846e50c369f345ee314f250e2149c0c",
       "changes": [
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
-        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs."
+        "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
+        "2026-10-27: Preserve per-account/order/inventory CAS while allowing unrelated economy revisions; fail closed on malformed scope, frozen accounts and unsafe amounts."
       ]
     },
     {
@@ -430,7 +436,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "9d5b4a441594de1e285b009f39313a58e8c3032027a55497d6ac8a35af025386",
+      "sha256": "27601b29e868084186443dda9f26e5e4c6440ac00806133240988ce2d175b2b6",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -448,7 +454,8 @@
         "2026-10-20: Add an opt-in full hall projection using one bounded lightweight index query and fresh published-union validation; preserve all grade/class/tie/zero scopes, historical EXPLICIT account snapshots, and the original full endpoint. Mask account reads only in the new full projection.",
         "2026-10-20: Add an opt-in hall-view projection that verifies only the selected grade or class, retains empty selector maps for all permitted groups, enforces canonical student scope, and preserves full/preview/archive contracts without background queries.",
         "2026-10-20: Page selected hall groups in ordered batches of twenty with fresh cutoff/zero-tail bounds; share student grade/class candidate authority and current moves. Cache only two-field teacher selector directories for thirty seconds with four-scope pending deduplication and failure eviction; preserve missing-group fallback via real bounded queries.",
-        "2026-10-20: Start selected paged-hall account and safe index roster-hint reads together; keep canonical slot/enrollment/class authority, stale-hint fallback, account field masks and unselected-candidate bounds unchanged."
+        "2026-10-20: Start selected paged-hall account and safe index roster-hint reads together; keep canonical slot/enrollment/class authority, stale-hint fallback, account field masks and unselected-candidate bounds unchanged.",
+        "2026-10-27: Page the complete immutable ledger with scope/owner-checked cursors, preserve game/learning activities, and allow direct lightweight account reads."
       ]
     },
     {
@@ -506,6 +513,18 @@
     {
       "name": "getWisEconomyState",
       "region": "asia-northeast3",
+      "entry": "../studentWisQuery.js",
+      "source": "wisEconomyQuery.js"
+    },
+    {
+      "name": "getWisEconomyState",
+      "region": "us-central1",
+      "entry": "../studentWisQuery.js",
+      "source": "wisEconomyQuery.js"
+    },
+    {
+      "name": "getWisEconomyStateFast",
+      "region": "us-central1",
       "entry": "../studentWisQuery.js",
       "source": "wisEconomyQuery.js"
     }

@@ -1512,6 +1512,11 @@ const getDefaultCore = () => {
   return defaultCore;
 };
 
+const assertWisTransactionCommand = (request) => {
+  if (!wisEconomy.WIS_TRANSACTION_COMMAND_TYPES.has(String(request.data?.commandType || "").trim()))
+    fail("permission-denied", "이 경로에서는 위스 거래만 처리할 수 있습니다.", "WIS_FAST_COMMAND_REQUIRED");
+};
+
 const createCallableExports = ({ core } = {}) => ({
   executeCommand: onCall({ region: REGION }, (request) =>
     (core || getDefaultCore()).execute(request),
@@ -1519,6 +1524,17 @@ const createCallableExports = ({ core } = {}) => ({
   getCommandStatus: onCall({ region: REGION }, (request) =>
     (core || getDefaultCore()).getStatus(request),
   ),
+  // The same authorization, transaction and receipt namespace serve old and
+  // fast clients. Keep this route limited to routine wallet transactions.
+  executeWisCommandFast: onCall({ region: "us-central1", memory: "256MiB",
+    minInstances: 1, maxInstances: 20, concurrency: 80 }, (request) => {
+    assertWisTransactionCommand(request);
+    return (core || getDefaultCore()).execute(request);
+  }),
+  getWisCommandStatusFast: onCall({ region: "us-central1" }, (request) => {
+    assertWisTransactionCommand(request);
+    return (core || getDefaultCore()).getStatus(request);
+  }),
   // Keep Seoul available for older clients; nam5 reads run beside Firestore.
   getSemesterCoreState: onCall({ region: [REGION, "us-central1"] }, (request) =>
     (core || getDefaultCore()).getSemesterCoreState(request),

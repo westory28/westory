@@ -31,6 +31,9 @@ interface StudentPointSummaryTabProps {
   transactions: PointTransaction[];
   historyLoading?: boolean;
   historyErrorMessage?: string;
+  historyHasMore?: boolean;
+  onLoadMoreHistory?: () => void;
+  onRetryHistory?: () => void;
   onHistoryFilterChange: (value: HistoryFilter) => void;
 }
 
@@ -53,6 +56,9 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
   transactions,
   historyLoading = false,
   historyErrorMessage = "",
+  historyHasMore = false,
+  onLoadMoreHistory,
+  onRetryHistory,
   onHistoryFilterChange,
 }) => {
   const selectedDetailFilter = QUICK_HISTORY_FILTERS.includes(historyFilter)
@@ -86,7 +92,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-bold text-gray-500">누적 사용</dt>
+              <dt className="text-xs font-bold text-gray-500">상점 사용</dt>
               <dd className="mt-1 whitespace-nowrap text-lg font-black text-rose-500">
                 {formatWisAmount(wallet.spentTotal || 0)}
               </dd>
@@ -118,6 +124,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
               <h2 className="text-lg font-bold text-gray-900">위스 기록</h2>
               <span className="text-sm text-gray-500">
                 {transactions.length}건
+                {historyHasMore ? " · 이전 기록 있음" : ""}
               </span>
               {historyLoading && (
                 <span className="text-xs font-bold text-blue-600">
@@ -162,6 +169,14 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
         {historyErrorMessage && (
           <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-bold text-red-700">
             {historyErrorMessage}
+            <button
+              type="button"
+              className="ml-3 min-h-11 underline"
+              onClick={onRetryHistory}
+              disabled={historyLoading}
+            >
+              다시 불러오기
+            </button>
           </div>
         )}
 
@@ -205,6 +220,16 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
             );
           })}
         </div>
+        {historyHasMore && (
+          <button
+            type="button"
+            className="mt-3 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 disabled:opacity-50"
+            onClick={onLoadMoreHistory}
+            disabled={historyLoading}
+          >
+            {historyLoading ? "불러오는 중…" : "이전 기록 더 보기"}
+          </button>
+        )}
       </section>
     </div>
   );

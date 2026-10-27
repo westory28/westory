@@ -209,10 +209,11 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
-    name === "getWisRankingPreview" || name === "commandYutRoomFast"
+    ["getWisRankingPreview", "commandYutRoomFast", "getWisEconomyStateFast",
+      "executeWisCommandFast", "getWisCommandStatusFast"].includes(name)
       ? (wisRankingFunctionsPromise ??= import("firebase/functions")
           .then(({ connectFunctionsEmulator, getFunctions }) => {
-            // Ranking reads and latency-sensitive Yut commands run beside nam5.
+            // Latency-sensitive wallet and game operations run beside nam5.
             const functions = getFunctions(app, "us-central1");
             if (import.meta.env.DEV && useFirebaseEmulators) {
               connectFunctionsEmulator(

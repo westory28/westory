@@ -8174,6 +8174,9 @@ exports.getAssessmentState = require('./productionGateway/productionSource').get
 exports.saveAssessmentProgress = require('./productionGateway/productionSource').saveAssessmentProgress;
 exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
 exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
+exports.getWisEconomyStateFast = require('./studentWisQuery').getWisEconomyStateFast;
+exports.executeWisCommandFast = require('./productionGateway/productionSource').executeWisCommandFast;
+exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 Object.assign(exports, require('./wisRankingIndex').createWisRankingIndexTriggers({ db }));
 // Use the reviewed scoped query, preserving the live teacher archive boundary.

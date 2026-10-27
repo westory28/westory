@@ -3,10 +3,14 @@ const { createFirestoreStore } = require('./productionGateway/commandGateway');
 const { createWisQueryCore } = require('./productionGateway/wisEconomyQuery');
 const { onCallWithStudentMaintenance } = require('./productionGateway/studentMaintenance');
 
-// The restored live query preserves explicit teacher archive reads. Only the
-// Seoul endpoint is exported; the existing us-central1 deployment is untouched.
-const core = createWisQueryCore({ store: createFirestoreStore(getFirestore()) });
+// Snapshot reads must not lock accounts while students spend or teachers grant.
+// Keep the old callable for open clients and give new clients a nam5-local route.
+const core = createWisQueryCore({ store: createFirestoreStore(getFirestore(), { readOnly: true }) });
 exports.getWisEconomyState = onCallWithStudentMaintenance(
-  { region: 'asia-northeast3' },
+  { region: ['asia-northeast3', 'us-central1'] },
+  request => core.getWisEconomyState(request),
+);
+exports.getWisEconomyStateFast = onCallWithStudentMaintenance(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 20, concurrency: 80 },
   request => core.getWisEconomyState(request),
 );

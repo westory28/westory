@@ -390,6 +390,9 @@ export const POINT_HISTORY_FILTER_LABELS = {
   history_classroom_bonus: "역사교실 성과 보너스",
   manual_adjust: "교사 지급",
   manual_reclaim: "교사 환수",
+  weplay_cost: "위플레이 도전 비용",
+  weplay_reward: "위플레이 도전 보상",
+  weplay_rank_reward: "위플레이 순위 보상",
   purchase: "구매 관련",
 } as const;
 

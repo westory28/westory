@@ -6,8 +6,12 @@ const { spawnSync } = require('node:child_process');
 const gatewayDir = path.resolve(__dirname, '../productionGateway');
 const manifest = require('../productionGateway/source-manifest.json');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-assert.deepEqual(manifest.rootExports, ['executeCommand', 'getCommandStatus', 'executeLessonCorePointCommand']);
-assert.deepEqual(manifest.isolatedQueryExports, [{ name: 'getWisEconomyState', region: 'asia-northeast3', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' }]);
+assert.deepEqual(manifest.rootExports, ['executeCommand', 'getCommandStatus', 'executeLessonCorePointCommand', 'executeWisCommandFast', 'getWisCommandStatusFast']);
+assert.deepEqual(manifest.isolatedQueryExports, [
+  { name: 'getWisEconomyState', region: 'asia-northeast3', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' },
+  { name: 'getWisEconomyState', region: 'us-central1', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' },
+  { name: 'getWisEconomyStateFast', region: 'us-central1', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' },
+]);
 for (const entry of manifest.files) {
   assert.match(entry.originalSha256, /^[a-f0-9]{64}$/);
   const file = path.join(gatewayDir, entry.file);
@@ -28,8 +32,8 @@ assert.match(source, /exports\.saveAssessmentProgress = require\('\.\/production
 assert.match(source, /exports\.executeLessonCorePointCommand = require\('\.\/productionGateway\/productionSource'\)\.executeLessonCorePointCommand/);
 assert.match(source, /exports\.getWisEconomyState = require\('\.\/studentWisQuery'\)\.getWisEconomyState/);
 const querySource = fs.readFileSync(path.resolve(__dirname, '../studentWisQuery.js'), 'utf8');
-assert.match(querySource, /region: 'asia-northeast3'/);
-assert.doesNotMatch(querySource, /region:\s*\[|createWisCallableExports/);
+assert.match(querySource, /region: \['asia-northeast3', 'us-central1'\]/);
+assert.doesNotMatch(querySource, /createWisCallableExports/);
 assert.doesNotMatch(source, /Object\.assign\(exports, require\('\.\/productionGateway/);
 process.env.GCLOUD_PROJECT = 'demo-westory-session-gateway-exports';
 process.env.GOOGLE_CLOUD_PROJECT = process.env.GCLOUD_PROJECT;
@@ -41,8 +45,9 @@ const canonicalFunctions = require('../productionGateway/productionSource');
 for (const name of [...manifest.rootExports, 'getAssessmentState', 'saveAssessmentProgress']) {
   assert.equal(typeof deployedFunctions[name], 'function', `${name} must be a deployed callable`);
   assert.equal(deployedFunctions[name], canonicalFunctions[name], `${name} must share the canonical command closure`);
-  assert.deepEqual(deployedFunctions[name].__endpoint?.region, ['asia-northeast3']);
+  assert.deepEqual(deployedFunctions[name].__endpoint?.region,
+    [name.endsWith('WisCommandFast') || name === 'getWisCommandStatusFast' ? 'us-central1' : 'asia-northeast3']);
   assert.equal(deployedFunctions[name].__endpoint?.platform, 'gcfv2');
   assert.ok(Object.hasOwn(deployedFunctions[name].__endpoint, 'callableTrigger'));
 }
-console.log(`PASS production gateway: ${manifest.files.length} source hashes, syntax, three canonical command/status exports and the isolated Seoul query export`);
+console.log(`PASS production gateway: ${manifest.files.length} source hashes, syntax, canonical and restricted fast command/status exports and isolated queries`);

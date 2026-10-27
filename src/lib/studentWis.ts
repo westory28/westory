@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { getPointsRevision } from "./appEvents";
 import { getWisHallOfFameState } from "./wisRankingPreview";
 import {
   assertWisOwner,
@@ -20,17 +21,18 @@ export const getStudentWisState = async (
   config: WisConfig,
   projection = "student-core",
   uid = auth.currentUser?.uid || "",
+  options: { cursor?: string; limit?: number; includeLedger?: boolean } = {},
 ): Promise<WisState> => {
   assertWisOwner(uid);
   const user = auth.currentUser!;
   const epoch = Number((await user.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== user || !Number.isFinite(epoch))
     throw new Error("로그인 상태가 바뀌었습니다.");
-  const key = `${uid}:${epoch}:${wisSemesterId(config)}:${projection}`;
+  const key = `${uid}:${epoch}:${wisSemesterId(config)}:${projection}:${JSON.stringify(options)}:${getPointsRevision()}`;
   const pending = flights.get(key);
   if (pending) return pending;
   const flight = (async () => {
-    const data = await queryWisState(config, "student", projection);
+    const data = await queryWisState(config, "student", projection, options);
     if (
       auth.currentUser !== user ||
       (data.account && data.account.studentUid !== uid)
@@ -46,8 +48,26 @@ export const getStudentWisState = async (
   }
 };
 export const getStudentPointWallet = async (config: WisConfig, uid: string) => {
-  const { account } = await getStudentWisState(config, "student-core", uid);
+  const { account } = await getStudentWisState(config, "student-core", uid, {
+    includeLedger: false,
+  });
   return account ? wisWallet(account) : null;
+};
+export const getStudentPointTransactionPage = async (
+  config: WisConfig,
+  uid: string,
+  cursor = "",
+  limit = 50,
+) => {
+  const state = await getStudentWisState(config, "student-core", uid, {
+    cursor,
+    limit,
+  });
+  return {
+    wallet: state.account ? wisWallet(state.account) : null,
+    transactions: state.ledger.map((entry) => wisTransaction(entry, uid)),
+    nextCursor: state.nextCursor,
+  };
 };
 export const listStudentPointTransactions = async (
   config: WisConfig,

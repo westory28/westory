@@ -29,6 +29,7 @@ import type { PointRankPolicy } from "../../types";
 import { resolveStudentProfileEmoji } from "../../lib/studentProfileEmoji";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import { auth } from "../../lib/firebase";
+import { subscribePointsForegroundRefresh } from "../../lib/appEvents";
 import { removeStorage } from "../../lib/safeStorage";
 import {
   clearDeviceSession,
@@ -188,6 +189,25 @@ const Header: React.FC<{
         : "student";
 
   const isTeacherPortal = portal === "teacher";
+  const foregroundScope = `${currentUser?.uid || ""}:${authGeneration}:${configReady}:${config?.year}:${config?.semester}:${portal}:${userData?.role || ""}`;
+  const foregroundScopeRef = useRef(foregroundScope);
+  foregroundScopeRef.current = foregroundScope;
+  useEffect(() => {
+    if (
+      !currentUser ||
+      !configReady ||
+      !config?.year ||
+      !config?.semester ||
+      isTeacherPortal ||
+      userData?.role !== "student"
+    )
+      return;
+    return subscribePointsForegroundRefresh(
+      () =>
+        foregroundScopeRef.current === foregroundScope &&
+        auth.currentUser === currentUser,
+    );
+  }, [currentUser, foregroundScope]);
   const useTeacherSidebar = teacherLayout && isTeacherPortal;
   const useStudentSidebar = studentLayout && !isTeacherPortal;
   const usePortalSidebar = useTeacherSidebar || useStudentSidebar;

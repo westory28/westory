@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../../contexts/AuthContext";
+import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import {
   commandYutRoom,
   getYutLobby,
@@ -691,6 +692,28 @@ export default function YutGame({
   }, [portrait, onMusicActiveChange]);
   const uid = local ? YUT_PREVIEW_UID : currentUser?.uid || "";
   const accountScope = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
+  const notifiedReward = useRef("");
+  useEffect(() => {
+    if (
+      local ||
+      portal !== "student" ||
+      room?.reward?.status !== "paid" ||
+      room.reward.uid !== uid
+    )
+      return;
+    const key = `${accountScope}:${room.id}:${room.reward.uid}`;
+    if (notifiedReward.current === key) return;
+    notifiedReward.current = key;
+    notifyPointsUpdated();
+  }, [
+    local,
+    portal,
+    accountScope,
+    room?.id,
+    room?.reward?.status,
+    room?.reward?.uid,
+    uid,
+  ]);
   useEffect(() => {
     expiryCheckRoom.current = "";
     membershipCheckRoom.current = null;

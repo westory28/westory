@@ -2527,6 +2527,8 @@ const normalizeQuery = (raw) => {
       "projection",
       "accountId",
       "ledgerEntryId",
+      "studentUid",
+      "includeLedger",
       "orderStatus",
       "cursor",
       "limit",
@@ -2558,6 +2560,11 @@ const normalizeQuery = (raw) => {
     (hallClassKey.indexOf("-") < 1 || hallClassKey.endsWith("-")))
     fail("invalid-argument", "hallClassKey is invalid.", "WIS_QUERY_INVALID");
   const cursor = value.cursor ? text(value.cursor, "cursor", 160) : "";
+  if (value.includeLedger !== undefined && typeof value.includeLedger !== "boolean")
+    fail("invalid-argument", "includeLedger is invalid.", "WIS_QUERY_INVALID");
+  const targetStudentUid = value.studentUid ? text(value.studentUid, "studentUid", 128) : "";
+  if (targetStudentUid && !/^[A-Za-z0-9_-]+$/.test(targetStudentUid))
+    fail("invalid-argument", "studentUid is invalid.", "WIS_QUERY_INVALID");
   if (cursor && !/^[A-Za-z0-9_-]+$/.test(cursor)) {
     fail("invalid-argument", "cursor is invalid.", "WIS_QUERY_INVALID");
   }
@@ -2570,6 +2577,8 @@ const normalizeQuery = (raw) => {
     hallGradeKey,
     hallClassKey,
     accountId: value.accountId ? text(value.accountId, "accountId", 80) : "",
+    studentUid: targetStudentUid,
+    includeLedger: value.includeLedger !== false,
     ledgerEntryId: value.ledgerEntryId
       ? text(value.ledgerEntryId, "ledgerEntryId", 80)
       : "",
@@ -2840,6 +2849,25 @@ const projectWisAccount = (account) =>
       }
     : null;
 
+// The account's recent array is a bounded cache, never the complete ledger.
+// Cursor ownership is checked before using its timestamp in a scoped query.
+const queryAccountLedgerPage = async (transaction, account, query) => {
+  const accountId = account.accountId;
+  if (query.cursor) {
+    const cursor = await transaction.get(ledgerPath(query.cursor));
+    if (!cursor.exists || cursor.data?.accountId !== accountId ||
+      cursor.data?.semesterId !== query.semesterId || cursor.data?.studentUid !== account.studentUid)
+      fail("invalid-argument", "Ledger cursor is invalid.", "WIS_QUERY_INVALID");
+  }
+  const page = await queryBoundedCreatedAtPage(transaction, WIS_LEDGER_COLLECTION, {
+    cursor: query.cursor, limit: query.limit,
+    filters: [{ field: "accountId", operator: "==", value: accountId }],
+  });
+  if (page.rows.some(row => row.accountId !== accountId || row.semesterId !== query.semesterId || row.studentUid !== account.studentUid))
+    fail("failed-precondition", "Ledger scope is invalid.", "WIS_LEDGER_SCOPE_MISMATCH");
+  return page;
+};
+
 const projectStudentLedgerEntry = (entry) => ({
   ledgerEntryId: String(entry?.ledgerEntryId || ""),
   type: String(entry?.type || ""),
@@ -2848,7 +2876,7 @@ const projectStudentLedgerEntry = (entry) => ({
   balanceAfter: Number(entry?.balanceAfter || 0),
   reason: String(entry?.reason || ""),
   createdAt: entry?.createdAt || null,
-  ...(["history_dictionary", "history_dictionary_reclaim", ...AUTOMATIC_REWARD_ACTIVITIES].includes(
+  ...(["history_dictionary", "history_dictionary_reclaim", "weplay_cost", "weplay_reward", "weplay_rank_reward", "lesson", "think_cloud", "attendance", ...AUTOMATIC_REWARD_ACTIVITIES].includes(
     entry?.activityType,
   )
     ? { activityType: entry.activityType }
@@ -3987,24 +4015,12 @@ const createWisQueryCore = ({
           });
         }
         if (query.projection === "student-core") {
-          const [recentLedger, ownRankingSnapshot] = await Promise.all([
-            Array.isArray(account?.recentLedgerEntries)
-              ? account.recentLedgerEntries
-              : transaction.query(WIS_LEDGER_COLLECTION, {
-                    field: "accountId",
-                    operator: "==",
-                    value: ownAccountId,
-                    orderBy: { field: "createdAt", direction: "desc" },
-                    limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
-                  }).then((rows) => rows.map((row) => row.data)),
+          const [page, ownRankingSnapshot] = await Promise.all([
+            query.includeLedger
+              ? queryAccountLedgerPage(transaction, account, query)
+              : { rows: [], nextCursor: "" },
             transaction.get(rankingPath(ownAccountId)),
           ]);
-          const ledgerRows = recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
-          const page = paginatePresortedRows(ledgerRows, {
-            cursor: query.cursor,
-            limit: query.limit,
-            id: (row) => row.ledgerEntryId,
-          });
           const ownRanking =
             ownRankingSnapshot.exists &&
             ownRankingSnapshot.data?.studentUid === uid &&
@@ -4166,7 +4182,8 @@ const createWisQueryCore = ({
       }
       if (query.projection === "account") {
         let ledgerEntry = null;
-        let targetAccountId = query.accountId;
+        let targetAccountId = query.accountId || (query.studentUid
+          ? accountIdFor(query.semesterId, query.studentUid) : "");
         if (query.ledgerEntryId) {
           const entrySnapshot = await transaction.get(
             ledgerPath(query.ledgerEntryId),
@@ -4187,30 +4204,19 @@ const createWisQueryCore = ({
           accountSnapshot.data?.semesterId === query.semesterId
             ? accountSnapshot.data
             : null;
-        const [recentLedger, projectedAccounts] = await Promise.all([
-          Array.isArray(rawAccount?.recentLedgerEntries)
-            ? rawAccount.recentLedgerEntries
-            : rawAccount
-              ? transaction.query(WIS_LEDGER_COLLECTION, {
-                  field: "accountId",
-                  operator: "==",
-                  value: targetAccountId,
-                  orderBy: { field: "createdAt", direction: "desc" },
-                  limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
-                }).then((rows) => rows.map((row) => row.data))
-              : [],
+        if (rawAccount && ledgerEntry && (ledgerEntry.accountId !== rawAccount.accountId ||
+          ledgerEntry.semesterId !== rawAccount.semesterId || ledgerEntry.studentUid !== rawAccount.studentUid))
+          fail("failed-precondition", "Ledger scope is invalid.", "WIS_LEDGER_SCOPE_MISMATCH");
+        const [page, projectedAccounts] = await Promise.all([
+          rawAccount && query.includeLedger
+            ? ledgerEntry
+              ? { rows: [ledgerEntry], nextCursor: "" }
+              : queryAccountLedgerPage(transaction, rawAccount, query)
+            : { rows: [], nextCursor: "" },
           rawAccount
             ? projectRoster(transaction, [rawAccount], query.semesterId)
             : [],
         ]);
-        const filteredLedger = ledgerEntry
-          ? [ledgerEntry]
-          : recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
-        const page = paginatePresortedRows(filteredLedger, {
-          cursor: query.cursor,
-          limit: query.limit,
-          id: (row) => row.ledgerEntryId,
-        });
         const accounts = projectedAccounts.map(projectWisAccount);
         return {
           ...base,

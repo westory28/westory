@@ -120,17 +120,24 @@ function harness(service = async () => state(), sharedStorage = new Map()) {
   const deps = {
     "./firebase": { auth },
     "./historyDictionarySession": {
-      getHistoryDictionaryCallable: async (name) => async (payload) => {
-        if (deployedContract && name === "executeCommand")
-          deployedContract.normalizeWisPayload(
-            payload.commandType,
-            payload.payload,
-          );
-        if (deployedContract && name === "getWisEconomyState")
-          deployedContract.normalizeQueryForTest(payload);
-        calls.push({ name, payload });
-        return { data: await service(name, payload) };
-      },
+      getHistoryDictionaryCallable:
+        async (transportName) => async (payload) => {
+          const name =
+            {
+              getWisEconomyStateFast: "getWisEconomyState",
+              executeWisCommandFast: "executeCommand",
+              getWisCommandStatusFast: "getCommandStatus",
+            }[transportName] || transportName;
+          if (deployedContract && name === "executeCommand")
+            deployedContract.normalizeWisPayload(
+              payload.commandType,
+              payload.payload,
+            );
+          if (deployedContract && name === "getWisEconomyState")
+            deployedContract.normalizeQueryForTest(payload);
+          calls.push({ name, transportName, payload });
+          return { data: await service(name, payload) };
+        },
     },
     "./semesterScope": { getYearSemester: (input) => input || config },
     "./semesterArchive": { isSemesterArchive: false },
@@ -201,6 +208,7 @@ function harness(service = async () => state(), sharedStorage = new Map()) {
     student: load("studentWis"),
     adapter: load("pointEconomyAdapter"),
     promotion: load("pointRankPromotion"),
+    events: load("appEvents"),
     reload: () => harness(service, storage),
   };
 }
@@ -218,12 +226,14 @@ await test("Own student reads deduplicate pending work and use canonical scope",
   const gate = deferred(),
     h = harness(async () => gate.promise);
   const one = h.student.getStudentPointWallet(config, "student-a"),
-    two = h.student.listStudentPointTransactions(config, "student-a");
+    two = h.student.getStudentPointWallet(config, "student-a");
   for (let i = 0; i < 20; i++) await Promise.resolve();
   assert.equal(h.calls.length, 1);
   assert.equal(h.calls[0].name, "getWisEconomyState");
   assert.equal(h.calls[0].payload.audience, "student");
   assert.equal(h.calls[0].payload.source, "CURRENT");
+  assert.equal(h.calls[0].transportName, "getWisEconomyStateFast");
+  assert.equal(h.calls[0].payload.includeLedger, false);
   gate.resolve(state());
   const [wallet] = await Promise.all([one, two]);
   assert.equal(wallet.balance, 140);
@@ -556,7 +566,7 @@ await test("Hall query converts ISO timestamps and keeps canonical masked identi
   const snapshot = {
     snapshotVersion: 7,
     updatedAt: "2026-10-08T04:00:00.000Z",
-    gradeTop3ByGrade: { 1: [{ uid: "wispublic_masked" }] },
+    gradeTop3ByGrade: { 1: [{ uid: "wispublic_masked", profileIcon: "😀" }] },
     classTop3ByClassKey: {},
     gradeLeaderboardByGrade: {},
     classLeaderboardByClassKey: {},
@@ -569,7 +579,7 @@ await test("Hall query converts ISO timestamps and keeps canonical masked identi
 });
 await test("Hall config command uses protected session and exact canonical revisions", async () => {
   const h = harness(async (name, payload) =>
-    name === "getWisEconomyState"
+    name === "getWisRankingPreview"
       ? state()
       : {
           status: "SUCCEEDED",
@@ -695,6 +705,179 @@ await test("Teacher grants and deductions preserve integer amount and target acc
       delta: 0.5,
       actor: { uid: "teacher" },
     }),
+  );
+});
+await test("One teacher adjustment reads only its target wallet and uses the fast command transport", async () => {
+  const h = harness(async (name) =>
+    name === "getWisEconomyState"
+      ? state()
+      : {
+          status: "SUCCEEDED",
+          result: {
+            accountId: account.accountId,
+            ledgerEntryId: "grant",
+            balance: 150,
+            accountRevision: 5,
+          },
+        },
+  );
+  h.auth.currentUser = makeUser("teacher");
+  const result = await h.adapter.adjustCanonicalPoints({
+    config,
+    uid: "student-a",
+    delta: 10,
+    sourceId: "grant-a",
+    sourceLabel: "수업 참여",
+    actor: { uid: "teacher" },
+  });
+  const reads = h.calls.filter((call) => call.name === "getWisEconomyState");
+  assert.equal(reads.length, 1);
+  assert.equal(reads[0].payload.studentUid, "student-a");
+  assert.equal(reads[0].payload.includeLedger, false);
+  assert.equal(reads[0].payload.projection, "account");
+  assert.equal(
+    h.calls.find((call) => call.name === "executeCommand").transportName,
+    "executeWisCommandFast",
+  );
+  assert.equal(result.accountRevision, 5);
+});
+await test("Reloading an unresolved grant keeps the original command and source despite a new UI intent ID", async () => {
+  let failed = true;
+  const service = async (name) => {
+    if (name === "getWisEconomyState") return state();
+    if (failed)
+      throw Object.assign(Error("lost"), { code: "functions/unavailable" });
+    return {
+      status: "SUCCEEDED",
+      result: {
+        accountId: account.accountId,
+        ledgerEntryId: "grant",
+        balance: 150,
+        accountRevision: 5,
+      },
+    };
+  };
+  const h = harness(service);
+  h.auth.currentUser = makeUser("teacher");
+  const input = {
+    config,
+    uid: "student-a",
+    delta: 10,
+    sourceId: "before-reload",
+    sourceLabel: "참여",
+    actor: { uid: "teacher" },
+  };
+  await assert.rejects(h.adapter.adjustCanonicalPoints(input));
+  const command = h.calls.find((call) => call.name === "executeCommand");
+  assert.equal(
+    h.calls.find((call) => call.name === "getCommandStatus").transportName,
+    "getWisCommandStatusFast",
+  );
+  const next = h.reload();
+  next.auth.currentUser = makeUser("teacher");
+  failed = false;
+  await next.adapter.adjustCanonicalPoints({
+    ...input,
+    sourceId: "after-reload",
+  });
+  assert.equal(
+    JSON.stringify(
+      next.calls.find((call) => call.name === "executeCommand").payload,
+    ),
+    JSON.stringify(command.payload),
+  );
+  assert.equal(
+    next.calls.filter((call) => call.name === "getWisEconomyState").length,
+    0,
+  );
+});
+await test("Student and teacher history pages preserve negative game entries and cursors", async () => {
+  const h = harness(async (_name, payload) =>
+    state({
+      ledger: [
+        {
+          ledgerEntryId: payload.cursor ? "older" : "newer",
+          activityType: "weplay_cost",
+          type: "DEDUCT",
+          delta: -30,
+          balanceAfter: 140,
+          reason: "충무공 도전 비용",
+        },
+      ],
+      nextCursor: payload.cursor ? "" : "next-page",
+    }),
+  );
+  const first = await h.student.getStudentPointTransactionPage(
+    config,
+    "student-a",
+  );
+  const second = await h.student.getStudentPointTransactionPage(
+    config,
+    "student-a",
+    first.nextCursor,
+  );
+  assert.equal(first.transactions[0].delta, -30);
+  assert.equal(first.transactions[0].type, "weplay_cost");
+  assert.equal(second.transactions[0].id, "older");
+  assert.equal(second.nextCursor, "");
+  assert.equal(h.calls[1].payload.cursor, "next-page");
+  h.auth.currentUser = makeUser("teacher");
+  const teacher = await h.adapter.getCanonicalPointTransactionPage(
+    config,
+    "student-a",
+    "next-page",
+  );
+  assert.equal(teacher.transactions[0].id, "older");
+  assert.equal(h.calls[2].payload.studentUid, "student-a");
+});
+await test("A committed points event does not reuse an older pending wallet read", async () => {
+  const before = deferred(),
+    after = deferred();
+  let request = 0;
+  const h = harness(async () =>
+    ++request === 1 ? before.promise : after.promise,
+  );
+  const one = h.student.getStudentPointWallet(config, "student-a");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  h.events.notifyPointsUpdated();
+  const two = h.student.getStudentPointWallet(config, "student-a");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  assert.equal(h.calls.length, 2);
+  after.resolve(state({ account: { ...account, balance: 180, revision: 5 } }));
+  assert.equal((await two).balance, 180);
+  before.resolve(state());
+  await one;
+  assert.equal(
+    h.client.latestWisWallet(
+      { uid: "student-a", balance: 180, revision: 5 },
+      { uid: "student-a", balance: 140, revision: 4 },
+    ).balance,
+    180,
+  );
+});
+await test("An invalidated rank read cannot replace the newer cached wallet", async () => {
+  const before = deferred();
+  let request = 0;
+  const h = harness(async () =>
+    ++request === 1
+      ? before.promise
+      : state({ account: { ...account, balance: 180, revision: 5 } }),
+  );
+  const one = h.promotion.loadStudentRankPromotionSnapshot(config, "student-a");
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  h.events.notifyPointsUpdated();
+  h.promotion.invalidateStudentRankPromotionSnapshotCache(config, "student-a");
+  assert.equal(
+    (await h.promotion.loadStudentRankPromotionSnapshot(config, "student-a"))
+      .wallet.balance,
+    180,
+  );
+  before.resolve(state());
+  await one;
+  assert.equal(
+    (await h.promotion.loadStudentRankPromotionSnapshot(config, "student-a"))
+      .wallet.balance,
+    180,
   );
 });
 console.log(
