@@ -16,6 +16,18 @@ Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
+const studentAvatarHandlers = require('./studentAvatar').createStudentAvatarHandlers({
+  db,
+  bucket: () => require('firebase-admin/storage').getStorage().bucket(),
+});
+const studentAvatarOptions = { region: 'us-central1', memory: '256MiB', timeoutSeconds: 60, maxInstances: 20, concurrency: 40 };
+exports.getStudentAvatar = onCall(studentAvatarOptions, studentAvatarHandlers.getStudentAvatar);
+exports.purchaseStudentAvatarItem = onCall(studentAvatarOptions, studentAvatarHandlers.purchaseStudentAvatarItem);
+exports.saveStudentAvatar = onCall(studentAvatarOptions, studentAvatarHandlers.saveStudentAvatar);
+exports.cleanupStudentAvatarOnUserDelete = require('firebase-functions/v2/firestore').onDocumentDeleted(
+  { document: 'users/{uid}', region: 'us-central1', retry: true, memory: '256MiB', maxInstances: 5 },
+  require('./studentAvatar').createStudentAvatarDeletionHandler({ db, bucket: () => require('firebase-admin/storage').getStorage().bucket() }),
+);
 exports.getQuizEditorCatalog = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   require('./quizEditorCatalog').createQuizEditorCatalogHandler({ db }),

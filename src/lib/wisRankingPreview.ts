@@ -1,4 +1,6 @@
 import { auth } from "./firebase";
+import { getPointsRevision } from "./appEvents";
+import { getAvatarRevision } from "../features/avatar/events";
 import { isSemesterArchive } from "./semesterArchive";
 import { resolvePointRankPolicy } from "./pointRanks";
 import {
@@ -37,7 +39,7 @@ const getWisRankingState = async (
   const selectionKey = selection
     ? JSON.stringify([selection.view, selection.gradeKey, selection.classKey])
     : "";
-  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}:${selectionKey}`;
+  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}:${selectionKey}:${getPointsRevision()}:${getAvatarRevision()}`;
   let pending = flights.get(user);
   if (!pending) {
     pending = new Map();

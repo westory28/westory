@@ -64,7 +64,12 @@ const LazyChart = lazyWithRetry(
   "student-my-page-chart",
 );
 
-type MainMenu = "profile" | "score" | "wrong_note";
+const StudentAvatarStudio = lazyWithRetry(
+  () => import("../../features/avatar/AvatarStudio"),
+  "student-avatar-studio",
+);
+
+type MainMenu = "profile" | "score" | "wrong_note" | "avatar";
 
 interface UserProfileDoc {
   name?: string;
@@ -340,6 +345,7 @@ const MyPage: React.FC = () => {
   useEffect(() => {
     if (
       requestedMenu === "profile" ||
+      requestedMenu === "avatar" ||
       requestedMenu === "score" ||
       requestedMenu === "wrong_note"
     ) {
@@ -912,6 +918,7 @@ const MyPage: React.FC = () => {
 
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
+    { key: "avatar", title: "아바타 꾸미기", icon: "fa-shirt" },
     { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "응시 기록", icon: "fa-book-open" },
   ];
@@ -1083,6 +1090,15 @@ const MyPage: React.FC = () => {
 
         <section className="teacher-sub-content">
           <div className="space-y-8">
+            {menu === "avatar" && (
+              <React.Suspense
+                fallback={
+                  <div role="status">아바타 꾸미기를 불러오는 중입니다.</div>
+                }
+              >
+                <StudentAvatarStudio />
+              </React.Suspense>
+            )}
             {menu === "profile" && (
               <div className="student-my-page__panel">
                 <h2 className="sr-only">나의 기본 정보</h2>

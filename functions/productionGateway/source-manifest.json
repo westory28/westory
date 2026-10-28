@@ -436,7 +436,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "27601b29e868084186443dda9f26e5e4c6440ac00806133240988ce2d175b2b6",
+      "sha256": "1631f96b103377e677cf86ee6da0f4d435c25d92eaeec252d945b270bd96d6f2",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -455,7 +455,8 @@
         "2026-10-20: Add an opt-in hall-view projection that verifies only the selected grade or class, retains empty selector maps for all permitted groups, enforces canonical student scope, and preserves full/preview/archive contracts without background queries.",
         "2026-10-20: Page selected hall groups in ordered batches of twenty with fresh cutoff/zero-tail bounds; share student grade/class candidate authority and current moves. Cache only two-field teacher selector directories for thirty seconds with four-scope pending deduplication and failure eviction; preserve missing-group fallback via real bounded queries.",
         "2026-10-20: Start selected paged-hall account and safe index roster-hint reads together; keep canonical slot/enrollment/class authority, stale-hint fallback, account field masks and unselected-candidate bounds unchanged.",
-        "2026-10-27: Page the complete immutable ledger with scope/owner-checked cursors, preserve game/learning activities, and allow direct lightweight account reads."
+        "2026-10-27: Page the complete immutable ledger with scope/owner-checked cursors, preserve game/learning activities, and allow direct lightweight account reads.",
+        "2026-10-27: Project server-validated avatar summaries from existing permitted users profile batches into public ranking preview/full hall; preserve public IDs, profile read bounds, wallet arithmetic and all authorization."
       ]
     },
     {

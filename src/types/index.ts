@@ -1,3 +1,5 @@
+import type { AvatarPublic } from "../features/avatar/catalog";
+
 export interface SystemConfig {
   year: string;
   semester: string;
@@ -574,6 +576,7 @@ export interface WisHallOfFameEntry {
   cumulativeEarned: number;
   profileIcon: string;
   profileEmojiId?: string;
+  avatar?: AvatarPublic;
 }
 
 export interface WisHallOfFameLeaderboardPolicy {

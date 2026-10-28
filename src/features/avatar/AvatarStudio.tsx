@@ -1,0 +1,557 @@
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { useAppToast } from "../../components/common/AppToastProvider";
+import { getStudentPointWallet } from "../../lib/studentWis";
+import WisIcon from "../../components/common/WisIcon";
+import {
+  AVATAR_ITEMS,
+  AVATAR_SLOTS,
+  defaultAvatarLook,
+  itemForLook,
+  ownsAvatarItem,
+  selectAvatarItem,
+  unownedAvatarItems,
+  type AvatarItem,
+  type AvatarLook,
+  type AvatarSlot,
+  type AvatarState,
+} from "./catalog";
+import {
+  avatarErrorMessage,
+  getStudentAvatar,
+  makeAvatarThumbnail,
+  purchaseAvatarItem,
+  saveStudentAvatar,
+  type AvatarPurchaseResult,
+} from "./service";
+import AvatarStage from "./AvatarStage";
+import "./avatarStudio.css";
+
+export interface AvatarStudioAdapter {
+  load(): Promise<{ avatar: AvatarState; balance: number | null }>;
+  purchase(itemId: string): Promise<AvatarPurchaseResult>;
+  save(
+    look: AvatarLook,
+    revision: number,
+    thumbnail: string,
+  ): Promise<AvatarState>;
+}
+type StageControls = {
+  capture(): string;
+  resetView(): void;
+  focusFace(): void;
+  rotate(angle: number): void;
+  animateOnce?(duration?: number): void;
+  stop?(): void;
+};
+
+export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
+  const { showToast } = useAppToast();
+  const [saved, setSaved] = useState<AvatarState | null>(null);
+  const [look, setLook] = useState<AvatarLook>(defaultAvatarLook());
+  const [balance, setBalance] = useState<number | null>(null);
+  const [slot, setSlot] = useState<AvatarSlot>("top");
+  const [filter, setFilter] = useState<"all" | "owned" | "premium">("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<"buy" | "save" | null>(null);
+  const [ready, setReady] = useState(false);
+  const [stageError, setStageError] = useState("");
+  const [stageKey, setStageKey] = useState(0);
+  const [purchase, setPurchase] = useState<AvatarItem | null>(null);
+  const [confirmError, setConfirmError] = useState("");
+  const stage = useRef<StageControls | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const generation = useRef(0);
+  const busyRef = useRef(false);
+  const load = useCallback(async () => {
+    const current = ++generation.current;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await adapter.load();
+      if (current !== generation.current) return;
+      setSaved(data.avatar);
+      setLook(data.avatar.look);
+      setBalance(data.balance);
+    } catch (failure) {
+      if (current === generation.current) setError(avatarErrorMessage(failure));
+    } finally {
+      if (current === generation.current) setLoading(false);
+    }
+  }, [adapter]);
+  useEffect(() => {
+    void load();
+    return () => {
+      generation.current++;
+      stage.current = null;
+    };
+  }, [load]);
+  useEffect(() => {
+    if (purchase && !dialog.current?.open) dialog.current?.showModal();
+    else if (!purchase && dialog.current?.open) dialog.current?.close();
+  }, [purchase]);
+  useEffect(() => {
+    if (saved && JSON.stringify(saved.look) !== JSON.stringify(look)) {
+      const prevent = (event: BeforeUnloadEvent) => {
+        event.preventDefault();
+        event.returnValue = "";
+      };
+      window.addEventListener("beforeunload", prevent);
+      return () => window.removeEventListener("beforeunload", prevent);
+    }
+  }, [saved, look]);
+  const onReady = useCallback((controller: StageControls) => {
+    stage.current = controller;
+    setReady(true);
+    setStageError("");
+  }, []);
+  const onStageError = useCallback(() => {
+    stage.current = null;
+    setReady(false);
+    setStageError("3D를 불러오지 못했습니다. 다시 시도해 주세요.");
+  }, []);
+  const onLoadingChange = useCallback((value: boolean) => {
+    if (value) {
+      stage.current = null;
+      setReady(false);
+    }
+  }, []);
+  const owned = saved?.ownedItemIds || [];
+  const selected = itemForLook(look, slot);
+  const items = AVATAR_ITEMS.filter(
+    (item) =>
+      item.slot === slot &&
+      item.characters.includes(look.character) &&
+      (filter !== "owned" || ownsAvatarItem(item, owned)) &&
+      (filter !== "premium" || item.price > 0),
+  );
+  const missing = unownedAvatarItems(look, owned);
+  const dirty = saved && JSON.stringify(saved.look) !== JSON.stringify(look);
+  const choose = (item: AvatarItem) => {
+    if (busyRef.current) return;
+    if (item.slot === "character" && item.value !== look.character) {
+      stage.current = null;
+      setReady(false);
+    }
+    setLook((previous) => selectAvatarItem(previous, item));
+  };
+  const buy = async () => {
+    if (!purchase || busyRef.current) return;
+    busyRef.current = true;
+    setBusy("buy");
+    setConfirmError("");
+    const current = generation.current;
+    try {
+      const result = await adapter.purchase(purchase.id);
+      if (current !== generation.current) return;
+      setSaved(result.avatar);
+      setBalance(result.wallet.balance);
+      setPurchase(null);
+      showToast({
+        title: result.alreadyOwned
+          ? "이미 보유한 아이템입니다"
+          : "구매했습니다",
+        message: result.charged
+          ? `${result.charged.toLocaleString()} 위스를 사용했습니다.`
+          : undefined,
+        tone: "success",
+      });
+    } catch (failure) {
+      if (current === generation.current)
+        setConfirmError(avatarErrorMessage(failure));
+    } finally {
+      busyRef.current = false;
+      if (current === generation.current) setBusy(null);
+    }
+  };
+  const save = async () => {
+    if (!saved || !stage.current || busyRef.current || missing.length) return;
+    busyRef.current = true;
+    setBusy("save");
+    setError("");
+    const current = generation.current;
+    try {
+      stage.current.stop?.();
+      stage.current.resetView();
+      // Let the on-demand renderer draw the reset camera before capturing.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      const thumbnail = await makeAvatarThumbnail(stage.current.capture());
+      const result = await adapter.save(look, saved.revision, thumbnail);
+      if (current !== generation.current) return;
+      setSaved(result);
+      setLook(result.look);
+      showToast({ title: "아바타를 저장했습니다", tone: "success" });
+    } catch (failure) {
+      if (current === generation.current) setError(avatarErrorMessage(failure));
+    } finally {
+      busyRef.current = false;
+      if (current === generation.current) setBusy(null);
+    }
+  };
+  if (loading)
+    return (
+      <div className="avatar-studio-status" role="status">
+        아바타와 위스 지갑을 불러오는 중입니다.
+      </div>
+    );
+  if (!saved)
+    return (
+      <div className="avatar-studio-status" role="alert">
+        <p>{error}</p>
+        <button type="button" onClick={() => void load()}>
+          다시 불러오기
+        </button>
+      </div>
+    );
+
+  return (
+    <section
+      className="avatar-studio"
+      aria-label="아바타 꾸미기"
+      aria-busy={Boolean(busy)}
+    >
+      <div className="avatar-studio-heading">
+        <h2>아바타 꾸미기</h2>
+        <span className="avatar-studio-wallet">
+          내 지갑{" "}
+          <strong>
+            {balance === null ? "확인 필요" : balance.toLocaleString("ko-KR")}
+          </strong>
+          <WisIcon />
+        </span>
+      </div>
+      <div className="avatar-studio-layout">
+        <div className="avatar-studio-preview">
+          <div
+            className="avatar-studio-stage"
+            aria-label="선택한 아바타 미리보기"
+          >
+            <AvatarStage
+              key={stageKey}
+              look={look}
+              active
+              onReady={onReady}
+              onError={onStageError}
+              onLoadingChange={onLoadingChange}
+            />
+            {stageError && (
+              <div className="avatar-studio-stage-error" role="alert">
+                <p>{stageError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStageError("");
+                    setReady(false);
+                    setStageKey((key) => key + 1);
+                  }}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="avatar-studio-camera" aria-label="아바타 보기 조절">
+            <button
+              type="button"
+              disabled={!ready || Boolean(busy)}
+              onClick={() => stage.current?.rotate(-0.4)}
+              aria-label="왼쪽으로 돌리기"
+            >
+              <i className="fas fa-rotate-left" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={!ready || Boolean(busy)}
+              onClick={() => stage.current?.resetView()}
+            >
+              전체 보기
+            </button>
+            <button
+              type="button"
+              disabled={!ready || Boolean(busy)}
+              onClick={() => stage.current?.focusFace()}
+            >
+              얼굴 보기
+            </button>
+            <button
+              type="button"
+              disabled={!ready || Boolean(busy)}
+              onClick={() => stage.current?.rotate(0.4)}
+              aria-label="오른쪽으로 돌리기"
+            >
+              <i className="fas fa-rotate-right" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="avatar-studio-save">
+            <button
+              type="button"
+              disabled={Boolean(busy) || !dirty}
+              onClick={() => setLook(saved.look)}
+            >
+              저장한 모습
+            </button>
+            <button
+              type="button"
+              className="avatar-primary"
+              disabled={
+                !ready ||
+                Boolean(busy) ||
+                missing.length > 0 ||
+                (!dirty && Boolean(saved.thumbnailUrl))
+              }
+              onClick={() => void save()}
+            >
+              {busy === "save" ? "저장 중…" : "아바타 저장"}
+            </button>
+          </div>
+          {missing.length > 0 && (
+            <p className="avatar-studio-pending" role="status">
+              미보유 아이템 {missing.length}개 · 구매 후 저장할 수 있습니다.
+            </p>
+          )}
+          {error && (
+            <div className="avatar-studio-error" role="alert">
+              <p>{error}</p>
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => void load()}
+              >
+                새로고침
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="avatar-studio-picker">
+          <div className="avatar-studio-categories" aria-label="꾸미기 종류">
+            {AVATAR_SLOTS.map((category) => (
+              <button
+                type="button"
+                key={category.key}
+                aria-pressed={slot === category.key}
+                onClick={() => setSlot(category.key)}
+              >
+                <i className={`fas ${category.icon}`} aria-hidden="true" />
+                <span>{category.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="avatar-studio-filter" aria-label="아이템 필터">
+            {(
+              [
+                ["all", "전체"],
+                ["owned", "보유"],
+                ["premium", "프리미엄"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                type="button"
+                key={key}
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="avatar-studio-items"
+            aria-label={
+              AVATAR_SLOTS.find((category) => category.key === slot)?.label
+            }
+          >
+            {items.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`avatar-studio-item ${item.price ? "is-premium" : "is-basic"}`}
+                aria-pressed={selected?.id === item.id}
+                disabled={Boolean(busy)}
+                onClick={() => choose(item)}
+              >
+                <span
+                  className={`avatar-studio-item-art${item.slot === "character" ? " has-preview" : ""}`}
+                  aria-hidden="true"
+                >
+                  {item.color ? (
+                    <span
+                      className="avatar-studio-swatch"
+                      style={{ backgroundColor: item.color }}
+                    />
+                  ) : (
+                    <>
+                      <i
+                        className={`fas ${AVATAR_SLOTS.find((category) => category.key === slot)?.icon || "fa-star"}`}
+                      />
+                      {item.slot === "character" && (
+                        <img
+                          src={`${import.meta.env.BASE_URL}avatar/v1/${item.value}-preview.webp`}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          width="128"
+                          height="128"
+                          onLoad={(event) => {
+                            event.currentTarget.style.opacity = "1";
+                          }}
+                          onError={(event) => {
+                            event.currentTarget.style.opacity = "0";
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                </span>
+                <span className="avatar-studio-item-name">{item.label}</span>
+                <span className="avatar-studio-item-price">
+                  {item.price === 0 ? (
+                    "기본 · 무료"
+                  ) : ownsAvatarItem(item, owned) ? (
+                    "프리미엄 · 보유"
+                  ) : (
+                    <>
+                      {item.price.toLocaleString()} <WisIcon />
+                    </>
+                  )}
+                </span>
+                {selected?.id === item.id && (
+                  <i
+                    className="fas fa-check avatar-studio-item-check"
+                    aria-label="선택됨"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+          {!items.length && (
+            <p className="avatar-studio-empty">
+              이 조건에 맞는 아이템이 없습니다.
+            </p>
+          )}
+          {selected && (
+            <div className="avatar-studio-selected">
+              <div>
+                <strong>{selected.label}</strong>
+                <span>{selected.price ? "프리미엄" : "기본 무료"}</span>
+              </div>
+              {!ownsAvatarItem(selected, owned) ? (
+                <button
+                  type="button"
+                  className="avatar-primary"
+                  disabled={Boolean(busy) || balance === null}
+                  onClick={() => {
+                    setConfirmError("");
+                    setPurchase(selected);
+                  }}
+                >
+                  {selected.price.toLocaleString()} 위스로 구매
+                </button>
+              ) : (
+                <span className="avatar-studio-owned">사용 가능</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <dialog
+        ref={dialog}
+        className="avatar-purchase-dialog"
+        aria-labelledby="avatar-purchase-title"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+          else setPurchase(null);
+        }}
+        onClose={() => {
+          if (!busy) setPurchase(null);
+        }}
+      >
+        <h3 id="avatar-purchase-title">아이템 구매</h3>
+        {purchase && (
+          <>
+            <p className="avatar-purchase-name">{purchase.label}</p>
+            <dl>
+              <div>
+                <dt>가격</dt>
+                <dd>{purchase.price.toLocaleString()} 위스</dd>
+              </div>
+              <div>
+                <dt>구매 후 잔액</dt>
+                <dd>
+                  {balance === null
+                    ? "확인 필요"
+                    : `${Math.max(0, balance - purchase.price).toLocaleString()} 위스`}
+                </dd>
+              </div>
+            </dl>
+            <p>구매해도 누적 위스와 등급은 유지됩니다.</p>
+            {balance !== null && balance < purchase.price && (
+              <p role="alert">위스가 부족합니다.</p>
+            )}
+          </>
+        )}
+        {confirmError && (
+          <p role="alert" className="avatar-studio-error">
+            {confirmError}
+          </p>
+        )}
+        <div className="avatar-purchase-actions">
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => setPurchase(null)}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            className="avatar-primary"
+            disabled={
+              Boolean(busy) ||
+              balance === null ||
+              !purchase ||
+              balance < purchase.price
+            }
+            onClick={() => void buy()}
+          >
+            {busy === "buy" ? "구매 중…" : "구매하기"}
+          </button>
+        </div>
+      </dialog>
+    </section>
+  );
+}
+
+export default function StudentAvatarStudio() {
+  const { user, config, authGeneration } = useAuth();
+  const adapter = useMemo<AvatarStudioAdapter>(
+    () => ({
+      load: async () => {
+        if (!user || !config?.year || !config.semester)
+          throw new Error("로그인과 학기를 확인해 주세요.");
+        const [avatar, wallet] = await Promise.all([
+          getStudentAvatar(),
+          getStudentPointWallet(config, user.uid).catch(() => null),
+        ]);
+        return { avatar, balance: wallet?.balance ?? null };
+      },
+      purchase: (itemId) => purchaseAvatarItem(config!, itemId),
+      save: saveStudentAvatar,
+    }),
+    [user?.uid, config?.year, config?.semester, authGeneration],
+  );
+  return (
+    <AvatarStudio
+      key={`${user?.uid}:${authGeneration}:${config?.year}:${config?.semester}`}
+      adapter={adapter}
+    />
+  );
+}

@@ -209,8 +209,16 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 ): Promise<HttpsCallable<RequestData, ResponseData>> => {
   assertArchiveWritable();
   const [functions, { httpsCallable }] = await Promise.all([
-    ["getWisRankingPreview", "commandYutRoomFast", "getWisEconomyStateFast",
-      "executeWisCommandFast", "getWisCommandStatusFast"].includes(name)
+    [
+      "getWisRankingPreview",
+      "commandYutRoomFast",
+      "getWisEconomyStateFast",
+      "executeWisCommandFast",
+      "getWisCommandStatusFast",
+      "getStudentAvatar",
+      "purchaseStudentAvatarItem",
+      "saveStudentAvatar",
+    ].includes(name)
       ? (wisRankingFunctionsPromise ??= import("firebase/functions")
           .then(({ connectFunctionsEmulator, getFunctions }) => {
             // Latency-sensitive wallet and game operations run beside nam5.

@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { resolveStudentProfileEmoji } = require("../studentProfileEmojiPolicy");
+const { sanitizePublicAvatar } = require("../studentAvatarCatalog");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
@@ -3117,8 +3118,11 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
     `years/${year}/semesters/${semester}/point_policies/current`,
     ...selected.map((account) => `users/${account.studentUid}`),
   ]);
+  const avatars = new Map();
   const icons = new Map(selected.map((account, index) => {
     const profile = profiles[index]?.exists ? profiles[index].data : account;
+    const avatar = profiles[index]?.exists ? sanitizePublicAvatar(profile.avatar) : null;
+    if (avatar) avatars.set(hallPublicId(scope, account.studentUid), avatar);
     const resolved = resolveStudentProfileEmoji({
       profileEmojiId: profile?.profileEmojiId,
       profileIcon: profile?.profileIcon,
@@ -3127,7 +3131,10 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
     });
     return [hallPublicId(scope, account.studentUid), resolved.profileIcon];
   }));
-  for (const entry of entries) entry.profileIcon = icons.get(entry.uid) || "😀";
+  for (const entry of entries) {
+    entry.profileIcon = icons.get(entry.uid) || "😀";
+    if (avatars.has(entry.uid)) entry.avatar = avatars.get(entry.uid);
+  }
   const snapshotBody = { gradeLeaderboardByGrade: hall.gradeLeaderboardByGrade, classLeaderboardByClassKey: hall.classLeaderboardByClassKey };
   return { ...hall, snapshotKey: `w7_${sha256(canonicalJson(snapshotBody)).slice(0, 32)}` };
 };
@@ -3251,14 +3258,20 @@ const buildRankingPreview = async ({ transaction, cached, scope, config, student
   const displayed = selected.filter((account) => entryIds.has(hallPublicId(scope, account.studentUid)));
   const profiles = includeProfiles
     ? await transaction.getAll(displayed.map((account) => `users/${account.studentUid}`)) : [];
+  const avatars = new Map();
   const icons = new Map(displayed.map((account, index) => {
     const profile = profiles[index]?.exists ? profiles[index].data : account;
+    const avatar = profiles[index]?.exists ? sanitizePublicAvatar(profile.avatar) : null;
+    if (avatar) avatars.set(hallPublicId(scope, account.studentUid), avatar);
     return [hallPublicId(scope, account.studentUid), resolveStudentProfileEmoji({
       profileEmojiId: profile?.profileEmojiId, profileIcon: profile?.profileIcon,
       rankEarnedTotal: account.rankEarnedTotal, rankPolicy,
     }).profileIcon];
   }));
-  entries.forEach((entry) => { entry.profileIcon = icons.get(entry.uid) || "😀"; });
+  entries.forEach((entry) => {
+    entry.profileIcon = icons.get(entry.uid) || "😀";
+    if (avatars.has(entry.uid)) entry.avatar = avatars.get(entry.uid);
+  });
   const gradeLeaderboardByGrade = { [primaryGradeKey]: entries };
   return { ...hall, primaryGradeKey, gradeLeaderboardByGrade,
     gradeTop3ByGrade: { [primaryGradeKey]: entries.filter((entry) => entry.cumulativeEarned > 0 && entry.rank <= 3) },
