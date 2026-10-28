@@ -58,7 +58,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-let analytics: Analytics | null = null;
+// Keep the existing export without starting nonessential usage analytics.
+const analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
 let functionsPromise: Promise<Functions> | null = null;
@@ -155,23 +156,6 @@ try {
 } catch (e) {
   console.warn("Analytics not supported:", e);
 }
-if (
-  !isSemesterArchive &&
-  typeof window !== "undefined" &&
-  firebaseConfig.measurementId
-) {
-  window.setTimeout(() => {
-    void import("firebase/analytics")
-      .then(async ({ getAnalytics, isSupported }) => {
-        if (!(await isSupported())) return;
-        analytics = getAnalytics(app);
-      })
-      .catch((e) => {
-        console.warn("Analytics not supported:", e);
-      });
-  }, 0);
-}
-
 const getFirebaseFunctions = () => {
   assertArchiveWritable();
   if (!functionsPromise) {

@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-10-28",
+  "source": "Public site_settings policy documents",
+  "documents": [
+    {
+      "name": "terms",
+      "updateTime": "2026-02-16T14:21:14.919503Z",
+      "sha256": "4f1dcc12fd8572f304d33f0d8f0e4f81039bf2d6f87366d54b89bdcf5e34d49e"
+    },
+    {
+      "name": "privacy",
+      "updateTime": "2026-07-07T09:36:44.270307Z",
+      "sha256": "ec57f888fa35b9d363ad0c04e9adf2ee60a2a73f3052966a5bf80532e9761ca4"
+    }
+  ]
+}

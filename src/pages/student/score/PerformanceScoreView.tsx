@@ -331,7 +331,7 @@ const getPerformanceScoreObjectionErrorMessage = (error: unknown) => {
     return "이의 제기 요청 권한이 거부되었습니다. 로그인 학생 정보를 다시 확인해 주세요.";
   }
   if (code === "failed-precondition") {
-    return "이미 확인 서명이 완료된 점수는 이의 제기 요청을 보낼 수 없습니다.";
+    return "확인 서명 후 온라인 추가 제출은 담당 교사에게 재확인을 요청해 주세요. 서명은 이의제기·정정 요청 권리를 제한하지 않습니다.";
   }
   if (code === "unavailable" || code === "deadline-exceeded") {
     return "이의 제기 알림 서버 연결이 불안정합니다. 잠시 후 다시 시도해 주세요.";
@@ -452,7 +452,7 @@ const PERFORMANCE_SCORE_COPY: ScoreConfirmationViewCopy = {
   objectionResultTitle: "수행평가 이의 결과",
   signatureTitle: "수행평가 점수 확인 및 서명",
   signatureAgreementText:
-    "위 수행평가 점수와 평가 근거를 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
+    "위 수행평가 점수와 평가 근거를 열람·확인한 사실을 기록합니다. 이 확인은 이의제기나 정정 요청 권리를 제한하지 않습니다.",
   signatureReviewDescription:
     "아래 영역별 점수와 동의, 서명 작성 여부를 한 번 더 확인해 주세요. 제출하면 현재 점수 확인 서명이 담당 교사에게 전달됩니다.",
 };
@@ -483,7 +483,7 @@ const WRITTEN_EXAM_SCORE_COPY: ScoreConfirmationViewCopy = {
   objectionResultTitle: "정기시험 이의 결과",
   signatureTitle: "정기시험 점수 확인 및 서명",
   signatureAgreementText:
-    "위 정기시험 점수와 피드백을 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
+    "위 정기시험 점수와 피드백을 열람·확인한 사실을 기록합니다. 이 확인은 이의제기나 정정 요청 권리를 제한하지 않습니다.",
   signatureReviewDescription:
     "아래 점수와 동의, 서명 작성 여부를 한 번 더 확인해 주세요. 제출하면 현재 점수 확인 서명이 담당 교사에게 전달됩니다.",
 };
@@ -1385,9 +1385,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     }
     if (!canRequestObjection) {
       showToast({
-        title: "이의 제기 불가",
+        title: "이의 신청 안내",
         message: allScoresConfirmed
-          ? "이미 점수 확인과 서명이 완료되었습니다. 제출 후에는 담당 교사의 반려 없이 이의를 제기할 수 없습니다."
+          ? "확인 서명 후 온라인 추가 제출은 담당 교사에게 재확인을 요청해 주세요. 서명은 이의제기·정정 요청 권리를 제한하지 않습니다."
           : `이의 제기할 ${resolvedCopy.scoreLabel} 점수가 없습니다.`,
         tone: "warning",
       });
@@ -1581,7 +1581,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       return;
     }
     if (!signatureConsent) {
-      setSignatureError("점수 확인과 이의 없음 안내에 동의해 주세요.");
+      setSignatureError("점수 열람·확인 사실을 기록하는 안내를 확인해 주세요.");
       return;
     }
     const signatureImage = getSignatureImageDataUrl();
@@ -2517,6 +2517,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   점수 확인 완료 {confirmedRecordCount}/
                   {registeredRecords.length}
                 </button>
+                <a
+                  href="mailto:westoria28@gmail.com"
+                  className="inline-flex min-h-11 items-center justify-center px-2 text-sm font-bold text-blue-700 underline underline-offset-4 hover:text-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                >
+                  정정·이의 문의
+                </a>
               </>
             ) : (
               <>
@@ -3446,8 +3452,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   </div>
 
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-7 text-rose-700">
-                    정말로 성적을 확정짓겠습니까? 제출 후에는 담당 교사에게 점수
-                    확인 및 이의 없음 서명으로 전달됩니다.
+                    현재 점수의 열람·확인 기록을 담당 교사에게 제출합니다.
+                    서명은 이의제기나 정정 요청 권리를 제한하지 않습니다.
                   </div>
                 </div>
               )}
