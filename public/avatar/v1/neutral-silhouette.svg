@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 640" fill="#000">
+  <!-- Match the avatars' large head and short body without hair or garments. -->
+  <ellipse cx="192" cy="555" rx="135" ry="25" />
+  <rect x="148" y="405" width="36" height="140" rx="18" />
+  <rect x="200" y="405" width="36" height="140" rx="18" />
+  <path d="M150 297 Q131 336 119 400 M234 297 Q253 336 265 400"
+    fill="none" stroke="#000" stroke-width="32" stroke-linecap="round" />
+  <rect x="144" y="272" width="96" height="164" rx="30" />
+  <rect x="172" y="245" width="40" height="48" rx="14" />
+  <circle cx="192" cy="170" r="92" />
+</svg>

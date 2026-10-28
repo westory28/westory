@@ -192,9 +192,11 @@ const server = http.createServer(async (req, res) => {
       data = await fs.readFile(target);
       type = url.pathname.endsWith(".webp")
         ? "image/webp"
-        : url.pathname.endsWith(".png")
-          ? "image/png"
-          : "model/gltf-binary";
+        : url.pathname.endsWith(".svg")
+          ? "image/svg+xml"
+          : url.pathname.endsWith(".png")
+            ? "image/png"
+            : "model/gltf-binary";
     } else if (url.pathname === "/") {
       data = html;
       type = "text/html";

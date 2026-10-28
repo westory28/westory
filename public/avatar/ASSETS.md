@@ -26,8 +26,10 @@ bone transforms. The original preview files remain available for older clients.
 The v2 previews are transparent 384 × 640 WebP images, captured through
 `createAvatarStage` with `defaultAvatarLook(character)` and pixel ratio 1, then
 encoded at quality 90. Versioned filenames avoid stale immutable asset caches.
-The unchosen avatar masks the actual girl preview's alpha to preserve its
-character silhouette, with a question mark over it; it assigns no character or
-gender to the student. New saved thumbnails preserve the renderer's alpha so
+The unchosen avatar uses the authored `v1/neutral-silhouette.svg` alpha mask:
+the same large-head/short-body proportions, a round hairless head, a straight
+featureless torso, and relaxed limbs without clothing or anatomical details.
+It retains the pedestal and centered question mark, and assigns no character
+or gender to the student. New saved thumbnails preserve the renderer's alpha so
 the character stands naturally against the hall of fame background.
 Runtime choices do not request image generation or model generation services.

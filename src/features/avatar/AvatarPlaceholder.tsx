@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import "./avatarPlaceholder.css";
 
 const placeholderStyle = {
-  "--avatar-placeholder-mask": `url("${import.meta.env.BASE_URL}avatar/v1/girl-preview-v2.webp")`,
+  "--avatar-placeholder-mask": `url("${import.meta.env.BASE_URL}avatar/v1/neutral-silhouette.svg")`,
 } as CSSProperties;
 
 export default function AvatarPlaceholder() {
