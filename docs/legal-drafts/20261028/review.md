@@ -2,7 +2,7 @@
 
 ## 현재 상태
 
-`terms.html`, `privacy.html`은 **미공개 검토안**이다. `site_settings/terms`, `site_settings/privacy`, 가입 동의 항목을 아직 변경하지 않았으며 개정 완료 알림도 보내지 않았다. 시행일은 게시 때 확정한다. 초안을 `public/`이나 기본 정책으로 연결하지 않는다.
+이 폴더의 `terms.html`, `privacy.html`은 당시 **미공개 검토안의 보관본**이다. 최종 문서는 `src/content/legal/terms.html`, `src/content/legal/privacy.html`이며, 공개·운영 반영 기록은 `docs/reviews/legal-policy-publication-20261028.md`를 따른다. 아래의 게시 전 확인사항과 보호조치 검증은 작성 당시의 조사 기록이며, 최종 판단·해결 여부는 새 게시 기록에 정리한다. 초안을 `public/`이나 기본 정책으로 연결하지 않는다.
 
 `terms.previous.html`, `privacy.previous.html`은 이날 공개 문서에서 읽은 이전 전문이다. 원본 수정 시각과 SHA-256은 `previous-manifest.json`에 남겼다. 이 파일들은 새 정책이 아니라 개정 전후 검토용 보관본이다.
 

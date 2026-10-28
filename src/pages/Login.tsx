@@ -13,7 +13,6 @@ import {
   getDoc,
   getDocs,
   limit,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -105,6 +104,7 @@ interface ConsentItem {
   id: string;
   title: string;
   text: string;
+  kind?: "notice" | "consent";
   required: boolean;
   order: number;
 }
@@ -1079,7 +1079,7 @@ const Login: React.FC = () => {
     try {
       const consentQuery = query(
         collection(db, "site_settings", "consent", "items"),
-        orderBy("order", "asc"),
+        where("enabled", "==", true),
       );
       const snap = await getDocs(consentQuery);
       const items: ConsentItem[] = [];
@@ -1089,11 +1089,12 @@ const Login: React.FC = () => {
           id: docSnap.id,
           title: (data.title || "").trim() || "동의 항목",
           text: data.text || "",
+          kind: data.kind === "notice" ? "notice" : "consent",
           required: data.required === true,
           order: Number(data.order) || 0,
         });
       });
-      return items;
+      return items.sort((left, right) => left.order - right.order);
     } catch (error) {
       console.warn("Failed to load consent items");
       return [];
@@ -1196,7 +1197,7 @@ const Login: React.FC = () => {
 
   const handleConsentConfirm = () => {
     if (!consentReady) {
-      alert("필수 동의 항목에 체크해주세요.");
+      alert("필수 항목을 확인해 주세요.");
       return;
     }
     const agreedItems = consentItems
@@ -1325,7 +1326,7 @@ const Login: React.FC = () => {
       await assertLive();
       if (items.length === 0) {
         alert(
-          "개인정보 동의 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.",
+          "이용 안내 항목을 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.",
         );
         return null;
       }
@@ -2522,7 +2523,7 @@ const Login: React.FC = () => {
           data-login-dialog="consent"
           data-auth-dialog
           tabIndex={-1}
-          aria-label="개인정보 수집·이용 동의"
+          aria-label="서비스 이용 안내"
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -2540,23 +2541,21 @@ const Login: React.FC = () => {
                 id="student-consent-title"
                 className="text-2xl md:text-3xl font-bold text-gray-900"
               >
-                개인정보 활용 동의
+                서비스 이용 안내
               </h2>
-              <p className="text-gray-600 text-base mt-2 font-medium">
-                서비스 이용을 위해 최초 1회 동의가 필요합니다.
-              </p>
             </div>
 
             <div className="bg-gray-50 p-4 md:p-5 rounded-lg text-base text-gray-700 overflow-y-auto mb-5 border border-gray-200 leading-relaxed flex-1 min-h-0 space-y-4">
               {consentItems.length === 0 && (
                 <p className="text-center text-gray-400 py-6">
-                  등록된 동의 항목이 없습니다.
+                  등록된 안내·동의 항목이 없습니다.
                 </p>
               )}
 
               {consentItems.map((item, idx) => {
                 const isExpanded = consentExpandedId === item.id;
                 const isChecked = !!consentChecked[item.id];
+                const isNotice = item.kind === "notice";
                 const locked = idx > currentConsentStepIndex && !isChecked;
                 return (
                   <div
@@ -2581,17 +2580,17 @@ const Login: React.FC = () => {
                           {item.title || "동의 항목"}
                         </span>
                         {item.required ? (
-                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
+                          <span className="shrink-0 whitespace-nowrap text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
                             필수
                           </span>
                         ) : (
-                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">
+                          <span className="shrink-0 whitespace-nowrap text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">
                             선택
                           </span>
                         )}
                         {isChecked && (
-                          <span className="ml-auto text-xs md:text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            동의 완료
+                          <span className="ml-auto shrink-0 whitespace-nowrap text-xs md:text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            {isNotice ? "확인완료" : "동의 완료"}
                           </span>
                         )}
                       </div>
@@ -2617,7 +2616,7 @@ const Login: React.FC = () => {
                           >
                             {consentReadReady[item.id]
                               ? "읽기 확인됨"
-                              : "끝까지 스크롤하면 동의 버튼이 활성화됩니다."}
+                              : `끝까지 스크롤하면 ${isNotice ? "확인" : "동의"} 버튼이 활성화됩니다.`}
                           </span>
                           <button
                             type="button"
@@ -2626,8 +2625,12 @@ const Login: React.FC = () => {
                             className="shrink-0 px-4 md:px-5 py-2 rounded-lg text-sm md:text-base font-bold bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition"
                           >
                             {isChecked
-                              ? "동의 완료"
-                              : `${item.required ? "필수" : "선택"} 동의`}
+                              ? isNotice
+                                ? "확인완료"
+                                : "동의 완료"
+                              : isNotice
+                                ? "확인했습니다"
+                                : `${item.required ? "필수" : "선택"} 동의`}
                           </button>
                         </div>
                       </>
@@ -2635,12 +2638,14 @@ const Login: React.FC = () => {
 
                     {!isExpanded && !isChecked && locked && (
                       <p className="text-xs md:text-sm text-gray-400 mt-1">
-                        이전 항목 동의 후 열 수 있습니다.
+                        이전 항목 완료 후 열 수 있습니다.
                       </p>
                     )}
                     {!isExpanded && !isChecked && !locked && (
                       <p className="text-xs md:text-sm text-gray-500 mt-1">
-                        클릭하여 내용을 확인하고 동의하세요.
+                        {isNotice
+                          ? "클릭하여 내용을 확인하세요."
+                          : "클릭하여 내용을 확인하고 동의하세요."}
                       </p>
                     )}
                   </div>
@@ -2660,7 +2665,9 @@ const Login: React.FC = () => {
                 disabled={!consentReady}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                동의하고 시작하기
+                {consentItems.some((item) => item.kind === "notice")
+                  ? "확인하고 시작하기"
+                  : "동의하고 시작하기"}
               </button>
             </div>
           </div>
