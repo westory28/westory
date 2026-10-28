@@ -4,6 +4,11 @@ import { InlineLoading } from "../../../components/common/LoadingState";
 import WisIcon from "../../../components/common/WisIcon";
 import { useAuth } from "../../../contexts/AuthContext";
 import { AVATAR_ITEMS, AVATAR_SLOTS } from "../../../features/avatar/catalog";
+import AvatarItemPreview from "../../../features/avatar/AvatarItemPreview";
+import {
+  avatarItemTypeLabel,
+  getAvatarItemGroup,
+} from "../../../features/avatar/itemPresentation";
 import {
   avatarErrorMessage,
   getAvatarCatalogPricing,
@@ -62,7 +67,10 @@ export function AvatarPricingManager({
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [search, setSearch] = useState("");
-  const [slot, setSlot] = useState("all");
+  const [slot, setSlot] = useState("top");
+  const [group, setGroup] = useState("all");
+  const [character, setCharacter] = useState("all");
+  const [changedOnly, setChangedOnly] = useState(false);
   const sequence = useRef(0);
   const busy = useRef(false);
 
@@ -105,14 +113,43 @@ export function AvatarPricingManager({
       state && AVATAR_ITEMS.some((item) => priceOf(drafts[item.id]) === null),
     [drafts, state],
   );
+  const groups = useMemo(
+    () => [
+      ...new Set(
+        AVATAR_ITEMS.filter((item) => slot === "all" || item.slot === slot).map(
+          getAvatarItemGroup,
+        ),
+      ),
+    ],
+    [slot],
+  );
   const visibleItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return AVATAR_ITEMS.filter(
       (item) =>
         (slot === "all" || item.slot === slot) &&
-        (!query || item.label.toLocaleLowerCase().includes(query)),
+        (group === "all" || getAvatarItemGroup(item) === group) &&
+        (character === "all" ||
+          (item.slot === "character"
+            ? item.value === character
+            : item.characters.includes(character as "girl" | "boy"))) &&
+        (!changedOnly || changed.some((entry) => entry.id === item.id)) &&
+        (!query ||
+          `${item.label} ${avatarItemTypeLabel(item)} ${getAvatarItemGroup(item)}`
+            .toLocaleLowerCase()
+            .includes(query)),
     );
-  }, [search, slot]);
+  }, [search, slot, group, character, changedOnly, changed]);
+  const visibleGroups = useMemo(
+    () =>
+      Array.from(new Set(visibleItems.map(getAvatarItemGroup)), (label) => ({
+        label,
+        items: visibleItems.filter(
+          (item) => getAvatarItemGroup(item) === label,
+        ),
+      })),
+    [visibleItems],
+  );
 
   const updateDraft = (id: string, patch: Partial<PriceDraft>) => {
     setSaved(false);
@@ -162,12 +199,25 @@ export function AvatarPricingManager({
         <div className="avatar-pricing-actions">
           <button
             type="button"
+            className="avatar-pricing-reload"
             onClick={() => void load()}
             disabled={loading || saving}
             title="저장된 가격 다시 불러오기"
             aria-label="저장된 가격 다시 불러오기"
           >
-            <i className="fas fa-rotate-right" aria-hidden="true" />
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65M20 7l-2.35-2.65" />
+            </svg>
           </button>
           <button
             type="button"
@@ -199,111 +249,213 @@ export function AvatarPricingManager({
       ) : state ? (
         <>
           <div className="ws-filter-bar avatar-pricing-filters">
-            <input
-              type="search"
-              aria-label="아바타 아이템 검색"
-              placeholder="아이템 검색"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <select
-              aria-label="꾸미기 종류"
-              value={slot}
-              onChange={(event) => setSlot(event.target.value)}
-            >
-              <option value="all">전체 종류</option>
-              {AVATAR_SLOTS.map((entry) => (
-                <option key={entry.key} value={entry.key}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-            <span>
+            <label className="avatar-pricing-search">
+              <span>아이템 검색</span>
+              <input
+                type="search"
+                aria-label="아이템 검색"
+                placeholder="이름·유형 검색"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>꾸미기 종류</span>
+              <select
+                aria-label="꾸미기 종류"
+                value={slot}
+                onChange={(event) => {
+                  setSlot(event.target.value);
+                  setGroup("all");
+                }}
+              >
+                <option value="all">전체 종류</option>
+                {AVATAR_SLOTS.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label} (
+                    {
+                      AVATAR_ITEMS.filter((item) => item.slot === entry.key)
+                        .length
+                    }
+                    )
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>유형</span>
+              <select
+                aria-label="유형"
+                value={group}
+                onChange={(event) => setGroup(event.target.value)}
+              >
+                <option value="all">전체 유형</option>
+                {groups.map((label) => (
+                  <option key={label} value={label}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>아바타</span>
+              <select
+                aria-label="아바타"
+                value={character}
+                onChange={(event) => setCharacter(event.target.value)}
+              >
+                <option value="all">전체</option>
+                <option value="girl">여성형</option>
+                <option value="boy">남성형</option>
+              </select>
+            </label>
+          </div>
+          <div className="avatar-pricing-summary">
+            <span role="status">
               {visibleItems.length}개
               {changed.length ? ` · 변경 ${changed.length}개` : ""}
             </span>
+            <label>
+              <input
+                type="checkbox"
+                checked={changedOnly}
+                onChange={(event) => setChangedOnly(event.target.checked)}
+              />
+              변경한 항목만
+            </label>
           </div>
-          <div
-            className="ws-surface avatar-pricing-table-scroll"
-            tabIndex={0}
-            aria-label="아바타 가격 목록"
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">아이템</th>
-                  <th scope="col">종류</th>
-                  <th scope="col">아바타</th>
-                  <th scope="col">무료·유료</th>
-                  <th scope="col">위스 가격</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleItems.map((item) => {
-                  const draft = drafts[item.id];
-                  return (
-                    <tr key={item.id}>
-                      <th scope="row">{item.label}</th>
-                      <td>
-                        {
-                          AVATAR_SLOTS.find((entry) => entry.key === item.slot)
-                            ?.label
-                        }
-                      </td>
-                      <td>
-                        {item.characters.length === 2
-                          ? "공통"
-                          : item.characters[0] === "girl"
-                            ? "여성형"
-                            : "남성형"}
-                      </td>
-                      <td>
-                        <select
-                          aria-label={`${item.label} 무료·유료`}
-                          value={draft.paid ? "paid" : "free"}
-                          onChange={(event) =>
-                            updateDraft(item.id, {
-                              paid: event.target.value === "paid",
-                            })
-                          }
-                          disabled={saving}
-                        >
-                          <option value="free">무료</option>
-                          <option value="paid">유료</option>
-                        </select>
-                      </td>
-                      <td>
-                        <label className="avatar-pricing-value">
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={MAX_PRICE}
-                            step={1}
-                            aria-label={`${item.label} 위스 가격`}
-                            aria-invalid={draft.paid && priceOf(draft) === null}
-                            value={draft.paid ? draft.price : ""}
-                            placeholder={draft.paid ? "가격" : "0"}
-                            onChange={(event) =>
-                              updateDraft(item.id, {
-                                price: event.target.value,
-                              })
+          <div className="avatar-pricing-catalog" aria-label="아바타 가격 목록">
+            {visibleGroups.map(({ label, items }) => (
+              <section
+                key={label}
+                className="avatar-pricing-group"
+                aria-label={label}
+              >
+                <h3>
+                  {label}
+                  <span>{items.length}개</span>
+                </h3>
+                <ul className="avatar-pricing-items">
+                  {items.map((item) => {
+                    const draft = drafts[item.id];
+                    const isInvalid = draft.paid && priceOf(draft) === null;
+                    const isChanged = priceOf(draft) !== state.prices[item.id];
+                    const currentPrice = state.prices[item.id];
+                    return (
+                      <li
+                        key={item.id}
+                        className={`avatar-pricing-item${isChanged ? " is-changed" : ""}`}
+                      >
+                        <div className="avatar-pricing-item-heading">
+                          <AvatarItemPreview
+                            item={item}
+                            character={
+                              character === "boy"
+                                ? "boy"
+                                : character === "girl"
+                                  ? "girl"
+                                  : undefined
                             }
-                            disabled={saving || !draft.paid}
+                            className="avatar-pricing-preview"
                           />
-                          <WisIcon />
-                        </label>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {!visibleItems.length && (
-                  <tr>
-                    <td colSpan={5}>검색 결과가 없습니다.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                          <div className="avatar-pricing-item-identity">
+                            <h4>{item.label}</h4>
+                            <div className="avatar-pricing-labels">
+                              <span>{avatarItemTypeLabel(item)}</span>
+                              {getAvatarItemGroup(item) !==
+                                avatarItemTypeLabel(item) && (
+                                <span>{getAvatarItemGroup(item)}</span>
+                              )}
+                              <span>
+                                {item.slot === "character"
+                                  ? item.value === "girl"
+                                    ? "여성형"
+                                    : "남성형"
+                                  : item.characters.length === 2
+                                    ? "공용"
+                                    : item.characters[0] === "girl"
+                                      ? "여성형"
+                                      : "남성형"}
+                              </span>
+                            </div>
+                            <p className="avatar-pricing-current">
+                              현재{" "}
+                              {currentPrice === 0
+                                ? "무료"
+                                : `${currentPrice.toLocaleString()} 위스`}
+                            </p>
+                            {isChanged && (
+                              <span className="avatar-pricing-changed">
+                                변경됨
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="avatar-pricing-item-controls">
+                          <label>
+                            <span>판매 방식</span>
+                            <select
+                              aria-label={`${item.label} 무료·유료`}
+                              value={draft.paid ? "paid" : "free"}
+                              onChange={(event) =>
+                                updateDraft(item.id, {
+                                  paid: event.target.value === "paid",
+                                })
+                              }
+                              disabled={saving}
+                            >
+                              <option value="free">무료</option>
+                              <option value="paid">유료</option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>가격</span>
+                            <span className="avatar-pricing-value">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={MAX_PRICE}
+                                step={1}
+                                aria-label={`${item.label} 위스 가격`}
+                                aria-invalid={isInvalid}
+                                aria-describedby={
+                                  isInvalid
+                                    ? `avatar-price-error-${item.id}`
+                                    : undefined
+                                }
+                                value={draft.paid ? draft.price : ""}
+                                placeholder={draft.paid ? "가격" : "0"}
+                                onChange={(event) =>
+                                  updateDraft(item.id, {
+                                    price: event.target.value,
+                                  })
+                                }
+                                disabled={saving || !draft.paid}
+                              />
+                              <WisIcon />
+                            </span>
+                          </label>
+                        </div>
+                        {isInvalid && (
+                          <p
+                            className="avatar-pricing-item-error"
+                            id={`avatar-price-error-${item.id}`}
+                          >
+                            1~1,000,000 위스를 입력해 주세요.
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+            {!visibleItems.length && (
+              <p className="avatar-pricing-empty">
+                해당하는 아이템이 없습니다.
+              </p>
+            )}
           </div>
         </>
       ) : null}

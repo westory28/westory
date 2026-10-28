@@ -98,7 +98,7 @@ if (require.main === module) {
 test('default, free catalog choices and private state never return another identity', async () => {
   const state = fixture(); const result = await state.api.getStudentAvatar(req({}));
   assert.deepEqual(result.look, defaultLook()); assert.equal(result.revision, 0); assert.deepEqual(result.ownedItemIds, []);
-  assert.equal(catalog.items.filter(item => item.price === 0).length, 41);
+  assert.equal(catalog.items.filter(item => item.price === 0).length, 44);
   await assert.rejects(state.api.getStudentAvatar(req({ uid: 'foreign' })), reason('AVATAR_INPUT_INVALID'));
   assert.equal(state.writes.length, 0);
 });

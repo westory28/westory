@@ -31,6 +31,8 @@ import {
 } from "./service";
 import AvatarStage from "./AvatarStage";
 import AvatarPlaceholder from "./AvatarPlaceholder";
+import AvatarItemPreview from "./AvatarItemPreview";
+import { getAvatarItemGroup } from "./itemPresentation";
 import "./avatarStudio.css";
 
 export interface AvatarStudioAdapter {
@@ -520,53 +522,24 @@ export function AvatarStudio({
                 disabled={!characterChosen || Boolean(busy)}
                 onClick={() => choose(item)}
               >
-                <span
-                  className={`avatar-studio-item-art${item.slot === "character" ? " has-preview" : ""}`}
-                  aria-hidden="true"
-                >
-                  {item.color ? (
-                    <span
-                      className="avatar-studio-swatch"
-                      style={{ backgroundColor: item.color }}
-                    />
-                  ) : (
-                    <>
-                      <i
-                        className={`fas ${AVATAR_SLOTS.find((category) => category.key === slot)?.icon || "fa-star"}`}
-                      />
-                      {item.slot === "character" && (
-                        <img
-                          src={`${import.meta.env.BASE_URL}avatar/v1/${item.value}-preview-v2.webp`}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          width="128"
-                          height="128"
-                          onLoad={(event) => {
-                            event.currentTarget.style.opacity = "1";
-                          }}
-                          onError={(event) => {
-                            event.currentTarget.style.opacity = "0";
-                          }}
-                        />
-                      )}
-                    </>
-                  )}
+                <AvatarItemPreview item={item} character={look.character} />
+                <span className="avatar-studio-item-type">
+                  {getAvatarItemGroup(item)}
                 </span>
                 <span className="avatar-studio-item-name">{item.label}</span>
-                <span className="avatar-studio-item-price">
-                  {allAvailable ? (
-                    "사용 가능"
-                  ) : item.price === 0 ? (
-                    "무료"
-                  ) : available(item) ? (
-                    "보유"
-                  ) : (
-                    <>
-                      {item.price.toLocaleString()} <WisIcon />
-                    </>
-                  )}
-                </span>
+                {!allAvailable && (
+                  <span className="avatar-studio-item-price">
+                    {item.price === 0 ? (
+                      "무료"
+                    ) : available(item) ? (
+                      "보유"
+                    ) : (
+                      <>
+                        {item.price.toLocaleString()} <WisIcon />
+                      </>
+                    )}
+                  </span>
+                )}
                 {selected?.id === item.id && (
                   <i
                     className="fas fa-check avatar-studio-item-check"

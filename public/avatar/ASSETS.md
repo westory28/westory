@@ -66,3 +66,55 @@ individual garment choice. The generated geometry and badge texture are disposed
 with the stage. New catalog IDs use the existing top/bottom/accessory slots and
 additive catalog version 1; their initial price is zero, with school pricing
 controlled by the administrator.
+
+## Item previews and rebuilt shapes (2026-10-28 follow-up)
+
+Garments now use continuous skinned surfaces across shoulders, elbows and
+waists, with shared weights at each connection. Collars and ribbons follow the
+torso surface. Robes and skirts have continuous pleated hems; trousers taper
+without detached joint spheres. The existing skeleton, palettes and six poses
+remain authoritative. Geometry is reused within a stage and disposed with it.
+The fused base's clothing masks protect its collar while replacing hair.
+`renderer/native-collar.js` closes the female base jacket's open inner collar
+with a small spine-attached lining that shares the source textures and colorway
+uniforms. Replacement tops hide that lining; disposing it leaves shared atlas
+textures to their original owner.
+
+`v1/models/hair-v3/` contains six original hair models: volume, side-swept
+waves, upswept short hair, Toben-inspired short hair, twin tails and half-up
+hair. Higgsfield generated front/left/back/right reference renders and converted
+those renders to textured GLBs with Tripo H3.1 multiview generation. No student
+photo or personal information was supplied. MapleStory's official hair previews
+informed silhouette research only; no Nexon image, mesh or texture is shipped.
+The original detailed bob/curtain meshes remain the defaults; long waves retain
+and reshape the original mesh and UVs in `renderer/hair-source-styles.js`.
+
+The six GLBs total 11,206,408 bytes, reduced from 70,785,460 bytes by resizing
+embedded textures while preserving geometry and UVs. Reproduce optimization
+with `node scripts/optimize-avatar-hair-assets.mjs <source.glb> --verify-browser`.
+Source-to-final geometry, bounds, texture links and browser rendering are checked
+by that script. Runtime loading is local to the site, lazy per selected style,
+and cached within the stage; it makes no AI-service requests. Selection prepares
+the model before applying or saving the look. Aborted selections and disposed
+stages release their resources, and loading failures expose an explicit retry.
+
+Final Higgsfield 3D generation jobs:
+
+- `toben`: `deb19c05-1cb0-49d6-be48-a832ba407276`
+- `volume`: `b7ef3bd2-de51-4192-b4c0-69289da42f89`
+- `wave`: `20c45d06-bb7e-4f62-9c9c-02f16ffedd08`
+- `crop`: `3fb9675a-abea-4c69-a920-d9b6e42e27cc`
+- `twin-tail`: `d941cc43-99b0-4d7c-b746-dd0293bb67cb`
+- `half-up`: `770cf11f-ac2b-4b5f-a707-14b329503224`
+
+`v1/previews-v3/{girl,boy}/*.webp` contains 256 × 256 static captures of every
+supported catalog item and character combination. Clothing previews use the
+actual dressed model; portrait, lower-body and shoe items use appropriate
+camera framing. The picker and pricing manager share these images instead of
+creating a WebGL context per card. These assets contain no student records.
+
+Rebuild with `node scripts/render-avatar-item-previews.mjs`; validate with
+`npm run verify:avatar-previews`. The manifest records source fingerprints,
+item coverage and image hashes. Build validation rejects stale captures and
+enforces a 50 KB per-image / 4 MB total budget. Existing saved profile thumbnails
+remain unchanged until their owners save their appearance again.

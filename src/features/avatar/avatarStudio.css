@@ -1,6 +1,8 @@
 .avatar-studio {
   color: var(--ws-text, #1f2937);
   font-size: 16px;
+  container-type: inline-size;
+  min-width: 0;
 }
 .avatar-studio button,
 .avatar-studio-status button {
@@ -51,7 +53,7 @@
 }
 .avatar-studio-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 400px) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -161,7 +163,7 @@
 }
 .avatar-studio-items {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: 12px;
 }
 .avatar-studio button.avatar-studio-item {
@@ -173,40 +175,16 @@
   padding: 12px 8px;
   gap: 8px;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 .avatar-studio-item[aria-pressed="true"] {
   border-color: var(--ws-primary, #2563eb);
   box-shadow: 0 0 0 1px var(--ws-primary, #2563eb);
 }
-.avatar-studio-item-art {
-  display: grid;
-  place-items: center;
-  height: 48px;
-  width: 48px;
+.avatar-studio-item-type {
   color: var(--ws-muted, #64748b);
-  font-size: 24px;
-}
-.avatar-studio-item-art.has-preview {
-  position: relative;
-  width: 100%;
-  height: 90px;
-}
-.avatar-studio-item-art img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: var(--ws-surface, #fff);
-}
-.is-premium .avatar-studio-item-art {
-  color: var(--ws-primary, #2563eb);
-}
-.avatar-studio-swatch {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid var(--ws-border, #e5e7eb);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .avatar-studio-item-name {
   font-size: 14px;
@@ -225,6 +203,12 @@
   right: 8px;
   color: var(--ws-primary, #2563eb);
   font-size: 12px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ws-surface, #fff);
 }
 .avatar-studio-selected {
   display: flex;
@@ -328,7 +312,7 @@
     font-size: 14px;
   }
   .avatar-studio-items {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
   .avatar-studio-heading h2 {
@@ -336,5 +320,27 @@
   }
   .avatar-studio-wallet {
     font-size: 14px;
+  }
+}
+
+@container (max-width: 760px) {
+  .avatar-studio-layout {
+    grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@container (max-width: 620px) {
+  .avatar-studio-layout {
+    grid-template-columns: 1fr;
+  }
+  .avatar-studio-preview {
+    position: static;
+  }
+  .avatar-studio-stage {
+    height: 320px;
+    min-height: 0;
+  }
+  .avatar-studio-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

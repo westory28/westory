@@ -5,6 +5,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { SKIN_TONES, HAIR_TONES } from "./palettes.js";
 import { createPoseController } from "./pose-controller.js";
 import { createExpressionController } from "./expression-controller.js";
+import { createSculptedHairController } from "./hair-styles.js";
 import {
   createFaceShapeController,
   createAccessoryController,
@@ -99,186 +100,17 @@ export function modelKeyForLook(look = {}) {
   return `${look.character === "boy" ? "boy" : "girl"}:base`;
 }
 
-function createHairController(root, maskImage, character, forwardAxis = "x") {
-  const canvas = document.createElement("canvas");
-  canvas.width = maskImage.width;
-  canvas.height = maskImage.height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(maskImage, 0, 0);
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-  const records = [];
-  root.traverse((object) => {
-    if (!object.isMesh || !object.geometry.attributes.uv) return;
-    const positions = object.geometry.attributes.position,
-      uv = object.geometry.attributes.uv;
-    object.geometry.computeBoundingBox();
-    const bounds = object.geometry.boundingBox;
-    const norm = 0.98 / (bounds.max.y - bounds.min.y);
-    const minY = bounds.min.y;
-    const centerFront = (bounds.min[forwardAxis] + bounds.max[forwardAxis]) / 2;
-    const sideAxis = forwardAxis === "x" ? "z" : "x";
-    const centerSide = (bounds.min[sideAxis] + bounds.max[sideAxis]) / 2;
-    const original = positions.array.slice(),
-      weights = new Float32Array(positions.count);
-    const seams = new Map();
-    for (let i = 0; i < positions.count; i++) {
-      const x = Math.min(
-        canvas.width - 1,
-        Math.max(0, Math.round(uv.getX(i) * (canvas.width - 1))),
-      );
-      const y = Math.min(
-        canvas.height - 1,
-        Math.max(0, Math.round(uv.getY(i) * (canvas.height - 1))),
-      );
-      weights[i] = pixels[(y * canvas.width + x) * 4 + 1] / 255;
-      const canonicalY = (positions.getY(i) - minY) * norm - 0.49;
-      const canonicalFront =
-        ((forwardAxis === "x" ? positions.getX(i) : positions.getZ(i)) -
-          centerFront) *
-        norm;
-      const canonicalSide =
-        ((sideAxis === "x" ? positions.getX(i) : positions.getZ(i)) -
-          centerSide) *
-        norm;
-      // Eyebrow dye may share the hair channel, but styling must never move
-      // brows, eyelids, or the central face with the actual hairstyle.
-      if (
-        canonicalFront > 0.055 &&
-        canonicalY < 0.327 &&
-        Math.abs(canonicalSide) < 0.108
-      )
-        weights[i] = 0;
-      const browDistance =
-        ((Math.abs(canonicalSide) - 0.057) / 0.058) ** 2 +
-        ((canonicalY - 0.331) / 0.028) ** 2;
-      if (canonicalFront > 0.065 && browDistance < 1.25) weights[i] = 0;
-      // Ears and the side of the cheek can have brown shadow texels. Keep a
-      // generous anatomical guard independent of the recolor-mask boundary.
-      const earDistance =
-        ((Math.abs(canonicalSide) - 0.132) / 0.036) ** 2 +
-        ((canonicalY - 0.235) / 0.045) ** 2;
-      if (canonicalFront > -0.045 && earDistance < 1.25) weights[i] = 0;
-      if (
-        canonicalFront > -0.03 &&
-        canonicalY < 0.2 &&
-        Math.abs(canonicalSide) < 0.09
-      )
-        weights[i] = 0;
-      if (pixels[(y * canvas.width + x) * 4] > 32) weights[i] = 0;
-      const key = `${Math.round(positions.getX(i) * 100000)},${Math.round(positions.getY(i) * 100000)},${Math.round(positions.getZ(i) * 100000)}`;
-      if (!seams.has(key)) seams.set(key, []);
-      seams.get(key).push(i);
-    }
-    // Duplicate UV seam vertices share the same spatial weight, preventing
-    // tiny cracks when neighboring texture islands have different padding.
-    for (const indices of seams.values()) {
-      const max = Math.max(...indices.map((index) => weights[index]));
-      for (const index of indices) weights[index] = max;
-    }
-    const selected = [];
-    for (let i = 0; i < weights.length; i++)
-      if (weights[i] > 0.05) selected.push(i);
-    if (selected.length)
-      records.push({
-        object,
-        positions,
-        original,
-        weights,
-        selected,
-        norm,
-        minY,
-        centerFront,
-        centerSide,
-      });
-  });
-  const base = character === "boy" ? "curtain" : "bob";
-  const supported = records.length
-    ? [base, "volume", "wave", character === "boy" ? "crop" : "long"]
-    : [base];
-  let current = base;
-  function setStyle(style) {
-    if (!supported.includes(style)) return false;
-    if (style === current) return true;
-    for (const {
-      object,
-      positions,
-      original,
-      weights,
-      selected,
-      norm,
-      minY,
-      centerFront,
-      centerSide,
-    } of records) {
-      for (const i of selected) {
-        const rawX = original[i * 3],
-          rawY = original[i * 3 + 1],
-          rawZ = original[i * 3 + 2];
-        const x = ((forwardAxis === "x" ? rawX : rawZ) - centerFront) * norm;
-        const y = (rawY - minY) * norm - 0.49;
-        const z = ((forwardAxis === "x" ? rawZ : rawX) - centerSide) * norm;
-        const weight = THREE.MathUtils.smoothstep(weights[i], 0.15, 0.9);
-        const lower = 1 - THREE.MathUtils.smoothstep(y, 0.17, 0.36);
-        let dx = 0,
-          dy = 0,
-          dz = 0;
-        if (style === "volume") {
-          dx = x * 0.08;
-          dz = z * 0.09;
-          dy = (y - 0.3) * 0.06;
-        } else if (style === "wave") {
-          const strength = 0.4 + 0.6 * lower;
-          dz =
-            Math.sin((y - 0.1) * 39 + (z < 0 ? 0.7 : -0.7)) * 0.008 * strength;
-          dx = Math.cos(y * 32 + z * 8) * 0.006 * strength;
-        } else if (style === "long") {
-          const back = 1 - THREE.MathUtils.smoothstep(x, -0.05, 0.025);
-          dy = -0.05 * lower * lower * back;
-          dz = z * 0.02 * lower * back;
-          dx = -0.01 * lower * back;
-        } else if (style === "crop") {
-          dx = -x * 0.05;
-          dz = -z * 0.06;
-          dy = (0.32 - y) * 0.14;
-        }
-        positions.setXYZ(
-          i,
-          rawX + ((forwardAxis === "x" ? dx : dz) * weight) / norm,
-          rawY + (dy * weight) / norm,
-          rawZ + ((forwardAxis === "x" ? dz : dx) * weight) / norm,
-        );
-      }
-      positions.needsUpdate = true;
-      // Preserve the source's artist normals across UV islands. Recomputing
-      // per-island normals creates visible hard edges on the dense sculpt.
-      object.geometry.computeBoundingSphere();
-    }
-    current = style;
-    return true;
-  }
-  return {
-    supported: Object.freeze(supported),
-    setStyle,
-    get current() {
-      return current;
-    },
-    dispose() {
-      records.length = 0;
-    },
-  };
-}
-
 function installColorwayShader(material, uniforms) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying vec3 vAvatarBindPosition;",
+        "#include <common>\nvarying vec3 vAvatarBindPosition;\nattribute float avatarHairMask;\nvarying float vAvatarHairMask;",
       )
       .replace(
         "#include <begin_vertex>",
-        "#include <begin_vertex>\nvAvatarBindPosition = position;",
+        "#include <begin_vertex>\nvAvatarBindPosition = position;\nvAvatarHairMask = avatarHairMask;",
       );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <common>",
@@ -295,8 +127,9 @@ uniform float uAvatarPlainTop; uniform float uAvatarPlainBottom; uniform float u
 uniform vec3 uAvatarPlainTopColor; uniform vec3 uAvatarPlainBottomColor; uniform vec3 uAvatarPlainShoesColor;
 uniform vec3 uAvatarSkinColor; uniform float uAvatarSkinMix;
 uniform vec3 uAvatarHairColor; uniform float uAvatarHairMix;
-uniform float uAvatarReplaceTop; uniform float uAvatarReplaceBottom;
+uniform float uAvatarReplaceTop; uniform float uAvatarReplaceBottom; uniform float uAvatarReplaceHair;
 varying vec3 vAvatarBindPosition;
+varying float vAvatarHairMask;
 bool avatarSourceCuff(vec3 wrist, vec3 elbow) {
   vec3 delta = vAvatarBindPosition - wrist;
   float along = dot(delta, normalize(wrist - elbow));
@@ -323,6 +156,24 @@ diffuseColor.rgb = mix(diffuseColor.rgb, avatarRecolor(avatarOriginal, uAvatarSh
 diffuseColor.rgb = mix(diffuseColor.rgb, avatarRecolor(avatarOriginal, uAvatarAccessoryColor, 0.40), hatMask * uAvatarAccessoryMix);
 vec2 appearanceMasks = texture2D(uAvatarAppearanceMask, vMapUv).rg;
 vec3 plainMasks = texture2D(uAvatarPlainMask, vMapUv).rgb;
+// Replace hair only. Preserve the eyebrows, eyes, ears and original skin.
+bool avatarHairSurface = vAvatarHairMask > 0.5;
+// At a welded skin/hair seam, a triangle can contain skin vertices while its
+// texture still contains fringe. Remove those texels above the brow line.
+bool avatarBrowRegion = abs(vAvatarBindPosition.x) < 0.15
+  && vAvatarBindPosition.z > 0.07 && vAvatarBindPosition.y > 1.035
+  && vAvatarBindPosition.y < 1.115;
+if (uAvatarBoy > 0.5 && avatarBrowRegion) {
+  float browFaceDepth = 0.175 * sqrt(max(0.0, 1.0 - pow(vAvatarBindPosition.x / 0.18, 2.0))) - 0.003;
+  avatarBrowRegion = vAvatarBindPosition.z >= browFaceDepth || vAvatarBindPosition.y < 1.075;
+}
+if (appearanceMasks.g > 0.05 && vAvatarBindPosition.y > 0.79 && !avatarBrowRegion)
+  avatarHairSurface = true;
+// Authored collars overlap the appearance hair mask at welded UV seams.
+// Keep those clothing surfaces on the body, not on a head-attached hair clone.
+if (vAvatarBindPosition.y < 0.92 && max(topMask, plainMasks.r) > 0.35)
+  avatarHairSurface = false;
+if (uAvatarReplaceHair > 0.5 && avatarHairSurface) discard;
 float authoredGarment = max(topMask, max(bottomMask, shoesMask));
 plainMasks *= 1.0 - max(appearanceMasks.r, appearanceMasks.g) * (1.0 - authoredGarment);
 // Replace only authored clothing fragments. The source head/hair/hands and
@@ -383,11 +234,11 @@ if (avatarPlainArea < 0.5) {
 `,
     );
   };
-  material.customProgramCacheKey = () => "westory-avatar-production-v3";
+  material.customProgramCacheKey = () => "westory-avatar-production-v4";
   material.needsUpdate = true;
 }
 
-// The two textured bases support palettes, bounded facial/hair deformation,
+// The two textured bases support palettes, bounded facial deformation, sculpted hair,
 // head-mounted accessories and verified rig poses.
 export async function createAvatarStage(
   container,
@@ -405,9 +256,9 @@ export async function createAvatarStage(
     window.location.href,
   );
   const assetUrl = (path) => new URL(path, assetBaseUrl).href;
-  async function fetchAsset(path) {
+  async function fetchAsset(path, requestSignal = signal) {
     const response = await fetch(assetUrl(path), {
-      signal,
+      signal: requestSignal,
       credentials: "same-origin",
     });
     if (!response.ok)
@@ -573,6 +424,7 @@ export async function createAvatarStage(
     uAvatarHairMix: { value: 0 },
     uAvatarReplaceTop: { value: 0 },
     uAvatarReplaceBottom: { value: 0 },
+    uAvatarReplaceHair: { value: 0 },
   };
   const selectedColors = { ...REFERENCE_LOOK };
   function applyColorway(look = {}) {
@@ -628,6 +480,8 @@ export async function createAvatarStage(
       }
       colorUniforms[`${prefix}Mix`].value = item.id === "original" ? 0 : 1;
       colorUniforms[`${prefix}Color`].value.set(item.color);
+      if (slot === "hairTone") hairController?.setTone(item.id);
+      if (slot === "skinTone") hairController?.setSkinTone?.(item.id);
     }
     if (look.hairStyle !== undefined) {
       if (!hairController?.setStyle(look.hairStyle))
@@ -657,6 +511,10 @@ export async function createAvatarStage(
         unsupported.push("accessory");
       else selectedColors.accessory = look.accessory;
     }
+    hairController?.setHeadwear(selectedColors.accessory);
+    colorUniforms.uAvatarReplaceHair.value = hairController?.replacingSource
+      ? 1
+      : 0;
     if (look.pose !== undefined) {
       if (!supportsPose(look.pose)) unsupported.push("pose");
       else poseController?.setPose(look.pose);
@@ -669,6 +527,7 @@ export async function createAvatarStage(
     colorUniforms.uAvatarReplaceBottom.value = replaced?.bottom ? 1 : 0;
   }
   if (useBase) applyColorway(initialLook);
+  let preparation = 0;
   let disposed = false,
     frame = 0,
     motionUntil = 0,
@@ -678,6 +537,10 @@ export async function createAvatarStage(
   const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
   let autoRequested = false;
   const initialCamera = new THREE.Vector3(0.6, 2.35, 6.95);
+  let framing = "body";
+  function bodyHeight() {
+    return Math.max(3.44, hairController?.getBounds?.().max.y || 0);
+  }
   function render() {
     if (!disposed && !document.hidden) {
       renderer.render(scene, camera);
@@ -691,8 +554,9 @@ export async function createAvatarStage(
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
     if (reset) {
-      controls.target.set(0, 1.72, 0);
-      camera.position.copy(initialCamera);
+      const scale = bodyHeight() / 3.44;
+      controls.target.set(0, 1.72 * scale, 0);
+      camera.position.copy(initialCamera).multiplyScalar(scale);
       if (camera.aspect < 0.66)
         camera.position.copy(controls.target).add(
           initialCamera
@@ -841,30 +705,47 @@ export async function createAvatarStage(
       }
     });
     avatar.add(model);
+    const loadedColorMask = await loadMask(
+      `models/${character}-base-color-mask.png`,
+    );
     colorMask.dispose();
-    colorMask = await loadMask(`models/${character}-base-color-mask.png`);
+    colorMask = loadedColorMask;
     colorMask.anisotropy = Math.min(
       4,
       renderer.capabilities.getMaxAnisotropy(),
     );
     colorUniforms.uAvatarColorMask.value = colorMask;
     colorwayReady = true;
-    appearanceMask.dispose();
-    appearanceMask = await loadMask(
+    const loadedAppearanceMask = await loadMask(
       `models/${character}-base-appearance-mask.png`,
     );
+    appearanceMask.dispose();
+    appearanceMask = loadedAppearanceMask;
     colorUniforms.uAvatarAppearanceMask.value = appearanceMask;
     appearanceReady = true;
+    const loadedPlainMask = await loadMask(
+      `models/${character}-base-plain-mask.png`,
+    );
     plainMask.dispose();
-    plainMask = await loadMask(`models/${character}-base-plain-mask.png`);
+    plainMask = loadedPlainMask;
     colorUniforms.uAvatarPlainMask.value = plainMask;
     assertActive();
-    hairController = createHairController(
+    hairController = createSculptedHairController(
       model,
-      appearanceMask.image,
       character,
-      forwardAxis,
+      appearanceMask.image,
+      {
+        appearanceMask,
+        colorMask,
+        plainMask,
+        signal,
+        loadAsset: async (path, requestSignal) =>
+          (await fetchAsset(path, requestSignal)).arrayBuffer(),
+      },
     );
+    colorUniforms.uAvatarReplaceHair.value = hairController.supported.length
+      ? 1
+      : 0;
     faceController = createFaceShapeController(model, appearanceMask.image);
     accessoryController = createAccessoryController(model);
     if (useBase)
@@ -883,8 +764,14 @@ export async function createAvatarStage(
         forwardAxis,
       });
     garmentController = createGarmentController(model, character);
+    await hairController.prepareStyle?.(
+      initialLook.hairStyle || (isBoy ? "curtain" : "bob"),
+      signal,
+    );
+    assertActive();
     applyAppearance(initialLook);
     applyGarments(initialLook);
+    fit(true);
     wake();
     render();
   } catch (error) {
@@ -951,6 +838,19 @@ export async function createAvatarStage(
         renderedFrames,
       };
     },
+    async prepareLook(look, options = {}) {
+      const request = ++preparation;
+      if (disposed || options.signal?.aborted)
+        throw new DOMException("Avatar preparation cancelled", "AbortError");
+      if (look.character && look.character !== character)
+        throw new Error("아바타를 다시 불러와야 합니다.");
+      await hairController?.prepareStyle?.(
+        look.hairStyle || hairController.current || (isBoy ? "curtain" : "bob"),
+        options.signal,
+      );
+      if (disposed || request !== preparation || options.signal?.aborted)
+        throw new DOMException("Avatar preparation cancelled", "AbortError");
+    },
     setLook(look) {
       if (disposed) return { applied: false, reason: "stage-disposed" };
       if (modelKeyForLook({ ...initialLook, ...look }) !== modelKey)
@@ -959,6 +859,13 @@ export async function createAvatarStage(
           requiresReload: true,
           reason: "model-change-required",
         };
+      if (look.hairStyle && hairController?.isReady?.(look.hairStyle) === false)
+        return {
+          applied: false,
+          requiresPreparation: true,
+          reason: "hair-not-prepared",
+        };
+      const previousHair = hairController?.current;
       const result = colorwayReady
         ? applyColorway(look)
         : {
@@ -972,6 +879,8 @@ export async function createAvatarStage(
       applyGarments(look);
       result.look = { ...selectedColors };
       result.applied = result.unsupported.length === 0;
+      if (framing === "body" && previousHair !== hairController?.current)
+        fit(true);
       wake(250);
       render();
       return result;
@@ -1002,12 +911,14 @@ export async function createAvatarStage(
     },
     resetView() {
       if (!disposed) {
+        framing = "body";
         fit(true);
         wake();
       }
     },
     focusFace() {
       if (disposed) return;
+      framing = "face";
       controls.target.set(0, 2.72, 0);
       const offset = new THREE.Vector3(0.12, 0.1, 3.65).multiplyScalar(
         Math.max(1, 0.8 / camera.aspect),
@@ -1016,6 +927,66 @@ export async function createAvatarStage(
       camera.lookAt(controls.target);
       controls.update();
       wake();
+      render();
+    },
+    focusItem(slot) {
+      if (disposed) return;
+      framing = "item";
+      stop();
+      // Stable, synchronous framing for the build-time catalog previews. The
+      // viewer uses these same models/materials; no second preview renderer.
+      const frames = {
+        top: [1.82, 3.35],
+        bottom: [0.97, 3.35],
+        shoes: [0.43, 1.95],
+        hairStyle: [2.76, 3.2],
+        hairTone: [2.76, 3.2],
+        skinTone: [2.65, 2.55],
+        faceShape: [2.65, 2.55],
+        expression: [2.65, 2.55],
+        accessory: [2.85, 3.25],
+        character: [1.72, 6.45],
+        pose: [1.72, 6.45],
+      };
+      let [height, distance] =
+        slot === "hairStyle" && hairController?.current === "long"
+          ? [2.42, 3.85]
+          : frames[slot] || frames.character;
+      if (slot === "hairStyle" || slot === "hairTone") {
+        const bounds = hairController?.getBounds?.();
+        if (bounds && !bounds.isEmpty()) {
+          const bottom = Math.min(bounds.min.y, 2.05);
+          height = (bounds.max.y + bottom) / 2;
+          const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+          distance =
+            Math.max(
+              3.2,
+              ((bounds.max.y - bottom) / (2 * tangent)) * 1.14,
+              ((bounds.max.x - bounds.min.x) / (2 * tangent * camera.aspect)) *
+                1.14,
+            ) +
+            Math.max(0, bounds.max.z) * 0.3;
+        }
+      } else if (slot === "character" || slot === "pose") {
+        const scale = bodyHeight() / 3.44;
+        height *= scale;
+        distance *= scale;
+      }
+      const damping = controls.enableDamping;
+      const minDistance = controls.minDistance;
+      controls.enableDamping = false;
+      controls.minDistance = 1;
+      controls.target.set(0, height, 0);
+      camera.position.set(
+        0.1,
+        height + 0.05,
+        distance * Math.max(1, 0.8 / camera.aspect),
+      );
+      camera.lookAt(controls.target);
+      controls.update();
+      controls.minDistance = minDistance;
+      controls.enableDamping = damping;
+      stop();
       render();
     },
     zoom(direction) {

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas",
+    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
@@ -42,7 +42,8 @@
     "verify:history-dictionary": "node scripts/verify-history-dictionary-catalog.mjs && node scripts/verify-history-dictionary-textbooks.mjs && node scripts/verify-history-dictionary-classification.mjs && node scripts/verify-history-dictionary-browse.mjs && node scripts/verify-history-dictionary-initials.mjs && node scripts/verify-history-dictionary-navigation.mjs && node scripts/verify-history-dictionary-session.mjs && node scripts/verify-history-dictionary-contract.mjs && node scripts/verify-history-dictionary-catalog-sync.mjs && node scripts/verify-history-dictionary-continuity.mjs && node scripts/verify-history-dictionary-cache.mjs && node scripts/verify-history-dictionary-search.mjs && node scripts/verify-history-dictionary-panel-loading.mjs && node scripts/verify-history-dictionary-catalog-snapshot.mjs",
     "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-east-asia.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs && node scripts/verify-history-atlas-terrain.mjs && node scripts/verify-history-atlas-country-profiles.mjs && node scripts/verify-history-atlas-korea-foreign-context.mjs",
     "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs",
-    "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs"
+    "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
+    "verify:avatar-previews": "node scripts/render-avatar-item-previews.mjs --check"
   },
   "dependencies": {
     "@fontsource/noto-serif-kr": "^5.3.1",

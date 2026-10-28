@@ -263,7 +263,7 @@
       "id": "hairStyle:volume",
       "slot": "hairStyle",
       "value": "volume",
-      "label": "볼륨 헤어",
+      "label": "구름 볼륨 펌",
       "price": 160,
       "tier": "premium",
       "characters": [
@@ -275,7 +275,7 @@
       "id": "hairStyle:wave",
       "slot": "hairStyle",
       "value": "wave",
-      "label": "소프트 웨이브",
+      "label": "사이드 스윕 웨이브",
       "price": 220,
       "tier": "premium",
       "characters": [
@@ -287,7 +287,7 @@
       "id": "hairStyle:long",
       "slot": "hairStyle",
       "value": "long",
-      "label": "롱 웨이브",
+      "label": "물결 롱 헤어",
       "price": 280,
       "tier": "premium",
       "characters": [
@@ -298,12 +298,39 @@
       "id": "hairStyle:crop",
       "slot": "hairStyle",
       "value": "crop",
-      "label": "텍스처 숏컷",
+      "label": "업스윕 숏컷",
       "price": 240,
       "tier": "premium",
       "characters": [
         "boy"
       ]
+    },
+    {
+      "id": "hairStyle:toben",
+      "slot": "hairStyle",
+      "value": "toben",
+      "label": "토벤 스타일",
+      "price": 0,
+      "tier": "basic",
+      "characters": ["boy"]
+    },
+    {
+      "id": "hairStyle:twin-tail",
+      "slot": "hairStyle",
+      "value": "twin-tail",
+      "label": "물결 트윈테일",
+      "price": 0,
+      "tier": "basic",
+      "characters": ["girl"]
+    },
+    {
+      "id": "hairStyle:half-up",
+      "slot": "hairStyle",
+      "value": "half-up",
+      "label": "볼륨 반묶음",
+      "price": 0,
+      "tier": "basic",
+      "characters": ["girl"]
     },
     {
       "id": "hairTone:original",

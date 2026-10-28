@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { SKIN_TONES } from "./palettes.js";
+import { createNativeCollar } from "./native-collar.js";
 
 export const GARMENT_TOPS = Object.freeze({
   "hanbok-ivory": { kind: "hanbok", color: "#f3e7cd", trim: "#8e3049" },
@@ -45,6 +47,7 @@ const mat = (color, options = {}) =>
     color,
     roughness: 0.82,
     metalness: 0,
+    side: THREE.DoubleSide,
     ...options,
   });
 const add = (parent, geometry, material, position = [0, 0, 0]) => {
@@ -112,9 +115,6 @@ function segment(parent, a, b, radiusA, radiusB, material) {
   );
   return object;
 }
-function roundedJoint(parent, point, radius, material) {
-  return add(parent, new THREE.SphereGeometry(radius, 20, 12), material, point);
-}
 function ring(parent, y, radius, depth, material, thickness = 0.006) {
   const object = add(
     parent,
@@ -125,6 +125,52 @@ function ring(parent, y, radius, depth, material, thickness = 0.006) {
   object.rotation.x = Math.PI / 2;
   object.scale.y = depth;
   return object;
+}
+
+// Cloth is a single smooth surface with its own rig weights. The old rigid
+// cylinders/sphere elbows separated as soon as a pose bent the arm.
+function loftGeometry(
+  profiles,
+  { rings = 32, segments = 48, pleats = 0 } = {},
+) {
+  const curve = new THREE.CatmullRomCurve3(
+    profiles.map(([y, x, z]) => new THREE.Vector3(x, y, z)),
+    false,
+    "centripetal",
+  );
+  const points = curve.getPoints(rings);
+  const positions = [],
+    uv = [],
+    indices = [];
+  for (let row = 0; row <= rings; row++) {
+    const p = points[row];
+    for (let col = 0; col <= segments; col++) {
+      const angle = (col / segments) * Math.PI * 2;
+      const fold =
+        1 +
+        pleats * Math.cos(angle * 18) * Math.sin((row / rings) * Math.PI * 0.8);
+      positions.push(
+        Math.sin(angle) * p.x * fold,
+        p.y,
+        Math.cos(angle) * p.z * fold,
+      );
+      uv.push(col / segments, row / rings);
+      if (row < rings && col < segments) {
+        const a = row * (segments + 1) + col,
+          b = a + segments + 1;
+        indices.push(a, a + 1, b, b, a + 1, b + 1);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 // Original, stylized crane/cloud embroidery. No student photos or third-party
@@ -208,7 +254,7 @@ function rankBadgeTexture() {
   return texture;
 }
 
-/** Real garment geometry bound to the source rig, with no extra model requests. */
+/** Smooth rigged clothing, built once per choice and released with the stage. */
 export function createGarmentController(root, character) {
   let source;
   root.traverse((o) => {
@@ -221,538 +267,798 @@ export function createGarmentController(root, character) {
       dispose() {},
     };
   const bones = new Map(
-    source.skeleton.bones.map((b, i) => [
-      b.name.toLowerCase(),
-      { bone: b, index: i },
+    source.skeleton.bones.map((bone, index) => [
+      bone.name.toLowerCase(),
+      { bone, index },
     ]),
   );
-  const bindPoints = new Map(
+  const points = new Map(
     [...bones].map(([name, { index }]) => [
       name,
-      new THREE.Vector3()
-        .setFromMatrixPosition(
-          source.skeleton.boneInverses[index].clone().invert(),
-        )
-        .toArray(),
+      new THREE.Vector3().setFromMatrixPosition(
+        source.skeleton.boneInverses[index].clone().invert(),
+      ),
     ]),
   );
+  const point = (name) => points.get(name.toLowerCase()).clone();
+  const index = (name) => bones.get(name.toLowerCase()).index;
+  const hipY = point("Hips").y;
+  const waist = hipY + 0.019;
   const groups = new Map();
-  const skinMaterial = mat("#e6ac86", { roughness: 0.7 });
-  const isBoy = character === "boy";
+  const materials = new Map();
+  const material = (color, options = {}) => {
+    if (Object.keys(options).length) return mat(color, options);
+    if (!materials.has(color)) materials.set(color, mat(color));
+    return materials.get(color);
+  };
+  const skinMaterial = material("#e6ac86");
+  const nativeCollar = createNativeCollar(source, character);
   let look = {
     top: "plain-top",
     bottom: "plain-bottom",
     accessory: "none",
     skinTone: "original",
   };
-  function attach(key, boneName) {
-    const { bone, index } = bones.get(boneName.toLowerCase());
-    const object = new THREE.Group();
-    object.name = key;
-    object.matrixAutoUpdate = false;
-    object.matrix
-      .copy(source.skeleton.boneInverses[index])
-      .multiply(source.bindMatrix);
-    bone.add(object);
-    return object;
-  }
+  let disposed = false;
   function collection(id) {
     const parts = [];
     groups.set(id, parts);
-    return (bone) => {
-      const g = attach(`AvatarGarment:${id}:${bone}`, bone);
-      parts.push(g);
-      return g;
+    const part = (boneName) => {
+      const { bone, index: boneIndex } = bones.get(boneName.toLowerCase());
+      const group = new THREE.Group();
+      group.name = `AvatarGarment:${id}:${boneName}`;
+      group.matrixAutoUpdate = false;
+      group.matrix
+        .copy(source.skeleton.boneInverses[boneIndex])
+        .multiply(source.bindMatrix);
+      bone.add(group);
+      parts.push(group);
+      return group;
     };
-  }
-  const point = (name) => bindPoints.get(name.toLowerCase());
-  const interpolate = (a, b, t) =>
-    new THREE.Vector3(...a).lerp(new THREE.Vector3(...b), t).toArray();
-
-  function makeArms(part, cloth, trim, short) {
-    for (const side of ["Left", "Right"]) {
-      const shoulder = point(side + "Arm"),
-        elbow = point(side + "ForeArm"),
-        wrist = point(side + "Hand");
-      const upper = part(side + "Arm"),
-        lower = part(side + "ForeArm");
-      // Bridge the source cuff removal plane to the retained hand.
-      segment(
-        lower,
-        interpolate(elbow, wrist, 0.86),
-        interpolate(elbow, wrist, 1.14),
-        0.033,
-        0.03,
-        skinMaterial,
-      );
-      if (short) {
-        segment(upper, shoulder, elbow, 0.035, 0.032, skinMaterial);
-        roundedJoint(lower, elbow, 0.033, skinMaterial);
-        segment(lower, elbow, wrist, 0.032, 0.026, skinMaterial);
-        const end = interpolate(shoulder, elbow, 0.58);
-        segment(upper, shoulder, end, 0.051, 0.047, cloth);
-        segment(
-          upper,
-          interpolate(shoulder, elbow, 0.54),
-          interpolate(shoulder, elbow, 0.6),
-          0.048,
-          0.048,
-          trim,
+    part.skinned = (name, geometry, cloth, weights) => {
+      const skinIndices = [],
+        skinWeights = [];
+      const position = geometry.attributes.position;
+      for (let i = 0; i < position.count; i++) {
+        const pairs = weights(
+          new THREE.Vector3().fromBufferAttribute(position, i),
+          i,
         );
-      } else {
-        segment(upper, shoulder, elbow, 0.054, 0.069, cloth);
-        roundedJoint(lower, elbow, 0.068, cloth);
-        segment(
-          lower,
-          elbow,
-          interpolate(elbow, wrist, 0.96),
-          0.069,
-          0.047,
-          cloth,
-        );
-        segment(
-          lower,
-          interpolate(elbow, wrist, 0.88),
-          interpolate(elbow, wrist, 0.98),
-          0.049,
-          0.048,
-          trim,
-        );
+        const sum = pairs.reduce((n, pair) => n + pair[1], 0);
+        for (let j = 0; j < 4; j++) {
+          skinIndices.push(pairs[j]?.[0] ?? 0);
+          skinWeights.push((pairs[j]?.[1] ?? 0) / sum);
+        }
       }
-      roundedJoint(upper, shoulder, short ? 0.05 : 0.055, cloth);
+      geometry.setAttribute(
+        "skinIndex",
+        new THREE.Uint16BufferAttribute(skinIndices, 4),
+      );
+      geometry.setAttribute(
+        "skinWeight",
+        new THREE.Float32BufferAttribute(skinWeights, 4),
+      );
+      const mesh = new THREE.SkinnedMesh(geometry, cloth);
+      mesh.name = `AvatarGarment:${id}:${name}`;
+      mesh.frustumCulled = false;
+      source.parent.add(mesh);
+      mesh.bind(source.skeleton, source.bindMatrix);
+      parts.push(mesh);
+      return mesh;
+    };
+    return part;
+  }
+  const mixWeights = (nameA, nameB, t) => [
+    [index(nameA), 1 - t],
+    [index(nameB), t],
+  ];
+  function bodyWeights(p) {
+    const chain = ["Hips", "Spine02", "Spine01", "Spine"];
+    for (let i = 0; i < chain.length - 1; i++) {
+      const a = point(chain[i]).y,
+        b = point(chain[i + 1]).y;
+      if (p.y <= b)
+        return mixWeights(
+          chain[i],
+          chain[i + 1],
+          THREE.MathUtils.clamp((p.y - a) / (b - a), 0, 1),
+        );
+    }
+    return [[index("Spine"), 1]];
+  }
+  function skinTube(
+    part,
+    name,
+    joints,
+    radii,
+    cloth,
+    {
+      start = 0,
+      end = 1,
+      drape = 0,
+      folds = 0,
+      shoulder = false,
+      waistFit = false,
+    } = {},
+  ) {
+    const [a, b, c] = joints;
+    const lengths = [a.distanceTo(b), b.distanceTo(c)];
+    const jointT = lengths[0] / (lengths[0] + lengths[1]);
+    const route = new THREE.CatmullRomCurve3([a, b, c], false, "centripetal");
+    const rows = 32,
+      cols = 28,
+      positions = [],
+      uv = [],
+      indices = [],
+      weights = [];
+    const curveT = (t) =>
+      t < jointT
+        ? (t / jointT) * 0.5
+        : 0.5 + ((t - jointT) / (1 - jointT)) * 0.5;
+    const center = (t) =>
+      t < 0
+        ? a.clone().lerp(b, t / jointT)
+        : t > 1
+          ? b.clone().lerp(c, (t - jointT) / (1 - jointT))
+          : route.getPoint(curveT(t));
+    for (let row = 0; row <= rows; row++) {
+      const t = start + ((end - start) * row) / rows;
+      const p = center(t);
+      const tangent = route
+        .getTangent(THREE.MathUtils.clamp(curveT(t), 0, 1))
+        .normalize();
+      const front = new THREE.Vector3(0, 0, 1)
+        .addScaledVector(tangent, -tangent.z)
+        .normalize();
+      const across = new THREE.Vector3()
+        .crossVectors(tangent, front)
+        .normalize();
+      const q = t / jointT;
+      let r =
+        t < jointT
+          ? THREE.MathUtils.lerp(radii[0], radii[1], q)
+          : THREE.MathUtils.lerp(
+              radii[1],
+              radii[2],
+              (t - jointT) / (1 - jointT),
+            );
+      if (shoulder) r *= Math.sqrt(THREE.MathUtils.smoothstep(t, start, 0.08));
+      const blend = THREE.MathUtils.smoothstep(t, jointT - 0.15, jointT + 0.15);
+      for (let col = 0; col <= cols; col++) {
+        const angle = (col / cols) * Math.PI * 2;
+        const pleat =
+          1 +
+          folds *
+            Math.sin(angle * 5 + 0.6) *
+            Math.sin((Math.PI * (t - start)) / (end - start));
+        const v = p
+          .clone()
+          .addScaledVector(front, Math.cos(angle) * r * pleat * 0.88)
+          .addScaledVector(across, Math.sin(angle) * r * pleat);
+        if (waistFit) {
+          // Merge the paired leg shells inside the shared waistband. Without
+          // this taper, their rear corners can pierce the shirt at the hip.
+          const blend = THREE.MathUtils.smoothstep(
+            v.y,
+            hipY - 0.11,
+            hipY - 0.055,
+          );
+          const distance = Math.hypot(v.x / 0.108, v.z / 0.068);
+          const scale = THREE.MathUtils.lerp(
+            1,
+            Math.min(1, 1 / distance),
+            blend,
+          );
+          v.x *= scale;
+          v.z *= scale;
+        }
+        v.y -= drape * Math.max(0, -Math.sin(angle)) * Math.sin(Math.PI * t);
+        positions.push(v.x, v.y, v.z);
+        uv.push(col / cols, row / rows);
+        weights.push([
+          blend,
+          shoulder ? 1 - THREE.MathUtils.smoothstep(t, -0.08, 0.17) : 0,
+        ]);
+        if (row < rows && col < cols) {
+          const k = row * (cols + 1) + col,
+            l = k + cols + 1;
+          indices.push(k, k + 1, l, l, k + 1, l + 1);
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return part.skinned(name, geo, cloth, (_p, i) => {
+      const [bend, chest] = weights[i];
+      const upper = name.includes("Left")
+        ? joints.upperLeft
+        : joints.upperRight;
+      const lower = name.includes("Left")
+        ? joints.lowerLeft
+        : joints.lowerRight;
+      return [
+        [index(upper), (1 - bend) * (1 - chest)],
+        [index(lower), bend * (1 - chest)],
+        [index("Spine"), chest],
+      ];
+    });
+  }
+  function limb(
+    part,
+    side,
+    upperName,
+    lowerName,
+    endName,
+    radii,
+    cloth,
+    opts = {},
+  ) {
+    const joints = [
+      point(side + upperName),
+      point(side + lowerName),
+      point(side + endName),
+    ];
+    joints.upperLeft = "Left" + upperName;
+    joints.upperRight = "Right" + upperName;
+    joints.lowerLeft = "Left" + lowerName;
+    joints.lowerRight = "Right" + lowerName;
+    return skinTube(
+      part,
+      side + upperName + ":" + (opts.name || "cloth"),
+      joints,
+      radii,
+      cloth,
+      opts,
+    );
+  }
+  function makeArms(part, cloth, trim, kind) {
+    const short = kind === "summer";
+    for (const side of ["Left", "Right"]) {
+      const anchor = point(side + "Arm");
+      const shoulder = new THREE.SphereGeometry(1, 24, 16);
+      shoulder.scale(0.048, 0.037, 0.05);
+      shoulder.translate(anchor.x, anchor.y, anchor.z + 0.006);
+      part.skinned(side + "ShoulderBridge", shoulder, cloth, (p) => {
+        const outward = side === "Left" ? p.x - anchor.x : anchor.x - p.x;
+        const arm = THREE.MathUtils.smoothstep(outward, -0.045, 0.03);
+        return mixWeights("Spine", side + "Arm", arm);
+      });
+      // The hand remains the authored textured mesh. A soft continuous wrist
+      // reaches into it; no spherical elbow or disconnected cylinder caps.
+      limb(
+        part,
+        side,
+        "Arm",
+        "ForeArm",
+        "Hand",
+        [0.036, 0.032, 0.026],
+        skinMaterial,
+        { start: 0.01, end: 1.1, name: "skin" },
+      );
+      const radii = short
+        ? [0.048, 0.043, 0.037]
+        : kind === "robe"
+          ? [0.051, 0.057, 0.043]
+          : [0.05, 0.054, 0.041];
+      limb(part, side, "Arm", "ForeArm", "Hand", radii, cloth, {
+        start: -0.08,
+        end: short ? 0.3 : 0.94,
+        drape: short ? 0 : 0.011,
+        folds: 0.028,
+        shoulder: true,
+      });
+      limb(
+        part,
+        side,
+        "Arm",
+        "ForeArm",
+        "Hand",
+        radii.map((r) => r + 0.0015),
+        trim,
+        { start: short ? 0.28 : 0.9, end: short ? 0.32 : 0.965, name: "cuff" },
+      );
     }
   }
-
+  function skirtLegs(part, cloth) {
+    for (const side of ["Left", "Right"]) {
+      const lower = part(side + "Leg"),
+        ankle = point(side + "Foot"),
+        knee = point(side + "Leg");
+      const start = knee
+        .clone()
+        .lerp(
+          ankle,
+          THREE.MathUtils.clamp((knee.y - 0.17) / (knee.y - ankle.y), 0, 1),
+        );
+      const connection = segment(
+        lower,
+        start.toArray(),
+        ankle
+          .clone()
+          .add(new THREE.Vector3(0, -0.08, 0))
+          .toArray(),
+        0.034,
+        0.029,
+        cloth,
+      );
+      connection.name = `AvatarAnkleConnection:${side}`;
+    }
+  }
   function buildTop(id) {
     const spec = GARMENT_TOPS[id],
       part = collection(id),
-      torso = part("Spine02");
-    const cloth = mat(spec.color),
-      trim = mat(spec.trim),
-      ivory = mat("#f6efdf");
-    // Close the small neck area formerly occupied by the authored shirt collar.
+      cloth = material(spec.color),
+      trim = material(spec.trim),
+      ivory = material("#f6efdf");
+    const torso = part("Spine");
+    const neck = part("neck");
     segment(
-      part("neck"),
-      point("neck"),
-      point("Head"),
+      neck,
+      point("neck")
+        .clone()
+        .add(new THREE.Vector3(0, -0.018, 0))
+        .toArray(),
+      point("Head").toArray(),
       0.043,
       0.038,
       skinMaterial,
     );
-    const hem = spec.kind === "robe" ? 0.18 : isBoy ? 0.55 : 0.63;
-    if (spec.kind === "robe") {
-      // The robe covers the selected bottom, so it owns the two trouser legs
-      // down to the retained shoes as well; the hem must never float above them.
-      for (const side of ["Left", "Right"]) {
-        const lower = part(side + "Leg"),
-          ankle = point(side + "Foot"),
-          knee = point(side + "Leg");
-        const start = interpolate(
-          knee,
-          ankle,
-          (knee[1] - 0.186) / (knee[1] - ankle[1]),
+    const hem =
+      spec.kind === "robe"
+        ? 0.145
+        : hipY - (spec.kind === "summer" ? 0.05 : 0.025);
+    const profile =
+      spec.kind === "robe"
+        ? [
+            [hem, 0.222, 0.158],
+            [0.18, 0.222, 0.158],
+            [0.3, 0.207, 0.125],
+            [waist - 0.07, 0.157, 0.093],
+            [waist, 0.124, 0.077],
+            [0.75, 0.13, 0.083],
+            [0.804, 0.145, 0.082],
+            [0.825, 0.116, 0.071],
+            [0.851, 0.048, 0.043],
+          ]
+        : [
+            [
+              hem,
+              spec.kind === "summer" ? 0.143 : 0.127,
+              spec.kind === "summer" ? 0.093 : 0.083,
+            ],
+            [
+              hem + 0.015,
+              spec.kind === "summer" ? 0.143 : 0.127,
+              spec.kind === "summer" ? 0.092 : 0.082,
+            ],
+            [
+              waist + 0.035,
+              spec.kind === "summer" ? 0.135 : 0.117,
+              spec.kind === "summer" ? 0.089 : 0.075,
+            ],
+            [0.754, 0.128, 0.08],
+            [0.804, 0.145, 0.081],
+            [0.825, 0.115, 0.07],
+            [0.851, 0.048, 0.042],
+          ];
+    const body = loftGeometry(profile, {
+      pleats: spec.kind === "robe" ? 0.036 : 0.007,
+      rings: 40,
+    });
+    part.skinned("Body", body, cloth, bodyWeights);
+    const chestCurve = new THREE.CatmullRomCurve3(
+      profile.map(([y, x, z]) => new THREE.Vector3(x, y, z)),
+      false,
+      "centripetal",
+    ).getPoints(80);
+    const chestFront = (x, y) => {
+      const right = chestCurve.findIndex((p) => p.y >= y);
+      const b = chestCurve[right < 0 ? chestCurve.length - 1 : right],
+        a = chestCurve[Math.max(0, right - 1)];
+      const t =
+        b.y === a.y ? 0 : THREE.MathUtils.clamp((y - a.y) / (b.y - a.y), 0, 1);
+      const radius = THREE.MathUtils.lerp(a.x, b.x, t),
+        depth = THREE.MathUtils.lerp(a.z, b.z, t);
+      return depth * Math.sqrt(Math.max(0.04, 1 - (x / radius) ** 2));
+    };
+    const drapePanel = (parent, outline, cloth, z) => {
+      const mesh = panel(parent, outline, cloth, 0);
+      const flat = mesh.geometry;
+      mesh.geometry = new TessellateModifier(0.012, 5).modify(flat);
+      flat.dispose();
+      const vertices = mesh.geometry.attributes.position;
+      for (let i = 0; i < vertices.count; i++)
+        vertices.setZ(
+          i,
+          vertices.getZ(i) +
+            chestFront(vertices.getX(i), vertices.getY(i)) +
+            Math.max(0.002, z - 0.08),
         );
-        segment(lower, start, ankle, 0.033, 0.03, cloth);
-        roundedJoint(lower, ankle, 0.03, cloth);
-      }
+      vertices.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+      return mesh;
+    };
+    if (spec.kind === "robe") {
+      skirtLegs(part, material("#e9dfce"));
+      const beltY = waist + 0.025;
+      const belt = part("Spine02");
       lathe(
+        belt,
+        [
+          [0.121, beltY - 0.014],
+          [0.128, beltY - 0.012],
+          [0.128, beltY + 0.014],
+          [0.121, beltY + 0.015],
+        ],
+        material("#423a30"),
+        0.64,
+      );
+      for (const x of [-0.086, -0.044, 0, 0.044, 0.086]) {
+        const z = Math.sqrt(Math.max(0, 0.129 ** 2 - x * x)) * 0.64 + 0.003;
+        const plaque = add(
+          belt,
+          new THREE.BoxGeometry(0.025, 0.019, 0.004),
+          trim,
+          [x, beltY, z],
+        );
+        add(
+          plaque,
+          new THREE.BoxGeometry(0.016, 0.01, 0.002),
+          material("#7c633d"),
+          [0, 0, 0.003],
+        );
+      }
+      // Ivory cross-collar is fitted over the chest, not a floating neck ring.
+      drapePanel(
         torso,
         [
-          [0, hem],
-          [0.18, hem],
-          [0.19, hem + 0.015],
-          [0.17, 0.43],
-          [0.125, 0.64],
-          [0.115, 0.76],
-          [0.12, 0.8],
-          [0.057, 0.841],
-          [0, 0.841],
+          [-0.044, 0.849],
+          [-0.055, 0.836],
+          [0.035, 0.755],
+          [0.047, 0.767],
         ],
-        cloth,
+        ivory,
+        0.081,
       );
-      const beltY = isBoy ? 0.62 : 0.67;
-      ring(torso, beltY, 0.132, 0.67, trim, 0.014);
-      for (const x of [-0.09, -0.045, 0, 0.045, 0.09]) {
-        const buckle = add(
+      drapePanel(
+        torso,
+        [
+          [0.044, 0.849],
+          [0.055, 0.836],
+          [-0.012, 0.777],
+          [-0.025, 0.789],
+        ],
+        ivory,
+        0.08,
+      );
+      if (spec.badge) {
+        const badge = add(
           torso,
-          new THREE.BoxGeometry(0.027, 0.022, 0.006),
-          mat("#70522e"),
-          [
-            x,
-            beltY,
-            Math.sqrt(Math.max(0, 0.132 ** 2 - x ** 2)) * 0.67 + 0.008,
-          ],
+          new THREE.PlaneGeometry(0.096, 0.087),
+          material("#ffffff", { map: rankBadgeTexture() }),
+          [0, 0.731, 0.086],
         );
-        add(
-          buckle,
-          new THREE.BoxGeometry(0.018, 0.014, 0.003),
-          trim,
-          [0, 0, 0.004],
-        );
+        badge.name = "AvatarRobeEmbroidery";
       }
-      ring(torso, 0.833, 0.055, 0.75, ivory, 0.005);
-      if (spec.badge)
-        add(
-          torso,
-          new THREE.PlaneGeometry(0.105, 0.095),
-          mat("#ffffff", { map: rankBadgeTexture() }),
-          [0, 0.738, 0.08],
-        );
+    } else if (spec.kind === "hanbok") {
+      drapePanel(
+        torso,
+        [
+          [-0.044, 0.848],
+          [-0.058, 0.835],
+          [0.052, 0.718],
+          [0.066, 0.73],
+        ],
+        ivory,
+        0.082,
+      );
+      drapePanel(
+        torso,
+        [
+          [0.044, 0.848],
+          [0.058, 0.835],
+          [-0.018, 0.751],
+          [-0.032, 0.763],
+        ],
+        ivory,
+        0.081,
+      );
+      const ribbonY = 0.735;
+      drapePanel(
+        torso,
+        [
+          [0.025, ribbonY],
+          [0.078, ribbonY + 0.014],
+          [0.071, ribbonY - 0.013],
+          [0.024, ribbonY - 0.008],
+        ],
+        trim,
+        0.088,
+      );
+      drapePanel(
+        torso,
+        [
+          [0.025, ribbonY],
+          [-0.009, ribbonY + 0.012],
+          [-0.025, ribbonY - 0.002],
+          [0.024, ribbonY - 0.009],
+        ],
+        trim,
+        0.089,
+      );
+      drapePanel(
+        torso,
+        [
+          [0.021, ribbonY],
+          [0.037, ribbonY - 0.004],
+          [0.057, hem + 0.018],
+          [0.039, hem + 0.014],
+        ],
+        trim,
+        0.089,
+      );
+      drapePanel(
+        torso,
+        [
+          [0.012, ribbonY - 0.004],
+          [0.026, ribbonY - 0.004],
+          [0.018, hem + 0.013],
+          [0.003, hem + 0.02],
+        ],
+        trim,
+        0.09,
+      );
+    } else {
+      // Small folded polo collars and a recessed placket retain the school
+      // uniform shape without raised wire outlines or giant geometric lapels.
+      drapePanel(
+        torso,
+        [
+          [-0.004, 0.847],
+          [-0.049, 0.841],
+          [-0.067, 0.812],
+          [-0.022, 0.792],
+        ],
+        trim,
+        0.08,
+      );
+      drapePanel(
+        torso,
+        [
+          [0.004, 0.847],
+          [0.049, 0.841],
+          [0.067, 0.812],
+          [0.022, 0.792],
+        ],
+        trim,
+        0.08,
+      );
+      drapePanel(
+        torso,
+        [
+          [-0.006, 0.822],
+          [0.006, 0.822],
+          [0.006, 0.756],
+          [-0.006, 0.756],
+        ],
+        trim,
+        0.083,
+      );
+      for (const y of [0.792, 0.77])
+        add(torso, new THREE.SphereGeometry(0.0026, 8, 5), ivory, [
+          0,
+          y,
+          0.087,
+        ]);
       tube(
         torso,
         [
-          [0.022, 0.815, 0.065],
-          [0.064, 0.78, 0.075],
-          [0.08, beltY + 0.018, 0.083],
+          [0.049, 0.741, 0.081],
+          [0.084, 0.741, 0.075],
         ],
-        0.0025,
+        0.0015,
         trim,
       );
-    } else {
-      lathe(
-        torso,
-        [
-          [0, hem],
-          [0.115, hem],
-          [0.117, hem + 0.012],
-          [0.11, 0.73],
-          [0.122, 0.8],
-          [0.056, 0.841],
-          [0, 0.841],
-        ],
-        cloth,
-      );
-      if (spec.kind === "hanbok") {
-        panel(
-          torso,
-          [
-            [-0.046, 0.837],
-            [-0.064, 0.821],
-            [0.058, 0.69],
-            [0.072, 0.705],
-          ],
-          ivory,
-          0.078,
-        );
-        panel(
-          torso,
-          [
-            [0.046, 0.837],
-            [0.063, 0.82],
-            [-0.025, 0.724],
-            [-0.039, 0.739],
-          ],
-          ivory,
-          0.079,
-        );
-        const ribbonY = 0.715;
-        panel(
-          torso,
-          [
-            [0.02, ribbonY],
-            [0.075, ribbonY + 0.014],
-            [0.066, ribbonY - 0.022],
-            [0.02, ribbonY - 0.009],
-          ],
-          trim,
-          0.087,
-        );
-        panel(
-          torso,
-          [
-            [0.02, ribbonY],
-            [-0.015, ribbonY + 0.014],
-            [-0.032, ribbonY - 0.006],
-            [0.02, ribbonY - 0.011],
-          ],
-          trim,
-          0.089,
-        );
-        panel(
-          torso,
-          [
-            [0.015, ribbonY - 0.006],
-            [0.034, ribbonY - 0.006],
-            [0.055, hem + 0.025],
-            [0.036, hem + 0.015],
-          ],
-          trim,
-          0.09,
-        );
-        panel(
-          torso,
-          [
-            [0.01, ribbonY - 0.006],
-            [0.025, ribbonY - 0.006],
-            [0.018, hem + 0.008],
-            [0.001, hem + 0.014],
-          ],
-          trim,
-          0.091,
-        );
-      } else {
-        panel(
-          torso,
-          [
-            [-0.006, 0.836],
-            [-0.052, 0.837],
-            [-0.085, 0.796],
-            [-0.036, 0.765],
-          ],
-          cloth,
-          0.08,
-        );
-        panel(
-          torso,
-          [
-            [0.006, 0.836],
-            [0.052, 0.837],
-            [0.085, 0.796],
-            [0.036, 0.765],
-          ],
-          cloth,
-          0.08,
-        );
-        tube(
-          torso,
-          [
-            [-0.051, 0.834, 0.085],
-            [-0.08, 0.796, 0.085],
-            [-0.036, 0.77, 0.085],
-          ],
-          0.0024,
-          trim,
-        );
-        tube(
-          torso,
-          [
-            [0.051, 0.834, 0.085],
-            [0.08, 0.796, 0.085],
-            [0.036, 0.77, 0.085],
-          ],
-          0.0024,
-          trim,
-        );
-        add(
-          torso,
-          new THREE.BoxGeometry(0.012, 0.072, 0.004),
-          trim,
-          [0, 0.769, 0.081],
-        );
-        for (const y of [0.786, 0.763])
-          add(torso, new THREE.SphereGeometry(0.003, 10, 6), ivory, [
-            0,
-            y,
-            0.086,
-          ]);
-        tube(
-          torso,
-          [
-            [0.052, 0.734, 0.08],
-            [0.088, 0.734, 0.074],
-          ],
-          0.0023,
-          trim,
-        );
-      }
     }
     makeArms(
       part,
       cloth,
-      spec.kind === "hanbok" ? ivory : trim,
-      spec.kind === "summer",
+      spec.kind === "hanbok" ? ivory : spec.kind === "robe" ? ivory : trim,
+      spec.kind,
     );
   }
-
   function buildBottom(id) {
     const spec = GARMENT_BOTTOMS[id],
       part = collection(id),
-      cloth = mat(spec.color);
-    const waist = isBoy ? 0.59 : 0.67;
+      cloth = material(spec.color);
+    const hips = part("Hips");
     if (spec.kind === "skirt") {
-      const hips = part("Hips");
-      for (const side of ["Left", "Right"]) {
-        const lower = part(side + "Leg"),
-          ankle = point(side + "Foot"),
-          knee = point(side + "Leg");
-        const start = interpolate(
-          knee,
-          ankle,
-          (knee[1] - 0.18) / (knee[1] - ankle[1]),
-        );
-        segment(lower, start, ankle, 0.03, 0.027, skinMaterial);
-        roundedJoint(lower, ankle, 0.028, skinMaterial);
-      }
-      const skirt = lathe(
+      skirtLegs(part, skinMaterial);
+      const geometry = loftGeometry(
+        [
+          [0.141, 0.235, 0.158],
+          [0.166, 0.238, 0.16],
+          [0.27, 0.222, 0.147],
+          [0.45, 0.185, 0.121],
+          [waist - 0.09, 0.138, 0.09],
+          [waist - 0.035, 0.111, 0.071],
+          [waist + 0.015, 0.108, 0.069],
+        ],
+        { rings: 36, segments: 64, pleats: 0.048 },
+      );
+      const skirt = add(hips, geometry, cloth);
+      skirt.name = "AvatarChimaPleatedSurface";
+      lathe(
         hips,
         [
-          [0, 0.17],
-          [0.215, 0.17],
-          [0.222, 0.185],
-          [0.2, 0.3],
-          [0.155, 0.54],
-          [0.111, waist],
-          [0, waist],
+          [0.11, waist - 0.004],
+          [0.115, waist - 0.004],
+          [0.115, waist + 0.018],
+          [0.11, waist + 0.018],
         ],
         cloth,
-        0.69,
-        96,
+        0.66,
       );
-      ring(hips, waist - 0.005, 0.111, 0.69, mat(spec.color), 0.012);
-      // Pleats belong to the cloth surface itself; separate overlay lines
-      // would intersect the curved skirt and flicker during orbit/poses.
-      const positions = skirt.geometry.attributes.position;
-      for (let i = 0; i < positions.count; i++) {
-        const x = positions.getX(i),
-          z = positions.getZ(i);
-        const radius = Math.hypot(x, z);
-        if (radius < 0.01) continue;
-        const spread = THREE.MathUtils.clamp(
-          (waist - positions.getY(i)) / (waist - 0.17),
-          0,
-          1,
-        );
-        const pleat = 1 + Math.cos(Math.atan2(x, z) * 16) * 0.016 * spread;
-        positions.setXYZ(i, x * pleat, positions.getY(i), z * pleat);
-      }
-      positions.needsUpdate = true;
-      skirt.geometry.computeVertexNormals();
       return;
     }
-    const hips = part("Hips");
+    // A shallow, rounded waistband overlaps two tapered cloth leg shells.
+    // The earlier long capped hip cylinder created a visible horizontal block.
+    if (spec.kind === "pants") skirtLegs(part, material("#e9dfce"));
     lathe(
       hips,
       [
-        [0, waist - 0.09],
-        [0.122, waist - 0.09],
-        [0.12, waist],
-        [0, waist],
+        [0.103, waist - 0.048],
+        [0.111, waist - 0.035],
+        [0.111, waist - 0.008],
+        [0.105, waist + 0.015],
       ],
       cloth,
-      0.72,
+      0.66,
     );
     for (const side of ["Left", "Right"]) {
-      const hip = point(side + "UpLeg"),
-        knee = point(side + "Leg"),
-        ankle = point(side + "Foot");
-      const upper = part(side + "UpLeg"),
-        lower = part(side + "Leg");
       if (spec.kind === "shorts") {
-        segment(upper, hip, knee, 0.044, 0.033, skinMaterial);
-        roundedJoint(lower, knee, 0.034, skinMaterial);
-        segment(lower, knee, ankle, 0.034, 0.027, skinMaterial);
-        segment(
-          upper,
-          interpolate(hip, knee, -0.1),
-          interpolate(hip, knee, 0.62),
-          0.067,
-          0.062,
-          cloth,
+        limb(
+          part,
+          side,
+          "UpLeg",
+          "Leg",
+          "Foot",
+          [0.045, 0.035, 0.028],
+          skinMaterial,
+          { start: 0.28, end: 1.035, name: "skin" },
+        );
+        limb(part, side, "UpLeg", "Leg", "Foot", [0.069, 0.06, 0.037], cloth, {
+          start: -0.18,
+          end: 0.33,
+          folds: 0.018,
+          waistFit: true,
+        });
+        limb(
+          part,
+          side,
+          "UpLeg",
+          "Leg",
+          "Foot",
+          [0.07, 0.061, 0.038],
+          material("#34404d"),
+          { start: 0.31, end: 0.335, name: "hem" },
         );
       } else {
-        segment(upper, interpolate(hip, knee, -0.1), knee, 0.068, 0.061, cloth);
-        roundedJoint(lower, knee, 0.062, cloth);
-        segment(
-          lower,
-          knee,
-          interpolate(knee, ankle, 0.94),
-          0.061,
-          0.037,
-          cloth,
-        );
-        segment(
-          lower,
-          interpolate(knee, ankle, 0.84),
-          interpolate(knee, ankle, 0.97),
-          0.039,
-          0.036,
-          mat(new THREE.Color(spec.color).multiplyScalar(0.85)),
+        limb(part, side, "UpLeg", "Leg", "Foot", [0.073, 0.067, 0.037], cloth, {
+          start: -0.18,
+          end: 0.96,
+          folds: 0.035,
+          waistFit: true,
+        });
+        limb(
+          part,
+          side,
+          "UpLeg",
+          "Leg",
+          "Foot",
+          [0.074, 0.067, 0.036],
+          material(new THREE.Color(spec.color).multiplyScalar(0.88).getStyle()),
+          { start: 0.9, end: 0.98, name: "cuff" },
         );
       }
     }
   }
-
   function buildHat(id) {
     const part = collection(id),
       head = part("Head"),
-      black = mat("#20232a", { roughness: 0.9 });
+      black = material("#252934", { roughness: 0.94 });
     if (id === "official-samo") {
       lathe(
         head,
         [
-          [0, 1.2],
-          [0.174, 1.2],
-          [0.174, 1.29],
-          [0.154, 1.35],
-          [0.136, 1.38],
-          [0, 1.39],
+          [0, 1.198],
+          [0.176, 1.198],
+          [0.18, 1.25],
+          [0.169, 1.32],
+          [0.137, 1.37],
+          [0, 1.377],
         ],
         black,
-        0.83,
+        0.85,
       );
-      const crown = add(
-        head,
-        new THREE.SphereGeometry(0.145, 32, 20),
-        black,
-        [0, 1.34, -0.055],
-      );
-      crown.scale.set(0.88, 0.72, 0.85);
       for (const side of [-1, 1]) {
-        const wing = add(
-          head,
-          new THREE.CapsuleGeometry(0.043, 0.17, 6, 16),
-          black,
-          [side * 0.245, 1.26, -0.045],
-        );
-        wing.rotation.z = Math.PI / 2 + side * 0.08;
-        wing.scale.z = 0.42;
+        const wing = add(head, new THREE.SphereGeometry(1, 24, 12), black, [
+          side * 0.249,
+          1.272,
+          -0.055,
+        ]);
+        wing.scale.set(0.126, 0.038, 0.014);
+        wing.rotation.z = side * 0.12;
       }
+      const seam = add(
+        head,
+        new THREE.TorusGeometry(0.17, 0.003, 6, 48),
+        material("#444952"),
+        [0, 1.21, 0],
+      );
+      seam.rotation.x = Math.PI / 2;
+      seam.scale.y = 0.85;
     } else {
       const brim = add(
         head,
-        new THREE.CylinderGeometry(0.3, 0.3, 0.009, 64),
+        new THREE.CylinderGeometry(0.3, 0.3, 0.006, 64),
         black,
-        [0, 1.225, -0.01],
+        [0, 1.231, -0.01],
       );
-      brim.scale.z = 0.9;
-      add(
+      brim.scale.z = 0.91;
+      lathe(
         head,
-        new THREE.CylinderGeometry(0.123, 0.15, 0.155, 48),
+        [
+          [0.148, 1.232],
+          [0.143, 1.245],
+          [0.122, 1.365],
+          [0.12, 1.378],
+          [0, 1.378],
+        ],
         black,
-        [0, 1.303, -0.01],
+        0.98,
       );
-      ring(head, 1.225, 0.3, 0.9, mat("#353943"), 0.003);
+      ring(head, 1.231, 0.299, 0.91, material("#4b4d54"), 0.0025);
       for (const side of [-1, 1])
         tube(
           head,
           [
-            [side * 0.16, 1.22, 0.01],
-            [side * 0.18, 1.02, 0.07],
-            [side * 0.1, 0.895, 0.09],
+            [side * 0.155, 1.228, 0.015],
+            [side * 0.176, 1.041, 0.09],
+            [side * 0.105, 0.918, 0.105],
           ],
-          0.0024,
+          0.0018,
           black,
         );
     }
+    // The cap overlaps the fitted hair crown instead of balancing on its tip.
+    for (const child of head.children)
+      child.position.y -= id === "official-samo" ? 0.023 : 0.026;
   }
-
   function setLook(next) {
+    if (disposed) return { top: false, bottom: false, accessory: false };
     look = { ...look, ...next };
-    const selected = [look.top, look.bottom, look.accessory];
-    const robe = GARMENT_TOPS[look.top]?.kind === "robe";
-    for (const id of selected) {
-      if (groups.has(id)) continue;
-      if (GARMENT_TOPS[id]) buildTop(id);
-      else if (GARMENT_BOTTOMS[id]) buildBottom(id);
-      else if (GARMENT_ACCESSORIES.includes(id)) buildHat(id);
-    }
-    for (const [id, parts] of groups) {
-      const visible = selected.includes(id) && !(robe && GARMENT_BOTTOMS[id]);
-      for (const part of parts) part.visible = visible;
-    }
-    const skin =
-      SKIN_TONES.find((s) => s.id === look.skinTone) || SKIN_TONES[0];
-    skinMaterial.color.set(skin.color);
+    nativeCollar.setVisible(!GARMENT_TOPS[look.top]);
+    const selected = [look.top, look.bottom, look.accessory],
+      robe = GARMENT_TOPS[look.top]?.kind === "robe";
+    for (const id of selected)
+      if (!groups.has(id)) {
+        if (GARMENT_TOPS[id]) buildTop(id);
+        else if (GARMENT_BOTTOMS[id]) buildBottom(id);
+        else if (GARMENT_ACCESSORIES.includes(id)) buildHat(id);
+      }
+    for (const [id, parts] of groups)
+      for (const part of parts)
+        part.visible = selected.includes(id) && !(robe && GARMENT_BOTTOMS[id]);
+    skinMaterial.color.set(
+      (SKIN_TONES.find((s) => s.id === look.skinTone) || SKIN_TONES[0]).color,
+    );
     return {
       top: Boolean(GARMENT_TOPS[look.top]),
       bottom: robe || Boolean(GARMENT_BOTTOMS[look.bottom]),
@@ -763,7 +1069,32 @@ export function createGarmentController(root, character) {
     supported: true,
     setLook,
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      nativeCollar.dispose();
+      const geometries = new Set(),
+        mats = new Set(),
+        textures = new Set();
+      for (const parts of groups.values())
+        for (const part of parts) {
+          part.traverse((node) => {
+            if (node.geometry) geometries.add(node.geometry);
+            for (const m of node.material
+              ? Array.isArray(node.material)
+                ? node.material
+                : [node.material]
+              : []) {
+              mats.add(m);
+              if (m.map) textures.add(m.map);
+            }
+          });
+          part.removeFromParent();
+        }
+      for (const g of geometries) g.dispose();
+      for (const m of mats) m.dispose();
+      for (const t of textures) t.dispose();
       groups.clear();
+      materials.clear();
     },
   };
 }

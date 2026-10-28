@@ -1,0 +1,22 @@
+.avatar-item-preview {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ws-bg, #f8fafc);
+}
+.avatar-item-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.avatar-item-preview-unavailable {
+  padding: 8px;
+  color: var(--ws-muted, #64748b);
+  font-size: 12px;
+  text-align: center;
+}

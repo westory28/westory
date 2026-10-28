@@ -1,6 +1,8 @@
 import React, {
   forwardRef,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -46,6 +48,9 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const stageRef = useRef<AvatarStageController | null>(null);
+    const preparedRef = useRef(false);
+    const selectionRef = useRef(0);
+    const preparationAbortRef = useRef<AbortController | null>(null);
     const lookRef = useRef(look);
     const callbacksRef = useRef({ onReady, onError, onLoadingChange });
     const [documentVisible, setDocumentVisible] = useState(
@@ -66,8 +71,9 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
     useImperativeHandle(
       forwardedRef,
       () => ({
-        getController: () => stageRef.current,
-        capture: () => stageRef.current?.capture() ?? null,
+        getController: () => (preparedRef.current ? stageRef.current : null),
+        capture: () =>
+          preparedRef.current ? (stageRef.current?.capture() ?? null) : null,
         rotate: (direction) => stageRef.current?.rotate(direction),
         zoom: (direction) => stageRef.current?.zoom(direction),
         resetView: () => stageRef.current?.resetView(),
@@ -75,6 +81,55 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
         animateOnce: (duration) => stageRef.current?.animateOnce(duration),
         stop: () => stageRef.current?.stop(),
       }),
+      [],
+    );
+
+    const applyLatestLook = useCallback(
+      async (controller: AvatarStageController, candidate: AvatarLook) => {
+        const selection = ++selectionRef.current;
+        preparationAbortRef.current?.abort();
+        const abort = new AbortController();
+        preparationAbortRef.current = abort;
+        preparedRef.current = false;
+        setError(null);
+        setLoading(true);
+        callbacksRef.current.onLoadingChange?.(true);
+        try {
+          await controller.prepareLook(candidate, { signal: abort.signal });
+          if (
+            abort.signal.aborted ||
+            selection !== selectionRef.current ||
+            stageRef.current !== controller
+          )
+            return;
+          const result = controller.setLook(candidate);
+          if (!result.applied)
+            throw new Error("선택한 아바타 모습을 적용하지 못했습니다.");
+          preparedRef.current = true;
+          setLoading(false);
+          callbacksRef.current.onLoadingChange?.(false);
+          callbacksRef.current.onReady?.(controller);
+        } catch (cause: unknown) {
+          if (
+            abort.signal.aborted ||
+            selection !== selectionRef.current ||
+            stageRef.current !== controller
+          )
+            return;
+          const failure =
+            cause instanceof Error
+              ? cause
+              : new Error("헤어를 불러오지 못했습니다.");
+          preparedRef.current = false;
+          setLoading(false);
+          setError("아바타를 불러오지 못했습니다. 다시 시도해 주세요.");
+          callbacksRef.current.onLoadingChange?.(false);
+          callbacksRef.current.onError?.(failure);
+        } finally {
+          if (preparationAbortRef.current === abort)
+            preparationAbortRef.current = null;
+        }
+      },
       [],
     );
 
@@ -87,17 +142,29 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
       }
       const abort = new AbortController();
       let controller: AvatarStageController | null = null;
+      let requestedLook = lookRef.current;
+      preparedRef.current = false;
       setError(null);
       setLoading(true);
       callbacksRef.current.onLoadingChange?.(true);
       void import("./renderer/engine.js")
         .then(async ({ createAvatarStage }) => {
           if (abort.signal.aborted) return null;
-          return createAvatarStage(container, lookRef.current, {
-            signal: abort.signal,
-            assetBaseUrl: `${import.meta.env.BASE_URL}avatar/v1/`,
-            maxPixelRatio: 1.5,
-          });
+          requestedLook = lookRef.current;
+          // Establish the base independently of the saved external hairstyle.
+          // New selections can then cancel a pending hair request immediately.
+          return createAvatarStage(
+            container,
+            {
+              ...requestedLook,
+              hairStyle: requestedLook.character === "boy" ? "curtain" : "bob",
+            },
+            {
+              signal: abort.signal,
+              assetBaseUrl: `${import.meta.env.BASE_URL}avatar/v1/`,
+              maxPixelRatio: 1.5,
+            },
+          );
         })
         .then((created) => {
           if (!created) return;
@@ -107,14 +174,15 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           }
           controller = created;
           stageRef.current = created;
-          // A look can change while its GLB is still decoding.
-          created.setLook(lookRef.current);
-          setLoading(false);
-          callbacksRef.current.onLoadingChange?.(false);
-          callbacksRef.current.onReady?.(created);
+          // The selected style may have changed while a previous GLB decoded.
+          void applyLatestLook(created, lookRef.current);
         })
         .catch((cause: unknown) => {
           if (abort.signal.aborted) return;
+          if (requestedLook.hairStyle !== lookRef.current.hairStyle) {
+            setRetry((value) => value + 1);
+            return;
+          }
           const failure =
             cause instanceof Error
               ? cause
@@ -125,15 +193,21 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           callbacksRef.current.onError?.(failure);
         });
       return () => {
+        selectionRef.current++;
+        preparedRef.current = false;
+        preparationAbortRef.current?.abort();
+        preparationAbortRef.current = null;
         abort.abort();
         controller?.dispose();
         if (stageRef.current === controller) stageRef.current = null;
       };
-    }, [active, documentVisible, look.character, retry]);
+    }, [active, documentVisible, look.character, retry, applyLatestLook]);
 
-    useEffect(() => {
-      stageRef.current?.setLook(look);
-    }, [look]);
+    useLayoutEffect(() => {
+      const controller = stageRef.current;
+      if (active && documentVisible && controller?.character === look.character)
+        void applyLatestLook(controller, look);
+    }, [look, active, documentVisible, applyLatestLook]);
 
     return (
       <div

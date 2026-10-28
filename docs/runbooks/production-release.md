@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 아바타 의상·헤어·미리보기 (2026-10-28)
+
+새 헤어는 `public/avatar/v1/models/hair-v3/`의 정적 GLB를 사용한다. 미리보기는 `node scripts/render-avatar-item-previews.mjs`로 실제 렌더러에서 재생성하며, `npm run build`가 포함한 `verify:avatar-previews`는 모델·렌더러·카탈로그 변경 후 오래된 이미지를 배포하지 못하게 검사한다. 생성된 GLB·WebP·manifest를 소스와 함께 커밋한다. `output/`의 생성 원본·QA 캡처는 일괄 스테이징하지 않는다. 제작·호환성·선택 배포 근거는 [아바타 개편 기록](../reviews/avatar-overhaul-20261028.md)을 따른다.
+
 ## 교사 아바타와 관리자 가격표 (2026-10-28)
 
 아바타 가격은 `avatar_catalog_settings/current`의 버전 있는 관리자 설정을 따르며, 학생 구매·저장 시 서버에서 현재 가격을 검증한다. 학생 꾸미기의 초기 조회는 아바타·지갑·가격표를 합친 `getAvatarStudioState`를 사용하고 교사 `getTeacherMyPage`는 지갑·가격표를 조회하지 않는다. 가격표 변경을 전파하려고 폴링·아이템별 쿼리를 추가하지 않는다. [검토 기록](../reviews/teacher-avatar-pricing-20261028.md)에 권한·비용·검증·선택 배포 대상을 기록했다.

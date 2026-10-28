@@ -43,17 +43,20 @@ type SettingSection = (typeof settingSections)[number]["id"];
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingSection>("general");
+  const [menuOpen, setMenuOpen] = useState(false);
   const activeSection = settingSections.find(({ id }) => id === activeTab)!;
   const selectSection = (section: SettingSection) => {
     setActiveTab(section);
+    setMenuOpen(false);
   };
 
   return (
-    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs">
+    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-settings-workspace">
       <TeacherSubNavigation
-        variant="tabs"
         title="관리자 설정"
         activeLabel={activeSection.label}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
       >
         {settingSections.map(({ id, label, icon }) => (
           <button
@@ -75,6 +78,7 @@ const Settings: React.FC = () => {
         className="teacher-sub-content teacher-settings-content"
         aria-label={activeSection.label}
       >
+        <h1 className="sr-only">관리자 설정 · {activeSection.label}</h1>
         {(activeTab === "my-page" || activeTab === "avatar-pricing") && (
           <React.Suspense
             fallback={<div role="status">화면을 불러오는 중입니다.</div>}

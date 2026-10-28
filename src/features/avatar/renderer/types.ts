@@ -1,10 +1,11 @@
-import type { AvatarLook } from "../catalog";
+import type { AvatarLook, AvatarSlot } from "../catalog";
 
 export type AvatarRenderLook = AvatarLook;
 export interface AvatarApplyResult {
   applied: boolean;
   unsupported?: string[];
   requiresReload?: boolean;
+  requiresPreparation?: boolean;
   reason?: string;
 }
 export interface AvatarCapabilities {
@@ -41,11 +42,16 @@ export interface AvatarStageController {
     renderedFrames: number;
   };
   setLook(look: Partial<AvatarLook>): AvatarApplyResult;
+  prepareLook(
+    look: Partial<AvatarLook>,
+    options?: { signal?: AbortSignal },
+  ): Promise<void>;
   setPose(pose: string): AvatarApplyResult;
   rotate(direction: "left" | "right" | number): void;
   zoom(direction: "in" | "out" | number): void;
   resetView(): void;
   focusFace(): void;
+  focusItem(slot: AvatarSlot): void;
   setAutoRotate(value: boolean): void;
   play(durationMs?: number): void;
   animateOnce(durationMs?: number): void;

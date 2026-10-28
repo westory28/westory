@@ -48,6 +48,10 @@ for (const character of ["girl", "boy"]) {
   for (const mesh of doc.meshes)
     for (const primitive of mesh.primitives) delete primitive.material;
   const { scene } = await new GLTFLoader().parseAsync(JSON.stringify(doc), "");
+  let sourceMesh;
+  scene.traverse((node) => {
+    if (!sourceMesh && node.isSkinnedMesh) sourceMesh = node;
+  });
   const poses = createPoseController(scene, {
     forwardAxis: new THREE.Vector3(0, 0, 1),
     armsEnabled: true,
@@ -59,6 +63,7 @@ for (const character of ["girl", "boy"]) {
     if (node.isBone) sourceBones.push(node);
   });
   const originalBoneCount = sourceBones.length;
+  const shoeSurfaceSamples = new Map();
   const choices = catalog.items.filter(
     (item) =>
       item.characters.includes(character) &&
@@ -90,19 +95,53 @@ for (const character of ["girl", "boy"]) {
     for (const pose of poses.supported) {
       assert.equal(poses.setPose(pose), true);
       scene.updateMatrixWorld(true);
+      sourceMesh.skeleton.update();
       let visibleGarments = 0;
+      let garmentVertices = 0;
       scene.traverseVisible((node) => {
-        if (!node.isMesh || node.isSkinnedMesh) return;
+        if (
+          !node.isMesh ||
+          (!node.name.startsWith("AvatarGarment:") &&
+            !node.parent?.name.startsWith("AvatarGarment:"))
+        )
+          return;
         visibleGarments++;
         assert(
           node.matrixWorld.elements.every(Number.isFinite),
           `${item.id}:${pose}: finite attachment`,
         );
         const positions = node.geometry.attributes.position;
+        garmentVertices += positions.count;
         assert(
           Array.from(positions.array).every(Number.isFinite),
           `${item.id}:${pose}: finite geometry`,
         );
+        if (node.isSkinnedMesh) {
+          const indices = node.geometry.attributes.skinIndex;
+          const weights = node.geometry.attributes.skinWeight;
+          assert(
+            indices && weights,
+            `${item.id}: continuous cloth has rig weights`,
+          );
+          for (let vertex = 0; vertex < positions.count; vertex++) {
+            let total = 0;
+            for (let channel = 0; channel < 4; channel++) {
+              const weight = weights.array[vertex * 4 + channel];
+              const bone = indices.array[vertex * 4 + channel];
+              assert(weight >= 0 && weight <= 1, `${item.id}: bounded weights`);
+              assert(
+                bone < node.skeleton.bones.length,
+                `${item.id}: existing skeleton only`,
+              );
+              total += weight;
+            }
+            assert(
+              Math.abs(total - 1) < 0.00001,
+              `${item.id}: normalized weights`,
+            );
+          }
+          node.computeBoundingBox();
+        }
         const bounds = new THREE.Box3().setFromObject(node);
         assert(
           bounds.min.y > -0.25 && bounds.max.y < 1.75,
@@ -110,9 +149,10 @@ for (const character of ["girl", "boy"]) {
         );
       });
       assert(visibleGarments > 0, `${item.id}: visible garment`);
+      assert(garmentVertices < 35000, `${item.id}: bounded garment geometry`);
       if (
         GARMENT_TOPS[item.value]?.kind === "robe" ||
-        GARMENT_BOTTOMS[item.value]?.kind === "skirt"
+        ["skirt", "pants"].includes(GARMENT_BOTTOMS[item.value]?.kind)
       ) {
         for (const side of ["Left", "Right"]) {
           const lower = scene.getObjectByName(
@@ -129,11 +169,53 @@ for (const character of ["girl", "boy"]) {
               .containsPoint(ankle),
             `${item.id}:${pose}: leg reaches retained shoe`,
           );
+          // The foot bone is above the authored shoe surface. Reaching that
+          // pivot alone previously passed while a visible ankle gap remained.
+          const key = `${pose}:${side}`;
+          if (!shoeSurfaceSamples.has(key)) {
+            sourceMesh.computeBoundingBox();
+            sourceMesh.computeBoundingSphere();
+            const samples = [];
+            for (const dx of [-0.015, 0, 0.015])
+              for (const dz of [0, 0.015, 0.03]) {
+                const ray = new THREE.Raycaster(
+                  ankle.clone().add(new THREE.Vector3(dx, 0.08, dz)),
+                  new THREE.Vector3(0, -1, 0),
+                  0,
+                  0.25,
+                );
+                samples.push(
+                  ...ray
+                    .intersectObject(sourceMesh, false)
+                    .filter((hit) => hit.point.y < ankle.y - 0.025),
+                );
+              }
+            shoeSurfaceSamples.set(key, samples);
+          }
+          const samples = shoeSurfaceSamples.get(key);
+          assert(
+            samples.length,
+            `${item.id}:${pose}:${side}: authored shoe surface found`,
+          );
+          assert(
+            samples.some((hit) =>
+              new THREE.Box3().setFromObject(lower).containsPoint(hit.point),
+            ),
+            `${item.id}:${pose}:${side}: ankle surface overlaps actual shoe`,
+          );
         }
       }
       checked++;
     }
-    assert.equal(sourceBones.length, originalBoneCount);
+    const currentBones = [];
+    scene.traverse((node) => {
+      if (node.isBone) currentBones.push(node);
+    });
+    assert.equal(
+      currentBones.length,
+      originalBoneCount,
+      "no duplicate skeleton per item",
+    );
   }
   garments.setLook({
     top: "official-navy",
@@ -159,6 +241,20 @@ for (const character of ["girl", "boy"]) {
   });
   assert.equal(active, 0, "legacy look restores original geometry only");
   garments.dispose();
+  let remaining = 0;
+  scene.traverse((node) => {
+    if (node.name.startsWith("AvatarGarment:")) remaining++;
+  });
+  assert.equal(
+    remaining,
+    0,
+    "disposal removes cached clothing and attachments",
+  );
+  garments.setLook({ top: "official-navy" });
+  scene.traverse((node) => {
+    if (node.name.startsWith("AvatarGarment:")) remaining++;
+  });
+  assert.equal(remaining, 0, "late updates cannot recreate disposed clothing");
   poses.dispose();
 }
 assert.equal(
