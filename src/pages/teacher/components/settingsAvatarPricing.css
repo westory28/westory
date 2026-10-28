@@ -1,0 +1,110 @@
+.avatar-pricing-title,
+.avatar-pricing-actions,
+.avatar-pricing-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.avatar-pricing button,
+.avatar-pricing input,
+.avatar-pricing select {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text-strong, #111827);
+  font: inherit;
+}
+.avatar-pricing button:focus-visible,
+.avatar-pricing input:focus-visible,
+.avatar-pricing select:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.avatar-pricing button:disabled,
+.avatar-pricing input:disabled,
+.avatar-pricing select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.avatar-pricing button.avatar-pricing-save {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
+  font-weight: 700;
+}
+.avatar-pricing .ws-info-help__button {
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+.avatar-pricing-filters {
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.avatar-pricing-filters input {
+  width: min(100%, 320px);
+}
+.avatar-pricing-filters > span {
+  color: var(--ws-text-muted, #64748b);
+  font-size: 14px;
+}
+.avatar-pricing-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0;
+}
+.avatar-pricing table {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  text-align: left;
+}
+.avatar-pricing th,
+.avatar-pricing td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  vertical-align: middle;
+}
+.avatar-pricing thead {
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+.avatar-pricing tbody th {
+  font-weight: 500;
+}
+.avatar-pricing tr:last-child > :is(th, td) {
+  border-bottom: 0;
+}
+.avatar-pricing-value input {
+  width: 136px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.avatar-pricing-value .wis-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+.avatar-pricing-error,
+.avatar-pricing-status {
+  margin: 0 0 16px;
+}
+.avatar-pricing-error {
+  color: var(--ws-danger-text, #b91c1c);
+}
+.avatar-pricing-status {
+  color: var(--ws-text-muted, #64748b);
+}
+@media (max-width: 640px) {
+  .avatar-pricing-title {
+    align-items: flex-start;
+  }
+  .avatar-pricing-actions {
+    margin-left: auto;
+  }
+  .avatar-pricing-filters input {
+    flex: 1 1 180px;
+  }
+}

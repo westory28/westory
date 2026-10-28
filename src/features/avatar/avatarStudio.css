@@ -77,6 +77,11 @@
   background: var(--ws-primary-soft, #eff6ff);
   font-weight: 700;
 }
+.avatar-studio-character-price {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .avatar-studio-stage {
   height: min(480px, 52dvh);
   min-height: 280px;

@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 교사 아바타와 관리자 가격표 (2026-10-28)
+
+아바타 가격은 `avatar_catalog_settings/current`의 버전 있는 관리자 설정을 따르며, 학생 구매·저장 시 서버에서 현재 가격을 검증한다. 학생 꾸미기의 초기 조회는 아바타·지갑·가격표를 합친 `getAvatarStudioState`를 사용하고 교사 `getTeacherMyPage`는 지갑·가격표를 조회하지 않는다. 가격표 변경을 전파하려고 폴링·아이템별 쿼리를 추가하지 않는다. [검토 기록](../reviews/teacher-avatar-pricing-20261028.md)에 권한·비용·검증·선택 배포 대상을 기록했다.
+
+카탈로그에 항목을 추가할 때는 저장 함수뿐 아니라 공개 아바타를 검증하는 `getWisRankingPreview`, `getWisEconomyState`, `getWisEconomyStateFast`도 함께 배포한다. 신규 교사 삭제 함수의 실패 재시도 배포에 `--force`가 요구되면 기존 함수 삭제 대상이 없는지와 `getWisEconomyState` 두 리전을 먼저 확인한다. 각 삭제 작업은 동일 이벤트 재시도에 안전해야 한다.
+
 ## 위스 지갑과 전체 거래 내역 (2026-10-27)
 
 위스 지급·차감·조정·역분개·구매·취소·주문 검토는 `executeWisCommandFast`, 상태 확인은 `getWisCommandStatusFast`, 일반 지갑 조회는 `getWisEconomyStateFast`를 us-central1에서 호출한다. 기존 서울 함수와 같은 영수증·권한을 사용하며 클라이언트가 실패 시 새 요청 ID나 다른 리전으로 자동 재지급하지 않는다. 지급 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, concurrency 80이다.

@@ -9,6 +9,12 @@ import {
   createFaceShapeController,
   createAccessoryController,
 } from "./shape-accessories.js";
+import {
+  createGarmentController,
+  GARMENT_TOPS,
+  GARMENT_BOTTOMS,
+  GARMENT_ACCESSORIES,
+} from "./garments.js";
 
 const PI = Math.PI;
 function makeMaterial(color, options = {}) {
@@ -265,6 +271,15 @@ function createHairController(root, maskImage, character, forwardAxis = "x") {
 function installColorwayShader(material, uniforms) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 vAvatarBindPosition;",
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvAvatarBindPosition = position;",
+      );
     shader.fragmentShader = shader.fragmentShader.replace(
       "#include <common>",
       `#include <common>
@@ -280,6 +295,13 @@ uniform float uAvatarPlainTop; uniform float uAvatarPlainBottom; uniform float u
 uniform vec3 uAvatarPlainTopColor; uniform vec3 uAvatarPlainBottomColor; uniform vec3 uAvatarPlainShoesColor;
 uniform vec3 uAvatarSkinColor; uniform float uAvatarSkinMix;
 uniform vec3 uAvatarHairColor; uniform float uAvatarHairMix;
+uniform float uAvatarReplaceTop; uniform float uAvatarReplaceBottom;
+varying vec3 vAvatarBindPosition;
+bool avatarSourceCuff(vec3 wrist, vec3 elbow) {
+  vec3 delta = vAvatarBindPosition - wrist;
+  float along = dot(delta, normalize(wrist - elbow));
+  return along < 0.008 && along > -0.065 && length(delta) < 0.07;
+}
 vec3 avatarRecolor(vec3 original, vec3 color, float referenceLuma) {
   float shade = clamp(dot(original, vec3(0.2126, 0.7152, 0.0722)) / referenceLuma, 0.12, 1.80);
   return color * shade;
@@ -303,6 +325,27 @@ vec2 appearanceMasks = texture2D(uAvatarAppearanceMask, vMapUv).rg;
 vec3 plainMasks = texture2D(uAvatarPlainMask, vMapUv).rgb;
 float authoredGarment = max(topMask, max(bottomMask, shoesMask));
 plainMasks *= 1.0 - max(appearanceMasks.r, appearanceMasks.g) * (1.0 - authoredGarment);
+// Replace only authored clothing fragments. The source head/hair/hands and
+// existing footwear retain their original rig, texture and appearance controls.
+if (uAvatarReplaceTop > 0.5 && max(topMask, plainMasks.r) > 0.35) discard;
+// The source's inner shirt collar and wrist cuffs extend beyond its jacket
+// recolor mask. Remove those non-skin/non-hair texels as well.
+if (uAvatarReplaceTop > 0.5 && vAvatarBindPosition.y > 0.48 && vAvatarBindPosition.y < 0.90
+  && (vAvatarBindPosition.y > 0.72 || abs(vAvatarBindPosition.x) > 0.19)
+  && max(appearanceMasks.r, appearanceMasks.g) < 0.35) discard;
+if (uAvatarReplaceTop > 0.5 && (
+  avatarSourceCuff(mix(vec3(0.2945,0.5939,0.0265),vec3(0.2608,0.5546,0.0139),uAvatarBoy), mix(vec3(0.1963,0.7005,0.012),vec3(0.1963,0.678,-0.0177),uAvatarBoy)) ||
+  avatarSourceCuff(mix(vec3(-0.3029,0.5911,0.021),vec3(-0.2692,0.549,0.0107),uAvatarBoy), mix(vec3(-0.2075,0.7005,0.0106),vec3(-0.2103,0.6752,-0.0241),uAvatarBoy))
+)) discard;
+if (uAvatarReplaceTop > 0.5 && vAvatarBindPosition.y > 0.82 && vAvatarBindPosition.y < 0.891
+  && abs(vAvatarBindPosition.x) < 0.11 && vAvatarBindPosition.z < 0.13 && vAvatarBindPosition.z > -0.08) discard;
+if (uAvatarReplaceBottom > 0.5 && max(bottomMask, plainMasks.g) > 0.35) discard;
+// The base girl has exposed thighs, and the boy's legs are baked into his
+// trousers. Replacement bottoms supply complete legs, while source footwear
+// and hands remain intact. Use bind-space bounds so poses cannot move a hand
+// into this removal region.
+if (uAvatarReplaceBottom > 0.5 && vAvatarBindPosition.y < mix(0.69, 0.60, uAvatarBoy)
+  && abs(vAvatarBindPosition.x) < 0.22 && max(shoesMask, plainMasks.b) < 0.25) discard;
 float avatarPlainArea = max(plainMasks.r * uAvatarPlainTop, max(plainMasks.g * uAvatarPlainBottom, plainMasks.b * uAvatarPlainShoes));
 // Basic clothing removes the baked print. Geometry and studio lighting retain
 // the garment's form while printed normal/AO details are suppressed below.
@@ -340,7 +383,7 @@ if (avatarPlainArea < 0.5) {
 `,
     );
   };
-  material.customProgramCacheKey = () => "westory-avatar-production-v2";
+  material.customProgramCacheKey = () => "westory-avatar-production-v3";
   material.needsUpdate = true;
 }
 
@@ -496,7 +539,8 @@ export async function createAvatarStage(
     poseController = null,
     expressionController = null,
     faceController = null,
-    accessoryController = null;
+    accessoryController = null,
+    garmentController = null;
   let forwardAxis = "x";
   const verifiedPoses = ["idle", "wave", "cheer", "think", "heart", "tilt"];
   const supportsPose = (pose) =>
@@ -527,12 +571,21 @@ export async function createAvatarStage(
     uAvatarSkinMix: { value: 0 },
     uAvatarHairColor: { value: new THREE.Color("#69412b") },
     uAvatarHairMix: { value: 0 },
+    uAvatarReplaceTop: { value: 0 },
+    uAvatarReplaceBottom: { value: 0 },
   };
   const selectedColors = { ...REFERENCE_LOOK };
   function applyColorway(look = {}) {
     const unsupported = [];
     for (const [slot, options] of Object.entries(COLORWAYS)) {
       if (look[slot] === undefined) continue;
+      if (
+        (slot === "top" && GARMENT_TOPS[look.top]) ||
+        (slot === "bottom" && GARMENT_BOTTOMS[look.bottom])
+      ) {
+        selectedColors[slot] = look[slot];
+        continue;
+      }
       if (!Object.hasOwn(options, look[slot])) {
         unsupported.push(slot);
         continue;
@@ -597,7 +650,10 @@ export async function createAvatarStage(
       unsupported.push("faceShape");
     else faceController?.setShape(faceController.current);
     if (look.accessory !== undefined) {
-      if (!accessoryController?.setAccessory(look.accessory))
+      if (GARMENT_ACCESSORIES.includes(look.accessory)) {
+        accessoryController?.setAccessory("none");
+        selectedColors.accessory = look.accessory;
+      } else if (!accessoryController?.setAccessory(look.accessory))
         unsupported.push("accessory");
       else selectedColors.accessory = look.accessory;
     }
@@ -606,6 +662,11 @@ export async function createAvatarStage(
       else poseController?.setPose(look.pose);
     }
     return unsupported;
+  }
+  function applyGarments(look) {
+    const replaced = garmentController?.setLook(look);
+    colorUniforms.uAvatarReplaceTop.value = replaced?.top ? 1 : 0;
+    colorUniforms.uAvatarReplaceBottom.value = replaced?.bottom ? 1 : 0;
   }
   if (useBase) applyColorway(initialLook);
   let disposed = false,
@@ -708,6 +769,7 @@ export async function createAvatarStage(
     expressionController?.dispose();
     faceController?.dispose();
     accessoryController?.dispose();
+    garmentController?.dispose();
     disposeTree(scene);
     disposeTexture(colorMask);
     disposeTexture(appearanceMask);
@@ -820,7 +882,9 @@ export async function createAvatarStage(
         enabled: true,
         forwardAxis,
       });
+    garmentController = createGarmentController(model, character);
     applyAppearance(initialLook);
+    applyGarments(initialLook);
     wake();
     render();
   } catch (error) {
@@ -846,7 +910,7 @@ export async function createAvatarStage(
       wardrobeSlots: colorwayReady
         ? ["top", "bottom", "shoes", "accessory"]
         : [],
-      garmentShapes: false,
+      garmentShapes: Boolean(garmentController?.supported),
       appearance: appearanceReady,
       skinTones: appearanceReady
         ? SKIN_TONES.map((item) => item.id)
@@ -856,7 +920,10 @@ export async function createAvatarStage(
         : ["original"],
       hairStyles: hairController?.supported || [isBoy ? "curtain" : "bob"],
       faceShapes: faceController?.supported || ["natural"],
-      accessories: accessoryController?.supported || ["none"],
+      accessories: [
+        ...(accessoryController?.supported || ["none"]),
+        ...(garmentController?.supported ? GARMENT_ACCESSORIES : []),
+      ],
       expressions: expressionController?.supported || ["natural"],
       poses: verifiedPoses.filter(supportsPose),
     }),
@@ -902,6 +969,8 @@ export async function createAvatarStage(
             ),
           };
       result.unsupported.push(...applyAppearance(look));
+      applyGarments(look);
+      result.look = { ...selectedColors };
       result.applied = result.unsupported.length === 0;
       wake(250);
       render();

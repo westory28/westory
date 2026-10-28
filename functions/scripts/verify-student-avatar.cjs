@@ -51,7 +51,7 @@ function fixture(balance = 1000) {
   let clock = 100000, rejectSession = false, sessionUid;
   const snapshot = (source, path) => ({ exists: source.has(path), data: () => structuredClone(source.get(path)) });
   const db = {
-    doc(path) { return { path, get: async () => snapshot(documents, path) }; },
+    doc(path) { return { path, get: async () => { reads.push(path); return snapshot(documents, path); } }; },
     async recursiveDelete(ref) {
       for (const path of documents.keys()) if (path === ref.path || path.startsWith(`${ref.path}/`)) {
         documents.delete(path); versions.set(path, (versions.get(path) || 0) + 1);
@@ -95,10 +95,10 @@ const save = async (overrides = {}) => req({ look: defaultLook(), expectedRevisi
 const reason = expected => error => error.details?.reason === expected;
 
 if (require.main === module) {
-test('default, 24 free catalog choices and private state never return another identity', async () => {
+test('default, free catalog choices and private state never return another identity', async () => {
   const state = fixture(); const result = await state.api.getStudentAvatar(req({}));
   assert.deepEqual(result.look, defaultLook()); assert.equal(result.revision, 0); assert.deepEqual(result.ownedItemIds, []);
-  assert.equal(catalog.items.filter(item => item.price === 0).length, 24);
+  assert.equal(catalog.items.filter(item => item.price === 0).length, 41);
   await assert.rejects(state.api.getStudentAvatar(req({ uid: 'foreign' })), reason('AVATAR_INPUT_INVALID'));
   assert.equal(state.writes.length, 0);
 });
@@ -295,4 +295,4 @@ test('deletion ignores teachers and recreated users; failed cleanup keeps a retr
 });
 
 }
-module.exports = { initialDocuments, memoryBucket, uid, semesterId, accountPath, avatarPath, req, purchase, save, paid };
+module.exports = { fixture, initialDocuments, memoryBucket, uid, semesterId, accountPath, avatarPath, req, purchase, save, paid };

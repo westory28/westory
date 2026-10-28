@@ -801,6 +801,221 @@
         "girl",
         "boy"
       ]
+    },
+    {
+      "id": "top:hanbok-ivory",
+      "slot": "top",
+      "value": "hanbok-ivory",
+      "label": "아이보리 저고리",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#f3e7cd"
+    },
+    {
+      "id": "top:hanbok-sky",
+      "slot": "top",
+      "value": "hanbok-sky",
+      "label": "하늘빛 저고리",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#a8cddd"
+    },
+    {
+      "id": "top:hanbok-peach",
+      "slot": "top",
+      "value": "hanbok-peach",
+      "label": "복숭아빛 저고리",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#efb0a1"
+    },
+    {
+      "id": "top:official-navy",
+      "slot": "top",
+      "value": "official-navy",
+      "label": "남색 흉배 관복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#263854"
+    },
+    {
+      "id": "top:official-red",
+      "slot": "top",
+      "value": "official-red",
+      "label": "홍색 관복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#9c312e"
+    },
+    {
+      "id": "top:official-black",
+      "slot": "top",
+      "value": "official-black",
+      "label": "흑색 흉배 관복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#282d39"
+    },
+    {
+      "id": "top:summer-white",
+      "slot": "top",
+      "value": "summer-white",
+      "label": "용신중 흰색 하복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#f0f1ee"
+    },
+    {
+      "id": "top:summer-navy",
+      "slot": "top",
+      "value": "summer-navy",
+      "label": "용신중 네이비 하복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#1f2c42"
+    },
+    {
+      "id": "bottom:chima-rose",
+      "slot": "bottom",
+      "value": "chima-rose",
+      "label": "장미빛 한복 치마",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl"
+      ],
+      "color": "#b65d78"
+    },
+    {
+      "id": "bottom:chima-navy",
+      "slot": "bottom",
+      "value": "chima-navy",
+      "label": "남색 한복 치마",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl"
+      ],
+      "color": "#29446a"
+    },
+    {
+      "id": "bottom:chima-jade",
+      "slot": "bottom",
+      "value": "chima-jade",
+      "label": "옥빛 한복 치마",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl"
+      ],
+      "color": "#398a7f"
+    },
+    {
+      "id": "bottom:baji-navy",
+      "slot": "bottom",
+      "value": "baji-navy",
+      "label": "남색 한복 바지",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "boy"
+      ],
+      "color": "#33465f"
+    },
+    {
+      "id": "bottom:baji-cream",
+      "slot": "bottom",
+      "value": "baji-cream",
+      "label": "미색 한복 바지",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "boy"
+      ],
+      "color": "#e6d7bb"
+    },
+    {
+      "id": "bottom:baji-charcoal",
+      "slot": "bottom",
+      "value": "baji-charcoal",
+      "label": "먹색 한복 바지",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "boy"
+      ],
+      "color": "#454750"
+    },
+    {
+      "id": "bottom:summer-shorts",
+      "slot": "bottom",
+      "value": "summer-shorts",
+      "label": "용신중 하복 반바지",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#202835"
+    },
+    {
+      "id": "accessory:official-samo",
+      "slot": "accessory",
+      "value": "official-samo",
+      "label": "사모",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#20232a"
+    },
+    {
+      "id": "accessory:official-gat",
+      "slot": "accessory",
+      "value": "official-gat",
+      "label": "갓",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#20232a"
     }
   ]
 }

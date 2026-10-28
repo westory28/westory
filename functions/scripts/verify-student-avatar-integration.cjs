@@ -12,6 +12,8 @@ const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
+const { createAvatarCatalogPricingHandlers, PRICING_PATH } = require('../avatarCatalogPricing');
+const { catalog } = require('../studentAvatarCatalog');
 const fixture = require('./verify-student-avatar.cjs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, updateDoc, getDoc } = require('firebase/firestore');
@@ -23,6 +25,19 @@ const session = { status: 'active', authTime, schemaVersion: 2, authorityGenerat
 const authenticated = request => ({ ...request, auth: { uid: fixture.uid, token: { email: 'avatar@yongshin-ms.ms.kr', auth_time: authTime } },
   data: { ...request.data, _session: { authorityGeneration: session.authorityGeneration, protocolVersion: 2, revision } } });
 const bucket = fixture.memoryBucket(), api = createStudentAvatarHandlers({ db, bucket });
+const teacherUid = 'avatar-teacher';
+const teacherApi = createStudentAvatarHandlers({ db, bucket, audience: 'teacher',
+  loadPolicy: async tx => (await tx.get(db.doc('years/2026/semesters/2/point_policies/current'))).data() || {} });
+const pricingApi = createAvatarCatalogPricingHandlers({ db });
+const teacherRequest = data => {
+  const request = authenticated(fixture.req(data));
+  request.auth.uid = teacherUid; request.auth.token.email = 'teacher@yongshin-ms.ms.kr';
+  return request;
+};
+const seedTeacher = async () => {
+  await db.doc(`users/${teacherUid}`).set({ role: 'teacher', email: 'teacher@yongshin-ms.ms.kr', profileIcon: '😀' });
+  await db.doc(`application_sessions/${teacherUid}/sessions/${authTime}`).set(session);
+};
 const seed = async (balance = 1000) => {
   assert.equal((await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' })).ok, true);
   const rows = { ...fixture.initialDocuments(balance), [sessionPath]: session };
@@ -74,6 +89,41 @@ let rules;
     assert.ok((await get(fixture.accountPath)).balance >= 0);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 1);
   });
+  await check('pricing uses real session/teacher authority and concurrent revision updates cannot overwrite each other', async () => {
+    await seed(); await seedTeacher();
+    await assert.rejects(pricingApi.getAvatarCatalogPricing(authenticated(fixture.req({}))), error => error.details?.reason === 'AVATAR_TEACHER_REQUIRED');
+    const expired = teacherRequest({}); expired.data._session.revision = 'b'.repeat(64);
+    await assert.rejects(pricingApi.getAvatarCatalogPricing(expired), error => error.code === 'unauthenticated');
+    const values = await Promise.allSettled([73, 94].map(price => pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: { [fixture.paid[0].id]: price } }))));
+    assert.equal(values.filter(value => value.status === 'fulfilled').length, 1);
+    assert.equal(values.find(value => value.status === 'rejected').reason.details.reason, 'AVATAR_PRICING_REVISION_CONFLICT');
+    const current = await get(PRICING_PATH);
+    assert.equal(current.revision, 1);
+    await assert.rejects(api.purchaseStudentAvatarItem(authenticated(fixture.purchase())), error => error.details?.reason === 'AVATAR_PRICE_CHANGED');
+    const result = await api.purchaseStudentAvatarItem(authenticated(fixture.req({ ...fixture.purchase().data,
+      expectedPricingRevision: 1, expectedPrice: current.prices[fixture.paid[0].id] })));
+    assert.equal(result.charged, current.prices[fixture.paid[0].id]);
+    assert.equal((await get(fixture.accountPath)).balance, 1000 - result.charged);
+  });
+  await check('teacher all-item save and emoji use real sessions without a teacher wallet and reject role downgrade during save', async () => {
+    await seed(); await seedTeacher();
+    const current = await teacherApi.getTeacherMyPage(teacherRequest({ year: '2026', semester: '2' }));
+    assert.equal(current.avatar.ownedItemIds.length, catalog.items.length);
+    const item = fixture.paid.find(value => value.characters.includes('girl'));
+    const input = await fixture.save({ look: { ...current.avatar.look, [item.slot]: item.value } });
+    await teacherApi.saveStudentAvatar(teacherRequest(input.data));
+    await teacherApi.updateTeacherProfileIcon(teacherRequest({ year: '2026', semester: '2', emojiId: 'trophy' }));
+    assert.equal((await get(`users/${teacherUid}`)).profileIcon, '🏆');
+    assert.equal((await get(fixture.accountPath)).balance, 1000);
+    assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+    await db.doc(`teacher_avatars/${teacherUid}`).update({ lastSavedAtMs: Date.now() - 10000 });
+    bucket.afterSave = async () => db.doc(`users/${teacherUid}`).update({ role: 'student', teacherPortalEnabled: true });
+    await assert.rejects(teacherApi.saveStudentAvatar(teacherRequest((await fixture.save({ ...input.data, expectedRevision: 1, requestId: 'teacher-downgrade' })).data)),
+      error => error.details?.reason === 'AVATAR_TEACHER_REQUIRED');
+    bucket.afterSave = null;
+    assert.equal((await get(`teacher_avatars/${teacherUid}`)).revision, 1);
+    assert.equal(bucket.objects.size, 1);
+  });
   await check('real session save commits public projection and private inventory atomically', async () => {
     await seed(); const result = await api.saveStudentAvatar(authenticated(await fixture.save()));
     assert.equal(result.revision, 1);
@@ -90,7 +140,14 @@ let rules;
     await assertFails(setDoc(doc(client, fixture.avatarPath), { studentUid: fixture.uid, ownedItemIds: ['top:expensive'] }));
     await assertFails(setDoc(doc(client, `${fixture.avatarPath}/requests/fake`), { result: 'owned' }));
     await assertFails(setDoc(doc(client, 'semester_wis_ledger/fake'), { delta: 999 }));
+    await assertFails(setDoc(doc(client, PRICING_PATH), { prices: { [fixture.paid[0].id]: 0 } }));
+    await assertFails(getDoc(doc(client, PRICING_PATH)));
+    await assertFails(setDoc(doc(client, `teacher_avatars/${fixture.uid}`), { ownedItemIds: ['top:expensive'] }));
     await assertFails(getDoc(doc(client, 'users/foreign-student')));
+    await seedTeacher();
+    const teacherClient = rules.authenticatedContext(teacherUid, { email: 'teacher@yongshin-ms.ms.kr', auth_time: authTime }).firestore();
+    await assertFails(setDoc(doc(teacherClient, PRICING_PATH), { prices: { [fixture.paid[0].id]: 0 } }));
+    await assertFails(setDoc(doc(teacherClient, `teacher_avatars/${teacherUid}`), { ownedItemIds: ['top:expensive'] }));
   });
   await check('deletion pending prevents purchase; real recursive cleanup removes private descendants only and retries safely', async () => {
     await db.doc(`users/${fixture.uid}`).update({ weplayDeletionPending: true });

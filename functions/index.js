@@ -24,9 +24,25 @@ const studentAvatarOptions = { region: 'us-central1', memory: '256MiB', timeoutS
 exports.getStudentAvatar = onCall(studentAvatarOptions, studentAvatarHandlers.getStudentAvatar);
 exports.purchaseStudentAvatarItem = onCall(studentAvatarOptions, studentAvatarHandlers.purchaseStudentAvatarItem);
 exports.saveStudentAvatar = onCall(studentAvatarOptions, studentAvatarHandlers.saveStudentAvatar);
+exports.getAvatarStudioState = onCall(studentAvatarOptions, studentAvatarHandlers.getAvatarStudioState);
+const teacherAvatarHandlers = require('./studentAvatar').createStudentAvatarHandlers({
+  db, audience: 'teacher',
+  bucket: () => require('firebase-admin/storage').getStorage().bucket(),
+  loadPolicy: (...args) => loadPolicy(...args),
+});
+exports.getTeacherMyPage = onCall(studentAvatarOptions, teacherAvatarHandlers.getTeacherMyPage);
+exports.saveTeacherAvatar = onCall(studentAvatarOptions, teacherAvatarHandlers.saveStudentAvatar);
+exports.updateTeacherProfileIcon = onCall(studentAvatarOptions, teacherAvatarHandlers.updateTeacherProfileIcon);
+const avatarPricingHandlers = require('./avatarCatalogPricing').createAvatarCatalogPricingHandlers({ db });
+exports.getAvatarCatalogPricing = onCall(studentAvatarOptions, avatarPricingHandlers.getAvatarCatalogPricing);
+exports.updateAvatarCatalogPricing = onCall(studentAvatarOptions, avatarPricingHandlers.updateAvatarCatalogPricing);
 exports.cleanupStudentAvatarOnUserDelete = require('firebase-functions/v2/firestore').onDocumentDeleted(
   { document: 'users/{uid}', region: 'us-central1', retry: true, memory: '256MiB', maxInstances: 5 },
   require('./studentAvatar').createStudentAvatarDeletionHandler({ db, bucket: () => require('firebase-admin/storage').getStorage().bucket() }),
+);
+exports.cleanupTeacherAvatarOnUserDelete = require('firebase-functions/v2/firestore').onDocumentDeleted(
+  { document: 'users/{uid}', region: 'us-central1', retry: true, memory: '256MiB', maxInstances: 5 },
+  require('./studentAvatar').createStudentAvatarDeletionHandler({ db, audience: 'teacher', bucket: () => require('firebase-admin/storage').getStorage().bucket() }),
 );
 exports.getQuizEditorCatalog = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },

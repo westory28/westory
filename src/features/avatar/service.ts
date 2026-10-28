@@ -1,19 +1,44 @@
 import { auth } from "../../lib/firebase";
 import { getHistoryDictionaryCallable } from "../../lib/historyDictionarySession";
 import { notifyPointsUpdated } from "../../lib/appEvents";
-import { getStudentWisState } from "../../lib/studentWis";
 import { getYearSemester } from "../../lib/semesterScope";
 import type { SystemConfig } from "../../types";
 import type { AvatarLook, AvatarState } from "./catalog";
 import { notifyAvatarUpdated } from "./events";
 
 type Scope = Pick<SystemConfig, "year" | "semester">;
+export interface AvatarCatalogPricingState {
+  revision: number;
+  prices: Record<string, number>;
+  catalogVersion?: number;
+}
+export interface AvatarStudioState {
+  avatar: AvatarState;
+  balance: number;
+  pricing: AvatarCatalogPricingState;
+  wallet?: AvatarPurchaseResult["wallet"];
+}
+export interface TeacherProfileEmoji {
+  id: string;
+  emoji: string;
+  label: string;
+  category?: string;
+  enabled?: boolean;
+}
+export interface TeacherMyPageState {
+  avatar: AvatarState;
+  profileEmojiId: string;
+  profileIcon: string;
+  emojiRegistry: TeacherProfileEmoji[];
+  allAvailable: true;
+}
 export interface AvatarPurchaseResult {
   itemId: string;
   charged: number;
   alreadyOwned: boolean;
   duplicate: boolean;
   avatar: AvatarState;
+  pricing?: AvatarCatalogPricingState;
   wallet: {
     balance: number;
     earnedTotal: number;
@@ -23,6 +48,8 @@ export interface AvatarPurchaseResult {
   };
 }
 const inFlight = new Map<string, Promise<AvatarState>>();
+const studioInFlight = new Map<string, Promise<AvatarStudioState>>();
+const teacherInFlight = new Map<string, Promise<TeacherMyPageState>>();
 const requestIds = new Map<string, string>();
 const requestIdFor = (key: string) => {
   if (requestIds.has(key)) return requestIds.get(key)!;
@@ -86,6 +113,8 @@ export const avatarErrorMessage = (error: unknown) => {
     details?: { reason?: string };
   };
   const reason = `${e.details?.reason || ""} ${e.code || ""}`;
+  if (/AVATAR_PRICE_CHANGED/.test(reason))
+    return "아이템 가격이 변경되었습니다. 새 가격을 확인한 뒤 다시 구매해 주세요.";
   if (/INSUFFICIENT/.test(reason))
     return "위스가 부족합니다. 지갑 잔액을 확인해 주세요.";
   if (/REVISION|aborted/.test(reason))
@@ -100,6 +129,72 @@ export const avatarErrorMessage = (error: unknown) => {
     return "현재 계정의 아바타 이용 권한을 확인해 주세요.";
   return "처리를 완료하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
 };
+export const avatarPricingFromError = (
+  error: unknown,
+): AvatarCatalogPricingState | null => {
+  const details = (
+    error as {
+      details?: {
+        reason?: string;
+        pricing?: AvatarCatalogPricingState;
+      };
+    }
+  )?.details;
+  return (details?.reason === "AVATAR_PRICE_CHANGED" ||
+    details?.reason === "AVATAR_ITEM_NOT_OWNED") &&
+    details.pricing
+    ? details.pricing
+    : null;
+};
+const scopedReadKey = async (config: Scope) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error("다시 로그인해 주세요.");
+  const epoch = Number((await user.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== user || !Number.isFinite(epoch))
+    throw new Error("로그인 계정이 바뀌었습니다.");
+  const scope = getYearSemester(config);
+  return { key: `${user.uid}:${epoch}:${scope.year}:${scope.semester}`, scope };
+};
+export const getAvatarStudioState = async (config: Scope) => {
+  const { key, scope } = await scopedReadKey(config);
+  const existing = studioInFlight.get(key);
+  if (existing) return existing;
+  const pending = service<AvatarStudioState>(
+    "getAvatarStudioState",
+    scope,
+  ).finally(() => {
+    if (studioInFlight.get(key) === pending) studioInFlight.delete(key);
+  });
+  studioInFlight.set(key, pending);
+  return pending;
+};
+export const getTeacherMyPage = async (config: Scope) => {
+  const { key, scope } = await scopedReadKey(config);
+  const existing = teacherInFlight.get(key);
+  if (existing) return existing;
+  const pending = service<TeacherMyPageState>(
+    "getTeacherMyPage",
+    scope,
+  ).finally(() => {
+    if (teacherInFlight.get(key) === pending) teacherInFlight.delete(key);
+  });
+  teacherInFlight.set(key, pending);
+  return pending;
+};
+export const updateTeacherProfileIcon = (config: Scope, emojiId: string) =>
+  service<{ emojiId: string; profileIcon: string }>(
+    "updateTeacherProfileIcon",
+    {
+      ...getYearSemester(config),
+      emojiId,
+    },
+  );
+export const getAvatarCatalogPricing = () =>
+  service<AvatarCatalogPricingState>("getAvatarCatalogPricing", {});
+export const updateAvatarCatalogPricing = (input: {
+  expectedRevision: number;
+  prices: Record<string, number>;
+}) => service<AvatarCatalogPricingState>("updateAvatarCatalogPricing", input);
 export const getStudentAvatar = async (): Promise<AvatarState> => {
   const user = auth.currentUser;
   if (!user) throw new Error("다시 로그인해 주세요.");
@@ -115,7 +210,12 @@ export const getStudentAvatar = async (): Promise<AvatarState> => {
   inFlight.set(key, pending);
   return pending;
 };
-export const purchaseAvatarItem = async (config: Scope, itemId: string) => {
+export const purchaseAvatarItem = async (
+  config: Scope,
+  itemId: string,
+  expectedPrice: number,
+  expectedPricingRevision: number,
+) => {
   const { year, semester } = getYearSemester(config);
   const key = `${auth.currentUser?.uid}:${year}:${semester}:${itemId}`;
   try {
@@ -125,6 +225,8 @@ export const purchaseAvatarItem = async (config: Scope, itemId: string) => {
         year,
         semester,
         itemId,
+        expectedPrice,
+        expectedPricingRevision,
         requestId: requestIdFor(key),
       },
     );
@@ -132,22 +234,13 @@ export const purchaseAvatarItem = async (config: Scope, itemId: string) => {
     notifyPointsUpdated();
     // The receipt may predate a later purchase in another tab.
     if (result.duplicate) {
-      const [avatar, current] = await Promise.all([
-        getStudentAvatar(),
-        getStudentWisState(config, "student-core", auth.currentUser?.uid, {
-          includeLedger: false,
-        }),
-      ]);
-      result.avatar = avatar;
-      if (current.account)
-        result.wallet = {
-          ...result.wallet,
-          balance: current.account.balance,
-          earnedTotal: current.account.earnedTotal,
-          rankEarnedTotal: current.account.rankEarnedTotal,
-          spentTotal: current.account.spentTotal,
-          revision: current.account.revision,
-        };
+      const current = await getAvatarStudioState(config);
+      result.avatar = current.avatar;
+      result.pricing = current.pricing;
+      result.wallet = current.wallet || {
+        ...result.wallet,
+        balance: current.balance,
+      };
     }
     return result;
   } catch (error) {
@@ -159,27 +252,63 @@ export const saveStudentAvatar = async (
   look: AvatarLook,
   expectedRevision: number,
   thumbnailWebp: string,
+) =>
+  saveAvatar(
+    "saveStudentAvatar",
+    getStudentAvatar,
+    look,
+    expectedRevision,
+    thumbnailWebp,
+  );
+
+export const saveTeacherAvatar = async (
+  config: Scope,
+  look: AvatarLook,
+  expectedRevision: number,
+  thumbnailWebp: string,
+) =>
+  saveAvatar(
+    "saveTeacherAvatar",
+    async () => (await getTeacherMyPage(config)).avatar,
+    look,
+    expectedRevision,
+    thumbnailWebp,
+  );
+
+const saveAvatar = async (
+  name: "saveStudentAvatar" | "saveTeacherAvatar",
+  readCurrent: () => Promise<AvatarState>,
+  look: AvatarLook,
+  expectedRevision: number,
+  thumbnailWebp: string,
 ) => {
+  const owner = auth.currentUser;
+  if (!owner) throw new Error("다시 로그인한 뒤 이용해 주세요.");
+  const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== owner || !Number.isFinite(epoch))
+    throw new Error("로그인 계정이 바뀌었습니다. 다시 열어 주세요.");
   // Stable across retries; a changed look gets a separate receipt.
   const bytes = new TextEncoder().encode(JSON.stringify([look, thumbnailWebp]));
   const hash = Array.from(
     new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
     (b) => b.toString(16).padStart(2, "0"),
   ).join("");
-  const key = `${auth.currentUser?.uid}:save:${expectedRevision}:${hash}`;
+  const currentEpoch = Number(
+    (await owner.getIdTokenResult()).claims.auth_time,
+  );
+  if (auth.currentUser !== owner || currentEpoch !== epoch)
+    throw new Error("로그인 계정이 바뀌었습니다. 다시 열어 주세요.");
+  const key = `${owner.uid}:${name}:${expectedRevision}:${hash}`;
   try {
-    const result = await service<AvatarState & { duplicate?: boolean }>(
-      "saveStudentAvatar",
-      {
-        look,
-        expectedRevision,
-        thumbnailWebp,
-        requestId: requestIdFor(key),
-      },
-    );
+    const result = await service<AvatarState & { duplicate?: boolean }>(name, {
+      look,
+      expectedRevision,
+      thumbnailWebp,
+      requestId: requestIdFor(key),
+    });
     clearRequest(key);
     notifyAvatarUpdated();
-    return result.duplicate ? await getStudentAvatar() : result;
+    return result.duplicate ? await readCurrent() : result;
   } catch (error) {
     if (!retryableFailure(error)) clearRequest(key);
     throw error;

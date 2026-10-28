@@ -1,0 +1,77 @@
+.teacher-my-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+}
+.teacher-my-page .ws-page-header {
+  margin: 0;
+}
+.teacher-my-page-name {
+  color: var(--ws-text-muted, #64748b);
+  font-size: 16px;
+}
+.teacher-my-page-emoji {
+  display: grid;
+  gap: 16px;
+}
+.teacher-my-page-emoji-heading,
+.teacher-my-page-emoji-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.teacher-my-page-emoji-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.teacher-my-page-emoji-preview > span {
+  font-size: 32px;
+  line-height: 1.25;
+}
+.teacher-my-page-emoji button {
+  min-height: 44px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--ws-surface, #fff);
+  font: inherit;
+  cursor: pointer;
+}
+.teacher-my-page-emoji button:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.teacher-my-page-emoji button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.teacher-my-page-emoji button.teacher-my-page-save {
+  color: #fff;
+  background: var(--ws-primary, #2563eb);
+  border-color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+.teacher-my-page-emoji-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 12px;
+}
+.teacher-my-page-emoji-options button {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.teacher-my-page-emoji-options button[aria-pressed="true"] {
+  border-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+  font-weight: 700;
+}
+.teacher-my-page-emoji-options button > span:first-child {
+  font-size: 24px;
+  line-height: 1.25;
+}
+.teacher-my-page-emoji-options button > span:last-child {
+  font-size: 14px;
+}

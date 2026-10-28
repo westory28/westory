@@ -9,7 +9,7 @@ const fail = () => { throw new HttpsError('failed-precondition', '현재 학기�
 
 // The active school economy is authoritative. Never create a second legacy
 // wallet or import an unverified legacy balance while processing a game.
-const createStudentWisWallet = ({ db, actorUid = 'system:weplay' }) => {
+const createStudentWisWallet = ({ db, actorUid = 'system:weplay', validateStudentProfile }) => {
   const read = async (transaction, scope, uid) => {
     const semesterId = `${scope.year}-${scope.semester}`;
     if (!/^\d{4}-[12]$/.test(semesterId) || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) fail();
@@ -33,6 +33,7 @@ const createStudentWisWallet = ({ db, actorUid = 'system:weplay' }) => {
       || identity.studentUid !== uid || (identity.accountStatus !== undefined && identity.accountStatus !== 'ACTIVE')
       || slot.studentUid !== uid || slot.semesterId !== semesterId || !slot.activeEnrollmentId
       || (slot.status !== undefined && slot.status !== 'ACTIVE')) fail();
+    if (validateStudentProfile) await validateStudentProfile(profile);
     const enrollment = (await transaction.get(db.doc('semester_enrollments/' + slot.activeEnrollmentId))).data() || {};
     if (enrollment.enrollmentId !== slot.activeEnrollmentId || enrollment.semesterId !== semesterId || enrollment.studentUid !== uid
       || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly === true || !enrollment.classId) fail();

@@ -7,16 +7,13 @@ import React, {
 } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppToast } from "../../components/common/AppToastProvider";
-import { getStudentPointWallet } from "../../lib/studentWis";
 import WisIcon from "../../components/common/WisIcon";
 import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
   defaultAvatarLook,
-  itemForLook,
   ownsAvatarItem,
   selectAvatarItem,
-  unownedAvatarItems,
   type AvatarItem,
   type AvatarLook,
   type AvatarSlot,
@@ -24,19 +21,29 @@ import {
 } from "./catalog";
 import {
   avatarErrorMessage,
-  getStudentAvatar,
+  avatarPricingFromError,
+  getAvatarStudioState,
   makeAvatarThumbnail,
   purchaseAvatarItem,
   saveStudentAvatar,
   type AvatarPurchaseResult,
+  type AvatarCatalogPricingState,
 } from "./service";
 import AvatarStage from "./AvatarStage";
 import AvatarPlaceholder from "./AvatarPlaceholder";
 import "./avatarStudio.css";
 
 export interface AvatarStudioAdapter {
-  load(): Promise<{ avatar: AvatarState; balance: number | null }>;
-  purchase(itemId: string): Promise<AvatarPurchaseResult>;
+  load(): Promise<{
+    avatar: AvatarState;
+    balance: number | null;
+    pricing?: AvatarCatalogPricingState;
+  }>;
+  purchase(
+    itemId: string,
+    expectedPrice: number,
+    expectedPricingRevision: number,
+  ): Promise<AvatarPurchaseResult>;
   save(
     look: AvatarLook,
     revision: number,
@@ -52,12 +59,25 @@ type StageControls = {
   stop?(): void;
 };
 
-export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
+export function AvatarStudio({
+  adapter,
+  access = "student",
+  active = true,
+}: {
+  adapter: AvatarStudioAdapter;
+  access?: "student" | "teacher";
+  active?: boolean;
+}) {
+  const allAvailable = access === "teacher";
   const { showToast } = useAppToast();
   const [saved, setSaved] = useState<AvatarState | null>(null);
   const [look, setLook] = useState<AvatarLook>(defaultAvatarLook());
   const [characterChosen, setCharacterChosen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<AvatarCatalogPricingState>({
+    revision: 0,
+    prices: {},
+  });
   const [slot, setSlot] = useState<AvatarSlot>("top");
   const [filter, setFilter] = useState<"all" | "owned" | "premium">("all");
   const [loading, setLoading] = useState(true);
@@ -83,6 +103,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       setLook(data.avatar.look);
       setCharacterChosen(Boolean(data.avatar.thumbnailUrl));
       setBalance(data.balance);
+      setPricing(data.pricing || { revision: 0, prices: {} });
     } catch (failure) {
       if (current === generation.current) setError(avatarErrorMessage(failure));
     } finally {
@@ -100,6 +121,12 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     if (purchase && !dialog.current?.open) dialog.current?.showModal();
     else if (!purchase && dialog.current?.open) dialog.current?.close();
   }, [purchase]);
+  useEffect(() => {
+    if (!active) {
+      stage.current = null;
+      setReady(false);
+    }
+  }, [active]);
   useEffect(() => {
     if (
       saved &&
@@ -132,15 +159,36 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     }
   }, []);
   const owned = saved?.ownedItemIds || [];
-  const selected = itemForLook(look, slot);
-  const items = AVATAR_ITEMS.filter(
+  const pricedItems = useMemo(
+    () =>
+      AVATAR_ITEMS.map((item) => {
+        const price = pricing.prices[item.id];
+        return Number.isSafeInteger(price) && price >= 0 && price <= 1_000_000
+          ? { ...item, price }
+          : item;
+      }),
+    [pricing],
+  );
+  const available = (item: AvatarItem) =>
+    allAvailable || ownsAvatarItem(item, owned);
+  const itemForCurrentLook = (key: AvatarSlot) =>
+    pricedItems.find(
+      (item) =>
+        item.slot === key &&
+        item.value === look[key] &&
+        item.characters.includes(look.character),
+    );
+  const selected = itemForCurrentLook(slot);
+  const items = pricedItems.filter(
     (item) =>
       item.slot === slot &&
       item.characters.includes(look.character) &&
-      (filter !== "owned" || ownsAvatarItem(item, owned)) &&
+      (filter !== "owned" || available(item)) &&
       (filter !== "premium" || item.price > 0),
   );
-  const missing = unownedAvatarItems(look, owned);
+  const missing = AVATAR_SLOTS.map(({ key }) => itemForCurrentLook(key)).filter(
+    (item): item is AvatarItem => Boolean(item && !available(item)),
+  );
   const dirty =
     saved &&
     characterChosen &&
@@ -149,6 +197,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
   const choose = (item: AvatarItem) => {
     if (busyRef.current) return;
     if (item.slot !== "character" && !characterChosen) return;
+    if (item.slot === "character" && !available(item)) setSlot("character");
     if (
       item.slot === "character" &&
       (!characterChosen || item.value !== look.character)
@@ -160,16 +209,23 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     setLook((previous) => selectAvatarItem(previous, item));
   };
   const buy = async () => {
-    if (!characterChosen || !purchase || busyRef.current) return;
+    if (allAvailable || !characterChosen || !purchase || busyRef.current)
+      return;
     busyRef.current = true;
     setBusy("buy");
     setConfirmError("");
+    setError("");
     const current = generation.current;
     try {
-      const result = await adapter.purchase(purchase.id);
+      const result = await adapter.purchase(
+        purchase.id,
+        purchase.price,
+        pricing.revision,
+      );
       if (current !== generation.current) return;
       setSaved(result.avatar);
       setBalance(result.wallet.balance);
+      if (result.pricing) setPricing(result.pricing);
       setPurchase(null);
       showToast({
         title: result.alreadyOwned
@@ -181,8 +237,14 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
         tone: "success",
       });
     } catch (failure) {
-      if (current === generation.current)
-        setConfirmError(avatarErrorMessage(failure));
+      if (current === generation.current) {
+        const updatedPricing = avatarPricingFromError(failure);
+        if (updatedPricing) {
+          setPricing(updatedPricing);
+          setPurchase(null);
+          setError(avatarErrorMessage(failure));
+        } else setConfirmError(avatarErrorMessage(failure));
+      }
     } finally {
       busyRef.current = false;
       if (current === generation.current) setBusy(null);
@@ -208,14 +270,20 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
+      if (current !== generation.current || !stage.current) return;
       const thumbnail = await makeAvatarThumbnail(stage.current.capture());
+      if (current !== generation.current) return;
       const result = await adapter.save(look, saved.revision, thumbnail);
       if (current !== generation.current) return;
       setSaved(result);
       setLook(result.look);
       showToast({ title: "아바타를 저장했습니다", tone: "success" });
     } catch (failure) {
-      if (current === generation.current) setError(avatarErrorMessage(failure));
+      if (current === generation.current) {
+        const updatedPricing = avatarPricingFromError(failure);
+        if (updatedPricing) setPricing(updatedPricing);
+        setError(avatarErrorMessage(failure));
+      }
     } finally {
       busyRef.current = false;
       if (current === generation.current) setBusy(null);
@@ -224,7 +292,9 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
   if (loading)
     return (
       <div className="avatar-studio-status" role="status">
-        아바타와 위스 지갑을 불러오는 중입니다.
+        {allAvailable
+          ? "아바타를 불러오는 중입니다."
+          : "아바타와 위스 지갑을 불러오는 중입니다."}
       </div>
     );
   if (!saved)
@@ -245,13 +315,15 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     >
       <div className="avatar-studio-heading">
         <h2>아바타 꾸미기</h2>
-        <span className="avatar-studio-wallet">
-          내 지갑{" "}
-          <strong>
-            {balance === null ? "확인 필요" : balance.toLocaleString("ko-KR")}
-          </strong>
-          <WisIcon />
-        </span>
+        {!allAvailable && (
+          <span className="avatar-studio-wallet">
+            내 지갑{" "}
+            <strong>
+              {balance === null ? "확인 필요" : balance.toLocaleString("ko-KR")}
+            </strong>
+            <WisIcon />
+          </span>
+        )}
       </div>
       <div className="avatar-studio-layout">
         <div className="avatar-studio-preview">
@@ -260,8 +332,9 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
             role="group"
             aria-label="남녀 아바타 선택"
           >
-            {AVATAR_ITEMS.filter((item) => item.slot === "character").map(
-              (item) => (
+            {pricedItems
+              .filter((item) => item.slot === "character")
+              .map((item) => (
                 <button
                   type="button"
                   key={item.id}
@@ -271,10 +344,19 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
                   disabled={Boolean(busy)}
                   onClick={() => choose(item)}
                 >
-                  {item.label} 아바타
+                  {allAvailable
+                    ? item.value === "boy"
+                      ? "남성"
+                      : "여성"
+                    : item.label}{" "}
+                  아바타
+                  {!available(item) && (
+                    <span className="avatar-studio-character-price">
+                      {item.price.toLocaleString()} 위스
+                    </span>
+                  )}
                 </button>
-              ),
-            )}
+              ))}
           </div>
           <div
             className="avatar-studio-stage"
@@ -284,7 +366,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
               <AvatarStage
                 key={stageKey}
                 look={look}
-                active
+                active={active}
                 onReady={onReady}
                 onError={onStageError}
                 onLoadingChange={onLoadingChange}
@@ -403,24 +485,26 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
               </button>
             ))}
           </div>
-          <div className="avatar-studio-filter" aria-label="아이템 필터">
-            {(
-              [
-                ["all", "전체"],
-                ["owned", "보유"],
-                ["premium", "프리미엄"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                type="button"
-                key={key}
-                aria-pressed={filter === key}
-                onClick={() => setFilter(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {!allAvailable && (
+            <div className="avatar-studio-filter" aria-label="아이템 필터">
+              {(
+                [
+                  ["all", "전체"],
+                  ["owned", "보유"],
+                  ["premium", "유료"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  type="button"
+                  key={key}
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div
             className="avatar-studio-items"
             aria-label={
@@ -471,10 +555,12 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
                 </span>
                 <span className="avatar-studio-item-name">{item.label}</span>
                 <span className="avatar-studio-item-price">
-                  {item.price === 0 ? (
-                    "기본 · 무료"
-                  ) : ownsAvatarItem(item, owned) ? (
-                    "프리미엄 · 보유"
+                  {allAvailable ? (
+                    "사용 가능"
+                  ) : item.price === 0 ? (
+                    "무료"
+                  ) : available(item) ? (
+                    "보유"
                   ) : (
                     <>
                       {item.price.toLocaleString()} <WisIcon />
@@ -499,9 +585,11 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
             <div className="avatar-studio-selected">
               <div>
                 <strong>{selected.label}</strong>
-                <span>{selected.price ? "프리미엄" : "기본 무료"}</span>
+                {!allAvailable && (
+                  <span>{selected.price ? "유료" : "무료"}</span>
+                )}
               </div>
-              {!ownsAvatarItem(selected, owned) ? (
+              {!available(selected) ? (
                 <button
                   type="button"
                   className="avatar-primary"
@@ -595,13 +683,15 @@ export default function StudentAvatarStudio() {
       load: async () => {
         if (!user || !config?.year || !config.semester)
           throw new Error("로그인과 학기를 확인해 주세요.");
-        const [avatar, wallet] = await Promise.all([
-          getStudentAvatar(),
-          getStudentPointWallet(config, user.uid).catch(() => null),
-        ]);
-        return { avatar, balance: wallet?.balance ?? null };
+        return getAvatarStudioState(config);
       },
-      purchase: (itemId) => purchaseAvatarItem(config!, itemId),
+      purchase: (itemId, expectedPrice, expectedPricingRevision) =>
+        purchaseAvatarItem(
+          config!,
+          itemId,
+          expectedPrice,
+          expectedPricingRevision,
+        ),
       save: saveStudentAvatar,
     }),
     [user?.uid, config?.year, config?.semester, authGeneration],

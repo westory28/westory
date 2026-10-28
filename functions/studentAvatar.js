@@ -5,6 +5,8 @@ const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { createStudentWisWallet } = require('./studentWisWallet');
 const { catalog, items, defaultLook, validateLook, lookHash } = require('./studentAvatarCatalog');
+const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
+const { resolveRankPolicy, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const safe = (value, min = 0) => Number.isSafeInteger(value) && value >= min;
@@ -49,17 +51,26 @@ async function encodeThumbnail(input) {
   invalid();
 }
 
-const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWorkflowSession, now = () => Date.now() }) => {
-  const canonicalWallet = createStudentWisWallet({ db, actorUid: 'system:student-avatar' });
-  const authenticate = async request => {
-    const identity = await assertSession(request);
-    const uid = request.auth?.uid;
-    if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid) || (identity?.uid && identity.uid !== uid)) {
-      fail('unauthenticated', '학생 계정으로 다시 로그인해 주세요.', 'AVATAR_SESSION_INVALID');
+const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWorkflowSession, now = () => Date.now(), audience = 'student', loadPolicy }) => {
+  if (!['student', 'teacher'].includes(audience)) throw new Error('Invalid avatar audience');
+  const teacher = audience === 'teacher';
+  const collection = teacher ? 'teacher_avatars' : 'student_avatars';
+  const deletionCollection = teacher ? 'teacher_avatar_deletions' : 'student_avatar_deletions';
+  const thumbnailFolder = teacher ? 'teacher_avatar_thumbnails' : 'student_avatar_thumbnails';
+  const ownerField = teacher ? 'teacherUid' : 'studentUid';
+  const exposeState = state => privateState(teacher ? { ...state, ownedItemIds: [...items.keys()] } : state);
+  const canonicalWallet = createStudentWisWallet({ db, actorUid: 'system:student-avatar', validateStudentProfile: profile => {
+    if (profile.weplayDeletionPending) fail('permission-denied', '승인된 학생 계정에서 사용할 수 있습니다.', 'AVATAR_STUDENT_REQUIRED');
+  } });
+  const authenticate = request => assertAvatarIdentity(request, assertSession);
+  const readStudent = async (tx, uid, authIdentity) => {
+    if (teacher) {
+      const profile = await readAvatarTeacher(tx, db, authIdentity);
+      if ((await tx.get(db.doc(`${deletionCollection}/${uid}`))).exists) {
+        fail('failed-precondition', '계정 정리 중입니다. 잠시 후 다시 시도해 주세요.', 'AVATAR_DELETION_PENDING');
+      }
+      return profile;
     }
-    return uid;
-  };
-  const readStudent = async (tx, uid) => {
     const [user, identity, deletion] = await tx.getAll(db.doc(`users/${uid}`), db.doc(`student_identities/${uid}`), db.doc(`student_avatar_deletions/${uid}`));
     if (deletion.exists) fail('failed-precondition', '계정 정리 중입니다. 잠시 후 다시 시도해 주세요.', 'AVATAR_DELETION_PENDING');
     const profile = user.data() || {}, actor = identity.data() || {};
@@ -68,67 +79,123 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       || !identity.exists || actor.studentUid !== uid || (actor.accountStatus && actor.accountStatus !== 'ACTIVE')) {
       fail('permission-denied', '승인된 학생 계정에서 사용할 수 있습니다.', 'AVATAR_STUDENT_REQUIRED');
     }
+    return profile;
   };
   const readState = async (tx, uid) => {
-    const doc = await tx.get(db.doc(`student_avatars/${uid}`));
-    if (!doc.exists) return { studentUid: uid, revision: 0, ownedItemIds: [], look: defaultLook() };
+    const doc = await tx.get(db.doc(`${collection}/${uid}`));
+    if (!doc.exists) return { [ownerField]: uid, revision: 0, ownedItemIds: [], look: defaultLook() };
     const value = doc.data();
-    if (value.studentUid !== uid || value.schemaVersion !== 1 || !safe(value.revision, 1)
+    if (value[ownerField] !== uid || value.schemaVersion !== 1 || !safe(value.revision, 1)
       || !Array.isArray(value.ownedItemIds) || value.ownedItemIds.length > 500
       || value.ownedItemIds.some(id => typeof id !== 'string' || id.length > 100)
       || new Set(value.ownedItemIds).size !== value.ownedItemIds.length
       || !validateLook(value.look, value.ownedItemIds) || value.lookHash !== lookHash(value.look)) {
       fail('failed-precondition', '아바타 보관함을 확인하지 못했습니다.', 'AVATAR_STATE_INVALID');
     }
-    return value;
+    // Items legitimately saved while free remain owned after a price increase.
+    // Validate the stored shape independently of today's catalog prices.
+    const savedItems = value.lastSavedAtMs && value.thumbnailPath ? ownedLookIds(value.look) : [];
+    return { ...value, ownedItemIds: [...new Set([...value.ownedItemIds, ...savedItems])] };
   };
   const readReceipt = async (tx, ref, uid, digest) => {
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) return null;
     const receipt = snapshot.data();
-    if (receipt.studentUid !== uid || receipt.payloadHash !== digest) {
+    if (receipt[ownerField] !== uid || receipt.payloadHash !== digest) {
       fail('already-exists', '이 요청 번호는 다른 선택에 사용되었습니다. 다시 시도해 주세요.', 'AVATAR_REQUEST_REUSED');
     }
     return { ...receipt.result, duplicate: true };
   };
   const writeState = (tx, uid, state, timestamp) => {
-    const data = { ...state, schemaVersion: 1, catalogVersion: catalog.version, studentUid: uid, lookHash: lookHash(state.look), updatedAt: timestamp };
-    tx.set(db.doc(`student_avatars/${uid}`), data);
+    const data = { ...state, schemaVersion: 1, catalogVersion: catalog.version, [ownerField]: uid, lookHash: lookHash(state.look), updatedAt: timestamp };
+    tx.set(db.doc(`${collection}/${uid}`), data);
     tx.set(db.doc(`users/${uid}`), { avatar: publicState(data), updatedAt: timestamp }, { merge: true });
   };
   const writeReceipt = (tx, ref, uid, digest, result, timestamp) => tx.create(ref, {
-    schemaVersion: 1, studentUid: uid, payloadHash: digest, result, createdAt: timestamp,
+    schemaVersion: 1, [ownerField]: uid, payloadHash: digest, result, createdAt: timestamp,
   });
 
   const getStudentAvatar = async request => {
-    const uid = await authenticate(request), data = request.data || {};
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
     if (!keysOnly(data, ['_session', 'year', 'semester'])) invalid();
     if (data.year !== undefined || data.semester !== undefined) scopeOf(data);
-    return db.runTransaction(async tx => { await readStudent(tx, uid); return privateState(await readState(tx, uid)); }, { readOnly: true });
+    return db.runTransaction(async tx => { await readStudent(tx, uid, identity); return exposeState(await readState(tx, uid)); }, { readOnly: true });
+  };
+
+  const getAvatarStudioState = async request => {
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
+    if (teacher || !keysOnly(data, ['_session', 'year', 'semester'])) invalid();
+    const scope = scopeOf(data);
+    return db.runTransaction(async tx => {
+      // Wallet validation already reads the student profile and identity. Avoid
+      // a second copy of those reads on this combined studio load.
+      const { wallet } = await canonicalWallet.read(tx, scope, uid);
+      if ((await tx.get(db.doc(`${deletionCollection}/${uid}`))).exists) fail('failed-precondition', '계정 정리 중입니다.', 'AVATAR_DELETION_PENDING');
+      const [state, pricing] = await Promise.all([readState(tx, uid), readAvatarPricing(tx, db)]);
+      return { avatar: exposeState(state), balance: wallet.balance, wallet: walletState(wallet), pricing };
+    }, { readOnly: true });
+  };
+
+  const getTeacherMyPage = async request => {
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
+    if (!teacher || !keysOnly(data, ['_session', 'year', 'semester'])) invalid();
+    const scope = scopeOf(data);
+    return db.runTransaction(async tx => {
+      const profile = await readStudent(tx, uid, identity);
+      const [state, policy] = await Promise.all([readState(tx, uid), loadPolicy(tx, scope.year, scope.semester)]);
+      const emojiRegistry = resolveRankPolicy(policy?.rankPolicy).emojiRegistry.filter(entry => entry.enabled !== false);
+      const selected = emojiRegistry.find(entry => entry.id === profile.profileEmojiId)
+        || emojiRegistry.find(entry => entry.emoji === profile.profileIcon)
+        || emojiRegistry.find(entry => entry.id === DEFAULT_PROFILE_EMOJI_ID) || emojiRegistry[0];
+      return { avatar: exposeState(state), allAvailable: true, emojiRegistry,
+        profileEmojiId: selected?.id || '', profileIcon: selected?.emoji || '😀' };
+    }, { readOnly: true });
+  };
+
+  const updateTeacherProfileIcon = async request => {
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
+    if (!teacher || !keysOnly(data, ['_session', 'year', 'semester', 'emojiId']) || typeof data.emojiId !== 'string' || data.emojiId.length > 100) invalid();
+    const scope = scopeOf(data);
+    return db.runTransaction(async tx => {
+      const profile = await readStudent(tx, uid, identity);
+      const policy = await loadPolicy(tx, scope.year, scope.semester);
+      const entry = getProfileEmojiEntryById(data.emojiId, resolveRankPolicy(policy?.rankPolicy).emojiRegistry);
+      if (!entry || entry.enabled === false) fail('invalid-argument', '선택할 수 없는 이모지입니다.', 'AVATAR_EMOJI_INVALID');
+      if (profile.profileEmojiId !== entry.id || profile.profileIcon !== entry.emoji) {
+        tx.set(db.doc(`users/${uid}`), { profileEmojiId: entry.id, profileIcon: entry.emoji, updatedAt: Timestamp.fromMillis(now()) }, { merge: true });
+      }
+      return { emojiId: entry.id, profileIcon: entry.emoji };
+    });
   };
 
   const purchaseStudentAvatarItem = async request => {
-    const uid = await authenticate(request), data = request.data || {};
-    if (!keysOnly(data, ['_session', 'year', 'semester', 'itemId', 'requestId'])) invalid();
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
+    if (teacher || !keysOnly(data, ['_session', 'year', 'semester', 'itemId', 'requestId', 'expectedPrice', 'expectedPricingRevision'])) invalid();
+    const hasQuote = data.expectedPrice !== undefined || data.expectedPricingRevision !== undefined;
+    if (hasQuote && (!safe(data.expectedPrice) || !safe(data.expectedPricingRevision))) invalid();
     const scope = scopeOf(data), key = requestKey(data.requestId), item = items.get(data.itemId);
     if (!item) invalid();
     const digest = hash(JSON.stringify(['purchase', uid, scope, item.id]));
-    const receiptRef = db.doc(`student_avatars/${uid}/requests/${key}`);
+    const receiptRef = db.doc(`${collection}/${uid}/requests/${key}`);
     return db.runTransaction(async tx => {
-      await readStudent(tx, uid);
+      await readStudent(tx, uid, identity);
       const previous = await readReceipt(tx, receiptRef, uid, digest);
       if (previous) return previous;
       const state = await readState(tx, uid);
+      const pricing = await readAvatarPricing(tx, db), price = pricing.prices[item.id];
+      const alreadyOwned = price === 0 || state.ownedItemIds.includes(item.id);
+      if (!alreadyOwned && ((hasQuote && (data.expectedPrice !== price || data.expectedPricingRevision !== pricing.revision)) || (!hasQuote && pricing.revision !== 0))) {
+        fail('failed-precondition', '아바타 가격이 변경되었습니다. 새 가격을 확인한 뒤 다시 구매해 주세요.', 'AVATAR_PRICE_CHANGED', { currentPrice: price, pricing });
+      }
       const { wallet, economy } = await canonicalWallet.read(tx, scope, uid);
       const timestamp = Timestamp.fromMillis(now());
-      const alreadyOwned = item.price === 0 || state.ownedItemIds.includes(item.id);
-      const result = { itemId: item.id, charged: 0, alreadyOwned, duplicate: false, ledgerEntryId: null, wallet: walletState(wallet), avatar: privateState(state) };
+      const result = { itemId: item.id, charged: 0, alreadyOwned, duplicate: false, ledgerEntryId: null, wallet: walletState(wallet), avatar: exposeState(state), pricing };
       // No-charge probes must not grow a receipt collection. An earlier charged
       // receipt was already checked above and still replays exactly once.
       if (alreadyOwned) return result;
       if (!alreadyOwned) {
-        if (wallet.balance < item.price) fail('failed-precondition', '위스 잔액이 부족합니다.', 'WIS_INSUFFICIENT_BALANCE', { balance: wallet.balance, required: item.price });
-        if (![wallet.revision + 1, wallet.spentTotal + item.price, economy.revision + 1, economy.ledgerEntryCount + 1, state.revision + 1].every(value => safe(value, 1))) {
+        if (wallet.balance < price) fail('failed-precondition', '위스 잔액이 부족합니다.', 'WIS_INSUFFICIENT_BALANCE', { balance: wallet.balance, required: price });
+        if (![wallet.revision + 1, wallet.spentTotal + price, economy.revision + 1, economy.ledgerEntryCount + 1, state.revision + 1].every(value => safe(value, 1))) {
           fail('failed-precondition', '위스 계좌의 금액과 합계를 확인해 주세요.', 'WIS_ACCOUNT_TOTALS_INVALID');
         }
         const sourceId = `avatar:${hash(`${uid}\n${key}`)}`;
@@ -136,13 +203,13 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
         const ledger = {
           schemaVersion: 1, policyVersion: 'w7-v1', ledgerEntryId, semesterId: wallet.semesterId,
           accountId: wallet.accountId, studentUid: uid, type: 'ORDER_DEBIT', activityType: 'avatar_purchase',
-          delta: -item.price, balanceBefore: wallet.balance, balanceAfter: wallet.balance - item.price,
+          delta: -price, balanceBefore: wallet.balance, balanceAfter: wallet.balance - price,
           sourceId, reason: `아바타 구매: ${item.label}`, actorUid: uid, actorRole: 'student',
           commandId: `avatar_${key}`, receiptId: receiptRef.path, createdAt: timestamp,
-          avatarItemId: item.id, catalogVersion: catalog.version,
+          avatarItemId: item.id, catalogVersion: catalog.version, pricingRevision: pricing.revision,
         };
-        const totals = { balance: wallet.balance - item.price, earnedTotal: wallet.earnedTotal,
-          rankEarnedTotal: wallet.rankEarnedTotal, spentTotal: wallet.spentTotal + item.price, adjustedTotal: wallet.adjustedTotal };
+        const totals = { balance: wallet.balance - price, earnedTotal: wallet.earnedTotal,
+          rankEarnedTotal: wallet.rankEarnedTotal, spentTotal: wallet.spentTotal + price, adjustedTotal: wallet.adjustedTotal };
         const nextWallet = { ...wallet, ...totals, revision: wallet.revision + 1 };
         const nextState = { ...state, revision: state.revision + 1, ownedItemIds: [...state.ownedItemIds, item.id].sort() };
         const common = { schemaVersion: 1, policyVersion: 'w7-v1', accountId: wallet.accountId,
@@ -157,7 +224,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
         tx.set(db.doc(`semester_wis_economies/${wallet.semesterId}`), { revision: economy.revision + 1,
           ledgerEntryCount: economy.ledgerEntryCount + 1, updatedAt: timestamp, updatedBy: uid }, { merge: true });
         writeState(tx, uid, nextState, timestamp);
-        Object.assign(result, { charged: item.price, ledgerEntryId, wallet: walletState(nextWallet), avatar: privateState(nextState) });
+        Object.assign(result, { charged: price, ledgerEntryId, wallet: walletState(nextWallet), avatar: exposeState(nextState) });
       }
       writeReceipt(tx, receiptRef, uid, digest, result, timestamp);
       return result;
@@ -165,7 +232,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
   };
 
   const saveStudentAvatar = async request => {
-    const uid = await authenticate(request), data = request.data || {};
+    const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
     if (!keysOnly(data, ['_session', 'look', 'expectedRevision', 'requestId', 'thumbnailWebp']) || !safe(data.expectedRevision)) invalid();
     const look = validateLook(data.look), key = requestKey(data.requestId);
     if (!look) invalid();
@@ -173,14 +240,19 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     // profile-image trust; decode/re-encode cannot prove a screenshot depicts look.
     const bytes = await encodeThumbnail(data.thumbnailWebp), thumbnailHash = hash(bytes);
     const digest = hash(JSON.stringify(['save', uid, lookHash(look), data.expectedRevision, thumbnailHash]));
-    const receiptRef = db.doc(`student_avatars/${uid}/requests/${key}`);
+    const receiptRef = db.doc(`${collection}/${uid}/requests/${key}`);
     const validateSave = async tx => {
-      await readStudent(tx, uid);
+      await readStudent(tx, uid, identity);
       const previous = await readReceipt(tx, receiptRef, uid, digest);
       if (previous) return { previous };
       const state = await readState(tx, uid);
       if (state.revision !== data.expectedRevision) fail('aborted', '다른 화면에서 아바타가 변경되었습니다. 보관함을 새로고침해 주세요.', 'AVATAR_REVISION_CONFLICT', { currentRevision: state.revision });
-      if (!validateLook(look, state.ownedItemIds)) fail('permission-denied', '구매한 아이템만 저장할 수 있습니다.', 'AVATAR_ITEM_NOT_OWNED');
+      if (!teacher) {
+        const pricing = await readAvatarPricing(tx, db);
+        if (!canUsePricedLook(look, state.ownedItemIds, pricing)) {
+          fail('permission-denied', '현재 가격표에서 구매하지 않은 아이템이 있습니다. 가격을 확인해 주세요.', 'AVATAR_ITEM_NOT_OWNED', { pricing });
+        }
+      }
       if (!safe(state.revision + 1, 1)) fail('failed-precondition', '아바타 보관함을 확인해 주세요.', 'AVATAR_STATE_INVALID');
       if (state.lastSavedAtMs && now() - state.lastSavedAtMs < 2000) fail('resource-exhausted', '잠시 후 다시 저장해 주세요.', 'AVATAR_SAVE_RATE_LIMIT');
       return { state };
@@ -189,7 +261,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     if (prepared.previous) return prepared.previous;
     const storageBucket = typeof bucket === 'function' ? bucket() : bucket;
     if (!storageBucket) fail('unavailable', '아바타 이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'AVATAR_STORAGE_UNAVAILABLE');
-    const objectPath = `student_avatar_thumbnails/v1/${hash(uid)}/${hash(`${key}\n${digest}`)}.webp`;
+    const objectPath = `${thumbnailFolder}/v1/${hash(uid)}/${hash(`${key}\n${digest}`)}.webp`;
     const file = storageBucket.file(objectPath);
     let token = randomUUID(), created = false;
     try {
@@ -214,18 +286,19 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
         if (checked.previous) return checked.previous;
         const state = checked.state, timestamp = Timestamp.fromMillis(now());
         retiredPath = state.previousThumbnailPath || null;
-        const next = { ...state, look, revision: state.revision + 1, thumbnailUrl, thumbnailPath: objectPath,
+        const next = { ...state, look, revision: state.revision + 1,
+          ownedItemIds: [...new Set([...state.ownedItemIds, ...ownedLookIds(look)])].sort(), thumbnailUrl, thumbnailPath: objectPath,
           previousThumbnailPath: state.thumbnailPath || null, lastSavedAtMs: now() };
         writeState(tx, uid, next, timestamp);
-        const saved = { ...privateState(next), duplicate: false };
+        const saved = { ...exposeState(next), duplicate: false };
         writeReceipt(tx, receiptRef, uid, digest, saved, timestamp);
         return saved;
       });
       // Retain current and previous image so normal page/cache transitions work.
       // Cleanup is best-effort; failures must not turn a committed save into failure.
-      if (retiredPath && retiredPath !== objectPath && retiredPath.startsWith(`student_avatar_thumbnails/v1/${hash(uid)}/`)) {
+      if (retiredPath && retiredPath !== objectPath && retiredPath.startsWith(`${thumbnailFolder}/v1/${hash(uid)}/`)) {
         try {
-          const current = (await db.doc(`student_avatars/${uid}`).get()).data() || {};
+          const current = (await db.doc(`${collection}/${uid}`).get()).data() || {};
           if (![current.thumbnailPath, current.previousThumbnailPath].includes(retiredPath)) await storageBucket.file(retiredPath).delete({ ignoreNotFound: true });
         } catch (_) { /* Retention cleanup may be retried operationally. */ }
       }
@@ -240,14 +313,27 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       throw error;
     }
   };
-  return { getStudentAvatar, purchaseStudentAvatarItem, saveStudentAvatar };
+  return { getStudentAvatar, getAvatarStudioState, getTeacherMyPage, updateTeacherProfileIcon,
+    purchaseStudentAvatarItem, saveStudentAvatar };
 };
 
-const createStudentAvatarDeletionHandler = ({ db, bucket }) => async event => {
+const createStudentAvatarDeletionHandler = ({ db, bucket, audience = 'student' }) => async event => {
+  const teacher = audience === 'teacher', collection = teacher ? 'teacher_avatars' : 'student_avatars';
+  const deletions = teacher ? 'teacher_avatar_deletions' : 'student_avatar_deletions';
+  const thumbnails = teacher ? 'teacher_avatar_thumbnails' : 'student_avatar_thumbnails';
   const uid = event.params?.uid;
-  if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid) || event.data?.data()?.role !== 'student'
+  if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)
+    || (!teacher && event.data?.data()?.role !== 'student')
     || typeof event.id !== 'string' || !event.id || event.id.length > 256) return;
-  const eventHash = hash(event.id), userRef = db.doc(`users/${uid}`), lockRef = db.doc(`student_avatar_deletions/${uid}`);
+  const eventHash = hash(event.id), userRef = db.doc(`users/${uid}`), lockRef = db.doc(`${deletions}/${uid}`);
+  if (teacher && event.data?.data()?.role !== 'teacher'
+    && String(event.data?.data()?.email || '').toLowerCase() !== 'westoria28@gmail.com'
+    && !(await db.doc(`${collection}/${uid}`).get()).exists) {
+    // A previous attempt may have removed the inventory before its final lock
+    // cleanup failed. Keep that event retryable after a teacher role change.
+    const lock = await lockRef.get();
+    if (!lock.exists || lock.data().eventHash !== eventHash) return;
+  }
   // The lock shares every avatar transaction's read set. A recreated identity
   // cannot save new avatar data while old subcollections/assets are removed.
   const acquired = await db.runTransaction(async tx => {
@@ -263,8 +349,8 @@ const createStudentAvatarDeletionHandler = ({ db, bucket }) => async event => {
   if (!acquired) return;
   const storageBucket = typeof bucket === 'function' ? bucket() : bucket;
   if (!storageBucket) throw new Error('Avatar cleanup storage unavailable');
-  await storageBucket.deleteFiles({ prefix: `student_avatar_thumbnails/v1/${hash(uid)}/`, force: true });
-  await db.recursiveDelete(db.doc(`student_avatars/${uid}`));
+  await storageBucket.deleteFiles({ prefix: `${thumbnails}/v1/${hash(uid)}/`, force: true });
+  await db.recursiveDelete(db.doc(`${collection}/${uid}`));
   await db.runTransaction(async tx => {
     const lock = await tx.get(lockRef);
     if (lock.exists && lock.data().eventHash === eventHash) tx.delete(lockRef);

@@ -202,6 +202,12 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       "getStudentAvatar",
       "purchaseStudentAvatarItem",
       "saveStudentAvatar",
+      "getAvatarStudioState",
+      "getTeacherMyPage",
+      "saveTeacherAvatar",
+      "updateTeacherProfileIcon",
+      "getAvatarCatalogPricing",
+      "updateAvatarCatalogPricing",
     ].includes(name)
       ? (wisRankingFunctionsPromise ??= import("firebase/functions")
           .then(({ connectFunctionsEmulator, getFunctions }) => {

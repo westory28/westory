@@ -40,3 +40,29 @@ use image generation.
 New saved thumbnails preserve the renderer's alpha so
 the character stands naturally against the hall of fame background.
 Runtime choices do not request image generation or model generation services.
+
+## Hanbok, official robes and summer uniforms (2026-10-28)
+
+`src/features/avatar/renderer/garments.js` creates original Three.js geometry for
+three jeogori colorways, three chima skirts, three baji trousers, navy/red/black
+official robes, a samo, a gat, and the white/navy Yongshin summer polo with dark
+shorts. Collars, white dongjeong, goreum ribbons, broad sleeves, skirt pleats,
+belts, robe silhouettes and hat wings/brims are geometry rather than recolors of
+the original jacket. Navy and black robes use an original stylized crane/cloud
+badge drawn by code; it is decorative and does not claim a historical rank.
+User-provided references informed garment shape/color only. No person, face,
+school photograph or third-party image is embedded in the garments or badge.
+
+Garment pieces attach to the existing skeleton in bind space and follow the
+six supported poses. Replacement tops hide the authored jacket; replacement
+bottoms also hide the authored leg surface to avoid clipping through shorts.
+Short sleeves and shorts provide their own skin-colored limb surfaces and
+reuse the selected skin palette. Source head, hair, hands and footwear retain
+the existing appearance controls. A robe visually covers the selected bottom,
+which returns when the user selects another top. Unchosen avatar silhouettes
+are unchanged. Each garment is built lazily once per stage and reused when
+switching looks; no additional model, texture or server request is made for an
+individual garment choice. The generated geometry and badge texture are disposed
+with the stage. New catalog IDs use the existing top/bottom/accessory slots and
+additive catalog version 1; their initial price is zero, with school pricing
+controlled by the administrator.
