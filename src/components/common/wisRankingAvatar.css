@@ -35,10 +35,7 @@
   border-width: 2px;
   border-color: rgb(var(--wis-ranking-accent-rgb) / 0.5);
   display: grid;
-  grid-template-columns: 24px minmax(112px, 1fr) max-content minmax(
-      80px,
-      max-content
-    );
+  grid-template-columns: 24px repeat(3, minmax(max-content, 1fr));
   grid-template-areas: "place person classroom score";
   gap: 8px;
   text-align: left;
@@ -97,6 +94,7 @@
 }
 
 .wis-ranking-with-avatar .wis-ranking-classroom {
+  justify-content: center;
   font-size: 11px;
   white-space: nowrap;
 }

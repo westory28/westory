@@ -26,19 +26,17 @@ bone transforms. The original preview files remain available for older clients.
 The v2 previews are transparent 384 × 640 WebP images, captured through
 `createAvatarStage` with `defaultAvatarLook(character)` and pixel ratio 1, then
 encoded at quality 90. Versioned filenames avoid stale immutable asset caches.
-The unchosen avatar uses `v1/neutral-base-v1.webp` (384 × 640, transparent,
-23,786 bytes). It preserves the existing avatar's 3D proportions, cheeks, chin,
-ears, hands and feet as a neutral gray base sculpt without hair, garments or
-anatomical details. A question mark is overlaid in the UI; no character or
-gender is assigned. The earlier geometric silhouette remains for older clients.
-This static asset was edited with the built-in imagegen tool on 2026-10-28,
-using the existing boy preview as the edit target and the user's base-avatar
-sprite only as a shape reference. A second imagegen pass cleaned the cutout.
-Sharp only resized and encoded the result to WebP with alpha preserved.
-Final edit prompt: preserve the existing avatar's large head, cheek/chin/ear
-outline, short body, relaxed arms, hands, feet and pedestal; remove hair,
-clothing and facial decoration; use featureless matte gray clay with gentle
-3D shading, a neutral torso, clean transparent edges, and no text.
+The unchosen avatar uses `v1/neutral-silhouette-v2.svg` (384 × 640), an
+original code-authored outline with a transparent background and a single
+neutral fill (`#cbd5e1`). The large round head, short body, relaxed arms and
+rounded hands/feet retain the avatar proportions. Torso and limbs have smooth
+continuous contours with no waist, muscle or joint emphasis. There are no
+facial details, hair, clothing, shading, highlights or pedestal. Feet remain
+at the shared 87% preview baseline so podium alignment is preserved. The UI
+overlays the question mark; no character or gender is assigned.
+The earlier geometric SVG and generated `neutral-base-v1.webp` remain only
+for older clients. The v2 silhouette is editable vector source and does not
+use image generation.
 New saved thumbnails preserve the renderer's alpha so
 the character stands naturally against the hall of fame background.
 Runtime choices do not request image generation or model generation services.
