@@ -200,7 +200,12 @@ export function createPoseController(
     if (disposed || !supported.includes(id)) return false;
     restore();
     const { right, forward, up } = axes();
-    if (id === "tilt") {
+    if (id === "idle" && hasArms) {
+      // The source rig's A-pose is a bind pose, not the resting appearance.
+      // Keep both hands beside the body with a soft, slightly asymmetric bend.
+      reach("left", 0.13, -0.9, 0.08);
+      reach("right", 0.12, -0.88, 0.12);
+    } else if (id === "tilt") {
       rotateAround(neck || head, forward, -0.12);
       if (head && neck) rotateAround(head, forward, -0.08);
       rotateAround(head, up, 0.055);

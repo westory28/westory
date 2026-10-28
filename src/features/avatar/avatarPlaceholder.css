@@ -1,0 +1,34 @@
+.avatar-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--ws-text-muted, #64748b);
+  pointer-events: none;
+}
+
+.avatar-placeholder__silhouette {
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0.28;
+  -webkit-mask-image: var(--avatar-placeholder-mask);
+  mask-image: var(--avatar-placeholder-mask);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  mask-mode: alpha;
+}
+
+.avatar-placeholder__question {
+  position: relative;
+  color: var(--ws-text-muted, #64748b);
+  font-family: inherit;
+  font-size: clamp(24px, 5vw, 44px);
+  font-weight: 800;
+  line-height: 1;
+}

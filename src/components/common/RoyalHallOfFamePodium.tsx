@@ -6,6 +6,7 @@ import {
   normalizeHallOfFameInterfaceConfig,
 } from "../../lib/wisHallOfFame";
 import { formatWisAmount } from "../../lib/pointFormatters";
+import WisHallOfFameAvatar from "./WisHallOfFameAvatar";
 import "./royalHallOfFamePodium.css";
 
 const SLOTS: Array<{ key: HallOfFamePodiumSlotKey; rank: number }> = [
@@ -18,6 +19,9 @@ const TOPS = {
   desktop: { second: 39, first: 27, third: 43 },
   mobile: { second: 30, first: 18, third: 34 },
 };
+// Preserve each saved position's offset while anchoring the avatar's feet to
+// the actual platform surface instead of positioning an emoji by its top.
+const FEET = { second: 56, first: 50, third: 60 };
 
 const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   entries = [],
@@ -81,7 +85,7 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
             const position = config.positions[mode][key];
             Object.assign(style, {
               [`--royal-${mode}-left`]: `${Math.min(CENTERS[key] + 5, Math.max(CENTERS[key] - 5, position.leftPercent))}%`,
-              [`--royal-${mode}-top`]: `${Math.min(TOPS[mode][key] + 6, Math.max(TOPS[mode][key] - 6, position.topPercent))}%`,
+              [`--royal-${mode}-top`]: `${FEET[key] + Math.min(6, Math.max(-6, position.topPercent - TOPS[mode][key]))}%`,
               [`--royal-${mode}-width`]: `${position.widthPercent}%`,
               [`--royal-${mode}-scale`]: position.widthPercent / 24,
             });
@@ -96,7 +100,7 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                 <button
                   type="button"
                   className="royal-hall-podium__place royal-hall-podium__handle"
-                  aria-label={control.dragLabel || `${rank}위 이모지 위치 이동`}
+                  aria-label={control.dragLabel || `${rank}위 아바타 위치 이동`}
                   onPointerDown={control.onPointerDown}
                   onClick={control.onClick}
                   disabled={control.disabled}
@@ -107,9 +111,10 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                 <span className="royal-hall-podium__place">{label}</span>
               )}
               {active && (
-                <span className="royal-hall-podium__emoji" aria-hidden="true">
-                  {active.profileIcon || "🙂"}
-                </span>
+                <WisHallOfFameAvatar
+                  entry={active}
+                  className="royal-hall-podium__figure"
+                />
               )}
               {members.length > 1 && (
                 <span className="royal-hall-podium__tie-count">

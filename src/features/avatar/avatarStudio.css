@@ -60,6 +60,23 @@
   top: 16px;
   min-width: 0;
 }
+.avatar-studio-characters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.avatar-studio-characters button {
+  flex: 1;
+  padding-inline: 8px;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.avatar-studio-characters button[aria-pressed="true"] {
+  color: var(--ws-primary, #2563eb);
+  border-color: currentColor;
+  background: var(--ws-primary-soft, #eff6ff);
+  font-weight: 700;
+}
 .avatar-studio-stage {
   height: min(480px, 52dvh);
   min-height: 280px;

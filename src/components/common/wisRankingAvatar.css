@@ -1,57 +1,79 @@
 .wis-ranking-with-avatar .wis-ranking-avatar-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   min-width: 0;
   min-height: 0;
 }
 
-.wis-ranking-with-avatar .wis-ranking-list {
-  container: wis-avatar-list / inline-size;
+.wis-ranking-list-scroll {
   align-self: start;
+  min-width: 0;
   width: 100%;
-  margin: 0;
   padding: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.wis-ranking-with-avatar .wis-ranking-list {
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 2px 0;
   gap: 8px;
   overflow: visible;
 }
 
-/* The avatar keeps its own column; compact ranking rows use two lines. */
+/* Preserve every field on one line; only the list scrolls when it needs room. */
 .wis-ranking-with-avatar .wis-ranking-row {
   width: 100%;
+  min-width: max-content;
   min-height: 52px;
-  padding: 7px 8px;
+  padding: 8px;
+  border-width: 2px;
+  border-color: rgb(var(--wis-ranking-accent-rgb) / 0.5);
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 80px;
-  grid-template-areas: "place person person" "place classroom score";
-  gap: 3px 6px;
+  grid-template-columns: 24px minmax(112px, 1fr) max-content minmax(
+      80px,
+      max-content
+    );
+  grid-template-areas: "place person classroom score";
+  gap: 8px;
   text-align: left;
   cursor: pointer;
-  transform: none;
 }
 
-.wis-ranking-with-avatar .wis-ranking-row.is-selected {
-  border-color: var(--ws-primary, #2563eb);
-  box-shadow: inset 3px 0 0 var(--ws-primary, #2563eb);
+.wis-ranking-with-avatar .wis-ranking-row.is-selected,
+.wis-ranking-with-avatar .wis-ranking-row.is-selected:hover {
+  border-color: rgb(var(--wis-ranking-accent-rgb));
+  box-shadow: inset 4px 0 0 rgb(var(--wis-ranking-accent-rgb));
+}
+
+.wis-ranking-with-avatar .wis-ranking-row:focus-visible {
+  outline-color: rgb(var(--wis-ranking-accent-rgb));
+  outline-offset: -4px;
 }
 
 .wis-ranking-with-avatar .wis-ranking-person {
   justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: max-content;
+  gap: 8px;
 }
 
 .wis-ranking-with-avatar .wis-ranking-identity {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .wis-ranking-with-avatar .wis-ranking-name {
   font-size: 14px;
   line-height: 1.3;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
   overflow: visible;
+  text-overflow: clip;
 }
 
 .wis-ranking-with-avatar .wis-ranking-profile {
@@ -76,13 +98,20 @@
 
 .wis-ranking-with-avatar .wis-ranking-classroom {
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .wis-ranking-with-avatar .wis-ranking-score {
-  max-width: 80px;
+  max-width: none;
   font-size: 14px;
   line-height: 1.3;
-  gap: 3px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.wis-ranking-with-avatar .wis-ranking-score > span {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
@@ -114,110 +143,12 @@
   background: var(--ws-surface-subtle, #f8fafc);
 }
 
-.wis-ranking-avatar__image,
-.wis-ranking-avatar__stage {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
 .wis-ranking-avatar__image {
-  padding: 8px 0 28px;
-  object-fit: contain;
-}
-
-.wis-ranking-avatar__image.is-hidden,
-.wis-ranking-avatar__stage:not(.is-ready) {
-  visibility: hidden;
-}
-
-.wis-ranking-avatar__image.is-default {
-  object-fit: contain;
-  padding: 8px 0 28px;
-}
-
-.wis-ranking-avatar__stage canvas {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-}
-
-.wis-ranking-avatar__fallback {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 12px;
-  color: var(--ws-text-muted, #64748b);
-  font-size: 12px;
-  text-align: center;
-}
-
-.wis-ranking-avatar__play {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 8px 4px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-
-.wis-ranking-avatar__play-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 6px 9px;
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 999px;
-  background: var(--ws-surface, #fff);
-  color: var(--ws-primary, #2563eb);
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.wis-ranking-avatar__caption {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding-top: 8px;
-  color: var(--ws-text-muted, #64748b);
-  font-size: 11px;
-}
-
-.wis-ranking-avatar__caption strong {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ws-text-strong, #111827);
-  font-size: 14px;
-}
-
-.wis-ranking-avatar-cycle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 44px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  color: var(--ws-text-muted, #64748b);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.wis-ranking-avatar-cycle:disabled {
-  cursor: default;
+  object-fit: contain;
 }
 
 .wis-ranking-with-avatar button:focus-visible {
@@ -225,12 +156,6 @@
   outline-offset: 2px;
 }
 
-.wis-ranking-avatar__play:focus-visible {
-  outline-offset: -3px;
-  border-radius: inherit;
-}
-
-.wis-ranking-avatar__error,
 .wis-ranking-load-error {
   color: var(--ws-danger-text, #b91c1c);
   font-size: 12px;
@@ -254,52 +179,6 @@
 @container wis-ranking (max-width: 390px) {
   .wis-ranking-with-avatar .wis-ranking-avatar-layout {
     gap: 8px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-row {
-    padding-inline: 5px;
-    grid-template-columns: 20px minmax(0, 1fr) 68px;
-    column-gap: 4px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-place .wis-ranking-rank-medal {
-    width: 20px;
-    height: 20px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-score {
-    max-width: 68px;
-    font-size: 13px;
-  }
-
-  .wis-ranking-avatar-cycle {
-    font-size: 10px;
-    gap: 3px;
-  }
-}
-
-@container wis-avatar-list (max-width: 250px) {
-  .wis-ranking-with-avatar .wis-ranking-row {
-    grid-template-columns: 20px minmax(0, 1fr);
-    grid-template-areas: "place person" "place classroom" "place score";
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-score {
-    justify-content: flex-start;
-    max-width: 100%;
-  }
-}
-
-@container wis-avatar-list (min-width: 440px) {
-  .wis-ranking-with-avatar .wis-ranking-row {
-    grid-template-columns: 24px minmax(0, 1fr) max-content 96px;
-    grid-template-areas: "place person classroom score";
-    column-gap: 8px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-score {
-    max-width: 96px;
-    font-size: 16px;
   }
 }
 

@@ -31,6 +31,7 @@ import {
   type AvatarPurchaseResult,
 } from "./service";
 import AvatarStage from "./AvatarStage";
+import AvatarPlaceholder from "./AvatarPlaceholder";
 import "./avatarStudio.css";
 
 export interface AvatarStudioAdapter {
@@ -55,6 +56,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
   const { showToast } = useAppToast();
   const [saved, setSaved] = useState<AvatarState | null>(null);
   const [look, setLook] = useState<AvatarLook>(defaultAvatarLook());
+  const [characterChosen, setCharacterChosen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
   const [slot, setSlot] = useState<AvatarSlot>("top");
   const [filter, setFilter] = useState<"all" | "owned" | "premium">("all");
@@ -79,6 +81,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       if (current !== generation.current) return;
       setSaved(data.avatar);
       setLook(data.avatar.look);
+      setCharacterChosen(Boolean(data.avatar.thumbnailUrl));
       setBalance(data.balance);
     } catch (failure) {
       if (current === generation.current) setError(avatarErrorMessage(failure));
@@ -98,7 +101,12 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     else if (!purchase && dialog.current?.open) dialog.current?.close();
   }, [purchase]);
   useEffect(() => {
-    if (saved && JSON.stringify(saved.look) !== JSON.stringify(look)) {
+    if (
+      saved &&
+      characterChosen &&
+      (!saved.thumbnailUrl ||
+        JSON.stringify(saved.look) !== JSON.stringify(look))
+    ) {
       const prevent = (event: BeforeUnloadEvent) => {
         event.preventDefault();
         event.returnValue = "";
@@ -106,7 +114,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       window.addEventListener("beforeunload", prevent);
       return () => window.removeEventListener("beforeunload", prevent);
     }
-  }, [saved, look]);
+  }, [saved, look, characterChosen]);
   const onReady = useCallback((controller: StageControls) => {
     stage.current = controller;
     setReady(true);
@@ -133,17 +141,26 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       (filter !== "premium" || item.price > 0),
   );
   const missing = unownedAvatarItems(look, owned);
-  const dirty = saved && JSON.stringify(saved.look) !== JSON.stringify(look);
+  const dirty =
+    saved &&
+    characterChosen &&
+    (!saved.thumbnailUrl ||
+      JSON.stringify(saved.look) !== JSON.stringify(look));
   const choose = (item: AvatarItem) => {
     if (busyRef.current) return;
-    if (item.slot === "character" && item.value !== look.character) {
+    if (item.slot !== "character" && !characterChosen) return;
+    if (
+      item.slot === "character" &&
+      (!characterChosen || item.value !== look.character)
+    ) {
       stage.current = null;
       setReady(false);
+      setCharacterChosen(true);
     }
     setLook((previous) => selectAvatarItem(previous, item));
   };
   const buy = async () => {
-    if (!purchase || busyRef.current) return;
+    if (!characterChosen || !purchase || busyRef.current) return;
     busyRef.current = true;
     setBusy("buy");
     setConfirmError("");
@@ -172,7 +189,14 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
     }
   };
   const save = async () => {
-    if (!saved || !stage.current || busyRef.current || missing.length) return;
+    if (
+      !characterChosen ||
+      !saved ||
+      !stage.current ||
+      busyRef.current ||
+      missing.length
+    )
+      return;
     busyRef.current = true;
     setBusy("save");
     setError("");
@@ -232,17 +256,42 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
       <div className="avatar-studio-layout">
         <div className="avatar-studio-preview">
           <div
+            className="avatar-studio-characters"
+            role="group"
+            aria-label="남녀 아바타 선택"
+          >
+            {AVATAR_ITEMS.filter((item) => item.slot === "character").map(
+              (item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  aria-pressed={
+                    characterChosen && look.character === item.value
+                  }
+                  disabled={Boolean(busy)}
+                  onClick={() => choose(item)}
+                >
+                  {item.label} 아바타
+                </button>
+              ),
+            )}
+          </div>
+          <div
             className="avatar-studio-stage"
             aria-label="선택한 아바타 미리보기"
           >
-            <AvatarStage
-              key={stageKey}
-              look={look}
-              active
-              onReady={onReady}
-              onError={onStageError}
-              onLoadingChange={onLoadingChange}
-            />
+            {characterChosen ? (
+              <AvatarStage
+                key={stageKey}
+                look={look}
+                active
+                onReady={onReady}
+                onError={onStageError}
+                onLoadingChange={onLoadingChange}
+              />
+            ) : (
+              <AvatarPlaceholder />
+            )}
             {stageError && (
               <div className="avatar-studio-stage-error" role="alert">
                 <p>{stageError}</p>
@@ -295,7 +344,14 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
             <button
               type="button"
               disabled={Boolean(busy) || !dirty}
-              onClick={() => setLook(saved.look)}
+              onClick={() => {
+                setLook(saved.look);
+                setCharacterChosen(Boolean(saved.thumbnailUrl));
+                stage.current = null;
+                setReady(false);
+                setStageError("");
+                setStageKey((key) => key + 1);
+              }}
             >
               저장한 모습
             </button>
@@ -333,7 +389,9 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
         </div>
         <div className="avatar-studio-picker">
           <div className="avatar-studio-categories" aria-label="꾸미기 종류">
-            {AVATAR_SLOTS.map((category) => (
+            {AVATAR_SLOTS.filter(
+              (category) => category.key !== "character",
+            ).map((category) => (
               <button
                 type="button"
                 key={category.key}
@@ -375,7 +433,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
                 key={item.id}
                 className={`avatar-studio-item ${item.price ? "is-premium" : "is-basic"}`}
                 aria-pressed={selected?.id === item.id}
-                disabled={Boolean(busy)}
+                disabled={!characterChosen || Boolean(busy)}
                 onClick={() => choose(item)}
               >
                 <span
@@ -394,7 +452,7 @@ export function AvatarStudio({ adapter }: { adapter: AvatarStudioAdapter }) {
                       />
                       {item.slot === "character" && (
                         <img
-                          src={`${import.meta.env.BASE_URL}avatar/v1/${item.value}-preview.webp`}
+                          src={`${import.meta.env.BASE_URL}avatar/v1/${item.value}-preview-v2.webp`}
                           alt=""
                           loading="lazy"
                           decoding="async"

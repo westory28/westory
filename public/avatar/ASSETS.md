@@ -15,7 +15,19 @@ Plain masks can be rebuilt using
 Basic clothing removes printed color and texture details; it retains the source
 garment shape, seams and sculpted folds. It is not a separate pajama garment mesh.
 
-The GLBs and renderer are loaded only after explicit 3D activation. Static
-dashboard previews use `v1/girl-preview.webp` and `v1/boy-preview.webp`, captured
-from the actual renderer with the default plain clothing. Runtime choices do not request
-image generation or model generation services.
+The GLBs and renderer load in My Page after a character is chosen. Rankings and
+the hall of fame use saved static thumbnails without loading 3D. Fallback
+previews use `v1/girl-preview-v2.webp` and `v1/boy-preview-v2.webp`,
+captured from the actual renderer with the default plain clothing and relaxed
+`idle` pose. The arms rest beside the body with a soft elbow bend; the rigs have
+hand bones but no finger joints. Other selectable poses retain their existing
+bone transforms. The original preview files remain available for older clients.
+
+The v2 previews are transparent 384 × 640 WebP images, captured through
+`createAvatarStage` with `defaultAvatarLook(character)` and pixel ratio 1, then
+encoded at quality 90. Versioned filenames avoid stale immutable asset caches.
+The unchosen avatar masks the actual girl preview's alpha to preserve its
+character silhouette, with a question mark over it; it assigns no character or
+gender to the student. New saved thumbnails preserve the renderer's alpha so
+the character stands naturally against the hall of fame background.
+Runtime choices do not request image generation or model generation services.

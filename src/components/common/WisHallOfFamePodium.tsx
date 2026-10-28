@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import RoyalHallOfFamePodium from "./RoyalHallOfFamePodium";
+import WisHallOfFameAvatar from "./WisHallOfFameAvatar";
 import { formatWisAmount } from "../../lib/pointFormatters";
 import {
   resolveWisHallOfFamePodiumImageUrl,
@@ -364,7 +365,7 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   return (
     <div
       ref={rootRef}
-      className="overflow-visible rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]"
+      className="wis-hall-legacy-podium overflow-visible rounded-[1.85rem] border border-slate-200 bg-white shadow-[0_22px_54px_rgba(15,23,42,0.08)]"
       style={podiumStyle}
     >
       {showHeader && (
@@ -529,7 +530,7 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         <div
                           className={`wis-hall-podium-entry__icon relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
                         >
-                          {primaryEntry.profileIcon || "🙂"}
+                          <WisHallOfFameAvatar entry={primaryEntry} />
                         </div>
 
                         <div
@@ -580,7 +581,7 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                   )
                                 }
                                 aria-label={`${rankLabel} ${entry.displayName || entry.studentName} 정보 보기`}
-                                className={`relative leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] transition-transform ${
+                                className={`wis-hall-legacy-tie-avatar relative leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] transition-transform ${
                                   tone.emojiClassName
                                 } ${index === 0 ? "" : "-ml-3.5 sm:-ml-4.5"} ${
                                   isActive || isHovered
@@ -589,13 +590,13 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 }`}
                               >
                                 <span
-                                  className={`inline-flex rounded-full ring-offset-2 transition ${
+                                  className={`flex w-full rounded-full ring-offset-2 transition ${
                                     isActive || isHovered
                                       ? "ring-2 ring-white ring-offset-transparent"
                                       : ""
                                   }`}
                                 >
-                                  {entry.profileIcon || "🙂"}
+                                  <WisHallOfFameAvatar entry={entry} />
                                 </span>
                               </button>
                             );

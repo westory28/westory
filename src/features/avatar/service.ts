@@ -194,8 +194,7 @@ export const makeAvatarThumbnail = async (dataUrl: string): Promise<string> => {
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("미리보기를 만들지 못했습니다.");
-    ctx.fillStyle = "#f8fafc";
-    ctx.fillRect(0, 0, 384, 512);
+    // Preserve the renderer's alpha so the saved avatar can stand on a podium.
     const scale = Math.min(384 / bitmap.width, 512 / bitmap.height);
     const w = bitmap.width * scale,
       h = bitmap.height * scale;

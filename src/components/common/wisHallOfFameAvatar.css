@@ -1,0 +1,33 @@
+.wis-hall-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+}
+.wis-hall-avatar > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+.wis-hall-avatar .avatar-placeholder {
+  padding: 0;
+}
+.wis-hall-legacy-podium {
+  container: legacy-podium / inline-size;
+}
+.wis-hall-legacy-podium .wis-hall-avatar {
+  height: clamp(80px, 20cqw, 220px);
+}
+.wis-hall-legacy-podium .wis-hall-podium-entry__icon {
+  width: 100%;
+}
+.wis-hall-legacy-podium .wis-hall-legacy-tie-avatar {
+  width: 50%;
+  min-width: 44px;
+  max-width: 112px;
+}
+.wis-hall-legacy-tie-avatar .wis-hall-avatar {
+  height: clamp(72px, 16cqw, 176px);
+}
