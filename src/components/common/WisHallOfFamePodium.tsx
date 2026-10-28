@@ -41,6 +41,17 @@ export interface WisHallOfFamePodiumProps {
 
 const SLOT_ORDER: HallOfFamePodiumSlotKey[] = ["second", "first", "third"];
 
+// The classic artwork's silver and bronze top surfaces, in image coordinates.
+// Keep stored drag offsets relative to the former emoji positions.
+const CLASSIC_SIDE_ANCHORS = {
+  second: { leftPercent: 23.5, surfaceY: 0.6 },
+  third: { leftPercent: 76.5, surfaceY: 0.64 },
+} as const;
+const CLASSIC_SIDE_BASELINES = {
+  desktop: { topPercent: 40.5, second: 26.5, third: 73.5 },
+  mobile: { topPercent: 46, second: 28, third: 72 },
+} as const;
+
 type SlotLayoutMode = "desktop" | "mobile";
 
 const DESKTOP_PODIUM_SCALE_BOUNDS = {
@@ -154,6 +165,8 @@ const buildSlotStyle = (
     desktop: HallOfFamePodiumPositions;
     mobile: HallOfFamePodiumPositions;
   },
+  stageSize: { width: number; height: number },
+  artworkAspect: number,
 ) => {
   const resolveLayout = (mode: SlotLayoutMode) => {
     const rawSlot = positions[mode][slotKey];
@@ -174,9 +187,30 @@ const buildSlotStyle = (
       Math.max(topRange.min, rawSlot.topPercent),
     );
 
+    const sideAnchor =
+      slotKey === "first" ? null : CLASSIC_SIDE_ANCHORS[slotKey];
+    if (
+      slotKey !== "first" &&
+      sideAnchor &&
+      stageSize.width > 0 &&
+      stageSize.height > 0
+    ) {
+      const baseline = CLASSIC_SIDE_BASELINES[mode];
+      const artworkHeight = Math.min(
+        stageSize.height,
+        stageSize.width / artworkAspect,
+      );
+      const footTop =
+        stageSize.height - artworkHeight + artworkHeight * sideAnchor.surfaceY;
+      return {
+        leftPercent: sideAnchor.leftPercent + leftPercent - baseline[slotKey],
+        top: `calc(${footTop}px + ${topPercent - baseline.topPercent}%)`,
+        widthPercent,
+      };
+    }
     return {
       leftPercent,
-      topPercent,
+      top: `${topPercent}%`,
       widthPercent,
     };
   };
@@ -187,10 +221,10 @@ const buildSlotStyle = (
 
   return {
     ["--slot-left" as string]: `${desktop.leftPercent}%`,
-    ["--slot-top" as string]: `${desktop.topPercent}%`,
+    ["--slot-top" as string]: desktop.top,
     ["--slot-width" as string]: `${desktop.widthPercent}%`,
     ["--slot-left-mobile" as string]: `${mobile.leftPercent}%`,
-    ["--slot-top-mobile" as string]: `${mobile.topPercent}%`,
+    ["--slot-top-mobile" as string]: mobile.top,
     ["--slot-width-mobile" as string]: `${mobile.widthPercent}%`,
     ["--slot-card-max-width" as string]: `${cardBaseWidth}rem`,
   } as React.CSSProperties;
@@ -233,6 +267,8 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
 }) => {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [stageWidth, setStageWidth] = useState(0);
+  const [stageHeight, setStageHeight] = useState(0);
+  const [artworkAspect, setArtworkAspect] = useState(1792 / 878);
   const safeEntries = entries || [];
   const normalizedConfig = normalizeHallOfFameInterfaceConfig(hallOfFameConfig);
   const resolvedImageUrl = resolveWisHallOfFamePodiumImageUrl(
@@ -291,6 +327,10 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       const nextWidth = readElementWidth(stageElement);
       setStageWidth((previousWidth) =>
         previousWidth === nextWidth ? previousWidth : nextWidth,
+      );
+      const nextHeight = stageElement.getBoundingClientRect().height;
+      setStageHeight((previousHeight) =>
+        previousHeight === nextHeight ? previousHeight : nextHeight,
       );
     };
 
@@ -405,6 +445,12 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
             <img
               src={resolvedImageUrl}
               alt=""
+              onLoad={(event) => {
+                const image = event.currentTarget;
+                if (image.naturalWidth && image.naturalHeight) {
+                  setArtworkAspect(image.naturalWidth / image.naturalHeight);
+                }
+              }}
               className="absolute inset-x-0 bottom-0 h-full w-full object-contain object-bottom"
             />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_rgba(255,255,255,0.03)_36%,_rgba(15,23,42,0.18)_100%)]" />
@@ -447,10 +493,18 @@ const LegacyWisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               return (
                 <div
                   key={`${slotKey}-${entriesForSlot.map((entry) => entry.uid).join("-")}`}
-                  style={buildSlotStyle(slotKey, normalizedPositions)}
+                  data-hall-podium-slot={slotKey}
+                  style={buildSlotStyle(
+                    slotKey,
+                    normalizedPositions,
+                    { width: stageWidth, height: stageHeight },
+                    artworkAspect,
+                  )}
                   className={`${slotPositionClassName} overflow-visible`}
                 >
-                  <div className="mx-auto flex w-full max-w-[var(--slot-card-max-width)] origin-top flex-col items-center gap-1.25 overflow-visible text-center [transform:scale(var(--hall-podium-scale))] sm:gap-1.5">
+                  <div
+                    className={`mx-auto flex w-full max-w-[var(--slot-card-max-width)] origin-top flex-col items-center gap-1.25 overflow-visible text-center [transform:scale(var(--hall-podium-scale))] sm:gap-1.5 ${slotKey !== "first" && stageWidth > 0 && stageHeight > 0 ? "wis-hall-legacy-card--foot-anchored" : ""} ${entriesForSlot.length > 1 ? "wis-hall-legacy-card--tied" : ""}`}
+                  >
                     {control ? (
                       <button
                         type="button"

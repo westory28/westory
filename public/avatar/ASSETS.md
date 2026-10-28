@@ -26,10 +26,19 @@ bone transforms. The original preview files remain available for older clients.
 The v2 previews are transparent 384 × 640 WebP images, captured through
 `createAvatarStage` with `defaultAvatarLook(character)` and pixel ratio 1, then
 encoded at quality 90. Versioned filenames avoid stale immutable asset caches.
-The unchosen avatar uses the authored `v1/neutral-silhouette.svg` alpha mask:
-the same large-head/short-body proportions, a round hairless head, a straight
-featureless torso, and relaxed limbs without clothing or anatomical details.
-It retains the pedestal and centered question mark, and assigns no character
-or gender to the student. New saved thumbnails preserve the renderer's alpha so
+The unchosen avatar uses `v1/neutral-base-v1.webp` (384 × 640, transparent,
+23,786 bytes). It preserves the existing avatar's 3D proportions, cheeks, chin,
+ears, hands and feet as a neutral gray base sculpt without hair, garments or
+anatomical details. A question mark is overlaid in the UI; no character or
+gender is assigned. The earlier geometric silhouette remains for older clients.
+This static asset was edited with the built-in imagegen tool on 2026-10-28,
+using the existing boy preview as the edit target and the user's base-avatar
+sprite only as a shape reference. A second imagegen pass cleaned the cutout.
+Sharp only resized and encoded the result to WebP with alpha preserved.
+Final edit prompt: preserve the existing avatar's large head, cheek/chin/ear
+outline, short body, relaxed arms, hands, feet and pedestal; remove hair,
+clothing and facial decoration; use featureless matte gray clay with gentle
+3D shading, a neutral torso, clean transparent edges, and no text.
+New saved thumbnails preserve the renderer's alpha so
 the character stands naturally against the hall of fame background.
 Runtime choices do not request image generation or model generation services.

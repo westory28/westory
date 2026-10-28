@@ -20,6 +20,50 @@
 .wis-hall-legacy-podium .wis-hall-avatar {
   height: clamp(80px, 20cqw, 220px);
 }
+.wis-hall-legacy-podium .wis-hall-legacy-card--foot-anchored {
+  --slot-avatar-height: clamp(80px, 20cqw, 220px);
+  --slot-badge-height: 32px;
+  --slot-avatar-gap: 0px;
+  transform: scale(var(--hall-podium-scale))
+    translateY(
+      calc(
+        -1 *
+          (
+            var(--slot-badge-height) + var(--slot-avatar-gap) +
+              var(--slot-avatar-height)
+          )
+      )
+    );
+}
+.wis-hall-legacy-card--foot-anchored .wis-hall-avatar > img,
+.wis-hall-legacy-card--foot-anchored .avatar-placeholder__silhouette {
+  position: absolute;
+  inset: auto;
+  bottom: 0;
+  left: 50%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  transform: translate(-50%, 13%);
+}
+.wis-hall-legacy-card--foot-anchored .avatar-placeholder {
+  container-type: inline-size;
+}
+.wis-hall-legacy-card--foot-anchored .avatar-placeholder__question {
+  position: absolute;
+  bottom: min(37%, 61.6667cqw);
+  transform: translateY(50%);
+}
+.wis-hall-legacy-podium .wis-hall-legacy-card--tied {
+  --slot-avatar-height: clamp(72px, 16cqw, 176px);
+}
+@media (min-width: 640px) {
+  .wis-hall-legacy-podium .wis-hall-legacy-card--foot-anchored {
+    --slot-badge-height: 36px;
+    --slot-avatar-gap: 6px;
+  }
+}
 .wis-hall-legacy-podium .wis-hall-podium-entry__icon {
   width: 100%;
 }

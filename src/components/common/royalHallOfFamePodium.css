@@ -79,10 +79,6 @@
 .royal-hall-podium__figure > .avatar-placeholder {
   transform: translateY(10%);
 }
-.royal-hall-podium__figure .avatar-placeholder__silhouette {
-  background: var(--ws-surface, #fff);
-  opacity: 0.72;
-}
 .royal-hall-podium__avatar--first .royal-hall-podium__figure {
   height: calc(25cqw * var(--royal-scale));
 }
