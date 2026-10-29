@@ -9,30 +9,38 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const destination = path.join(root, "public/avatar/v1/previews-v3");
+const destination = path.join(root, "public/avatar/v2/previews");
 const require = createRequire(import.meta.url);
 const catalog = JSON.parse(
   await fs.readFile(path.join(root, "functions/avatarCatalog.json"), "utf8"),
 );
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const rendererFiles = (
-  await fs.readdir(path.join(root, "src/features/avatar/renderer"))
+  await fs.readdir(path.join(root, "src/features/avatar/renderer2d"))
 )
-  .filter((name) => name.endsWith(".js"))
+  .filter((name) => name.endsWith(".ts"))
   .sort()
-  .map((name) => `src/features/avatar/renderer/${name}`);
+  .map((name) => `src/features/avatar/renderer2d/${name}`);
+const artManifest = JSON.parse(
+  await fs.readFile(path.join(root, "public/avatar/v2/manifest.json"), "utf8"),
+);
+const artFiles = new Set();
+function collectArt(value) {
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (["src", "mask"].includes(key) && typeof child === "string")
+      artFiles.add(`public/avatar/v2/${child}`);
+    else collectArt(child);
+  }
+}
+collectArt(artManifest);
 const sourceFiles = [
   "scripts/render-avatar-item-previews.mjs",
   "functions/avatarCatalog.json",
   "src/features/avatar/catalog.ts",
   ...rendererFiles,
-  ...catalog.items
-    .filter(
-      (item) =>
-        item.slot === "hairStyle" &&
-        !["bob", "curtain", "long"].includes(item.value),
-    )
-    .map((item) => `public/avatar/v1/models/hair-v3/${item.value}.glb`),
+  "public/avatar/v2/manifest.json",
+  ...[...artFiles].sort(),
 ];
 const sourceHashes = Object.fromEntries(
   await Promise.all(
@@ -41,7 +49,7 @@ const sourceHashes = Object.fromEntries(
       return [
         file,
         hash(
-          file.endsWith(".glb")
+          /\.(png|webp)$/.test(file)
             ? bytes
             : bytes.toString("utf8").replaceAll("\r\n", "\n"),
         ),
@@ -120,7 +128,7 @@ const scratch = await fs.mkdtemp(
 const bundle = await build({
   stdin: {
     contents: `
-    import {createAvatarStage} from './src/features/avatar/renderer/engine.js';
+    import {createAvatarStage} from './src/features/avatar/renderer2d/engine.ts';
     import {defaultAvatarLook} from './src/features/avatar/catalog.ts';
     let stage, character;
     window.renderItem=async(item,nextCharacter)=>{
@@ -132,14 +140,26 @@ const bundle = await build({
       if(item.value==='summer-shorts') look.top='summer-white';
       if(!stage||character!==nextCharacter){
         stage?.dispose(); character=nextCharacter;
-        stage=await createAvatarStage(document.getElementById('stage'),look,{assetBaseUrl:'/avatar/v1/',maxPixelRatio:1});
+        stage=await createAvatarStage(document.getElementById('stage'),look,{assetBaseUrl:'/avatar/v2/',maxPixelRatio:1});
       }
       await stage.prepareLook(look);
       const applied=stage.setLook(look);
       if(!applied.applied) throw Error('Unsupported item '+item.id+': '+JSON.stringify(applied));
       stage.stop();stage.resetView();
+      // Portrait framing can hide a hat clipped by the canonical saved image.
+      // Check the full capture independently before making the focused tile.
+      const full=await createImageBitmap(await(await fetch(stage.capture())).blob());
+      const probe=document.createElement('canvas');probe.width=full.width;probe.height=full.height;
+      const context=probe.getContext('2d');context.drawImage(full,0,0);full.close();
+      const pixels=context.getImageData(0,0,probe.width,probe.height).data;
+      const opaque=(x,y)=>pixels[(y*probe.width+x)*4+3]>16;
+      for(let x=0;x<probe.width;x++) if(opaque(x,0)||opaque(x,probe.height-1))
+        throw Error('Saved avatar is clipped vertically: '+nextCharacter+'/'+item.id);
+      for(let y=0;y<probe.height;y++) if(opaque(0,y)||opaque(probe.width-1,y))
+        throw Error('Saved avatar is clipped horizontally: '+nextCharacter+'/'+item.id);
+      probe.width=probe.height=0;
       stage.focusItem(item.value.startsWith('official-')&&item.slot==='top'?'pose':item.slot);
-      return {image:stage.capture(),stats:stage.stats};
+      return {image:stage.captureFrame(),stats:stage.stats};
     };
   `,
     loader: "ts",
@@ -162,7 +182,7 @@ const server = http.createServer(async (req, res) => {
       return res
         .writeHead(200, { "Content-Type": "text/javascript" })
         .end(bundle.outputFiles[0].contents);
-    const assetRoot = path.resolve(root, "public/avatar/v1");
+    const assetRoot = path.resolve(root, "public/avatar/v2");
     const target = path.resolve(
       root,
       "public",
@@ -173,7 +193,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "Content-Type": pathname.endsWith(".png")
         ? "image/png"
-        : "model/gltf-binary",
+        : pathname.endsWith(".webp") ? "image/webp" : "application/json",
     });
     res.end(await fs.readFile(target));
   } catch {
@@ -184,7 +204,9 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({
   headless: true,
-  args: ["--enable-unsafe-swiftshader"],
+  channel:
+    process.env.PLAYWRIGHT_BROWSER_CHANNEL ||
+    (process.platform === "win32" ? "msedge" : undefined),
 });
 const page = await browser.newPage({
   viewport: { width: 256, height: 256 },
@@ -199,7 +221,7 @@ await page.route("**/*", (route) =>
     : route.abort(),
 );
 const manifest = {
-  version: 3,
+  version: 4,
   width: 256,
   height: 256,
   sources: sourceHashes,

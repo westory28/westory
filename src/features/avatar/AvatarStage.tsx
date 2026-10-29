@@ -24,7 +24,6 @@ export interface AvatarStageProps {
 export interface AvatarStageHandle {
   getController(): AvatarStageController | null;
   capture(): string | null;
-  rotate(direction: "left" | "right"): void;
   zoom(direction: "in" | "out"): void;
   resetView(): void;
   focusFace(): void;
@@ -32,7 +31,7 @@ export interface AvatarStageHandle {
   stop(): void;
 }
 
-/** No renderer import or model request occurs before explicit activation. */
+/** Load the illustrated layers only when the studio is visible and active. */
 export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
   function AvatarStage(
     {
@@ -74,7 +73,6 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
         getController: () => (preparedRef.current ? stageRef.current : null),
         capture: () =>
           preparedRef.current ? (stageRef.current?.capture() ?? null) : null,
-        rotate: (direction) => stageRef.current?.rotate(direction),
         zoom: (direction) => stageRef.current?.zoom(direction),
         resetView: () => stageRef.current?.resetView(),
         focusFace: () => stageRef.current?.focusFace(),
@@ -119,7 +117,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           const failure =
             cause instanceof Error
               ? cause
-              : new Error("헤어를 불러오지 못했습니다.");
+              : new Error("아바타 그림을 불러오지 못했습니다.");
           preparedRef.current = false;
           setLoading(false);
           setError("아바타를 불러오지 못했습니다. 다시 시도해 주세요.");
@@ -147,24 +145,18 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
       setError(null);
       setLoading(true);
       callbacksRef.current.onLoadingChange?.(true);
-      void import("./renderer/engine.js")
+      void import("./renderer2d/engine")
         .then(async ({ createAvatarStage }) => {
           if (abort.signal.aborted) return null;
           requestedLook = lookRef.current;
-          // Establish the base independently of the saved external hairstyle.
-          // New selections can then cancel a pending hair request immediately.
-          return createAvatarStage(
-            container,
-            {
-              ...requestedLook,
-              hairStyle: requestedLook.character === "boy" ? "curtain" : "bob",
-            },
-            {
-              signal: abort.signal,
-              assetBaseUrl: `${import.meta.env.BASE_URL}avatar/v1/`,
-              maxPixelRatio: 1.5,
-            },
-          );
+          // The controller loads the shared art manifest first; selected layers
+          // are prepared below so a newer selection can cancel stale requests.
+          return createAvatarStage(container, requestedLook, {
+            signal: abort.signal,
+            assetBaseUrl: `${import.meta.env.BASE_URL}avatar/v2/`,
+            maxPixelRatio: 1.5,
+            deferPreparation: true,
+          });
         })
         .then((created) => {
           if (!created) return;
@@ -174,7 +166,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           }
           controller = created;
           stageRef.current = created;
-          // The selected style may have changed while a previous GLB decoded.
+          // A selection may have changed while the shared artwork loaded.
           void applyLatestLook(created, lookRef.current);
         })
         .catch((cause: unknown) => {

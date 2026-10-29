@@ -43,7 +43,7 @@
     "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-east-asia.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs && node scripts/verify-history-atlas-terrain.mjs && node scripts/verify-history-atlas-country-profiles.mjs && node scripts/verify-history-atlas-korea-foreign-context.mjs",
     "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs",
     "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
-    "verify:avatar-previews": "node scripts/render-avatar-item-previews.mjs --check"
+    "verify:avatar-previews": "node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json --check && node scripts/render-avatar-item-previews.mjs --check"
   },
   "dependencies": {
     "@fontsource/noto-serif-kr": "^5.3.1",

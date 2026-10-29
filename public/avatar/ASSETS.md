@@ -118,3 +118,39 @@ Rebuild with `node scripts/render-avatar-item-previews.mjs`; validate with
 item coverage and image hashes. Build validation rejects stale captures and
 enforces a 50 KB per-image / 4 MB total budget. Existing saved profile thumbnails
 remain unchanged until their owners save their appearance again.
+
+## Original-art 2D replacement (2026-10-29)
+
+The user selected original-art 2D after review of the arm and short-hair defects.
+This supersedes the 3D runtime described above. The studio now loads the local
+`v2/manifest.json` and transparent WebP artwork into a Canvas 2D compositor.
+It makes no WebGL, GLB, AI-service or external artwork request. Rendering occurs
+only after a look, viewport or visibility change; there is no animation loop.
+Full-body and face framing remain, while the 3D rotation controls are removed.
+
+Six original component sheets, a paired heart-hand sprite and a fitted headphone overlay were generated with the built-in OpenAI
+`image_gen` tool. Source sheets, provenance and the prompt specification are
+in `assets/avatar-source/v2/`. No real student/teacher photos or records were
+inputs, and no third-party game sprites, meshes or textures are shipped.
+`scripts/avatar-2d-art-registry.json` explicitly registers crop boundaries,
+placements, palettes and pose joints. `scripts/build-avatar-2d-assets.mjs`
+compiles the source sheets into `v2/layers/` and a validated manifest.
+
+All 84 catalog IDs, prices, ownership and server save contracts remain unchanged.
+Layered arms, sleeves and hands compose the six poses. Skin and hair colors
+preserve the artwork's shading; face, outfit accents and eyes are not recolored.
+As before, a robe covers the selected bottom until another top is selected.
+
+`v2/previews/{girl,boy}/*.webp` contains 256 × 256 static item captures from the
+same renderer, with portrait, clothing, lower-body and footwear framing.
+The shared picker and administrator price manager use these images. Build
+validation checks original sheet, registry, compiler, layer and preview hashes,
+complete catalog coverage, and a 50 KB per-image / 4 MB preview budget. Visual
+review of assembled characters separately checks fit, seams and all poses.
+
+Rebuild with `node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json`
+and `node scripts/render-avatar-item-previews.mjs`; check with
+`npm run verify:avatar-previews`. New v2 URLs use revalidation rather than the
+old immutable v1 cache. Old v1 assets remain for already-open clients. Existing
+saved profile thumbnails update only when their owner explicitly saves again;
+the studio allows this even when the selected items have not changed.

@@ -1,0 +1,2762 @@
+{
+  "sourceBase": "repository",
+  "canvas": [1024, 1280],
+  "sheets": [
+    {
+      "id": "body",
+      "src": "assets/avatar-source/v2/body.png",
+      "columns": 4,
+      "rows": 3,
+      "cleanup": {
+        "minArea": 16
+      },
+      "sha256": "db6bc4a1c071db7588f6340db24fbc6823dec171d3745a4059610b33d78f3fcb"
+    },
+    {
+      "id": "face",
+      "src": "assets/avatar-source/v2/expressions.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "340487322709eb2f1cb3b3332706727f4a572edae44970e8ff4ada15e7239870"
+    },
+    {
+      "id": "hair",
+      "src": "assets/avatar-source/v2/hair.png",
+      "columns": 3,
+      "rows": 3,
+      "sha256": "389abf688dfe83c6d8363738cad50983d08272e3e5754db4134719b1c9e2bee1"
+    },
+    {
+      "id": "tops",
+      "src": "assets/avatar-source/v2/tops.png",
+      "columns": 4,
+      "rows": 3,
+      "cleanup": {
+        "minArea": 16
+      },
+      "sha256": "f0ba8b58cce04e6836abfda04d0be14090f22b148c33cc20404f200cd455a1ea"
+    },
+    {
+      "id": "bottoms",
+      "src": "assets/avatar-source/v2/bottoms.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "c995cff633b8894f2926a79c6f763cb0c64a9ba97337677c785e00d03bd52ed9"
+    },
+    {
+      "id": "accessories",
+      "src": "assets/avatar-source/v2/accessories.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "9085ebbafc85d6c950b3f12304df500d690915e1c22d500d687e4aab89a1f9b5"
+    },
+    {
+      "id": "heart-hands",
+      "src": "assets/avatar-source/v2/heart-hands.png",
+      "columns": 1,
+      "rows": 1,
+      "sha256": "363dfb13bfb208ce2cc7f05c990e12f4789ea4f606c5dc170b7cbbdc4dcd39ab"
+    },
+    {
+      "id": "headphones-worn",
+      "src": "assets/avatar-source/v2/headphones-worn.png",
+      "columns": 1,
+      "rows": 1,
+      "sha256": "e6d5ab8802271cd6082044631b1cf3c792f30ca3ceda3d05c6351e1cd1e1185f"
+    }
+  ],
+  "cells": [
+    {
+      "id": "head-natural",
+      "sheet": "body",
+      "cell": [0, 0],
+      "rect": [0.28, 0.05, 0.44, 0.35],
+      "z": 40,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      }
+    },
+    {
+      "id": "head-round",
+      "sheet": "body",
+      "cell": [1, 0],
+      "rect": [0.28, 0.05, 0.44, 0.35],
+      "z": 40,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      }
+    },
+    {
+      "id": "head-slim",
+      "sheet": "body",
+      "cell": [2, 0],
+      "rect": [0.28, 0.05, 0.44, 0.35],
+      "z": 40,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      }
+    },
+    {
+      "id": "neck",
+      "sheet": "body",
+      "cell": [3, 0],
+      "rect": [0.39, 0.365, 0.22, 0.09],
+      "z": 10,
+      "fit": "bounds",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      }
+    },
+    {
+      "id": "upperarm",
+      "sheet": "body",
+      "rect": [0.285, 0.515, 0.05, 0.055],
+      "z": 15,
+      "fit": "stretch",
+      "group": "leftUpperArm",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "crop": [125, 565, 130, 90]
+    },
+    {
+      "id": "forearm",
+      "sheet": "body",
+      "cell": null,
+      "rect": [0.282, 0.535, 0.056, 0.115],
+      "z": 30,
+      "fit": "stretch",
+      "crop": [362, 405, 362, 152],
+      "group": "leftForearm",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "rowScale": [0.85, 1]
+    },
+    {
+      "id": "relaxed-hand",
+      "sheet": "body",
+      "cell": null,
+      "rect": [0.274, 0.64, 0.07, 0.07],
+      "z": 31,
+      "fit": "bounds",
+      "crop": [362, 557, 362, 167],
+      "group": "leftForearm",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      }
+    },
+    {
+      "id": "open-hand",
+      "sheet": "body",
+      "cell": [2, 1],
+      "rect": [0.25, 0.63, 0.12, 0.1],
+      "z": 31,
+      "fit": "bounds",
+      "group": "leftForearm",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "flipY": true
+    },
+    {
+      "id": "curled-hand",
+      "sheet": "body",
+      "cell": [3, 1],
+      "rect": [0.274, 0.63, 0.07, 0.09],
+      "z": 31,
+      "fit": "bounds",
+      "group": "leftForearm",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "flipY": true
+    },
+    {
+      "id": "leg",
+      "sheet": "body",
+      "rect": [0.42, 0.62, 0.07, 0.3],
+      "z": 8,
+      "fit": "stretch",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "crop": [125, 705, 150, 335]
+    },
+    {
+      "id": "sock",
+      "sheet": "body",
+      "cell": [1, 2],
+      "rect": [0.37, 0.83, 0.1, 0.09],
+      "z": 9,
+      "fit": "bounds"
+    },
+    {
+      "id": "undershirt",
+      "sheet": "body",
+      "cell": [2, 2],
+      "rect": [0.36, 0.405, 0.28, 0.235],
+      "z": 18,
+      "fit": "bounds"
+    },
+    {
+      "id": "expression-natural",
+      "sheet": "face",
+      "cell": [0, 0],
+      "rect": [0.2625, 0.01875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "expression-calm",
+      "sheet": "face",
+      "cell": [1, 0],
+      "rect": [0.2625, 0.01875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "expression-smile",
+      "sheet": "face",
+      "cell": [2, 0],
+      "rect": [0.2625, 0.01875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "expression-curious",
+      "sheet": "face",
+      "cell": [0, 1],
+      "rect": [0.2625, 0.05875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "expression-bright",
+      "sheet": "face",
+      "cell": [1, 1],
+      "rect": [0.2625, 0.05875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "expression-determined",
+      "sheet": "face",
+      "cell": [2, 1],
+      "rect": [0.2625, 0.05875, 0.475, 0.38],
+      "z": 45,
+      "fit": "frame",
+      "group": "head"
+    },
+    {
+      "id": "hair-bob",
+      "sheet": "hair",
+      "rect": [0.25, 0.025, 0.5, 0.32],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [80, 0, 430, 330],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-curtain",
+      "sheet": "hair",
+      "rect": [0.25, 0.025, 0.5, 0.3],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [560, 0, 440, 330],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-volume",
+      "sheet": "hair",
+      "rect": [0.235, 0.02, 0.53, 0.3],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [1030, 0, 430, 335],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-wave",
+      "sheet": "hair",
+      "rect": [0.235, 0.025, 0.53, 0.34],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [75, 335, 440, 330],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-long",
+      "sheet": "hair",
+      "rect": [0.225, 0.025, 0.55, 0.42],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [535, 325, 470, 365],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-crop",
+      "sheet": "hair",
+      "rect": [0.265, 0.025, 0.47, 0.27],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [1030, 330, 440, 315],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-toben",
+      "sheet": "hair",
+      "rect": [0.265, 0.025, 0.47, 0.28],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [100, 660, 400, 325],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hair-twin-tail",
+      "sheet": "hair",
+      "rect": [0.16, 0.025, 0.68, 0.43],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [510, 685, 490, 335],
+      "cleanup": {
+        "minArea": 32
+      },
+      "tintMask": {
+        "excludeRed": [7, 16]
+      }
+    },
+    {
+      "id": "hair-half-up",
+      "sheet": "hair",
+      "rect": [0.24, 0.01, 0.52, 0.4],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#302a2c",
+        "mode": "color"
+      },
+      "crop": [1030, 650, 430, 374],
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "jacket-torso",
+      "sheet": "tops",
+      "cell": null,
+      "rect": [0.33, 0.39, 0.34, 0.255],
+      "z": 25,
+      "fit": "stretch",
+      "crop": [0, 0, 362, 451]
+    },
+    {
+      "id": "jacket-upper",
+      "sheet": "tops",
+      "rect": [0.285, 0.407, 0.1, 0.16],
+      "z": 24,
+      "fit": "stretch",
+      "crop": [100, 455, 180, 273],
+      "group": "leftUpperArm"
+    },
+    {
+      "id": "jacket-forearm",
+      "sheet": "tops",
+      "rect": [0.26, 0.54, 0.105, 0.115],
+      "z": 30,
+      "fit": "bounds",
+      "crop": [100, 730, 180, 340],
+      "group": "leftForearm"
+    },
+    {
+      "id": "hanbok-torso",
+      "sheet": "tops",
+      "cell": null,
+      "rect": [0.33, 0.39, 0.34, 0.35],
+      "z": 25,
+      "fit": "stretch",
+      "crop": [362, 0, 362, 451]
+    },
+    {
+      "id": "hanbok-upper",
+      "sheet": "tops",
+      "rect": [0.285, 0.44, 0.1, 0.127],
+      "z": 24,
+      "fit": "stretch",
+      "crop": [460, 455, 190, 273],
+      "group": "leftUpperArm"
+    },
+    {
+      "id": "hanbok-forearm",
+      "sheet": "tops",
+      "rect": [0.26, 0.54, 0.105, 0.115],
+      "z": 30,
+      "fit": "bounds",
+      "crop": [410, 730, 270, 350],
+      "group": "leftForearm"
+    },
+    {
+      "id": "official-torso",
+      "sheet": "tops",
+      "cell": null,
+      "rect": [0.33, 0.385, 0.34, 0.235],
+      "z": 25,
+      "fit": "stretch",
+      "crop": [805, 0, 210, 196],
+      "rowScale": [1, 0.74]
+    },
+    {
+      "id": "official-upper",
+      "sheet": "tops",
+      "rect": [0.285, 0.44, 0.1, 0.127],
+      "z": 24,
+      "fit": "stretch",
+      "crop": [800, 455, 230, 273],
+      "group": "leftUpperArm"
+    },
+    {
+      "id": "official-forearm",
+      "sheet": "tops",
+      "rect": [0.26, 0.54, 0.105, 0.115],
+      "z": 30,
+      "fit": "bounds",
+      "crop": [770, 730, 270, 340],
+      "group": "leftForearm"
+    },
+    {
+      "id": "summer-torso",
+      "sheet": "tops",
+      "cell": null,
+      "rect": [0.33, 0.39, 0.34, 0.255],
+      "z": 25,
+      "fit": "stretch",
+      "crop": [1086, 0, 362, 451]
+    },
+    {
+      "id": "summer-upper",
+      "sheet": "tops",
+      "rect": [0.285, 0.407, 0.1, 0.13],
+      "z": 24,
+      "fit": "bounds",
+      "crop": [1160, 440, 200, 250],
+      "group": "leftUpperArm"
+    },
+    {
+      "id": "plain-torso",
+      "sheet": "tops",
+      "cell": null,
+      "rect": [0.33, 0.39, 0.34, 0.255],
+      "z": 25,
+      "fit": "stretch",
+      "crop": [1086, 700, 362, 386]
+    },
+    {
+      "id": "bottom-plain",
+      "sheet": "bottoms",
+      "rect": [0.355, 0.61, 0.29, 0.28],
+      "z": 20,
+      "fit": "stretch",
+      "crop": [140, 30, 330, 490]
+    },
+    {
+      "id": "bottom-pleated",
+      "sheet": "bottoms",
+      "rect": [0.32, 0.61, 0.36, 0.2],
+      "z": 20,
+      "fit": "stretch",
+      "crop": [545, 85, 420, 390]
+    },
+    {
+      "id": "bottom-chima",
+      "sheet": "bottoms",
+      "rect": [0.29, 0.61, 0.42, 0.28],
+      "z": 20,
+      "fit": "stretch",
+      "crop": [990, 25, 490, 510]
+    },
+    {
+      "id": "bottom-baji",
+      "sheet": "bottoms",
+      "rect": [0.34, 0.61, 0.32, 0.28],
+      "z": 20,
+      "fit": "stretch",
+      "crop": [100, 535, 410, 450]
+    },
+    {
+      "id": "bottom-summer",
+      "sheet": "bottoms",
+      "rect": [0.355, 0.61, 0.29, 0.17],
+      "z": 20,
+      "fit": "stretch",
+      "crop": [575, 580, 370, 350]
+    },
+    {
+      "id": "sneakers",
+      "sheet": "bottoms",
+      "rect": [0.33, 0.865, 0.34, 0.1],
+      "z": 22,
+      "fit": "bounds",
+      "crop": [980, 650, 530, 280]
+    },
+    {
+      "id": "plain-shoe-art",
+      "sheet": "accessories",
+      "rect": [0.33, 0.865, 0.34, 0.1],
+      "z": 22,
+      "fit": "bounds",
+      "crop": [1050, 650, 480, 270]
+    },
+    {
+      "id": "glasses-round",
+      "sheet": "accessories",
+      "cell": null,
+      "rect": [0.3, 0.23, 0.4, 0.12],
+      "z": 60,
+      "fit": "bounds",
+      "crop": [0, 0, 544, 512],
+      "group": "head"
+    },
+    {
+      "id": "star-clip",
+      "sheet": "accessories",
+      "rect": [0.625, 0.14, 0.1, 0.07],
+      "z": 60,
+      "fit": "bounds",
+      "group": "head",
+      "crop": [660, 180, 280, 230]
+    },
+    {
+      "id": "headphones",
+      "sheet": "headphones-worn",
+      "cell": [0, 0],
+      "rect": [0.235, 0.045, 0.53, 0.31],
+      "z": 60,
+      "fit": "stretch",
+      "group": "head",
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "official-samo",
+      "sheet": "accessories",
+      "rect": [0.25, 0.005, 0.5, 0.19],
+      "z": 60,
+      "fit": "stretch",
+      "crop": [15, 555, 528, 322],
+      "group": "head",
+      "cleanup": {
+        "minArea": 64
+      }
+    },
+    {
+      "id": "official-gat",
+      "sheet": "accessories",
+      "rect": [0.248, 0.005, 0.504, 0.21],
+      "z": 60,
+      "fit": "stretch",
+      "group": "head",
+      "crop": [544, 580, 490, 310],
+      "cleanup": {
+        "minArea": 64
+      }
+    },
+    {
+      "id": "official-skirt",
+      "sheet": "tops",
+      "crop": [750, 185, 310, 266],
+      "rect": [0.275, 0.61, 0.45, 0.29],
+      "z": 24.5,
+      "fit": "stretch"
+    },
+    {
+      "id": "heart-hands",
+      "sheet": "heart-hands",
+      "cell": [0, 0],
+      "rect": [0.418, 0.51, 0.164, 0.051],
+      "fit": "stretch",
+      "z": 31,
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "hanbok-shoulder",
+      "sheet": "tops",
+      "crop": [460, 455, 190, 125],
+      "rect": [0.31, 0.435, 0.075, 0.035],
+      "fit": "stretch",
+      "z": 23
+    },
+    {
+      "id": "official-shoulder",
+      "sheet": "tops",
+      "crop": [800, 455, 230, 125],
+      "rect": [0.31, 0.435, 0.075, 0.035],
+      "fit": "stretch",
+      "z": 23
+    }
+  ],
+  "variants": [
+    {
+      "id": "plain-top-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#c9cbd4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "plain-top-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#c9cbd4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-sunshine-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#f4c54e",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-sunshine-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#f4c54e",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-sunshine-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#f4c54e",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-lavender-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#b4a0d6",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-lavender-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#b4a0d6",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-lavender-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#b4a0d6",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-navy-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#394b70",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-navy-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#394b70",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-navy-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#394b70",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-mint-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#85c6b5",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-mint-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#85c6b5",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-mint-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#85c6b5",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-rose-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#e29baf",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-rose-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#e29baf",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-rose-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#e29baf",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-cream-torso",
+      "ref": "jacket-torso",
+      "recolor": {
+        "color": "#e8dcc4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-cream-upper",
+      "ref": "jacket-upper",
+      "recolor": {
+        "color": "#e8dcc4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "jacket-cream-forearm",
+      "ref": "jacket-forearm",
+      "recolor": {
+        "color": "#e8dcc4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-ivory-torso",
+      "ref": "hanbok-torso",
+      "recolor": {
+        "color": "#f3e7cd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-ivory-upper",
+      "ref": "hanbok-upper",
+      "recolor": {
+        "color": "#f3e7cd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-ivory-forearm",
+      "ref": "hanbok-forearm",
+      "recolor": {
+        "color": "#f3e7cd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-sky-torso",
+      "ref": "hanbok-torso",
+      "recolor": {
+        "color": "#a8cddd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-sky-upper",
+      "ref": "hanbok-upper",
+      "recolor": {
+        "color": "#a8cddd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-sky-forearm",
+      "ref": "hanbok-forearm",
+      "recolor": {
+        "color": "#a8cddd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-peach-torso",
+      "ref": "hanbok-torso",
+      "recolor": {
+        "color": "#efb0a1",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-peach-upper",
+      "ref": "hanbok-upper",
+      "recolor": {
+        "color": "#efb0a1",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-peach-forearm",
+      "ref": "hanbok-forearm",
+      "recolor": {
+        "color": "#efb0a1",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-navy-torso",
+      "ref": "official-torso",
+      "recolor": {
+        "color": "#263854",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-navy-upper",
+      "ref": "official-upper",
+      "recolor": {
+        "color": "#263854",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-navy-forearm",
+      "ref": "official-forearm",
+      "recolor": {
+        "color": "#263854",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-red-torso",
+      "ref": "official-torso",
+      "recolor": {
+        "color": "#9c312e",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-red-upper",
+      "ref": "official-upper",
+      "recolor": {
+        "color": "#9c312e",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-red-forearm",
+      "ref": "official-forearm",
+      "recolor": {
+        "color": "#9c312e",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-black-torso",
+      "ref": "official-torso",
+      "recolor": {
+        "color": "#282d39",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-black-upper",
+      "ref": "official-upper",
+      "recolor": {
+        "color": "#282d39",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-black-forearm",
+      "ref": "official-forearm",
+      "recolor": {
+        "color": "#282d39",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "summer-white-torso",
+      "ref": "summer-torso",
+      "recolor": {
+        "color": "#f0f1ee",
+        "sourceColor": "#f0f1ee",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "summer-white-upper",
+      "ref": "summer-upper",
+      "recolor": {
+        "color": "#f0f1ee",
+        "sourceColor": "#f0f1ee",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "summer-navy-torso",
+      "ref": "summer-torso",
+      "recolor": {
+        "color": "#1f2c42",
+        "sourceColor": "#f0f1ee",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "summer-navy-upper",
+      "ref": "summer-upper",
+      "recolor": {
+        "color": "#1f2c42",
+        "sourceColor": "#f0f1ee",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "plain-bottom",
+      "ref": "bottom-plain",
+      "recolor": {
+        "color": "#999fab",
+        "sourceColor": "#bfbabc",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "pleated-lilac",
+      "ref": "bottom-pleated",
+      "recolor": {
+        "color": "#a68ac7",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "pleated-navy",
+      "ref": "bottom-pleated",
+      "recolor": {
+        "color": "#344764",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "pleated-cream",
+      "ref": "bottom-pleated",
+      "recolor": {
+        "color": "#e8dbc4",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "pleated-mint",
+      "ref": "bottom-pleated",
+      "recolor": {
+        "color": "#85b9a9",
+        "sourceColor": "#b4a0d6",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "chima-rose",
+      "ref": "bottom-chima",
+      "recolor": {
+        "color": "#b65d78",
+        "sourceColor": "#b9737b",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "chima-navy",
+      "ref": "bottom-chima",
+      "recolor": {
+        "color": "#29446a",
+        "sourceColor": "#b9737b",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "chima-jade",
+      "ref": "bottom-chima",
+      "recolor": {
+        "color": "#398a7f",
+        "sourceColor": "#b9737b",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "baji-navy",
+      "ref": "bottom-baji",
+      "recolor": {
+        "color": "#33465f",
+        "sourceColor": "#34405f",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "baji-cream",
+      "ref": "bottom-baji",
+      "recolor": {
+        "color": "#e6d7bb",
+        "sourceColor": "#34405f",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "baji-charcoal",
+      "ref": "bottom-baji",
+      "recolor": {
+        "color": "#454750",
+        "sourceColor": "#34405f",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "summer-shorts",
+      "ref": "bottom-summer",
+      "recolor": {
+        "color": "#202835",
+        "sourceColor": "#34405f",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "plain-shoes",
+      "ref": "plain-shoe-art",
+      "recolor": {
+        "color": "#dbdce2",
+        "sourceColor": "#e9e2df",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "sneakers-pink",
+      "ref": "sneakers",
+      "recolor": {
+        "color": "#d8a0ae",
+        "sourceColor": "#e9e2df",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "sneakers-white",
+      "ref": "sneakers",
+      "recolor": {
+        "color": "#eee9df",
+        "sourceColor": "#e9e2df",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "sneakers-blue",
+      "ref": "sneakers",
+      "recolor": {
+        "color": "#819bbb",
+        "sourceColor": "#e9e2df",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "sneakers-lavender",
+      "ref": "sneakers",
+      "recolor": {
+        "color": "#b5a0c8",
+        "sourceColor": "#e9e2df",
+        "mode": "neutral"
+      }
+    },
+    {
+      "id": "official-navy-skirt",
+      "ref": "official-skirt",
+      "recolor": {
+        "color": "#263854",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-red-skirt",
+      "ref": "official-skirt",
+      "recolor": {
+        "color": "#9c312e",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-black-skirt",
+      "ref": "official-skirt",
+      "recolor": {
+        "color": "#282d39",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-ivory-shoulder",
+      "ref": "hanbok-shoulder",
+      "recolor": {
+        "color": "#f3e7cd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-sky-shoulder",
+      "ref": "hanbok-shoulder",
+      "recolor": {
+        "color": "#a8cddd",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "hanbok-peach-shoulder",
+      "ref": "hanbok-shoulder",
+      "recolor": {
+        "color": "#efb0a1",
+        "sourceColor": "#f3e7cd",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-navy-shoulder",
+      "ref": "official-shoulder",
+      "recolor": {
+        "color": "#263854",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-red-shoulder",
+      "ref": "official-shoulder",
+      "recolor": {
+        "color": "#9c312e",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    },
+    {
+      "id": "official-black-shoulder",
+      "ref": "official-shoulder",
+      "recolor": {
+        "color": "#282d39",
+        "sourceColor": "#263854",
+        "mode": "chroma"
+      }
+    }
+  ],
+  "characters": {
+    "girl": {
+      "groups": {
+        "head": {
+          "pivot": [0.5, 0.38]
+        },
+        "leftUpperArm": {
+          "pivot": [0.328, 0.43]
+        },
+        "leftForearm": {
+          "parent": "leftUpperArm",
+          "pivot": [0.31, 0.55]
+        },
+        "rightUpperArm": {
+          "pivot": [0.672, 0.43]
+        },
+        "rightForearm": {
+          "parent": "rightUpperArm",
+          "pivot": [0.69, 0.55]
+        }
+      },
+      "base": [
+        "neck",
+        "upperarm",
+        {
+          "ref": "forearm",
+          "id": "left-forearm"
+        },
+        {
+          "ref": "relaxed-hand",
+          "id": "left-hand"
+        },
+        {
+          "ref": "upperarm",
+          "id": "right-upperarm",
+          "flipX": true,
+          "group": "rightUpperArm",
+          "mirror": true
+        },
+        {
+          "ref": "forearm",
+          "id": "right-forearm",
+          "flipX": true,
+          "group": "rightForearm",
+          "mirror": true
+        },
+        {
+          "ref": "relaxed-hand",
+          "id": "right-hand",
+          "flipX": true,
+          "group": "rightForearm",
+          "mirror": true
+        },
+        "leg",
+        {
+          "ref": "leg",
+          "id": "right-leg",
+          "flipX": true,
+          "mirror": true
+        }
+      ],
+      "slots": {
+        "faceShape": {
+          "natural": ["head-natural"],
+          "round": ["head-round"],
+          "slim": ["head-slim"]
+        },
+        "expression": {
+          "natural": ["expression-natural"],
+          "calm": ["expression-calm"],
+          "smile": ["expression-smile"],
+          "curious": ["expression-curious"],
+          "bright": ["expression-bright"],
+          "determined": ["expression-determined"]
+        },
+        "hairStyle": {
+          "bob": ["hair-bob"],
+          "volume": ["hair-volume"],
+          "wave": ["hair-wave"],
+          "long": ["hair-long"],
+          "twin-tail": ["hair-twin-tail"],
+          "half-up": ["hair-half-up"]
+        },
+        "top": {
+          "plain-top": {
+            "layers": [
+              "plain-torso",
+              {
+                "ref": "plain-top-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "plain-top-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "plain-top-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "plain-top-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-sunshine": {
+            "layers": [
+              "jacket-sunshine-torso",
+              {
+                "ref": "jacket-sunshine-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-sunshine-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-sunshine-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-sunshine-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-lavender": {
+            "layers": [
+              "jacket-lavender-torso",
+              {
+                "ref": "jacket-lavender-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-lavender-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-lavender-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-lavender-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-navy": {
+            "layers": [
+              "jacket-navy-torso",
+              {
+                "ref": "jacket-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-navy-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-navy-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-mint": {
+            "layers": [
+              "jacket-mint-torso",
+              {
+                "ref": "jacket-mint-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-mint-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-mint-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-mint-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-rose": {
+            "layers": [
+              "jacket-rose-torso",
+              {
+                "ref": "jacket-rose-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-rose-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-rose-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-rose-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-cream": {
+            "layers": [
+              "jacket-cream-torso",
+              {
+                "ref": "jacket-cream-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-cream-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-cream-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-cream-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-ivory": {
+            "layers": [
+              "hanbok-ivory-shoulder",
+              {
+                "ref": "hanbok-ivory-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-ivory-torso",
+              {
+                "ref": "hanbok-ivory-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-ivory-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-ivory-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-ivory-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-sky": {
+            "layers": [
+              "hanbok-sky-shoulder",
+              {
+                "ref": "hanbok-sky-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-sky-torso",
+              {
+                "ref": "hanbok-sky-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-sky-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-sky-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-sky-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-peach": {
+            "layers": [
+              "hanbok-peach-shoulder",
+              {
+                "ref": "hanbok-peach-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-peach-torso",
+              {
+                "ref": "hanbok-peach-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-peach-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-peach-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-peach-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "official-navy": {
+            "layers": [
+              "official-navy-shoulder",
+              {
+                "ref": "official-navy-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-navy-skirt",
+              "official-navy-torso",
+              {
+                "ref": "official-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-navy-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-navy-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "official-red": {
+            "layers": [
+              "official-red-shoulder",
+              {
+                "ref": "official-red-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-red-skirt",
+              "official-red-torso",
+              {
+                "ref": "official-red-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-red-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-red-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-red-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "official-black": {
+            "layers": [
+              "official-black-shoulder",
+              {
+                "ref": "official-black-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-black-skirt",
+              "official-black-torso",
+              {
+                "ref": "official-black-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-black-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-black-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-black-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "summer-white": {
+            "layers": [
+              "summer-white-torso",
+              {
+                "ref": "summer-white-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "summer-white-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              }
+            ],
+            "hideIds": []
+          },
+          "summer-navy": {
+            "layers": [
+              "summer-navy-torso",
+              {
+                "ref": "summer-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "summer-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              }
+            ],
+            "hideIds": []
+          }
+        },
+        "bottom": {
+          "plain-bottom": {
+            "layers": ["plain-bottom"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "pleated-lilac": ["pleated-lilac"],
+          "pleated-navy": ["pleated-navy"],
+          "pleated-cream": ["pleated-cream"],
+          "pleated-mint": ["pleated-mint"],
+          "chima-rose": {
+            "layers": ["chima-rose"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "chima-navy": {
+            "layers": ["chima-navy"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "chima-jade": {
+            "layers": ["chima-jade"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "summer-shorts": ["summer-shorts"]
+        },
+        "shoes": {
+          "plain-shoes": ["plain-shoes"],
+          "sneakers-pink": ["sneakers-pink"],
+          "sneakers-white": ["sneakers-white"],
+          "sneakers-blue": ["sneakers-blue"],
+          "sneakers-lavender": ["sneakers-lavender"]
+        },
+        "accessory": {
+          "none": [],
+          "glasses-round": ["glasses-round"],
+          "star-clip": ["star-clip"],
+          "headphones": ["headphones"],
+          "official-samo": ["official-samo"],
+          "official-gat": ["official-gat"]
+        }
+      },
+      "poses": {
+        "idle": {},
+        "tilt": {
+          "transforms": {
+            "head": {
+              "rotation": -0.1
+            }
+          }
+        },
+        "wave": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 1.05
+            },
+            "leftForearm": {
+              "rotation": 1.65
+            }
+          },
+          "layers": [
+            {
+              "ref": "open-hand",
+              "id": "left-hand"
+            }
+          ]
+        },
+        "cheer": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.9
+            },
+            "leftForearm": {
+              "rotation": 1.8
+            },
+            "rightUpperArm": {
+              "rotation": -0.9
+            },
+            "rightForearm": {
+              "rotation": -1.8
+            }
+          },
+          "layers": [
+            {
+              "ref": "open-hand",
+              "id": "left-hand"
+            },
+            {
+              "ref": "open-hand",
+              "id": "right-hand",
+              "flipX": true,
+              "group": "rightForearm",
+              "mirror": true
+            }
+          ]
+        },
+        "think": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": -0.3
+            },
+            "leftForearm": {
+              "rotation": -2.35
+            }
+          },
+          "layers": [
+            {
+              "ref": "curled-hand",
+              "id": "left-hand"
+            }
+          ]
+        },
+        "heart": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.05
+            },
+            "leftForearm": {
+              "rotation": -1.6
+            },
+            "rightUpperArm": {
+              "rotation": -0.05
+            },
+            "rightForearm": {
+              "rotation": 1.6
+            }
+          },
+          "hideIds": ["left-hand", "right-hand"],
+          "layers": ["heart-hands"]
+        }
+      }
+    },
+    "boy": {
+      "groups": {
+        "head": {
+          "pivot": [0.5, 0.38]
+        },
+        "leftUpperArm": {
+          "pivot": [0.328, 0.43]
+        },
+        "leftForearm": {
+          "parent": "leftUpperArm",
+          "pivot": [0.31, 0.55]
+        },
+        "rightUpperArm": {
+          "pivot": [0.672, 0.43]
+        },
+        "rightForearm": {
+          "parent": "rightUpperArm",
+          "pivot": [0.69, 0.55]
+        }
+      },
+      "base": [
+        "neck",
+        "upperarm",
+        {
+          "ref": "forearm",
+          "id": "left-forearm"
+        },
+        {
+          "ref": "relaxed-hand",
+          "id": "left-hand"
+        },
+        {
+          "ref": "upperarm",
+          "id": "right-upperarm",
+          "flipX": true,
+          "group": "rightUpperArm",
+          "mirror": true
+        },
+        {
+          "ref": "forearm",
+          "id": "right-forearm",
+          "flipX": true,
+          "group": "rightForearm",
+          "mirror": true
+        },
+        {
+          "ref": "relaxed-hand",
+          "id": "right-hand",
+          "flipX": true,
+          "group": "rightForearm",
+          "mirror": true
+        },
+        "leg",
+        {
+          "ref": "leg",
+          "id": "right-leg",
+          "flipX": true,
+          "mirror": true
+        }
+      ],
+      "slots": {
+        "faceShape": {
+          "natural": ["head-natural"],
+          "round": ["head-round"],
+          "slim": ["head-slim"]
+        },
+        "expression": {
+          "natural": ["expression-natural"],
+          "calm": ["expression-calm"],
+          "smile": ["expression-smile"],
+          "curious": ["expression-curious"],
+          "bright": ["expression-bright"],
+          "determined": ["expression-determined"]
+        },
+        "hairStyle": {
+          "curtain": ["hair-curtain"],
+          "volume": ["hair-volume"],
+          "wave": ["hair-wave"],
+          "crop": ["hair-crop"],
+          "toben": ["hair-toben"]
+        },
+        "top": {
+          "plain-top": {
+            "layers": [
+              "plain-torso",
+              {
+                "ref": "plain-top-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "plain-top-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "plain-top-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "plain-top-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-sunshine": {
+            "layers": [
+              "jacket-sunshine-torso",
+              {
+                "ref": "jacket-sunshine-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-sunshine-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-sunshine-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-sunshine-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-lavender": {
+            "layers": [
+              "jacket-lavender-torso",
+              {
+                "ref": "jacket-lavender-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-lavender-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-lavender-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-lavender-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-navy": {
+            "layers": [
+              "jacket-navy-torso",
+              {
+                "ref": "jacket-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-navy-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-navy-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-mint": {
+            "layers": [
+              "jacket-mint-torso",
+              {
+                "ref": "jacket-mint-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-mint-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-mint-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-mint-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-rose": {
+            "layers": [
+              "jacket-rose-torso",
+              {
+                "ref": "jacket-rose-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-rose-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-rose-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-rose-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-cream": {
+            "layers": [
+              "jacket-cream-torso",
+              {
+                "ref": "jacket-cream-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "jacket-cream-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "jacket-cream-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "jacket-cream-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-ivory": {
+            "layers": [
+              "hanbok-ivory-shoulder",
+              {
+                "ref": "hanbok-ivory-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-ivory-torso",
+              {
+                "ref": "hanbok-ivory-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-ivory-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-ivory-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-ivory-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-sky": {
+            "layers": [
+              "hanbok-sky-shoulder",
+              {
+                "ref": "hanbok-sky-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-sky-torso",
+              {
+                "ref": "hanbok-sky-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-sky-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-sky-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-sky-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-peach": {
+            "layers": [
+              "hanbok-peach-shoulder",
+              {
+                "ref": "hanbok-peach-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "hanbok-peach-torso",
+              {
+                "ref": "hanbok-peach-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "hanbok-peach-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "hanbok-peach-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "hanbok-peach-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "official-navy": {
+            "layers": [
+              "official-navy-shoulder",
+              {
+                "ref": "official-navy-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-navy-skirt",
+              "official-navy-torso",
+              {
+                "ref": "official-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-navy-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-navy-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "official-red": {
+            "layers": [
+              "official-red-shoulder",
+              {
+                "ref": "official-red-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-red-skirt",
+              "official-red-torso",
+              {
+                "ref": "official-red-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-red-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-red-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-red-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "official-black": {
+            "layers": [
+              "official-black-shoulder",
+              {
+                "ref": "official-black-shoulder",
+                "id": "right-shoulder",
+                "mirror": true
+              },
+              "official-black-skirt",
+              "official-black-torso",
+              {
+                "ref": "official-black-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "official-black-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              },
+              {
+                "ref": "official-black-forearm",
+                "id": "left-forearm-sleeve"
+              },
+              {
+                "ref": "official-black-forearm",
+                "id": "right-forearm-sleeve",
+                "flipX": true,
+                "group": "rightForearm",
+                "mirror": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": ["bottom"]
+          },
+          "summer-white": {
+            "layers": [
+              "summer-white-torso",
+              {
+                "ref": "summer-white-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "summer-white-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              }
+            ],
+            "hideIds": []
+          },
+          "summer-navy": {
+            "layers": [
+              "summer-navy-torso",
+              {
+                "ref": "summer-navy-upper",
+                "id": "left-upper-sleeve"
+              },
+              {
+                "ref": "summer-navy-upper",
+                "id": "right-upper-sleeve",
+                "flipX": true,
+                "group": "rightUpperArm",
+                "mirror": true
+              }
+            ],
+            "hideIds": []
+          }
+        },
+        "bottom": {
+          "plain-bottom": {
+            "layers": ["plain-bottom"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "pleated-lilac": ["pleated-lilac"],
+          "pleated-navy": ["pleated-navy"],
+          "pleated-cream": ["pleated-cream"],
+          "pleated-mint": ["pleated-mint"],
+          "baji-navy": {
+            "layers": ["baji-navy"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "baji-cream": {
+            "layers": ["baji-cream"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "baji-charcoal": {
+            "layers": ["baji-charcoal"],
+            "hideIds": ["leg", "right-leg"]
+          },
+          "summer-shorts": ["summer-shorts"]
+        },
+        "shoes": {
+          "plain-shoes": ["plain-shoes"],
+          "sneakers-pink": ["sneakers-pink"],
+          "sneakers-white": ["sneakers-white"],
+          "sneakers-blue": ["sneakers-blue"],
+          "sneakers-lavender": ["sneakers-lavender"]
+        },
+        "accessory": {
+          "none": [],
+          "glasses-round": ["glasses-round"],
+          "star-clip": ["star-clip"],
+          "headphones": ["headphones"],
+          "official-samo": ["official-samo"],
+          "official-gat": ["official-gat"]
+        }
+      },
+      "poses": {
+        "idle": {},
+        "tilt": {
+          "transforms": {
+            "head": {
+              "rotation": -0.1
+            }
+          }
+        },
+        "wave": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 1.05
+            },
+            "leftForearm": {
+              "rotation": 1.65
+            }
+          },
+          "layers": [
+            {
+              "ref": "open-hand",
+              "id": "left-hand"
+            }
+          ]
+        },
+        "cheer": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.9
+            },
+            "leftForearm": {
+              "rotation": 1.8
+            },
+            "rightUpperArm": {
+              "rotation": -0.9
+            },
+            "rightForearm": {
+              "rotation": -1.8
+            }
+          },
+          "layers": [
+            {
+              "ref": "open-hand",
+              "id": "left-hand"
+            },
+            {
+              "ref": "open-hand",
+              "id": "right-hand",
+              "flipX": true,
+              "group": "rightForearm",
+              "mirror": true
+            }
+          ]
+        },
+        "think": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": -0.3
+            },
+            "leftForearm": {
+              "rotation": -2.35
+            }
+          },
+          "layers": [
+            {
+              "ref": "curled-hand",
+              "id": "left-hand"
+            }
+          ]
+        },
+        "heart": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.05
+            },
+            "leftForearm": {
+              "rotation": -1.6
+            },
+            "rightUpperArm": {
+              "rotation": -0.05
+            },
+            "rightForearm": {
+              "rotation": 1.6
+            }
+          },
+          "hideIds": ["left-hand", "right-hand"],
+          "layers": ["heart-hands"]
+        }
+      }
+    }
+  }
+}

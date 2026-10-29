@@ -56,7 +56,6 @@ type StageControls = {
   capture(): string;
   resetView(): void;
   focusFace(): void;
-  rotate(angle: number): void;
   animateOnce?(duration?: number): void;
   stop?(): void;
 };
@@ -86,6 +85,7 @@ export function AvatarStudio({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"buy" | "save" | null>(null);
   const [ready, setReady] = useState(false);
+  const [needsThumbnailRefresh, setNeedsThumbnailRefresh] = useState(false);
   const [stageError, setStageError] = useState("");
   const [stageKey, setStageKey] = useState(0);
   const [purchase, setPurchase] = useState<AvatarItem | null>(null);
@@ -104,6 +104,9 @@ export function AvatarStudio({
       setSaved(data.avatar);
       setLook(data.avatar.look);
       setCharacterChosen(Boolean(data.avatar.thumbnailUrl));
+      // Existing saved images can still use the previous renderer. Refresh only
+      // after the owner explicitly saves; viewing the studio never writes data.
+      setNeedsThumbnailRefresh(Boolean(data.avatar.thumbnailUrl));
       setBalance(data.balance);
       setPricing(data.pricing || { revision: 0, prices: {} });
     } catch (failure) {
@@ -152,7 +155,7 @@ export function AvatarStudio({
   const onStageError = useCallback(() => {
     stage.current = null;
     setReady(false);
-    setStageError("3D를 불러오지 못했습니다. 다시 시도해 주세요.");
+    setStageError("아바타를 불러오지 못했습니다. 다시 시도해 주세요.");
   }, []);
   const onLoadingChange = useCallback((value: boolean) => {
     if (value) {
@@ -268,7 +271,7 @@ export function AvatarStudio({
     try {
       stage.current.stop?.();
       stage.current.resetView();
-      // Let the on-demand renderer draw the reset camera before capturing.
+      // Let the illustrated view finish its full-body framing before capture.
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
@@ -279,6 +282,7 @@ export function AvatarStudio({
       if (current !== generation.current) return;
       setSaved(result);
       setLook(result.look);
+      setNeedsThumbnailRefresh(false);
       showToast({ title: "아바타를 저장했습니다", tone: "success" });
     } catch (failure) {
       if (current === generation.current) {
@@ -396,14 +400,6 @@ export function AvatarStudio({
             <button
               type="button"
               disabled={!ready || Boolean(busy)}
-              onClick={() => stage.current?.rotate(-0.4)}
-              aria-label="왼쪽으로 돌리기"
-            >
-              <i className="fas fa-rotate-left" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={!ready || Boolean(busy)}
               onClick={() => stage.current?.resetView()}
             >
               전체 보기
@@ -414,14 +410,6 @@ export function AvatarStudio({
               onClick={() => stage.current?.focusFace()}
             >
               얼굴 보기
-            </button>
-            <button
-              type="button"
-              disabled={!ready || Boolean(busy)}
-              onClick={() => stage.current?.rotate(0.4)}
-              aria-label="오른쪽으로 돌리기"
-            >
-              <i className="fas fa-rotate-right" aria-hidden="true" />
             </button>
           </div>
           <div className="avatar-studio-save">
@@ -446,7 +434,9 @@ export function AvatarStudio({
                 !ready ||
                 Boolean(busy) ||
                 missing.length > 0 ||
-                (!dirty && Boolean(saved.thumbnailUrl))
+                (!dirty &&
+                  !needsThumbnailRefresh &&
+                  Boolean(saved.thumbnailUrl))
               }
               onClick={() => void save()}
             >

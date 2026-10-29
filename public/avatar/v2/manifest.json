@@ -1,0 +1,4205 @@
+{
+  "version": 2,
+  "canvas": [
+    1024,
+    1280
+  ],
+  "characters": {
+    "girl": {
+      "groups": {
+        "head": {
+          "pivot": [
+            0.5,
+            0.38
+          ]
+        },
+        "leftUpperArm": {
+          "pivot": [
+            0.328,
+            0.43
+          ]
+        },
+        "leftForearm": {
+          "parent": "leftUpperArm",
+          "pivot": [
+            0.31,
+            0.55
+          ]
+        },
+        "rightUpperArm": {
+          "pivot": [
+            0.672,
+            0.43
+          ]
+        },
+        "rightForearm": {
+          "parent": "rightUpperArm",
+          "pivot": [
+            0.69,
+            0.55
+          ]
+        }
+      },
+      "base": [
+        {
+          "id": "neck",
+          "rect": [
+            0.40057218309859155,
+            0.365,
+            0.19885563380281687,
+            0.09
+          ],
+          "z": 10,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/neck.webp"
+        },
+        {
+          "id": "upperarm",
+          "rect": [
+            0.285,
+            0.515,
+            0.05,
+            0.055
+          ],
+          "z": 15,
+          "group": "leftUpperArm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/upperarm.webp"
+        },
+        {
+          "id": "left-forearm",
+          "rect": [
+            0.282,
+            0.535,
+            0.056,
+            0.115
+          ],
+          "z": 30,
+          "group": "leftForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/forearm.webp"
+        },
+        {
+          "id": "left-hand",
+          "rect": [
+            0.274,
+            0.6400619469026548,
+            0.07,
+            0.06987610619469029
+          ],
+          "z": 31,
+          "group": "leftForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/relaxed-hand.webp"
+        },
+        {
+          "id": "right-upperarm",
+          "rect": [
+            0.665,
+            0.515,
+            0.05,
+            0.055
+          ],
+          "z": 15,
+          "group": "rightUpperArm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/upperarm.webp",
+          "flipX": true
+        },
+        {
+          "id": "right-forearm",
+          "rect": [
+            0.6619999999999999,
+            0.535,
+            0.056,
+            0.115
+          ],
+          "z": 30,
+          "group": "rightForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/forearm.webp",
+          "flipX": true
+        },
+        {
+          "id": "right-hand",
+          "rect": [
+            0.6559999999999999,
+            0.6400619469026548,
+            0.07,
+            0.06987610619469029
+          ],
+          "z": 31,
+          "group": "rightForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/relaxed-hand.webp",
+          "flipX": true
+        },
+        {
+          "id": "leg",
+          "rect": [
+            0.42,
+            0.62,
+            0.07,
+            0.3
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/leg.webp"
+        },
+        {
+          "id": "right-leg",
+          "rect": [
+            0.51,
+            0.62,
+            0.07,
+            0.3
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/leg.webp",
+          "flipX": true
+        }
+      ],
+      "slots": {
+        "faceShape": {
+          "natural": [
+            {
+              "id": "head-natural",
+              "rect": [
+                0.28,
+                0.07165346534653465,
+                0.44,
+                0.3066930693069307
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-natural.webp"
+            }
+          ],
+          "round": [
+            {
+              "id": "head-round",
+              "rect": [
+                0.28,
+                0.0678993288590604,
+                0.44,
+                0.3142013422818792
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-round.webp"
+            }
+          ],
+          "slim": [
+            {
+              "id": "head-slim",
+              "rect": [
+                0.28,
+                0.06483391003460208,
+                0.44,
+                0.3203321799307958
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-slim.webp"
+            }
+          ]
+        },
+        "expression": {
+          "natural": [
+            {
+              "id": "expression-natural",
+              "rect": [
+                0.33671875,
+                0.16125,
+                0.35810546875,
+                0.173671875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-natural.webp"
+            }
+          ],
+          "calm": [
+            {
+              "id": "expression-calm",
+              "rect": [
+                0.321875,
+                0.168671875,
+                0.357177734375,
+                0.1684765625
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-calm.webp"
+            }
+          ],
+          "smile": [
+            {
+              "id": "expression-smile",
+              "rect": [
+                0.31259765625,
+                0.159765625,
+                0.36088867187499996,
+                0.1907421875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-smile.webp"
+            }
+          ],
+          "curious": [
+            {
+              "id": "expression-curious",
+              "rect": [
+                0.335791015625,
+                0.13890625,
+                0.37016601562499996,
+                0.2026171875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-curious.webp"
+            }
+          ],
+          "bright": [
+            {
+              "id": "expression-bright",
+              "rect": [
+                0.320947265625,
+                0.14484375,
+                0.359033203125,
+                0.20484375
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-bright.webp"
+            }
+          ],
+          "determined": [
+            {
+              "id": "expression-determined",
+              "rect": [
+                0.3107421875,
+                0.1723046875,
+                0.37016601562499996,
+                0.1580859375
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-determined.webp"
+            }
+          ]
+        },
+        "hairStyle": {
+          "bob": [
+            {
+              "id": "hair-bob",
+              "rect": [
+                0.25,
+                0.029562334217506654,
+                0.5,
+                0.3108753315649867
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-bob.webp"
+            }
+          ],
+          "volume": [
+            {
+              "id": "hair-volume",
+              "rect": [
+                0.24379770992366412,
+                0.02,
+                0.5124045801526718,
+                0.3
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-volume.webp"
+            }
+          ],
+          "wave": [
+            {
+              "id": "hair-wave",
+              "rect": [
+                0.235,
+                0.026062499999999995,
+                0.53,
+                0.33787500000000004
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-wave.webp"
+            }
+          ],
+          "long": [
+            {
+              "id": "hair-long",
+              "rect": [
+                0.225,
+                0.04855932203389827,
+                0.55,
+                0.37288135593220345
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-long.webp"
+            }
+          ],
+          "twin-tail": [
+            {
+              "id": "hair-twin-tail",
+              "rect": [
+                0.16,
+                0.06097664543524415,
+                0.68,
+                0.3580467091295117
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color",
+                "mask": "layers/hair-twin-tail-tint-mask.webp"
+              },
+              "src": "layers/hair-twin-tail.webp"
+            }
+          ],
+          "half-up": [
+            {
+              "id": "hair-half-up",
+              "rect": [
+                0.2528985507246377,
+                0.01,
+                0.49420289855072463,
+                0.4
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-half-up.webp"
+            }
+          ]
+        },
+        "top": {
+          "plain-top": {
+            "layers": [
+              {
+                "id": "plain-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/plain-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/plain-top-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/plain-top-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/plain-top-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/plain-top-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-sunshine": {
+            "layers": [
+              {
+                "id": "jacket-sunshine-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-sunshine-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-sunshine-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-sunshine-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-sunshine-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-sunshine-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-lavender": {
+            "layers": [
+              {
+                "id": "jacket-lavender-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-lavender-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-lavender-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-lavender-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-lavender-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-lavender-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-navy": {
+            "layers": [
+              {
+                "id": "jacket-navy-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-navy-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-navy-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-navy-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-mint": {
+            "layers": [
+              {
+                "id": "jacket-mint-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-mint-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-mint-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-mint-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-mint-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-mint-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-rose": {
+            "layers": [
+              {
+                "id": "jacket-rose-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-rose-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-rose-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-rose-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-rose-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-rose-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-cream": {
+            "layers": [
+              {
+                "id": "jacket-cream-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-cream-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-cream-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-cream-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-cream-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-cream-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-ivory": {
+            "layers": [
+              {
+                "id": "hanbok-ivory-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-ivory-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-ivory-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-ivory-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-ivory-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-ivory-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-ivory-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-ivory-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-ivory-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-sky": {
+            "layers": [
+              {
+                "id": "hanbok-sky-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-sky-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-sky-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-sky-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-sky-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-sky-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-sky-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-sky-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-sky-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-peach": {
+            "layers": [
+              {
+                "id": "hanbok-peach-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-peach-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-peach-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-peach-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-peach-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-peach-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-peach-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-peach-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-peach-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "official-navy": {
+            "layers": [
+              {
+                "id": "official-navy-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-navy-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-navy-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-navy-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-navy-skirt.webp"
+              },
+              {
+                "id": "official-navy-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-navy-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-navy-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-navy-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "official-red": {
+            "layers": [
+              {
+                "id": "official-red-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-red-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-red-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-red-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-red-skirt.webp"
+              },
+              {
+                "id": "official-red-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-red-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-red-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-red-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-red-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-red-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "official-black": {
+            "layers": [
+              {
+                "id": "official-black-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-black-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-black-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-black-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-black-skirt.webp"
+              },
+              {
+                "id": "official-black-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-black-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-black-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-black-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-black-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-black-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "summer-white": {
+            "layers": [
+              {
+                "id": "summer-white-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/summer-white-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/summer-white-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/summer-white-upper.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": []
+          },
+          "summer-navy": {
+            "layers": [
+              {
+                "id": "summer-navy-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/summer-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/summer-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/summer-navy-upper.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": []
+          }
+        },
+        "bottom": {
+          "plain-bottom": {
+            "layers": [
+              {
+                "id": "plain-bottom",
+                "rect": [
+                  0.355,
+                  0.61,
+                  0.29,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/plain-bottom.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "pleated-lilac": [
+            {
+              "id": "pleated-lilac",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-lilac.webp"
+            }
+          ],
+          "pleated-navy": [
+            {
+              "id": "pleated-navy",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-navy.webp"
+            }
+          ],
+          "pleated-cream": [
+            {
+              "id": "pleated-cream",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-cream.webp"
+            }
+          ],
+          "pleated-mint": [
+            {
+              "id": "pleated-mint",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-mint.webp"
+            }
+          ],
+          "chima-rose": {
+            "layers": [
+              {
+                "id": "chima-rose",
+                "rect": [
+                  0.29,
+                  0.61,
+                  0.42,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/chima-rose.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "chima-navy": {
+            "layers": [
+              {
+                "id": "chima-navy",
+                "rect": [
+                  0.29,
+                  0.61,
+                  0.42,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/chima-navy.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "chima-jade": {
+            "layers": [
+              {
+                "id": "chima-jade",
+                "rect": [
+                  0.29,
+                  0.61,
+                  0.42,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/chima-jade.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "summer-shorts": [
+            {
+              "id": "summer-shorts",
+              "rect": [
+                0.355,
+                0.61,
+                0.29,
+                0.17
+              ],
+              "z": 20,
+              "src": "layers/summer-shorts.webp"
+            }
+          ]
+        },
+        "shoes": {
+          "plain-shoes": [
+            {
+              "id": "plain-shoes",
+              "rect": [
+                0.36531690140845074,
+                0.865,
+                0.2693661971830986,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/plain-shoes.webp"
+            }
+          ],
+          "sneakers-pink": [
+            {
+              "id": "sneakers-pink",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-pink.webp"
+            }
+          ],
+          "sneakers-white": [
+            {
+              "id": "sneakers-white",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-white.webp"
+            }
+          ],
+          "sneakers-blue": [
+            {
+              "id": "sneakers-blue",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-blue.webp"
+            }
+          ],
+          "sneakers-lavender": [
+            {
+              "id": "sneakers-lavender",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-lavender.webp"
+            }
+          ]
+        },
+        "accessory": {
+          "none": [],
+          "glasses-round": [
+            {
+              "id": "glasses-round",
+              "rect": [
+                0.3054812834224599,
+                0.23,
+                0.3890374331550802,
+                0.12
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/glasses-round.webp"
+            }
+          ],
+          "star-clip": [
+            {
+              "id": "star-clip",
+              "rect": [
+                0.625,
+                0.14870967741935487,
+                0.1,
+                0.05258064516129032
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/star-clip.webp"
+            }
+          ],
+          "headphones": [
+            {
+              "id": "headphones",
+              "rect": [
+                0.235,
+                0.045,
+                0.53,
+                0.31
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/headphones.webp"
+            }
+          ],
+          "official-samo": [
+            {
+              "id": "official-samo",
+              "rect": [
+                0.25,
+                0.005,
+                0.5,
+                0.19
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/official-samo.webp"
+            }
+          ],
+          "official-gat": [
+            {
+              "id": "official-gat",
+              "rect": [
+                0.248,
+                0.005,
+                0.504,
+                0.21
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/official-gat.webp"
+            }
+          ]
+        }
+      },
+      "poses": {
+        "idle": {},
+        "tilt": {
+          "transforms": {
+            "head": {
+              "rotation": -0.1
+            }
+          }
+        },
+        "wave": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 1.05
+            },
+            "leftForearm": {
+              "rotation": 1.65
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.25101731601731603,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp"
+            }
+          ]
+        },
+        "cheer": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.9
+            },
+            "leftForearm": {
+              "rotation": 1.8
+            },
+            "rightUpperArm": {
+              "rotation": -0.9
+            },
+            "rightForearm": {
+              "rotation": -1.8
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.25101731601731603,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp"
+            },
+            {
+              "id": "right-hand",
+              "rect": [
+                0.631017316017316,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "rightForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp",
+              "flipX": true
+            }
+          ]
+        },
+        "think": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": -0.3
+            },
+            "leftForearm": {
+              "rotation": -2.35
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.2785815450643777,
+                0.63,
+                0.06083690987124463,
+                0.09
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/curled-hand.webp"
+            }
+          ]
+        },
+        "heart": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.05
+            },
+            "leftForearm": {
+              "rotation": -1.6
+            },
+            "rightUpperArm": {
+              "rotation": -0.05
+            },
+            "rightForearm": {
+              "rotation": 1.6
+            }
+          },
+          "hideIds": [
+            "left-hand",
+            "right-hand"
+          ],
+          "layers": [
+            {
+              "id": "heart-hands",
+              "rect": [
+                0.418,
+                0.51,
+                0.164,
+                0.051
+              ],
+              "z": 31,
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/heart-hands.webp"
+            }
+          ]
+        }
+      }
+    },
+    "boy": {
+      "groups": {
+        "head": {
+          "pivot": [
+            0.5,
+            0.38
+          ]
+        },
+        "leftUpperArm": {
+          "pivot": [
+            0.328,
+            0.43
+          ]
+        },
+        "leftForearm": {
+          "parent": "leftUpperArm",
+          "pivot": [
+            0.31,
+            0.55
+          ]
+        },
+        "rightUpperArm": {
+          "pivot": [
+            0.672,
+            0.43
+          ]
+        },
+        "rightForearm": {
+          "parent": "rightUpperArm",
+          "pivot": [
+            0.69,
+            0.55
+          ]
+        }
+      },
+      "base": [
+        {
+          "id": "neck",
+          "rect": [
+            0.40057218309859155,
+            0.365,
+            0.19885563380281687,
+            0.09
+          ],
+          "z": 10,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/neck.webp"
+        },
+        {
+          "id": "upperarm",
+          "rect": [
+            0.285,
+            0.515,
+            0.05,
+            0.055
+          ],
+          "z": 15,
+          "group": "leftUpperArm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/upperarm.webp"
+        },
+        {
+          "id": "left-forearm",
+          "rect": [
+            0.282,
+            0.535,
+            0.056,
+            0.115
+          ],
+          "z": 30,
+          "group": "leftForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/forearm.webp"
+        },
+        {
+          "id": "left-hand",
+          "rect": [
+            0.274,
+            0.6400619469026548,
+            0.07,
+            0.06987610619469029
+          ],
+          "z": 31,
+          "group": "leftForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/relaxed-hand.webp"
+        },
+        {
+          "id": "right-upperarm",
+          "rect": [
+            0.665,
+            0.515,
+            0.05,
+            0.055
+          ],
+          "z": 15,
+          "group": "rightUpperArm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/upperarm.webp",
+          "flipX": true
+        },
+        {
+          "id": "right-forearm",
+          "rect": [
+            0.6619999999999999,
+            0.535,
+            0.056,
+            0.115
+          ],
+          "z": 30,
+          "group": "rightForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/forearm.webp",
+          "flipX": true
+        },
+        {
+          "id": "right-hand",
+          "rect": [
+            0.6559999999999999,
+            0.6400619469026548,
+            0.07,
+            0.06987610619469029
+          ],
+          "z": 31,
+          "group": "rightForearm",
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/relaxed-hand.webp",
+          "flipX": true
+        },
+        {
+          "id": "leg",
+          "rect": [
+            0.42,
+            0.62,
+            0.07,
+            0.3
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/leg.webp"
+        },
+        {
+          "id": "right-leg",
+          "rect": [
+            0.51,
+            0.62,
+            0.07,
+            0.3
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f7cfa8",
+            "mode": "color"
+          },
+          "src": "layers/leg.webp",
+          "flipX": true
+        }
+      ],
+      "slots": {
+        "faceShape": {
+          "natural": [
+            {
+              "id": "head-natural",
+              "rect": [
+                0.28,
+                0.07165346534653465,
+                0.44,
+                0.3066930693069307
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-natural.webp"
+            }
+          ],
+          "round": [
+            {
+              "id": "head-round",
+              "rect": [
+                0.28,
+                0.0678993288590604,
+                0.44,
+                0.3142013422818792
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-round.webp"
+            }
+          ],
+          "slim": [
+            {
+              "id": "head-slim",
+              "rect": [
+                0.28,
+                0.06483391003460208,
+                0.44,
+                0.3203321799307958
+              ],
+              "z": 40,
+              "group": "head",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/head-slim.webp"
+            }
+          ]
+        },
+        "expression": {
+          "natural": [
+            {
+              "id": "expression-natural",
+              "rect": [
+                0.33671875,
+                0.16125,
+                0.35810546875,
+                0.173671875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-natural.webp"
+            }
+          ],
+          "calm": [
+            {
+              "id": "expression-calm",
+              "rect": [
+                0.321875,
+                0.168671875,
+                0.357177734375,
+                0.1684765625
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-calm.webp"
+            }
+          ],
+          "smile": [
+            {
+              "id": "expression-smile",
+              "rect": [
+                0.31259765625,
+                0.159765625,
+                0.36088867187499996,
+                0.1907421875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-smile.webp"
+            }
+          ],
+          "curious": [
+            {
+              "id": "expression-curious",
+              "rect": [
+                0.335791015625,
+                0.13890625,
+                0.37016601562499996,
+                0.2026171875
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-curious.webp"
+            }
+          ],
+          "bright": [
+            {
+              "id": "expression-bright",
+              "rect": [
+                0.320947265625,
+                0.14484375,
+                0.359033203125,
+                0.20484375
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-bright.webp"
+            }
+          ],
+          "determined": [
+            {
+              "id": "expression-determined",
+              "rect": [
+                0.3107421875,
+                0.1723046875,
+                0.37016601562499996,
+                0.1580859375
+              ],
+              "z": 45,
+              "group": "head",
+              "src": "layers/expression-determined.webp"
+            }
+          ]
+        },
+        "hairStyle": {
+          "curtain": [
+            {
+              "id": "hair-curtain",
+              "rect": [
+                0.2614942528735632,
+                0.025,
+                0.47701149425287354,
+                0.3
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-curtain.webp"
+            }
+          ],
+          "volume": [
+            {
+              "id": "hair-volume",
+              "rect": [
+                0.24379770992366412,
+                0.02,
+                0.5124045801526718,
+                0.3
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-volume.webp"
+            }
+          ],
+          "wave": [
+            {
+              "id": "hair-wave",
+              "rect": [
+                0.235,
+                0.026062499999999995,
+                0.53,
+                0.33787500000000004
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-wave.webp"
+            }
+          ],
+          "crop": [
+            {
+              "id": "hair-crop",
+              "rect": [
+                0.2879134241245136,
+                0.025,
+                0.4241731517509728,
+                0.27
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-crop.webp"
+            }
+          ],
+          "toben": [
+            {
+              "id": "hair-toben",
+              "rect": [
+                0.26666666666666666,
+                0.025,
+                0.4666666666666667,
+                0.28
+              ],
+              "z": 50,
+              "group": "head",
+              "tint": {
+                "slot": "hairTone",
+                "sourceColor": "#302a2c",
+                "mode": "color"
+              },
+              "src": "layers/hair-toben.webp"
+            }
+          ]
+        },
+        "top": {
+          "plain-top": {
+            "layers": [
+              {
+                "id": "plain-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/plain-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/plain-top-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/plain-top-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/plain-top-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/plain-top-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-sunshine": {
+            "layers": [
+              {
+                "id": "jacket-sunshine-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-sunshine-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-sunshine-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-sunshine-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-sunshine-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-sunshine-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-lavender": {
+            "layers": [
+              {
+                "id": "jacket-lavender-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-lavender-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-lavender-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-lavender-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-lavender-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-lavender-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-navy": {
+            "layers": [
+              {
+                "id": "jacket-navy-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-navy-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-navy-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-navy-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-mint": {
+            "layers": [
+              {
+                "id": "jacket-mint-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-mint-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-mint-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-mint-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-mint-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-mint-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-rose": {
+            "layers": [
+              {
+                "id": "jacket-rose-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-rose-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-rose-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-rose-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-rose-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-rose-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "jacket-cream": {
+            "layers": [
+              {
+                "id": "jacket-cream-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/jacket-cream-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/jacket-cream-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.407,
+                  0.1,
+                  0.16
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/jacket-cream-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2802801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/jacket-cream-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6552801724137931,
+                  0.54,
+                  0.0644396551724138,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/jacket-cream-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-ivory": {
+            "layers": [
+              {
+                "id": "hanbok-ivory-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-ivory-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-ivory-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-ivory-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-ivory-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-ivory-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-ivory-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-ivory-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-ivory-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-sky": {
+            "layers": [
+              {
+                "id": "hanbok-sky-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-sky-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-sky-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-sky-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-sky-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-sky-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-sky-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-sky-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-sky-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "hanbok-peach": {
+            "layers": [
+              {
+                "id": "hanbok-peach-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-peach-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/hanbok-peach-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "hanbok-peach-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.35
+                ],
+                "z": 25,
+                "src": "layers/hanbok-peach-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/hanbok-peach-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/hanbok-peach-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.2609751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/hanbok-peach-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6359751506024096,
+                  0.54,
+                  0.10304969879518074,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/hanbok-peach-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ]
+          },
+          "official-navy": {
+            "layers": [
+              {
+                "id": "official-navy-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-navy-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-navy-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-navy-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-navy-skirt.webp"
+              },
+              {
+                "id": "official-navy-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-navy-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-navy-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-navy-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "official-red": {
+            "layers": [
+              {
+                "id": "official-red-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-red-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-red-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-red-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-red-skirt.webp"
+              },
+              {
+                "id": "official-red-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-red-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-red-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-red-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-red-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-red-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "official-black": {
+            "layers": [
+              {
+                "id": "official-black-shoulder",
+                "rect": [
+                  0.31,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-black-shoulder.webp"
+              },
+              {
+                "id": "right-shoulder",
+                "rect": [
+                  0.615,
+                  0.435,
+                  0.075,
+                  0.035
+                ],
+                "z": 23,
+                "src": "layers/official-black-shoulder.webp",
+                "flipX": true
+              },
+              {
+                "id": "official-black-skirt",
+                "rect": [
+                  0.275,
+                  0.61,
+                  0.45,
+                  0.29
+                ],
+                "z": 24.5,
+                "src": "layers/official-black-skirt.webp"
+              },
+              {
+                "id": "official-black-torso",
+                "rect": [
+                  0.33,
+                  0.385,
+                  0.34,
+                  0.235
+                ],
+                "z": 25,
+                "src": "layers/official-black-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/official-black-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.44,
+                  0.1,
+                  0.127
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/official-black-upper.webp",
+                "flipX": true
+              },
+              {
+                "id": "left-forearm-sleeve",
+                "rect": [
+                  0.26185576923076925,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "leftForearm",
+                "src": "layers/official-black-forearm.webp"
+              },
+              {
+                "id": "right-forearm-sleeve",
+                "rect": [
+                  0.6368557692307693,
+                  0.54,
+                  0.10128846153846155,
+                  0.11500000000000002
+                ],
+                "z": 30,
+                "group": "rightForearm",
+                "src": "layers/official-black-forearm.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg",
+              "upperarm",
+              "right-upperarm",
+              "left-forearm",
+              "right-forearm"
+            ],
+            "hideSlots": [
+              "bottom"
+            ]
+          },
+          "summer-white": {
+            "layers": [
+              {
+                "id": "summer-white-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/summer-white-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/summer-white-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/summer-white-upper.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": []
+          },
+          "summer-navy": {
+            "layers": [
+              {
+                "id": "summer-navy-torso",
+                "rect": [
+                  0.33,
+                  0.39,
+                  0.34,
+                  0.255
+                ],
+                "z": 25,
+                "src": "layers/summer-navy-torso.webp"
+              },
+              {
+                "id": "left-upper-sleeve",
+                "rect": [
+                  0.285,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "leftUpperArm",
+                "src": "layers/summer-navy-upper.webp"
+              },
+              {
+                "id": "right-upper-sleeve",
+                "rect": [
+                  0.6150000000000001,
+                  0.4135384615384615,
+                  0.1,
+                  0.11692307692307694
+                ],
+                "z": 24,
+                "group": "rightUpperArm",
+                "src": "layers/summer-navy-upper.webp",
+                "flipX": true
+              }
+            ],
+            "hideIds": []
+          }
+        },
+        "bottom": {
+          "plain-bottom": {
+            "layers": [
+              {
+                "id": "plain-bottom",
+                "rect": [
+                  0.355,
+                  0.61,
+                  0.29,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/plain-bottom.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "pleated-lilac": [
+            {
+              "id": "pleated-lilac",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-lilac.webp"
+            }
+          ],
+          "pleated-navy": [
+            {
+              "id": "pleated-navy",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-navy.webp"
+            }
+          ],
+          "pleated-cream": [
+            {
+              "id": "pleated-cream",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-cream.webp"
+            }
+          ],
+          "pleated-mint": [
+            {
+              "id": "pleated-mint",
+              "rect": [
+                0.32,
+                0.61,
+                0.36,
+                0.2
+              ],
+              "z": 20,
+              "src": "layers/pleated-mint.webp"
+            }
+          ],
+          "baji-navy": {
+            "layers": [
+              {
+                "id": "baji-navy",
+                "rect": [
+                  0.34,
+                  0.61,
+                  0.32,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/baji-navy.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "baji-cream": {
+            "layers": [
+              {
+                "id": "baji-cream",
+                "rect": [
+                  0.34,
+                  0.61,
+                  0.32,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/baji-cream.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "baji-charcoal": {
+            "layers": [
+              {
+                "id": "baji-charcoal",
+                "rect": [
+                  0.34,
+                  0.61,
+                  0.32,
+                  0.28
+                ],
+                "z": 20,
+                "src": "layers/baji-charcoal.webp"
+              }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
+            ]
+          },
+          "summer-shorts": [
+            {
+              "id": "summer-shorts",
+              "rect": [
+                0.355,
+                0.61,
+                0.29,
+                0.17
+              ],
+              "z": 20,
+              "src": "layers/summer-shorts.webp"
+            }
+          ]
+        },
+        "shoes": {
+          "plain-shoes": [
+            {
+              "id": "plain-shoes",
+              "rect": [
+                0.36531690140845074,
+                0.865,
+                0.2693661971830986,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/plain-shoes.webp"
+            }
+          ],
+          "sneakers-pink": [
+            {
+              "id": "sneakers-pink",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-pink.webp"
+            }
+          ],
+          "sneakers-white": [
+            {
+              "id": "sneakers-white",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-white.webp"
+            }
+          ],
+          "sneakers-blue": [
+            {
+              "id": "sneakers-blue",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-blue.webp"
+            }
+          ],
+          "sneakers-lavender": [
+            {
+              "id": "sneakers-lavender",
+              "rect": [
+                0.3585829493087558,
+                0.865,
+                0.2828341013824885,
+                0.1
+              ],
+              "z": 22,
+              "src": "layers/sneakers-lavender.webp"
+            }
+          ]
+        },
+        "accessory": {
+          "none": [],
+          "glasses-round": [
+            {
+              "id": "glasses-round",
+              "rect": [
+                0.3054812834224599,
+                0.23,
+                0.3890374331550802,
+                0.12
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/glasses-round.webp"
+            }
+          ],
+          "star-clip": [
+            {
+              "id": "star-clip",
+              "rect": [
+                0.625,
+                0.14870967741935487,
+                0.1,
+                0.05258064516129032
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/star-clip.webp"
+            }
+          ],
+          "headphones": [
+            {
+              "id": "headphones",
+              "rect": [
+                0.235,
+                0.045,
+                0.53,
+                0.31
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/headphones.webp"
+            }
+          ],
+          "official-samo": [
+            {
+              "id": "official-samo",
+              "rect": [
+                0.25,
+                0.005,
+                0.5,
+                0.19
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/official-samo.webp"
+            }
+          ],
+          "official-gat": [
+            {
+              "id": "official-gat",
+              "rect": [
+                0.248,
+                0.005,
+                0.504,
+                0.21
+              ],
+              "z": 60,
+              "group": "head",
+              "src": "layers/official-gat.webp"
+            }
+          ]
+        }
+      },
+      "poses": {
+        "idle": {},
+        "tilt": {
+          "transforms": {
+            "head": {
+              "rotation": -0.1
+            }
+          }
+        },
+        "wave": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 1.05
+            },
+            "leftForearm": {
+              "rotation": 1.65
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.25101731601731603,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp"
+            }
+          ]
+        },
+        "cheer": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.9
+            },
+            "leftForearm": {
+              "rotation": 1.8
+            },
+            "rightUpperArm": {
+              "rotation": -0.9
+            },
+            "rightForearm": {
+              "rotation": -1.8
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.25101731601731603,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp"
+            },
+            {
+              "id": "right-hand",
+              "rect": [
+                0.631017316017316,
+                0.63,
+                0.11796536796536797,
+                0.1
+              ],
+              "z": 31,
+              "group": "rightForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/open-hand.webp",
+              "flipX": true
+            }
+          ]
+        },
+        "think": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": -0.3
+            },
+            "leftForearm": {
+              "rotation": -2.35
+            }
+          },
+          "layers": [
+            {
+              "id": "left-hand",
+              "rect": [
+                0.2785815450643777,
+                0.63,
+                0.06083690987124463,
+                0.09
+              ],
+              "z": 31,
+              "group": "leftForearm",
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "flipY": true,
+              "src": "layers/curled-hand.webp"
+            }
+          ]
+        },
+        "heart": {
+          "transforms": {
+            "leftUpperArm": {
+              "rotation": 0.05
+            },
+            "leftForearm": {
+              "rotation": -1.6
+            },
+            "rightUpperArm": {
+              "rotation": -0.05
+            },
+            "rightForearm": {
+              "rotation": 1.6
+            }
+          },
+          "hideIds": [
+            "left-hand",
+            "right-hand"
+          ],
+          "layers": [
+            {
+              "id": "heart-hands",
+              "rect": [
+                0.418,
+                0.51,
+                0.164,
+                0.051
+              ],
+              "z": 31,
+              "tint": {
+                "slot": "skinTone",
+                "sourceColor": "#f7cfa8",
+                "mode": "color"
+              },
+              "src": "layers/heart-hands.webp"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "palettes": {
+    "skinTone": {
+      "original": null,
+      "fair": "#f9d8bc",
+      "peach": "#e9b99b",
+      "warm": "#d8aa82",
+      "honey": "#c6986e",
+      "tan": "#af7a50",
+      "brown": "#87573e",
+      "deep": "#57392e"
+    },
+    "hairTone": {
+      "original": null,
+      "black": "#201b22",
+      "chestnut": "#633624",
+      "chocolate": "#39221b",
+      "copper": "#ad542b",
+      "blonde": "#dab46a",
+      "platinum": "#e8dfcd",
+      "rose": "#bd6f89",
+      "lavender": "#9c83c7",
+      "blue": "#526fa6",
+      "mint": "#6eaaa0",
+      "silver": "#b9bbc2"
+    }
+  }
+}

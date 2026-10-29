@@ -28,32 +28,6 @@ for (const character of ["girl", "boy"]) {
       ),
       `${character}/${slot} has a free choice`,
     );
-  const glb = await fs.readFile(
-    path.join(root, `public/avatar/v1/models/${character}-base.glb`),
-  );
-  assert.equal(glb.readUInt32LE(0), 0x46546c67, "GLB magic");
-  assert.equal(glb.readUInt32LE(4), 2, "GLB version");
-  assert.equal(glb.readUInt32LE(8), glb.length, "Complete model");
-  const json = JSON.parse(
-    glb.subarray(20, 20 + glb.readUInt32LE(12)).toString(),
-  );
-  assert(json.skins?.length && json.meshes?.length, "A rigged mesh is present");
-  assert(
-    [...json.buffers, ...json.images].every((value) => !value.uri),
-    "No missing external GLB resources",
-  );
-  for (const suffix of [
-    "color-mask.png",
-    "appearance-mask.png",
-    "plain-mask.png",
-  ]) {
-    const image = await fs.readFile(
-      path.join(root, `public/avatar/v1/models/${character}-base-${suffix}`),
-    );
-    assert.equal(image.subarray(1, 4).toString(), "PNG", "Mask format");
-    assert.equal(image.readUInt32BE(16), 2048, "Mask width");
-    assert.equal(image.readUInt32BE(20), 2048, "Mask height");
-  }
   const preview = await fs.readFile(
     path.join(root, `public/avatar/v1/${character}-preview-v2.webp`),
   );
@@ -65,7 +39,7 @@ for (const character of ["girl", "boy"]) {
   assert(preview.length < 64000, "Static preview budget");
 }
 console.log(
-  `PASS: ${catalog.items.length} catalog items, free coverage for both characters, embedded rigged GLBs, six 2K masks, two compact WebP previews.`,
+  `PASS: ${catalog.items.length} stable catalog items, free coverage for both characters and compatible saved-image fixtures.`,
 );
 if (!process.argv.includes("--serve")) process.exit(0);
 
@@ -98,7 +72,7 @@ let saved={schemaVersion:1,catalogVersion:1,look:defaultAvatarLook(),revision:0,
 const adapter={load:async()=>({avatar:saved,balance}),purchase:async id=>{const item=AVATAR_ITEMS.find(i=>i.id===id);if(balance<item.price)throw Error('Insufficient fixture funds');const owned=saved.ownedItemIds.includes(id);const charge=owned?0:item.price;balance-=charge;saved={...saved,ownedItemIds:[...new Set([...saved.ownedItemIds,id])]};qa.purchases.push({id,charge,balance});return{itemId:id,charged:charge,avatar:saved,wallet:{balance},alreadyOwned:owned,duplicate:false}},save:async(look,revision,thumbnailUrl)=>{if(revision!==saved.revision)throw Error('Fixture revision mismatch');saved={...saved,look,revision:revision+1,thumbnailUrl};const bitmap=await createImageBitmap(await(await fetch(thumbnailUrl)).blob());const probe=document.createElement('canvas');probe.width=bitmap.width;probe.height=bitmap.height;const context=probe.getContext('2d');context.drawImage(bitmap,0,0);const cornerAlpha=context.getImageData(0,0,1,1).data[3];bitmap.close();qa.saves.push({look,revision:saved.revision,thumbnailBytes:thumbnailUrl.length,cornerAlpha});qa.entries[0].avatar=saved;return saved}};
 function measure(){const sample=document.getElementById('sample'),list=sample.querySelector('.wis-ranking-list-scroll'),right=sample.querySelector('.wis-ranking-avatar-aside');const rows=[...sample.querySelectorAll('.wis-ranking-row')];const leftWidth=list?.getBoundingClientRect().width,rightWidth=right?.getBoundingClientRect().width;const report={mode:sample.dataset.mode,viewport:innerWidth,panelWidth:sample.clientWidth,leftWidth,rightWidth,twoToOneColumns:!list||Math.abs(leftWidth-2*rightWidth)<1,rowCount:rows.length,leftFields:rows.map(r=>({name:r.querySelector('.wis-ranking-name')?.textContent,classroom:r.querySelector('.wis-ranking-classroom')?.textContent,rank:r.querySelector('.wis-ranking-rank-badge')?.textContent,amount:r.querySelector('.wis-ranking-score')?.textContent})),overflow:sample.scrollWidth>sample.clientWidth,documentOverflow:document.documentElement.scrollWidth>innerWidth,canvases:sample.querySelectorAll('canvas').length,modelRequests:performance.getEntriesByType('resource').filter(r=>r.name.includes('.glb')).length,rankingReads:qa.rankingReads,imagesValid:[...sample.querySelectorAll('img')].every(i=>i.complete&&i.naturalWidth>0),purchases:qa.purchases,saves:qa.saves,errors:qa.errors};qa.reports.push(report);fetch('/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});return report}
 function PoseCheck(){const[look,setLook]=useState(defaultAvatarLook()),[active,setActive]=useState(false),[ready,setReady]=useState(false),[stats,setStats]=useState(null),[cycle,setCycle]=useState(false);const controller=useRef(null);const poses=AVATAR_ITEMS.filter(i=>i.slot==='pose');useEffect(()=>{if(!cycle)return;let index=0;const timer=setInterval(()=>{setLook(l=>({...l,pose:poses[index++%poses.length].value}))},1500);return()=>clearInterval(timer)},[cycle]);return <section><div className="qa-controls"><button onClick={()=>{setActive(v=>!v);setReady(false);controller.current=null}}>{active?'렌더러 해제':'렌더러 시작'}</button><button onClick={()=>{setLook(defaultAvatarLook(look.character==='girl'?'boy':'girl'));setReady(false)}}>남녀 전환</button><button onClick={()=>setCycle(v=>!v)}>{cycle?'포즈 순회 정지':'6포즈 순회'}</button><button onClick={()=>setStats(controller.current?.stats||null)}>렌더링 통계</button>{poses.map(p=><button key={p.id} onClick={()=>setLook(l=>({...l,pose:p.value}))}>{p.label}</button>)}</div><p>상태: {active?(ready?'준비 완료':'로딩 중'):'해제됨'} · 포즈: {look.pose}</p><div style={{height:420,position:'relative',background:'#f8fafc'}}>{active&&<AvatarStage look={look} active onReady={c=>{controller.current=c;setReady(true)}} onError={e=>qa.errors.push(e.message)}/>}</div><pre>{JSON.stringify(stats,null,2)}</pre></section>}
-function App(){const[width,setWidth]=useState(768),[mode,setMode]=useState('ranking'),[audience,setAudience]=useState('student'),[report,setReport]=useState(null);return <AppToastProvider><main style={{padding:16}}><h1>아바타 출시 검증 · 합성 데이터</h1><div className="qa-controls">{[320,390,768,1280].map(w=><button key={w} onClick={()=>setWidth(w)}>폭 {w}</button>)}<button onClick={()=>setAudience(a=>a==='student'?'teacher':'student')}>{audience==='student'?'교사 문맥':'학생 문맥'}</button><button onClick={()=>setMode('ranking')}>순위 화면</button><button onClick={()=>setMode('studio')}>꾸미기 화면</button><button onClick={()=>setMode('poses')}>포즈·취소 검사</button><button onClick={()=>setReport(measure())}>현재 검사</button></div><pre id="qa-report">{JSON.stringify(report,null,2)}</pre><div id="sample" data-mode={mode} className={audience==='teacher'?'teacher-dashboard-ranking':'student-dashboard-ranking'} style={{width,maxWidth:'100%'}}>{mode==='ranking'?<Ranking config={{year:'2026',semester:'2'}} hallOfFamePath={'/'+audience+'/points'}/>:mode==='studio'?<AvatarStudio adapter={adapter}/>:<PoseCheck/>}</div></main></AppToastProvider>}
+function App(){const[width,setWidth]=useState(768),[mode,setMode]=useState('ranking'),[audience,setAudience]=useState('student'),[report,setReport]=useState(null);return <AppToastProvider><main style={{padding:16}}><h1>아바타 출시 검증 · 합성 데이터</h1><div className="qa-controls">{[320,390,768,1280].map(w=><button key={w} onClick={()=>setWidth(w)}>폭 {w}</button>)}<button onClick={()=>setAudience(a=>a==='student'?'teacher':'student')}>{audience==='student'?'교사 문맥':'학생 문맥'}</button><button onClick={()=>setMode('ranking')}>순위 화면</button><button onClick={()=>setMode('studio')}>꾸미기 화면</button><button onClick={()=>setMode('poses')}>포즈·취소 검사</button><button onClick={()=>setReport(measure())}>현재 검사</button></div><pre id="qa-report">{JSON.stringify(report,null,2)}</pre><div id="sample" data-mode={mode} className={audience==='teacher'?'teacher-dashboard-ranking':'student-dashboard-ranking'} style={{width,maxWidth:'100%'}}>{mode==='ranking'?<Ranking config={{year:'2026',semester:'2'}} hallOfFamePath={'/'+audience+'/points'}/>:mode==='studio'?<AvatarStudio key={audience} adapter={adapter} access={audience}/>:<PoseCheck/>}</div></main></AppToastProvider>}
 createRoot(document.getElementById('root')).render(<HashRouter><App/></HashRouter>);
 `;
 const bundle = await build({
@@ -178,8 +152,8 @@ const server = http.createServer(async (req, res) => {
     }
     let data = files.get(url.pathname),
       type = url.pathname.endsWith(".css") ? "text/css" : "text/javascript";
-    if (url.pathname.startsWith("/avatar/v1/")) {
-      const assetRoot = path.resolve(root, "public/avatar/v1");
+    if (/^\/avatar\/v[12]\//.test(url.pathname)) {
+      const assetRoot = path.resolve(root, "public/avatar");
       const target = path.resolve(
         root,
         "public",
@@ -196,7 +170,9 @@ const server = http.createServer(async (req, res) => {
           ? "image/svg+xml"
           : url.pathname.endsWith(".png")
             ? "image/png"
-            : "model/gltf-binary";
+            : url.pathname.endsWith(".json")
+              ? "application/json"
+              : "application/octet-stream";
     } else if (url.pathname === "/") {
       data = html;
       type = "text/html";

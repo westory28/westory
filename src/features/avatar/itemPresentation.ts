@@ -44,5 +44,5 @@ export function avatarItemPreviewPath(
   item: AvatarItem,
   character?: AvatarCharacter,
 ): string {
-  return `avatar/v1/previews-v3/${avatarPreviewCharacter(item, character)}/${item.slot}-${item.value}.webp`;
+  return `avatar/v2/previews/${avatarPreviewCharacter(item, character)}/${item.slot}-${item.value}.webp`;
 }

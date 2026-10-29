@@ -1,0 +1,1187 @@
+{
+  "version": 4,
+  "width": 256,
+  "height": 256,
+  "sources": {
+    "scripts/render-avatar-item-previews.mjs": "7b3655073b8e4b4b55b22e822efe742b5c4523264a387a18a7f679e86cd5ce71",
+    "functions/avatarCatalog.json": "5c3214f05e978837e1d5cb4d0a366eff7c60c6097311e83281257b5d4909c525",
+    "src/features/avatar/catalog.ts": "1adff9d03ba68414b242d22f14dfa8c44039d28c3d962eb8885644acba2030e5",
+    "src/features/avatar/renderer2d/engine.ts": "0fdcb5aaa1a154c7d145f025c835ba1b3b7f9482dc3f034857ea7380b94e55f9",
+    "src/features/avatar/renderer2d/manifest.ts": "f8027cb6011c03e5e171c2e899d57307720d391733f4216df6aa340635ae8472",
+    "public/avatar/v2/manifest.json": "86b1f375ac7e4339a2df37d985e653f99e6d69a08808a85648ad6f0fe5468e95",
+    "public/avatar/v2/layers/baji-charcoal.webp": "80e399f402c894e6bee88d40f67fc4951ca686321ca702177dac10cc8626a4c9",
+    "public/avatar/v2/layers/baji-cream.webp": "1f903858b71b43ca38bd2ef833701fa511f93db48628691adba156db8808dda1",
+    "public/avatar/v2/layers/baji-navy.webp": "dbd2bb337b5ae1b643449d1f9c1f845620a8b800bb95a35f03e3fd71db07bb1d",
+    "public/avatar/v2/layers/chima-jade.webp": "b815ecdf90ebce2d2e8d1950891e46046bb07fc80632cc70489de24c7ec89077",
+    "public/avatar/v2/layers/chima-navy.webp": "87cdd6cee44fbac4439476eaa7ce3796baa8a6ae7f194e4812153172a4e3a479",
+    "public/avatar/v2/layers/chima-rose.webp": "fb4f2f5ccb9f32db7c006ccafa13337d33041b21a2c0dc1ad11f597486d15e02",
+    "public/avatar/v2/layers/curled-hand.webp": "2066fa343e9de8b89b789710a815c1c45d6898d6882c88b46f3ea28b5235b8a8",
+    "public/avatar/v2/layers/expression-bright.webp": "4c719d093a5462adab37de66dac0ca6dfa9fea2c479376e4e8a684803dd0527a",
+    "public/avatar/v2/layers/expression-calm.webp": "f0a75d12738db45886d645fcf28e1f75f1c17674461bf01f2b2d7f185dfaf74b",
+    "public/avatar/v2/layers/expression-curious.webp": "b71dac8bc45e88a5442f6b106170f14e0e2f5ced042837015f2e4934babfead7",
+    "public/avatar/v2/layers/expression-determined.webp": "977c15efce29abf41f22a2b719c51df2e949c7f05133f34d0e760423801aa421",
+    "public/avatar/v2/layers/expression-natural.webp": "811c410e8f419c0dde54c87cd76e08b32bfd6855d08eb6c8f96c5922868a0081",
+    "public/avatar/v2/layers/expression-smile.webp": "89bd0f81ffb9437f3fa620c63d0ddcfc0d22630b005a471d3713ea91e49e80f9",
+    "public/avatar/v2/layers/forearm.webp": "15252172e450d99b1f4b4d5936c1dd1513f95eae52d03bd951ee95036bd22940",
+    "public/avatar/v2/layers/glasses-round.webp": "6260ba39cc61e8d86fb880cbab8ff8e10a653a450f02f7993aaf85fe26804659",
+    "public/avatar/v2/layers/hair-bob.webp": "317a6cc25875ef7052b9adcc34959969ce217aaa98919bcac7d3243a8e8dcdeb",
+    "public/avatar/v2/layers/hair-crop.webp": "5e0a05bdf122d490dbe2b90dc0394c688a05f0b22cc8311698e3e531547bb0ae",
+    "public/avatar/v2/layers/hair-curtain.webp": "4463aa85ae5775784ccecd71895134b9c6caa3d647d410b3613681909be060b3",
+    "public/avatar/v2/layers/hair-half-up.webp": "62a218504d78bfbdffa8e36e360cf7e404e41aceb5794088e6590bc1c4ff7334",
+    "public/avatar/v2/layers/hair-long.webp": "a9d6f205d7f6f8f27e43370912a28ad4581bd5c370d91a0a1a6eb1066d395eff",
+    "public/avatar/v2/layers/hair-toben.webp": "7bdf07bbadad32c1b20322b6df50c96a2bb145eead79990776876163a4e6df1c",
+    "public/avatar/v2/layers/hair-twin-tail-tint-mask.webp": "a5aeb09ee8fa99adb7831fd7e718e25cc23ce3d0caef8f861eec027d878cc7bc",
+    "public/avatar/v2/layers/hair-twin-tail.webp": "ca5a121b63c616e88f20947c63a74f56be0a746da5d8ee756344b538c0cd0cd6",
+    "public/avatar/v2/layers/hair-volume.webp": "ca8cbd9e41afe2e8ee2d7114e30344fa4d1bb3d40273868fbd75cb342a53e45a",
+    "public/avatar/v2/layers/hair-wave.webp": "6bb6fab92bb94071ca2a162faddd17219f38e2156a5cd05eb0d40b513356a38f",
+    "public/avatar/v2/layers/hanbok-ivory-forearm.webp": "ded4d90ee99196354508ee4d3518ec66f137450b3c37dec056e00214e8191586",
+    "public/avatar/v2/layers/hanbok-ivory-shoulder.webp": "901cc1930ef81056661943fa7433fe56931d095c1e331470cf564c2cf3a1ee96",
+    "public/avatar/v2/layers/hanbok-ivory-torso.webp": "102b2c8011c118d5c846edfa21ca1637c9fc889f472dc3406b5bf8e8bdf679e3",
+    "public/avatar/v2/layers/hanbok-ivory-upper.webp": "894307e2995512ad5ea9fd8a19690bd22c986795e89ee5e66a9990ee563d131b",
+    "public/avatar/v2/layers/hanbok-peach-forearm.webp": "a3a7f2acda867903f4aa7473f8d483052d3f46c568be867b81628eca2b1cdae3",
+    "public/avatar/v2/layers/hanbok-peach-shoulder.webp": "564c4d82fb89e53a419431c1e7ef01cabfe7e5f3bfb21ad905dd20b3e6d05712",
+    "public/avatar/v2/layers/hanbok-peach-torso.webp": "6ec6e456a6ed5ec84a808c9ac8c7c89fad6a1486d1d91018fcc2e69afdadb95d",
+    "public/avatar/v2/layers/hanbok-peach-upper.webp": "2b53e56ede714e2b79364d5f5a2a9f21c752c21fd2611c02e2bd92d7ba14cc9f",
+    "public/avatar/v2/layers/hanbok-sky-forearm.webp": "5810e518ccc1040994a4218846340f5942e2b970554dac64db3a4d89df56d1e8",
+    "public/avatar/v2/layers/hanbok-sky-shoulder.webp": "6ebe4fcc7e96219aad69e126e42d7436d4ab491bf985cc658b29ffa6b0f38be2",
+    "public/avatar/v2/layers/hanbok-sky-torso.webp": "e2706f2151c92741611e93f49c4dfc4098c732bafe922e21db2c06c6e842f2bd",
+    "public/avatar/v2/layers/hanbok-sky-upper.webp": "2413adcfa952bce2a36a433e0a389180c72c6364ae8bda1d444750370d5b8ebd",
+    "public/avatar/v2/layers/head-natural.webp": "7fb351db0ff45dd5f6c957f9fdb059764058d67786fe74fbed9f202fc58f08fd",
+    "public/avatar/v2/layers/head-round.webp": "e48ee3d4759e1dc62e05fbd0a3a66250dcacd200a7152b46ccde78f2e6b9d343",
+    "public/avatar/v2/layers/head-slim.webp": "e7ab329b102b885b30c198e5ae1ed3b2bd551e5bbff4f37879b1419f4f8450dd",
+    "public/avatar/v2/layers/headphones.webp": "92812108e5e0d69703e66fbc7abc652c47cdf2d094c8a36da26637cb57697fc3",
+    "public/avatar/v2/layers/heart-hands.webp": "48a7d53d6cbbedb37807ebbb1fd5ceb9f09fa190901bab350db0fe441c84f5fe",
+    "public/avatar/v2/layers/jacket-cream-forearm.webp": "1337aa3e35a232f625ad6f0edc6034a225c61c5253277ebe139d646a73abc336",
+    "public/avatar/v2/layers/jacket-cream-torso.webp": "eaf4c4729c3950a63828a8a6c85f5eeebb989735718ed3f558034f8d93c27ed4",
+    "public/avatar/v2/layers/jacket-cream-upper.webp": "5a5e42a2e2eb037038d60e25e10ff12dd28a6df1d4f50a3cfadfb5344f7c0c51",
+    "public/avatar/v2/layers/jacket-lavender-forearm.webp": "98d7e891bd770d065a658a3b18248306b7ca01047fcffba404f78317b6589ab7",
+    "public/avatar/v2/layers/jacket-lavender-torso.webp": "74e282abac201985f7aa1ab23b13be8b0a2ec0181661e01275afe4d1441196e3",
+    "public/avatar/v2/layers/jacket-lavender-upper.webp": "74a7fade36628f71961628c88f03293675d38a89ca52e50ec7c167b5cfe029ab",
+    "public/avatar/v2/layers/jacket-mint-forearm.webp": "75d5f165c7fb1d6a6a242e87b7afda36f2abbf70816d95c057cb7ac76ce7829e",
+    "public/avatar/v2/layers/jacket-mint-torso.webp": "c442b4314d68c178e0f30c2bb08f9fc6f9659550811e056f27f1239d7b8c9e03",
+    "public/avatar/v2/layers/jacket-mint-upper.webp": "2d9b1f19cb223cbdd11010e79a5967076ffe8b6a9229b3f528ded82da69cbe7a",
+    "public/avatar/v2/layers/jacket-navy-forearm.webp": "ed9ec6f49bc7599c54b98cfae66741eea3750ca89be39aae4927e7825eda74d1",
+    "public/avatar/v2/layers/jacket-navy-torso.webp": "690daab05c4a00f57a4c3f4932815eea2b32113599e68f08cdca1a371dd0f3e0",
+    "public/avatar/v2/layers/jacket-navy-upper.webp": "bcf9b90bf3c8073024e1343a021c36aee7b37cf0e92a98061c8a08ea639c4778",
+    "public/avatar/v2/layers/jacket-rose-forearm.webp": "e6ef28539b20bd6043d8902043e8659145f7cae2d29ffa24bb361115732af681",
+    "public/avatar/v2/layers/jacket-rose-torso.webp": "0a171ce2a0da9eff83a3dd6d5b5c453b1db806cceb118871055b9a0e6954b4d5",
+    "public/avatar/v2/layers/jacket-rose-upper.webp": "9b14d106393ea2cbe36c7cc5fd931fc7f64f163d4622b12d67042c3d55153e8c",
+    "public/avatar/v2/layers/jacket-sunshine-forearm.webp": "4d9f98ab7d26e4d58d13539af27904fc4d902aafa1ccd59c62f38b38d9dd329f",
+    "public/avatar/v2/layers/jacket-sunshine-torso.webp": "503d1edb00f7ff015875f46877ae555f499322ec963971573aa493e60af16ba1",
+    "public/avatar/v2/layers/jacket-sunshine-upper.webp": "dbca231ad36943f33b079535d9fae5bf65bcf5f50069543e3bd6dbcfce9b422a",
+    "public/avatar/v2/layers/leg.webp": "5ba81f06ff5ef602f85e2d73971c9bf25ca27bb58768f6ff18b0e334982f37e9",
+    "public/avatar/v2/layers/neck.webp": "4de7a5a9edf1bc0b918e105d73a9c5566408daaaea84933e53a1c7cbaa3f8c71",
+    "public/avatar/v2/layers/official-black-forearm.webp": "68b31655c2295d62d02b4332b93839fa122f03834731f296e65fc0f638a1043d",
+    "public/avatar/v2/layers/official-black-shoulder.webp": "b547c5b2dda670be5ed7628f44a12023afec03379c759a0eb1315a63dd1ab10d",
+    "public/avatar/v2/layers/official-black-skirt.webp": "154142402be017bd7a6e62746fab058576e545f898ded1dfeae8e478648b0044",
+    "public/avatar/v2/layers/official-black-torso.webp": "4e10ae0e73506ea7fe47078a6d84609389649ef37ac21fad97150bc1d1c40659",
+    "public/avatar/v2/layers/official-black-upper.webp": "780204e16cacc3b1993c66b82b0e3091213487867f3aef67b5b8e48976e18883",
+    "public/avatar/v2/layers/official-gat.webp": "b00d59b44f6753e90ca59e8c38cd708c6a324d3e1d76fa65940e01a4075182c0",
+    "public/avatar/v2/layers/official-navy-forearm.webp": "2e18cce092a977e8b30245d5750847e982c491e1895252b39a7733cd9bdd420e",
+    "public/avatar/v2/layers/official-navy-shoulder.webp": "a7e520b3a1b91be4f91a06aa2471e2acc74be5d8aac81fa5ccf5a9864218573a",
+    "public/avatar/v2/layers/official-navy-skirt.webp": "3be9fe61d16205f3ebcd3cf0a0efcf0da75ead920e99280d26487e6d862ea6a2",
+    "public/avatar/v2/layers/official-navy-torso.webp": "9df50d8b8bd010ed9972db6f48d73a6c86c789353a3798a6f8afcdb2b6e00df6",
+    "public/avatar/v2/layers/official-navy-upper.webp": "b878ddd258ebef8e66755556d337049e3294ad9e66b0e866124b1ac8a5f7b7d1",
+    "public/avatar/v2/layers/official-red-forearm.webp": "ca0a89d27dd191e5ec35ca4491a5b1866e7e6785b9720a3157d837868ab6c21b",
+    "public/avatar/v2/layers/official-red-shoulder.webp": "e1628bd3f337c1b5ef3d35033f577e202522467de6edc09369a399f9177b1cc3",
+    "public/avatar/v2/layers/official-red-skirt.webp": "3cf30c5012cfe8ce95609d2a03e4b291f19085b3a6d62f24ff63d865d5126bb5",
+    "public/avatar/v2/layers/official-red-torso.webp": "e447d48780fd7f4097302c22cba2cbe60f6a3562cc63937dba32c996e6659287",
+    "public/avatar/v2/layers/official-red-upper.webp": "26e27cdc66131ae17d4518cce519d805ed86a40edb352778e126416c0f084ef9",
+    "public/avatar/v2/layers/official-samo.webp": "b0e2621a1e0fc07e38b1c291a50019cd1a8924a5b4c71ce8967144a75234d1e7",
+    "public/avatar/v2/layers/open-hand.webp": "919dbe5474c2b79eedb6f0e6252189cb51d1aa540da305e086c695ec341309a5",
+    "public/avatar/v2/layers/plain-bottom.webp": "a80a74b813f0a3efa93dff9983355f8e146577d25cca22322d0c9361c38a0e36",
+    "public/avatar/v2/layers/plain-shoes.webp": "b642abe580002a590cf9ae1925958532d4e21e893fbe53e4bd558669f4e5ffd7",
+    "public/avatar/v2/layers/plain-top-forearm.webp": "e868787bd7ec1a2c20b522fcb0d9f1619bb14f73860cb5e2f160e6eff497ac73",
+    "public/avatar/v2/layers/plain-top-upper.webp": "a9528e1dbd806be6a4608612706d17e62825b8665c2ae162aa7a085d9fe17972",
+    "public/avatar/v2/layers/plain-torso.webp": "2028d990dfd49b4cd9142bcefacfccaa0ff745166e4dabc3dfb99677386e96a6",
+    "public/avatar/v2/layers/pleated-cream.webp": "66cc369ca314d77f6339866d707808ff06a3241391cfa76557eada6132cb3588",
+    "public/avatar/v2/layers/pleated-lilac.webp": "ec06e3d7929e8046998a26ac2ec84f2c82e9e0b1d3dd813e24be4d1e6f76e96a",
+    "public/avatar/v2/layers/pleated-mint.webp": "da3e18c2022eba1788514964f9f5a4da61d0edd436e2101cad626748b345bc65",
+    "public/avatar/v2/layers/pleated-navy.webp": "77ab73b29a1110e25e4379fbc6e94f5a0f420c6d51a575c2f2c2ca9c4ef1a7f5",
+    "public/avatar/v2/layers/relaxed-hand.webp": "40e973c9181c884cd6134b9935b91d47f17a44a1655162e9ec2cf45970215f86",
+    "public/avatar/v2/layers/sneakers-blue.webp": "cc849c0c985718e21aa8962d6374a82eeff2981694c1d0e69dac40d2705fa5dc",
+    "public/avatar/v2/layers/sneakers-lavender.webp": "288ebcf8d1877d502461df06ca0e8491cab320b8963bd05776bb21531ef4bd98",
+    "public/avatar/v2/layers/sneakers-pink.webp": "da6acc755656e90031ce19b61afd325537ea0fea7c343753b63413796920e3e9",
+    "public/avatar/v2/layers/sneakers-white.webp": "1d17c6b7d28dcf1082ff65d7d3765159e5d4460c49d7ddddd5576ecb096e2e9b",
+    "public/avatar/v2/layers/star-clip.webp": "1f0a1c5b369dcf77427162a93f091c55275c3b655b2cf6f128ee6461d299a2e7",
+    "public/avatar/v2/layers/summer-navy-torso.webp": "7271f11d12ccf50ab334b8c222cf7dc60ea15250b98a7e27ae4ba571aa885885",
+    "public/avatar/v2/layers/summer-navy-upper.webp": "44cc439dd5b1d8c71dd65bcfdf383dde4abbbb32a24c61c4f494af11be8ca9b4",
+    "public/avatar/v2/layers/summer-shorts.webp": "2c8ea068eb5ef7cfedc8bddbde50b3afc98ac01809a9b046e8162da471dc81fe",
+    "public/avatar/v2/layers/summer-white-torso.webp": "c6b003cd29fe6aa20e51a0858bdd060e16073e3f5404e2fd61a1324feeecdcd9",
+    "public/avatar/v2/layers/summer-white-upper.webp": "5f466bd71ecc055fa8b080fe1700474711189a0f5844b27c1d608242d8861dc0",
+    "public/avatar/v2/layers/upperarm.webp": "2e6ed5de1aed05e9c36623f1d4f2e957f3ae9bbda4cef6f1e4a624ef79f119f6"
+  },
+  "items": [
+    {
+      "id": "character:girl",
+      "character": "girl",
+      "file": "girl/character-girl.webp",
+      "bytes": 11090,
+      "sha256": "b4ed605387493553e0e7544d6f385337b49ae2dfb49c957ebace456bdd37612e"
+    },
+    {
+      "id": "skinTone:original",
+      "character": "girl",
+      "file": "girl/skinTone-original.webp",
+      "bytes": 16028,
+      "sha256": "2fc23651763ae5008c86602827f5d0f564eb5a235081dcc606dce24975ab9a1e"
+    },
+    {
+      "id": "skinTone:fair",
+      "character": "girl",
+      "file": "girl/skinTone-fair.webp",
+      "bytes": 16016,
+      "sha256": "782247cd550b8f037008456a31ac3016b6489b6eb7f4d4fcac0ab4f5afe79db5"
+    },
+    {
+      "id": "skinTone:peach",
+      "character": "girl",
+      "file": "girl/skinTone-peach.webp",
+      "bytes": 15974,
+      "sha256": "ff9654416cfef0916ffc81ca5069768ee5739d66ed3ed160db93af2508ea052c"
+    },
+    {
+      "id": "skinTone:warm",
+      "character": "girl",
+      "file": "girl/skinTone-warm.webp",
+      "bytes": 15874,
+      "sha256": "58134dce26501f66335f91bf691ab67a018fb0c001b87cdec1b16e050f13b733"
+    },
+    {
+      "id": "skinTone:honey",
+      "character": "girl",
+      "file": "girl/skinTone-honey.webp",
+      "bytes": 15800,
+      "sha256": "91849b45a68a374aba2899aa8190073637d75244ac468a178c3893bedf32ed07"
+    },
+    {
+      "id": "skinTone:tan",
+      "character": "girl",
+      "file": "girl/skinTone-tan.webp",
+      "bytes": 15598,
+      "sha256": "6be193638b01e49d05493f3076dc8eaddab655999a9085e27823be8784335265"
+    },
+    {
+      "id": "skinTone:brown",
+      "character": "girl",
+      "file": "girl/skinTone-brown.webp",
+      "bytes": 15200,
+      "sha256": "cba6b7a293433ad07cb65ff923b841497a1a29d79addf5b2317e9bf8f32a570c"
+    },
+    {
+      "id": "skinTone:deep",
+      "character": "girl",
+      "file": "girl/skinTone-deep.webp",
+      "bytes": 14398,
+      "sha256": "6a0966f92575fde3d1f548cc736f474e4aab5522d5ccee5b5b7e533f7a1bff17"
+    },
+    {
+      "id": "faceShape:natural",
+      "character": "girl",
+      "file": "girl/faceShape-natural.webp",
+      "bytes": 15888,
+      "sha256": "53859555d050ba0ba09f797dac5207487953a95391ad99ca7eaa1377dbf272bd"
+    },
+    {
+      "id": "faceShape:round",
+      "character": "girl",
+      "file": "girl/faceShape-round.webp",
+      "bytes": 15934,
+      "sha256": "4490b0ff5305f0d0a1dc0e96c78db4952e1ac3154853212192f6a352f0420025"
+    },
+    {
+      "id": "faceShape:slim",
+      "character": "girl",
+      "file": "girl/faceShape-slim.webp",
+      "bytes": 15988,
+      "sha256": "77652e24ee1bf93883d2dacbab2e49aa71d8bc5e48f8dba0f5c8e35ea231a77b"
+    },
+    {
+      "id": "expression:natural",
+      "character": "girl",
+      "file": "girl/expression-natural.webp",
+      "bytes": 15888,
+      "sha256": "53859555d050ba0ba09f797dac5207487953a95391ad99ca7eaa1377dbf272bd"
+    },
+    {
+      "id": "expression:calm",
+      "character": "girl",
+      "file": "girl/expression-calm.webp",
+      "bytes": 15982,
+      "sha256": "97316f1fe15aa8129929e05d0b6689d802b6b4a3bdbf755798baa2d7eef94bb9"
+    },
+    {
+      "id": "expression:smile",
+      "character": "girl",
+      "file": "girl/expression-smile.webp",
+      "bytes": 16272,
+      "sha256": "23c840694002d6c56bebca79b87af61f85abaf67ed3af0d79c177d70c11efbcd"
+    },
+    {
+      "id": "expression:curious",
+      "character": "girl",
+      "file": "girl/expression-curious.webp",
+      "bytes": 15878,
+      "sha256": "284e3483d98600489e36efdba651748c93126b418d033c10875ff757b60b2366"
+    },
+    {
+      "id": "expression:bright",
+      "character": "girl",
+      "file": "girl/expression-bright.webp",
+      "bytes": 16348,
+      "sha256": "1a24bf72196275f5e5f912b18ec97f2798e76a063628bef6178ac546970f9020"
+    },
+    {
+      "id": "expression:determined",
+      "character": "girl",
+      "file": "girl/expression-determined.webp",
+      "bytes": 15962,
+      "sha256": "98a735091b1e5d49d04a3c4acb8f274cde6f4dbe31d948ac15e163f0d1bf7e84"
+    },
+    {
+      "id": "hairStyle:bob",
+      "character": "girl",
+      "file": "girl/hairStyle-bob.webp",
+      "bytes": 13428,
+      "sha256": "b402e0496c0d60348a0cf12ba8dc984f270fca87d5a99d5f85e3403cb15825f8"
+    },
+    {
+      "id": "hairStyle:volume",
+      "character": "girl",
+      "file": "girl/hairStyle-volume.webp",
+      "bytes": 14894,
+      "sha256": "7707680bdc30a55704f619e8a0ba8ff00e376714c8b92decc0bf4abd8d88f0db"
+    },
+    {
+      "id": "hairStyle:wave",
+      "character": "girl",
+      "file": "girl/hairStyle-wave.webp",
+      "bytes": 14754,
+      "sha256": "19a481a45e86300c12f33e008741cbd9516e601ce57581d7533d657d27c82612"
+    },
+    {
+      "id": "hairStyle:long",
+      "character": "girl",
+      "file": "girl/hairStyle-long.webp",
+      "bytes": 14778,
+      "sha256": "bdc2a0d017914f39353bc727926fc61a0b3c97b0eda0708010890921f5921d5f"
+    },
+    {
+      "id": "hairStyle:twin-tail",
+      "character": "girl",
+      "file": "girl/hairStyle-twin-tail.webp",
+      "bytes": 18692,
+      "sha256": "6eca3af371c7df541f9fd7b986e3c5d131dd86259db4b7fc98abcb78cb3aceec"
+    },
+    {
+      "id": "hairStyle:half-up",
+      "character": "girl",
+      "file": "girl/hairStyle-half-up.webp",
+      "bytes": 16024,
+      "sha256": "14e73d62cbcf501018c7917711eef73409ab32ec233b5ff5e19d0bde86d7b029"
+    },
+    {
+      "id": "hairTone:original",
+      "character": "girl",
+      "file": "girl/hairTone-original.webp",
+      "bytes": 13428,
+      "sha256": "b402e0496c0d60348a0cf12ba8dc984f270fca87d5a99d5f85e3403cb15825f8"
+    },
+    {
+      "id": "hairTone:black",
+      "character": "girl",
+      "file": "girl/hairTone-black.webp",
+      "bytes": 12990,
+      "sha256": "bd1dcac0902d24ffbfdb6a2e48044b0cdad46f9754a72ff87511a931d908da88"
+    },
+    {
+      "id": "hairTone:chestnut",
+      "character": "girl",
+      "file": "girl/hairTone-chestnut.webp",
+      "bytes": 15490,
+      "sha256": "eb95b05f8b1695c95c3ccfeb2c77621f42edf4f7f8f037633d939d240b7c39b8"
+    },
+    {
+      "id": "hairTone:chocolate",
+      "character": "girl",
+      "file": "girl/hairTone-chocolate.webp",
+      "bytes": 14156,
+      "sha256": "b2839032f60e2472efcb14b29abdaebb6f3d8bcd088aa124e134c0a7884e48d0"
+    },
+    {
+      "id": "hairTone:copper",
+      "character": "girl",
+      "file": "girl/hairTone-copper.webp",
+      "bytes": 17286,
+      "sha256": "3bc1b0346cd67a737be6c9746aa4579018ee82ba1d4ed5b8aeaf12a2011d3c4c"
+    },
+    {
+      "id": "hairTone:blonde",
+      "character": "girl",
+      "file": "girl/hairTone-blonde.webp",
+      "bytes": 18208,
+      "sha256": "d374ccdb887196c2a2379dc056ee37215870d5c4662e290c0bcc1ae2995298dd"
+    },
+    {
+      "id": "hairTone:platinum",
+      "character": "girl",
+      "file": "girl/hairTone-platinum.webp",
+      "bytes": 17234,
+      "sha256": "ac8b459fde03af5cbaca0c23034e2fc215f1a75388583190b7c3acc2351d2371"
+    },
+    {
+      "id": "hairTone:rose",
+      "character": "girl",
+      "file": "girl/hairTone-rose.webp",
+      "bytes": 17026,
+      "sha256": "6ab4b823dd4376062fa6ab5f383bfb4eb7095c82e27eafb3e22565725f881c88"
+    },
+    {
+      "id": "hairTone:lavender",
+      "character": "girl",
+      "file": "girl/hairTone-lavender.webp",
+      "bytes": 17252,
+      "sha256": "75c72a6d09099b457beb997f47657d2797760cb6b81eaad26cd4c53ccb81b8e6"
+    },
+    {
+      "id": "hairTone:blue",
+      "character": "girl",
+      "file": "girl/hairTone-blue.webp",
+      "bytes": 17188,
+      "sha256": "860f6dbdd72161762d07895f0caaf7cbe7e81573b0fc95420b5a6969839deac3"
+    },
+    {
+      "id": "hairTone:mint",
+      "character": "girl",
+      "file": "girl/hairTone-mint.webp",
+      "bytes": 17388,
+      "sha256": "a1450772a6d6b3a2ec776e8573a83b5b631dd4a9008649278f3f7e6b2b57c712"
+    },
+    {
+      "id": "hairTone:silver",
+      "character": "girl",
+      "file": "girl/hairTone-silver.webp",
+      "bytes": 16928,
+      "sha256": "80a9ff300847b495eb69d1d3a1c73d89f0172f722f477a4402e90ced41c7d9fd"
+    },
+    {
+      "id": "pose:idle",
+      "character": "girl",
+      "file": "girl/pose-idle.webp",
+      "bytes": 11016,
+      "sha256": "7d131957a14ef8b12473d06ad522e7f52d06db2ff9de0469db91404ddfc4fed4"
+    },
+    {
+      "id": "pose:tilt",
+      "character": "girl",
+      "file": "girl/pose-tilt.webp",
+      "bytes": 11118,
+      "sha256": "42ef888d026168f9a996bbeabf5e964afc48ea0b8b537f61bfff4e0b1c709659"
+    },
+    {
+      "id": "pose:wave",
+      "character": "girl",
+      "file": "girl/pose-wave.webp",
+      "bytes": 11990,
+      "sha256": "a03d0976a12a4a9dc0a4b391263e4bd0be9c893713152bd78f403d10823ee341"
+    },
+    {
+      "id": "pose:cheer",
+      "character": "girl",
+      "file": "girl/pose-cheer.webp",
+      "bytes": 13022,
+      "sha256": "41ddba38b56a8511f5f626dfbc7543d20357ed35f6aa3646ce75adc58b823a69"
+    },
+    {
+      "id": "pose:think",
+      "character": "girl",
+      "file": "girl/pose-think.webp",
+      "bytes": 10692,
+      "sha256": "1af181ae76514c397b8655a0407add1c00c26fbc2b603690cc9d5c732235279e"
+    },
+    {
+      "id": "pose:heart",
+      "character": "girl",
+      "file": "girl/pose-heart.webp",
+      "bytes": 10438,
+      "sha256": "06dfa8cbea656edb5ae4ccad0d4057639d7273b158260ae7281eedd02d249f23"
+    },
+    {
+      "id": "top:plain-top",
+      "character": "girl",
+      "file": "girl/top-plain-top.webp",
+      "bytes": 15874,
+      "sha256": "831ef3bc2b90179c69b2eb89989d19f6adfa115e1f69a55e72ca78b68258ec86"
+    },
+    {
+      "id": "top:jacket-sunshine",
+      "character": "girl",
+      "file": "girl/top-jacket-sunshine.webp",
+      "bytes": 17774,
+      "sha256": "1184da4bd953d3b5e8899710c266e07007d6479c2e1172cdd16400763f39a1bf"
+    },
+    {
+      "id": "top:jacket-lavender",
+      "character": "girl",
+      "file": "girl/top-jacket-lavender.webp",
+      "bytes": 16520,
+      "sha256": "0c8cba5c30c72cc6aca54a82da1d67a778b7b2e2ab21c8b732b4159c86f0ef61"
+    },
+    {
+      "id": "top:jacket-navy",
+      "character": "girl",
+      "file": "girl/top-jacket-navy.webp",
+      "bytes": 15936,
+      "sha256": "3a69b311f2ce03cd6c12875fa692f7b8f46c70ea4ffa8f84f3f7fc03ef6ee7c5"
+    },
+    {
+      "id": "top:jacket-mint",
+      "character": "girl",
+      "file": "girl/top-jacket-mint.webp",
+      "bytes": 16690,
+      "sha256": "b07d4c232c6bded900dc1e0fd52ebc73f510ab54aa59a208b822053fb494b18e"
+    },
+    {
+      "id": "top:jacket-rose",
+      "character": "girl",
+      "file": "girl/top-jacket-rose.webp",
+      "bytes": 16564,
+      "sha256": "26c51988cbef2107ce79d19608e774eaa5ec0273b423a7545227ba7f8acd8625"
+    },
+    {
+      "id": "top:jacket-cream",
+      "character": "girl",
+      "file": "girl/top-jacket-cream.webp",
+      "bytes": 16880,
+      "sha256": "8dafb7cdf00d6286a25c4b6858c2d0e74db6eba476ecc88e4ddc2df1f6d3ae78"
+    },
+    {
+      "id": "bottom:plain-bottom",
+      "character": "girl",
+      "file": "girl/bottom-plain-bottom.webp",
+      "bytes": 16472,
+      "sha256": "ae6bf23a550400b8783c62f24a8571898e1804aa967cdfa842c859af0b91a8ed"
+    },
+    {
+      "id": "bottom:pleated-lilac",
+      "character": "girl",
+      "file": "girl/bottom-pleated-lilac.webp",
+      "bytes": 16646,
+      "sha256": "cc1f1579eb99195fb8a7af3cf409a22c441090ac2cd07fe18219c7608fd17d8c"
+    },
+    {
+      "id": "bottom:pleated-navy",
+      "character": "girl",
+      "file": "girl/bottom-pleated-navy.webp",
+      "bytes": 15896,
+      "sha256": "a9dff6341148be8d8fa1885f58769ed30f8e5421251e1acff3edc42e3b04f61b"
+    },
+    {
+      "id": "bottom:pleated-cream",
+      "character": "girl",
+      "file": "girl/bottom-pleated-cream.webp",
+      "bytes": 16986,
+      "sha256": "c63ccbe5f0039baa9a9b0cd3a2a4746d196bf16c417a34e86d782f5ef71e906c"
+    },
+    {
+      "id": "bottom:pleated-mint",
+      "character": "girl",
+      "file": "girl/bottom-pleated-mint.webp",
+      "bytes": 16680,
+      "sha256": "d76bf6b12087487f4be397047a36b833ee28376f35ef72007fa59952589c4b41"
+    },
+    {
+      "id": "shoes:plain-shoes",
+      "character": "girl",
+      "file": "girl/shoes-plain-shoes.webp",
+      "bytes": 10336,
+      "sha256": "9d33d425545af35d198324a1e6600981d9973d77f6d80e5541ec1302e20b8f90"
+    },
+    {
+      "id": "shoes:sneakers-pink",
+      "character": "girl",
+      "file": "girl/shoes-sneakers-pink.webp",
+      "bytes": 10546,
+      "sha256": "2ebc75c8e64f4d960c77b5297e1ae3854036ffc567e4e2311c23b162067dfd00"
+    },
+    {
+      "id": "shoes:sneakers-white",
+      "character": "girl",
+      "file": "girl/shoes-sneakers-white.webp",
+      "bytes": 10644,
+      "sha256": "5e68a4a27ea93dfe464baf3912532f7adfdc6bc231c51fc2cbf78a609550e3d2"
+    },
+    {
+      "id": "shoes:sneakers-blue",
+      "character": "girl",
+      "file": "girl/shoes-sneakers-blue.webp",
+      "bytes": 10246,
+      "sha256": "7f3e5f868240d902e5173129595f01609a3c74a48fbbb4a8b498a5971bbd920e"
+    },
+    {
+      "id": "shoes:sneakers-lavender",
+      "character": "girl",
+      "file": "girl/shoes-sneakers-lavender.webp",
+      "bytes": 10406,
+      "sha256": "c826b695d75535144b3643fd5d45ef42ee03ec62187ef3c64859a6e9b733b5cd"
+    },
+    {
+      "id": "accessory:none",
+      "character": "girl",
+      "file": "girl/accessory-none.webp",
+      "bytes": 13206,
+      "sha256": "336b7010f4c188e844f63a339b5b66e077267b6ba967699bedbabc9db769414a"
+    },
+    {
+      "id": "accessory:glasses-round",
+      "character": "girl",
+      "file": "girl/accessory-glasses-round.webp",
+      "bytes": 13912,
+      "sha256": "8f03da7d130639a33231b3dbc72a4538534e756e0004b7022dcb7f99d90c992a"
+    },
+    {
+      "id": "accessory:star-clip",
+      "character": "girl",
+      "file": "girl/accessory-star-clip.webp",
+      "bytes": 13570,
+      "sha256": "76f5ee0e3b14db3ee6b8294c97133475fbaf924d69fd3eeb85e4eb17ffc99321"
+    },
+    {
+      "id": "accessory:headphones",
+      "character": "girl",
+      "file": "girl/accessory-headphones.webp",
+      "bytes": 14602,
+      "sha256": "7a2bdeb40981def5bcf0a18727947fc5468ddfb930a54ef9fb75bfa894e7ff2f"
+    },
+    {
+      "id": "top:hanbok-ivory",
+      "character": "girl",
+      "file": "girl/top-hanbok-ivory.webp",
+      "bytes": 16256,
+      "sha256": "3a0c80ac790532ffb41e7d74ee4b95059d44ea4ddc8fb434e3303a2b50ee651d"
+    },
+    {
+      "id": "top:hanbok-sky",
+      "character": "girl",
+      "file": "girl/top-hanbok-sky.webp",
+      "bytes": 16374,
+      "sha256": "b026fadb20570a3b787e1258f716edcc8bab3602b90e6156fbc34a6d85f2730a"
+    },
+    {
+      "id": "top:hanbok-peach",
+      "character": "girl",
+      "file": "girl/top-hanbok-peach.webp",
+      "bytes": 16080,
+      "sha256": "0c7dd376235167e4329a20d5c3daa6dba3b18b21f9fc3ae950a26e522095dc02"
+    },
+    {
+      "id": "top:official-navy",
+      "character": "girl",
+      "file": "girl/top-official-navy.webp",
+      "bytes": 11018,
+      "sha256": "81248b6b0d2c5cd1cef68176d384d8196aabb754ccd8db6d311ba515193f2f98"
+    },
+    {
+      "id": "top:official-red",
+      "character": "girl",
+      "file": "girl/top-official-red.webp",
+      "bytes": 11690,
+      "sha256": "befee4b62368571cfe0ec864ea43fa59f11254879f56193d1f11811a20e8a49d"
+    },
+    {
+      "id": "top:official-black",
+      "character": "girl",
+      "file": "girl/top-official-black.webp",
+      "bytes": 10630,
+      "sha256": "dba3d002cb7de6587df4283bf1005b6be07df145dbed217fd2962f68b4037237"
+    },
+    {
+      "id": "top:summer-white",
+      "character": "girl",
+      "file": "girl/top-summer-white.webp",
+      "bytes": 14602,
+      "sha256": "5ea1fba42081ffc153415c2476c4a4e6d4130e7d2e799b866d40713fcc8692c8"
+    },
+    {
+      "id": "top:summer-navy",
+      "character": "girl",
+      "file": "girl/top-summer-navy.webp",
+      "bytes": 13064,
+      "sha256": "60398c048d776100835e4a8cbfe459ae289d39ac43fed05883c5514abcd8430f"
+    },
+    {
+      "id": "bottom:chima-rose",
+      "character": "girl",
+      "file": "girl/bottom-chima-rose.webp",
+      "bytes": 17782,
+      "sha256": "e1d8e792c726033bd010a172e40e9dbc1c3240de2c68203b5895d650c2cc54f0"
+    },
+    {
+      "id": "bottom:chima-navy",
+      "character": "girl",
+      "file": "girl/bottom-chima-navy.webp",
+      "bytes": 16930,
+      "sha256": "60914ae6a03238197a128e0ba0034e57a3cb9aeec256a7dd340d06005c7d0417"
+    },
+    {
+      "id": "bottom:chima-jade",
+      "character": "girl",
+      "file": "girl/bottom-chima-jade.webp",
+      "bytes": 17736,
+      "sha256": "c4f50f6ba79073eac0a7d1fb65f8ef0ecff465d183976dc5eac16bcd9b119909"
+    },
+    {
+      "id": "bottom:summer-shorts",
+      "character": "girl",
+      "file": "girl/bottom-summer-shorts.webp",
+      "bytes": 13590,
+      "sha256": "a4a6e0bf42e0dc19ef4f0e4f2cac821a3e43655ddcb8a717af06811dac0e7f7b"
+    },
+    {
+      "id": "accessory:official-samo",
+      "character": "girl",
+      "file": "girl/accessory-official-samo.webp",
+      "bytes": 13484,
+      "sha256": "87d5ff48ffee6f0dfda93b55dfb23b7a0376fc34de21d796651851cf4bfec7ea"
+    },
+    {
+      "id": "accessory:official-gat",
+      "character": "girl",
+      "file": "girl/accessory-official-gat.webp",
+      "bytes": 14186,
+      "sha256": "49760b24fe0ef46b0583035044d5d774d03f11778d474bab0a24c74d5fcd9f47"
+    },
+    {
+      "id": "character:boy",
+      "character": "boy",
+      "file": "boy/character-boy.webp",
+      "bytes": 10936,
+      "sha256": "e876359e53700ca55790274b928a8c537566418f299f06d3294efb730ea79cdd"
+    },
+    {
+      "id": "skinTone:original",
+      "character": "boy",
+      "file": "boy/skinTone-original.webp",
+      "bytes": 15360,
+      "sha256": "bfce91960bc5a861d50e8cb5e4011235215dd3e29a49f584e6e06d51b73efd48"
+    },
+    {
+      "id": "skinTone:fair",
+      "character": "boy",
+      "file": "boy/skinTone-fair.webp",
+      "bytes": 14982,
+      "sha256": "5ac698cc519eab5cf2e2770f77e616ce0bf2a8f607f89da5f2e355297949537b"
+    },
+    {
+      "id": "skinTone:peach",
+      "character": "boy",
+      "file": "boy/skinTone-peach.webp",
+      "bytes": 15252,
+      "sha256": "29b08888c2018cd549714cc32774b136f3095949a4752545c57969608f8e4fe7"
+    },
+    {
+      "id": "skinTone:warm",
+      "character": "boy",
+      "file": "boy/skinTone-warm.webp",
+      "bytes": 15222,
+      "sha256": "ac1d3f1addc0448e9d0e032409f23be2d8df24ed59667e78eccb49e0a2bf3dd2"
+    },
+    {
+      "id": "skinTone:honey",
+      "character": "boy",
+      "file": "boy/skinTone-honey.webp",
+      "bytes": 15070,
+      "sha256": "9bbbe67409e0f63b7790db0380bf1afd0d1cb5c1c186cfbb0bc2681b9f29e4cb"
+    },
+    {
+      "id": "skinTone:tan",
+      "character": "boy",
+      "file": "boy/skinTone-tan.webp",
+      "bytes": 14900,
+      "sha256": "4be4bb13d89f6fb5a63507f8414b8fde4eb91dfeb2053e473649ba5d7780b142"
+    },
+    {
+      "id": "skinTone:brown",
+      "character": "boy",
+      "file": "boy/skinTone-brown.webp",
+      "bytes": 14538,
+      "sha256": "2d89c2725c890ab4d44f275aafbfd9e702d8775a04ef0efb625f52b54ad4a572"
+    },
+    {
+      "id": "skinTone:deep",
+      "character": "boy",
+      "file": "boy/skinTone-deep.webp",
+      "bytes": 13864,
+      "sha256": "2faa81a5b0a11ff935e21066370e4f7756707a2570f24c0b9ca07b917b5e93b0"
+    },
+    {
+      "id": "faceShape:natural",
+      "character": "boy",
+      "file": "boy/faceShape-natural.webp",
+      "bytes": 15360,
+      "sha256": "bfce91960bc5a861d50e8cb5e4011235215dd3e29a49f584e6e06d51b73efd48"
+    },
+    {
+      "id": "faceShape:round",
+      "character": "boy",
+      "file": "boy/faceShape-round.webp",
+      "bytes": 15488,
+      "sha256": "2006b422b20a7bd10679b026327e8a2f024bb1e37d983dd56ddcecfdc17eda8d"
+    },
+    {
+      "id": "faceShape:slim",
+      "character": "boy",
+      "file": "boy/faceShape-slim.webp",
+      "bytes": 15594,
+      "sha256": "9483456f0db40b50c9e619f73183c63e189a5a95cfd0da7c03d0644656c7be50"
+    },
+    {
+      "id": "expression:natural",
+      "character": "boy",
+      "file": "boy/expression-natural.webp",
+      "bytes": 15238,
+      "sha256": "07088c8ef83eea3b392829331ba72e719de9f1d885e55fda31656f3a6d02f159"
+    },
+    {
+      "id": "expression:calm",
+      "character": "boy",
+      "file": "boy/expression-calm.webp",
+      "bytes": 15348,
+      "sha256": "a7a6f4c25c5df7f11f432e4ef394a0bce835c0a0e044567075edea73f1de35fa"
+    },
+    {
+      "id": "expression:smile",
+      "character": "boy",
+      "file": "boy/expression-smile.webp",
+      "bytes": 15434,
+      "sha256": "15973a430fc656ccbf2daee4c0026176d905738355760bcd671caf8c8ea977e3"
+    },
+    {
+      "id": "expression:curious",
+      "character": "boy",
+      "file": "boy/expression-curious.webp",
+      "bytes": 15190,
+      "sha256": "779a29002a405ddb320fde737d5663640a1ae3088af62d64f48210f7cc8fc7e1"
+    },
+    {
+      "id": "expression:bright",
+      "character": "boy",
+      "file": "boy/expression-bright.webp",
+      "bytes": 15832,
+      "sha256": "f7d14f9543965cbf8f4b15d0f8dae406b7653271d1720956a9177766037222d9"
+    },
+    {
+      "id": "expression:determined",
+      "character": "boy",
+      "file": "boy/expression-determined.webp",
+      "bytes": 15534,
+      "sha256": "3435b036e688f2a8dffb68a857ba992cd00a579dca3d502cdae8dda95d7d365f"
+    },
+    {
+      "id": "hairStyle:curtain",
+      "character": "boy",
+      "file": "boy/hairStyle-curtain.webp",
+      "bytes": 13010,
+      "sha256": "e027b4e4f7826ce00e7fff42fb94c45e28c94e6445f2965efa39f217ca5724a8"
+    },
+    {
+      "id": "hairStyle:volume",
+      "character": "boy",
+      "file": "boy/hairStyle-volume.webp",
+      "bytes": 14894,
+      "sha256": "7707680bdc30a55704f619e8a0ba8ff00e376714c8b92decc0bf4abd8d88f0db"
+    },
+    {
+      "id": "hairStyle:wave",
+      "character": "boy",
+      "file": "boy/hairStyle-wave.webp",
+      "bytes": 14754,
+      "sha256": "19a481a45e86300c12f33e008741cbd9516e601ce57581d7533d657d27c82612"
+    },
+    {
+      "id": "hairStyle:crop",
+      "character": "boy",
+      "file": "boy/hairStyle-crop.webp",
+      "bytes": 13542,
+      "sha256": "41a87eea457c657d7d2618f1a1a7f73bc288f8c5b52231bdf6b20b2e5ee74496"
+    },
+    {
+      "id": "hairStyle:toben",
+      "character": "boy",
+      "file": "boy/hairStyle-toben.webp",
+      "bytes": 13208,
+      "sha256": "d975ec54d3064919a023d64f9a96cddac7a70f7533c4e265b5c0952f9252caac"
+    },
+    {
+      "id": "hairTone:original",
+      "character": "boy",
+      "file": "boy/hairTone-original.webp",
+      "bytes": 13010,
+      "sha256": "e027b4e4f7826ce00e7fff42fb94c45e28c94e6445f2965efa39f217ca5724a8"
+    },
+    {
+      "id": "hairTone:black",
+      "character": "boy",
+      "file": "boy/hairTone-black.webp",
+      "bytes": 12422,
+      "sha256": "53e374e912c83b8925d6727a2b2c9742aba594f78396bf6ef7bcdb6b8a230a5d"
+    },
+    {
+      "id": "hairTone:chestnut",
+      "character": "boy",
+      "file": "boy/hairTone-chestnut.webp",
+      "bytes": 14696,
+      "sha256": "4a416b17f0d0b0d6b2725c8066ee49811d19ea5e393b9ef2cc913dab0ef0cb6e"
+    },
+    {
+      "id": "hairTone:chocolate",
+      "character": "boy",
+      "file": "boy/hairTone-chocolate.webp",
+      "bytes": 13466,
+      "sha256": "6da4500013c344f6cd2758304e5f9dd2e736299c0b172c47573736ebe080e1c9"
+    },
+    {
+      "id": "hairTone:copper",
+      "character": "boy",
+      "file": "boy/hairTone-copper.webp",
+      "bytes": 16276,
+      "sha256": "dcdb56c2837bfe7500a4fccddf2a54db9d2eed0e21c0b7edfc95b939b4c1c8fe"
+    },
+    {
+      "id": "hairTone:blonde",
+      "character": "boy",
+      "file": "boy/hairTone-blonde.webp",
+      "bytes": 17290,
+      "sha256": "e00fc52c66c4af7410e57abcb25cf5df55deada5418a30fc852bd69dcc9e21bc"
+    },
+    {
+      "id": "hairTone:platinum",
+      "character": "boy",
+      "file": "boy/hairTone-platinum.webp",
+      "bytes": 16750,
+      "sha256": "5919a5361da97e0b5968766c2d61128a93d786d7870364441f8643fc9409e3af"
+    },
+    {
+      "id": "hairTone:rose",
+      "character": "boy",
+      "file": "boy/hairTone-rose.webp",
+      "bytes": 16168,
+      "sha256": "669cc3e4b5fc5334845179dc2216c4cca51c42c2f8a8c810bc1eaf8b1e7d1dc4"
+    },
+    {
+      "id": "hairTone:lavender",
+      "character": "boy",
+      "file": "boy/hairTone-lavender.webp",
+      "bytes": 16324,
+      "sha256": "ac50deb0472a8518cffa5c81d390f8f031733d4818069edcd9222ce45a146cc7"
+    },
+    {
+      "id": "hairTone:blue",
+      "character": "boy",
+      "file": "boy/hairTone-blue.webp",
+      "bytes": 15992,
+      "sha256": "ab33bc988376567f1c1da2b12685c4fee0c030ec3642d59c5cbf7d9df2f88991"
+    },
+    {
+      "id": "hairTone:mint",
+      "character": "boy",
+      "file": "boy/hairTone-mint.webp",
+      "bytes": 16466,
+      "sha256": "3c6db2733068b02e41e2ced4695bead3283dce2881ba8a341af7fd423f78e883"
+    },
+    {
+      "id": "hairTone:silver",
+      "character": "boy",
+      "file": "boy/hairTone-silver.webp",
+      "bytes": 16204,
+      "sha256": "3116fad35dcc31b24970779efe5c2b3c77c8af478508528b0fd4001079adf8cb"
+    },
+    {
+      "id": "pose:idle",
+      "character": "boy",
+      "file": "boy/pose-idle.webp",
+      "bytes": 10906,
+      "sha256": "84c8e25ad6ae8c2909c77d23d20a86a1a92b07732fcef6a026035d1ffd913a66"
+    },
+    {
+      "id": "pose:tilt",
+      "character": "boy",
+      "file": "boy/pose-tilt.webp",
+      "bytes": 10916,
+      "sha256": "1a02f1db3d89ed60179ad87f5ba5085f8317d702353c67ef18979dc35c3b2c77"
+    },
+    {
+      "id": "pose:wave",
+      "character": "boy",
+      "file": "boy/pose-wave.webp",
+      "bytes": 11882,
+      "sha256": "c76c718ee7ac1bbe7b59f5fff54953d280ff63aef65520e2288854c9c031df1a"
+    },
+    {
+      "id": "pose:cheer",
+      "character": "boy",
+      "file": "boy/pose-cheer.webp",
+      "bytes": 12872,
+      "sha256": "2ea622fc2a40fc06225aeacd0de0c2359d3d57e36ba7aa4a90ac5f90bb00b2f3"
+    },
+    {
+      "id": "pose:think",
+      "character": "boy",
+      "file": "boy/pose-think.webp",
+      "bytes": 10656,
+      "sha256": "e52e82bce6ef2d0044e6c42cfd06930e3685597dd1f33e6cdc48b7234c5c90fc"
+    },
+    {
+      "id": "pose:heart",
+      "character": "boy",
+      "file": "boy/pose-heart.webp",
+      "bytes": 10368,
+      "sha256": "eabccb4b88c35ce9f4b39a3246ff54c33f17f4e8acd8819c14bd9aa2c7b6c9db"
+    },
+    {
+      "id": "top:plain-top",
+      "character": "boy",
+      "file": "boy/top-plain-top.webp",
+      "bytes": 15490,
+      "sha256": "2c6aca5a285c7cb701bdf1f2a592f192281cd317a5b1c2c1d19cc309ee5650f1"
+    },
+    {
+      "id": "top:jacket-sunshine",
+      "character": "boy",
+      "file": "boy/top-jacket-sunshine.webp",
+      "bytes": 17208,
+      "sha256": "65c9d9fddfd8e5b13ba20f37ac50c7fcc193733ac1e1e9beb480a056875bfd0e"
+    },
+    {
+      "id": "top:jacket-lavender",
+      "character": "boy",
+      "file": "boy/top-jacket-lavender.webp",
+      "bytes": 16172,
+      "sha256": "b574ece782f5484d2bf1346544c641c67b382a67e60d7ecc6c86023c4d8d4630"
+    },
+    {
+      "id": "top:jacket-navy",
+      "character": "boy",
+      "file": "boy/top-jacket-navy.webp",
+      "bytes": 15536,
+      "sha256": "051f852a08c5377b0fb8c08982d81a9e7a0c26dc1eab86da975a1016ccc9082c"
+    },
+    {
+      "id": "top:jacket-mint",
+      "character": "boy",
+      "file": "boy/top-jacket-mint.webp",
+      "bytes": 16228,
+      "sha256": "cd0906070c6eaafaef225c23503a2f189c5f2bdf5378f4a05739086a1e7be157"
+    },
+    {
+      "id": "top:jacket-rose",
+      "character": "boy",
+      "file": "boy/top-jacket-rose.webp",
+      "bytes": 16150,
+      "sha256": "056802f5867bbfe15dfbe8f5ca8e2d3f38d44764be3333431e5f4ed38fc26734"
+    },
+    {
+      "id": "top:jacket-cream",
+      "character": "boy",
+      "file": "boy/top-jacket-cream.webp",
+      "bytes": 16536,
+      "sha256": "298cf053cb6f22dad0eb608f90cce3e9c7a3afa52a60c5159011bc0ae0f913d5"
+    },
+    {
+      "id": "bottom:plain-bottom",
+      "character": "boy",
+      "file": "boy/bottom-plain-bottom.webp",
+      "bytes": 16472,
+      "sha256": "ae6bf23a550400b8783c62f24a8571898e1804aa967cdfa842c859af0b91a8ed"
+    },
+    {
+      "id": "bottom:pleated-lilac",
+      "character": "boy",
+      "file": "boy/bottom-pleated-lilac.webp",
+      "bytes": 16646,
+      "sha256": "cc1f1579eb99195fb8a7af3cf409a22c441090ac2cd07fe18219c7608fd17d8c"
+    },
+    {
+      "id": "bottom:pleated-navy",
+      "character": "boy",
+      "file": "boy/bottom-pleated-navy.webp",
+      "bytes": 15896,
+      "sha256": "a9dff6341148be8d8fa1885f58769ed30f8e5421251e1acff3edc42e3b04f61b"
+    },
+    {
+      "id": "bottom:pleated-cream",
+      "character": "boy",
+      "file": "boy/bottom-pleated-cream.webp",
+      "bytes": 16986,
+      "sha256": "c63ccbe5f0039baa9a9b0cd3a2a4746d196bf16c417a34e86d782f5ef71e906c"
+    },
+    {
+      "id": "bottom:pleated-mint",
+      "character": "boy",
+      "file": "boy/bottom-pleated-mint.webp",
+      "bytes": 16680,
+      "sha256": "d76bf6b12087487f4be397047a36b833ee28376f35ef72007fa59952589c4b41"
+    },
+    {
+      "id": "shoes:plain-shoes",
+      "character": "boy",
+      "file": "boy/shoes-plain-shoes.webp",
+      "bytes": 10336,
+      "sha256": "9d33d425545af35d198324a1e6600981d9973d77f6d80e5541ec1302e20b8f90"
+    },
+    {
+      "id": "shoes:sneakers-pink",
+      "character": "boy",
+      "file": "boy/shoes-sneakers-pink.webp",
+      "bytes": 10546,
+      "sha256": "2ebc75c8e64f4d960c77b5297e1ae3854036ffc567e4e2311c23b162067dfd00"
+    },
+    {
+      "id": "shoes:sneakers-white",
+      "character": "boy",
+      "file": "boy/shoes-sneakers-white.webp",
+      "bytes": 10644,
+      "sha256": "5e68a4a27ea93dfe464baf3912532f7adfdc6bc231c51fc2cbf78a609550e3d2"
+    },
+    {
+      "id": "shoes:sneakers-blue",
+      "character": "boy",
+      "file": "boy/shoes-sneakers-blue.webp",
+      "bytes": 10246,
+      "sha256": "7f3e5f868240d902e5173129595f01609a3c74a48fbbb4a8b498a5971bbd920e"
+    },
+    {
+      "id": "shoes:sneakers-lavender",
+      "character": "boy",
+      "file": "boy/shoes-sneakers-lavender.webp",
+      "bytes": 10406,
+      "sha256": "c826b695d75535144b3643fd5d45ef42ee03ec62187ef3c64859a6e9b733b5cd"
+    },
+    {
+      "id": "accessory:none",
+      "character": "boy",
+      "file": "boy/accessory-none.webp",
+      "bytes": 12632,
+      "sha256": "067add4e5b0a5b76b765e7ac11f0d83224f5d8c203a11a77b7b3a37bf31e4f63"
+    },
+    {
+      "id": "accessory:glasses-round",
+      "character": "boy",
+      "file": "boy/accessory-glasses-round.webp",
+      "bytes": 13622,
+      "sha256": "4388081f77388bb6e437cf60c2ffe655aa7db5ad35f6ae6074fad4d541e28782"
+    },
+    {
+      "id": "accessory:star-clip",
+      "character": "boy",
+      "file": "boy/accessory-star-clip.webp",
+      "bytes": 12944,
+      "sha256": "354a9bdcf029ce4a4b76b7f4f1bccbecef9ba852293b2cd42b51d81b3086ea90"
+    },
+    {
+      "id": "accessory:headphones",
+      "character": "boy",
+      "file": "boy/accessory-headphones.webp",
+      "bytes": 13926,
+      "sha256": "09087ed3e57dbeaa57b8bb4390fc5c58bc93ca15c70e8f676f7615f1637a8f86"
+    },
+    {
+      "id": "top:hanbok-ivory",
+      "character": "boy",
+      "file": "boy/top-hanbok-ivory.webp",
+      "bytes": 16708,
+      "sha256": "e76e4149ed179742657d4dab8b13be36fd869092c1aeb087b3e47a8c89f43acb"
+    },
+    {
+      "id": "top:hanbok-sky",
+      "character": "boy",
+      "file": "boy/top-hanbok-sky.webp",
+      "bytes": 16730,
+      "sha256": "af656577709792a4038c50f3c0ece6b318c15d2b1690a1f4cdbfc31e631b8803"
+    },
+    {
+      "id": "top:hanbok-peach",
+      "character": "boy",
+      "file": "boy/top-hanbok-peach.webp",
+      "bytes": 16818,
+      "sha256": "6287ca29f9a7e889ebed55f9b91792c60e70a9dd95a86f38a447f51cc74166a4"
+    },
+    {
+      "id": "top:official-navy",
+      "character": "boy",
+      "file": "boy/top-official-navy.webp",
+      "bytes": 10850,
+      "sha256": "ac032b5087ae5648cc034340f85378076ebc37fd70694fca5a072425f708436f"
+    },
+    {
+      "id": "top:official-red",
+      "character": "boy",
+      "file": "boy/top-official-red.webp",
+      "bytes": 11576,
+      "sha256": "61dea834d7e731b087f1428d6a729c737b0fc0f1771f1d332040a0e0c8991109"
+    },
+    {
+      "id": "top:official-black",
+      "character": "boy",
+      "file": "boy/top-official-black.webp",
+      "bytes": 10520,
+      "sha256": "6c472e859f41c402f77652b82c765babd4b1352d543ff69d1d8f97e766e09ca5"
+    },
+    {
+      "id": "top:summer-white",
+      "character": "boy",
+      "file": "boy/top-summer-white.webp",
+      "bytes": 14290,
+      "sha256": "1c8c22e0920486842a5dcb661d308f552bc01ef6f0fde21cface3cefac7be34e"
+    },
+    {
+      "id": "top:summer-navy",
+      "character": "boy",
+      "file": "boy/top-summer-navy.webp",
+      "bytes": 12714,
+      "sha256": "e46cc630d1620e7f775e08ebdca7e0f9e03bf6ff1fca9249c192c336da0edb63"
+    },
+    {
+      "id": "bottom:baji-navy",
+      "character": "boy",
+      "file": "boy/bottom-baji-navy.webp",
+      "bytes": 16544,
+      "sha256": "48c604fa495906907fe2dfeabd98ac7f6f0fa32742e9651a83c0d1b59f73b21b"
+    },
+    {
+      "id": "bottom:baji-cream",
+      "character": "boy",
+      "file": "boy/bottom-baji-cream.webp",
+      "bytes": 18414,
+      "sha256": "f5082d2290731d610285450a32501f6dd3cd7c155d866e214189dc5200fd3d56"
+    },
+    {
+      "id": "bottom:baji-charcoal",
+      "character": "boy",
+      "file": "boy/bottom-baji-charcoal.webp",
+      "bytes": 16194,
+      "sha256": "f7c5db4c913f8b92db54158ec6a5061cb03ff6841663b7bb5643fb782bfe5f3a"
+    },
+    {
+      "id": "bottom:summer-shorts",
+      "character": "boy",
+      "file": "boy/bottom-summer-shorts.webp",
+      "bytes": 13540,
+      "sha256": "bb732f7d3aa8f4a795c7f39e1a945d4d01703ffdd7e24e23f504ae2a727f291f"
+    },
+    {
+      "id": "accessory:official-samo",
+      "character": "boy",
+      "file": "boy/accessory-official-samo.webp",
+      "bytes": 12542,
+      "sha256": "1688932b3ba80e7b76427c2df601c9976786a3486b011c9a4cd61bf7b806d6b9"
+    },
+    {
+      "id": "accessory:official-gat",
+      "character": "boy",
+      "file": "boy/accessory-official-gat.webp",
+      "bytes": 13542,
+      "sha256": "3a90fb127656a3a46bc62f05b66338bcc55cc11314c817fdb47f7ae26ec35a85"
+    }
+  ]
+}

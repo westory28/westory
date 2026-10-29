@@ -282,7 +282,7 @@ try {
           .locator(".avatar-pricing-preview img")
           .first()
           .getAttribute("src"),
-        "/avatar/v1/previews-v3/boy/top-official-navy.webp",
+        "/avatar/v2/previews/boy/top-official-navy.webp",
       );
     await page.getByLabel("아이템 검색", { exact: true }).fill("흑색");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 1);

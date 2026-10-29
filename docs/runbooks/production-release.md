@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 원화 기반 2D 아바타 (2026-10-29)
+
+꾸미기는 `public/avatar/v2/`의 원화 레이어·manifest와 Canvas 2D 렌더러를 사용한다. 아래 2026-10-28의 GLB 생성 절차는 구 3D 클라이언트 기록이다. 원본 시트(`assets/avatar-source/v2/`)와 등록표(`scripts/avatar-2d-art-registry.json`)를 수정하면 `node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json` 뒤 `node scripts/render-avatar-item-previews.mjs`를 실행한다. `npm run verify:avatar-previews`와 기본 빌드는 원본·등록표·생성기·레이어·미리보기의 일치와 전체 품목 대응을 검사한다. 그림의 연결·두상 맞춤은 실제 화면에서 별도로 확인한다.
+
+생성된 v2 자산과 원본·등록표를 함께 커밋하고 `output/`의 실험·QA 캡처는 제외한다. v2는 재검증 가능한 캐시를 사용한다. 기존 저장 썸네일은 사용자의 명시적 저장으로 갱신하며, 이 전환은 카탈로그·Functions·rules를 변경하지 않는다. 상세 제작·검증 근거는 [2D 전환 기록](../reviews/avatar-anatomy-20261029.md)을 따른다.
+
 ## 아바타 의상·헤어·미리보기 (2026-10-28)
 
 새 헤어는 `public/avatar/v1/models/hair-v3/`의 정적 GLB를 사용한다. 미리보기는 `node scripts/render-avatar-item-previews.mjs`로 실제 렌더러에서 재생성하며, `npm run build`가 포함한 `verify:avatar-previews`는 모델·렌더러·카탈로그 변경 후 오래된 이미지를 배포하지 못하게 검사한다. 생성된 GLB·WebP·manifest를 소스와 함께 커밋한다. `output/`의 생성 원본·QA 캡처는 일괄 스테이징하지 않는다. 제작·호환성·선택 배포 근거는 [아바타 개편 기록](../reviews/avatar-overhaul-20261028.md)을 따른다.
