@@ -4,7 +4,7 @@ const { createStudentMaintenanceService, withStudentMaintenanceGuard } = require
 
 async function main() {
   let checks = 0;
-  for (const status of ["PENDING", "APPROVED_PENDING_ACCOUNT", "", null, false, "approved"]) {
+  for (const status of ["PENDING", "APPROVED_PENDING_ACCOUNT", "REJECTED", "", null, false, "approved"]) {
     assert.throws(() => assertStudentRegistrationAccess({ role: "student", registrationApprovalStatus: status }, true),
       error => error.details?.reason === "STUDENT_REGISTRATION_APPROVAL_REQUIRED"); checks++;
   }

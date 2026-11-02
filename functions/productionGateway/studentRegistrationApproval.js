@@ -39,7 +39,7 @@ const pathsFor = (semesterId, uid) => {
 const normalizeStudentRegistrationApprovalPayload = (type, payload) => {
   const common = ["semesterId", "expectedSemesterRevision", "studentUid", "expectedProfileVersion", "action"];
   const actionKeys = { APPROVE: ["classId", "expectedClassRevision", "studentNumber", "displayName", "rosterConfirmed"],
-    PREPARE_ACCOUNT: ["expectedEnrollmentId", "expectedEconomyRevision"], FINALIZE: ["expectedEnrollmentId", "expectedAccountRevision"] };
+    REJECT: [], PREPARE_ACCOUNT: ["expectedEnrollmentId", "expectedEconomyRevision"], FINALIZE: ["expectedEnrollmentId", "expectedAccountRevision"] };
   const keys = [...common, ...(actionKeys[payload?.action] || [])];
   if (type !== COMMAND_TYPE || !exact(payload, keys) || !actionKeys[payload.action] || !scopeValid(payload.semesterId) ||
     !id(payload.studentUid) || !integer(payload.expectedSemesterRevision) || !/^[a-f0-9]{64}$/.test(payload.expectedProfileVersion || "")) fail("INPUT_INVALID", undefined, "invalid-argument");
@@ -48,7 +48,7 @@ const normalizeStudentRegistrationApprovalPayload = (type, payload) => {
       typeof payload.studentNumber !== "string" || !/^[1-9]\d{0,5}$/.test(payload.studentNumber) ||
       typeof payload.displayName !== "string" || !payload.displayName.trim() || payload.displayName !== payload.displayName.trim() ||
       payload.displayName.length > 80 || /[\x00-\x1f\x7f]/.test(payload.displayName)) fail("ROSTER_CONFIRMATION_REQUIRED", "명부에서 학급·번호·이름을 확인해 주세요.", "invalid-argument");
-  } else if (!id(payload.expectedEnrollmentId) || !integer(payload.action === "FINALIZE" ? payload.expectedAccountRevision : payload.expectedEconomyRevision)) fail("INPUT_INVALID", undefined, "invalid-argument");
+  } else if (payload.action !== "REJECT" && (!id(payload.expectedEnrollmentId) || !integer(payload.action === "FINALIZE" ? payload.expectedAccountRevision : payload.expectedEconomyRevision))) fail("INPUT_INVALID", undefined, "invalid-argument");
   return Object.fromEntries(keys.map(key => [key, payload[key]]));
 };
 const assertCurrent = (state, semesterId, expectedRevision) => {
@@ -102,15 +102,31 @@ const createStudentRegistrationApprovalAdapter = ({ getAuthUser, wisAdapter = wi
     const { transaction, actor, timestamp, concreteTimestamp, receiptId, commandId } = context;
     const payload = normalizeStudentRegistrationApprovalPayload(context.commandType, context.payload);
     if (!id(actor?.actorUid) || !["teacher", "admin"].includes(actor.actorRole) || actor.actorUid === payload.studentUid) fail("MANAGER_REQUIRED", "교사가 명부를 확인한 뒤 승인할 수 있습니다.", "permission-denied");
-    const authUser = await getAuthUser(payload.studentUid);
-    if (authUser?.uid !== payload.studentUid || authUser.disabled === true || authUser.emailVerified !== true ||
-      !/^[^@\s]+@yongshin-ms\.ms\.kr$/i.test(authUser.email || "")) fail("SCHOOL_ACCOUNT_REQUIRED", "확인된 학교 계정만 승인할 수 있습니다.");
+    // Refusal grants no access and must remain possible for an unverified or
+    // disabled applicant. The school-account fence still covers every approval stage.
+    const authUser = payload.action === "REJECT" ? null : await getAuthUser(payload.studentUid);
+    if (payload.action !== "REJECT" && (authUser?.uid !== payload.studentUid || authUser.disabled === true || authUser.emailVerified !== true ||
+      !/^[^@\s]+@yongshin-ms\.ms\.kr$/i.test(authUser.email || ""))) fail("SCHOOL_ACCOUNT_REQUIRED", "확인된 학교 계정만 승인할 수 있습니다.");
     const paths = pathsFor(payload.semesterId, payload.studentUid);
     const state = await readNamed(transaction, paths, ["user", "identity", "approval", "slot", "manifest", "pointer", "account", "balance", "ranking", "economy", "control", "readiness"]);
     assertCurrent(state, payload.semesterId, payload.expectedSemesterRevision);
-    migrationFence.assertControl(state.control.data);
-    if (!state.user.exists || state.user.data.role !== "student" || String(state.user.data.email || "").toLowerCase() !== authUser.email.toLowerCase()) fail("STUDENT_PROFILE_INVALID");
+    if (payload.action !== "REJECT") migrationFence.assertControl(state.control.data);
+    if (!state.user.exists || state.user.data.role !== "student" || (payload.action !== "REJECT" && String(state.user.data.email || "").toLowerCase() !== authUser.email.toLowerCase())) fail("STUDENT_PROFILE_INVALID");
     if (profileVersion(state.user.data) !== payload.expectedProfileVersion) fail("PROFILE_CHANGED", "학생 신청 정보가 바뀌었습니다. 새로고침 후 다시 확인해 주세요.", "aborted");
+    if (payload.action === "REJECT") {
+      if (state.user.data.registrationApprovalStatus !== "PENDING") fail("NOT_PENDING", "이미 처리된 신청입니다. 승인 목록을 새로고침해 주세요.");
+      if (state.approval.exists || state.slot.exists || state.account.exists || state.balance.exists || state.ranking.exists) fail("EXISTING_ENROLLMENT", "기존 학적 또는 계좌가 있어 신규 신청으로 거부할 수 없습니다.");
+      const existing = await transaction.query("semester_enrollments", { filters: [{ field: "semesterId", operator: "==", value: payload.semesterId }, { field: "studentUid", operator: "==", value: payload.studentUid }], limit: 1 });
+      if (existing.length) fail("EXISTING_ENROLLMENT", "기존 학적은 학생 정보 관리에서 확인해 주세요.");
+      transaction.create(paths.approval, { approvalId: paths.approvalId, schemaVersion: 1, status: "REJECTED", semesterId: payload.semesterId,
+        studentUid: payload.studentUid, submittedProfile: submittedProfile(state.user.data), submittedProfileVersion: payload.expectedProfileVersion,
+        rejectedBy: actor.actorUid, rejectedAt: timestamp, commandId, receiptId });
+      transaction.set(paths.user, { registrationApprovalStatus: "REJECTED", registrationRejectedBy: actor.actorUid,
+        registrationRejectedAt: timestamp, updatedAt: timestamp, updatedBy: actor.actorUid }, { merge: true });
+      return { target: { kind: "student-registration-rejection", id: paths.approvalId, refs: [paths.approval, paths.user] },
+        sourceHash: payload.expectedProfileVersion, result: { studentUid: payload.studentUid, semesterId: payload.semesterId,
+          enrollmentId: "", status: "REJECTED", action: payload.action } };
+    }
     if (payload.action === "APPROVE") {
       if (state.user.data.registrationApprovalStatus !== "PENDING") fail("NOT_PENDING", "이미 처리된 신청입니다. 승인 목록을 새로고침해 주세요.");
       if (state.approval.exists || state.slot.exists || state.account.exists || state.balance.exists || state.ranking.exists) fail("EXISTING_ENROLLMENT", "기존 학적 또는 계좌가 있어 신규 승인으로 덮어쓸 수 없습니다.");

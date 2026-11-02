@@ -8219,3 +8219,6 @@ exports.claimStudentLearningReward = onCall({ region: REGION }, require("./stude
 // notification writers remain outside the deployment targets.
 exports.manageNotificationInbox = onCall({ region: REGION },
   require('./notificationInbox').createNotificationInboxHandler({ db }));
+
+Object.assign(exports, require('./studentRegistrationNotifications')
+  .createStudentRegistrationNotificationTriggers({ db, auth: getAuth() }));

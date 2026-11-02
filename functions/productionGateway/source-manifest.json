@@ -364,8 +364,10 @@
       "sourceFile": "studentRegistrationApproval.js",
       "file": "studentRegistrationApproval.js",
       "originalSha256": "7da71582c196d76351dbc9b8124c8ab4c9507c38bef3c93c03f5018ce4f16c93",
-      "sha256": "ccf949f9f79e0587f1b6c1e4929322d496e09fc632760d519820169cad40380d",
-      "changes": []
+      "sha256": "442b2bda46edc7fb422d3c41d1b818a2c7825edf40a48a861110e025a69c8e5c",
+      "changes": [
+        "2026-11-02: Add manager-only, revision-checked REJECT for pending registration with immutable review and canonical receipt/audit; preserve all approval/account fences and existing enrollment records."
+      ]
     },
     {
       "sourceFile": "studentSemesterReceipt.js",

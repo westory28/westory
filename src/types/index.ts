@@ -238,6 +238,7 @@ export interface PointOrder {
 }
 
 export type WestoryNotificationType =
+  | "student_registration_requested"
   | "history_classroom_assigned"
   | "history_classroom_passed"
   | "history_classroom_failed"

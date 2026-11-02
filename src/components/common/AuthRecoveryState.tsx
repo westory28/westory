@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 
 type AuthRecoveryStateProps = {
   registrationPending?: boolean;
+  registrationRejected?: boolean;
   error: { message: string; retryable: boolean } | null;
   onRetry: () => Promise<void>;
   onRestart: () => Promise<void>;
@@ -9,6 +10,7 @@ type AuthRecoveryStateProps = {
 
 const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
   registrationPending = false,
+  registrationRejected = false,
   error,
   onRetry,
   onRestart,
@@ -49,7 +51,9 @@ const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
       >
         <h1 className="text-xl font-bold text-gray-900">
           {registrationPending
-            ? "등록 승인 대기"
+            ? registrationRejected
+              ? "가입 신청 거부"
+              : "등록 승인 대기"
             : "로그인을 확인하지 못했습니다"}
         </h1>
         <p
@@ -57,7 +61,11 @@ const AuthRecoveryState: React.FC<AuthRecoveryStateProps> = ({
           role={registrationPending && !actionError ? "status" : "alert"}
         >
           {actionError ||
-            (registrationPending ? "선생님의 등록 승인이 필요합니다." : null) ||
+            (registrationPending
+              ? registrationRejected
+                ? "가입 신청이 거부되었습니다. 선생님께 확인해 주세요."
+                : "선생님의 등록 승인이 필요합니다."
+              : null) ||
             error?.message ||
             "연결 상태를 확인한 뒤 다시 시도해 주세요."}
         </p>

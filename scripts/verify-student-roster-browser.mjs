@@ -35,7 +35,8 @@ if(new URLSearchParams(location.search).has('legacy321'))data.splice(0,data.leng
  {id:'qa-undefined',studentName:'미승인미정',registrationApprovalStatus:undefined}
 ].map((student,index)=>({role:'student',grade:'3',class:'1',number:String(index+28),email:student.id+'@example.test',...student})));
 export const events=[];
-window.rosterQa={data,events,fail:false};
+if(new URLSearchParams(location.search).has('registration'))data.push({id:'qa-pending',role:'student',grade:'3',class:'1',number:'5',name:'가입대기예시',studentName:'가입대기예시',email:'qa-pending@example.test',registrationApprovalStatus:'PENDING'});
+window.rosterQa={data,events,toasts:[],fail:false};
 `;
 const mocks = {
   "qa-state": state,
@@ -48,12 +49,14 @@ export const getHttpsCallable=async(name)=>async(input)=>{
  events.push({name,input});if(window.rosterQa.fail)throw Object.assign(new Error('synthetic save failure'),{code:'unavailable'});
  if(name==='createStudentData'){data.push({id:'qa-new',role:'student',...input,studentName:input.name,enrollmentStatus:'active',registrationApprovalStatus:'PENDING'});return{data:{uid:'qa-new',registrationApprovalStatus:'PENDING',requiresFirstSignIn:true}};}
  if(name==='getStudentRegistrationApprovalState'){const student=data.find(item=>item.id===input.studentUid);return{data:{semesterId:'2026-2',manifestRevision:1,economyRevision:1,economyReady:true,classes:[{classId:'class-3-1',grade:'3',classNumber:'1',revision:1}],students:[{studentUid:student.id,status:student.registrationApprovalStatus,profileVersion:'a'.repeat(64),submittedProfile:{...student,number:String(student.number)},enrollmentId:'enr-qa',accountState:student.accountState||'NOT_PREPARED',accountRevision:1,blockedReason:''}]}};}
- if(name==='executeCommand'){if(!window.rosterQa.schoolVerified)throw Object.assign(new Error('학교 계정 확인 필요'),{code:'functions/failed-precondition',details:{reason:'REGISTRATION_SCHOOL_ACCOUNT_REQUIRED'}});const student=data.find(item=>item.id===input.payload.studentUid);const action=input.payload.action;if(action==='APPROVE')student.registrationApprovalStatus='APPROVED_PENDING_ACCOUNT';if(action==='PREPARE_ACCOUNT')student.accountState='PREPARED';if(action==='FINALIZE')student.registrationApprovalStatus='APPROVED';return{data:{status:'SUCCEEDED',result:{studentUid:student.id,semesterId:'2026-2',enrollmentId:'enr-qa',status:student.registrationApprovalStatus,action}}};}
+ if(name==='executeCommand'){if(input.payload.action!=='REJECT'&&!window.rosterQa.schoolVerified)throw Object.assign(new Error('학교 계정 확인 필요'),{code:'functions/failed-precondition',details:{reason:'REGISTRATION_SCHOOL_ACCOUNT_REQUIRED'}});const student=data.find(item=>item.id===input.payload.studentUid);const action=input.payload.action;if(action==='APPROVE')student.registrationApprovalStatus='APPROVED_PENDING_ACCOUNT';if(action==='PREPARE_ACCOUNT')student.accountState='PREPARED';if(action==='FINALIZE')student.registrationApprovalStatus='APPROVED';if(action==='REJECT')student.registrationApprovalStatus='REJECTED';return{data:{status:'SUCCEEDED',result:{studentUid:student.id,semesterId:'2026-2',enrollmentId:action==='REJECT'?'':'enr-qa',status:student.registrationApprovalStatus,action}}};}
  if(name==='updateStudentEnrollment'){Object.assign(data.find(student=>student.id===input.uid),{enrollmentStatus:input.status,enrollmentReason:input.reason});return{data:{uid:input.uid,status:input.status}};}
  return{data:{}};
 };`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
   "qa-detail": `export default()=>null;`,
+  "qa-toast": `const showToast=(toast)=>window.rosterQa.toasts.push(toast);export const useAppToast=()=>({showToast});`,
+  "qa-sensitive": `export const ensureSensitiveOperation=async()=>{};`,
 };
 const moduleFor = (request) => {
   const value = request.replaceAll("\\", "/");
@@ -63,10 +66,12 @@ const moduleFor = (request) => {
   if (/lib\/firebase$/.test(value)) return "qa-firebase";
   if (/lib\/semesterArchive$/.test(value)) return "qa-archive";
   if (/StudentDetailModal$/.test(value)) return "qa-detail";
+  if (/AppToastProvider$/.test(value)) return "qa-toast";
+  if (/lib\/sensitiveOperation$/.test(value)) return "qa-sensitive";
 };
 const result = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import StudentList from'${root}/src/pages/teacher/StudentList';import'qa-state';createRoot(document.getElementById('root')).render(<StudentList/>);`,
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter,useNavigate}from'react-router-dom';import StudentList from'${root}/src/pages/teacher/StudentList';import'qa-state';function Fixture(){window.rosterQa.navigate=useNavigate();return <StudentList/>}createRoot(document.getElementById('root')).render(<BrowserRouter><Fixture/></BrowserRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -313,6 +318,140 @@ try {
   report.checks.push(
     "Pending registration stays out of active roster; first school login is required; approval resumes through three stages before active roster and success message.",
   );
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(origin + "?registration=qa-pending");
+    await dialog.waitFor();
+    await dialog.getByRole("heading", { name: "학생 가입 신청" }).waitFor();
+    await dialog.getByText("3학년 1반 5번 가입대기예시").waitFor();
+    assert.equal(
+      await page.getByLabel("학적 상태 필터").inputValue(),
+      "pending",
+    );
+    const box = await dialog.boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= width + 1);
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await dialog
+      .getByRole("button", { name: "등록 거부", exact: true })
+      .click();
+    assert.equal(await page.evaluate(() => window.rosterQa.events.length), 0);
+    await dialog
+      .getByRole("status")
+      .filter({ hasText: "접속할 수 없습니다" })
+      .waitFor();
+    await page.screenshot({
+      path: `${out}/registration-review-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`registration-review-${width}.png`);
+    await dialog
+      .getByRole("button", { name: "거부 확정", exact: true })
+      .click();
+    await dialog.waitFor({ state: "hidden" });
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.rosterQa.events
+          .filter((e) => e.name === "executeCommand")
+          .map((e) => e.input.payload.action),
+      ),
+      ["REJECT"],
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "가입대기예시", exact: true })
+        .count(),
+      0,
+    );
+    await page.getByLabel("학적 상태 필터").selectOption("rejected");
+    await page
+      .getByRole("button", { name: "가입대기예시", exact: true })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "가입대기예시 등록 승인", exact: true })
+        .count(),
+      0,
+    );
+    await page.evaluate(() =>
+      window.rosterQa.navigate("?registration=qa-pending"),
+    );
+    await page.waitForFunction(() =>
+      window.rosterQa.toasts.some(
+        (t) => t.title === "이미 거부된 가입 신청입니다.",
+      ),
+    );
+    assert.equal(await dialog.isVisible(), false);
+    await page.evaluate(() =>
+      window.rosterQa.navigate("?registration=qa-active"),
+    );
+    await page.waitForFunction(() =>
+      window.rosterQa.toasts.some(
+        (t) => t.title === "이미 승인된 가입 신청입니다.",
+      ),
+    );
+    assert.equal(await page.getByLabel("학적 상태 필터").inputValue(), "all");
+    assert.equal(await dialog.isVisible(), false);
+    await page.evaluate(() =>
+      window.rosterQa.navigate("?registration=missing"),
+    );
+    await page.waitForFunction(() =>
+      window.rosterQa.toasts.some(
+        (t) => t.title === "가입 신청을 찾을 수 없습니다.",
+      ),
+    );
+  }
+  report.checks.push(
+    "390/768/1280: notification link opens fresh pending review; rejection requires confirmation, sends only REJECT, removes pending row and preserves denied row; repeated/approved/missing links do not reopen actionable review.",
+  );
+  await page.goto(origin + "?readonly&registration=qa-pending");
+  await page
+    .getByRole("button", { name: "가입대기예시", exact: true })
+    .waitFor();
+  assert.equal(await dialog.isVisible(), false);
+  assert.equal(
+    await page.getByRole("button", { name: /등록 승인|등록 거부/ }).count(),
+    0,
+  );
+  report.checks.push(
+    "Read-only notification links expose no registration review or mutation.",
+  );
+  await page.goto(origin + "?registration=pending");
+  await page
+    .getByRole("button", { name: "가입대기예시", exact: true })
+    .waitFor();
+  assert.equal(await page.getByLabel("학적 상태 필터").inputValue(), "pending");
+  assert.equal(await dialog.isVisible(), false);
+  assert.deepEqual(await page.evaluate(() => window.rosterQa.toasts), []);
+  await page.evaluate(() =>
+    window.rosterQa.navigate("?registration=qa-pending"),
+  );
+  await dialog.waitFor();
+  await page.evaluate(() => window.rosterQa.navigate("?view=roster"));
+  await dialog.waitFor({ state: "hidden" });
+  report.checks.push(
+    "Generic pending link shows all pending requests without false missing warning; leaving notification route closes the review dialog.",
+  );
+  // Restore the earlier approved fixture for enrollment workflow regression.
+  await page.goto(origin);
+  await page.evaluate(() =>
+    window.rosterQa.data.push({
+      id: "qa-new",
+      role: "student",
+      grade: "3",
+      class: "1",
+      number: "5",
+      name: "등록예시",
+      studentName: "등록예시",
+      email: "qa-new@example.test",
+      registrationApprovalStatus: "APPROVED",
+    }),
+  );
+  await page.evaluate(() => window.rosterQa.navigate("?refresh"));
+  await page.getByRole("button", { name: "등록예시", exact: true }).waitFor();
   await page
     .getByRole("button", { name: "등록예시 학적 상태 변경", exact: true })
     .click();

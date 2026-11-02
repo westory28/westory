@@ -64,14 +64,15 @@ const ambiguous = (error: unknown) =>
 
 // Each stage uses the deployed approval command and its receipt. A created user
 // is not an approved enrollment; neither query omissions nor timeouts mean success.
-export const approveStudentRegistration = (
+const reviewStudentRegistration = (
   config: Parameters<typeof getYearSemester>[0],
   profile: Profile,
+  decision: "APPROVE" | "REJECT",
 ): Promise<void> => {
   const ownerUid = auth.currentUser?.uid || "";
   const { year, semester } = getYearSemester(config);
   const semesterId = `${year}-${semester}`;
-  const key = JSON.stringify([ownerUid, semesterId, profile.uid]);
+  const key = JSON.stringify([ownerUid, semesterId, profile.uid, decision]);
   const existing = flights.get(key);
   if (existing) return existing;
   const flight = (async () => {
@@ -99,6 +100,10 @@ export const approveStudentRegistration = (
             "등록 대기 상태를 확인하지 못했습니다. 명단을 새로고침해 주세요.",
           );
         if (student.blockedReason) throw new Error(student.blockedReason);
+        if (decision === "REJECT" && student.status !== "PENDING")
+          throw new Error(
+            "이미 승인이 진행된 신청은 거부할 수 없습니다. 명단을 새로고침해 주세요.",
+          );
         const payload: Record<string, unknown> = {
           semesterId,
           expectedSemesterRevision: state.manifestRevision,
@@ -118,23 +123,27 @@ export const approveStudentRegistration = (
               "학생 등록 정보가 바뀌었습니다. 명단을 새로고침한 뒤 다시 확인해 주세요.",
             );
           }
-          const targets = state.classes.filter(
-            (item) =>
-              item.grade === profile.grade &&
-              item.classNumber === profile.class,
-          );
-          if (targets.length !== 1)
-            throw new Error(
-              "현재 학기의 대상 학급을 찾지 못했습니다. 학년과 반을 확인해 주세요.",
+          if (decision === "REJECT") {
+            payload.action = "REJECT";
+          } else {
+            const targets = state.classes.filter(
+              (item) =>
+                item.grade === profile.grade &&
+                item.classNumber === profile.class,
             );
-          Object.assign(payload, {
-            action: "APPROVE",
-            classId: targets[0].classId,
-            expectedClassRevision: targets[0].revision,
-            studentNumber: String(profile.number),
-            displayName: profile.name,
-            rosterConfirmed: true,
-          });
+            if (targets.length !== 1)
+              throw new Error(
+                "현재 학기의 대상 학급을 찾지 못했습니다. 학년과 반을 확인해 주세요.",
+              );
+            Object.assign(payload, {
+              action: "APPROVE",
+              classId: targets[0].classId,
+              expectedClassRevision: targets[0].revision,
+              studentNumber: String(profile.number),
+              displayName: profile.name,
+              rosterConfirmed: true,
+            });
+          }
         } else if (student.status === "APPROVED_PENDING_ACCOUNT") {
           if (!state.economyReady)
             throw new Error(
@@ -191,7 +200,7 @@ export const approveStudentRegistration = (
         if (response.status !== "SUCCEEDED")
           throw Object.assign(
             new Error(
-              "저장 결과를 확인하지 못했습니다. 등록 승인을 다시 눌러 주세요.",
+              "저장 결과를 확인하지 못했습니다. 같은 작업을 다시 눌러 주세요.",
             ),
             { code: "functions/unavailable" },
           );
@@ -203,12 +212,24 @@ export const approveStudentRegistration = (
             result.semesterId !== semesterId) ||
           (envelope.payload.expectedEnrollmentId !== undefined &&
             result.enrollmentId !== envelope.payload.expectedEnrollmentId) ||
-          !result.enrollmentId
+          (decision === "APPROVE" && !result.enrollmentId)
         )
           throw new Error(
-            "승인한 학생과 학적을 확인하지 못했습니다. 명단을 새로고침해 주세요.",
+            "처리한 학생과 등록 상태를 확인하지 못했습니다. 명단을 새로고침해 주세요.",
           );
         pending.delete(key);
+        if (decision === "REJECT") {
+          if (
+            result.action === "REJECT" &&
+            result.status === "REJECTED" &&
+            result.semesterId === semesterId &&
+            result.enrollmentId === ""
+          )
+            return;
+          throw new Error(
+            "등록 거부 상태를 확인하지 못했습니다. 명단을 새로고침해 주세요.",
+          );
+        }
         if (result.action === "FINALIZE" && result.status === "APPROVED")
           return;
         if (result.status !== "APPROVED_PENDING_ACCOUNT")
@@ -227,3 +248,13 @@ export const approveStudentRegistration = (
   flights.set(key, flight);
   return flight;
 };
+
+export const approveStudentRegistration = (
+  config: Parameters<typeof getYearSemester>[0],
+  profile: Profile,
+) => reviewStudentRegistration(config, profile, "APPROVE");
+
+export const rejectStudentRegistration = (
+  config: Parameters<typeof getYearSemester>[0],
+  profile: Profile,
+) => reviewStudentRegistration(config, profile, "REJECT");

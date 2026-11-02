@@ -325,6 +325,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return (
       <AuthRecoveryState
         registrationPending={authPhase === "registration-pending"}
+        registrationRejected={
+          userData?.registrationApprovalStatus === "REJECTED"
+        }
         error={authError}
         onRetry={retryAuth}
         onRestart={async () => {

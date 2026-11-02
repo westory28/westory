@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { useLocation } from "react-router-dom";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
@@ -7,6 +8,7 @@ import StudentRosterModal from "./components/StudentRosterModal";
 import { buildStudentPagination } from "./components/studentPagination";
 import "./components/teacher-list-controls.css";
 import { useAuth } from "../../contexts/AuthContext";
+import { useAppToast } from "../../components/common/AppToastProvider";
 import { canEditStudentList } from "../../lib/permissions";
 import {
   resetLessonCorePointProgress,
@@ -155,6 +157,11 @@ const getCorePointResetErrorMessage = (error: unknown) => {
 
 const StudentList: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
+  const location = useLocation();
+  const { showToast } = useAppToast();
+  const registrationUid =
+    new URLSearchParams(location.search).get("registration") || "";
+  const fetchVersionRef = useRef(0);
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,9 +203,49 @@ const StudentList: React.FC = () => {
   const readOnly = !canEditStudentList(userData, currentUser?.email || "");
 
   useEffect(() => {
-    void fetchStudents();
     void loadSchoolConfig();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setRosterModalMode(null);
+    if (registrationUid) {
+      setGradeFilter("all");
+      setClassFilter("all");
+      setEnrollmentFilter("pending");
+      setSearchQuery("");
+      setSearchOpen(false);
+    }
+    void fetchStudents().then((list) => {
+      if (!active || !registrationUid || registrationUid === "pending" || !list)
+        return;
+      const student = list.find((item) => item.id === registrationUid);
+      if (!student) {
+        showToast({ tone: "warning", title: "가입 신청을 찾을 수 없습니다." });
+        return;
+      }
+      if (student.registrationApprovalStatus === "REJECTED") {
+        setEnrollmentFilter("rejected");
+        setSearchQuery(student.email || student.name);
+        showToast({ tone: "info", title: "이미 거부된 가입 신청입니다." });
+        return;
+      }
+      if (!isStudentRegistrationPending(student)) {
+        setEnrollmentFilter("all");
+        setSearchQuery(student.email || student.name);
+        showToast({ tone: "info", title: "이미 승인된 가입 신청입니다." });
+        return;
+      }
+      setSearchQuery(student.email || student.name);
+      if (!readOnly) {
+        setEnrollmentTargets([student]);
+        setRosterModalMode("registration");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [location.key, registrationUid, readOnly, config?.year, config?.semester]);
 
   const gradeOrderMap = useMemo(() => {
     return gradeOptions.reduce<Record<string, number>>((acc, item, index) => {
@@ -234,10 +281,12 @@ const StudentList: React.FC = () => {
   }, [searchOpen]);
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
+    const version = ++fetchVersionRef.current;
     if (!options.silent) setLoading(true);
     setLoadError("");
     try {
       const snap = await getDocs(collection(db, "users"));
+      if (version !== fetchVersionRef.current) return null;
       const list: Student[] = [];
 
       snap.forEach((item) => {
@@ -310,11 +359,14 @@ const StudentList: React.FC = () => {
       });
 
       setStudents(list);
+      return list;
     } catch (error) {
+      if (version !== fetchVersionRef.current) return null;
       console.error("Error fetching students:", error);
       setLoadError("학생 명단을 불러오지 못했습니다. 새로고침해 주세요.");
+      return null;
     } finally {
-      if (!options.silent) setLoading(false);
+      if (version === fetchVersionRef.current) setLoading(false);
     }
   };
 
@@ -404,13 +456,18 @@ const StudentList: React.FC = () => {
     if (enrollmentFilter !== "all") {
       result = result.filter((student) =>
         enrollmentFilter === "pending"
-          ? isStudentRegistrationPending(student)
-          : enrollmentFilter === "active"
-            ? isActiveRosterStudent(student)
-            : !isStudentRegistrationPending(student) &&
-              (enrollmentFilter === "excluded"
-                ? student.enrollmentStatus !== "active"
-                : student.enrollmentStatus === enrollmentFilter),
+          ? isStudentRegistrationPending(student) &&
+            student.registrationApprovalStatus !== "REJECTED"
+          : enrollmentFilter === "rejected"
+            ? student.registrationApprovalStatus === "REJECTED"
+            : enrollmentFilter === "active"
+              ? isActiveRosterStudent(student)
+              : enrollmentFilter === "excluded"
+                ? student.registrationApprovalStatus === "REJECTED" ||
+                  (!isStudentRegistrationPending(student) &&
+                    student.enrollmentStatus !== "active")
+                : !isStudentRegistrationPending(student) &&
+                  student.enrollmentStatus === enrollmentFilter,
       );
     }
     if (gradeFilter !== "all")
@@ -621,6 +678,7 @@ const StudentList: React.FC = () => {
                 >
                   <option value="active">재학생</option>
                   <option value="pending">등록 대기</option>
+                  <option value="rejected">등록 거부</option>
                   <option value="excluded">제외 명단 전체</option>
                   {STUDENT_ENROLLMENT_OPTIONS.filter(
                     (option) => option.value !== "active",
@@ -879,11 +937,13 @@ const StudentList: React.FC = () => {
                       </td>
                       <td className="student-list-column--status p-4 text-sm text-gray-600">
                         <span className="whitespace-nowrap font-bold">
-                          {isStudentRegistrationPending(student)
-                            ? "등록 대기"
-                            : getStudentEnrollmentLabel(
-                                student.enrollmentStatus,
-                              )}
+                          {student.registrationApprovalStatus === "REJECTED"
+                            ? "등록 거부"
+                            : isStudentRegistrationPending(student)
+                              ? "등록 대기"
+                              : getStudentEnrollmentLabel(
+                                  student.enrollmentStatus,
+                                )}
                         </span>
                         {student.enrollmentReason && (
                           <span className="mt-1 block text-xs">
@@ -897,6 +957,7 @@ const StudentList: React.FC = () => {
                       <td className="student-list-column--actions p-4 text-center">
                         <div className="flex flex-wrap justify-center gap-2">
                           {!readOnly &&
+                            student.registrationApprovalStatus !== "REJECTED" &&
                             (isStudentRegistrationPending(student) ? (
                               <button
                                 onClick={() => {
@@ -1103,6 +1164,14 @@ const StudentList: React.FC = () => {
             );
             if (result?.registrationPending) setEnrollmentFilter("pending");
             if (result?.registrationApproved) setEnrollmentFilter("active");
+            if (result?.registrationRejected) {
+              setEnrollmentFilter("pending");
+              setSearchQuery("");
+              showToast({
+                tone: "success",
+                title: "학생 가입 신청을 거부했습니다.",
+              });
+            }
             setSelectedIds(new Set());
             void fetchStudents({ silent: true });
           }}

@@ -8,7 +8,10 @@ import {
   StudentEnrollmentStatus,
   updateStudentEnrollment,
 } from "../../../lib/studentRoster";
-import { approveStudentRegistration } from "../../../lib/studentRegistration";
+import {
+  approveStudentRegistration,
+  rejectStudentRegistration,
+} from "../../../lib/studentRegistration";
 
 interface RosterStudent {
   id: string;
@@ -19,6 +22,7 @@ interface RosterStudent {
   email: string;
   enrollmentStatus: StudentEnrollmentStatus;
   enrollmentReason: string;
+  registrationApprovalStatus?: unknown;
 }
 
 interface StudentRosterModalProps {
@@ -34,6 +38,7 @@ interface StudentRosterModalProps {
     requiresFirstSignIn?: boolean;
     registrationPending?: boolean;
     registrationApproved?: boolean;
+    registrationRejected?: boolean;
   }) => void;
 }
 
@@ -88,6 +93,7 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [rosterConfirmed, setRosterConfirmed] = useState(false);
+  const [rejectConfirming, setRejectConfirming] = useState(false);
 
   useEffect(() => {
     if (!mode) {
@@ -109,11 +115,46 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
     setReason(targets.length === 1 ? targets[0].enrollmentReason : "");
     setError("");
     setRosterConfirmed(false);
+    setRejectConfirming(false);
     dialogRef.current?.showModal();
-  }, [mode]);
+  }, [mode, targets[0]?.id]);
 
   const handleClose = () => {
     if (!saving) onClose();
+  };
+
+  const handleReject = async () => {
+    if (
+      saving ||
+      mode !== "registration" ||
+      targets[0]?.registrationApprovalStatus !== "PENDING"
+    )
+      return;
+    if (!rejectConfirming) {
+      setRejectConfirming(true);
+      setError("");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const student = targets[0];
+    try {
+      await rejectStudentRegistration(config, {
+        uid: student.id,
+        grade: student.grade,
+        class: student.class,
+        number: student.number,
+        name: student.name,
+        email: student.email,
+      });
+      onComplete({ registrationRejected: true });
+      onClose();
+    } catch (saveError) {
+      onComplete();
+      setError(getSaveError(saveError));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -225,7 +266,7 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
           {mode === "create"
             ? "학생 등록"
             : mode === "registration"
-              ? "학생 등록 승인"
+              ? "학생 가입 신청"
               : "학적 상태 변경"}
         </h3>
         <fieldset disabled={saving} className="space-y-4">
@@ -320,6 +361,12 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
                 />
                 학급·번호·이름을 확인했습니다.
               </label>
+              {rejectConfirming && (
+                <p role="status" className="text-sm text-red-700">
+                  가입 신청을 거부하면 학생은 접속할 수 없습니다.
+                  거부하시겠습니까?
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -370,7 +417,7 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
             {error}
           </p>
         )}
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={handleClose}
@@ -379,6 +426,17 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
           >
             취소
           </button>
+          {mode === "registration" &&
+            targets[0]?.registrationApprovalStatus === "PENDING" && (
+              <button
+                type="button"
+                onClick={() => void handleReject()}
+                disabled={saving}
+                className="min-h-11 rounded-lg border border-red-300 px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                {rejectConfirming ? "거부 확정" : "등록 거부"}
+              </button>
+            )}
           <button
             type="submit"
             disabled={saving}

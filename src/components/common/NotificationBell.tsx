@@ -63,6 +63,7 @@ const timestampMs = (value: unknown) => {
 };
 
 const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
+  if (type === "student_registration_requested") return "fas fa-user-plus";
   if (type.startsWith("history_classroom")) return "fas fa-landmark";
   if (type.startsWith("history_dictionary")) return "fas fa-book-open";
   if (type.startsWith("performance_score")) return "fas fa-clipboard-check";
@@ -98,6 +99,12 @@ const getNotificationBodyText = (notification: WestoryNotification) => {
 
 const getNotificationTargetUrl = (notification: WestoryNotification) => {
   const targetUrl = String(notification.targetUrl || "").trim();
+  if (notification.type === "student_registration_requested") {
+    const studentUid = String(notification.entityId || "").trim();
+    return studentUid
+      ? `/teacher/students?registration=${encodeURIComponent(studentUid)}`
+      : "/teacher/students?registration=pending";
+  }
   if (
     notification.type === "history_classroom_submitted" ||
     notification.type === "history_classroom_passed" ||

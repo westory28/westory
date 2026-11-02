@@ -292,6 +292,31 @@ const fixture = async (role = "teacher") => {
 {
   const f = await fixture();
   assert.equal(f.calls.loads.length, 0, "Closed bell does not fetch items");
+  f.setRows([notification("new-registration", {
+    type: "student_registration_requested",
+    title: "학생 가입 신청",
+    body: "테스트 학생이 가입을 신청했습니다.",
+    entityId: "synthetic-student",
+    targetUrl: "/teacher/students",
+    priority: "high",
+  })]);
+  await f.emit({ unreadCount: 1 });
+  assert.equal(f.calls.toasts.length, 1, "Closed center immediately announces signup");
+  assert.equal(f.calls.toasts[0].title, "학생 가입 신청");
+  assert.equal(f.calls.toasts[0].persistent, true);
+  assert.equal(f.calls.reads.length, 0, "Toast alone must not mark signup read");
+  await f.toggle();
+  assert.match(f.text(), /학생 가입 신청/);
+  const row = f.button(/학생 가입 신청/);
+  assert(row, "Signup has a navigable notification row");
+  row.props.onClick();
+  await f.render();
+  assert.deepEqual(f.calls.routes, ["/teacher/students?registration=synthetic-student"]);
+}
+
+{
+  const f = await fixture();
+  assert.equal(f.calls.loads.length, 0, "Closed bell does not fetch items");
   await f.toggle();
   assert.match(f.text(), /받은 알림이 없습니다/);
   f.setRows([notification("new-pass")]);

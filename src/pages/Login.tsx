@@ -2060,6 +2060,9 @@ const Login: React.FC = () => {
     return (
       <AuthRecoveryState
         registrationPending={authPhase === "registration-pending"}
+        registrationRejected={
+          userData?.registrationApprovalStatus === "REJECTED"
+        }
         error={authError}
         onRetry={retryAuth}
         onRestart={() => handleSwitchAccount()}
