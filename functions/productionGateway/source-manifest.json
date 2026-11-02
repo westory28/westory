@@ -19,7 +19,8 @@
     "Historical capture 2026-10-08: standalone Wis query source and shared session contract were compared. As of 2026-10-27 both existing query regions must remain exported to preserve compatibility.",
     "2026-10-21: Live Seoul executeCommand source (updated 2026-10-19) was compared before this fix: assessmentLifecycle, historyClassroomExemptions, productionSource and dictionaryNotifications matched the baseline; commandGateway differs only by previously reviewed opt-in ranking read-only/field-mask support.",
     "2026-10-27: executeCommand live source from 2026-10-26 matches baseline commandGateway, wisEconomy, wisEconomyQuery, sessionAuthority and productionSource. The older standalone Seoul query lacks reviewed ranking additions already deployed in that newer closure. Only the changed command/status and standalone query endpoints are deployment targets.",
-    "2026-10-27: Explicitly export both existing getWisEconomyState regions. Firebase deployment reconciles regions by function name, even with --only; declaring Seoul alone would remove the US compatibility endpoint. The deployment-time removal was detected and the US endpoint was restored before frontend release."
+    "2026-10-27: Explicitly export both existing getWisEconomyState regions. Firebase deployment reconciles regions by function name, even with --only; declaring Seoul alone would remove the US compatibility endpoint. The deployment-time removal was detected and the US endpoint was restored before frontend release.",
+    "2026-11-02: studentRegistrationPolicyCore.js is newly authored policy code, not a recovered production file; originalSha256 records its initial reviewed source. Login and command closures retain identical policy/session modules."
   ],
   "files": [
     {
@@ -299,9 +300,10 @@
       "sourceFile": "sessionAuthority.js",
       "file": "sessionAuthority.js",
       "originalSha256": "e3ae2d5dbb6f19ae06e2b028f576d91448a313281bb7e630455255b278fc633c",
-      "sha256": "dfe91819e12dd9318d13f6b67108f75c55d05c7ddf486ebaa5353ca926df4844",
+      "sha256": "d9c152c3827b1216342b3e8f169e249ff15ef7051ee60a954ce05fd997c64347",
       "changes": [
-        "Match the current root sessionAuthority idle policy (60/60 minutes); all other source identical."
+        "Match the current root sessionAuthority idle policy (60/60 minutes); all other source identical.",
+        "2026-11-02: configurable account-issue year/grade policy for new and pending registrations; established approved students and teacher roles retain access."
       ]
     },
     {
@@ -364,9 +366,10 @@
       "sourceFile": "studentRegistrationApproval.js",
       "file": "studentRegistrationApproval.js",
       "originalSha256": "7da71582c196d76351dbc9b8124c8ab4c9507c38bef3c93c03f5018ce4f16c93",
-      "sha256": "442b2bda46edc7fb422d3c41d1b818a2c7825edf40a48a861110e025a69c8e5c",
+      "sha256": "ab3276c1988e5e6f8e12a853906c5d6cd385dab5cad6c65d91d9fef1274c8c58",
       "changes": [
-        "2026-11-02: Add manager-only, revision-checked REJECT for pending registration with immutable review and canonical receipt/audit; preserve all approval/account fences and existing enrollment records."
+        "2026-11-02: Add manager-only, revision-checked REJECT for pending registration with immutable review and canonical receipt/audit; preserve all approval/account fences and existing enrollment records.",
+        "2026-11-02: configurable account-issue year/grade policy for new and pending registrations; established approved students and teacher roles retain access."
       ]
     },
     {
@@ -494,6 +497,15 @@
         "2026-10-21: Newly authored current-semester result projection and deterministic inbox notification planner; originalSha256 denotes its first reviewed authored version, not a captured production file.",
         "Legacy canonical outcomes use only frozen result/attempt thresholds when the passed flag is absent; unverifiable outcomes remain unknown.",
         "2026-10-22: Notify teachers once for pass/fail submissions using a fixed concise outcome body, preserving recipient, policy, replay and cleared-inbox boundaries."
+      ]
+    },
+    {
+      "sourceFile": "studentRegistrationPolicyCore.js",
+      "file": "studentRegistrationPolicyCore.js",
+      "originalSha256": "af33e97e20d1ac7465a16c884509606bc8fc5ada6de4a148d2013b2ac94cdc39",
+      "sha256": "af33e97e20d1ac7465a16c884509606bc8fc5ada6de4a148d2013b2ac94cdc39",
+      "changes": [
+        "2026-11-02: configurable account-issue year/grade policy for new and pending registrations; established approved students and teacher roles retain access."
       ]
     }
   ],

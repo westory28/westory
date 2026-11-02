@@ -63,7 +63,7 @@ const env = await initializeTestEnvironment({
   },
 });
 const email = (uid) =>
-  uid === "admin" ? "westoria28@gmail.com" : `${uid}@yongshin-ms.ms.kr`;
+  uid === "admin" ? "westoria28@gmail.com" : uid === "fresh" ? "2630099@yongshin-ms.ms.kr" : `${uid}@yongshin-ms.ms.kr`;
 const client = (uid, options = {}) =>
   env
     .authenticatedContext(uid, {

@@ -36,7 +36,7 @@ const {
   resolveSessionAuthorityConfig,
 } = require("../sessionAuthority");
 
-const email = "session.test@yongshin-ms.ms.kr";
+const email = "2630001@yongshin-ms.ms.kr";
 const nowSeconds = Math.floor(Date.now() / 1000);
 
 const revision = "a".repeat(64);

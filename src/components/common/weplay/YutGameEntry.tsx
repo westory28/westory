@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { YutSettings } from "../../../lib/yut";
 import useYutPublication from "./useYutPublication";
@@ -25,14 +25,34 @@ export default function YutGameEntry({
   const [params, setParams] = useSearchParams();
   const [musicActive, setMusicActive] = useState(true);
   const allowed = access.status === "open";
+  const admittedScope = useRef("");
+  if (allowed) admittedScope.current = access.scope;
+  // A failed publication refresh must block play without discarding the current
+  // board or an uncertain command's receipt. Account/semester changes still reset.
+  const retainGame = admittedScope.current === access.scope;
   const music = useYutMusic(musicActive && allowed);
   useEffect(() => {
     setIntroduced(false);
     // Download the game while publication is checked and the opening plays.
     void loadYutGame().catch(() => {});
   }, [portal, access.scope]);
-  if (!allowed) {
-    const status = access.status;
+  const accessNotice = !allowed && (
+    <>
+      <p role={access.status === "error" ? "alert" : "status"}>
+        {access.status === "checking"
+          ? "게임을 확인하고 있습니다."
+          : access.status === "error"
+            ? "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."
+            : "지금은 윷놀이가 열려 있지 않습니다."}
+      </p>
+      {access.status !== "checking" && (
+        <button className="weplay-primary" onClick={access.retry}>
+          다시 확인
+        </button>
+      )}
+    </>
+  );
+  if (!allowed && !retainGame) {
     return (
       <main className="weplay-page" tabIndex={-1}>
         <header className="weplay-heading">
@@ -44,18 +64,7 @@ export default function YutGameEntry({
             <WeplayMusicButton {...music} />
           </div>
         </header>
-        <p role={status === "error" ? "alert" : "status"}>
-          {status === "checking"
-            ? "게임을 확인하고 있습니다."
-            : status === "error"
-              ? "게임을 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요."
-              : "지금은 윷놀이가 열려 있지 않습니다."}
-        </p>
-        {status !== "checking" && (
-          <button className="weplay-primary" onClick={access.retry}>
-            다시 확인
-          </button>
-        )}
+        {accessNotice}
       </main>
     );
   }
@@ -78,31 +87,41 @@ export default function YutGameEntry({
           <WeplayMusicButton {...music} />
         </nav>
       </header>
-      <WeplayGameFrame theme="yut">
-        {!introduced ? (
-          <WeplayStudioIntro onComplete={() => setIntroduced(true)} />
-        ) : (
-          <Suspense
-            fallback={
-              <WeplayGameLoading theme="yut" label="윷판을 준비하고 있습니다" />
-            }
-          >
-            <YutGame
-              initialLobby={portal === "student" ? access.lobby : undefined}
-              initialSettings={
-                portal === "student" ? access.settings : initialSettings
+      {accessNotice}
+      <div hidden={!allowed}>
+        <WeplayGameFrame theme="yut">
+          {!introduced ? (
+            <WeplayStudioIntro onComplete={() => setIntroduced(true)} />
+          ) : (
+            <Suspense
+              fallback={
+                <WeplayGameLoading
+                  theme="yut"
+                  label="윷판을 준비하고 있습니다"
+                />
               }
-              music={music}
-              onMusicActiveChange={setMusicActive}
-              portal={portal}
-              preview={portal === "teacher" && params.get("view") === "preview"}
-              onBack={() =>
-                setParams(portal === "teacher" ? { game: "joseon-yut" } : {})
-              }
-            />
-          </Suspense>
-        )}
-      </WeplayGameFrame>
+            >
+              <YutGame
+                key={access.scope}
+                suspended={!allowed}
+                initialLobby={portal === "student" ? access.lobby : undefined}
+                initialSettings={
+                  portal === "student" ? access.settings : initialSettings
+                }
+                music={music}
+                onMusicActiveChange={setMusicActive}
+                portal={portal}
+                preview={
+                  portal === "teacher" && params.get("view") === "preview"
+                }
+                onBack={() =>
+                  setParams(portal === "teacher" ? { game: "joseon-yut" } : {})
+                }
+              />
+            </Suspense>
+          )}
+        </WeplayGameFrame>
+      </div>
     </main>
   );
 }

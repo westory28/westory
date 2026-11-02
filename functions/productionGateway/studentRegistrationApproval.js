@@ -3,6 +3,7 @@ const { HttpsError } = require("firebase-functions/v2/https");
 const enrollment = require("./archiveEnrollment");
 const wis = require("./wisEconomy");
 const migrationFence = require("./wisMigrationFence");
+const { POLICY_PATH, normalizePolicy, assertRegistrationEmail } = require("./studentRegistrationPolicyCore");
 const COMMAND_TYPE = "approveStudentRegistration";
 const QUERY_NAME = "getStudentRegistrationApprovalState";
 const APPROVAL_COLLECTION = "student_registration_approvals";
@@ -109,6 +110,10 @@ const createStudentRegistrationApprovalAdapter = ({ getAuthUser, wisAdapter = wi
       !/^[^@\s]+@yongshin-ms\.ms\.kr$/i.test(authUser.email || ""))) fail("SCHOOL_ACCOUNT_REQUIRED", "확인된 학교 계정만 승인할 수 있습니다.");
     const paths = pathsFor(payload.semesterId, payload.studentUid);
     const state = await readNamed(transaction, paths, ["user", "identity", "approval", "slot", "manifest", "pointer", "account", "balance", "ranking", "economy", "control", "readiness"]);
+    if (payload.action !== "REJECT") {
+      const policy = await transaction.get(POLICY_PATH);
+      assertRegistrationEmail(authUser.email, normalizePolicy(policy.data, policy.exists));
+    }
     assertCurrent(state, payload.semesterId, payload.expectedSemesterRevision);
     if (payload.action !== "REJECT") migrationFence.assertControl(state.control.data);
     if (!state.user.exists || state.user.data.role !== "student" || (payload.action !== "REJECT" && String(state.user.data.email || "").toLowerCase() !== authUser.email.toLowerCase())) fail("STUDENT_PROFILE_INVALID");

@@ -1,11 +1,4 @@
-import React, {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   finishWeplayGame,
   normalizeWeplayAnswer,
@@ -148,6 +141,7 @@ export default function NavalBattleGame({
     window.visualViewport?.height || window.innerHeight,
   );
   const initialViewportHeight = useRef(window.innerHeight);
+  const viewportWidth = useRef(window.innerWidth);
   const refreshViewport = useRef<() => void>(() => undefined);
   const pending = useRef(new Set<string>());
   const [pendingCount, setPendingCount] = useState(0);
@@ -182,18 +176,13 @@ export default function NavalBattleGame({
           ? bounds.top - top - margin
           : 0;
     if (
-      shift &&
+      Math.abs(shift) > 1 &&
       Math.max(initialViewportHeight.current, window.innerHeight) -
         (viewport?.height || window.innerHeight) >=
         120
     ) {
       window.scrollBy({ top: shift, behavior: "instant" });
-    } else if (shift)
-      element.scrollIntoView({
-        block: "nearest",
-        inline: "nearest",
-        behavior: "instant",
-      });
+    }
   };
   const alive = useRef(true);
   const finishingRef = useRef(false);
@@ -303,55 +292,80 @@ export default function NavalBattleGame({
       const art = new Image();
       art.src = `${ART}${file}`;
     }
-    const timer = window.setInterval(
-      () =>
-        setNow(clock.current.server + performance.now() - clock.current.local),
-      50,
-    );
+    let timer: number | undefined;
+    const tick = () =>
+      setNow(clock.current.server + performance.now() - clock.current.local);
+    const syncClock = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+      setPageHidden(document.hidden);
+      if (!document.hidden) {
+        tick();
+        timer = window.setInterval(tick, 50);
+      }
+    };
+    syncClock();
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener("beforeunload", warn);
-    const visibilityChanged = () => setPageHidden(document.hidden);
-    document.addEventListener("visibilitychange", visibilityChanged);
+    document.addEventListener("visibilitychange", syncClock);
     const viewport = window.visualViewport;
+    let viewportTimer: number | undefined;
+    let viewportFrame: number | undefined;
+    let lastViewportLayout = "";
     const viewportChanged = () => {
-      const height = viewport?.height || window.innerHeight;
-      setViewportHeight(height);
-      setKeyboardInset(
-        Math.max(
-          0,
-          Math.max(initialViewportHeight.current, window.innerHeight) - height,
-        ),
-      );
-      setCompactViewport(
-        document.activeElement === input.current &&
+      window.clearTimeout(viewportTimer);
+      if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
+      // Wait for the keyboard animation to settle. Listening to viewport scroll
+      // here would feed our scroll correction back into itself on mobile Safari.
+      viewportTimer = window.setTimeout(() => {
+        if (!alive.current || (viewport?.scale || 1) > 1.05) return;
+        const height = viewport?.height || window.innerHeight;
+        if (Math.abs(window.innerWidth - viewportWidth.current) > 80) {
+          viewportWidth.current = window.innerWidth;
+          initialViewportHeight.current = window.innerHeight;
+        } else {
+          initialViewportHeight.current = Math.max(
+            initialViewportHeight.current,
+            window.innerHeight,
+          );
+        }
+        const inset = Math.max(0, initialViewportHeight.current - height);
+        const compact =
+          document.activeElement === input.current &&
           height < 540 &&
-          Math.max(initialViewportHeight.current, window.innerHeight) -
-            height >=
-            120,
-      );
-      requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
+          inset >= 120;
+        const layout = `${window.innerWidth}:${height}:${inset}:${compact}`;
+        if (layout === lastViewportLayout) return;
+        lastViewportLayout = layout;
+        setViewportHeight(height);
+        setKeyboardInset(compact ? inset : 0);
+        setCompactViewport(compact);
+        if (compact) {
+          viewportFrame = requestAnimationFrame(() => {
+            if (alive.current) keepInputVisible();
+          });
+        }
+      }, 120);
     };
     refreshViewport.current = viewportChanged;
     viewport?.addEventListener("resize", viewportChanged);
-    viewport?.addEventListener("scroll", viewportChanged);
+    window.addEventListener("resize", viewportChanged);
     return () => {
       alive.current = false;
       window.clearInterval(timer);
       window.removeEventListener("beforeunload", warn);
-      document.removeEventListener("visibilitychange", visibilityChanged);
+      document.removeEventListener("visibilitychange", syncClock);
       viewport?.removeEventListener("resize", viewportChanged);
-      viewport?.removeEventListener("scroll", viewportChanged);
+      window.removeEventListener("resize", viewportChanged);
+      window.clearTimeout(viewportTimer);
+      if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
       refreshViewport.current = () => undefined;
       effectTimers.current.forEach(clearTimeout);
     };
   }, []);
-  useLayoutEffect(() => {
-    if (compactViewport) keepInputVisible();
-  }, [compactViewport, keyboardInset]);
   useEffect(() => {
     if (started && !ended && !exitOpenRef.current && !guideDemo) {
       input.current?.focus({ preventScroll: true });
-      requestAnimationFrame(() => requestAnimationFrame(keepInputVisible));
     }
   }, [started, ended]);
   useEffect(() => {
@@ -609,8 +623,8 @@ export default function NavalBattleGame({
     exitOpenRef.current = false;
     setExitOpen(false);
     requestAnimationFrame(() => {
-      if (!ended) input.current?.focus({ preventScroll: true });
-      requestAnimationFrame(keepInputVisible);
+      if (alive.current && !ended)
+        input.current?.focus({ preventScroll: true });
     });
   };
   const confirmExit = () => {
@@ -652,7 +666,11 @@ export default function NavalBattleGame({
       return;
     pending.current.add(data.wordId);
     setPendingCount(pending.current.size);
-    setAnswer("");
+    setAnswer((current) =>
+      normalizeWeplayAnswer(current) === normalizeWeplayAnswer(data.answer)
+        ? ""
+        : current,
+    );
     const word = session.words.find((item) => item.id === data.wordId);
     const submittedAt =
       clock.current.server + performance.now() - clock.current.local;
@@ -727,8 +745,6 @@ export default function NavalBattleGame({
         );
       }
     }
-    if (!exitOpenRef.current && !exitRequestedRef.current)
-      input.current?.focus({ preventScroll: true });
   };
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -811,7 +827,7 @@ export default function NavalBattleGame({
       aria-busy={networkBusy}
     >
       <div
-        {...(networkBusy ? { inert: "" } : {})}
+        {...(finishing ? { inert: "" } : {})}
         className={`naval-scene${effects.some((effect) => effect.kind === "sunk") ? " has-sinking" : ""}`}
       >
         <div className="naval-ocean" aria-hidden="true" />
@@ -1189,23 +1205,13 @@ export default function NavalBattleGame({
               ref={input}
               value={answer}
               onChange={(event) => {
-                if (!pending.current.size && !finishingRef.current)
-                  setAnswer(event.target.value);
+                if (!finishingRef.current) setAnswer(event.target.value);
               }}
               onFocus={() => {
                 refreshViewport.current();
-                requestAnimationFrame(keepInputVisible);
               }}
               onBlur={() => {
-                window.setTimeout(() => {
-                  if (
-                    alive.current &&
-                    document.activeElement !== input.current
-                  ) {
-                    if (!guideDemo) setCompactViewport(false);
-                    setKeyboardInset(0);
-                  }
-                }, 200);
+                refreshViewport.current();
               }}
               placeholder="단어를 입력하고 Enter"
               autoComplete="off"
@@ -1213,7 +1219,7 @@ export default function NavalBattleGame({
               spellCheck={false}
               disabled={
                 !started ||
-                networkBusy ||
+                finishing ||
                 ended ||
                 exitRequested ||
                 (guideDemo && !guideInteractive?.wordId)
@@ -1236,6 +1242,10 @@ export default function NavalBattleGame({
             />
             <button
               type="submit"
+              onPointerDown={(event) => {
+                if (document.activeElement === input.current)
+                  event.preventDefault();
+              }}
               disabled={
                 !started ||
                 networkBusy ||
@@ -1300,7 +1310,7 @@ export default function NavalBattleGame({
                   : `도전 비용 ${session.policy.challengeCost}위스`}
             </span>
             <div className="naval-feedback" role="status">
-              {feedback}
+              {pendingCount > 0 ? "장전 확인 중…" : feedback}
             </div>
           </div>
         </div>
@@ -1345,11 +1355,8 @@ export default function NavalBattleGame({
           )}
         </div>
       )}
-      {networkBusy && (
-        <WeplayGameLoading
-          theme="naval"
-          label={finishing ? "전투 결과 확인 중…" : "장전 확인 중…"}
-        />
+      {finishing && (
+        <WeplayGameLoading theme="naval" label="전투 결과 확인 중…" />
       )}
     </section>
   );

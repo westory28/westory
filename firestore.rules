@@ -12,6 +12,22 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
+    function matchesStudentRegistrationPolicy(policy) {
+      return policy.schemaVersion == 1
+        && policy.admissionYear is string && policy.admissionYear.matches('^20[0-9]{2}$')
+        && policy.admissionGrade is string && policy.admissionGrade.matches('^[1-3]$')
+        && policy.revision is int && policy.revision >= 1 && policy.revision <= 9007199254740991
+        && request.auth.token.email.lower().matches(
+          '^' + policy.admissionYear.replace('^20', '') + policy.admissionGrade + '[0-9]{4}@yongshin-ms\\.ms\\.kr$');
+    }
+
+    function hasAllowedStudentRegistrationEmail() {
+      let path = /databases/$(database)/documents/site_settings/student_registration_policy;
+      return hasAllowedSchoolEmail()
+        && ((!exists(path) && request.auth.token.email.matches('^263[0-9]{4}@yongshin-ms\\.ms\\.kr$'))
+          || (exists(path) && matchesStudentRegistrationPolicy(get(path).data)));
+    }
+
     function applicationSessionPath() {
       return /databases/$(database)/documents/application_sessions/$(request.auth.uid)/sessions/$(request.auth.token.auth_time);
     }
@@ -785,7 +801,7 @@ service cloud.firestore {
     }
 
     function isValidOwnStudentCreate(userId) {
-      return hasWestoryIdentity() && request.auth.uid == userId
+      return hasAllowedStudentRegistrationEmail() && request.auth.uid == userId
         && hasOnlyUserDocKeys()
         && hasValidOwnUserFieldTypes()
         && request.resource.data.uid == request.auth.uid
@@ -1098,7 +1114,7 @@ service cloud.firestore {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config']
         || (hasWestoryIdentity() && docId in ['config', 'menu_config'])
         || canUseWestory();
-      allow write: if isAdmin();
+      allow write: if docId != 'student_registration_policy' && isAdmin();
 
       match /items/{itemId} {
         allow read: if (docId == 'consent' && hasWestoryIdentity() && resource.data.enabled == true)

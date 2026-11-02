@@ -33,6 +33,7 @@ import { isSemesterArchive } from "../lib/semesterArchive";
 import AuthRecoveryState from "../components/common/AuthRecoveryState";
 import { isStudentRegistrationPending } from "../lib/studentRegistrationStatus";
 import { readSiteSettingDoc } from "../lib/siteSettings";
+import { getStudentRegistrationPolicy } from "../lib/studentRegistrationPolicy";
 import {
   readLocalOnly,
   readStorage,
@@ -1388,6 +1389,21 @@ const Login: React.FC = () => {
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);
     const existing = bootstrap.profile;
+    if (!existing || isStudentRegistrationPending(existing)) {
+      const policy = await awaitLoginNetwork(getStudentRegistrationPolicy());
+      await assertLive();
+      const allowed = new RegExp(
+        `^${policy.admissionYear.slice(-2)}${policy.admissionGrade}[0-9]{4}@yongshin-ms\\.ms\\.kr$`,
+        "i",
+      ).test(user.email || "");
+      if (!allowed && !isTeacherEmail) {
+        await rejectUnauthorizedEmailLogin(user.email);
+        setLoginNotice(
+          `신규 가입은 ${policy.emailPatternLabel} 형식의 학교 계정만 가능합니다.`,
+        );
+        return;
+      }
+    }
     if (isStudentRegistrationPending(existing)) {
       clearPendingLoginMode();
       clearRedirectAttempt();

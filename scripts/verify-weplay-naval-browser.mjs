@@ -306,6 +306,7 @@ try {
   await keyboard.locator('.naval-game').waitFor(); await advanceTo(keyboard, 2200);
   await keyboard.getByRole('textbox', { name: '단어 입력' }).focus();
   await keyboard.setViewportSize({ width: 390, height: 360 });
+  await keyboard.evaluate(() => window.dispatchEvent(new Event('resize')));
   await keyboard.clock.runFor(250);
   await keyboard.locator('.naval-game--compact').waitFor();
   const keyboardGeometry = await keyboard.evaluate(() => {
@@ -335,6 +336,7 @@ try {
   assert.equal((await answerVisible(keyboard, true)).accepted, true);
   await keyboard.getByRole('checkbox', { name: '움직임 줄이기' }).check();
   await keyboard.setViewportSize({ width: 390, height: 950 });
+  await keyboard.evaluate(() => window.dispatchEvent(new Event('resize')));
   await keyboard.clock.runFor(250);
   assert.equal(await keyboard.getByRole('checkbox', { name: '움직임 줄이기' }).evaluate(element => document.activeElement === element), true, 'Closing the keyboard while changing motion settings must not refocus the answer input');
   checks.push('600/680px teacher content at 1280px viewport keeps HUD, words and input inside scene; simulated keyboard viewport shrink preserves visible prompt and usable input');
@@ -456,14 +458,15 @@ try {
   await reordered.locator('.naval-game').waitFor();
   await reordered.evaluate(() => { window.navalQa.holdFirst = true; });
   await advanceTo(reordered, 200); await answerVisible(reordered);
-  await reordered.locator('.weplay-game-loading').waitFor();
-  assert.equal(await reordered.locator('.naval-scene').evaluate(element => element.inert), true);
-  assert.equal(await reordered.locator('#naval-answer-input').isDisabled(), true);
+  assert.equal(await reordered.locator('.weplay-game-loading').count(), 0);
+  assert.equal(await reordered.locator('.naval-scene').evaluate(element => element.inert), false);
+  assert.equal(await reordered.locator('#naval-answer-input').isDisabled(), false);
+  assert.equal(await reordered.locator('#naval-answer-input').evaluate(element => document.activeElement === element), true);
   await advanceTo(reordered, 1700);
   await reordered.locator('.naval-command').dispatchEvent('submit');
   assert.equal(await reordered.evaluate(() => window.navalQa.answers.length), 1, 'Pending answer blocks additional keyboard/form submits');
   await reordered.evaluate(() => window.navalQa.releaseFirst());
-  await reordered.locator('.weplay-game-loading').waitFor({state:'hidden'});
+  await reordered.waitForFunction(() => document.querySelector('.naval-game').getAttribute('aria-busy') === 'false');
   await answerVisible(reordered);
   await reordered.locator('.naval-effect--cannon').waitFor();
   await reordered.clock.runFor(450);
@@ -471,7 +474,7 @@ try {
   await reordered.clock.runFor(100);
   assert.equal(await reordered.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 88');
   assert.equal(await reordered.locator('.naval-ammo').getAttribute('aria-label'), '포탄 장전 0 / 2');
-  checks.push('Pending answer uses themed loading, locks game input and rejects another submit; acknowledgement unlocks the next answer without losing hits or firing twice');
+  checks.push('Pending answer keeps the input focused and editable while rejecting another submit; acknowledgement unlocks the next answer without losing hits or firing twice');
   await reordered.close();
 
   for (const releaseAt of [8200, 8450]) {
@@ -531,7 +534,7 @@ try {
   await delayed.locator('.naval-effect--sunk').waitFor();
   assert.equal(await delayed.locator('.naval-result').count(), 0, 'Delayed final response must not skip its sinking scene');
   assert.equal(await delayed.locator('.naval-screen-message').count(), 0, 'Final sinking remains visible without the time-ended overlay');
-  assert.equal(await delayed.locator('#naval-answer-input').isDisabled(), true, 'Input remains locked while the final answer is pending');
+  assert.equal(await delayed.locator('#naval-answer-input').isDisabled(), false, 'Pending answer does not close the keyboard before time ends');
   assert.equal(await delayed.locator('.naval-health--enemy').getAttribute('aria-label'), '적군 체력 0', 'Sunk enemy HP stays zero during its sinking animation');
   await delayed.clock.runFor(900);
   assert.equal(await delayed.locator('.naval-result').count(), 0, 'Result waits until the 1100ms sinking animation completes');
@@ -539,7 +542,8 @@ try {
   await capture(delayed, 'naval-final-late-response-sinking-1280');
   await advanceTo(delayed, 91700);
   assert.equal(await delayed.evaluate(() => window.navalQa.completions.length), 0);
-  await delayed.locator('.weplay-game-loading').waitFor();
+  assert.equal(await delayed.locator('#naval-answer-input').isDisabled(), true, 'Elapsed time closes input while final acknowledgement is pending');
+  assert.equal(await delayed.locator('.naval-game').getAttribute('aria-busy'), 'true');
   await delayed.evaluate(() => window.navalQa.releaseFirst());
   await delayed.clock.runFor(300);
   await delayed.locator('.naval-result').waitFor();

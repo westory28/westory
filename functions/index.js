@@ -16,6 +16,9 @@ Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
+const registrationPolicyHandlers = require('./studentRegistrationPolicy').createStudentRegistrationPolicyHandlers({ db });
+exports.getStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.getStudentRegistrationPolicy);
+exports.saveStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.saveStudentRegistrationPolicy);
 const studentAvatarHandlers = require('./studentAvatar').createStudentAvatarHandlers({
   db,
   bucket: () => require('firebase-admin/storage').getStorage().bucket(),

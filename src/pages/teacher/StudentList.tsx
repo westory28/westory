@@ -5,6 +5,7 @@ import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import StudentRosterModal from "./components/StudentRosterModal";
+import StudentRegistrationPolicyModal from "./components/StudentRegistrationPolicyModal";
 import { buildStudentPagination } from "./components/studentPagination";
 import "./components/teacher-list-controls.css";
 import { useAuth } from "../../contexts/AuthContext";
@@ -167,6 +168,7 @@ const StudentList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [registrationNotice, setRegistrationNotice] = useState("");
+  const [registrationPolicyOpen, setRegistrationPolicyOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [gradeFilter, setGradeFilter] = useState("all");
@@ -644,17 +646,26 @@ const StudentList: React.FC = () => {
               </span>
             </h1>
             {!readOnly && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEnrollmentTargets([]);
-                  setRosterModalMode("create");
-                }}
-                className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
-              >
-                <i className="fas fa-user-plus mr-2" aria-hidden="true"></i>학생
-                등록
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRegistrationPolicyOpen(true)}
+                  className="min-h-11 rounded-lg border border-gray-300 px-4 text-sm font-bold text-gray-700 hover:border-blue-500 hover:text-blue-600"
+                >
+                  신규 가입 기준
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEnrollmentTargets([]);
+                    setRosterModalMode("create");
+                  }}
+                  className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  <i className="fas fa-user-plus mr-2" aria-hidden="true"></i>
+                  학생 등록
+                </button>
+              </div>
             )}
           </div>
 
@@ -1137,6 +1148,11 @@ const StudentList: React.FC = () => {
           onUpdate={fetchStudents}
           readOnly={readOnly || isStudentRegistrationPending(selectedStudent)}
           initialTab={detailInitialTab}
+        />
+
+        <StudentRegistrationPolicyModal
+          open={!readOnly && registrationPolicyOpen}
+          onClose={() => setRegistrationPolicyOpen(false)}
         />
 
         <StudentRosterModal

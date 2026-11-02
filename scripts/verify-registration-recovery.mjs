@@ -24,4 +24,22 @@ assert.match(rejected, /가입 신청이 거부되었습니다/);
 assert.doesNotMatch(rejected, /등록 승인 대기/);
 assert.match(rejected, /로그아웃/);
 assert.match(render({ error: { message: "연결 오류", retryable: true } }), /연결 오류/);
-console.log("PASS: pending, rejected and failed sign-in recovery states remain distinct");
+const loadLibrary = name => {
+  const loaded = { exports: {} };
+  vm.runInNewContext(ts.transpileModule(readFileSync(`src/lib/${name}.ts`, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, { module: loaded, exports: loaded.exports, require: dependency => loadLibrary(dependency.replace(/^\.\//, "")) });
+  return loaded.exports;
+};
+const { authStartupFailure } = loadLibrary("authStartup");
+for (const emailPatternLabel of ["263NNNN@yongshin-ms.ms.kr", "272NNNN@yongshin-ms.ms.kr"]) {
+  const failure = authStartupFailure({ code: "functions/permission-denied",
+    details: { reason: "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED", policy: { emailPatternLabel } } });
+  assert.equal(failure.retryable, false);
+  assert.ok(render({ error: failure }).includes(emailPatternLabel));
+}
+const invalidLabel = authStartupFailure({ code: "functions/permission-denied",
+  details: { reason: "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED", policy: { emailPatternLabel: "<unsafe>" } } });
+assert.equal(invalidLabel.retryable, false);
+assert.doesNotMatch(invalidLabel.message, /unsafe/);
+console.log("PASS: pending, rejected, current intake policy and failed sign-in recovery states remain distinct");

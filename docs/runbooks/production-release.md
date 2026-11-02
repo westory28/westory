@@ -1,5 +1,13 @@
 # 운영 배포 절차
 
+## 신규 가입 기준과 게임 안정성 (2026-11-02)
+
+교사 `학생 명단 → 신규 가입 기준`에서 학교 계정 발급 연도와 담당 학년을 저장한다. 단일 원본은 `site_settings/student_registration_policy`이며 현재 수업 학기와 별개다. 문서가 없을 때만 2026년 3학년(`263NNNN@yongshin-ms.ms.kr`)을 사용한다. 2027년 2학년으로 저장하면 `272NNNN`이 된다. 이미 승인된 학생·기존 학생의 계정과 기록은 자동 변경하지 않는다. 자세한 허용·차단 및 충돌·재시도 계약은 [가입 기준 검토](../reviews/student-registration-policy-20261102.md)를 따른다.
+
+운영 소스를 대조한 후 `getStudentRegistrationPolicy`, `saveStudentRegistrationPolicy`, `openApplicationSession`, `beginApplicationSessionReauthentication`, `touchApplicationSession`, `closeApplicationSession`, `executeCommand`와 Firestore rules만 배포한다. 게임 수정은 프론트엔드에 한정하며 Storage rules·게임 Functions·공개 설정은 배포하거나 변경하지 않는다. 정책 API와 rules를 먼저 반영하고 Vercel main 배포를 승격한다. 설정 문서나 학생 계정을 시험 목적으로 운영에서 생성·수정하지 않는다.
+
+필수 검증은 기본 빌드·Functions check·포맷, 가입 정책 전용 Firestore emulator 통합, 기존 로그인·학생 접근 회귀와 `verify-student-registration-policy-browser.mjs`, `verify-weplay-network-loading.mjs`, `verify-weplay-naval-browser.mjs`, `verify-yut-publication-recovery-browser.mjs`다. 브라우저 검사에는 실제 공통 재인증 창, 답안 응답 유실·같은 영수증 재시도, 키보드 viewport·IME·회전, 윷 공개 확인 실패 후 복귀를 포함한다. 모사한 키보드 검사를 실물 iOS/Android 검증으로 표현하지 않는다. [통합 검증 기록](../reviews/registration-game-stability-20261102.md)을 참고한다.
+
 ## 원화 기반 2D 아바타 (2026-10-29)
 
 꾸미기는 `public/avatar/v2/`의 원화 레이어·manifest와 Canvas 2D 렌더러를 사용한다. 아래 2026-10-28의 GLB 생성 절차는 구 3D 클라이언트 기록이다. 원본 시트(`assets/avatar-source/v2/`)와 등록표(`scripts/avatar-2d-art-registry.json`)를 수정하면 `node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json` 뒤 `node scripts/render-avatar-item-previews.mjs`를 실행한다. `npm run verify:avatar-previews`와 기본 빌드는 원본·등록표·생성기·레이어·미리보기의 일치와 전체 품목 대응을 검사한다. 그림의 연결·두상 맞춤은 실제 화면에서 별도로 확인한다.

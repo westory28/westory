@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import {
@@ -537,6 +543,7 @@ export default function YutGame({
   onMusicActiveChange,
   initialSettings,
   initialLobby,
+  suspended = false,
 }: {
   portal: "student" | "teacher";
   preview?: boolean;
@@ -545,6 +552,7 @@ export default function YutGame({
   onMusicActiveChange: (active: boolean) => void;
   initialSettings?: YutSettings;
   initialLobby?: YutLobbySnapshot;
+  suspended?: boolean;
 }) {
   const { config, currentUser } = useAuth();
   const admissionSnapshot = useRef(initialLobby);
@@ -754,7 +762,7 @@ export default function YutGame({
       );
     setNote("이 게임 방식은 지금 이용할 수 없습니다.");
   }, [modeUnavailable, local]);
-  const paused = local && (hidden || portrait || modeUnavailable);
+  const paused = local && (hidden || portrait || modeUnavailable || suspended);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const movingRef = useRef(moving);
@@ -1077,6 +1085,16 @@ export default function YutGame({
       void document.exitFullscreen?.();
     else setFullscreenMode(null);
   };
+  useEffect(() => {
+    if (!suspended) return;
+    setDialog(null);
+    setStackChoice(null);
+    setEmoteOpen(false);
+    setSingleOpen(false);
+    setFullscreenMode(null);
+    if (document.fullscreenElement === shellRef.current)
+      void document.exitFullscreen?.().catch(() => {});
+  }, [suspended]);
 
   useEffect(() => {
     mounted.current = true;
@@ -1226,7 +1244,7 @@ export default function YutGame({
   }, [identity, retry, acceptRoom, recordServerTime]);
 
   useEffect(() => {
-    if (local || loading || !room?.id || !uid || !config) return;
+    if (local || loading || suspended || !room?.id || !uid || !config) return;
     const scope = identity,
       id = room.id;
     const epoch = roomEpoch.current;
@@ -1323,6 +1341,7 @@ export default function YutGame({
     identity,
     roomSubscription,
     loading,
+    suspended,
     local,
     uid,
     config?.year,
@@ -1331,10 +1350,11 @@ export default function YutGame({
   ]);
 
   useEffect(() => {
-    if (!room || paused) return;
+    if (!room || paused || hidden || suspended) return;
+    setClock(Date.now());
     const timer = window.setInterval(() => setClock(Date.now()), 250);
     return () => window.clearInterval(timer);
-  }, [room?.id, paused]);
+  }, [room?.id, paused, hidden, suspended]);
   useEffect(() => {
     if (local || room?.status !== "waiting") return;
     if (
@@ -1393,6 +1413,7 @@ export default function YutGame({
   ) => {
     if (
       pendingRef.current ||
+      suspended ||
       disconnected ||
       needsSync ||
       loading ||
@@ -1533,7 +1554,10 @@ export default function YutGame({
       : 2;
   const turn = room?.players.find((item) => item.uid === room.turnUid);
   const myTurn = room?.turnUid === uid;
-  const moves = room ? getLegalYutMoves(room, uid) : [];
+  const moves = useMemo(
+    () => (room ? getLegalYutMoves(room, uid) : []),
+    [room, uid],
+  );
   const seconds = room
     ? Math.max(
         0,
@@ -1548,7 +1572,12 @@ export default function YutGame({
       )
     : 0;
   const busy =
-    Boolean(pending) || disconnected || needsSync || loading || modeUnavailable;
+    Boolean(pending) ||
+    disconnected ||
+    needsSync ||
+    loading ||
+    modeUnavailable ||
+    suspended;
   const serverClock = clock + (local ? 0 : serverOffset);
   const phaseWaiting = Boolean(
     room && serverClock < (room.phaseStartsAtMs || 0),
@@ -1622,7 +1651,14 @@ export default function YutGame({
     ),
   );
   const sendEmote = async (kind: YutEmoteKind) => {
-    if (!room || emoteFlight.current || emoteCooldown || portrait || hidden)
+    if (
+      !room ||
+      emoteFlight.current ||
+      emoteCooldown ||
+      portrait ||
+      hidden ||
+      suspended
+    )
       return;
     const scope = identityRef.current,
       id = room.id;
@@ -1856,6 +1892,7 @@ export default function YutGame({
     moves,
   ]);
   const beginLocal = (mode: YutLocalMode) => {
+    if (suspended) return;
     music.start();
     if (
       !portrait &&

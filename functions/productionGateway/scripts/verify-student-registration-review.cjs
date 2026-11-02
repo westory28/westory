@@ -56,13 +56,13 @@ class Store {
 }
 const fixture = () => {
   const store = new Store({
-    [paths.user]: { role: "student", name: "신청학생", grade: "3", class: "1", number: "5", email: "applicant@yongshin-ms.ms.kr", registrationApprovalStatus: "PENDING" },
+    [paths.user]: { role: "student", name: "신청학생", grade: "3", class: "1", number: "5", email: "2630001@yongshin-ms.ms.kr", registrationApprovalStatus: "PENDING" },
     [paths.pointer]: { semesterId: scope, revision: 7 },
     [paths.manifest]: { semesterId: scope, status: "ACTIVE", revision: 7 },
     "semester_classes/class-a": { classId: "class-a", semesterId: scope, status: "ACTIVE", revision: 2, grade: "3", classNumber: "1" },
   });
   const authCalls = [], sessionCalls = [];
-  let authUser = { uid: "applicant", email: "applicant@yongshin-ms.ms.kr", emailVerified: true, disabled: false };
+  let authUser = { uid: "applicant", email: "2630001@yongshin-ms.ms.kr", emailVerified: true, disabled: false };
   const adapter = registration.createStudentRegistrationApprovalAdapter({ getAuthUser: async uid => { authCalls.push(uid); return authUser; } });
   const core = gateway.createCommandGatewayCore({ store, projectId,
     assertSession: async (request, options) => {
@@ -159,7 +159,7 @@ test("racing approval and rejection cannot both commit, and approval keeps its a
     assert.equal(f.store.documents.get(paths.user).registrationApprovalStatus, first === "APPROVE" ? "APPROVED_PENDING_ACCOUNT" : "REJECTED");
     assert.equal(f.store.documents.has(paths.slot), first === "APPROVE");
   }
-  const f = fixture(); f.setAuth({ uid: "applicant", email: "applicant@yongshin-ms.ms.kr", emailVerified: false });
+  const f = fixture(); f.setAuth({ uid: "applicant", email: "2630001@yongshin-ms.ms.kr", emailVerified: false });
   await unchanged(f, f.request("APPROVE"), "REGISTRATION_SCHOOL_ACCOUNT_REQUIRED");
 });
 
@@ -173,4 +173,23 @@ test("pending query removes rejected applicants and still returns approval in pr
   const approval = fixture(); await approval.core.execute(approval.request("APPROVE"));
   const approvedQuery = registration.createStudentRegistrationApprovalQueryCore({ store: approval.store, assertManager: async () => {} })[registration.QUERY_NAME];
   assert.equal((await approvedQuery({ data: { semesterId: scope } })).students[0].status, "APPROVED_PENDING_ACCOUNT");
+});
+
+test("every approval stage reads current intake policy, while rejected old accounts remain reviewable", async () => {
+  for (const email of ["2430001@yongshin-ms.ms.kr", "2530001@yongshin-ms.ms.kr", "26300001@yongshin-ms.ms.kr"]) {
+    const f = fixture(); f.setAuth({ uid: "applicant", email, emailVerified: true, disabled: false });
+    f.store.documents.get(paths.user).email = email;
+    await unchanged(f, f.request("APPROVE"), "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED");
+    assert.equal((await f.core.execute(f.request("REJECT"))).result.status, "REJECTED");
+  }
+  const f = fixture();
+  f.store.documents.set("site_settings/student_registration_policy", { schemaVersion: 1, admissionYear: "2027", admissionGrade: "2", revision: 1 });
+  await unchanged(f, f.request("APPROVE"), "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED");
+  f.setAuth({ uid: "applicant", email: "2720001@yongshin-ms.ms.kr", emailVerified: true, disabled: false });
+  f.store.documents.get(paths.user).email = "2720001@yongshin-ms.ms.kr";
+  const response = await f.core.execute(f.request("APPROVE"));
+  assert.equal(response.result.status, "APPROVED_PENDING_ACCOUNT");
+  f.store.documents.set("site_settings/student_registration_policy", { schemaVersion: 1, admissionYear: "2028", admissionGrade: "1", revision: 2 });
+  await unchanged(f, f.request("PREPARE_ACCOUNT", { expectedEnrollmentId: response.result.enrollmentId, expectedEconomyRevision: 1 }), "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED");
+  await unchanged(f, f.request("FINALIZE", { expectedEnrollmentId: response.result.enrollmentId, expectedAccountRevision: 1 }), "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED");
 });

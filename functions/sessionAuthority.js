@@ -13,6 +13,9 @@ const onCall = (options, handler) => onCallWithStudentMaintenance(
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
+const {
+  POLICY_PATH, normalizePolicy, isEstablishedProfile, assertRegistrationEmail,
+} = require("./studentRegistrationPolicyCore");
 
 const GENERAL_IDLE_MS = 60 * 60 * 1000;
 const HIGH_RISK_IDLE_MS = GENERAL_IDLE_MS;
@@ -193,6 +196,16 @@ const getSessionRef = (uid, authTime) =>
 
 const getReauthTransitionRef = (uid) =>
   getFirestore().doc(`application_session_transitions/${uid}`);
+
+const assertRegistrationSessionAccount = async (request, identity, config, transaction) => {
+  if (identity.email === ADMIN_EMAIL || isTrustedW10PVisualFixtureAdmin(request, identity, config)) return;
+  const db = getFirestore();
+  const read = ref => transaction ? transaction.get(ref) : ref.get();
+  const profile = await read(db.doc(`users/${identity.uid}`));
+  if (profile.exists && isEstablishedProfile(profile.data())) return;
+  const policy = await read(db.doc(POLICY_PATH));
+  assertRegistrationEmail(identity.email, normalizePolicy(policy.exists ? policy.data() : null, policy.exists));
+};
 
 const timestampMillis = (value) =>
   value && typeof value.toMillis === "function" ? value.toMillis() : 0;
@@ -401,6 +414,7 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
   const transitionRef = getReauthTransitionRef(identity.uid);
 
   return db.runTransaction(async (transaction) => {
+    await assertRegistrationSessionAccount(request, identity, config, transaction);
     const nowMs = Date.now();
     const snap = await transaction.get(ref);
     const existing = snap.exists ? snap.data() || {} : null;
@@ -484,6 +498,7 @@ const beginApplicationSessionReauthentication = onCall(
     const identity = await assertActiveApplicationSession(request, {
       highRisk: true,
     });
+    await assertRegistrationSessionAccount(request, identity, getSessionAuthorityConfig());
     const nowMs = Date.now();
     await getReauthTransitionRef(identity.uid).set({
       uid: identity.uid,
@@ -522,6 +537,7 @@ const touchApplicationSession = onCall({ region: REGION }, async (request) => {
   const db = getFirestore();
   const ref = getSessionRef(identity.uid, identity.authTime);
   return db.runTransaction(async (transaction) => {
+    await assertRegistrationSessionAccount(request, identity, config, transaction);
     const nowMs = Date.now();
     const snap = await transaction.get(ref);
     const session = snap.exists ? snap.data() || {} : {};

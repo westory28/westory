@@ -71,9 +71,24 @@ interface Attempt {
 }
 
 export const authStartupFailure = (error: unknown): AuthStartupError => {
-  const failure = error as { code?: string; details?: { reason?: string } };
+  const failure = error as {
+    code?: string;
+    details?: { reason?: string; policy?: { emailPatternLabel?: string } };
+  };
   const code = String(failure?.code || "auth/startup-failed");
   const reason = String(failure?.details?.reason || "");
+  if (reason === "STUDENT_REGISTRATION_EMAIL_NOT_ALLOWED") {
+    const label = failure.details?.policy?.emailPatternLabel;
+    return {
+      code,
+      message:
+        typeof label === "string" &&
+        /^[0-9]{3}NNNN@yongshin-ms\.ms\.kr$/.test(label)
+          ? `신규 가입은 ${label} 형식의 학교 계정만 가능합니다. 로그인 계정을 확인해 주세요.`
+          : "신규 가입 기준에 맞지 않는 학교 계정입니다. 선생님에게 확인해 주세요.",
+      retryable: false,
+    };
+  }
   if (reason === "APP_CHECK_REQUIRED") {
     return {
       code,

@@ -19,6 +19,7 @@ const gateway = require("../commandGateway");
 const { createStudentRegistrationNotificationService, noticeId } = require("../../studentRegistrationNotifications");
 const semesterId = "2026-2", root = "years/2026/semesters/2";
 const authTime = Math.floor(Date.now() / 1000) - 30;
+const studentEmail = uid => `${({ approved: "2630001", rejected: "2630002", cleared: "2630003" })[uid] || uid}@yongshin-ms.ms.kr`;
 let rulesEnvironment, adminClient, clientFor;
 const service = createStudentRegistrationNotificationService({ db, resolveAdminUid: async () => "admin" });
 const store = gateway.createFirestoreStore(db);
@@ -29,14 +30,14 @@ const core = gateway.createCommandGatewayCore({ store, projectId,
   authorizeCommand: async ({ request }) => ({ actorUid: request.auth.uid, actorEmail: "manager@yongshin-ms.ms.kr", actorRole: "teacher" }),
   serverTimestamp: () => FieldValue.serverTimestamp(), concreteTimestamp: () => Timestamp.now(),
   commandAdapters: { [registration.COMMAND_TYPE]: registration.createStudentRegistrationApprovalAdapter({
-    getAuthUser: async uid => ({ uid, email: `${uid}@yongshin-ms.ms.kr`, emailVerified: true, disabled: false }),
+    getAuthUser: async uid => ({ uid, email: studentEmail(uid), emailVerified: true, disabled: false }),
   }) },
 });
 const read = async path => (await db.doc(path).get()).data();
 const inboxPath = uid => `${root}/notification_inboxes/${uid}`;
 const itemPath = (uid, recipient = "admin") => `${inboxPath(recipient)}/items/${noticeId(uid)}`;
 const profile = uid => ({ uid, role: "student", name: `합성 ${uid}`, grade: "3", class: "1", number: uid === "approved" ? "1" : "2",
-  email: `${uid}@yongshin-ms.ms.kr`, registrationApprovalStatus: "PENDING", createdAt: serverTimestamp() });
+  email: studentEmail(uid), registrationApprovalStatus: "PENDING", createdAt: serverTimestamp() });
 const writeAndNotify = async (uid, data) => {
   const ref = db.doc(`users/${uid}`), before = await ref.get();
   if (before.exists) await ref.set(data, { merge: true });
@@ -75,7 +76,7 @@ const waitForUnread = (expected, change) => new Promise((resolve, reject) => {
     rules: readFileSync(resolve(__dirname, "../../../firestore.rules"), "utf8") } });
   await rulesEnvironment.clearFirestore();
   const client = uid => rulesEnvironment.authenticatedContext(uid, {
-    email: uid === "admin" ? "westoria28@gmail.com" : `${uid}@yongshin-ms.ms.kr`, auth_time: authTime,
+    email: uid === "admin" ? "westoria28@gmail.com" : studentEmail(uid), auth_time: authTime,
   }).firestore();
   clientFor = client;
   adminClient = client("admin");

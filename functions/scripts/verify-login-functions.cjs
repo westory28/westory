@@ -44,6 +44,14 @@ for (const name of lifecycleNames) {
 }
 
 const catalog = deployedFunctions.getQuizEditorCatalog;
+for (const name of ["getStudentRegistrationPolicy", "saveStudentRegistrationPolicy"]) {
+  const callable = deployedFunctions[name];
+  assert.equal(typeof callable, "function", `${name} must be attached to the deployment entrypoint.`);
+  assert.deepEqual(callable.__endpoint?.region, ["asia-northeast3"]);
+  assert.equal(callable.__endpoint?.platform, "gcfv2");
+  assert.ok(Object.hasOwn(callable.__endpoint, "callableTrigger"));
+  assert.equal(typeof callable.run, "function");
+}
 assert.equal(typeof catalog, "function", "index.js must export getQuizEditorCatalog.");
 assert.deepEqual(catalog.__endpoint?.region, ["asia-northeast3"]);
 assert.equal(catalog.__endpoint?.platform, "gcfv2");
