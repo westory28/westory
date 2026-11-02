@@ -36,7 +36,7 @@ if(new URLSearchParams(location.search).has('legacy321'))data.splice(0,data.leng
 ].map((student,index)=>({role:'student',grade:'3',class:'1',number:String(index+28),email:student.id+'@example.test',...student})));
 export const events=[];
 if(new URLSearchParams(location.search).has('registration'))data.push({id:'qa-pending',role:'student',grade:'3',class:'1',number:'5',name:'가입대기예시',studentName:'가입대기예시',email:'qa-pending@example.test',registrationApprovalStatus:'PENDING'});
-window.rosterQa={data,events,toasts:[],fail:false};
+window.rosterQa={data,events,toasts:[],fail:false,popupStarts:0,popupFailed:false,reauthenticated:false,dialogResults:[]};
 `;
 const mocks = {
   "qa-state": state,
@@ -56,7 +56,15 @@ export const getHttpsCallable=async(name)=>async(input)=>{
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
   "qa-detail": `export default()=>null;`,
   "qa-toast": `const showToast=(toast)=>window.rosterQa.toasts.push(toast);export const useAppToast=()=>({showToast});`,
-  "qa-sensitive": `export const ensureSensitiveOperation=async()=>{};`,
+  "qa-sensitive": `import{requestSensitiveReauthentication}from'${root}/src/lib/sensitiveOperationPrompt';
+export const ensureSensitiveOperation=async()=>{
+ if(!new URLSearchParams(location.search).has('reauth')||window.rosterQa.reauthenticated)return;
+ await requestSensitiveReauthentication(async()=>{
+  window.rosterQa.popupStarts++;window.rosterQa.popupHadUserActivation=navigator.userActivation.isActive;
+  if(window.rosterQa.popupFailed)throw Object.assign(new Error('합성 Google 팝업 실패'),{code:'auth/popup-blocked'});
+  window.rosterQa.schoolVerified=true;window.rosterQa.reauthenticated=true;
+ });
+};`,
 };
 const moduleFor = (request) => {
   const value = request.replaceAll("\\", "/");
@@ -71,7 +79,10 @@ const moduleFor = (request) => {
 };
 const result = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter,useNavigate}from'react-router-dom';import StudentList from'${root}/src/pages/teacher/StudentList';import'qa-state';function Fixture(){window.rosterQa.navigate=useNavigate();return <StudentList/>}createRoot(document.getElementById('root')).render(<BrowserRouter><Fixture/></BrowserRouter>);`,
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter,useNavigate}from'react-router-dom';import StudentList from'${root}/src/pages/teacher/StudentList';import{AppDialogProvider,useAppDialog}from'${root}/src/components/common/AppDialogProvider';import{SensitiveOperationController}from'${root}/src/components/common/SensitiveOperationController';import'qa-state';
+function DialogProbe(){const{confirm,prompt}=useAppDialog();if(!new URLSearchParams(location.search).has('dialogs'))return null;return <div><button onClick={async()=>window.rosterQa.dialogResults.push(await confirm({title:'합성 확인',message:'확인 키보드 회귀',confirmLabel:'진행'}))}>확인 대화상자 열기</button><button onClick={async()=>window.rosterQa.dialogResults.push(await prompt({title:'합성 입력',inputLabel:'검증 입력',required:true,confirmLabel:'입력 저장'}))}>입력 대화상자 열기</button></div>}
+function Fixture(){window.rosterQa.navigate=useNavigate();return <><DialogProbe/><StudentList/></>}
+createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><SensitiveOperationController/><Fixture/></AppDialogProvider></BrowserRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -406,6 +417,233 @@ try {
   }
   report.checks.push(
     "390/768/1280: notification link opens fresh pending review; rejection requires confirmation, sends only REJECT, removes pending row and preserves denied row; repeated/approved/missing links do not reopen actionable review.",
+  );
+  const reviewDialog = page.locator(
+    'dialog[aria-labelledby="student-roster-modal-title"]',
+  );
+  const reauthentication = page.getByRole("alertdialog", {
+    name: "다시 인증",
+    exact: true,
+  });
+  const waitForReviewUnlocked = () =>
+    page.waitForFunction(() => {
+      const review = document.querySelector(
+        'dialog[aria-labelledby="student-roster-modal-title"]',
+      );
+      return (
+        review?.open &&
+        [...review.querySelectorAll("button")].some(
+          (button) => button.textContent.trim() === "취소" && !button.disabled,
+        ) &&
+        !review.textContent.includes("저장 중…")
+      );
+    });
+  const assertReauthenticationOnTop = async () => {
+    await reauthentication.waitFor();
+    const button = reauthentication.getByRole("button", {
+      name: "Google로 다시 인증",
+      exact: true,
+    });
+    assert.equal(
+      await button.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          box.x + box.width / 2,
+          box.y + box.height / 2,
+        );
+        return element === hit || element.contains(hit);
+      }),
+      true,
+      "Reauthentication must receive pointer input above the native roster dialog",
+    );
+    assert.equal(
+      await button.evaluate((element) =>
+        Boolean(element.closest("dialog")?.matches(":modal")),
+      ),
+      true,
+    );
+    assert.equal(
+      await page.evaluate(
+        () => document.querySelectorAll("dialog:modal").length,
+      ),
+      2,
+    );
+    return button;
+  };
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const action of ["APPROVE", "REJECT"]) {
+      await page.goto(origin + "?registration=qa-pending&reauth");
+      await reviewDialog.waitFor();
+      const checkbox =
+        reviewDialog.getByLabel("학급·번호·이름을 확인했습니다.");
+      const approve = reviewDialog.getByRole("button", {
+        name: "등록 승인",
+        exact: true,
+      });
+      assert.equal(await approve.isDisabled(), true);
+      await checkbox.check();
+      assert.equal(await approve.isEnabled(), true);
+      await checkbox.uncheck();
+      assert.equal(await approve.isDisabled(), true);
+      if (action === "APPROVE") await checkbox.check();
+      else
+        await reviewDialog
+          .getByRole("button", { name: "등록 거부", exact: true })
+          .click();
+      const startReview = () =>
+        reviewDialog
+          .getByRole("button", {
+            name: action === "APPROVE" ? "등록 승인" : "거부 확정",
+            exact: true,
+          })
+          .click();
+
+      await startReview();
+      await assertReauthenticationOnTop();
+      assert.equal(await page.evaluate(() => window.rosterQa.events.length), 0);
+      assert.equal(await page.evaluate(() => window.rosterQa.popupStarts), 0);
+      await page.screenshot({
+        path: `${out}/registration-reauth-${action.toLowerCase()}-${width}.png`,
+        fullPage: true,
+      });
+      report.screenshots.push(
+        `registration-reauth-${action.toLowerCase()}-${width}.png`,
+      );
+      if (action === "APPROVE") await page.keyboard.press("Escape");
+      else
+        await reauthentication
+          .getByRole("button", { name: "취소", exact: true })
+          .click();
+      await reauthentication.waitFor({ state: "hidden" });
+      await waitForReviewUnlocked();
+      assert.equal(await reviewDialog.isVisible(), true);
+      assert.equal(await page.evaluate(() => window.rosterQa.events.length), 0);
+      assert.equal(await page.evaluate(() => window.rosterQa.popupStarts), 0);
+
+      await page.evaluate(() => (window.rosterQa.popupFailed = true));
+      await startReview();
+      await (await assertReauthenticationOnTop()).click();
+      await reauthentication.waitFor({ state: "hidden" });
+      await waitForReviewUnlocked();
+      await reviewDialog
+        .getByRole("alert")
+        .filter({ hasText: "합성 Google 팝업 실패" })
+        .waitFor();
+      assert.equal(await page.evaluate(() => window.rosterQa.events.length), 0);
+      assert.equal(await page.evaluate(() => window.rosterQa.popupStarts), 1);
+
+      await page.evaluate(() => (window.rosterQa.popupFailed = false));
+      await startReview();
+      await (await assertReauthenticationOnTop()).click();
+      await reviewDialog.waitFor({ state: "hidden" });
+      assert.deepEqual(
+        await page.evaluate(() =>
+          window.rosterQa.events
+            .filter((event) => event.name === "executeCommand")
+            .map((event) => event.input.payload.action),
+        ),
+        action === "APPROVE"
+          ? ["APPROVE", "PREPARE_ACCOUNT", "FINALIZE"]
+          : ["REJECT"],
+      );
+      assert.equal(await page.evaluate(() => window.rosterQa.popupStarts), 2);
+      assert.equal(
+        await page.evaluate(() => window.rosterQa.popupHadUserActivation),
+        true,
+        "Popup start remains inside the trusted confirmation click",
+      );
+    }
+
+    await page.goto(origin + "?dialogs");
+    const confirmOpener = page.getByRole("button", {
+      name: "확인 대화상자 열기",
+      exact: true,
+    });
+    await confirmOpener.click();
+    const confirmation = page.getByRole("alertdialog", {
+      name: "합성 확인",
+      exact: true,
+    });
+    await confirmation.waitFor();
+    await confirmation
+      .getByRole("button", { name: "진행", exact: true })
+      .focus();
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await confirmation
+        .getByRole("button", { name: "취소", exact: true })
+        .evaluate((element) => document.activeElement === element),
+      true,
+    );
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(
+      await confirmation
+        .getByRole("button", { name: "진행", exact: true })
+        .evaluate((element) => document.activeElement === element),
+      true,
+    );
+    await page.keyboard.press("Escape");
+    await confirmation.waitFor({ state: "hidden" });
+    await page.waitForFunction(
+      () => window.rosterQa.dialogResults.length === 1,
+    );
+    assert.deepEqual(await page.evaluate(() => window.rosterQa.dialogResults), [
+      false,
+    ]);
+    await page.waitForFunction(
+      () => document.activeElement?.textContent === "확인 대화상자 열기",
+    );
+    await confirmOpener.click();
+    await confirmation
+      .getByRole("button", { name: "진행", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    await confirmation.waitFor({ state: "hidden" });
+    assert.deepEqual(await page.evaluate(() => window.rosterQa.dialogResults), [
+      false,
+      true,
+    ]);
+
+    await page
+      .getByRole("button", { name: "입력 대화상자 열기", exact: true })
+      .click();
+    const prompt = page.getByRole("dialog", { name: "합성 입력", exact: true });
+    await prompt.waitFor();
+    const input = prompt.getByLabel("검증 입력", { exact: true });
+    await input.press("Enter");
+    await prompt.getByText("내용을 입력해 주세요.", { exact: true }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.rosterQa.dialogResults), [
+      false,
+      true,
+    ]);
+    await input.fill("합성 검증 입력");
+    await input.press("Enter");
+    await prompt.waitFor({ state: "hidden" });
+    assert.deepEqual(await page.evaluate(() => window.rosterQa.dialogResults), [
+      false,
+      true,
+      "합성 검증 입력",
+    ]);
+    await page.waitForFunction(
+      () => document.activeElement?.textContent === "입력 대화상자 열기",
+    );
+    await page
+      .getByRole("button", { name: "입력 대화상자 열기", exact: true })
+      .click();
+    await prompt.waitFor();
+    await page.keyboard.press("Escape");
+    await prompt.waitFor({ state: "hidden" });
+    assert.deepEqual(await page.evaluate(() => window.rosterQa.dialogResults), [
+      false,
+      true,
+      "합성 검증 입력",
+      null,
+    ]);
+  }
+  report.checks.push(
+    "390/768/1280: actual AppDialogProvider and SensitiveOperationController show clickable native reauthentication above roster review for APPROVE and REJECT; cancel and popup failure unlock without server commands; retry preserves user activation and completes canonical stages.",
+    "390/768/1280: approval checkbox gates submit in both directions; confirmation Tab/Shift+Tab trap, Escape/Enter, prompt required validation/Enter/Escape and opener focus restoration pass.",
   );
   await page.goto(origin + "?readonly&registration=qa-pending");
   await page

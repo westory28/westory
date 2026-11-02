@@ -439,7 +439,7 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
             )}
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || (mode === "registration" && !rosterConfirmed)}
             className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving

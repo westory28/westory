@@ -113,7 +113,7 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   const [promptError, setPromptError] = useState("");
   const resolverRef = useRef<DialogResolver | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const promptInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(
     null,
@@ -207,6 +207,10 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     if (!dialog) return undefined;
+    // Native modal callers make ordinary overlays inert. Join the browser's
+    // top layer so confirmations and reauthentication stay actionable.
+    const element = dialogRef.current;
+    element?.showModal();
     const frame = window.requestAnimationFrame(() => {
       if (dialog.kind === "prompt") {
         promptInputRef.current?.focus();
@@ -215,7 +219,10 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
         cancelButtonRef.current?.focus();
       }
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      element?.close();
+    };
   }, [dialog]);
 
   const value = useMemo<AppDialogContextValue>(
@@ -226,7 +233,7 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     [confirm, prompt],
   );
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDialogElement>) => {
     if (!dialog) return;
     if (event.key === "Escape") {
       event.preventDefault();
@@ -265,134 +272,134 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     <AppDialogContext.Provider value={value}>
       {children}
       {dialog && (
-        <div
-          className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-[2px]"
+        <dialog
+          ref={dialogRef}
+          role={dialog.kind === "confirm" ? "alertdialog" : "dialog"}
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={dialog.message ? messageId : undefined}
+          className="m-auto max-h-[88vh] w-[calc(100%-2rem)] max-w-md flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-2xl open:flex backdrop:bg-slate-950/45 backdrop:backdrop-blur-[2px]"
           onKeyDown={handleKeyDown}
+          onCancel={(event) => {
+            event.preventDefault();
+            closeDialog(dialog.kind === "prompt" ? null : false);
+          }}
         >
-          <div
-            ref={dialogRef}
-            role={dialog.kind === "confirm" ? "alertdialog" : "dialog"}
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={dialog.message ? messageId : undefined}
-            className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
-          >
-            <div className="overflow-y-auto px-5 pt-5">
+          <div className="overflow-y-auto px-5 pt-5">
+            <div
+              className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${toneMeta.iconClassName}`}
+              aria-hidden="true"
+            >
+              <i className={`${toneMeta.icon} text-lg`}></i>
+            </div>
+            <h2
+              id={titleId}
+              className="mt-4 text-lg font-black leading-7 text-slate-900"
+            >
+              {dialog.title}
+            </h2>
+            {dialog.message && (
               <div
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${toneMeta.iconClassName}`}
-                aria-hidden="true"
+                id={messageId}
+                className="mt-2 text-sm font-semibold leading-6 text-slate-600"
               >
-                <i className={`${toneMeta.icon} text-lg`}></i>
+                {typeof dialog.message === "string" ? (
+                  <p className="whitespace-pre-line">{dialog.message}</p>
+                ) : (
+                  dialog.message
+                )}
               </div>
-              <h2
-                id={titleId}
-                className="mt-4 text-lg font-black leading-7 text-slate-900"
-              >
-                {dialog.title}
-              </h2>
-              {dialog.message && (
-                <div
-                  id={messageId}
-                  className="mt-2 text-sm font-semibold leading-6 text-slate-600"
+            )}
+            {dialog.kind === "prompt" && (
+              <div className="mt-4">
+                <label
+                  htmlFor={promptInputId}
+                  className="text-xs font-black text-slate-600"
                 >
-                  {typeof dialog.message === "string" ? (
-                    <p className="whitespace-pre-line">{dialog.message}</p>
-                  ) : (
-                    dialog.message
-                  )}
-                </div>
-              )}
-              {dialog.kind === "prompt" && (
-                <div className="mt-4">
-                  <label
-                    htmlFor={promptInputId}
-                    className="text-xs font-black text-slate-600"
-                  >
-                    {dialog.inputLabel}
-                  </label>
-                  {dialog.multiline ? (
-                    <textarea
-                      lang="ko"
-                      inputMode="text"
-                      id={promptInputId}
-                      ref={(element) => {
-                        promptInputRef.current = element;
-                      }}
-                      value={promptValue}
-                      onChange={(event) => {
-                        setPromptValue(event.target.value);
-                        if (promptError) setPromptError("");
-                      }}
-                      rows={5}
-                      maxLength={dialog.maxLength}
-                      placeholder={dialog.placeholder}
-                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  ) : (
-                    <input
-                      lang="ko"
-                      id={promptInputId}
-                      ref={(element) => {
-                        promptInputRef.current = element;
-                      }}
-                      value={promptValue}
-                      onChange={(event) => {
-                        setPromptValue(event.target.value);
-                        if (promptError) setPromptError("");
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handlePromptConfirm();
-                        }
-                      }}
-                      maxLength={dialog.maxLength}
-                      inputMode={dialog.inputMode ?? "text"}
-                      placeholder={dialog.placeholder}
-                      className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                  )}
-                  {(promptError || dialog.maxLength) && (
-                    <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
-                      <p className="min-h-4 text-rose-600">{promptError}</p>
-                      {dialog.maxLength && (
-                        <p className="shrink-0 text-slate-400">
-                          {promptValue.length}/{dialog.maxLength}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
-              <button
-                ref={cancelButtonRef}
-                type="button"
-                onClick={() =>
-                  closeDialog(dialog.kind === "prompt" ? null : false)
-                }
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-              >
-                {dialog.cancelLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dialog.kind === "prompt"
-                    ? handlePromptConfirm()
-                    : (() => {
-                        dialog.onConfirm?.();
-                        closeDialog(true);
-                      })()
-                }
-                className={`inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-black shadow-sm transition ${toneMeta.confirmClassName}`}
-              >
-                {dialog.confirmLabel}
-              </button>
-            </div>
+                  {dialog.inputLabel}
+                </label>
+                {dialog.multiline ? (
+                  <textarea
+                    lang="ko"
+                    inputMode="text"
+                    id={promptInputId}
+                    ref={(element) => {
+                      promptInputRef.current = element;
+                    }}
+                    value={promptValue}
+                    onChange={(event) => {
+                      setPromptValue(event.target.value);
+                      if (promptError) setPromptError("");
+                    }}
+                    rows={5}
+                    maxLength={dialog.maxLength}
+                    placeholder={dialog.placeholder}
+                    className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                ) : (
+                  <input
+                    lang="ko"
+                    id={promptInputId}
+                    ref={(element) => {
+                      promptInputRef.current = element;
+                    }}
+                    value={promptValue}
+                    onChange={(event) => {
+                      setPromptValue(event.target.value);
+                      if (promptError) setPromptError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handlePromptConfirm();
+                      }
+                    }}
+                    maxLength={dialog.maxLength}
+                    inputMode={dialog.inputMode ?? "text"}
+                    placeholder={dialog.placeholder}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                )}
+                {(promptError || dialog.maxLength) && (
+                  <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
+                    <p className="min-h-4 text-rose-600">{promptError}</p>
+                    {dialog.maxLength && (
+                      <p className="shrink-0 text-slate-400">
+                        {promptValue.length}/{dialog.maxLength}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+          <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
+            <button
+              ref={cancelButtonRef}
+              type="button"
+              onClick={() =>
+                closeDialog(dialog.kind === "prompt" ? null : false)
+              }
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+            >
+              {dialog.cancelLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                dialog.kind === "prompt"
+                  ? handlePromptConfirm()
+                  : (() => {
+                      dialog.onConfirm?.();
+                      closeDialog(true);
+                    })()
+              }
+              className={`inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-black shadow-sm transition ${toneMeta.confirmClassName}`}
+            >
+              {dialog.confirmLabel}
+            </button>
+          </div>
+        </dialog>
       )}
     </AppDialogContext.Provider>
   );
