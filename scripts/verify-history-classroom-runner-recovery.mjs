@@ -96,6 +96,14 @@ if(params.get('resultCase')==='long'&&!stored){
 }
 if(params.get('untimed')==='1')fixture.assignment.timeLimitMinutes=0;
 if(params.get('lowerBlank')==='1'&&!stored)fixture.assignment.blanks[0].top=1150;
+if(params.get('clipped')==='1'&&!stored)fixture.assignment.blanks[0].inkClip=[
+ {x:0,y:0},{x:1,y:0},{x:1,y:.2},{x:.7,y:.2},{x:.7,y:.85},{x:1,y:.85},{x:1,y:1},{x:0,y:1}
+];
+if(params.get('smallBlanks')==='1'&&!stored) {
+ fixture.assignment.blanks[0].width=36;
+ fixture.assignment.blanks[0].height=14;
+ fixture.assignment.blanks.splice(1,0,{...fixture.assignment.blanks[0],id:'blank-c',top:1150,answer:'고려',prompt:'아래 빈칸'});
+}
 if(params.get('due')==='1'&&!stored)fixture.assignment.dueAt={seconds:(Date.now()+6000)/1000};
 const persist=()=>localStorage.setItem('runnerFixtureBackend',JSON.stringify(fixture));
 window.__persistBackend=persist;
@@ -339,6 +347,87 @@ const visibility = (page, state) =>
     document.dispatchEvent(new Event("visibilitychange"));
   }, state);
 try {
+  for (const [width, height] of [[390, 844], [768, 1024], [1280, 800]]) {
+    const t = await open(`large-input-${width}`, width, height, "?smallBlanks=1", false);
+    const toggle = t.page.getByRole("button", {name: "큰 입력칸"});
+    assert.equal(await toggle.count(), 0);
+    await t.page.getByRole("button", {name: "응시 시작"}).click();
+    await toggle.focus();
+    await t.page.keyboard.press("Enter");
+    const input = t.page.getByRole("textbox", {name: "선택한 빈칸의 답안"});
+    const select = t.page.getByRole("combobox", {name: "이 페이지의 빈칸 선택"});
+    assert((await input.boundingBox()).height >= 44);
+    await t.page.keyboard.press("Tab");
+    assert(await select.evaluate(el => document.activeElement === el));
+    await t.page.keyboard.press("Tab");
+    assert(await input.evaluate(el => document.activeElement === el));
+    const cdp = await t.context.newCDPSession(t.page);
+    await cdp.send("Input.imeSetComposition", {text:"고조", selectionStart:2, selectionEnd:2});
+    await advance(t.page, 1100);
+    assert(await input.evaluate(el => document.activeElement === el));
+    await cdp.send("Input.insertText", {text:"고조선"});
+    assert.equal(await firstInput(t.page).inputValue(), "고조선");
+    await select.selectOption("blank-c");
+    assert.equal(await input.inputValue(), "");
+    await input.fill("고려");
+    const lower = t.page.getByRole("textbox", {name:"아래 빈칸",exact:true});
+    assert.equal(await lower.inputValue(), "고려");
+    assert(await lower.evaluate(el => {
+      const field = el.getBoundingClientRect();
+      const frame = el.closest("[data-history-viewport]").getBoundingClientRect();
+      return field.top >= frame.top && field.bottom <= frame.bottom;
+    }));
+    await t.page.screenshot({path:path.join(evidence, `runner-large-input-${width}-active.png`)});
+    await t.page.getByRole("button", {name:"다음",exact:true}).click();
+    assert.equal(await input.inputValue(), "");
+    await input.fill("백제");
+    await toggle.click();
+    assert.equal(await input.count(), 0);
+    await submit(t.page);
+    await t.page.getByRole("dialog", {name:"통과",exact:true}).waitFor();
+    assert.deepEqual((await callsOf(t.page, "submit"))[0].answers, {
+      "blank-a":"고조선", "blank-c":"고려", "blank-b":"백제"
+    });
+    await finish(t);
+  }
+  {
+    const t = await open("clipped-blank-touch-ime", 768, 1024, "?clipped=1");
+    const input = firstInput(t.page);
+    const rect = await input.boundingBox();
+    assert(rect);
+    const x = rect.x + rect.width * 0.9;
+    const y = rect.y + rect.height * 0.5;
+    assert.equal(
+      await input.evaluate(
+        (el, p) => document.elementFromPoint(p.x, p.y) === el,
+        { x, y },
+      ),
+      true,
+      "the text field must receive taps across the blank, including a PDF mask cutout",
+    );
+    await t.page.touchscreen.tap(x, y);
+    assert(await input.evaluate((el) => document.activeElement === el));
+    const cdp = await t.context.newCDPSession(t.page);
+    for (const text of ["ㄱ", "고", "고조", "고조선"]) {
+      await cdp.send("Input.imeSetComposition", {
+        text,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+      });
+      await advance(t.page, 300);
+      assert.equal(await input.inputValue(), text);
+    }
+    await cdp.send("Input.insertText", { text: "고조선" });
+    await input.press("Tab");
+    assert.equal((await draft(t.page)).answers["blank-a"], "고조선");
+    await submit(t.page);
+    await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
+    assert.equal(
+      (await callsOf(t.page, "submit"))[0].answers["blank-a"],
+      "고조선",
+    );
+    await finish(t);
+  }
   for (const [width, height] of [
     [390, 844],
     [768, 1024],

@@ -792,12 +792,13 @@ const runPresentationOrderCases = async () => {
   const { createHash } = require("node:crypto");
   const { canonicalDetail } = require("../../studentQuizHistory");
   const semesterId = "2026-2", studentUid = "order-student";
-  const definitionId = "quiz:2026-2:order-unit:formative";
   const ids = ["2", "4", "10", "21", "30"];
   const unitById = { 2: "small-a", 4: "small-b", 10: "small-b", 21: "small-a", 30: "small-a" };
-  const rank = id => createHash("sha256").update(`${studentUid}\n${definitionId}\n1\n${id}`).digest("hex");
-  const selected = [...ids].sort((a, b) => rank(a).localeCompare(rank(b))).slice(0, 4);
   for (const mode of ["random", "created", "unit", "legacy-created"]) {
+    const category = mode === "legacy-created" ? "diagnostic" : "formative";
+    const definitionId = `quiz:2026-2:order-unit:${category}`;
+    const rank = id => createHash("sha256").update(`${studentUid}\n${definitionId}\n1\n${id}`).digest("hex");
+    const selected = [...ids].sort((a, b) => rank(a).localeCompare(rank(b))).slice(0, 4);
     const seed = {
       [`users/${studentUid}`]: { role: "student" },
       "site_settings/semester_active": { semesterId, revision: 1 },
@@ -808,7 +809,7 @@ const runPresentationOrderCases = async () => {
       "years/2026/semesters/2/curriculum/tree": { tree: [{ id: "order-unit", children: [{ id: "small-b" }, { id: "small-a" }] }] },
     };
     for (const id of ids) seed[`years/2026/semesters/2/quiz_questions/q${id}`] = {
-      id: Number(id), unitId: "order-unit", subUnitId: unitById[id], category: "formative",
+      id: Number(id), unitId: "order-unit", subUnitId: unitById[id], category,
       type: "choice", question: `Frozen question ${id}`, answer: `Answer ${id}`, options: [`Answer ${id}`, "Other"],
     };
     const store = new MemoryStore(seed);
@@ -821,9 +822,9 @@ const runPresentationOrderCases = async () => {
       commandId: `order-${++commandNumber}`, receiptId: `receipt-${commandNumber}`, timestamp: { seconds: now().getTime() / 1000 },
     }))).result;
     await apply("createAssessmentDefinition", {
-      definitionId, semesterId, assessmentKind: "QUIZ", title: "Order fixture", sourceId: "order-unit", category: "formative",
-      questionCount: 4, durationSeconds: 600, maxAttempts: 2, cooldownMinutes: 0, assignedClassIds: ["class_order"],
-      legacyConfigKey: "order-unit::formative", presentationSettings: mode === "legacy-created" ? { randomOrder: false } : { questionOrder: mode },
+      definitionId, semesterId, assessmentKind: "QUIZ", title: "Order fixture", sourceId: "order-unit", category,
+      questionCount: 4, durationSeconds: 600, maxAttempts: 5, cooldownMinutes: 0, assignedClassIds: ["class_order"],
+      legacyConfigKey: `order-unit::${category}`, presentationSettings: mode === "legacy-created" ? { randomOrder: false } : { questionOrder: mode },
     }, "teacher");
     await apply("transitionAssessmentDefinition", { definitionId, expectedRevision: 1, targetStatus: "PUBLISHED", reason: "test" }, "teacher");
     const first = await apply("startAssessmentAttempt", { definitionId });
@@ -865,6 +866,25 @@ const runPresentationOrderCases = async () => {
     const replayed = await apply("submitAssessmentAttempt", { attemptId: first.attemptId, expectedRevision: restored.revision, answers, submitReason: "MANUAL" });
     assert.deepEqual(replayed.answerChecks, submitted.answerChecks);
     assert.deepEqual(replayed.questionSnapshots, submitted.questionSnapshots);
+
+    const historicalAttempt = store.documents.get(`semester_assessment_attempts/${first.attemptId}`);
+    delete historicalAttempt.questionCycleStartOrdinal;
+    delete historicalAttempt.attemptOrdinal;
+    const tail = await apply("startAssessmentAttempt", { definitionId });
+    assert.deepEqual(tail.questionIds, ids.filter(id => !expected.includes(id)), "Finish the legacy cycle before repeating any answered question");
+    const skipped = await apply("submitAssessmentAttempt", { attemptId: tail.attemptId, expectedRevision: 1, answers: {}, submitReason: "TIMEOUT" });
+    assert.equal(skipped.total, 1);
+    await apply("resetAssessmentAttempt", { definitionId, studentUid, reason: "synthetic reset" }, "teacher");
+    const retry = await apply("startAssessmentAttempt", { definitionId });
+    assert.deepEqual(retry.questionIds, tail.questionIds, "An unanswered question remains eligible after a teacher reset");
+    const submitAll = attempt => apply("submitAssessmentAttempt", { attemptId: attempt.attemptId, expectedRevision: 1,
+      answers: Object.fromEntries(attempt.questionIds.map(id => [id, `Answer ${id}`])), submitReason: "MANUAL" });
+    await submitAll(retry);
+    const next = await apply("startAssessmentAttempt", { definitionId });
+    assert.equal(next.questionIds.length, 4, "All questions become eligible in a new cycle");
+    await submitAll(next);
+    const nextTail = await apply("startAssessmentAttempt", { definitionId });
+    assert.deepEqual(nextTail.questionIds, ids.filter(id => !next.questionIds.includes(id)), "Second-cycle answers are excluded until full coverage");
   }
 };
 
@@ -896,6 +916,7 @@ const runPresentationOrderCases = async () => {
         "LEGACY_ATTEMPT_COMPATIBILITY",
         "FROZEN_RANDOM_CREATED_UNIT_ORDER_THROUGH_RESUME_SUBMISSION_AND_HISTORY",
         "ORDER_SETTINGS_KEEP_SELECTION_GRADING_AND_REWARD_POLICY",
+        "DIAGNOSTIC_FORMATIVE_ROTATION_LEGACY_RESET_TIMEOUT_AND_SECOND_CYCLE",
       ],
     }),
   );

@@ -200,19 +200,20 @@ service firebase.storage {
       return isAdmin();
     }
 
-    function hasRecentHighRiskSession() {
+    function hasWisImageWriteSession() {
       let session = firestore.get(applicationSessionPath()).data;
       return hasActiveApplicationSession()
         && session.generalExpiresAt > request.time
         && session.highRiskExpiresAt is timestamp
         && session.highRiskExpiresAt > request.time
         && request.time.toMillis() - request.auth.token.auth_time * 1000 >= -60000
-        && request.time.toMillis() - request.auth.token.auth_time * 1000 <= 300000;
+        && (request.auth.token.email == "westoria28@gmail.com"
+          || request.time.toMillis() - request.auth.token.auth_time * 1000 <= 300000);
     }
 
     function canManageWisImages() {
       return canUseWestory()
-        && hasRecentHighRiskSession()
+        && hasWisImageWriteSession()
         && (request.auth.token.email == "westoria28@gmail.com"
           || (hasUserProfile()
             && (userProfile().role == 'teacher' || userProfile().get('teacherPortalEnabled', false) == true)

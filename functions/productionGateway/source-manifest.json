@@ -48,7 +48,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "ccf86459b22e6966c2f46a6243b76584be970e73f7f348925787243182d631f7",
+      "sha256": "d860c082ea5845349a668fdf1aaef3954392cdbd95b9d75f7a6780e09e0a8d9a",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "Preserve current lesson-source metadata in the History Classroom source command.",
@@ -63,7 +63,8 @@
         "2026-10-19: Expose canonical active writable class options through a session- and quiz-management-gated read; identify invalid publication classes and clear canonical assignments when the teacher clears all publication classes.",
         "2026-10-21: Atomically synchronize ordinary History Classroom results and teacher pass/lock notifications; publish assignment notices through the canonical command.",
         "2026-10-22: Preserve original History Classroom creation metadata during source replacement; repair missing provenance from the canonical definition.",
-        "2026-10-26: Freeze configured quiz presentation order after authoritative question selection so first solve, resume, grading and history use the same question sequence."
+        "2026-10-26: Freeze configured quiz presentation order after authoritative question selection so first solve, resume, grading and history use the same question sequence.",
+        "2026-11-03: Rotate diagnostic and formative questions by student answers within each definition, closing each cycle before repeating questions."
       ]
     },
     {
@@ -300,9 +301,10 @@
       "sourceFile": "sessionAuthority.js",
       "file": "sessionAuthority.js",
       "originalSha256": "e3ae2d5dbb6f19ae06e2b028f576d91448a313281bb7e630455255b278fc633c",
-      "sha256": "d9c152c3827b1216342b3e8f169e249ff15ef7051ee60a954ce05fd997c64347",
+      "sha256": "141cd82cef122159e5de1af3328142c078a4315c39a55138c8c99a4839a609ee",
       "changes": [
         "Match the current root sessionAuthority idle policy (60/60 minutes); all other source identical.",
+        "2026-11-03: keep high-risk session proof checks and accept the active designated administrator without another Google sign-in.",
         "2026-11-02: configurable account-issue year/grade policy for new and pending registrations; established approved students and teacher roles retain access."
       ]
     },

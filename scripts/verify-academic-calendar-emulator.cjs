@@ -90,15 +90,12 @@ const adminFirestore = serverRequire('firebase-admin/firestore');
     assert.equal((await store.doc(`years/2026/semesters/2/calendar/${agedCreated.eventId}`).get()).data().title,'6분 경과 일반 세션 수정');
     assert.equal((await store.doc('site_settings/schedule_categories').get()).data().items[0].label,'6분 경과 분류 저장');
     assert.equal((await store.doc('years/2026/semesters/2/calendar/holiday_2026-09-25_추석').get()).exists,true);
-    assert(!callableNames.slice(agedCallsStart).includes('beginApplicationSessionReauthentication'),'routine saves must not request step-up authentication');
-    // Bypass only the client confirmation to verify the independent server
-    // five-minute deletion fence still rejects a stale authentication epoch.
-    await assert.rejects(httpsCallable(functions,'manageAcademicCalendar')({...scope,action:'DELETE_EVENT',eventId:agedCreated.eventId,expectedRevision:2,requestId:crypto.randomUUID(),_session:{authorityGeneration:agedSession.authorityGeneration,protocolVersion:agedSession.protocolVersion,revision:agedSession.sessionRevision}}),e=>e.code==='functions/failed-precondition'&&e.details?.reason==='RECENT_AUTH_REQUIRED');
-    assert.equal((await store.doc(`years/2026/semesters/2/calendar/${agedCreated.eventId}`).get()).exists,true);
+    await mutate({...scope,action:'DELETE_EVENT',eventId:agedCreated.eventId,expectedRevision:2});
+    assert(!callableNames.slice(agedCallsStart).includes('beginApplicationSessionReauthentication'),'active administrator saves and deletion must not request step-up authentication');
+    assert.equal((await store.doc(`years/2026/semesters/2/calendar/${agedCreated.eventId}`).get()).exists,false);
   } finally {
     currentUser.stsTokenManager.accessToken = freshToken;
   }
-  await mutate({...scope,action:'DELETE_EVENT',eventId:agedCreated.eventId,expectedRevision:2});
   await mutate({...scope,action:'DELETE_EVENT',eventId:created.eventId,expectedRevision:2});
   assert.equal((await getDoc(ref)).exists(),false);
   await signOut(auth);
@@ -110,5 +107,5 @@ const adminFirestore = serverRequire('firebase-admin/firestore');
   await assert.rejects(setDoc(ref,{title:'student direct overwrite'},{merge:true}), e=>e.code==='permission-denied');
   await deleteApp(app);
   await adminApp.deleteApp(admin);
-  console.log('PASS: real client adapter + sensitive-operation helper + session callable + calendar callable + repository Firestore rules. Create/read/update/delete/colors/ranges/categories/holiday sync/stale revision/stale scope/student callable and direct-write denial; six-minute-old general session saves/categories/holiday sync without step-up; stale-auth deletion denied and fresh-auth deletion succeeds.');
+  console.log('PASS: calendar client, session callable and rules, including stale revision/scope and student denial. Active administrator saves and deletes six minutes after sign-in without step-up.');
 })().catch(error=>{console.error(error);process.exit(1);});

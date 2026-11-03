@@ -19,11 +19,11 @@ try {
       ),
   );
 }
-const out = path.join(root, "output/registration-policy-20261102");
+const out = process.env.WESTORY_QA_OUTPUT || path.join(root, "output/registration-policy-20261102");
 await fs.mkdir(out, { recursive: true });
 const service = `
 export const qa=window.policyQa={reads:0,calls:[],writes:0,toasts:[],failRead:false,loseResponse:false,holdSave:false,conflict:false,errors:[],popupStarts:0,popupFailed:false,authTime:new URLSearchParams(location.search).has('reauth')?10:Math.floor(Date.now()/1000),transitions:0,sessionRefreshes:0};
-export const auth={currentUser:{uid:'teacher-fixture',email:'teacher-fixture@yongshin-ms.ms.kr',getIdTokenResult:async()=>({claims:{auth_time:qa.authTime}}),getIdToken:async()=> 'synthetic-only'}};
+export const auth={currentUser:{uid:'teacher-fixture',email:new URLSearchParams(location.search).has('admin')?'westoria28@gmail.com':'teacher-fixture@yongshin-ms.ms.kr',getIdTokenResult:async()=>({claims:{auth_time:qa.authTime}}),getIdToken:async()=> 'synthetic-only'}};
 qa.swapAccount=()=>{auth.currentUser={...auth.currentUser,uid:'different-teacher-fixture'};};
 qa.policy={schemaVersion:1,admissionYear:'2026',admissionGrade:'3',revision:0,emailPatternLabel:'263NNNN@yongshin-ms.ms.kr'};
 export const useAuth=()=>({currentUser:auth.currentUser,userData:{role:new URLSearchParams(location.search).has('readonly')?'staff':'teacher',staffPermissions:['student_list_read']},config:{year:'2026',semester:'2'}});
@@ -386,6 +386,16 @@ try {
       popupUserActivation: true,
       saveAfterReauthenticationOnce: true,
     });
+    await page.goto(origin + "?admin&reauth");
+    await page.getByRole("button", { name: "신규 가입 기준 열기" }).click();
+    await page.getByLabel("계정 발급 연도").fill("2027");
+    await save().click();
+    await page.waitForFunction(() => window.policyQa.writes === 1);
+    assert.deepEqual(await page.evaluate(() => [
+      window.policyQa.popupStarts, window.policyQa.transitions, window.policyQa.errors,
+    ]), [0, 0, []]);
+    assert.equal(await reauthentication.count(), 0);
+    reports.push({ width, agedAdminSavedWithoutPopup: true });
     await page.goto(origin + "?list&readonly");
     await page
       .getByText("읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.", {

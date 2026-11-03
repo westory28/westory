@@ -4,6 +4,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth } from "./firebase";
+import { isDeveloperUser } from "./permissions";
 import { ensureWestoryAppCheck } from "./appCheck";
 import {
   ensureHistoryDictionarySession,
@@ -35,6 +36,13 @@ const prepareSensitiveOperation = async (user: User) => {
   if ((await readEpoch()) !== epoch)
     throw new Error("로그인 상태가 바뀌었습니다. 다시 확인해 주세요.");
   const age = Date.now() - epoch * 1000;
+  if (isDeveloperUser(user.email)) {
+    if (!Number.isFinite(age) || age < -60000)
+      throw new Error(
+        "로그인 시간을 확인하지 못했습니다. 다시 로그인해 주세요.",
+      );
+    return;
+  }
   if (!Number.isFinite(age) || age < -60000 || age > 240000) {
     // Keep authenticated listeners authorized while auth_time rolls over.
     // A revoked/expired application session cannot use this transition.

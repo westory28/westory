@@ -59,6 +59,9 @@ const main = async () => {
   });
   const profiles = [
     { uid: "admin", email: "westoria28@gmail.com", role: "teacher" },
+    { uid: "aged-admin", email: "westoria28@gmail.com", role: "teacher", authTime: authTime - 600 },
+    { uid: "revoked-admin", email: "westoria28@gmail.com", role: "teacher", authTime: authTime - 600, sessionStatus: "revoked" },
+    { uid: "aged-staff", role: "staff", teacherPortalEnabled: true, staffPermissions: ["point_manage"], authTime: authTime - 600 },
     { uid: "teacher", role: "teacher" },
     { uid: "student", role: "student" },
     {
@@ -93,6 +96,7 @@ const main = async () => {
       const db = context.firestore();
       for (const profile of profiles) {
         const email = profile.email || `${profile.uid}@yongshin-ms.ms.kr`;
+        const sessionAuthTime = profile.authTime || authTime;
         await setDoc(doc(db, "users", profile.uid), {
           role: profile.role,
           email,
@@ -108,11 +112,11 @@ const main = async () => {
               "application_sessions",
               profile.uid,
               "sessions",
-              String(authTime),
+              String(sessionAuthTime),
             ),
             {
               status: profile.sessionStatus || "active",
-              authTime,
+              authTime: sessionAuthTime,
               schemaVersion: 2,
               authorityGeneration: "w1r2-2026-08-09",
               protocolVersion: 2,
@@ -121,13 +125,16 @@ const main = async () => {
               generalExpiresAt: Timestamp.fromMillis(
                 profile.expiresAt || Date.now() + 3_600_000,
               ),
+              highRiskExpiresAt: Timestamp.fromMillis(
+                profile.expiresAt || Date.now() + 3_600_000,
+              ),
             },
           );
         }
         clients[profile.uid] = testEnv
           .authenticatedContext(profile.uid, {
             email,
-            auth_time: authTime,
+            auth_time: sessionAuthTime,
           })
           .storage(bucket);
       }
@@ -138,6 +145,22 @@ const main = async () => {
       );
     });
     clients.unauthenticated = testEnv.unauthenticatedContext().storage(bucket);
+    const wisImageCases = [
+      ["aged-admin", true],
+      ["revoked-admin", false],
+      ["aged-staff", false],
+      ["staff", true],
+    ];
+    for (const [uid, allowed] of wisImageCases) {
+      await check(
+        `${uid}: protected Wis image write`,
+        () => uploadBytes(
+          ref(clients[uid], "site-settings/interface/hall-of-fame/podium-1.jpg"),
+          image, { contentType: "image/jpeg" },
+        ),
+        allowed,
+      );
+    }
 
     for (const uid of ["admin", "teacher"]) {
       const object = ref(clients[uid], pathFor(`${uid}-lifecycle`));

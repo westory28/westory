@@ -1,5 +1,19 @@
 # 운영 배포 절차
 
+## 역사교실 입력과 진단·형성평가 문항 순환 (2026-11-03)
+
+학생 역사교실의 `큰 입력칸`에서 현재 페이지의 빈칸 번호를 고르면 문서의 해당 위치가 강조된다. 문서 위 입력과 큰 입력칸은 같은 답안을 사용한다. 재응시·한글 조합·정밀 마스크 안쪽의 터치·페이지 이동 후 제출은 `node scripts/verify-history-classroom-runner-recovery.mjs`로 확인한다.
+
+진단·형성평가는 같은 학생·평가의 과거 응시에서 답을 작성한 문항을 현재 주기에서 제외한다. 남은 문항이 설정 수보다 적으면 남은 수만 출제한다. 미응답 문항은 계속 후보에 남고 교사가 재응시를 열어도 이전 풀이 기록을 유지한다. 한 바퀴를 마친 다음 응시부터 다시 추첨하며 단원 정렬은 기존 설정을 따른다. 서버 출제 변경의 배포 대상은 서울 `executeCommand`다.
+
+## 관리자 세션과 보호된 작업 (2026-11-03)
+
+지정 관리자 계정은 현재 로그인으로 가입 승인·기준 변경, 학사 일정 삭제, 위스 운영 등 보호된 작업을 수행한다. 서버는 Firebase 인증 토큰의 관리자 이메일과 각 작업에 필요한 애플리케이션 세션·권한을 검사한다. 최초 세션 개설, 종료된 세션의 복구, 권한을 위임받은 교사·직원의 최근 인증 기준은 기존 정책을 따른다. 위스 이미지 업로드에도 같은 관리자 예외와 기존 세션 만료 검사를 함께 적용한다.
+
+운영 확인에는 학생 자료나 운영 데이터를 변경하지 않는다. 지정 관리자와 일반 교사의 반복 저장 차이는 `node scripts/verify-student-registration-policy-browser.mjs`, 세션 증명과 철회는 `npm run test:login-session`, 위스 이미지 쓰기 권한은 `scripts/verify-notice-storage-rules.mjs`의 전용 로컬 에뮬레이터 검사로 재현한다.
+
+이번 배포 범위는 Storage 규칙, 서울의 `executeCommand`, `getCommandStatus`, `manageAcademicCalendar`, `updateStudentMaintenanceConfig`, `saveStudentRegistrationPolicy`, `createStudentData`, `updateStudentEnrollment`, `updateStudentData`, `reviewPerformanceScoreObjection`과 미국의 `executeWisCommandFast`, `getWisCommandStatusFast`다. 운영 원본에서 `resetLessonCorePointProgress`와 `createManagedNotifications`는 종료된 호출을 거부하고, `deleteStudentData`는 최근 인증 시간을 검사하지 않아 세 함수는 배포 범위에서 제외했다.
+
 ## 신규 가입 기준과 게임 안정성 (2026-11-02)
 
 교사 `학생 명단 → 신규 가입 기준`에서 학교 계정 발급 연도와 담당 학년을 저장한다. 단일 원본은 `site_settings/student_registration_policy`이며 현재 수업 학기와 별개다. 문서가 없을 때만 2026년 3학년(`263NNNN@yongshin-ms.ms.kr`)을 사용한다. 2027년 2학년으로 저장하면 `272NNNN`이 된다. 이미 승인된 학생·기존 학생의 계정과 기록은 자동 변경하지 않는다. 자세한 허용·차단 및 충돌·재시도 계약은 [가입 기준 검토](../reviews/student-registration-policy-20261102.md)를 따른다.

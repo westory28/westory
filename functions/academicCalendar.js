@@ -138,13 +138,12 @@ function createAcademicCalendarHandler({ db, now = Date.now, environment = proce
       if (!_session || _session.authorityGeneration !== GENERATION || _session.protocolVersion !== session.protocolVersion || _session.revision !== session.sessionRevision) fail('unauthenticated', 'SESSION_PROOF_INVALID', '로그인 상태를 확인할 수 없습니다. 다시 로그인해 주세요.');
       const expiry = typeof session.generalExpiresAt?.toMillis === 'function' ? session.generalExpiresAt.toMillis() : NaN;
       if (!MODES.includes(session.authorityModeAtOpen) || !Number.isFinite(expiry) || ((idleMode === 'ENFORCE' || session.authorityModeAtOpen === 'ENFORCE') && expiry <= now())) fail('unauthenticated', 'SESSION_EXPIRED', '세션이 만료되었습니다. 다시 로그인해 주세요.');
-      // Routine saves use the general session above; deletion keeps the stricter
-      // high-risk session and recent-authentication requirements.
+      // Deletion also requires the current high-risk session.
       if (data.action === 'DELETE_EVENT') {
         const highRiskExpiry = typeof session.highRiskExpiresAt?.toMillis === 'function' ? session.highRiskExpiresAt.toMillis() : NaN;
         if (!Number.isFinite(highRiskExpiry) || ((idleMode === 'ENFORCE' || session.authorityModeAtOpen === 'ENFORCE') && highRiskExpiry <= now())) fail('unauthenticated', 'SESSION_EXPIRED', '학사 일정을 삭제하려면 다시 로그인해 주세요.');
         const authAge = now() - token.auth_time * 1000;
-        if (authAge < -60000 || authAge > 300000) fail('failed-precondition', 'RECENT_AUTH_REQUIRED', '학사 일정 삭제는 로그인 후 5분 이내에 가능합니다. 다시 로그인한 뒤 삭제해 주세요.');
+        if (authAge < -60000) fail('unauthenticated', 'SESSION_AUTH_TIME_INVALID', '로그인 시간을 확인하지 못했습니다. 다시 로그인해 주세요.');
       }
       const config = configSnap.data() || {}, pointer = pointerSnap.data() || {}, manifest = manifestSnap.data() || {};
       const semesterId = `${year}-${semester}`;

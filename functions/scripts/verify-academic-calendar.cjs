@@ -119,10 +119,8 @@ async function main() {
   const deletion = { action: 'DELETE_EVENT', eventId: 'existing' };
   await rejects((f) => { delete f.docs.get(sessionPath).highRiskExpiresAt; }, 'unauthenticated', 'SESSION_EXPIRED', deletion);
   await rejects((f) => { f.docs.get(sessionPath).highRiskExpiresAt = Timestamp.fromMillis(NOW - 1); }, 'unauthenticated', 'SESSION_EXPIRED', deletion);
-  for (const authAge of [301, -61]) {
-    await rejects((f, req) => { setAuthAge(f, req, authAge); }, 'failed-precondition', 'RECENT_AUTH_REQUIRED', deletion);
-  }
-  for (const authAge of [300, -60]) {
+  await rejects((f, req) => { setAuthAge(f, req, -61); }, 'unauthenticated', 'SESSION_AUTH_TIME_INVALID', deletion);
+  for (const authAge of [3601, 301, 300, -60]) {
     const boundary = fixture(); boundary.docs.set(existingPath, { ...event, revision: 0 });
     const req = request(deletion); setAuthAge(boundary, req, authAge);
     assert.deepEqual(await boundary.handler(req), { deleted: true }); checks++;
@@ -130,8 +128,8 @@ async function main() {
   const deleteRetry = fixture(); deleteRetry.docs.set(existingPath, { ...event, revision: 0 });
   const deleteRequest = request(deletion); await deleteRetry.handler(deleteRequest);
   const deleteWrites = deleteRetry.writes; setAuthAge(deleteRetry, deleteRequest, 301);
-  await assert.rejects(() => deleteRetry.handler(deleteRequest), (error) => error.details.reason === 'RECENT_AUTH_REQUIRED');
-  assert.equal(deleteRetry.writes, deleteWrites, 'deletion retry must recheck recent authentication'); checks++;
+  assert.deepEqual(await deleteRetry.handler(deleteRequest), { deleted: true });
+  assert.equal(deleteRetry.writes, deleteWrites, 'aged administrator session replays the same deletion receipt'); checks++;
   for (const mode of ['OBSERVE_ONLY', 'DISABLED']) {
     const observer = fixture({ WESTORY_SESSION_IDLE_MODE: mode }); observer.docs.set(existingPath, { ...event, revision: 0 });
     Object.assign(observer.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
@@ -139,10 +137,6 @@ async function main() {
     const enforced = fixture({ WESTORY_SESSION_IDLE_MODE: 'ENFORCE' }); Object.assign(enforced.docs.get(sessionPath), { authorityModeAtOpen: mode, highRiskExpiresAt: Timestamp.fromMillis(NOW - 1) });
     await assert.rejects(() => enforced.handler(request(deletion)), (error) => error.code === 'unauthenticated');
     assert.equal(enforced.writes, 0); checks++;
-    const stale = fixture({ WESTORY_SESSION_IDLE_MODE: mode });
-    const req = request(deletion); setAuthAge(stale, req, 301).authorityModeAtOpen = mode;
-    await assert.rejects(() => stale.handler(req), (error) => error.details.reason === 'RECENT_AUTH_REQUIRED');
-    assert.equal(stale.writes, 0); checks++;
   }
   await rejects((f, req) => { delete req.auth; }, 'unauthenticated');
   await rejects((f, req) => { req.auth.token.email = 'student@yongshin-ms.ms.kr'; }, 'permission-denied', 'CALENDAR_ADMIN_REQUIRED');

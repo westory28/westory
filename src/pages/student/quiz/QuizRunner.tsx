@@ -1459,6 +1459,11 @@ const QuizRunner: React.FC = () => {
                     출제 문항
                   </dt>
                   <dd className="mt-1 text-lg font-black text-blue-700 sm:text-xl">
+                    {!blockReason &&
+                    !selectedQuestions.length &&
+                    (category === "diagnostic" || category === "formative")
+                      ? "최대 "
+                      : ""}
                     {questionCount}문항
                   </dd>
                 </div>

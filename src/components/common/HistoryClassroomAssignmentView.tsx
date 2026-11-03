@@ -95,6 +95,19 @@ const isInteractiveFieldTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
   Boolean(target.closest("input, textarea, select, button, label"));
 
+const revealBlank = (viewport: HTMLElement, field: HTMLElement) => {
+  const rect = field.getBoundingClientRect();
+  const frame = viewport.getBoundingClientRect();
+  if (rect.bottom > frame.bottom - 12)
+    viewport.scrollTop += rect.bottom - frame.bottom + 12;
+  else if (rect.top < frame.top + 12)
+    viewport.scrollTop += rect.top - frame.top - 12;
+  if (rect.right > frame.right - 12)
+    viewport.scrollLeft += rect.right - frame.right + 12;
+  else if (rect.left < frame.left + 12)
+    viewport.scrollLeft += rect.left - frame.left - 12;
+};
+
 interface ViewportDragState {
   x: number;
   y: number;
@@ -356,6 +369,9 @@ const HistoryClassroomAssignmentView: React.FC<
   const helpId = useId();
   const wordListId = useId();
   const [wordListOpen, setWordListOpen] = useState(false);
+  const [largeInputOpen, setLargeInputOpen] = useState(false);
+  const [largeInputBlankId, setLargeInputBlankId] = useState("");
+  const largeInputId = useId();
   const [helpOpen, setHelpOpen] = useState(false);
   const showHelp = !readOnly && !completed && helperItems.length > 0;
   const hintButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -734,6 +750,16 @@ const HistoryClassroomAssignmentView: React.FC<
     () => sortPlacementsForFocus(blankPlacements),
     [blankPlacements],
   );
+  const largeInputAvailable =
+    isStudentSolve && feedbackEnabled && orderedBlankPlacements.length > 0;
+  const largeInputBlank =
+    largeInputOpen && largeInputAvailable
+      ? (
+          orderedBlankPlacements.find(
+            ({ blank }) => blank.id === largeInputBlankId,
+          ) ?? orderedBlankPlacements[0]
+        ).blank
+      : null;
   useEffect(() => {
     fitScaleRef.current = fitScale;
   }, [fitScale]);
@@ -804,6 +830,9 @@ const HistoryClassroomAssignmentView: React.FC<
     const viewport = viewportRef.current;
     const updateFitScale = () => {
       const focusedInput = document.activeElement;
+      const largeInputTarget =
+        largeInputBlank && blankInputRefs.current[largeInputBlank.id];
+      if (largeInputTarget) revealBlank(viewport, largeInputTarget);
       if (
         focusedInput instanceof HTMLInputElement &&
         viewport.contains(focusedInput) &&
@@ -811,12 +840,7 @@ const HistoryClassroomAssignmentView: React.FC<
       ) {
         // The tablet keyboard reduces the visible canvas, not the worksheet's
         // reading scale. Scroll the active blank into that smaller canvas.
-        const fieldRect = focusedInput.getBoundingClientRect();
-        const viewportRect = viewport.getBoundingClientRect();
-        if (fieldRect.bottom > viewportRect.bottom - 12)
-          viewport.scrollTop += fieldRect.bottom - viewportRect.bottom + 12;
-        else if (fieldRect.top < viewportRect.top + 12)
-          viewport.scrollTop += fieldRect.top - viewportRect.top - 12;
+        revealBlank(viewport, focusedInput);
         return;
       }
       const fitPadding = isStudentSolve ? 8 : VIEWPORT_FIT_PADDING;
@@ -857,7 +881,7 @@ const HistoryClassroomAssignmentView: React.FC<
       observer.disconnect();
       window.removeEventListener("resize", updateFitScale);
     };
-  }, [enableInteractiveViewport, isStudentSolve, pageImage]);
+  }, [enableInteractiveViewport, isStudentSolve, largeInputBlank, pageImage]);
 
   const clearViewportGestureState = () => {
     dragStateRef.current = null;
@@ -1146,12 +1170,10 @@ const HistoryClassroomAssignmentView: React.FC<
     const nextBlankId = ids[nextIndex];
     event.preventDefault();
     event.stopPropagation();
-    setFocusedBlankId(nextBlankId);
-    window.requestAnimationFrame(() => {
-      const input = blankInputRefs.current[nextBlankId];
-      input?.focus({ preventScroll: true });
-      input?.select();
-    });
+    // Keep focus in the tap gesture so the on-screen keyboard can open.
+    const input = blankInputRefs.current[nextBlankId];
+    input?.focus({ preventScroll: true });
+    input?.select();
   };
 
   return (
@@ -1473,32 +1495,89 @@ const HistoryClassroomAssignmentView: React.FC<
           </div>
         </div>
         <div className="border-t border-gray-100">
-          <button
-            type="button"
-            aria-expanded={wordListOpen}
-            aria-controls={wordListId}
-            onClick={() => setWordListOpen((open) => !open)}
-            className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-          >
-            <span>
-              단어 목록{" "}
-              <span className="text-gray-500">
-                {assignment.answerOptions.length}개
-              </span>
-            </span>
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`h-5 w-5 shrink-0 ${wordListOpen ? "rotate-180" : ""}`}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-expanded={wordListOpen}
+              aria-controls={wordListId}
+              onClick={() => setWordListOpen((open) => !open)}
+              className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
             >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
+              <span>
+                단어 목록{" "}
+                <span className="text-gray-500">
+                  {assignment.answerOptions.length}개
+                </span>
+              </span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`h-5 w-5 shrink-0 ${wordListOpen ? "rotate-180" : ""}`}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {largeInputAvailable && (
+              <button
+                type="button"
+                aria-expanded={largeInputOpen}
+                aria-controls={largeInputId}
+                onClick={() => setLargeInputOpen((open) => !open)}
+                className="min-h-11 shrink-0 rounded-lg px-3 text-sm font-bold text-blue-700 hover:bg-blue-50 aria-expanded:bg-blue-50"
+              >
+                큰 입력칸
+              </button>
+            )}
+          </div>
+          {largeInputBlank && (
+            <div
+              id={largeInputId}
+              className="flex items-center gap-2 px-2 pb-2"
+            >
+              <select
+                aria-label="이 페이지의 빈칸 선택"
+                value={largeInputBlank.id}
+                onChange={(event) =>
+                  setLargeInputBlankId(event.currentTarget.value)
+                }
+                className="min-h-11 rounded-lg border border-gray-300 bg-white px-2 text-base"
+              >
+                {orderedBlankPlacements.map(({ blank }, index) => (
+                  <option key={blank.id} value={blank.id}>
+                    {index + 1}번 빈칸
+                  </option>
+                ))}
+              </select>
+              <input
+                key={largeInputBlank.id}
+                type="text"
+                inputMode="text"
+                lang="ko"
+                autoComplete="off"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="선택한 빈칸의 답안"
+                placeholder="정답 입력"
+                value={answers[largeInputBlank.id] ?? ""}
+                onChange={(event) =>
+                  onAnswerChange?.(
+                    largeInputBlank.id,
+                    event.currentTarget.value,
+                  )
+                }
+                onBlur={(event) =>
+                  showBlankFeedback(largeInputBlank, event.currentTarget.value)
+                }
+                className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 text-base focus:border-blue-600"
+              />
+            </div>
+          )}
           <div
             id={wordListId}
             hidden={!wordListOpen}
@@ -1691,7 +1770,11 @@ const HistoryClassroomAssignmentView: React.FC<
                           topPx,
                         } = placement;
                         const isFocused = focusedBlankId === blank.id;
+                        const largeInputSelected =
+                          largeInputBlank?.id === blank.id;
                         const clipPath = getLessonBlankClipPath(blank.inkClip);
+                        const editableClip =
+                          isStudentSolve && !isInputLocked && clipPath;
                         const hasReview = reviewCorrect !== null;
                         const reviewToneClass = hasReview
                           ? reviewCorrect
@@ -1705,11 +1788,13 @@ const HistoryClassroomAssignmentView: React.FC<
                           reviewText || trimmedAnswerValue || placeholder;
                         return (
                           <React.Fragment key={blank.id}>
-                            <div
+                            <label
                               data-blank-box="true"
                               data-blank-id={blank.id}
                               className={`absolute overflow-hidden rounded-[2px] border text-left font-bold shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-colors focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-200 ${
-                                isFocused ? "z-20" : "z-10"
+                                isFocused || largeInputSelected
+                                  ? "z-20"
+                                  : "z-10"
                               } ${reviewToneClass}`}
                               title={
                                 hasReview
@@ -1723,12 +1808,29 @@ const HistoryClassroomAssignmentView: React.FC<
                                 top: `${topPx}px`,
                                 width: `${chipWidth}px`,
                                 height: `${chipHeight}px`,
-                                backgroundColor: "#ffffff",
+                                backgroundColor: editableClip
+                                  ? "transparent"
+                                  : "#ffffff",
                                 opacity: 1,
-                                clipPath,
+                                clipPath: editableClip ? undefined : clipPath,
                                 borderRadius: clipPath ? 0 : undefined,
+                                ...(editableClip
+                                  ? { borderWidth: 0, boxShadow: "none" }
+                                  : {}),
+                                ...(largeInputSelected
+                                  ? {
+                                      outline: `${2 / totalScale}px solid var(--ws-primary, #2563eb)`,
+                                    }
+                                  : {}),
                               }}
                             >
+                              {editableClip && (
+                                <span
+                                  aria-hidden="true"
+                                  className={`pointer-events-none absolute inset-0 border bg-white ${reviewToneClass}`}
+                                  style={{ clipPath: editableClip }}
+                                />
+                              )}
                               {isInputLocked ? (
                                 <span
                                   aria-hidden
@@ -1759,6 +1861,8 @@ const HistoryClassroomAssignmentView: React.FC<
                                 }
                                 onFocus={() => {
                                   setFocusedBlankId(blank.id);
+                                  if (isStudentSolve)
+                                    setLargeInputBlankId(blank.id);
                                   deferredBlurIdsRef.current.delete(blank.id);
                                   setBlankFeedback((current) =>
                                     current?.blankId === blank.id
@@ -1811,7 +1915,7 @@ const HistoryClassroomAssignmentView: React.FC<
                                   touchAction: "manipulation",
                                 }}
                               />
-                            </div>
+                            </label>
                             {feedbackEnabled &&
                               blankFeedback?.blankId === blank.id && (
                                 <HistoryBlankFeedback

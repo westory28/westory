@@ -210,10 +210,10 @@ const assertRegistrationSessionAccount = async (request, identity, config, trans
 const timestampMillis = (value) =>
   value && typeof value.toMillis === "function" ? value.toMillis() : 0;
 
-const isRecentAuthentication = (authTime, nowMs) => {
+const isAuthenticationInWindow = (authTime, nowMs, maxAgeMs) => {
   const authTimeMs = authTime * 1000;
   const ageMs = nowMs - authTimeMs;
-  return ageMs >= -MAX_CLOCK_SKEW_MS && ageMs <= RECENT_AUTH_MS;
+  return ageMs >= -MAX_CLOCK_SKEW_MS && ageMs <= maxAgeMs;
 };
 
 const normalizeHandshake = (data) => ({
@@ -317,7 +317,8 @@ const assertActiveApplicationSession = async (request, options = {}) => {
   const nowMs = Date.now();
   assertAppCheckIfRequired(request, config);
 
-  if (options.recentAuth === true && !isRecentAuthentication(identity.authTime, nowMs)) {
+  const maxAuthAge = identity.email === ADMIN_EMAIL ? Infinity : RECENT_AUTH_MS;
+  if (options.recentAuth === true && !isAuthenticationInWindow(identity.authTime, nowMs, maxAuthAge)) {
     throwRecentAuthenticationRequired();
   }
 
@@ -455,7 +456,7 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
       );
     }
 
-    if (!isRecentAuthentication(identity.authTime, nowMs)) {
+    if (!isAuthenticationInWindow(identity.authTime, nowMs, RECENT_AUTH_MS)) {
       throw new HttpsError(
         "unauthenticated",
         "A recent sign-in is required to start a Westory application session.",

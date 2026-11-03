@@ -572,6 +572,16 @@ const main = async () => {
   );
 
   const oldAuthTime = nowSeconds - Math.ceil(RECENT_AUTH_MS / 1000) - 2;
+  const adminRequest = highRiskRequestFor({ uid: "active-admin", email: "westoria28@gmail.com", authTime: oldAuthTime });
+  const protectedAction = () => assertActiveApplicationSession(adminRequest, { recentAuth: true, highRisk: true });
+  assert.equal(await rejectionReason(protectedAction), "SESSION_MISSING");
+  await seedSession("active-admin", oldAuthTime, { email: adminRequest.auth.token.email });
+  assert.equal((await protectedAction()).uid, "active-admin");
+  adminRequest.data._session.revision = "b".repeat(64);
+  assert.equal(await rejectionReason(protectedAction), "SESSION_PROOF_INVALID");
+  adminRequest.data._session.revision = revision;
+  await seedSession("active-admin", oldAuthTime, { status: "closed" });
+  assert.equal(await rejectionReason(protectedAction), "SESSION_EXPIRED");
   await seedSession("stale-auth", oldAuthTime);
   assert.equal(
     await rejectionReason(() =>
@@ -618,6 +628,7 @@ const main = async () => {
         "MISSING",
         "GENERAL_EXPIRED",
         "HIGH_RISK_EXPIRED",
+        "AGED_ACTIVE_ADMIN_ACCOUNT_AND_PROOF_REQUIRED",
         "RECENT_AUTH_REQUIRED",
       ],
       productionAccess: 0,

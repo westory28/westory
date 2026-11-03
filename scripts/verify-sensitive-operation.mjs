@@ -21,7 +21,7 @@ const freshEpoch = now / 1000;
 const make = (options = {}) => {
   const events = [], dialogReady = deferred();
   let epoch = options.recent ? freshEpoch : oldEpoch, time = now, gesture = false, dialog, resolveDialog, cleanup;
-  const user = { uid: 'qa-admin', email: 'qa@example.test', getIdTokenResult: async () => ({claims:{auth_time:epoch}}), getIdToken: async () => events.push('refresh') };
+  const user = { uid: 'qa-user', email: options.email || 'qa@example.test', getIdTokenResult: async () => ({claims:{auth_time:epoch}}), getIdToken: async () => events.push('refresh') };
   const auth = { currentUser: user };
   const bridge = load('src/lib/sensitiveOperationPrompt.ts', {});
   const controller = load('src/components/common/SensitiveOperationController.tsx', {
@@ -38,6 +38,7 @@ const make = (options = {}) => {
       epoch = freshEpoch; return Promise.resolve({user});
     }},
     './firebase': {auth},
+    './permissions': load('src/lib/permissions.ts', {}),
     './appCheck': {ensureWestoryAppCheck: async () => {events.push('app-check'); await options.appCheck?.({auth, setEpoch: value => {epoch = value;}});}},
     './historyDictionarySession': {
       getHistoryDictionaryCallable: async () => async () => {events.push('begin'); if (options.beginFailure) throw Error('session expired'); return {data:{expiresAt:time + 90000}};},
@@ -50,6 +51,14 @@ const make = (options = {}) => {
 };
 
 let cases = 0;
+{
+  const f = make({email:'westoria28@gmail.com'}); await f.api.ensureSensitiveOperation();
+  await f.api.ensureSensitiveOperation(); assert.deepEqual(f.events,['app-check','app-check']); f.cleanup(); cases++;
+}
+{
+  const f = make({email:'westoria28@gmail.com', appCheck: async ({auth}) => {auth.currentUser = null;}});
+  await assert.rejects(f.api.ensureSensitiveOperation(),/계정이 바뀌/); assert.deepEqual(f.events,['app-check']); f.cleanup(); cases++;
+}
 {
   const f = make(); const work = f.api.ensureSensitiveOperation(); await f.ready;
   assert.deepEqual(f.events, ['app-check','begin','dialog']); f.click(); await work;

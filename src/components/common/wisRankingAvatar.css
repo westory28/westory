@@ -26,7 +26,6 @@
   overflow: visible;
 }
 
-/* Preserve every field on one line; only the list scrolls when it needs room. */
 .wis-ranking-with-avatar .wis-ranking-row {
   width: 100%;
   min-width: max-content;
@@ -172,6 +171,61 @@
   min-height: 44px;
   padding-inline: 12px;
   text-decoration: underline;
+}
+
+@media (max-width: 1280px), (pointer: coarse) {
+  .wis-ranking-with-avatar .wis-ranking-list-scroll {
+    overflow: visible;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-list {
+    width: 100%;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-row {
+    min-width: 0;
+    min-height: 44px;
+    grid-template-columns: 24px minmax(0, 1fr) auto auto;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-person {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-name,
+  .wis-ranking-with-avatar .wis-ranking-rank-badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @container wis-ranking (max-width: 768px) {
+    .wis-ranking-with-avatar .wis-ranking-row {
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      grid-template-areas: "place person score";
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-classroom {
+      display: none;
+    }
+  }
+
+  @container wis-ranking (max-width: 390px) {
+    .wis-ranking-with-avatar .wis-ranking-row {
+      grid-template-columns: 24px minmax(0, 1fr);
+      grid-template-areas: "place person" "place score";
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-score {
+      justify-content: flex-start;
+    }
+  }
 }
 
 @container wis-ranking (max-width: 390px) {

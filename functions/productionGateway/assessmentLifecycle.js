@@ -548,23 +548,50 @@ const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) =>
   return [...new Set(resolved)];
 };
 
-const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber, priorAttempts = [] }) => {
+const attemptSequence = attempt => Number(attempt.attemptOrdinal || attempt.attemptNumber || 0);
+
+const getQuizQuestionCycle = (allIds, priorAttempts) => {
+  // The marker keeps earlier cycles closed when the teacher edits the bank.
+  // Attempts predating it are replayed in their original lifetime order.
+  let startOrdinal = 1;
+  for (const attempt of priorAttempts) {
+    startOrdinal = Math.max(startOrdinal, attempt.questionCycleStartOrdinal || 1);
+  }
+  const remaining = new Set(allIds);
+  const history = priorAttempts.filter(attempt => attemptSequence(attempt) >= startOrdinal)
+    .sort((left, right) => attemptSequence(left) - attemptSequence(right));
+  for (const attempt of history) {
+    for (const id of attempt.questionIds || []) {
+      if (normalizeAnswer(attempt.answers?.[id])) remaining.delete(String(id));
+    }
+    if (remaining.size === 0) {
+      startOrdinal = attemptSequence(attempt) + 1;
+      for (const id of allIds) remaining.add(id);
+    }
+  }
+  return { startOrdinal, remaining };
+};
+
+const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber, attemptOrdinal, priorAttempts = [] }) => {
   const allIds = source.answerKey.map((item) => item.id);
-  if (definition.assessmentKind !== "QUIZ") return allIds;
+  if (definition.assessmentKind !== "QUIZ") return { questionIds: allIds };
   const requestedCount = Number(definition.questionCount || 0);
   const count = Math.min(requestedCount, allIds.length);
   if (count < 1) {
     fail("failed-precondition", "The published quiz question count is invalid.", "ASSESSMENT_QUESTION_SET_INVALID");
   }
   const learningRanks = learning.rankLearningCandidates(source, priorAttempts);
-  return [...allIds]
+  const cycle = ["diagnostic", "formative"].includes(definition.category)
+    ? getQuizQuestionCycle(allIds, priorAttempts) : null;
+  const questionIds = [...(cycle?.remaining || allIds)]
     .map((id) => ({
       id,
-      rank: sha256(`${studentUid}\n${definition.definitionId}\n${attemptNumber}\n${id}`),
+      rank: sha256(`${studentUid}\n${definition.definitionId}\n${cycle ? attemptOrdinal : attemptNumber}\n${id}`),
     }))
     .sort((left, right) => (learningRanks.get(left.id) - learningRanks.get(right.id)) || left.rank.localeCompare(right.rank) || left.id.localeCompare(right.id))
     .slice(0, count)
     .map((item) => item.id);
+  return { questionIds, ...(cycle ? { questionCycleStartOrdinal: cycle.startOrdinal } : {}) };
 };
 
 // Selection keeps its learning priorities; presentation order is then frozen
@@ -1104,15 +1131,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const attemptOrdinal = Math.max(0, ...allPrior.map((document) =>
         Number(document.data?.attemptOrdinal || document.data?.attemptNumber || 0))) + 1;
       if (!Number.isSafeInteger(attemptOrdinal)) fail("failed-precondition", "Assessment attempt sequence is invalid.", "ASSESSMENT_ATTEMPT_INVALID");
+      const selection = selectAttemptQuestionIds({
+        source, definition, studentUid: actor.actorUid, attemptNumber, attemptOrdinal,
+        priorAttempts: allPrior.map(document => document.data || {}),
+      });
       const selectedIds = await orderAttemptQuestionIds({
-        transaction, source, definition,
-        questionIds: selectAttemptQuestionIds({
-          source,
-          definition,
-          studentUid: actor.actorUid,
-          attemptNumber,
-          priorAttempts: allPrior.map(document => document.data || {}),
-        }),
+        transaction, source, definition, questionIds: selection.questionIds,
       });
       const answerById = new Map(source.answerKey.map((item) => [item.id, item]));
       const gradingSnapshot = selectedIds.map((id) => answerById.get(id));
@@ -1135,6 +1159,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         classId: enrollment.classId,
         attemptNumber,
         attemptOrdinal,
+        ...(selection.questionCycleStartOrdinal ? { questionCycleStartOrdinal: selection.questionCycleStartOrdinal } : {}),
         status: "STARTED",
         revision: 1,
         answers: {},

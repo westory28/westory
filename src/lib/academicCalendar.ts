@@ -67,8 +67,7 @@ export const mutateAcademicCalendar = async <
         "로그인 사용자가 바뀌었습니다. 화면을 새로고침해 주세요.",
       );
   };
-  // Routine calendar edits use the active application session. Only permanent
-  // deletion needs step-up authentication, through the shared user-click flow.
+  // Deletion also prepares App Check and verifies the current account.
   if (operation.action === "DELETE_EVENT") {
     await ensureSensitiveOperation();
     assertSameUser();
