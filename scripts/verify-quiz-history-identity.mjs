@@ -32,6 +32,18 @@ const { normalizeQuizSubmissionDoc, getQuizSubmissionDeadlineMs } = await load(
   "src/lib/quizSubmissions.ts",
 );
 
+const { limitShortAnswer, restoreAssessmentAnswers } = await load(
+  "src/lib/assessmentAnswerLimits.ts",
+);
+const longOption = "긴 선택지".repeat(12);
+assert.deepEqual(
+  restoreAssessmentAnswers(
+    { short: "가".repeat(21), word: "나".repeat(19) + "😀", choice: longOption, unknown: "위조" },
+    [{ id: "short", type: "short" }, { id: "word", type: "word" }, { id: "choice", type: "choice" }],
+  ),
+  { answers: { short: "가".repeat(20), word: "나".repeat(19), choice: longOption }, changed: true },
+);
+
 // Execute the actual runner start, answer, resume and submit functions together.
 // This catches reordering in their call sites, not just in a standalone helper.
 const source = readFileSync("src/pages/student/quiz/QuizRunner.tsx", "utf8");
@@ -179,6 +191,8 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         getResolvedStudentUid: () => "synthetic-student",
         normalizeStudentText: (value) => String(value || ""),
         buildGradeClassLabel: () => "",
+        limitShortAnswer,
+        restoreAssessmentAnswers,
         normalizeQuizSubmissionDoc,
         getQuizSubmissionDeadlineMs,
         buildQuizRelearningItems,
