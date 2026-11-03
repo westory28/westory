@@ -5,6 +5,10 @@ import React, {
   useRef,
   useState,
 } from "react";
+import {
+  limitShortAnswer,
+  restoreAssessmentAnswers,
+} from "../../../lib/assessmentAnswerLimits";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -539,13 +543,19 @@ const HistoryClassroomRunner: React.FC = () => {
           pendingProgress?.attemptId === attempt.attemptId &&
           pendingProgress.answers &&
           Number.isInteger(pendingProgress.expectedRevision)
-        )
-          pendingProgressRef.current = pendingProgress;
+        ) {
+          // A changed legacy payload cannot replay the original save receipt.
+          // The fresh attempt revision above is authoritative for the bounded draft.
+          if (
+            !restoreAssessmentAnswers(pendingProgress.answers, loaded.blanks)
+              .changed
+          )
+            pendingProgressRef.current = pendingProgress;
+        }
         const queued = readHistoryClassroomPendingSubmission(
           saved?.pendingSubmission,
         );
-        const pendingSubmission =
-          queued?.status === "cancelled" ? null : queued;
+        let pendingSubmission = queued?.status === "cancelled" ? null : queued;
         const savedAnswers =
           saved?.answers && typeof saved.answers === "object"
             ? Object.fromEntries(
@@ -564,8 +574,20 @@ const HistoryClassroomRunner: React.FC = () => {
           loaded.pdfPageImages?.[0]?.page ||
           1;
         attemptResultIdRef.current = attempt.attemptId;
+        const restored = restoreAssessmentAnswers(
+          pendingSubmission?.answers || savedAnswers,
+          loaded.blanks,
+        );
+        if (restored.changed) {
+          pendingSubmission = null;
+          showToast({
+            tone: "warning",
+            title: "복원한 빈칸 답안을 확인해 주세요.",
+            message: "현재 빈칸에 입력한 답안을 20자까지 복원했습니다.",
+          });
+        }
         pendingSubmissionRef.current = pendingSubmission;
-        answersRef.current = pendingSubmission?.answers || savedAnswers;
+        answersRef.current = restored.answers;
         currentPageRef.current = savedPage;
         attemptDeadlineMsRef.current = Date.parse(attempt.deadlineAtIso);
         completedRef.current = false;
@@ -1690,7 +1712,9 @@ const HistoryClassroomRunner: React.FC = () => {
       return;
     }
     emitSessionActivity();
-    answersRef.current = { ...answersRef.current, [blankId]: value };
+    const answer = limitShortAnswer(value);
+    if (answersRef.current[blankId] === answer) return;
+    answersRef.current = { ...answersRef.current, [blankId]: answer };
     setAnswers(answersRef.current);
     persistAttemptProgress();
   };

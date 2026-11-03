@@ -1,3 +1,4 @@
+import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { getHistoryDictionaryCallable as getHttpsCallable } from "../../../lib/historyDictionarySession";
@@ -1193,6 +1194,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     }
     if (formType === "word") {
       if (!wordAnswer.trim()) return (alert("단답형 정답을 입력하세요."), null);
+      if (exceedsShortAnswerLimit(wordAnswer)) {
+        alert(
+          "학생이 입력할 수 있도록 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
+        );
+        return null;
+      }
       return { answer: wordAnswer.trim(), options: [] };
     }
     if (formType === "matching") {

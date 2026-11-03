@@ -635,7 +635,7 @@ const StudentList: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <div
-        className={`ws-page flex flex-1 animate-fadeIn flex-col ${!readOnly && selectedIds.size > 0 ? "teacher-floating-bar-space" : ""}`}
+        className={`ws-page ws-page--reading flex flex-1 animate-fadeIn flex-col ${!readOnly && selectedIds.size > 0 ? "teacher-floating-bar-space" : ""}`}
       >
         <div className="flex min-h-[600px] min-w-0 flex-col">
           <div className="ws-page-header">
@@ -813,10 +813,9 @@ const StudentList: React.FC = () => {
           )}
 
           <div
-            className="student-list-scroll flex-1 overflow-x-auto rounded-xl border border-gray-200 bg-white"
+            className="student-list-scroll rounded-xl border border-gray-200 bg-white"
             role="region"
             aria-label="학생 명단 표"
-            tabIndex={0}
           >
             <table className="student-list-table text-center text-sm">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
@@ -1049,42 +1048,44 @@ const StudentList: React.FC = () => {
           {!loading && studentPageGroups.length > 1 && (
             <nav
               aria-label="학생 명단 페이지"
-              className="student-list-pagination border-t border-gray-100 bg-white"
+              className="student-list-pagination rounded-b-xl border border-t-0 border-gray-200 bg-white"
             >
               {currentPageGroup && (
-                <span className="hidden whitespace-nowrap text-xs font-bold text-gray-500 md:inline">
+                <span className="student-list-pagination__class text-xs font-bold text-gray-500">
                   현재 {currentPageGroup.label}
                 </span>
               )}
-              {buildStudentPagination(currentPage, totalPages).map(
-                (page, index) => {
-                  if (page === "ellipsis") {
+              <div className="student-list-pagination__pages">
+                {buildStudentPagination(currentPage, totalPages).map(
+                  (page, index) => {
+                    if (page === "ellipsis") {
+                      return (
+                        <span
+                          key={`gap-${index}`}
+                          className="student-list-pagination__gap text-xs text-gray-500"
+                          aria-hidden="true"
+                        >
+                          …
+                        </span>
+                      );
+                    }
+                    const group = studentPageGroups[page - 1];
                     return (
-                      <span
-                        key={`gap-${index}`}
-                        className="student-list-pagination__gap text-xs text-gray-500"
-                        aria-hidden="true"
+                      <button
+                        key={group.key}
+                        type="button"
+                        onClick={() => setCurrentPage(page)}
+                        title={`${page}페이지: ${group.label}`}
+                        aria-label={`${page}페이지, ${group.label}`}
+                        aria-current={currentPage === page ? "page" : undefined}
+                        className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${currentPage === page ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                       >
-                        …
-                      </span>
+                        {page}
+                      </button>
                     );
-                  }
-                  const group = studentPageGroups[page - 1];
-                  return (
-                    <button
-                      key={group.key}
-                      type="button"
-                      onClick={() => setCurrentPage(page)}
-                      title={`${page}페이지: ${group.label}`}
-                      aria-label={`${page}페이지, ${group.label}`}
-                      aria-current={currentPage === page ? "page" : undefined}
-                      className={`rounded-md text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
-                    >
-                      {page}
-                    </button>
-                  );
-                },
-              )}
+                  },
+                )}
+              </div>
             </nav>
           )}
         </div>

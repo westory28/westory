@@ -47,7 +47,7 @@ class MemoryStore {
           this.documents.set(
             path,
             structuredClone(
-              options?.merge
+              options?.merge || options?.mergeFields
                 ? { ...this.documents.get(path), ...value }
                 : value,
             ),

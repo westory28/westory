@@ -1,3 +1,4 @@
+import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -796,6 +797,12 @@ const QuizBankTab: React.FC<{
     } else if (editType === "word") {
       if (!editWordAnswer.trim()) {
         alert("단답형 정답을 입력하세요.");
+        return;
+      }
+      if (exceedsShortAnswerLimit(editWordAnswer)) {
+        alert(
+          "학생이 입력할 수 있도록 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
+        );
         return;
       }
       answer = editWordAnswer.trim();

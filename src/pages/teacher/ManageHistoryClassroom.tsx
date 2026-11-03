@@ -1,3 +1,4 @@
+import { exceedsShortAnswerLimit } from "../../lib/assessmentAnswerLimits";
 import NumericInput from "../../components/common/NumericInput";
 import "./ManageHistoryClassroom.css";
 import React, {
@@ -3826,6 +3827,16 @@ const ManageHistoryClassroom: React.FC = () => {
       return;
     }
 
+    if (
+      mapChanged &&
+      nextBlanks.some((blank) => exceedsShortAnswerLimit(blank.answer))
+    ) {
+      alert(
+        "학생이 입력할 수 있도록 빈칸 정답을 공백 제외 20자 이내로 줄여 주세요.",
+      );
+      return;
+    }
+
     savingEditRef.current = true;
     setSavingEdit(true);
     try {
@@ -4237,6 +4248,13 @@ const ManageHistoryClassroom: React.FC = () => {
       saveBlanks.some((blank) => !blank.answer.trim())
     ) {
       alert("선택한 자료에 빈칸과 정답을 먼저 저장해 주세요.");
+      return;
+    }
+
+    if (saveBlanks.some((blank) => exceedsShortAnswerLimit(blank.answer))) {
+      alert(
+        "학생이 입력할 수 있도록 빈칸 정답을 공백 제외 20자 이내로 줄여 주세요.",
+      );
       return;
     }
 

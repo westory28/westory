@@ -49,7 +49,7 @@ class Store {
         if (filter.limit) rows = rows.slice(0, filter.limit); return rows;
       },
       create: (path, value) => { writes = true; if (path === this.failCreate) throw Error("injected write abort"); assert(!docs.has(path)); docs.set(path, clone(value)); },
-      set: (path, value, options) => { writes = true; docs.set(path, options?.merge ? { ...docs.get(path), ...clone(value) } : clone(value)); },
+      set: (path, value, options) => { writes = true; docs.set(path, options?.merge || options?.mergeFields ? { ...docs.get(path), ...clone(value) } : clone(value)); },
       delete: path => { writes = true; docs.delete(path); },
     };
     try { const result = await run(tx); this.documents = docs; return result; } finally { release(); }

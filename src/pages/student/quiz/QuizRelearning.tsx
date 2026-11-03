@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  SHORT_ANSWER_MAX_LENGTH,
+  limitShortAnswer,
+} from "../../../lib/assessmentAnswerLimits";
 import InfoHelp from "../../../components/common/InfoHelp";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
@@ -259,8 +263,11 @@ export default function QuizRelearning({
                 className="student-quiz-text-answer"
                 value={answer}
                 disabled={checked}
-                maxLength={20000}
-                onChange={(event) => setAnswer(event.target.value)}
+                maxLength={SHORT_ANSWER_MAX_LENGTH}
+                placeholder={`최대 ${SHORT_ANSWER_MAX_LENGTH}자`}
+                onChange={(event) =>
+                  setAnswer(limitShortAnswer(event.target.value))
+                }
                 autoComplete="off"
               />
             </label>

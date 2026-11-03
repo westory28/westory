@@ -55,7 +55,7 @@ class MemoryStore {
       getAll: async (paths) => paths.map(read),
       query,
       set: (path, data, options) => {
-        const next = options?.merge && staged.has(path)
+        const next = (options?.merge || options?.mergeFields) && staged.has(path)
           ? { ...clone(staged.get(path)), ...clone(data) }
           : clone(data);
         staged.set(path, next);
@@ -567,6 +567,18 @@ const runKind = async (kind) => {
   const answerMap = kind === "QUIZ"
     ? { 1: "정답", 2: "오답" }
     : { "blank-1": "고려", "blank-2": "오답" };
+  if (kind === "HISTORY_CLASSROOM") {
+    const tooLong = { "blank-1": "한".repeat(21) };
+    const before = store.writeCount;
+    const exceedsBlank = error => error.details?.reason === "ASSESSMENT_ANSWER_TOO_LONG" && error.details.limit === 20;
+    await assert.rejects(queryCore.saveAssessmentProgress({ auth: student, data: {
+      attemptId, expectedRevision: 1, answers: tooLong, saveId: "long-blank",
+    } }), exceedsBlank);
+    await assert.rejects(execute(student, "submitAssessmentAttempt", {
+      attemptId, expectedRevision: 1, answers: tooLong, submitReason: "TIMEOUT",
+    }), exceedsBlank);
+    assert.equal(store.writeCount, before);
+  }
   const save = await queryCore.saveAssessmentProgress({
     auth: student,
     data: {
@@ -743,6 +755,74 @@ const runKind = async (kind) => {
   assert.equal(store.writeCount, writesBeforeClosedStart);
 };
 
+const runAnswerLimits = async () => {
+  const unitId = "limits";
+  const longOption = "긴".repeat(80);
+  const questions = [
+    { id: "word", type: "word", answer: "가" },
+    { id: "short", type: "short", answer: "나" },
+    { id: "essay", type: "essay", answer: "다" },
+    { id: "choice", type: "choice", answer: "답", options: ["답", longOption] },
+    { id: "order", type: "order", answer: "답||" + longOption, options: ["답", longOption] },
+    { id: "matching", type: "matching", answer: "A=>짧음||B=>" + longOption },
+  ];
+  const sourcePath = id => `years/2026/semesters/2/quiz_questions/limit-${id}`;
+  for (const question of questions) store.documents.set(sourcePath(question.id), {
+    ...question, unitId, category: "formative", question: "합성 문항", contentRevision: 1,
+  });
+  const definition = definitionPayload("QUIZ");
+  definition.sourceId = unitId;
+  definition.definitionId = "quiz:2026-2:limits:formative";
+  definition.legacyConfigKey = "limits::formative";
+  definition.questionCount = definition.presentationSettings.questionCount = questions.length;
+  await execute(admin, "createAssessmentDefinition", definition);
+  await execute(admin, "transitionAssessmentDefinition", { definitionId: definition.definitionId,
+    expectedRevision: 1, targetStatus: "PUBLISHED", reason: "answer limits" });
+  const { attemptId } = (await execute(student, "startAssessmentAttempt", { definitionId: definition.definitionId })).result;
+  const attemptPath = `semester_assessment_attempts/${attemptId}`;
+  const attempt = store.documents.get(attemptPath);
+  assert.ok(attempt.gradingSnapshot.every(item => Number.isInteger(item.answerLimit)));
+  // Mix new frozen limits, old presentation snapshots, and omitted large-image
+  // snapshots recovered from the same revision. A changed source may not grant more space.
+  for (const id of ["short", "essay", "choice"]) delete attempt.gradingSnapshot.find(item => item.id === id).answerLimit;
+  attempt.questionSnapshots = attempt.questionSnapshots.filter(item => item.id !== "choice");
+  store.documents.get(sourcePath("word")).type = "essay";
+  attempt.answers = { unassigned: longOption };
+
+  const query = assessment.createAssessmentQueryCore({ store, now: () => new Date(nowMs),
+    serverTimestamp: () => ({ __serverTimestamp: nowMs }), assertSession: async request => ({ uid: request.auth.uid }) });
+  const save = (answers, saveId = "bounded") => query.saveAssessmentProgress({ auth: student, data: {
+    attemptId, expectedRevision: 1, answers, saveId,
+  } });
+  const submit = (answers, revision = 1) => execute(student, "submitAssessmentAttempt", {
+    attemptId, expectedRevision: revision, answers, submitReason: "STUDENT",
+  });
+  const rejected = async (answers, reason, limit) => {
+    const before = store.writeCount;
+    const matches = error => error.details?.reason === reason && error.details?.limit === limit;
+    await assert.rejects(save(answers), matches);
+    await assert.rejects(submit(answers), matches);
+    assert.equal(store.writeCount, before, "Invalid input must create no progress, submission, receipt, reward, or audit");
+  };
+  await rejected({ word: "한".repeat(21) }, "ASSESSMENT_ANSWER_TOO_LONG", 20);
+  await rejected({ short: "😀".repeat(10) + "가" }, "ASSESSMENT_ANSWER_TOO_LONG", 20);
+  await rejected({ essay: "한".repeat(2001) }, "ASSESSMENT_ANSWER_TOO_LONG", 2000);
+  await rejected({ choice: longOption + "초과" }, "ASSESSMENT_ANSWER_TOO_LONG", longOption.length);
+  await rejected({ unassigned: "가짜" }, "ASSESSMENT_ANSWERS_INVALID");
+  await rejected({ word: { type: "essay", answer: "위조" } }, "ASSESSMENT_ANSWERS_INVALID");
+  await rejected(Object.fromEntries(Array.from({ length: 100 }, (_, index) => [index, "한".repeat(3000)])), "ASSESSMENT_ANSWERS_INVALID");
+  store.documents.get(sourcePath("choice")).contentRevision = 2;
+  await rejected({ choice: longOption }, "ASSESSMENT_ANSWER_TOO_LONG", 20);
+  store.documents.get(sourcePath("choice")).contentRevision = 1;
+  const answers = { word: "한".repeat(20), short: "😀".repeat(10), essay: "글".repeat(2000),
+    choice: longOption, order: longOption + "||답", matching: `A=>${longOption}||B=>${longOption}` };
+  assert.equal((await save(answers)).revision, 2);
+  assert.deepEqual(store.documents.get(attemptPath).answers, answers);
+  assert.equal((await save(answers)).replayed, true);
+  assert.equal((await submit(answers, 2)).result.status, "SUBMITTED");
+  assert.deepEqual(store.documents.get(`semester_assessment_submissions/${attemptId}`).answers, answers);
+};
+
 (async () => {
   await runClassVisibilityCommands();
   await runManagementContentCommands();
@@ -881,6 +961,7 @@ const runKind = async (kind) => {
   );
   assert.equal(store.writeCount, writesBeforeProductionFaultAttempt);
 
+  await runAnswerLimits();
   console.log(JSON.stringify({
     suite: "assessment-lifecycle-core",
     passed: true,
@@ -897,6 +978,7 @@ const runKind = async (kind) => {
       "SOURCE_HASH_STALE_REJECTION",
       "CONCURRENT_START_EFFECT_ONCE",
       "SAVE_REVISION_AND_REPLAY",
+      "TYPED_ANSWER_LIMITS_SAVE_SUBMIT_LEGACY_AND_UNKNOWN_KEYS",
       "SERVER_DEADLINE_PRESERVED",
       "SERVER_DEADLINE_MINUS_ONE_ZERO_PLUS_ONE_BOTH_KINDS",
       "SERVER_DEADLINE_TAMPER_REJECTED",

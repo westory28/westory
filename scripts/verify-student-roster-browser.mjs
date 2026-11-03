@@ -371,12 +371,9 @@ try {
       ),
       ["REJECT"],
     );
-    assert.equal(
-      await page
-        .getByRole("button", { name: "가입대기예시", exact: true })
-        .count(),
-      0,
-    );
+    await page
+      .getByRole("button", { name: "가입대기예시", exact: true })
+      .waitFor({ state: "detached" });
     await page.getByLabel("학적 상태 필터").selectOption("rejected");
     await page
       .getByRole("button", { name: "가입대기예시", exact: true })

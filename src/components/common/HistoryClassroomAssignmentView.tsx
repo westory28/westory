@@ -1,3 +1,4 @@
+import { SHORT_ANSWER_MAX_LENGTH } from "../../lib/assessmentAnswerLimits";
 import React, {
   useEffect,
   useId,
@@ -881,7 +882,13 @@ const HistoryClassroomAssignmentView: React.FC<
       observer.disconnect();
       window.removeEventListener("resize", updateFitScale);
     };
-  }, [enableInteractiveViewport, isStudentSolve, largeInputBlank, pageImage]);
+  }, [
+    enableInteractiveViewport,
+    isStudentSolve,
+    largeInputBlank,
+    pageImage,
+    viewportHeight,
+  ]);
 
   const clearViewportGestureState = () => {
     dragStateRef.current = null;
@@ -1563,7 +1570,8 @@ const HistoryClassroomAssignmentView: React.FC<
                 autoCorrect="off"
                 spellCheck={false}
                 aria-label="선택한 빈칸의 답안"
-                placeholder="정답 입력"
+                maxLength={SHORT_ANSWER_MAX_LENGTH}
+                placeholder={`정답 입력 (최대 ${SHORT_ANSWER_MAX_LENGTH}자)`}
                 value={answers[largeInputBlank.id] ?? ""}
                 onChange={(event) =>
                   onAnswerChange?.(
@@ -1846,6 +1854,11 @@ const HistoryClassroomAssignmentView: React.FC<
                                 />
                               ) : null}
                               <WorksheetBlankInput
+                                maxLength={
+                                  isStudentSolve
+                                    ? SHORT_ANSWER_MAX_LENGTH
+                                    : undefined
+                                }
                                 focusOutline={false}
                                 type="text"
                                 ref={(node) => {

@@ -17,6 +17,7 @@
 }
 
 .score-list-compact {
+  container-type: inline-size;
   width: 100%;
   min-width: 0;
 }
@@ -27,8 +28,14 @@
   padding-right: 8px;
 }
 
-.score-list-compact th:last-child {
+.score-list-compact:not(.score-list-summary) th:last-child {
   width: 64px;
+}
+
+.score-list-summary th {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .score-list-compact td:nth-child(4) {
@@ -47,25 +54,20 @@
   min-width: 0;
 }
 
-@media (min-width: 768px) {
-  .score-list-compact {
-    overflow-x: auto;
-  }
+.score-list-compact--many {
+  --wrap-score-items: true;
+}
 
-  .score-list-compact th:nth-child(-n + 4),
-  .score-list-compact td:nth-child(-n + 4):not([colspan]) {
-    min-width: 80px;
-    padding-left: 16px;
-    padding-right: 16px;
+@container (width > 52rem) {
+  .score-list-compact th:nth-child(-n + 3) {
+    width: 7%;
   }
-
-  .score-list-compact th:nth-child(4),
-  .score-list-compact td:nth-child(4):not([colspan]) {
-    min-width: 128px;
+  .score-list-compact th:nth-child(4) {
+    width: 13%;
   }
 }
 
-@media (max-width: 767px) {
+@container (max-width: 52rem) or style(--wrap-score-items: true) {
   .score-list-compact table,
   .score-list-compact thead,
   .score-list-compact tbody {
@@ -126,6 +128,12 @@
 
   .score-list-compact td[data-score-summary]::before {
     content: attr(data-score-summary);
+  }
+
+  .score-list-summary td[data-score-summary] {
+    grid-column: span 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .score-list-compact td[colspan] {

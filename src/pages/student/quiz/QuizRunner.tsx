@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  SHORT_ANSWER_MAX_LENGTH,
+  limitShortAnswer,
+  restoreAssessmentAnswers,
+} from "../../../lib/assessmentAnswerLimits";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { PageLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
@@ -530,7 +535,16 @@ const QuizRunner: React.FC = () => {
     }, {});
 
     setSelectedQuestions(questionList);
-    setAnswers(submission.answers);
+    const restored = restoreAssessmentAnswers(submission.answers, questionList);
+    setAnswers(restored.answers);
+    if (restored.changed) {
+      showToast({
+        tone: "warning",
+        title: "복원한 답안을 확인해 주세요.",
+        message:
+          "현재 출제된 문항의 답안을 불러왔습니다. 단답형은 앞 20자까지 복원했습니다.",
+      });
+    }
     setCurrentIndex(
       Math.min(
         Math.max(0, submission.currentIndex),
@@ -1158,11 +1172,15 @@ const QuizRunner: React.FC = () => {
     }
   };
 
-  const handleAnswer = (value: string) => {
+  const handleAnswer = (input: string) => {
     const question = selectedQuestions[currentIndex];
     if (!question || finishSubmittingRef.current) return;
-    if (answers[String(question.id)] !== value)
-      pendingSubmitAnalyticsRef.current = undefined;
+    const value =
+      question.type === "short" || question.type === "word"
+        ? limitShortAnswer(input)
+        : input;
+    if (answers[String(question.id)] === value) return;
+    pendingSubmitAnalyticsRef.current = undefined;
 
     emitSessionActivity();
     const completedSelection =
@@ -1964,6 +1982,7 @@ const QuizRunner: React.FC = () => {
                   type="text"
                   aria-label={`${currentIndex + 1}번 문제 답안`}
                   value={currentAnswer}
+                  maxLength={SHORT_ANSWER_MAX_LENGTH}
                   onChange={(event) => handleAnswer(event.target.value)}
                   onBlur={() =>
                     observe((collector) =>
@@ -1971,7 +1990,7 @@ const QuizRunner: React.FC = () => {
                     )
                   }
                   className="student-quiz-text-answer"
-                  placeholder="정답을 입력하세요"
+                  placeholder={`정답 입력 (최대 ${SHORT_ANSWER_MAX_LENGTH}자)`}
                 />
               )}
 

@@ -97,6 +97,10 @@ const normalizeKind = (value) => {
   return value;
 };
 
+const SHORT_ANSWER_LIMIT = 20;
+const ESSAY_ANSWER_LIMIT = 2_000;
+const SERIALIZED_SELECTION_LIMIT = 20_000;
+
 const normalizeAnswers = (value) => {
   if (!isPlainObject(value)) {
     fail("invalid-argument", "answers must be an object.", "ASSESSMENT_ANSWERS_INVALID");
@@ -105,12 +109,18 @@ const normalizeAnswers = (value) => {
   if (entries.length > 300) {
     fail("invalid-argument", "answers contains too many entries.", "ASSESSMENT_ANSWERS_INVALID");
   }
-  return Object.fromEntries(entries.map(([key, answer]) => [
-    text(String(key), "answer key", 160),
-    typeof answer === "string" && answer.length <= 20_000
-      ? answer
-      : fail("invalid-argument", "answer is invalid.", "ASSESSMENT_ANSWERS_INVALID"),
-  ]));
+  let answerBytes = 0;
+  for (const [key, answer] of entries) {
+    text(key, "answer key", 160);
+    if (typeof answer !== "string" || answer.length > SERIALIZED_SELECTION_LIMIT) {
+      fail("invalid-argument", "answer is invalid.", "ASSESSMENT_ANSWERS_INVALID");
+    }
+    answerBytes += Buffer.byteLength(key) + Buffer.byteLength(answer);
+    if (answerBytes > 750_000) {
+      fail("invalid-argument", "answers is too large.", "ASSESSMENT_ANSWERS_INVALID");
+    }
+  }
+  return Object.fromEntries(entries);
 };
 
 const normalizeJsonDocument = (value, allowedKeys, label, maxBytes = 900_000) => {
@@ -462,6 +472,68 @@ const extractQuizQuestion = (document) => {
     answer: String(data.answer ?? ""),
     sourceRevision: String(data.contentRevision || data.revision || data.updatedAt?.toMillis?.() || "legacy"),
   };
+};
+
+// Selection answers contain the actual option text. A matching exercise can use
+// the same right-hand option for multiple left-hand options in a wrong answer.
+const quizAnswerLimit = (question) => {
+  if (question.type === "essay") return ESSAY_ANSWER_LIMIT;
+  if (!["choice", "order", "matching"].includes(question.type)) return SHORT_ANSWER_LIMIT;
+  const answer = String(question.answer ?? "");
+  const options = Array.isArray(question.options) ? question.options.filter(item => typeof item === "string") : [];
+  let length = answer.length;
+  if (question.type === "choice") {
+    for (const option of options) length = Math.max(length, option.length);
+  } else if (question.type === "order") {
+    length = Math.max(length, options.join("||").length);
+  } else {
+    const pairs = Array.isArray(question.matchingPairs) && question.matchingPairs.length ? question.matchingPairs
+      : answer.split("||").map(item => { const [left, right] = item.split("=>"); return { left, right }; });
+    let longestRight = 0;
+    let leftLength = 0;
+    for (const pair of pairs) {
+      longestRight = Math.max(longestRight, String(pair?.right ?? "").length);
+      leftLength += String(pair?.left ?? "").length;
+    }
+    length = Math.max(length, leftLength + pairs.length * (longestRight + 4) - 2);
+  }
+  return Math.min(SERIALIZED_SELECTION_LIMIT, Math.max(SHORT_ANSWER_LIMIT, length));
+};
+
+const assertAttemptAnswers = async (transaction, attempt, answers) => {
+  const grading = new Map((attempt.gradingSnapshot || []).map(item => [String(item.id), item]));
+  const snapshots = new Map((attempt.questionSnapshots || []).map(item => [String(item.id), item]));
+  const missing = [];
+  const checkLength = (id, limit) => {
+    if (answers[id].length > limit) {
+      fail("invalid-argument", `답안은 문항당 ${limit.toLocaleString("ko-KR")}자까지 입력할 수 있습니다.`, "ASSESSMENT_ANSWER_TOO_LONG", { questionId: id, limit });
+    }
+  };
+  for (const [id, answer] of Object.entries(answers)) {
+    const item = grading.get(id);
+    if (!item) fail("invalid-argument", "Answer does not belong to this attempt.", "ASSESSMENT_ANSWERS_INVALID");
+    if (answer.length <= SHORT_ANSWER_LIMIT) continue;
+    if (attempt.assessmentKind !== "QUIZ") checkLength(id, SHORT_ANSWER_LIMIT);
+    else if (Number.isInteger(item.answerLimit)) checkLength(id, item.answerLimit);
+    else if (snapshots.has(id)) checkLength(id, quizAnswerLimit(snapshots.get(id)));
+    else missing.push(id);
+  }
+  if (!missing.length) return;
+  // Pre-limit attempts may omit a presentation snapshot. Only an unchanged
+  // server question can grant a limit above the short-answer default.
+  const documents = await transaction.getAll(missing.map(id =>
+    `${semesterRoot(attempt.semesterId)}/quiz_questions/${attempt.questionDocumentIds?.[id] || id}`), {
+    fieldMask: ["id", "type", "answer", "options", "matchingPairs", "unitId", "category", "updatedAt", "revision", "contentRevision"],
+  });
+  documents.forEach((doc, index) => {
+    const id = missing[index], item = grading.get(id);
+    const source = extractQuizQuestion(doc);
+    const matches = doc.exists && source.id === id && source.answer === item.answer
+      && source.sourceRevision === String(item.sourceRevision || "legacy")
+      && (!attempt.sourceId || doc.data.unitId === attempt.sourceId)
+      && (!attempt.category || doc.data.category === attempt.category);
+    checkLength(id, matches ? quizAnswerLimit(doc.data) : SHORT_ANSWER_LIMIT);
+  });
 };
 
 const collectHistoryAnswerKey = (data) => {
@@ -1160,7 +1232,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         transaction, source, definition, questionIds,
       });
       const answerById = new Map(source.answerKey.map((item) => [item.id, item]));
-      const gradingSnapshot = selectedIds.map((id) => answerById.get(id));
+      // Keep the publication source hash stable. Freeze only the selected
+      // questions' limits on the new attempt, even when a large image is omitted.
+      const quizDocumentsById = new Map((source.quizDocuments || []).map(document => [
+        String(document.data?.id ?? document.path.split("/").at(-1)).trim(), document.data,
+      ]));
+      const gradingSnapshot = selectedIds.map(id => quizDocumentsById.has(id)
+        ? { ...answerById.get(id), answerLimit: quizAnswerLimit(quizDocumentsById.get(id)) }
+        : answerById.get(id));
       const attemptId = `attempt_${sha256(`${actor.actorUid}\n${payload.definitionId}\n${attemptOrdinal}`)}`;
       const path = attemptPath(attemptId);
       const deadlineMs = Math.min(
@@ -1240,6 +1319,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (payload.submitReason !== "TIMEOUT" && nowDate.getTime() > Date.parse(attempt.deadlineAtIso)) {
         fail("deadline-exceeded", "The authoritative assessment deadline has passed.", "ASSESSMENT_DEADLINE_EXPIRED");
       }
+      await assertAttemptAnswers(transaction, attempt, payload.answers);
       const effectiveAnswers = payload.answers;
       const analytics = attempt.assessmentKind === "QUIZ"
         ? learning.normalizeAnalytics(payload.analytics === undefined ? attempt.analytics : payload.analytics, attempt, nowDate.getTime(), effectiveAnswers) : null;
@@ -1308,7 +1388,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         receiptId,
         createdAt: timestamp,
       });
-      transaction.set(path, { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}), submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp }, { merge: true });
+      const submittedFields = { status: "SUBMITTED", revision: nextRevision, answers: effectiveAnswers, ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}), submittedAtIso, submissionRef: immutableSubmissionPath, resultRef: immutableResultPath, submitReason: payload.submitReason, updatedAt: timestamp };
+      transaction.set(path, submittedFields, { mergeFields: Object.keys(submittedFields) });
       rewardPlan.apply();
       historyPlan.apply();
       return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
@@ -1609,9 +1690,12 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       }
       const savedAtIso = savedAt.toISOString();
       const revision = payload.expectedRevision + 1;
+      await assertAttemptAnswers(transaction, attempt, payload.answers);
       const analytics = attempt.assessmentKind === "QUIZ" && payload.analytics !== undefined
         ? { analytics: learning.normalizeAnalytics(payload.analytics, attempt, savedAt.getTime(), payload.answers) } : {};
-      transaction.set(path, { status: "IN_PROGRESS", revision, answers: payload.answers, ...analytics, currentItemId: payload.currentItemId, lastSaveId: payload.saveId, lastSaveHash: saveHash, lastSavedAtIso: savedAtIso, updatedAt: serverTimestamp() }, { merge: true });
+      const savedFields = { status: "IN_PROGRESS", revision, answers: payload.answers, ...analytics, currentItemId: payload.currentItemId, lastSaveId: payload.saveId, lastSaveHash: saveHash, lastSavedAtIso: savedAtIso, updatedAt: serverTimestamp() };
+      // Replace the full answer map, including removal of old unassigned keys.
+      transaction.set(path, savedFields, { mergeFields: Object.keys(savedFields) });
       return { attemptId: attempt.attemptId, status: "IN_PROGRESS", revision, deadlineAtIso: attempt.deadlineAtIso, savedAtIso, replayed: false };
     });
     if (payload.testDropResponseAfterCommit) {

@@ -13850,8 +13850,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     </p>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[880px] text-left text-sm">
+                <div
+                  className={
+                    isWrittenExamMode
+                      ? "overflow-x-auto"
+                      : "score-list-compact score-list-summary"
+                  }
+                >
+                  <table
+                    className={`w-full text-left text-sm ${isWrittenExamMode ? "min-w-[880px]" : ""}`}
+                  >
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
                         {renderScoreListHeader("grade", "학년")}
@@ -13916,6 +13924,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   {student.studentName || "(이름 없음)"}
                                 </td>
                                 <td
+                                  data-score-summary={
+                                    isWrittenExamMode
+                                      ? undefined
+                                      : firstScoreListSummaryHeader
+                                  }
                                   className={`whitespace-nowrap px-3 py-3 text-right font-black ${
                                     transferredStudent
                                       ? "text-rose-600"
@@ -13930,6 +13943,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                                 <td
+                                  data-score-summary={
+                                    isWrittenExamMode
+                                      ? undefined
+                                      : secondScoreListSummaryHeader
+                                  }
                                   className={`whitespace-nowrap px-3 py-3 text-right font-black ${
                                     transferredStudent
                                       ? "text-rose-600"
@@ -13944,6 +13962,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                                 <td
+                                  data-score-summary={
+                                    isWrittenExamMode
+                                      ? undefined
+                                      : combinedScoreListSummaryHeader
+                                  }
                                   className={`whitespace-nowrap px-3 py-3 text-right text-xl font-black ${
                                     transferredStudent
                                       ? "text-rose-600"
@@ -14060,7 +14083,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </div>
                 <div
                   className={
-                    isWrittenExamMode ? "overflow-x-auto" : "score-list-compact"
+                    isWrittenExamMode
+                      ? "overflow-x-auto"
+                      : `score-list-compact ${scoreListTableItemEntries.length > 8 ? "score-list-compact--many" : ""}`
                   }
                 >
                   <table

@@ -361,6 +361,11 @@ try {
     assert(await select.evaluate(el => document.activeElement === el));
     await t.page.keyboard.press("Tab");
     assert(await input.evaluate(el => document.activeElement === el));
+    assert.equal(await input.getAttribute("maxlength"), "20");
+    assert.equal(await firstInput(t.page).getAttribute("maxlength"), "20");
+    await t.page.keyboard.insertText("가".repeat(21));
+    assert.equal(await firstInput(t.page).inputValue(), "가".repeat(20));
+    await input.fill("");
     const cdp = await t.context.newCDPSession(t.page);
     await cdp.send("Input.imeSetComposition", {text:"고조", selectionStart:2, selectionEnd:2});
     await advance(t.page, 1100);
@@ -914,7 +919,7 @@ try {
     assert(
       after.y >= reduced.y &&
         after.y + after.height <= reduced.y + reduced.height,
-      "lower-page focused answer remains visible",
+      `lower-page focused answer remains visible at ${width}px: viewport ${reduced.y}..${reduced.y + reduced.height}, answer ${after.y}..${after.y + after.height}`,
     );
     assert.equal(await firstInput(t.page).inputValue(), "가독성 검증");
     assert.equal(

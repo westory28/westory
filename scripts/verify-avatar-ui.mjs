@@ -5,6 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { build } from "esbuild";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -41,7 +42,8 @@ for (const character of ["girl", "boy"]) {
 console.log(
   `PASS: ${catalog.items.length} stable catalog items, free coverage for both characters and compatible saved-image fixtures.`,
 );
-if (!process.argv.includes("--serve")) process.exit(0);
+const checkRankingLayout = process.argv.includes("--check-ranking-layout");
+if (!process.argv.includes("--serve") && !checkRankingLayout) process.exit(0);
 
 const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "westory-avatar-ui-"));
 const mock = `
@@ -66,6 +68,8 @@ import AvatarStage from './src/features/avatar/AvatarStage';
 import {AppToastProvider} from './src/components/common/AppToastProvider';
 import {defaultAvatarLook,AVATAR_ITEMS} from './src/features/avatar/catalog';
 import './src/assets/index.css';
+import './src/pages/student/studentDashboard.css';
+import './src/pages/teacher/teacherDashboard.css';
 const qa=window.avatarQa={rankingReads:0,purchases:[],saves:[],reports:[],errors:[],entries:Array.from({length:5},(_,i)=>({uid:'qa-'+i,studentName:'검증학생'+(i+1),grade:'3',class:String(i+1),number:'1',cumulativeEarned:4420-i*500,currentBalance:500,rank:i+1,avatar:{look:defaultAvatarLook(i%2?'boy':'girl'),lookHash:'qa-'+i,revision:1,...(i<2?{thumbnailUrl:'/avatar/v1/'+(i%2?'boy':'girl')+'-preview-v2.webp'}:{})}}))};
 window.addEventListener('error',e=>qa.errors.push(e.message));window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
 let saved={schemaVersion:1,catalogVersion:1,look:defaultAvatarLook(),revision:0,lookHash:'fixture',ownedItemIds:[]},balance=500;
@@ -197,10 +201,137 @@ const server = http.createServer(async (req, res) => {
 await new Promise((resolve, reject) => {
   server.once("error", reject);
   server.listen(
-    Number(process.env.AVATAR_QA_PORT || 4181),
+    Number(process.env.AVATAR_QA_PORT || (checkRankingLayout ? 0 : 4181)),
     "127.0.0.1",
     resolve,
   );
 });
 console.log(`CUA_FIXTURE_URL=http://127.0.0.1:${server.address().port}/`);
 console.log(`EVIDENCE=${evidence}`);
+
+if (checkRankingLayout) {
+  const require = createRequire(import.meta.url);
+  let playwright;
+  try {
+    playwright = require("playwright");
+  } catch {
+    playwright = require(
+      process.env.PLAYWRIGHT_MODULE_PATH ||
+        path.join(
+          os.homedir(),
+          ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+        ),
+    );
+  }
+  const browser = await playwright.chromium.launch({
+    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+  });
+  try {
+    const page = await browser.newPage({ reducedMotion: "reduce" });
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.locator(".wis-ranking-row").first().waitFor();
+    await page.evaluate(() => {
+      window.avatarQa.entries[0].studentName = "가나다";
+      window.avatarQa.entries[1].studentName = "아주긴이름으로등록된합성학생";
+      window.avatarQa.entries[1].cumulativeEarned = 987654321098;
+    });
+    for (const role of ["teacher", "student"]) {
+      await page
+        .getByRole("button", {
+          name: role === "teacher" ? "교사 문맥" : "학생 문맥",
+        })
+        .click();
+      await page
+        .locator(".wis-ranking-name")
+        .filter({ hasText: "가나다" })
+        .waitFor();
+      for (const [viewport, cardWidth] of [
+        [320, 320],
+        [390, 390],
+        [768, 768],
+        [1280, 480],
+        [1366, 500],
+        [1440, 1000],
+      ]) {
+        await page.setViewportSize({ width: viewport, height: 768 });
+        await page.locator("#sample").evaluate(
+          (sample, { cardWidth, role }) => {
+            sample.classList.toggle(
+              "teacher-weekly-dashboard",
+              role === "teacher",
+            );
+            sample.classList.toggle(
+              "student-portal-dashboard",
+              role === "student",
+            );
+            sample.style.width = cardWidth + "px";
+            sample.style.paddingInline = "0";
+          },
+          { cardWidth, role },
+        );
+        const geometry = await page
+          .locator(".wis-ranking-row")
+          .evaluateAll((rows) =>
+            rows.map((row) => {
+              const rect = (s) =>
+                row.querySelector(".wis-ranking-" + s).getBoundingClientRect();
+              const center = (r) => (r.top + r.bottom) / 2;
+              const medal = rect("rank-medal"),
+                name = rect("name"),
+                badge = rect("rank-badge"),
+                score = rect("score");
+              const list = row.closest(".wis-ranking-list-scroll");
+              return {
+                oneLine: [name, badge, score].every(
+                  (r) => Math.abs(center(r) - center(medal)) < 2,
+                ),
+                separated:
+                  medal.right <= name.left &&
+                  name.right <= badge.left + 1 &&
+                  badge.right <= score.left + 1,
+                overflow: list.scrollWidth > list.clientWidth + 1,
+                visibleName: name.width,
+                regularTextFits: ["name", "score > span"].every((s) => {
+                  const element = row.querySelector(".wis-ranking-" + s);
+                  return element.scrollWidth <= element.clientWidth + 1;
+                }),
+              };
+            }),
+          );
+        if (viewport === 320 || viewport === 768) {
+          await page
+            .locator(".wis-ranking-panel")
+            .screenshot({
+              path: path.join(evidence, role + "-" + viewport + ".png"),
+            });
+        }
+        assert.equal(geometry.length, 5);
+        assert(
+          geometry.every(
+            (r) => r.oneLine && r.separated && !r.overflow && r.visibleName > 0,
+          ),
+          `${role} ${viewport}px: ${JSON.stringify(geometry)}`,
+        );
+        assert(
+          geometry[0].regularTextFits,
+          `Ordinary name and four-digit amount fit at ${viewport}px ${JSON.stringify(geometry[0])}`,
+        );
+      }
+      await page.locator(".wis-ranking-row").last().focus();
+      await page.keyboard.press("Enter");
+      assert.equal(
+        await page
+          .locator(".wis-ranking-row")
+          .last()
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+    }
+    console.log(
+      "PASS: student and teacher ranking rows stay on one line with separated fields at 320/390/768/1280/1366/1440px; keyboard selection works.",
+    );
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}

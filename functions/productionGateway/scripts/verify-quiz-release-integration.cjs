@@ -104,8 +104,17 @@ const payload = (revision, update = {}) => {
   assert.equal((await get(`semester_assessment_attempts/${attempt.attemptId}`)).revision, 1, "Read recovery must not write progress");
   const answers = { "1": "O", "2": "왼쪽1=>오른쪽2||왼쪽2=>오른쪽1", "3": "다||나||가" };
   const savePayload = { attemptId: attempt.attemptId, expectedRevision: 1, answers, currentItemId: "3", saveId: randomUUID() };
+  const attemptRef = db.doc(`semester_assessment_attempts/${attempt.attemptId}`);
+  await attemptRef.update({ answers: { unassigned: "legacy" } });
+  const invalid = { ...answers, unassigned: "forged" };
+  await assert.rejects(production.saveAssessmentProgress.run(request("student-one", { ...savePayload, answers: invalid })), reason("ASSESSMENT_ANSWERS_INVALID"));
+  await assert.rejects(execute("student-one", "submitAssessmentAttempt", {
+    attemptId: attempt.attemptId, expectedRevision: 1, answers: invalid, submitReason: "STUDENT",
+  }), reason("ASSESSMENT_ANSWERS_INVALID"));
+  assert.equal((await attemptRef.get()).data().revision, 1);
   const saved = await production.saveAssessmentProgress.run(request("student-one", savePayload));
   assert.equal(saved.revision, 2);
+  assert.deepEqual((await attemptRef.get()).data().answers, answers, "Saving replaces legacy unknown entries in the entire Firestore answer map");
   assert.equal((await production.saveAssessmentProgress.run(request("student-one", savePayload))).replayed, true);
   const submitted = await execute("student-one", "submitAssessmentAttempt", { attemptId: attempt.attemptId, expectedRevision: 2, answers, submitReason: "STUDENT" });
   assert.equal(submitted.result.percent, 100);

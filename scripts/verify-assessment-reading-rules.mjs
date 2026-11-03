@@ -19,6 +19,8 @@ import {
   query,
   setDoc,
   setLogLevel,
+  serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 
@@ -195,6 +197,49 @@ try {
   }
   await maintenance(false);
   const student = client("student-a");
+  // Use the exact formerly accepted payload, including server timestamps and owner identity.
+  for (const path of legacyPaths.filter((name) =>
+    name.endsWith("quiz_submissions"),
+  )) {
+    const validDraft = {
+      uid: "student-a",
+      name: "연습 학생",
+      email: email("student-a"),
+      class: "1",
+      number: "1",
+      gradeClass: "3학년 1반",
+      unitId: "unit",
+      category: "diagnostic",
+      title: "합성 평가",
+      status: "in_progress",
+      questionIds: ["1"],
+      answers: { 1: "가".repeat(21) },
+      currentIndex: 0,
+      hintUsedCount: 0,
+      revealedHintIds: [],
+      orderOptionMap: {},
+      timeLimitSeconds: 300,
+      clientStartedAtMs: 1,
+      lastClientSavedAtMs: 2,
+      startedAt: serverTimestamp(),
+      lastSavedAt: serverTimestamp(),
+      resultId: "",
+    };
+    const legacy = doc(student, path, "formerly-valid-draft");
+    await check(`legacy student draft create denied ${path}`, false, () =>
+      setDoc(legacy, validDraft),
+    );
+    await seed(legacy.path, validDraft);
+    await check(`legacy student draft update denied ${path}`, false, () =>
+      updateDoc(legacy, {
+        answers: { 1: "가".repeat(2001) },
+        lastSavedAt: serverTimestamp(),
+      }),
+    );
+    await check(`legacy own draft remains readable ${path}`, true, () =>
+      getDoc(legacy),
+    );
+  }
   for (const path of [...legacyPaths, ...canonicalPaths]) {
     await seed(`${path}/pending-own`, {
       uid: "pending-student",

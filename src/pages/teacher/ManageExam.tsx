@@ -29,7 +29,7 @@ const ManageExam: React.FC = () => {
         className={
           activeTab === "preview"
             ? "grading-page mx-auto flex w-full flex-1 flex-col px-4 py-6"
-            : "ws-page flex flex-1 flex-col"
+            : `ws-page flex flex-1 flex-col ${activeTab === "performance" ? "ws-page--reading" : ""}`
         }
       >
         <div
