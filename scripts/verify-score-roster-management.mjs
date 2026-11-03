@@ -9,6 +9,8 @@ const definitions = new Map();
 let loadScoreRecordsClosure = "";
 let loadClassRecordsClosure = "";
 for (const path of [
+  "src/lib/studentRegistrationStatus.ts",
+  "src/lib/studentRoster.ts",
   "src/lib/performanceScores.ts",
   "src/pages/teacher/components/PerformanceScoreManager.tsx",
 ]) {
@@ -80,6 +82,18 @@ const targets = [
   "saveScoreListEdits",
   "applyPerformanceScoreConfirmation",
   "getAcademicStatusLabel",
+  "projectScoreDocumentForRosterRow",
+  "getPerformanceEnrollmentLabel",
+  "getClassSheetStudentScoreCellValue",
+  "getClassSheetTotalScoreCellValue",
+  "getScoreListCombinedTotalLabel",
+  "getConfirmedSignatureRecord",
+  "buildScoreSummary",
+  "buildItemScoreSummary",
+  "getUploadMovementLookup",
+  "uploadStudentLinksChanged",
+  "markStudentIdentityConflicts",
+  "wasExcludedBeforeScoreSemester",
   "clearLegacyScoreEnrollmentForActiveStudent",
   "sortPerformanceScoreRecords",
 ];
@@ -363,6 +377,224 @@ assert.equal(
 );
 assert.equal(legacyExcludedRow.academicStatus, "전출");
 assert.equal(legacyExcludedRow.isTransferred, true);
+const movementScope = { year: "2026", semester: "2" };
+const movementRow = (status, timing, base = rows[0]) => ({
+  ...base,
+  enrollmentStatus: status,
+  enrollmentYear: "2026",
+  enrollmentSemester: "2",
+  enrollmentMovementTiming: timing,
+});
+for (const [status, label] of [
+  ["transferred", "전출"],
+  ["outside_quota", "정원외"],
+]) {
+  const during = movementRow(status, "during");
+  const withdrawn = {
+    ...active[0],
+    movementLabel: subject.getPerformanceEnrollmentLabel(during, movementScope),
+  };
+  assert.equal(withdrawn.movementLabel, label);
+  assert.equal(
+    subject.getPerformanceEnrollmentLabel(
+      movementRow(status, "before"),
+      movementScope,
+    ),
+    "",
+  );
+  assert.equal(
+    subject.getPerformanceEnrollmentLabel(during, {
+      ...movementScope,
+      semester: "1",
+    }),
+    "",
+  );
+  const rosterWithScope = {
+    ...roster,
+    academicYear: "2026",
+    semester: "2",
+    rows: [during, movementRow(status, "before", rows[1]), rows[2]],
+  };
+  for (const archive of [false, true]) {
+    subject.archive(archive);
+    const view = subject.buildActiveStudentRoster(rosterWithScope, [
+      withdrawn,
+      active[2],
+    ]);
+    assert.equal(view.rows.length, 2);
+    assert.equal(
+      view.rows.some((row) => row.uid === rows[1].uid),
+      false,
+    );
+    const record = subject.projectScoreDocumentForRosterRow(
+      rosterWithScope,
+      view.rows[0],
+      {
+        ...rows[0],
+        signatureImage: "old signature",
+        updatedAt: { seconds: 20 },
+      },
+    );
+    const sheetStudent = { firstRecord: record };
+    assert.equal(
+      subject.getClassSheetStudentScoreCellValue(sheetStudent, record),
+      label,
+    );
+    assert.equal(
+      subject.getClassSheetStudentScoreCellValue(sheetStudent, undefined),
+      label,
+    );
+    assert.equal(subject.getClassSheetTotalScoreCellValue(sheetStudent), "");
+    assert.equal(subject.getScoreListCombinedTotalLabel(sheetStudent), "");
+    assert.equal(subject.getConfirmedSignatureRecord(sheetStudent), null);
+    const scored = {
+      ...rows[2],
+      items: [{ score: 0, scoreEntered: true }],
+      enteredScoreCount: 1,
+      totalScore: 0,
+    };
+    const overall = subject.buildScoreSummary([record, scored], 20);
+    assert.equal(overall.average, 0);
+    assert.equal(overall.count, 1);
+    const item = subject.buildItemScoreSummary([record, scored], 0, 20);
+    assert.equal(item.average, 0);
+    assert.equal(item.count, 1);
+    assert.equal(during.totalScore, 15);
+  }
+}
+subject.archive(false);
+const movedProfile = {
+  ...active[0],
+  uid: "moved-otherwise-absent",
+  movementLabel: "전출",
+};
+const otherClassRoster = {
+  ...roster,
+  targetGrade: "3",
+  classes: ["1", "2"],
+  rows: [
+    { ...rows[0], grade: "2", class: "1" },
+    { ...rows[1], grade: "3", class: "2" },
+  ],
+};
+assert.equal(
+  subject.buildActiveStudentRoster(otherClassRoster, [movedProfile]).rows
+    .length,
+  0,
+);
+assert.equal(
+  subject.buildActiveStudentRoster(roster, [movedProfile]).rows.length,
+  1,
+);
+const lookup = subject.getUploadMovementLookup(
+  [movedProfile, active[2]],
+  [active[1]],
+);
+assert.equal(lookup("3", "1", "1", "가학생"), "during");
+assert.equal(lookup("3", "1", "2", "나학생"), "before");
+assert.equal(lookup("3", "1", "2", "동명이 아님"), undefined);
+assert.equal(lookup("3", "2", "3", "다학생"), undefined);
+assert.equal(
+  subject.wasExcludedBeforeScoreSemester(
+    movementRow("transferred", "during"),
+    "2027",
+    "1",
+  ),
+  true,
+);
+assert.equal(
+  subject.wasExcludedBeforeScoreSemester(
+    movementRow("outside_quota", "during"),
+    "2026",
+    "2",
+  ),
+  false,
+);
+assert.equal(
+  subject.wasExcludedBeforeScoreSemester(
+    movementRow("outside_quota", "before"),
+    "2026",
+    "2",
+  ),
+  true,
+);
+assert.equal(
+  subject.wasExcludedBeforeScoreSemester(
+    movementRow("outside_quota", "before"),
+    "2026",
+    "1",
+  ),
+  false,
+);
+assert.equal(
+  subject.wasExcludedBeforeScoreSemester(
+    { ...movementRow("outside_quota", "during"), enrollmentYear: "" },
+    "2027",
+    "1",
+  ),
+  false,
+);
+assert.throws(
+  () =>
+    subject.getUploadMovementLookup(active, [
+      { ...active[0], uid: "different-uid" },
+    ])("3", "1", "1", "가학생"),
+  /학년·반·번호와 이름/,
+);
+console.log(
+  "PASS semester-scoped movements: current and archived rows, both labels, stale scores and signatures, true zero, missing candidates and mixed-grade boundaries.",
+);
+const oldA = { ...active[0], uid: "old-a" };
+const replacementB = { ...active[0], uid: "replacement-b" };
+subject.markStudentIdentityConflicts([oldA, replacementB]);
+const legacyUnlinked = {
+  ...mkRow("", "1", oldA.name),
+  totalScore: 17,
+  items: [{ name: "평가", score: 17, maxScore: 20 }],
+};
+const ambiguousRoster = { ...roster, rows: [legacyUnlinked] };
+const ambiguousView = subject.buildActiveStudentRoster(ambiguousRoster, [
+  replacementB,
+]);
+assert.equal(ambiguousView.rows.length, 1);
+assert.equal(ambiguousView.rows[0].uid, replacementB.uid);
+assert.equal(ambiguousView.rows[0].enteredScoreCount, 0);
+assert.equal(
+  subject.repairRosterRowsWithStudentProfiles([legacyUnlinked], [replacementB])
+    .changed,
+  false,
+);
+assert.equal(
+  subject.matchRowsToStudents([legacyUnlinked], [replacementB])[0].uid,
+  "",
+);
+assert.equal(
+  subject.uploadStudentLinksChanged(
+    [{ uid: "old-a", academicStatus: "" }],
+    [{ uid: "replacement-b", academicStatus: "" }],
+  ),
+  true,
+);
+assert.equal(legacyUnlinked.totalScore, 17);
+const explicitUid = { ...legacyUnlinked, uid: replacementB.uid };
+assert.equal(
+  subject.buildActiveStudentRoster({ ...roster, rows: [explicitUid] }, [
+    replacementB,
+  ]).rows[0].totalScore,
+  17,
+);
+const historicalOrphan = { ...legacyUnlinked, enrollmentStatus: "transferred" };
+assert.equal(
+  subject.buildActiveStudentRoster({ ...roster, rows: [historicalOrphan] }, [
+    active[0],
+  ]).rows[0].enteredScoreCount,
+  0,
+);
+assert.equal(
+  subject.repairRosterRowsWithStudentProfiles([historicalOrphan], [active[0]])
+    .changed,
+  false,
+);
 subject.archive(true);
 assert.equal(
   subject.clearLegacyScoreEnrollmentForActiveStudent(legacyExcludedRow),
@@ -528,6 +760,28 @@ await (async () => {
   await subject.saveScoreListEdits();
   assert.equal(writes.length, 0);
   assert.equal(toasts.at(-1)?.tone, "error");
+  // An explicit edit for the new UID creates that student's score. It must
+  // never turn the other child's historical, unlinked row into a new grade.
+  const unlinkedRoster = { ...fixtureRoster, rows: [legacyUnlinked] };
+  snapshots.set(rosterPath, unlinkedRoster);
+  snapshots.delete("users/active-1/performance_scores/roster");
+  const blank = subject.buildScoreListRecordsFromRosterRows(
+    subject.buildActiveStudentRoster(unlinkedRoster, [
+      { ...active[0], identityConflict: true },
+    ]),
+  )[0];
+  context.scoreEditOriginalRecords = [blank];
+  context.scoreListRecords = [
+    { ...blank, items: updated.items, totalScore: 18, enteredScoreCount: 1 },
+  ];
+  await subject.saveScoreListEdits();
+  assert.equal(toasts.at(-1)?.tone, "success");
+  const newRows = writes.find((entry) => entry.type === "update").data.rows;
+  assert.equal(newRows.length, 2);
+  assert.equal(newRows[0].uid, "");
+  assert.equal(newRows[0].totalScore, 17);
+  assert.equal(newRows[1].uid, "active-1");
+  assert.equal(newRows[1].totalScore, 18);
   console.log(
     "PASS score transaction checks: untouched/excluded rows preserved, scores editable, signature cleared, pending objection preserved by merge, canonical name, inactive save rejected, concurrent score save rejected.",
   );

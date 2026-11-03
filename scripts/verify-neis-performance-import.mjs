@@ -31,6 +31,14 @@ const fixture = [
 ];
 const params = { fileName: "수행평가 파일일괄등록 - 2026학년도 2학기 주간 3학년 역사_전체_1강의실.xlsx", targetGrade: "2", fallbackClass: "" };
 const parsed = parser.parsePerformanceScoreWorkbook(fixture, params);
+const movedImport = parser.parsePerformanceScoreWorkbook([...fixture,
+  ["일반", 1, 3, "이동중", "전출", 999],
+  ["일반", 1, 4, "이동전", 999, 999],
+], {...params, movementTiming: (_grade, _classValue, _number, name) =>
+  name === "이동중" ? "during" : name === "이동전" ? "before" : undefined});
+assert.equal(movedImport.rows.length,3);
+assert.equal(movedImport.rows[2].enteredScoreCount,0);
+assert.ok(movedImport.rows[2].items.every(item=>!item.scoreEntered));
 assert.equal(parsed.format, "neis");
 assert.equal(parsed.rows[0].grade, "3");
 assert.equal(parsed.subject, "역사");
@@ -232,6 +240,28 @@ const assertReferenceBorders = async (buffer, studentCount, label, assessmentCou
   }
 };
 await assertReferenceBorders(await blob.arrayBuffer(), 32, "32 students");
+const movedStudents = students.map((student,index) => index < 2 ? {
+  ...student,
+  firstRecord: {...signedFirst, academicStatus: ["전출","정원외"][index]},
+  secondRecord: signedSecond,
+} : student);
+const movementWorkbook = new ExcelJS.Workbook();
+const movedBuffer = await (await manager.buildClassSummaryWorkbookFromTemplate({...exportParams, students: movedStudents})).arrayBuffer();
+await movementWorkbook.xlsx.load(movedBuffer);
+const movedSheet = movementWorkbook.worksheets[0];
+for (const [row, label] of [[7,"전출"],[8,"정원외"]]) {
+  assert.equal(movedSheet.getCell(`E${row}`).value,label);
+  assert.equal(movedSheet.getCell(`G${row}`).value,label);
+  assert.equal(movedSheet.getCell(`H${row}`).value || "","");
+  assert.equal(movedSheet.getCell(`J${row}`).value || "","");
+}
+assert.equal(movedSheet.getImages().length,0);
+assert.equal(movedSheet.getCell("E39").value,"30 명");
+assert.equal(movedSheet.getCell("G39").value,"30 명");
+assert.equal(movedSheet.getCell("E40").value,510);
+assert.equal(movedSheet.getCell("G40").value,870);
+assert.equal(movedSheet.getCell("H41").value,46);
+await assertReferenceBorders(movedBuffer,32,"two semester movements");
 for (const test of finalSignatureCases) {
   const finalBlob = await manager.buildClassSummaryWorkbookFromTemplate({
     ...exportParams,

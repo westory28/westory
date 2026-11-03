@@ -225,6 +225,11 @@ export interface PerformanceScoreAnswerSheetRequest {
 }
 
 export interface PerformanceScoreRosterRow {
+  enrollmentStatus?: string;
+  enrollmentYear?: string;
+  enrollmentSemester?: string;
+  enrollmentMovementTiming?: "before" | "during" | null;
+  enrollmentMovementDate?: string | null;
   rowNumber: number;
   uid: string;
   grade: string;

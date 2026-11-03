@@ -212,9 +212,7 @@ const assertDetailedHairBorders = async (buffer, assessmentCount = 2) => {
     assert.equal(actual, expected, `detailed XLSX ${address}.${side}`);
   };
   for (let row = 7; row < 38; row += 1)
-    for (const column of assessmentCount === 1
-      ? "BCDEFGHI"
-      : "BCDEFGHIJKLM") {
+    for (const column of assessmentCount === 1 ? "BCDEFGHI" : "BCDEFGHIJKLM") {
       edge(`${column}${row}`, "bottom", "hair");
       edge(`${column}${row + 1}`, "top", "hair");
     }
@@ -1166,6 +1164,77 @@ try {
         orientation: resultSheet.pageSetup.orientation,
         filename: download.suggestedFilename(),
       };
+      // The score documents and a previously valid signature still exist. A new
+      // export has to use today's enrollment classification without deleting either.
+      const priorWrites = await page.evaluate(() => {
+        for (const [number, status, timing] of [
+          [1, "transferred", "during"],
+          [2, "outside_quota", "during"],
+          [3, "transferred", "before"],
+          [4, "outside_quota", "before"],
+        ]) {
+          Object.assign(window.scoreQa.docs.get("users/qa-" + number), {
+            enrollmentStatus: status,
+            enrollmentMovementDate:
+              timing === "during" ? "2026-08-14" : "2026-08-13",
+            enrollmentMovementTiming: timing,
+            enrollmentYear: "2026",
+            enrollmentSemester: "2",
+          });
+        }
+        return window.scoreQa.events.length;
+      });
+      await page
+        .getByRole("button", { name: "일람표 다운로드", exact: true })
+        .click();
+      const unsignedDialog = page.getByRole("alertdialog");
+      await unsignedDialog.waitFor();
+      for (const name of [
+        "가상학생01",
+        "가상학생02",
+        "가상학생03",
+        "가상학생04",
+      ]) {
+        assert.ok(
+          !(await unsignedDialog.innerText()).includes(name),
+          name + " is not a signature target",
+        );
+      }
+      const [movementDownload] = await Promise.all([
+        page.waitForEvent("download"),
+        unsignedDialog.getByRole("button", { name: "그래도 다운로드" }).click(),
+      ]);
+      const moved = new ExcelJS.Workbook();
+      await moved.xlsx.readFile(await movementDownload.path());
+      const exported = moved.worksheets[0];
+      for (const [row, label] of [
+        [7, "전출"],
+        [8, "정원외"],
+      ]) {
+        for (const col of ["E", "G"])
+          assert.equal(exported.getCell(col + row).value, label);
+        for (const col of ["H", "J"])
+          assert.equal(exported.getCell(col + row).text, "");
+      }
+      assert.equal(exported.getImages().length, 0);
+      assert.equal(exported.getCell("D9").text, "가상학생05");
+      assert.equal(exported.getCell("D36").text, "가상학생32");
+      // 28 numeric scores: 27 scores of 12/30 and one actual zero.
+      for (const [col, sum, avg] of [
+        ["E", 324, 11.57],
+        ["G", 810, 28.93],
+      ]) {
+        assert.match(exported.getCell(col + "37").text, /^28\s*명$/);
+        assert.equal(exported.getCell(col + "38").value, sum);
+        assert.equal(exported.getCell(col + "39").value, avg);
+      }
+      assert.equal(
+        await page.evaluate(() => window.scoreQa.events.length),
+        priorWrites,
+      );
+      report.checks.push(
+        "Current-term transfer/outside-quota labels in both exported score columns, blank totals/remarks and no signatures; pre-term students omitted; a real zero retained in both averages without changing score records.",
+      );
       let failedReadDownloads = 0;
       page.on("download", () => {
         failedReadDownloads += 1;
@@ -1184,6 +1253,26 @@ try {
       assert.equal(await page.getByRole("alertdialog").count(), 0);
       report.checks.push(
         "Confirmation query and fallback read failure: download stops with an explicit error; no unsigned-student confirmation or XLSX download is produced.",
+      );
+      const snapshotMovementScores = () =>
+        page.evaluate(() =>
+          [...window.scoreQa.docs].filter(([key]) =>
+            /^users\/qa-[1-4]\/performance_scores\//.test(key),
+          ),
+        );
+      const originalMovementScores = await snapshotMovementScores();
+      await page.evaluate(() => {
+        window.scoreQa.rejectConfirmationReads = false;
+      });
+      await page
+        .getByRole("button", { name: "일람표 다운로드 창 닫기", exact: true })
+        .click();
+      // This file still has their old numeric marks. Re-import must preserve the
+      // score documents and signatures even though the teacher now sees labels.
+      await uploadFixture(syntheticFile);
+      assert.deepEqual(await snapshotMovementScores(), originalMovementScores);
+      report.checks.push(
+        "Reimport of stale numeric marks after transfer preserves the four affected students' original score and confirmation documents.",
       );
     }
     await page.close();
@@ -2658,7 +2747,10 @@ try {
     .click();
   await rosterChangePage
     .getByRole("status")
-    .filter({ hasText: "학생 명단을 확인해 주세요." })
+    .filter({
+      hasText:
+        "학적 상태가 변경되었습니다. 파일을 다시 선택해 명단을 확인해 주세요.",
+    })
     .waitFor();
   assert.equal(
     await rosterChangePage.evaluate(

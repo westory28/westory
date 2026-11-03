@@ -21,11 +21,12 @@ import {
   isStudentRosterProfile,
   isActiveRosterStudent,
   isStudentRegistrationPending,
+  type StudentEnrollmentProfile,
   StudentEnrollmentStatus,
   STUDENT_ENROLLMENT_OPTIONS,
 } from "../../lib/studentRoster";
 
-interface Student {
+interface Student extends StudentEnrollmentProfile {
   id: string;
   userId: string;
   grade: string;
@@ -318,6 +319,10 @@ const StudentList: React.FC = () => {
           isTeacherAccount,
           enrollmentStatus: getStudentEnrollmentStatus(data),
           enrollmentReason: String(data.enrollmentReason || "").trim(),
+          enrollmentYear: data.enrollmentYear,
+          enrollmentSemester: data.enrollmentSemester,
+          enrollmentMovementTiming: data.enrollmentMovementTiming,
+          enrollmentMovementDate: data.enrollmentMovementDate,
           ...(Object.prototype.hasOwnProperty.call(
             data,
             "registrationApprovalStatus",

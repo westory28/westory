@@ -66,13 +66,14 @@ try {
   await assertSucceeds(setDoc(doc(teacherDb, scorePath), score));
   await admin.doc(`${root}/performance_score_rosters/${scoreId}`).set({ rows: [{ ...creation, studentName: creation.name, uid, totalScore: 15 }], academicYear: year, semester });
   await admin.doc(`users/${uid}/performance_scores/past`).set({ ...score, updatedAt: require("firebase-admin/firestore").Timestamp.fromMillis(version.toMillis()), academicYear: "2025", semester: "1", rosterId: "past" });
-  await assertSucceeds(getDoc(doc(studentDb, scorePath)));
+  await assertFails(getDoc(doc(studentDb, scorePath)));
   await assertFails(getDoc(doc(otherDb, scorePath)));
   await assertFails(updateDoc(doc(studentDb, scorePath), { totalScore: 20 }));
-  await assertSucceeds(setDoc(doc(studentDb, `users/${uid}/performance_score_consents/current`), {
+  const consent = {
     uid, academicYear: year, semester, acknowledged: true, warningVersion: "default-20260609",
     warningTextHash: "test-hash", acknowledgedAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  }));
+  };
+  await assertFails(setDoc(doc(studentDb, `users/${uid}/performance_score_consents/current`), consent));
   const signature = (scoreUpdatedAt = version) => ({
     uid, rosterId: scoreId, signatureName: creation.name, signatureImage: "data:image/png;base64,aGVsbG8=",
     scoreUpdatedAt, confirmedAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -84,6 +85,8 @@ try {
   // Seed the terminal approval state for the independent score-flow fixture.
   // This does not exercise or claim an end-to-end production registration.
   await admin.doc(`users/${uid}`).update({ registrationApprovalStatus: 'APPROVED' });
+  await assertSucceeds(getDoc(doc(studentDb, scorePath)));
+  await assertSucceeds(setDoc(doc(studentDb, `users/${uid}/performance_score_consents/current`), consent));
   check('preregistration remains PENDING, does not verify Auth email, and cannot self-approve/sign/request before approval');
   const blankScoreId = "unentered-second-assessment";
   const blankScorePath = `users/${uid}/performance_scores/${blankScoreId}`;
@@ -285,8 +288,37 @@ try {
   await admin.doc("semester_enrollments/canonical-enrollment").set({
     studentUid: uid, semesterId: "2026-2", enrollmentStatus: "ACTIVE", revision: 7, enrollmentId: "canonical-enrollment", classId: "existing-class",
   });
-  await functions.updateStudentEnrollment.run(req(teacher, { uid, status: "transferred", reason: "전출" }));
-  await functions.updateStudentEnrollment.run(req(teacher, { uid, status: "transferred", reason: "전출" }));
+  await admin.doc("semester_manifests/2026-2").set({ startAt: "2026-09-01", endAt: "2027-02-28" }, { merge: true });
+  await admin.doc(`${root}/assessment_config/enrollment_movement`).set({ startDate: "2026-08-14" });
+  const recoveredRoster = admin.doc(`${root}/performance_score_rosters/missing-row`);
+  const otherClass = admin.doc(`${root}/performance_score_rosters/other-class`);
+  const written = admin.doc(`${root}/performance_score_rosters/written`);
+  await recoveredRoster.set({ academicYear: year, semester, targetGrade: "3", targetClass: "1", rows: [], items: [{ name: "기준", maxScore: 20 }] });
+  await otherClass.set({ academicYear: year, semester, targetGrade: "3", targetClass: "2", rows: [] });
+  await written.set({ academicYear: year, semester, scoreKind: "written_exam_essay", targetGrade: "3", targetClass: "1", rows: [] });
+  const transfer = { uid, status: "transferred", reason: "전출", movementDate: "2026-08-14" };
+  for (const movementDate of [null, "2026-02-30", "2099-12-01"]) {
+    await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, { ...transfer, movementDate })), { code: "invalid-argument" });
+  }
+  await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, { ...transfer, movementTiming: "before" })), { code: "failed-precondition" });
+  await admin.doc("semester_manifests/2026-2").update({ endAt: "2026-08-31" });
+  await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, { ...transfer, movementDate: "2026-09-01" })), { code: "invalid-argument" });
+  await admin.doc("semester_manifests/2026-2").update({ endAt: "2027-02-28" });
+  await functions.updateStudentEnrollment.run(req(teacher, { ...transfer, movementDate: "2026-08-13" }));
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentMovementTiming, "before");
+  assert.equal((await recoveredRoster.get()).data().rows.length, 0);
+  await functions.updateStudentEnrollment.run(req(teacher, transfer));
+  await functions.updateStudentEnrollment.run(req(teacher, transfer));
+  const restored = (await recoveredRoster.get()).data();
+  assert.equal(restored.rows.length, 1);
+  assert.equal(restored.matchedCount, 1);
+  assert.equal(restored.rows[0].enteredScoreCount, 0);
+  assert.equal(restored.rows[0].enrollmentMovementTiming, "during");
+  assert.equal(restored.rows[0].enrollmentMovementDate, transfer.movementDate);
+  assert.equal((await otherClass.get()).data().rows.length, 0);
+  assert.equal((await written.get()).data().rows.length, 0);
+  assert.equal((await admin.doc(scorePath).get()).data().totalScore, 16);
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentMovementTiming, "during");
   assert.equal((await admin.doc(`users/${uid}`).get()).data().enrollmentStatus, "transferred");
   assert.equal((await admin.doc(scorePath).get()).data().enrollmentStatus, "transferred");
   assert.equal((await admin.doc(`users/${uid}/performance_scores/past`).get()).data().enrollmentStatus, undefined);
@@ -294,16 +326,30 @@ try {
   assert.equal((await admin.doc(confirmationPath).get()).exists, true);
   const canonical = (await admin.doc("semester_enrollments/canonical-enrollment").get()).data();
   assert.equal(canonical.rosterExclusionStatus, "transferred");
+  assert.equal(canonical.rosterExclusionMovementDate, transfer.movementDate);
+  assert.equal(canonical.rosterExclusionMovementTiming, "during");
   assert.equal(canonical.enrollmentStatus, "ACTIVE");
   assert.equal(canonical.enrollmentId, "canonical-enrollment");
   assert.equal(canonical.revision, 7);
   await assertFails(updateDoc(doc(studentDb, `users/${uid}`), { enrollmentStatus: "active" }));
+  await assertFails(updateDoc(doc(studentDb, `users/${uid}`), { enrollmentMovementTiming: "before", enrollmentMovementDate: "2026-08-12" }));
   await assertSucceeds(deleteDoc(doc(teacherDb, confirmationPath)));
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
   await assert.rejects(functions.notifyPerformanceScoreObjectionRequested.run(req(actor, { scoreIds: [scoreId], reason: "답안 확인을 요청합니다.", answerSheetRequested: true })), { code: "failed-precondition" });
   await functions.updateStudentEnrollment.run(req(teacher, { uid, status: "active", reason: "" }));
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
-  assert.equal((await admin.collection(`users/${uid}/enrollment_history`).get()).size, 2);
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentMovementTiming, null);
+  assert.equal((await admin.collection(`users/${uid}/enrollment_history`).get()).size, 3);
+  await admin.doc(`${root}/assessment_config/enrollment_movement`).delete();
+  const outside = { ...transfer, status: "outside_quota" };
+  await functions.updateStudentEnrollment.run(req(teacher, outside));
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentMovementTiming, "before");
+  await admin.doc("semester_manifests/2026-2").delete();
+  await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, outside)), { code: "invalid-argument" });
+  await functions.updateStudentEnrollment.run(req(teacher, { ...outside, movementTiming: "during" }));
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentStatus, "outside_quota");
+  assert.equal((await admin.doc(scorePath).get()).data().enrollmentMovementTiming, "during");
+  await functions.updateStudentEnrollment.run(req(teacher, { uid, status: "active", reason: "" }));
   check("exclusion preserves score/signature, updates current roster only, blocks self-reactivation/signing/requests, restoration works with audit history");
   await admin.doc('site_settings/semester_active').set({ semesterId: '2027-1' });
   await assert.rejects(functions.updateStudentEnrollment.run(req(teacher, { uid, status: 'transferred', reason: '학기 경계' })), { code: 'failed-precondition' });

@@ -259,13 +259,21 @@ export const getPerformanceScoreItemShortName = (
 const sortSchoolValues = (values: string[]) =>
   values.sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
 
+interface PerformanceWorkbookOptions {
+  fileName: string;
+  targetGrade: string;
+  fallbackClass: string;
+  movementTiming?: (
+    grade: string,
+    classValue: string,
+    number: string,
+    name: string,
+  ) => "before" | "during" | undefined;
+}
+
 export const parsePerformanceScoreWorkbook = (
   rows: unknown[][],
-  params: {
-    fileName: string;
-    targetGrade: string;
-    fallbackClass: string;
-  },
+  params: PerformanceWorkbookOptions,
 ): ParsedPerformanceScoreUpload => {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("첫 번째 시트를 찾을 수 없습니다.");
@@ -303,9 +311,19 @@ export const parsePerformanceScoreWorkbook = (
     .filter(({ row }) =>
       row.some((cell) => String(cell ?? "").trim().length > 0),
     );
-  const scoreRows = candidateRows.filter(({ row }) =>
-    Boolean(getCellText(row, indexes.nameIndex)),
-  );
+  const scoreRows = candidateRows.flatMap(({ row, rowIndex }) => {
+    const name = getCellText(row, indexes.nameIndex);
+    if (!name) return [];
+    const timing = params.movementTiming?.(
+      getCellText(row, indexes.gradeIndex) || params.targetGrade,
+      getCellText(row, indexes.classIndex) || params.fallbackClass,
+      getCellText(row, indexes.numberIndex),
+      name,
+    );
+    return timing === "before"
+      ? []
+      : [{ row, rowIndex, moved: timing === "during" }];
+  });
 
   if (!scoreRows.length) {
     throw new Error("등록할 학생 점수 행을 찾지 못했습니다.");
@@ -337,7 +355,8 @@ export const parsePerformanceScoreWorkbook = (
 
   const scoreColumns: ScoreColumn[] = scoreColumnCandidates.map(
     ({ header, index }) => {
-      const observedMax = scoreRows.reduce((max, { row }) => {
+      const observedMax = scoreRows.reduce((max, { row, moved }) => {
+        if (moved) return max;
         const value = toFiniteScore(getCell(row, index));
         return value === null ? max : Math.max(max, value);
       }, 0);
@@ -354,7 +373,8 @@ export const parsePerformanceScoreWorkbook = (
     shortName: getPerformanceScoreItemShortName(column.header, index),
     maxScore: column.maxScore,
   }));
-  const observedTotalMax = scoreRows.reduce((max, { row }) => {
+  const observedTotalMax = scoreRows.reduce((max, { row, moved }) => {
+    if (moved) return max;
     const value = toFiniteScore(getCell(row, indexes.totalIndex));
     return value === null ? max : Math.max(max, value);
   }, 0);
@@ -371,7 +391,7 @@ export const parsePerformanceScoreWorkbook = (
   const seenStudents = new Set<string>();
 
   const rowsWithScores: ParsedPerformanceScoreRow[] = scoreRows.map(
-    ({ row, rowIndex }) => {
+    ({ row, rowIndex, moved }) => {
       const rowGrade =
         getCellText(row, indexes.gradeIndex) || params.targetGrade.trim();
       const rowClass =
@@ -386,10 +406,10 @@ export const parsePerformanceScoreWorkbook = (
           `${rowIndex + 1}행: 같은 학년·반·번호가 중복되었습니다.`,
         );
       seenStudents.add(identity);
-      const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
+      const rawTotal = moved ? null : getCell(row, indexes.totalIndex);
+      const parsedTotal = toFiniteScore(rawTotal);
       if (
-        (!isBlankScoreCell(getCell(row, indexes.totalIndex)) &&
-          parsedTotal === null) ||
+        (!isBlankScoreCell(rawTotal) && parsedTotal === null) ||
         (parsedTotal !== null &&
           (parsedTotal < 0 || parsedTotal > totalMaxScore))
       )
@@ -397,10 +417,11 @@ export const parsePerformanceScoreWorkbook = (
           `${rowIndex + 1}행 총점은 0~${totalMaxScore}점 범위의 숫자, 빈칸 또는 -여야 합니다.`,
         );
       const rowItems = scoreColumns.map((column, itemIndex) => {
-        const score = toFiniteScore(getCell(row, column.index));
+        const raw = moved ? null : getCell(row, column.index);
+        const score = toFiniteScore(raw);
         const item = items[itemIndex];
         if (
-          (!isBlankScoreCell(getCell(row, column.index)) && score === null) ||
+          (!isBlankScoreCell(raw) && score === null) ||
           (score !== null && (score < 0 || score > item.maxScore))
         )
           throw new Error(
@@ -486,7 +507,7 @@ export const parsePerformanceScoreWorkbook = (
 // assessment has its own title, declared maximum, and score column.
 const parseNeisPerformanceScoreWorkbook = (
   rows: unknown[][],
-  params: { fileName: string; targetGrade: string; fallbackClass: string },
+  params: PerformanceWorkbookOptions,
 ): ParsedPerformanceScoreUpload | null => {
   const headerIndex = rows.slice(0, 20).findIndex((row) => {
     const keys = row.map(toHeaderKey);
@@ -558,12 +579,19 @@ const parseNeisPerformanceScoreWorkbook = (
     ) {
       throw new Error(`${rowNumber}행의 학년, 반, 번호, 성명을 확인해 주세요.`);
     }
+    const timing = params.movementTiming?.(
+      grade,
+      classValue,
+      number,
+      studentName,
+    );
+    if (timing === "before") return;
     const identity = `${grade}|${classValue}|${number}`;
     if (seen.has(identity))
       throw new Error(`${rowNumber}행: 같은 학년·반·번호가 중복되었습니다.`);
     seen.add(identity);
     const items = columns.map((column, index) => {
-      const raw = row[column.index];
+      const raw = timing === "during" ? null : row[column.index];
       const score = toFiniteScore(raw);
       if (!isBlankScoreCell(raw) && score === null)
         throw new Error(

@@ -36,6 +36,15 @@ const fixture = [
   [3, 1, 3, "가상학생셋", null, null, null, null, null, null, null, 80, ""],
 ];
 const parsed = parser.parsePerformanceScoreWorkbook(fixture, params);
+const scoped = parser.parsePerformanceScoreWorkbook([...fixture,
+  [3,1,4,"이동중",null,999,"전출","전출","전출","전출","전출",0,""],
+  [3,1,5,"이동전",999,999,999,999,999,999,999,0,""],
+], {...params, movementTiming: (_grade,_classValue,_number,name) =>
+  name === "이동중" ? "during" : name === "이동전" ? "before" : undefined});
+assert.equal(scoped.rows.length,4);
+assert.equal(scoped.totalMaxScore,30);
+assert.equal(scoped.rows[3].enteredScoreCount,0);
+assert.deepEqual(Array.from(scoped.items, item=>item.maxScore),maximums);
 assert.equal(parsed.format, "legacy");
 assert.deepEqual(Array.from(parsed.inferredMaxScoreItemIndexes), [0, 1, 2, 3, 4, 5]);
 assert.equal(parsed.title, "하여가와 단심가 다시 쓰기(논술형)");

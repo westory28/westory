@@ -3,17 +3,23 @@ import { useAuth } from "../../../contexts/AuthContext";
 import {
   createStudentData,
   getStudentEnrollmentLabel,
+  getStudentEnrollmentMovementTiming,
   isActiveRosterStudent,
+  needsEnrollmentMovementTiming,
+  loadEnrollmentMovementStartDate,
   STUDENT_ENROLLMENT_OPTIONS,
+  type EnrollmentMovementTiming,
+  type StudentEnrollmentProfile,
   StudentEnrollmentStatus,
   updateStudentEnrollment,
 } from "../../../lib/studentRoster";
+import { getYearSemester } from "../../../lib/semesterScope";
 import {
   approveStudentRegistration,
   rejectStudentRegistration,
 } from "../../../lib/studentRegistration";
 
-interface RosterStudent {
+interface RosterStudent extends StudentEnrollmentProfile {
   id: string;
   grade: string;
   class: string;
@@ -49,7 +55,10 @@ const getSaveError = (error: unknown) => {
   );
   if (reason === "REGISTRATION_SCHOOL_ACCOUNT_REQUIRED")
     return "학생이 학교 계정으로 처음 로그인한 뒤 등록 승인을 다시 진행해 주세요. 아직 점수 명단에는 표시되지 않습니다.";
-  if (reason.startsWith("REGISTRATION_") && error instanceof Error)
+  if (
+    (reason.startsWith("REGISTRATION_") || reason.startsWith("ENROLLMENT_")) &&
+    error instanceof Error
+  )
     return error.message;
   if (
     /unavailable|deadline-exceeded|internal|network-request-failed/.test(code)
@@ -82,6 +91,7 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
   onComplete,
 }) => {
   const { config } = useAuth();
+  const { year, semester } = getYearSemester(config);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [grade, setGrade] = useState("");
   const [classValue, setClassValue] = useState("");
@@ -89,6 +99,31 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<StudentEnrollmentStatus>("transferred");
+  const [movementTiming, setMovementTiming] = useState<
+    EnrollmentMovementTiming | ""
+  >("");
+  const [movementDate, setMovementDate] = useState("");
+  const [period, setPeriod] = useState<{
+    start: string | null;
+    scope: string;
+  } | null>(null);
+  const [periodError, setPeriodError] = useState(false);
+  const [manualTimingRequired, setManualTimingRequired] = useState(false);
+  const [periodRetry, setPeriodRetry] = useState(0);
+  const showMovement =
+    mode === "enrollment" && needsEnrollmentMovementTiming(status);
+  const periodReady = period?.scope === `${year}-${semester}`;
+  const timing =
+    period?.start && movementDate
+      ? movementDate < period.start
+        ? "before"
+        : "during"
+      : manualTimingRequired
+        ? movementTiming
+        : "";
+  const today = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Seoul",
+  }).format(new Date());
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -113,11 +148,42 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
       targets.length === 1 ? targets[0].enrollmentStatus : "transferred",
     );
     setReason(targets.length === 1 ? targets[0].enrollmentReason : "");
+    setMovementTiming(
+      targets.length === 1
+        ? getStudentEnrollmentMovementTiming(targets[0], year, semester) || ""
+        : "",
+    );
+    setMovementDate(
+      targets.length === 1 &&
+        String(targets[0].enrollmentYear) === year &&
+        String(targets[0].enrollmentSemester) === semester
+        ? String(targets[0].enrollmentMovementDate || "")
+        : "",
+    );
     setError("");
     setRosterConfirmed(false);
     setRejectConfirming(false);
     dialogRef.current?.showModal();
-  }, [mode, targets[0]?.id]);
+  }, [mode, targets[0]?.id, year, semester]);
+
+  useEffect(() => {
+    let current = true;
+    setPeriod(null);
+    setPeriodError(false);
+    setManualTimingRequired(false);
+    if (showMovement) {
+      void loadEnrollmentMovementStartDate({ year, semester })
+        .then((start) => {
+          if (current) setPeriod({ start, scope: `${year}-${semester}` });
+        })
+        .catch(() => {
+          if (current) setPeriodError(true);
+        });
+    }
+    return () => {
+      current = false;
+    };
+  }, [showMovement, year, semester, periodRetry]);
 
   const handleClose = () => {
     if (!saving) onClose();
@@ -198,6 +264,12 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
     } else if (mode === "enrollment" && status === "other" && !reason.trim()) {
       setError("기타 제외 사유를 입력해 주세요.");
       return;
+    } else if (
+      showMovement &&
+      (!periodReady || !movementDate || (manualTimingRequired && !timing))
+    ) {
+      setError("학적 변동일과 이동 시기를 확인해 주세요.");
+      return;
     }
 
     setSaving(true);
@@ -231,6 +303,8 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
             uid: student.id,
             status,
             reason: status === "active" ? "" : reason.trim(),
+            ...(showMovement ? { movementDate } : {}),
+            ...(showMovement && timing ? { movementTiming: timing } : {}),
           });
           savedCount += 1;
         }
@@ -242,6 +316,11 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
       });
       onClose();
     } catch (saveError) {
+      if (
+        (saveError as { details?: { reason?: string } })?.details?.reason ===
+        "ENROLLMENT_MOVEMENT_TIMING_REQUIRED"
+      )
+        setManualTimingRequired(true);
       if (savedCount || mode === "registration") onComplete();
       setError(
         `${savedCount ? `${savedCount}명은 반영되었습니다. ` : ""}${getSaveError(saveError)}`,
@@ -392,9 +471,67 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
                   ))}
                 </select>
               </label>
+              {showMovement && (
+                <label className="block text-sm font-bold">
+                  학적 변동일
+                  <input
+                    type="date"
+                    max={today}
+                    value={movementDate}
+                    onChange={(event) => setMovementDate(event.target.value)}
+                    required
+                    className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 px-3 text-base font-normal"
+                  />
+                </label>
+              )}
+              {showMovement &&
+                !periodReady &&
+                (periodError ? (
+                  <div
+                    role="alert"
+                    className="flex flex-wrap items-center gap-2 text-sm text-red-700"
+                  >
+                    학기 기준일을 불러오지 못했습니다.
+                    <button
+                      type="button"
+                      onClick={() => setPeriodRetry((value) => value + 1)}
+                      className="min-h-11 px-2 font-bold underline"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : (
+                  <p role="status" className="text-sm text-gray-600">
+                    학기 기준일 확인 중…
+                  </p>
+                ))}
+              {showMovement &&
+                periodReady &&
+                manualTimingRequired &&
+                !period.start && (
+                  <label className="block text-sm font-bold">
+                    학적 이동 시기 ({year}학년도 {semester}학기)
+                    <select
+                      value={movementTiming}
+                      onChange={(event) =>
+                        setMovementTiming(
+                          event.target.value as EnrollmentMovementTiming | "",
+                        )
+                      }
+                      required
+                      className="mt-1 min-h-11 w-full rounded-lg border border-gray-300 px-3 text-base font-normal"
+                    >
+                      <option value="">시기 선택</option>
+                      <option value="before">학기 시작 전</option>
+                      <option value="during">학기 중</option>
+                    </select>
+                  </label>
+                )}
               {status !== "active" && (
                 <label className="block text-sm font-bold">
-                  제외 사유 {status === "other" ? "(필수)" : "(선택)"}
+                  {status === "other"
+                    ? "제외 사유 (필수)"
+                    : "학적 변동 사유 (선택)"}
                   <input
                     required={status === "other"}
                     maxLength={200}
@@ -404,10 +541,26 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
                   />
                 </label>
               )}
-              <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+              <p
+                aria-live="polite"
+                className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600"
+              >
+                {showMovement && periodReady && period.start && (
+                  <span className="block">
+                    {year}학년도 {semester}학기 시작일: {period.start}
+                  </span>
+                )}
                 {status === "active"
                   ? "재학으로 변경하면 수행평가·정기시험 명단에 다시 표시됩니다."
-                  : `${getStudentEnrollmentLabel(status)} 학생은 수행평가·정기시험 명단에서 제외됩니다. 기존 점수와 서명은 보존됩니다.`}
+                  : needsEnrollmentMovementTiming(status)
+                    ? movementDate && timing === "during"
+                      ? "수행평가 명단에 남고 점수칸에 학적 상태가 표시됩니다. 평균 산출과 정기시험 명단에서는 제외됩니다."
+                      : movementDate && timing === "before"
+                        ? "이 학기 수행평가 명단과 평균 산출, 정기시험 명단에서 제외됩니다."
+                        : periodReady && !period.start && !manualTimingRequired
+                          ? "저장할 때 학기 시작일과 비교해 수행평가 명단 반영 여부를 정합니다."
+                          : ""
+                    : `${getStudentEnrollmentLabel(status)} 학생은 수행평가·정기시험 명단에서 제외됩니다. 기존 점수와 서명은 보존됩니다.`}
               </p>
             </>
           )}
@@ -439,7 +592,11 @@ const StudentRosterModal: React.FC<StudentRosterModalProps> = ({
             )}
           <button
             type="submit"
-            disabled={saving || (mode === "registration" && !rosterConfirmed)}
+            disabled={
+              saving ||
+              (showMovement && !periodReady) ||
+              (mode === "registration" && !rosterConfirmed)
+            }
             className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving

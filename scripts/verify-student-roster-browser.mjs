@@ -41,7 +41,7 @@ window.rosterQa={data,events,toasts:[],fail:false,popupStarts:0,popupFailed:fals
 const mocks = {
   "qa-state": state,
   "qa-auth": `export const useAuth=()=>({userData:{role:new URLSearchParams(location.search).has('readonly')?'staff':'teacher'},currentUser:{email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
-  "qa-firestore": `import{data}from'qa-state';export const collection=(db,name)=>({name});export const doc=(db,...names)=>({names});export const getDoc=async()=>({exists:()=>false});export const getDocs=async()=>{if(new URLSearchParams(location.search).has('loaderror'))throw new Error('synthetic read failure');const docs=data.map(({id,...value})=>({id,data:()=>value}));return{docs,forEach:fn=>docs.forEach(fn)};};`,
+  "qa-firestore": `import{data}from'qa-state';export const collection=(db,name)=>({name});export const doc=(db,...names)=>({names});export const getDoc=async(ref)=>ref.names.join('/').endsWith('/assessment_config/enrollment_movement')&&!location.search.includes('noPeriod')?{exists:()=>true,data:()=>({startDate:'2026-08-14'})}:{exists:()=>false};export const getDocs=async()=>{if(new URLSearchParams(location.search).has('loaderror'))throw new Error('synthetic read failure');const docs=data.map(({id,...value})=>({id,data:()=>value}));return{docs,forEach:fn=>docs.forEach(fn)};};`,
   "qa-firebase": `import{data,events}from'qa-state';
 export const db={};export const auth={currentUser:{uid:'qa-teacher',getIdTokenResult:async()=>({claims:{auth_time:10}})}};
 export const getHttpsCallable=async(name)=>async(input)=>{
@@ -50,7 +50,7 @@ export const getHttpsCallable=async(name)=>async(input)=>{
  if(name==='createStudentData'){data.push({id:'qa-new',role:'student',...input,studentName:input.name,enrollmentStatus:'active',registrationApprovalStatus:'PENDING'});return{data:{uid:'qa-new',registrationApprovalStatus:'PENDING',requiresFirstSignIn:true}};}
  if(name==='getStudentRegistrationApprovalState'){const student=data.find(item=>item.id===input.studentUid);return{data:{semesterId:'2026-2',manifestRevision:1,economyRevision:1,economyReady:true,classes:[{classId:'class-3-1',grade:'3',classNumber:'1',revision:1}],students:[{studentUid:student.id,status:student.registrationApprovalStatus,profileVersion:'a'.repeat(64),submittedProfile:{...student,number:String(student.number)},enrollmentId:'enr-qa',accountState:student.accountState||'NOT_PREPARED',accountRevision:1,blockedReason:''}]}};}
  if(name==='executeCommand'){if(input.payload.action!=='REJECT'&&!window.rosterQa.schoolVerified)throw Object.assign(new Error('학교 계정 확인 필요'),{code:'functions/failed-precondition',details:{reason:'REGISTRATION_SCHOOL_ACCOUNT_REQUIRED'}});const student=data.find(item=>item.id===input.payload.studentUid);const action=input.payload.action;if(action==='APPROVE')student.registrationApprovalStatus='APPROVED_PENDING_ACCOUNT';if(action==='PREPARE_ACCOUNT')student.accountState='PREPARED';if(action==='FINALIZE')student.registrationApprovalStatus='APPROVED';if(action==='REJECT')student.registrationApprovalStatus='REJECTED';return{data:{status:'SUCCEEDED',result:{studentUid:student.id,semesterId:'2026-2',enrollmentId:action==='REJECT'?'':'enr-qa',status:student.registrationApprovalStatus,action}}};}
- if(name==='updateStudentEnrollment'){Object.assign(data.find(student=>student.id===input.uid),{enrollmentStatus:input.status,enrollmentReason:input.reason});return{data:{uid:input.uid,status:input.status}};}
+ if(name==='updateStudentEnrollment'){if(location.search.includes('noPeriod')&&input.status==='outside_quota'&&!input.movementTiming)throw Object.assign(new Error('이동 시기를 선택해 주세요.'),{code:'functions/invalid-argument',details:{reason:'ENROLLMENT_MOVEMENT_TIMING_REQUIRED'}});Object.assign(data.find(student=>student.id===input.uid),{enrollmentStatus:input.status,enrollmentReason:input.reason,enrollmentMovementDate:input.movementDate,enrollmentMovementTiming:input.movementTiming,enrollmentYear:input.year,enrollmentSemester:input.semester});return{data:{uid:input.uid,status:input.status}};}
  return{data:{}};
 };`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
@@ -227,11 +227,24 @@ try {
       .getByRole("button", { name: "전출예시 학적 상태 변경", exact: true })
       .click();
     await dialog.waitFor();
+    const date = dialog.getByLabel("학적 변동일");
+    await date.fill("2026-08-13");
+    await dialog.getByText(/이 학기 수행평가 명단과 평균 산출/).waitFor();
+    await date.fill("2026-08-14");
+    await dialog.getByText(/수행평가 명단에 남고/).waitFor();
+    await date.press("Tab");
     await page.screenshot({
       path: `${out}/enrollment-${width}.png`,
       fullPage: true,
     });
     report.screenshots.push(`enrollment-${width}.png`);
+    await dialog.getByRole("button", { name: "저장", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    const update = await page.evaluate(() => window.rosterQa.events.find(e => e.name === "updateStudentEnrollment").input);
+    assert.equal(update.movementDate, "2026-08-14");
+    assert.equal(update.movementTiming, "during");
+    await page.getByRole("button", { name: "전출예시 학적 상태 변경", exact: true }).click();
+    assert.equal(await date.inputValue(), "2026-08-14");
     await dialog
       .getByLabel("학적 상태", { exact: true })
       .selectOption("active");
@@ -242,6 +255,19 @@ try {
     report.viewports.push(width);
     await page.close();
   }
+  const noPeriod = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  await noPeriod.goto(origin + "/?noPeriod");
+  await noPeriod.getByLabel("학적 상태 필터").selectOption("excluded");
+  await noPeriod.getByRole("button", { name: "정원외예시 학적 상태 변경", exact: true }).click();
+  const manual = noPeriod.getByRole("dialog");
+  await manual.getByLabel("학적 변동일").fill("2026-08-12");
+  await manual.getByRole("button", { name: "저장", exact: true }).click();
+  await manual.getByLabel(/학적 이동 시기/).selectOption("before");
+  assert.equal(await manual.getByLabel("학적 변동일").inputValue(), "2026-08-12");
+  await manual.getByRole("button", { name: "저장", exact: true }).click();
+  await manual.waitFor({ state: "hidden" });
+  await noPeriod.close();
+  report.checks.push("Movement date before/on term start, persisted date on reopen, and explicit fallback for a missing semester start.");
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });

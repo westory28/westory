@@ -18,6 +18,85 @@ const assertUniqueIdentity = (snapshot, candidate, excludedUid = '') => {
   if (conflict) throw new HttpsError('already-exists', '같은 학년·반·번호의 재학생이 이미 등록되어 있습니다.');
 };
 
+const needsMovementTiming = (status) => status === 'transferred' || status === 'outside_quota';
+const studentName = (data) => String(data.studentName || data.name || data.displayName || '').trim();
+const rosterIdentity = (data) => [
+  token(data.studentGrade ?? data.grade), token(data.studentClass ?? data.class),
+  token(data.studentNumber ?? data.number), studentName(data).replace(/\s/g, ''),
+].join('/');
+const isPerformanceRoster = (roster) => !roster.scoreKind || roster.scoreKind === 'performance';
+const validDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+const movementInputError = (message) => new HttpsError('invalid-argument', message, { reason: 'ENROLLMENT_TIMING_INVALID' });
+function classifyMovement({ movementDate, movementTiming, startDate, endDate, year, today }) {
+  if (!validDate(movementDate) || movementDate > today)
+    throw movementInputError('학적 변동일은 오늘까지의 실제 날짜로 입력해 주세요.');
+  if ((startDate != null && (!validDate(startDate) || !startDate.startsWith(year + '-')))
+    || (endDate != null && (!validDate(endDate) || (startDate && startDate > endDate)))) {
+    throw new HttpsError('failed-precondition', '학기 시작일과 종료일 설정을 확인해 주세요.', { reason: 'ENROLLMENT_PERIOD_INVALID' });
+  }
+  if (endDate && movementDate > endDate) throw movementInputError('이 학기가 끝난 뒤의 변동일입니다. 학기와 날짜를 확인해 주세요.');
+  if (startDate) {
+    const timing = movementDate < startDate ? 'before' : 'during';
+    if (movementTiming !== null && movementTiming !== timing)
+      throw new HttpsError('failed-precondition', '학기 기준일이 변경되었습니다. 명단을 새로고침한 뒤 확인해 주세요.', { reason: 'ENROLLMENT_PERIOD_CHANGED' });
+    return timing;
+  }
+  if (!['before', 'during'].includes(movementTiming))
+    throw new HttpsError('invalid-argument', '등록된 학기 시작일이 없습니다. 이동 시기를 선택해 주세요.', { reason: 'ENROLLMENT_MOVEMENT_TIMING_REQUIRED' });
+  return movementTiming;
+}
+
+// The semester roster is also the archive's source. Keep the original scores
+// and confirmations; store only the classification used for presentation.
+function getEnrollmentRosterUpdate(roster, { uid, profile, status, reason, year, semester, movementTiming, movementDate, uniqueIdentity = false }) {
+  const rows = Array.isArray(roster.rows) ? roster.rows : [];
+  if ((roster.academicYear && String(roster.academicYear) !== year)
+    || (roster.semester && String(roster.semester) !== semester)) return null;
+  const patch = {
+    enrollmentStatus: status, enrollmentReason: reason,
+    enrollmentYear: year, enrollmentSemester: semester, enrollmentMovementTiming: movementTiming, enrollmentMovementDate: movementDate,
+  };
+  if (rows.some((row) => row.uid === uid)) {
+    return { rows: rows.map((row) => row.uid === uid ? { ...row, ...patch } : row) };
+  }
+  if (!needsMovementTiming(status) || !isPerformanceRoster(roster)) return null;
+  const grade = token(profile.studentGrade ?? profile.grade);
+  const classValue = token(profile.studentClass ?? profile.class);
+  const number = token(profile.studentNumber ?? profile.number);
+  const name = studentName(profile);
+  if (![grade, classValue, number].every((part) => /^[1-9]\d*$/.test(part)) || !name) return null;
+  const expectedIdentity = rosterIdentity(profile);
+  const matchingRows = rows.filter((row) => !row.uid && rosterIdentity(row) === expectedIdentity);
+  let next;
+  if (matchingRows.length) {
+    if (matchingRows.length !== 1 || !uniqueIdentity) {
+      throw new HttpsError('failed-precondition', '이름과 학번이 같은 미연결 점수 행이 있습니다. 응시자 명단을 확인해 주세요.');
+    }
+    next = rows.map((row) => row === matchingRows[0]
+      ? { ...row, ...patch, uid, matchStatus: 'matched', matchMessage: '' }
+      : row);
+  } else {
+    if (movementTiming !== 'during') return null;
+    // Match an actual grade/class pair. Independent sets would accidentally
+    // admit a student to another grade's class in a mixed-grade import.
+    const declaredClass = token(roster.targetGrade) === grade
+      && [roster.targetClass, ...(Array.isArray(roster.classes) ? roster.classes : [])].some((value) => token(value) === classValue)
+      && !rows.some((row) => row.grade && token(row.grade) !== grade);
+    if (!declaredClass && !rows.some((row) => token(row.grade) === grade && token(row.class) === classValue)) return null;
+    const rowNumber = rows.reduce((max, row) => Math.max(max, Number(row.rowNumber) || 0), 0) + 1;
+    next = [...rows, {
+      rowNumber, uid, grade, class: classValue, number, studentName: name,
+      ...patch, items: [], enteredScoreCount: 0, matchStatus: 'matched', matchMessage: '',
+    }];
+  }
+  const matchedCount = next.filter((row) => row.uid).length;
+  return { rows: next, rowCount: next.length, matchedCount, unmatchedCount: next.length - matchedCount };
+}
+
 function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
   const assertTransactionScope = async (transaction, year, semester) => {
     const [config, pointer] = await Promise.all([
@@ -102,20 +181,24 @@ function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
     const uid = String(request.data?.uid || '').trim();
     const status = String(request.data?.status || '').trim();
     const reason = String(request.data?.reason || '').replace(/\s+/g, ' ').trim();
+    const requestedTiming = request.data?.movementTiming ?? null;
+    const movementDate = request.data?.movementDate ?? null;
+    const moved = needsMovementTiming(status);
     if (!uid || uid.includes('/') || !['active', 'transferred', 'outside_quota', 'other'].includes(status)
       || reason.length > 200 || (status === 'other' && !reason)) {
       throw new HttpsError('invalid-argument', '학적 상태와 제외 사유를 확인해 주세요.');
+    }
+    if (!moved && (movementDate !== null || requestedTiming !== null)) {
+      throw movementInputError('학적 변동일은 전출 또는 정원외 학적관리를 선택했을 때만 입력해 주세요.');
     }
     const root = `years/${year}/semesters/${semester}`;
     await db.runTransaction(async (transaction) => {
       await assertTransactionScope(transaction, year, semester);
       const userRef = db.doc(`users/${uid}`);
-      const [user, students, rosters, scores, enrollments] = await Promise.all([
+      const [user, period, manifest] = await Promise.all([
         transaction.get(userRef),
-        transaction.get(db.collection('users')),
-        transaction.get(db.collection(`${root}/performance_score_rosters`)),
-        transaction.get(db.collection(`users/${uid}/performance_scores`)),
-        transaction.get(db.collection('semester_enrollments').where('studentUid', '==', uid)),
+        moved ? transaction.get(db.doc(`${root}/assessment_config/enrollment_movement`)) : null,
+        moved ? transaction.get(db.doc(`semester_manifests/${year}-${semester}`)) : null,
       ]);
       if (!user.exists || user.data().role !== 'student') {
         throw new HttpsError('not-found', '학생 정보를 찾을 수 없습니다.');
@@ -123,17 +206,50 @@ function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
       if (Object.hasOwn(user.data(), 'registrationApprovalStatus') && user.data().registrationApprovalStatus !== 'APPROVED') {
         throw new HttpsError('failed-precondition', '학생 등록 승인을 먼저 완료해 주세요.');
       }
-      if (status === 'active') assertUniqueIdentity(students, user.data(), uid);
-      if ((user.data().enrollmentStatus || 'active') === status
-        && (user.data().enrollmentReason || '') === (status === 'active' ? '' : reason)) return;
+      const saved = user.data();
+      const movementTiming = moved ? classifyMovement({
+        movementDate, movementTiming: requestedTiming, year,
+        startDate: period?.data()?.startDate ?? manifest?.data()?.startAt,
+        endDate: manifest?.data()?.endAt,
+        today: new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date()),
+      }) : null;
+      if ((saved.enrollmentStatus || 'active') === status
+        && (saved.enrollmentReason || '') === (status === 'active' ? '' : reason)
+        && (saved.enrollmentMovementTiming ?? null) === movementTiming
+        && (saved.enrollmentMovementDate ?? null) === movementDate
+        && (!needsMovementTiming(status) || (String(saved.enrollmentYear) === year && String(saved.enrollmentSemester) === semester))) return;
+      const [rosters, scores, enrollments] = await Promise.all([
+        transaction.get(db.collection(`${root}/performance_score_rosters`)),
+        transaction.get(db.collection(`users/${uid}/performance_scores`)),
+        transaction.get(db.collection('semester_enrollments').where('studentUid', '==', uid)),
+      ]);
+      const expectedIdentity = rosterIdentity(saved);
+      const needsUnlinkedMatch = moved && rosters.docs.some((doc) => {
+        const roster = doc.data(), rows = Array.isArray(roster.rows) ? roster.rows : [];
+        return isPerformanceRoster(roster) && !rows.some((row) => row.uid === uid)
+          && rows.some((row) => !row.uid && rosterIdentity(row) === expectedIdentity);
+      });
+      let uniqueIdentity = false;
+      // A normal date correction only needs this student, their semester
+      // records and rosters. Read all students only to check a possible match.
+      if (status === 'active' || needsUnlinkedMatch) {
+        const students = await transaction.get(db.collection('users'));
+        if (status === 'active') assertUniqueIdentity(students, saved, uid);
+        uniqueIdentity = !students.docs.some((other) => other.id !== uid && (!other.data().role || other.data().role === 'student')
+          && rosterIdentity(other.data()) === expectedIdentity);
+      }
       const patch = {
         enrollmentStatus: status, enrollmentReason: status === 'active' ? '' : reason,
         enrollmentYear: year, enrollmentSemester: semester,
+        enrollmentMovementTiming: movementTiming,
+        enrollmentMovementDate: movementDate,
         enrollmentUpdatedAt: FieldValue.serverTimestamp(), enrollmentUpdatedBy: manager.uid,
       };
       transaction.update(userRef, { ...patch, updatedAt: FieldValue.serverTimestamp() });
       transaction.set(userRef.collection('enrollment_history').doc(), {
-        ...patch, previousStatus: user.data().enrollmentStatus || 'active',
+        ...patch, previousStatus: saved.enrollmentStatus || 'active',
+        previousMovementTiming: saved.enrollmentMovementTiming ?? null,
+        previousMovementDate: saved.enrollmentMovementDate ?? null,
       });
       // This is the score-roster inclusion classification, not an enrollment
       // lifecycle transition. Preserve ACTIVE/closed records and Wis bindings.
@@ -141,6 +257,8 @@ function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
         if (enrollment.data().semesterId !== `${year}-${semester}`) return;
         transaction.update(enrollment.ref, {
           rosterExclusionStatus: status,
+          rosterExclusionMovementTiming: movementTiming,
+          rosterExclusionMovementDate: movementDate,
           rosterExclusionReason: patch.enrollmentReason,
           rosterExclusionUpdatedAt: patch.enrollmentUpdatedAt,
           rosterExclusionUpdatedBy: manager.uid,
@@ -153,12 +271,12 @@ function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
         }
       });
       rosters.docs.forEach((roster) => {
-        const rows = Array.isArray(roster.data().rows) ? roster.data().rows : [];
-        if (!rows.some((row) => row.uid === uid)) return;
+        const projection = getEnrollmentRosterUpdate(roster.data(), {
+          uid, profile: saved, status, reason: patch.enrollmentReason, year, semester, movementTiming, movementDate, uniqueIdentity,
+        });
+        if (!projection) return;
         transaction.update(roster.ref, {
-          rows: rows.map((row) => row.uid === uid ? {
-            ...row, enrollmentStatus: status, enrollmentReason: patch.enrollmentReason,
-          } : row),
+          ...projection,
           updatedAt: FieldValue.serverTimestamp(),
         });
       });
@@ -216,4 +334,4 @@ function createStudentRosterHandlers({ db, auth, assertManager, assertScope }) {
   return { createStudentData, updateStudentEnrollment, updateStudentData };
 }
 
-module.exports = { createStudentRosterHandlers, assertUniqueIdentity, validateIdentity, isActiveStudent };
+module.exports = { createStudentRosterHandlers, assertUniqueIdentity, validateIdentity, isActiveStudent, getEnrollmentRosterUpdate };

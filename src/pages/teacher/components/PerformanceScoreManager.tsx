@@ -15,6 +15,7 @@ import {
   type DocumentReference,
   getDoc,
   getDocs,
+  getDocsFromServer,
   orderBy,
   query,
   runTransaction,
@@ -93,6 +94,8 @@ import {
   reviewPerformanceScoreObjection,
 } from "../../../lib/notifications";
 import {
+  getPerformanceEnrollmentLabel,
+  getStudentEnrollmentMovementTiming,
   isActiveRosterStudent,
   isStudentRosterProfile,
 } from "../../../lib/studentRoster";
@@ -104,6 +107,8 @@ interface StudentProfile {
   class: string;
   number: string;
   email: string;
+  movementLabel?: "전출" | "정원외";
+  identityConflict?: boolean;
 }
 
 type ParsedScoreRow = ParsedPerformanceScoreRow;
@@ -1079,16 +1084,58 @@ const getUniqueStudentMatch = (
   values: StudentProfile[] | undefined,
 ): StudentProfile | null => (values && values.length === 1 ? values[0] : null);
 
+const studentIdentityKey = (
+  grade: string,
+  classValue: string,
+  number: string,
+  name: string,
+) =>
+  `${buildStudentLookupKey(grade, classValue, number)}:${normalizeStudentName(name)}`;
+
+// Check all profiles before filtering them for the selected semester. Otherwise
+// an old unlinked score can be attributed to the next holder of the same number.
+const markStudentIdentityConflicts = (profiles: StudentProfile[]) => {
+  const firstByKey = new Map<string, StudentProfile>();
+  for (const student of profiles) {
+    const key = studentIdentityKey(
+      student.grade,
+      student.class,
+      student.number,
+      student.name,
+    );
+    const prior = firstByKey.get(key);
+    if (prior) {
+      prior.identityConflict = true;
+      student.identityConflict = true;
+    } else firstByKey.set(key, student);
+  }
+};
+
+const getStudentMatchByIdentity = (
+  row: PerformanceScoreRosterRow,
+  indexes: StudentMatchIndexes,
+) => {
+  const numbered = indexes.byNumber.get(
+    buildStudentLookupKey(row.grade, row.class, row.number),
+  );
+  const matched =
+    getUniqueStudentMatch(
+      numbered?.filter(
+        (student) =>
+          normalizeStudentName(student.name) ===
+          normalizeStudentName(row.studentName),
+      ),
+    ) || getUniqueStudentMatch(numbered);
+  return matched?.identityConflict ? null : matched;
+};
+
 const matchRowsToStudents = (
   rows: ParsedScoreRow[],
   students: StudentProfile[],
 ): ParsedScoreRow[] => {
-  const { byNumber } = buildStudentMatchIndexes(students);
-
+  const indexes = buildStudentMatchIndexes(students);
   return rows.map((row) => {
-    const numberMatch = getUniqueStudentMatch(
-      byNumber.get(buildStudentLookupKey(row.grade, row.class, row.number)),
-    );
+    const numberMatch = getStudentMatchByIdentity(row, indexes);
     if (numberMatch) {
       const sameName =
         Boolean(row.studentName) &&
@@ -1099,8 +1146,9 @@ const matchRowsToStudents = (
         uid: sameName ? numberMatch.uid : "",
         studentName: row.studentName,
         matchStatus: sameName ? "matched" : "name-mismatch",
+        academicStatus: sameName ? numberMatch.movementLabel || "" : "",
         matchMessage: sameName
-          ? "학년, 반, 번호, 이름이 일치합니다."
+          ? numberMatch.movementLabel || "학년, 반, 번호, 이름이 일치합니다."
           : "같은 학년·반·번호의 학생 이름이 다릅니다. 학생 명단과 파일을 확인해 주세요.",
       };
     }
@@ -1115,6 +1163,76 @@ const matchRowsToStudents = (
   });
 };
 
+const uploadStudentLinksChanged = (
+  preview: ParsedScoreRow[],
+  fresh: ParsedScoreRow[],
+) =>
+  preview.length !== fresh.length ||
+  fresh.some(
+    (row, index) =>
+      row.uid !== preview[index].uid ||
+      row.academicStatus !== preview[index].academicStatus,
+  );
+
+const wasExcludedBeforeScoreSemester = (
+  profile: Record<string, unknown>,
+  year: string,
+  semester: string,
+) => {
+  const movementYear = String(profile.enrollmentYear || "");
+  const movementSemester = String(profile.enrollmentSemester || "");
+  if (!/^\d{4}$/.test(movementYear) || !/^[12]$/.test(movementSemester))
+    return false;
+  const timing = getStudentEnrollmentMovementTiming(
+    profile,
+    movementYear,
+    movementSemester,
+  );
+  if (!timing) return false;
+  return movementYear === year && movementSemester === semester
+    ? timing === "before"
+    : Number(movementYear) * 2 + Number(movementSemester) <
+        Number(year) * 2 + Number(semester);
+};
+
+const getUploadMovementLookup = (
+  students: StudentProfile[],
+  before: StudentProfile[],
+) => {
+  const timing = new Map<
+    string,
+    "during" | "before" | "ambiguous" | undefined
+  >();
+  const beforeUids = new Set(before.map((student) => student.uid));
+  for (const profile of [...students, ...before]) {
+    const identity = studentIdentityKey(
+      profile.grade,
+      profile.class,
+      profile.number,
+      profile.name,
+    );
+    const value = profile.movementLabel
+      ? "during"
+      : beforeUids.has(profile.uid)
+        ? "before"
+        : undefined;
+    timing.set(
+      identity,
+      profile.identityConflict || timing.has(identity) ? "ambiguous" : value,
+    );
+  }
+  return (grade: string, classValue: string, number: string, name: string) => {
+    const value = timing.get(
+      studentIdentityKey(grade, classValue, number, name),
+    );
+    if (value === "ambiguous")
+      throw new Error(
+        "학년·반·번호와 이름이 같은 학생이 있습니다. 학생 명단을 확인해 주세요.",
+      );
+    return value;
+  };
+};
+
 const getRosterRowStudentRepair = (
   row: PerformanceScoreRosterRow,
   indexes: StudentMatchIndexes,
@@ -1122,13 +1240,13 @@ const getRosterRowStudentRepair = (
 ) => {
   // Excluded or deleted profiles must never cause score/signature deletion.
   if (row.uid) return row;
-  if (!rosterRowHasScore(row)) return row;
+  if (
+    !rosterRowHasScore(row) ||
+    (row.enrollmentStatus && row.enrollmentStatus !== "active")
+  )
+    return row;
 
-  const numberMatch = getUniqueStudentMatch(
-    indexes.byNumber.get(
-      buildStudentLookupKey(row.grade, row.class, row.number),
-    ),
-  );
+  const numberMatch = getStudentMatchByIdentity(row, indexes);
   if (numberMatch) {
     const sameName =
       Boolean(row.studentName) &&
@@ -1185,8 +1303,9 @@ const repairRosterRowsWithStudentProfiles = (
 
 const clearLegacyScoreEnrollmentForActiveStudent = <T extends object>(
   source: T,
+  archivedActive = false,
 ): T => {
-  if (isSemesterArchive) return source;
+  if (isSemesterArchive && !archivedActive) return source;
   const active = { ...source } as T & TransferScoreMeta;
   delete active.academicStatus;
   delete active.isTransferred;
@@ -1198,7 +1317,22 @@ const buildActiveStudentRoster = (
   roster: PerformanceScoreRoster,
   activeStudents: StudentProfile[],
 ): PerformanceScoreRoster => {
-  if (isSemesterArchive) return roster;
+  if (isSemesterArchive) {
+    if (
+      normalizePerformanceScoreKind(roster.scoreKind) !== "performance" ||
+      !(roster.rows || []).some((row) => row.enrollmentStatus)
+    )
+      return roster;
+    const scope = { year: roster.academicYear, semester: roster.semester };
+    const rows = (roster.rows || []).flatMap((row) => {
+      if (!row.enrollmentStatus) return [row];
+      if (row.enrollmentStatus === "active")
+        return [clearLegacyScoreEnrollmentForActiveStudent(row, true)];
+      const label = getPerformanceEnrollmentLabel(row, scope);
+      return label ? [{ ...row, academicStatus: label }] : [];
+    });
+    return { ...roster, rows };
+  }
   const indexes = buildStudentMatchIndexes(activeStudents);
   const studentsByUid = new Map(
     activeStudents.map((student) => [student.uid, student]),
@@ -1207,13 +1341,11 @@ const buildActiveStudentRoster = (
   const rows = [...(roster.rows || [])]
     .sort((a, b) => Number(Boolean(b.uid)) - Number(Boolean(a.uid)))
     .flatMap((row) => {
+      if (!row.uid && row.enrollmentStatus && row.enrollmentStatus !== "active")
+        return [];
       const student = row.uid
         ? studentsByUid.get(row.uid)
-        : getUniqueStudentMatch(
-            indexes.byNumber.get(
-              buildStudentLookupKey(row.grade, row.class, row.number),
-            ),
-          );
+        : getStudentMatchByIdentity(row, indexes);
       if (
         !student ||
         includedUids.has(student.uid) ||
@@ -1226,6 +1358,9 @@ const buildActiveStudentRoster = (
       return [
         {
           ...clearLegacyScoreEnrollmentForActiveStudent(row),
+          ...(student.movementLabel
+            ? { academicStatus: student.movementLabel }
+            : {}),
           uid: student.uid,
           grade: student.grade,
           class: student.class,
@@ -1248,6 +1383,17 @@ const buildActiveStudentRoster = (
       .map(normalizeSchoolValue)
       .filter(Boolean),
   );
+  const gradeClasses = new Set(
+    (roster.rows || []).map(
+      (row) =>
+        `${normalizeSchoolValue(row.grade)}:${normalizeSchoolValue(row.class)}`,
+    ),
+  );
+  if (targetGrades.size === 1 && roster.targetGrade) {
+    targetClasses.forEach((value) =>
+      gradeClasses.add(`${normalizeSchoolValue(roster.targetGrade)}:${value}`),
+    );
+  }
   let nextRowNumber = Math.max(
     0,
     ...(roster.rows || []).map((row) => Number(row.rowNumber) || 0),
@@ -1255,12 +1401,20 @@ const buildActiveStudentRoster = (
   activeStudents.forEach((student) => {
     if (
       includedUids.has(student.uid) ||
+      (student.movementLabel &&
+        (!gradeClasses.has(`${student.grade}:${student.class}`) ||
+          !student.class ||
+          !student.number ||
+          !student.name)) ||
       !targetGrades.has(student.grade) ||
       (targetClasses.size > 0 && !targetClasses.has(student.class))
     )
       return;
     rows.push({
       rowNumber: ++nextRowNumber,
+      ...(student.movementLabel
+        ? { academicStatus: student.movementLabel }
+        : {}),
       uid: student.uid,
       grade: student.grade,
       class: student.class,
@@ -1666,6 +1820,15 @@ const isTransferredScoreRecord = (
   record?: (PerformanceScoreRecord & TransferScoreMeta) | null,
 ) => Boolean(getAcademicStatusLabel(record));
 
+const isPerformanceMovementRecord = (
+  record?: (TransferScoreMeta & { scoreKind?: PerformanceScoreKind }) | null,
+) =>
+  Boolean(
+    record &&
+    normalizePerformanceScoreKind(record.scoreKind) === "performance" &&
+    ["전출", "정원외"].includes(getAcademicStatusLabel(record)),
+  );
+
 const isTransferredRosterRow = (
   row?: (PerformanceScoreRosterRow & TransferScoreMeta) | null,
 ) => Boolean(getAcademicStatusLabel(row));
@@ -2057,7 +2220,10 @@ const addRecordToClassSheetStudentMap = (
   record: PerformanceScoreRecord,
   slot: "firstRecord" | "secondRecord",
 ) => {
-  const aliases = getScoreSyncIdentityKeys(record);
+  const aliases = getScoreSyncIdentityKeys(record).filter((alias) => {
+    const existingUid = studentMap.get(alias)?.uid;
+    return !record.uid || !existingUid || record.uid === existingUid;
+  });
   const key =
     aliases.find((alias) => studentMap.has(alias)) ||
     aliases[0] ||
@@ -2913,7 +3079,12 @@ const buildRecordFromRosterRow = (
       : Array.isArray(row.items)
         ? row.items
         : [],
-    enteredScoreCount: getRosterRowEnteredScoreCount(row),
+    enteredScoreCount: isPerformanceMovementRecord({
+      scoreKind: roster.scoreKind,
+      academicStatus,
+    })
+      ? 0
+      : getRosterRowEnteredScoreCount(row),
     totalScore:
       hasScore && !hasAcademicStatus ? Number(row.totalScore || 0) : Number.NaN,
     totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
@@ -3073,6 +3244,34 @@ const buildScoreListRecordFromRosterRow = (
   scoreDocumentExists: false,
   ...(isManualRosterRow(row) ? { isManual: true } : {}),
 });
+
+// An earlier numeric score or signature in the student's document must never
+// override the roster's current (or semester-archived) movement classification.
+const projectScoreDocumentForRosterRow = (
+  roster: PerformanceScoreRoster,
+  row: PerformanceScoreRosterRow,
+  stored?: ScoreListRecord,
+): ScoreListRecord => {
+  if (
+    !stored ||
+    isPerformanceMovementRecord({
+      scoreKind: roster.scoreKind,
+      academicStatus: getAcademicStatusLabel(row),
+    })
+  ) {
+    return buildScoreListRecordFromRosterRow(roster, row);
+  }
+  const archivedActive =
+    normalizePerformanceScoreKind(roster.scoreKind) === "performance" &&
+    row.enrollmentStatus === "active";
+  return {
+    ...clearLegacyScoreEnrollmentForActiveStudent(stored, archivedActive),
+    grade: row.grade,
+    class: row.class,
+    number: row.number,
+    studentName: row.studentName,
+  };
+};
 
 const shouldIncludeRosterRowInScoreList = (row: PerformanceScoreRosterRow) =>
   Boolean(row.uid) || shouldShowRosterRowInScoreList(row);
@@ -3776,6 +3975,10 @@ const getClassSheetAcademicStatusLabel = (student: ClassSheetStudent) =>
 const isClassSheetTransferredStudent = (student: ClassSheetStudent) =>
   Boolean(getClassSheetAcademicStatusLabel(student));
 
+const isPerformanceMovementStudent = (student: ClassSheetStudent) =>
+  isPerformanceMovementRecord(student.firstRecord) ||
+  isPerformanceMovementRecord(student.secondRecord);
+
 const getClassSheetStudentScoreCellValue = (
   student: ClassSheetStudent,
   record?: PerformanceScoreRecord,
@@ -3838,7 +4041,8 @@ const getScoreListCombinedTotalScore = (student: ClassSheetStudent) => {
 
 const getScoreListCombinedTotalLabel = (student: ClassSheetStudent) => {
   const academicStatus = getClassSheetAcademicStatusLabel(student);
-  if (academicStatus) return academicStatus;
+  if (academicStatus)
+    return isPerformanceMovementStudent(student) ? "" : academicStatus;
   const totalScore = getScoreListCombinedTotalScore(student);
   return totalScore === null ? "-" : formatPerformanceScore(totalScore);
 };
@@ -3974,6 +4178,7 @@ const getConfirmedSignatureRecord = (
   expected: { requireFirst?: boolean; requireSecond?: boolean } = {},
 ) => {
   if (isClassSheetTransferredStudent(student)) {
+    if (isPerformanceMovementStudent(student)) return null;
     return (
       [student.secondRecord, student.firstRecord].find((record) =>
         isTransferredScoreRecord(record),
@@ -5832,6 +6037,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreEditOriginalRecords, setScoreEditOriginalRecords] = useState<
     ScoreListRecord[]
   >([]);
+  const beforeMovementProfilesRef = useRef<StudentProfile[]>([]);
   const studentsLoadPromiseRef = useRef<Promise<StudentProfile[]> | null>(null);
   const scoreDocumentSyncCheckedKeysRef = useRef<Set<string>>(
     new Set<string>(),
@@ -5944,14 +6150,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   useEffect(() => {
     if (!parsed || !studentsLoaded) return;
-    setParsed((current) =>
-      current
-        ? {
-            ...current,
-            rows: matchRowsToStudents(current.rows, students),
-          }
-        : current,
-    );
+    setParsed((current) => {
+      if (!current) return current;
+      // Keep the UID the teacher previewed, even if the number is reassigned.
+      const refreshed = matchRowsToStudents(current.rows, students);
+      return {
+        ...current,
+        rows: current.rows.map((row, index) =>
+          row.uid ? row : refreshed[index],
+        ),
+      };
+    });
   }, [students, studentsLoaded]);
 
   useEffect(() => {
@@ -6906,13 +7115,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       return scoreStatsFallbackRecords;
     };
     const selectedRecords = selectRecords();
-    if (isSemesterArchive) return selectedRecords;
+    if (isSemesterArchive)
+      return selectedRecords.filter(
+        (record) => !isPerformanceMovementRecord(record),
+      );
     const activeByUid = new Map(
       students.map((student) => [student.uid, student]),
     );
     return selectedRecords.flatMap((record) => {
       const student = activeByUid.get(record.uid);
-      return student
+      return student &&
+        !student.movementLabel &&
+        !isPerformanceMovementRecord(record)
         ? [
             {
               ...record,
@@ -7439,41 +7653,42 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (student) =>
         getClassSheetSummaryScore(student, student.secondRecord) !== null,
     ).length;
-    const signedCount = classSheetPreviewStudents.filter((student) =>
+    const signatureStudents = classSheetPreviewStudents.filter(
+      (student) => !isPerformanceMovementStudent(student),
+    );
+    const signedCount = signatureStudents.filter((student) =>
       getConfirmedSignatureRecord(student, classSheetSignatureRequirements),
     ).length;
-    const firstSignedCount = classSheetPreviewStudents.filter(
+    const firstSignedCount = signatureStudents.filter(
       (student) =>
         Boolean(
           student.firstRecord?.signatureImage ||
           student.firstRecord?.confirmation?.signatureImage,
         ) && classSheetSignatureRequirements.requireFirst,
     ).length;
-    const secondSignedCount = classSheetPreviewStudents.filter(
+    const secondSignedCount = signatureStudents.filter(
       (student) =>
         Boolean(
           student.secondRecord?.signatureImage ||
           student.secondRecord?.confirmation?.signatureImage,
         ) && classSheetSignatureRequirements.requireSecond,
     ).length;
-    const secondOnlySignedCount = classSheetPreviewStudents.filter(
-      (student) => {
-        const firstSigned = Boolean(
-          student.firstRecord?.signatureImage ||
-          student.firstRecord?.confirmation?.signatureImage,
-        );
-        const secondSigned = Boolean(
-          student.secondRecord?.signatureImage ||
-          student.secondRecord?.confirmation?.signatureImage,
-        );
-        return (
-          classSheetSignatureRequirements.requireFirst &&
-          classSheetSignatureRequirements.requireSecond &&
-          secondSigned &&
-          !firstSigned
-        );
-      },
-    ).length;
+    const secondOnlySignedCount = signatureStudents.filter((student) => {
+      const firstSigned = Boolean(
+        student.firstRecord?.signatureImage ||
+        student.firstRecord?.confirmation?.signatureImage,
+      );
+      const secondSigned = Boolean(
+        student.secondRecord?.signatureImage ||
+        student.secondRecord?.confirmation?.signatureImage,
+      );
+      return (
+        classSheetSignatureRequirements.requireFirst &&
+        classSheetSignatureRequirements.requireSecond &&
+        secondSigned &&
+        !firstSigned
+      );
+    }).length;
     return {
       totalCount: classSheetPreviewStudents.length,
       firstScoredCount,
@@ -7482,10 +7697,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       secondSignedCount,
       secondOnlySignedCount,
       signedCount,
-      unsignedCount: Math.max(
-        0,
-        classSheetPreviewStudents.length - signedCount,
-      ),
+      unsignedCount: Math.max(0, signatureStudents.length - signedCount),
     };
   }, [classSheetPreviewStudents, classSheetSignatureRequirements]);
 
@@ -7581,17 +7793,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setStudentsLoading(true);
     setStudentLoadError("");
     const loadPromise = (async () => {
-      const snap = await getDocs(collection(db, "users"));
+      const snap = await getDocsFromServer(collection(db, "users"));
       const loaded: StudentProfile[] = [];
+      const before: StudentProfile[] = [];
+      const allProfiles: StudentProfile[] = [];
       snap.forEach((item) => {
         const data = item.data() as Record<string, unknown>;
-        if (!isActiveRosterStudent(data) || !isStudentRosterProfile(data))
+        if (!isStudentRosterProfile(data)) return;
+        const profile: StudentProfile = normalizeStudentProfile(item.id, data);
+        allProfiles.push(profile);
+        const movementLabel = !isWrittenExamMode
+          ? getPerformanceEnrollmentLabel(data, { year, semester })
+          : "";
+        if (!movementLabel && !isActiveRosterStudent(data)) {
+          if (
+            !isWrittenExamMode &&
+            wasExcludedBeforeScoreSemester(data, year, semester)
+          )
+            before.push(profile);
           return;
-        const profile = normalizeStudentProfile(item.id, data);
+        }
         if (!profile.name && !profile.number && !profile.class) return;
         if (data.role === "teacher" && !profile.number) return;
+        if (movementLabel) profile.movementLabel = movementLabel;
         loaded.push(profile);
       });
+      markStudentIdentityConflicts(allProfiles);
+      beforeMovementProfilesRef.current = before;
       setStudents(loaded);
       setStudentsLoaded(true);
       return loaded;
@@ -7757,6 +7985,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     if (isSemesterArchive) return;
     const activeStudentUids = new Set(
       (await loadStudents({ force: true }))
+        .filter((student) => !student.movementLabel)
         .map((student) => student.uid)
         .filter(Boolean),
     );
@@ -8004,9 +8233,42 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           );
           const repaired = repairRosterRowsWithStudentProfiles(
             latestRoster.rows || [],
-            studentSnapshot,
+            studentSnapshot.filter((student) => !student.movementLabel),
           );
           if (!repaired.changed) return null;
+          const newLinks = repaired.rows.filter(
+            (row, index) => row.uid && !latestRoster.rows[index]?.uid,
+          );
+          const profiles = await Promise.all(
+            newLinks.map((row) => transaction.get(doc(db, "users", row.uid))),
+          );
+          if (
+            newLinks.some((row, index) => {
+              const snap = profiles[index];
+              if (
+                !snap.exists() ||
+                !isActiveRosterStudent(snap.data()) ||
+                !isStudentRosterProfile(snap.data())
+              )
+                return true;
+              const current = normalizeStudentProfile(snap.id, snap.data());
+              return (
+                studentIdentityKey(
+                  row.grade,
+                  row.class,
+                  row.number,
+                  row.studentName,
+                ) !==
+                studentIdentityKey(
+                  current.grade,
+                  current.class,
+                  current.number,
+                  current.name,
+                )
+              );
+            })
+          )
+            return null;
 
           const repairedRowsForStorage = getRosterRowsForStorage(repaired.rows);
           const meta = buildRosterRowsMeta(
@@ -8112,18 +8374,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         .filter((record) => record.uid)
         .map((record) => [record.uid, record]),
     );
-    const loaded = linkedRows.map((row) => {
-      const documentRecord = documentRecordsByUid.get(row.uid);
-      return documentRecord
-        ? {
-            ...clearLegacyScoreEnrollmentForActiveStudent(documentRecord),
-            grade: row.grade,
-            class: row.class,
-            number: row.number,
-            studentName: row.studentName,
-          }
-        : buildScoreListRecordFromRosterRow(roster, row);
-    });
+    const loaded = linkedRows.map((row) =>
+      projectScoreDocumentForRosterRow(
+        roster,
+        row,
+        documentRecordsByUid.get(row.uid),
+      ),
+    );
     rosterRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
@@ -9051,20 +9308,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 "학생 명단과 연결되지 않은 점수입니다. 다시 조회해 주세요.",
               );
             const original = originalByKey.get(getScoreListRecordKey(record));
-            const latestRow =
-              (latestRoster.rows || []).find((row) => row.uid === record.uid) ||
-              (latestRoster.rows || []).find(
-                (row) =>
-                  !row.uid &&
-                  buildStudentLookupKey(row.grade, row.class, row.number) ===
-                    buildStudentLookupKey(
-                      profile.grade,
-                      profile.class,
-                      profile.number,
-                    ) &&
-                  normalizeStudentName(row.studentName) ===
-                    normalizeStudentName(profile.name),
+            const latestRow = (latestRoster.rows || []).find(
+              (row) => row.uid === record.uid,
+            );
+            // Only the explicit UID may claim or update an old score. A blank
+            // participant may still receive a new UID-bound row.
+            if (
+              !latestRow &&
+              !scoreSnap.exists() &&
+              original &&
+              hasDisplayableScoreRecord(original)
+            ) {
+              throw new Error(
+                "기존 점수의 학생 연결이 바뀌었습니다. 명단을 다시 조회해 주세요.",
               );
+            }
             const latestRecord = scoreSnap.exists()
               ? clearLegacyScoreEnrollmentForActiveStudent(
                   buildScoreListRecordFromDocument(
@@ -9125,21 +9383,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         const usedUids = new Set<string>();
         // Preserve every untouched row, including students excluded from the active roster.
         const nextRows = (latestRoster.rows || []).map((row) => {
-          const record =
-            recordsByUid.get(row.uid) ||
-            (!row.uid
-              ? snapshots.find(
-                  ({ record }) =>
-                    buildStudentLookupKey(row.grade, row.class, row.number) ===
-                      buildStudentLookupKey(
-                        record.grade,
-                        record.class,
-                        record.number,
-                      ) &&
-                    normalizeStudentName(row.studentName) ===
-                      normalizeStudentName(record.studentName),
-                )?.record
-              : undefined);
+          const record = recordsByUid.get(row.uid);
           if (!record) return row;
           usedUids.add(record.uid);
           return buildRosterRowFromScoreRecord(row, record, latestRoster);
@@ -9347,20 +9591,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         .filter((record) => record.uid)
         .map((record) => [record.uid, record]),
     );
-    const loaded: PerformanceScoreRecord[] = linkedRows.flatMap((row) => {
-      const documentRecord = documentRecordsByUid.get(row.uid);
-      if (documentRecord)
-        return [
-          {
-            ...clearLegacyScoreEnrollmentForActiveStudent(documentRecord),
-            grade: row.grade,
-            class: row.class,
-            number: row.number,
-            studentName: row.studentName,
-          },
-        ];
-      return [buildScoreListRecordFromRosterRow(roster, row)];
-    });
+    const loaded: PerformanceScoreRecord[] = linkedRows.map((row) =>
+      projectScoreDocumentForRosterRow(
+        roster,
+        row,
+        documentRecordsByUid.get(row.uid),
+      ),
+    );
     classRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
@@ -9534,7 +9771,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         summaryExportRosters,
       );
       const unsignedStudents = studentsForSheet.filter(
-        (student) => !getConfirmedSignatureRecord(student, scoreRequirements),
+        (student) =>
+          !isPerformanceMovementStudent(student) &&
+          !getConfirmedSignatureRecord(student, scoreRequirements),
       );
       if (unsignedStudents.length > 0) {
         const visibleUnsignedStudents = unsignedStudents.slice(0, 50);
@@ -9655,7 +9894,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const rejectClassSheetSignature = async (student: ClassSheetStudent) => {
-    if (rejectingSignatureKey) return;
+    if (rejectingSignatureKey || isPerformanceMovementStudent(student)) return;
     if (!student.uid) {
       showToast({
         tone: "warning",
@@ -9711,36 +9950,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       : "performance_score_signature_rejected";
     setRejectingSignatureKey(studentKey);
     try {
-      const batchQueue = createBatchQueue();
-      signedRecords.forEach((record) => {
-        const scoreId = getRecordScoreId(record);
-        batchQueue.update(
-          doc(
+      await runTransaction(db, async (transaction) => {
+        if (!isWrittenExamMode) {
+          const profile = await transaction.get(doc(db, "users", student.uid));
+          if (!profile.exists() || !isActiveRosterStudent(profile.data())) {
+            throw new Error(
+              "학적이 변경되었습니다. 일람표를 다시 조회해 주세요.",
+            );
+          }
+        }
+        signedRecords.forEach((record) => {
+          const ref = doc(
             db,
             "users",
             student.uid,
             PERFORMANCE_SCORE_USER_COLLECTION,
-            scoreId,
-          ),
-          {
+            getRecordScoreId(record),
+          );
+          transaction.update(ref, {
             signatureName: deleteField(),
             signatureImage: deleteField(),
             signedAt: deleteField(),
-          },
-        );
-        batchQueue.delete(
-          doc(
-            db,
-            "users",
-            student.uid,
-            PERFORMANCE_SCORE_USER_COLLECTION,
-            scoreId,
-            PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-            student.uid,
-          ),
-        );
+          });
+          transaction.delete(
+            doc(ref, PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION, student.uid),
+          );
+        });
       });
-      await batchQueue.commit();
 
       const rejectedScoreTitles = signedRecords
         .map((record) => record.title)
@@ -9854,6 +10090,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             maxScore: Number(writtenExamMaxScore),
           })
         : parsePerformanceScoreWorkbook(rows, {
+            movementTiming: getUploadMovementLookup(
+              studentSnapshot,
+              beforeMovementProfilesRef.current,
+            ),
             fileName: file.name,
             targetGrade,
             fallbackClass,
@@ -10024,6 +10264,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         throwOnError: true,
       });
       const freshRows = matchRowsToStudents(parsed.rows, freshStudents);
+      if (
+        !isWrittenExamMode &&
+        uploadStudentLinksChanged(parsed.rows, freshRows)
+      ) {
+        throw new Error(
+          "학적 상태가 변경되었습니다. 파일을 다시 선택해 명단을 확인해 주세요.",
+        );
+      }
       const unresolved = freshRows.filter(
         (row) => !row.uid || row.matchStatus !== "matched",
       );
@@ -10193,11 +10441,37 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             );
           }
           // A roster change after preview must not route a score to another child.
+          const includedClasses = new Set(
+            effectiveRows.map((row) => row.class),
+          );
+          const rowUids = new Set(effectiveRows.map((row) => row.uid));
+          const additionalMovements = !isWrittenExamMode
+            ? freshStudents.filter(
+                (student) =>
+                  student.movementLabel &&
+                  student.grade === grade &&
+                  includedClasses.has(student.class) &&
+                  !rowUids.has(student.uid) &&
+                  !(previous?.rows || []).some(
+                    (row) => row.uid === student.uid,
+                  ),
+              )
+            : [];
           const profiles = await Promise.all(
-            effectiveRows.map((row) =>
+            [...effectiveRows, ...additionalMovements].map((row) =>
               transaction.get(doc(db, "users", row.uid)),
             ),
           );
+          const movementSnapshot = (data: Record<string, unknown>) => ({
+            enrollmentStatus: String(data.enrollmentStatus),
+            enrollmentYear: year,
+            enrollmentSemester: semester,
+            enrollmentMovementTiming: "during" as const,
+            enrollmentMovementDate:
+              typeof data.enrollmentMovementDate === "string"
+                ? data.enrollmentMovementDate
+                : null,
+          });
           const scoreRefs = effectiveRows.map((row) =>
             doc(
               db,
@@ -10217,7 +10491,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               : null;
             if (
               !current ||
-              !isActiveRosterStudent(profile.data()) ||
+              (row.academicStatus && !isWrittenExamMode
+                ? getPerformanceEnrollmentLabel(profile.data(), {
+                    year,
+                    semester,
+                  }) !== row.academicStatus
+                : !isActiveRosterStudent(profile.data())) ||
               current.grade !== row.grade ||
               current.class !== row.class ||
               current.number !== row.number ||
@@ -10232,7 +10511,24 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const timestamp = serverTimestamp();
           const preservedScoreUids = new Set<string>();
           const incomingRows: PerformanceScoreRosterRow[] = effectiveRows.map(
-            ({ rowKey: _key, ...row }, index) => {
+            ({ rowKey: _key, academicStatus, ...row }, index) => {
+              if (academicStatus && !isWrittenExamMode) {
+                preservedScoreUids.add(row.uid);
+                const existing = previous?.rows?.find(
+                  (entry) => entry.uid === row.uid,
+                );
+                return {
+                  ...(existing || {
+                    ...row,
+                    items: [],
+                    enteredScoreCount: 0,
+                    totalScore: 0,
+                    feedback: "",
+                    evidence: "",
+                  }),
+                  ...movementSnapshot(profiles[index].data()!),
+                };
+              }
               // NEIS has no feedback columns. Reimporting its scores must not
               // erase a teacher's existing explanation or invalidate an
               // otherwise unchanged signed score.
@@ -10312,6 +10608,39 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               items: getRosterRowItemsForStorage(row.items),
             })),
           ];
+          let nextRowNumber = Math.max(
+            0,
+            ...mergedRows.map((row) => Number(row.rowNumber) || 0),
+          );
+          additionalMovements.forEach((student, index) => {
+            const snap = profiles[effectiveRows.length + index];
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const profile = normalizeStudentProfile(snap.id, data);
+            if (
+              !getPerformanceEnrollmentLabel(data, { year, semester }) ||
+              profile.grade !== grade ||
+              !includedClasses.has(profile.class) ||
+              !profile.name ||
+              !profile.number
+            )
+              return;
+            mergedRows.push({
+              uid: profile.uid,
+              grade,
+              class: profile.class,
+              number: profile.number,
+              studentName: profile.name,
+              rowNumber: ++nextRowNumber,
+              items: [],
+              enteredScoreCount: 0,
+              totalScore: 0,
+              totalMaxScore: effectiveUpload.totalMaxScore,
+              matchStatus: "matched",
+              matchMessage: "",
+              ...movementSnapshot(data),
+            });
+          });
           const classes = [...new Set(mergedRows.map((row) => row.class))].sort(
             (a, b) => Number(a) - Number(b),
           );
@@ -13030,13 +13359,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
-                                  {totalScore === null
-                                    ? "-"
-                                    : formatPerformanceScore(totalScore)}
+                                  {transferredStudent && !isWrittenExamMode
+                                    ? ""
+                                    : totalScore === null
+                                      ? "-"
+                                      : formatPerformanceScore(totalScore)}
                                 </td>
                                 <td aria-hidden="true"></td>
                                 <td className="px-3 py-3 text-center">
-                                  {signatureDisplayRecord && signatureImage ? (
+                                  {transferredStudent &&
+                                  !isWrittenExamMode ? null : signatureDisplayRecord &&
+                                    signatureImage ? (
                                     <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2">
                                       <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
@@ -13531,16 +13864,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             key={`${row.rowKey}-${item.name}-${index}`}
                             className="px-3 py-3 text-right font-bold text-slate-700"
                           >
-                            {item.scoreEntered === false
-                              ? "-"
-                              : formatPerformanceScore(item.score)}
+                            {row.academicStatus ||
+                              (item.scoreEntered === false
+                                ? "-"
+                                : formatPerformanceScore(item.score))}
                           </td>
                         ))}
                         <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
-                          {row.enteredScoreCount > 0
-                            ? formatPerformanceScore(row.totalScore)
-                            : "-"}{" "}
-                          / {formatPerformanceScore(row.totalMaxScore)}
+                          {!row.academicStatus && (
+                            <>
+                              {row.enteredScoreCount > 0
+                                ? formatPerformanceScore(row.totalScore)
+                                : "-"}{" "}
+                              / {formatPerformanceScore(row.totalMaxScore)}
+                            </>
+                          )}
                         </td>
                         {parsedHasObjectiveOmr && (
                           <td className="whitespace-nowrap px-3 py-3 text-center">
@@ -13560,19 +13898,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           </td>
                         )}
                         <td className="w-72 min-w-72 px-3 py-2 sm:w-80">
-                          <textarea
-                            lang="ko"
-                            inputMode="text"
-                            aria-label={`${row.grade}학년 ${row.class}반 ${row.number}번 ${row.studentName} 감점 요인 및 평가 근거`}
-                            value={row.feedback}
-                            disabled={saving}
-                            onChange={(event) =>
-                              updateFeedback(row.rowKey, event.target.value)
-                            }
-                            rows={2}
-                            className="ml-auto block w-full min-w-0 max-w-[calc(100vw-112px)] resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 sm:min-w-64 sm:max-w-none"
-                            placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
-                          />
+                          {!row.academicStatus && (
+                            <textarea
+                              lang="ko"
+                              inputMode="text"
+                              aria-label={`${row.grade}학년 ${row.class}반 ${row.number}번 ${row.studentName} 감점 요인 및 평가 근거`}
+                              value={row.feedback}
+                              disabled={saving}
+                              onChange={(event) =>
+                                updateFeedback(row.rowKey, event.target.value)
+                              }
+                              rows={2}
+                              className="ml-auto block w-full min-w-0 max-w-[calc(100vw-112px)] resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 sm:min-w-64 sm:max-w-none"
+                              placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
+                            />
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -14322,7 +14662,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 }
                                 className="whitespace-nowrap px-3 py-3 text-right"
                               >
-                                {hasAcademicStatus ? (
+                                {hasAcademicStatus &&
+                                !isWrittenExamMode ? null : hasAcademicStatus ? (
                                   <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
                                     {academicStatusLabel}
                                   </span>
@@ -14384,31 +14725,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 }
                                 className="whitespace-nowrap px-3 py-3 text-center"
                               >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    scoreEditing
-                                      ? void editScoreListEvidence(recordKey)
-                                      : void showScoreListEvidence(record)
-                                  }
-                                  disabled={savingScoreEdits}
-                                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                                    evidenceText
-                                      ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-                                  }`}
-                                  title={
-                                    scoreEditing ? "사유 작성" : "사유 보기"
-                                  }
-                                  aria-label={
-                                    scoreEditing ? "사유 작성" : "사유 보기"
-                                  }
-                                >
-                                  <i
-                                    className="fas fa-comment-dots"
-                                    aria-hidden="true"
-                                  ></i>
-                                </button>
+                                {!isPerformanceMovementRecord(record) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      scoreEditing
+                                        ? void editScoreListEvidence(recordKey)
+                                        : void showScoreListEvidence(record)
+                                    }
+                                    disabled={savingScoreEdits}
+                                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                      evidenceText
+                                        ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                        : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                    }`}
+                                    title={
+                                      scoreEditing ? "사유 작성" : "사유 보기"
+                                    }
+                                    aria-label={
+                                      scoreEditing ? "사유 작성" : "사유 보기"
+                                    }
+                                  >
+                                    <i
+                                      className="fas fa-comment-dots"
+                                      aria-hidden="true"
+                                    ></i>
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );
