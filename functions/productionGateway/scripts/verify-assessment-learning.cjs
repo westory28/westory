@@ -867,24 +867,64 @@ const runPresentationOrderCases = async () => {
     assert.deepEqual(replayed.answerChecks, submitted.answerChecks);
     assert.deepEqual(replayed.questionSnapshots, submitted.questionSnapshots);
 
-    const historicalAttempt = store.documents.get(`semester_assessment_attempts/${first.attemptId}`);
-    delete historicalAttempt.questionCycleStartOrdinal;
-    delete historicalAttempt.attemptOrdinal;
-    const tail = await apply("startAssessmentAttempt", { definitionId });
-    assert.deepEqual(tail.questionIds, ids.filter(id => !expected.includes(id)), "Finish the legacy cycle before repeating any answered question");
-    const skipped = await apply("submitAssessmentAttempt", { attemptId: tail.attemptId, expectedRevision: 1, answers: {}, submitReason: "TIMEOUT" });
-    assert.equal(skipped.total, 1);
-    await apply("resetAssessmentAttempt", { definitionId, studentUid, reason: "synthetic reset" }, "teacher");
-    const retry = await apply("startAssessmentAttempt", { definitionId });
-    assert.deepEqual(retry.questionIds, tail.questionIds, "An unanswered question remains eligible after a teacher reset");
+    // Model records from both previous releases. The older one has only
+    // attemptNumber; the newer one has a cycle marker but no crossover data.
+    const historicalPath = `semester_assessment_attempts/${first.attemptId}`;
+    const historicalAttempt = store.documents.get(historicalPath);
+    const lastUnanswered = ids.find(id => !expected.includes(id));
+    const legacy = {
+      attemptId: first.attemptId, attemptNumber: 1, definitionId, studentUid, semesterId,
+      status: "SUBMITTED", questionIds: expected.map(Number), answers, submittedAtIso: historicalAttempt.submittedAtIso,
+      gradingSnapshot: historicalAttempt.gradingSnapshot, learningSnapshot: historicalAttempt.learningSnapshot,
+    };
+    store.documents.set(historicalPath, legacy);
+    if (category === "diagnostic") {
+      // This item belonged to a completed cycle before the teacher added
+      // more questions. Only the later attempt belongs to the current cycle.
+      store.documents.set(historicalPath, { ...legacy, questionIds: [lastUnanswered], answers: { [lastUnanswered]: "Old answer" },
+        gradingSnapshot: [], learningSnapshot: [], attemptOrdinal: 1, questionCycleStartOrdinal: 1 });
+      const laterId = "attempt_" + createHash("sha256").update(`${studentUid}\n${definitionId}\n2`).digest("hex");
+      store.documents.set(`semester_assessment_attempts/${laterId}`, { ...legacy, attemptId: laterId, attemptNumber: 2,
+        attemptOrdinal: 2, questionCycleStartOrdinal: 2 });
+    }
+    store.documents.get(`semester_assessment_definitions/${definitionId}`).presentationSettings = { questionOrder: "unit" };
+    const startFullAttempt = async () => {
+      const attempt = await apply("startAssessmentAttempt", { definitionId });
+      assert.equal(attempt.questionIds.length, 4, "Every start returns the configured count, including at cycle boundaries");
+      assert.equal(new Set(attempt.questionIds).size, 4, "Questions are unique within an attempt");
+      const units = attempt.questionIds.map(id => unitById[id]);
+      assert.deepEqual(units, [...units].sort(), "The current curriculum orders small-a before small-b in mixed attempts");
+      assert.deepEqual(attempt.questionPresentation.map(q => q.id), attempt.questionIds);
+      return attempt;
+    };
     const submitAll = attempt => apply("submitAssessmentAttempt", { attemptId: attempt.attemptId, expectedRevision: 1,
       answers: Object.fromEntries(attempt.questionIds.map(id => [id, `Answer ${id}`])), submitReason: "MANUAL" });
+    const mixed = await startFullAttempt();
+    assert.ok(mixed.questionIds.includes(lastUnanswered), "One unanswered question must be included with three review questions");
+    assert.equal(mixed.questionIds.filter(id => expected.includes(id)).length, 3);
+    const skipped = await apply("submitAssessmentAttempt", { attemptId: mixed.attemptId, expectedRevision: 1,
+      answers: { [lastUnanswered]: " " }, submitReason: "TIMEOUT" });
+    assert.equal(skipped.total, 4);
+    await apply("resetAssessmentAttempt", { definitionId, studentUid, reason: "synthetic reset" }, "teacher");
+    const retry = await startFullAttempt();
+    assert.ok(retry.questionIds.includes(lastUnanswered), "A blank answer and teacher reset preserve the unanswered question");
+    const resumedRetry = await startFullAttempt();
+    assert.equal(resumedRetry.attemptId, retry.attemptId);
+    assert.deepEqual(resumedRetry.questionIds, retry.questionIds, "Resuming must not draw from the next cycle");
     await submitAll(retry);
-    const next = await apply("startAssessmentAttempt", { definitionId });
-    assert.equal(next.questionIds.length, 4, "All questions become eligible in a new cycle");
-    await submitAll(next);
-    const nextTail = await apply("startAssessmentAttempt", { definitionId });
-    assert.deepEqual(nextTail.questionIds, ids.filter(id => !next.questionIds.includes(id)), "Second-cycle answers are excluded until full coverage");
+    const carried = retry.questionIds.filter(id => id !== lastUnanswered);
+    const secondCycleRemaining = ids.filter(id => !carried.includes(id));
+    const next = await startFullAttempt();
+    assert.ok(secondCycleRemaining.every(id => next.questionIds.includes(id)), "The three answered review questions already count in the second cycle");
+    const nextCarried = next.questionIds.filter(id => !secondCycleRemaining.includes(id));
+    assert.equal(nextCarried.length, 2, "The two remaining questions are topped up with exactly two reviews");
+    const blankReview = mode === "unit" ? nextCarried[0] : null;
+    const credited = nextCarried.filter(id => id !== blankReview);
+    await apply("submitAssessmentAttempt", { attemptId: next.attemptId, expectedRevision: 1, submitReason: "TIMEOUT",
+      answers: Object.fromEntries(next.questionIds.filter(id => id !== blankReview).map(id => [id, `Answer ${id}`])) });
+    const third = await startFullAttempt();
+    assert.ok(ids.filter(id => !credited.includes(id)).every(id => third.questionIds.includes(id)),
+      "A second crossover carries only answered reviews; a skipped review is still due in the third cycle");
   }
 };
 
@@ -916,7 +956,7 @@ const runPresentationOrderCases = async () => {
         "LEGACY_ATTEMPT_COMPATIBILITY",
         "FROZEN_RANDOM_CREATED_UNIT_ORDER_THROUGH_RESUME_SUBMISSION_AND_HISTORY",
         "ORDER_SETTINGS_KEEP_SELECTION_GRADING_AND_REWARD_POLICY",
-        "DIAGNOSTIC_FORMATIVE_ROTATION_LEGACY_RESET_TIMEOUT_AND_SECOND_CYCLE",
+        "DIAGNOSTIC_FORMATIVE_FULL_COUNT_CROSSOVER_LEGACY_RESET_TIMEOUT_AND_UNIT_ORDER",
       ],
     }),
   );

@@ -553,23 +553,35 @@ const attemptSequence = attempt => Number(attempt.attemptOrdinal || attempt.atte
 const getQuizQuestionCycle = (allIds, priorAttempts) => {
   // The marker keeps earlier cycles closed when the teacher edits the bank.
   // Attempts predating it are replayed in their original lifetime order.
-  let startOrdinal = 1;
-  for (const attempt of priorAttempts) {
-    startOrdinal = Math.max(startOrdinal, attempt.questionCycleStartOrdinal || 1);
-  }
+  const history = [...priorAttempts].sort((left, right) => attemptSequence(left) - attemptSequence(right));
+  const checkpoint = history.findLast(attempt => attempt.questionCycleStartOrdinal);
+  let startOrdinal = checkpoint?.questionCycleStartOrdinal || 1;
+  // Answers to repeats in the boundary attempt already count in this cycle.
+  let carryIds = checkpoint?.questionCycleCarryIds || [];
+  const bank = new Set(allIds);
   const remaining = new Set(allIds);
-  const history = priorAttempts.filter(attempt => attemptSequence(attempt) >= startOrdinal)
-    .sort((left, right) => attemptSequence(left) - attemptSequence(right));
+  for (const id of carryIds) remaining.delete(id);
+  // A bank edit can leave only questions already covered at the boundary.
+  if (!remaining.size) {
+    carryIds = [];
+    for (const id of bank) remaining.add(id);
+  }
+  const nextAnswered = new Set();
   for (const attempt of history) {
-    for (const id of attempt.questionIds || []) {
-      if (normalizeAnswer(attempt.answers?.[id])) remaining.delete(String(id));
+    if (attemptSequence(attempt) < startOrdinal) continue;
+    for (const questionId of attempt.questionIds || []) {
+      const id = String(questionId);
+      if (!bank.has(id) || !normalizeAnswer(attempt.answers?.[id])) continue;
+      if (!remaining.delete(id) && attempt.questionCycleStartOrdinal) nextAnswered.add(id);
     }
     if (remaining.size === 0) {
       startOrdinal = attemptSequence(attempt) + 1;
-      for (const id of allIds) remaining.add(id);
+      carryIds = [...nextAnswered];
+      for (const id of bank) if (!nextAnswered.has(id)) remaining.add(id);
+      nextAnswered.clear();
     }
   }
-  return { startOrdinal, remaining };
+  return { startOrdinal, carryIds, remaining, nextAnswered };
 };
 
 const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber, attemptOrdinal, priorAttempts = [] }) => {
@@ -583,15 +595,24 @@ const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumbe
   const learningRanks = learning.rankLearningCandidates(source, priorAttempts);
   const cycle = ["diagnostic", "formative"].includes(definition.category)
     ? getQuizQuestionCycle(allIds, priorAttempts) : null;
-  const questionIds = [...(cycle?.remaining || allIds)]
+  const cyclePriority = id => {
+    if (!cycle || cycle.remaining.has(id)) return 0;
+    return cycle.nextAnswered.has(id) ? 2 : 1;
+  };
+  const questionIds = allIds
     .map((id) => ({
       id,
+      priority: cyclePriority(id),
       rank: sha256(`${studentUid}\n${definition.definitionId}\n${cycle ? attemptOrdinal : attemptNumber}\n${id}`),
     }))
-    .sort((left, right) => (learningRanks.get(left.id) - learningRanks.get(right.id)) || left.rank.localeCompare(right.rank) || left.id.localeCompare(right.id))
+    .sort((left, right) => left.priority - right.priority || (learningRanks.get(left.id) - learningRanks.get(right.id)) || left.rank.localeCompare(right.rank) || left.id.localeCompare(right.id))
     .slice(0, count)
     .map((item) => item.id);
-  return { questionIds, ...(cycle ? { questionCycleStartOrdinal: cycle.startOrdinal } : {}) };
+  return {
+    questionIds,
+    ...(cycle ? { questionCycleStartOrdinal: cycle.startOrdinal } : {}),
+    ...(cycle?.carryIds.length ? { questionCycleCarryIds: cycle.carryIds } : {}),
+  };
 };
 
 // Selection keeps its learning priorities; presentation order is then frozen
@@ -1131,12 +1152,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const attemptOrdinal = Math.max(0, ...allPrior.map((document) =>
         Number(document.data?.attemptOrdinal || document.data?.attemptNumber || 0))) + 1;
       if (!Number.isSafeInteger(attemptOrdinal)) fail("failed-precondition", "Assessment attempt sequence is invalid.", "ASSESSMENT_ATTEMPT_INVALID");
-      const selection = selectAttemptQuestionIds({
+      const { questionIds, ...cycleFields } = selectAttemptQuestionIds({
         source, definition, studentUid: actor.actorUid, attemptNumber, attemptOrdinal,
         priorAttempts: allPrior.map(document => document.data || {}),
       });
       const selectedIds = await orderAttemptQuestionIds({
-        transaction, source, definition, questionIds: selection.questionIds,
+        transaction, source, definition, questionIds,
       });
       const answerById = new Map(source.answerKey.map((item) => [item.id, item]));
       const gradingSnapshot = selectedIds.map((id) => answerById.get(id));
@@ -1159,7 +1180,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         classId: enrollment.classId,
         attemptNumber,
         attemptOrdinal,
-        ...(selection.questionCycleStartOrdinal ? { questionCycleStartOrdinal: selection.questionCycleStartOrdinal } : {}),
+        ...cycleFields,
         status: "STARTED",
         revision: 1,
         answers: {},
