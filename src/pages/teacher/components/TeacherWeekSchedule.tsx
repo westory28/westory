@@ -227,6 +227,9 @@ const TeacherWeekSchedule: React.FC<Props> = ({
   }, [selectedDate, weekStart, weekEvents]);
   const sameMonth = weekStart.slice(0, 7) === days[6].slice(0, 7);
   const weekLabel = `${readableDate(weekStart)} – ${sameMonth ? `${Number(days[6].slice(8, 10))}일` : readableDate(days[6])}`;
+  const monthDay = (date: string) =>
+    `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  const compactWeekLabel = `${monthDay(weekStart)}–${sameMonth ? Number(days[6].slice(8, 10)) : monthDay(days[6])}`;
   const weekDescription = `${weekStart.slice(0, 4)}년 ${readableDate(weekStart)}부터 ${days[6].slice(0, 4)}년 ${readableDate(days[6])}까지`;
 
   return (
@@ -245,8 +248,12 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           className="teacher-week-schedule__range"
           aria-live="polite"
           aria-label={weekDescription}
+          title={weekDescription}
         >
-          {weekLabel}
+          <span className="teacher-week-schedule__range-full">{weekLabel}</span>
+          <span className="teacher-week-schedule__range-short">
+            {compactWeekLabel}
+          </span>
         </span>
         <button
           type="button"

@@ -56,12 +56,13 @@ function Calendar({role}) {
  const [weekStart,setWeekStart]=useState(new URLSearchParams(location.search).get('week')||'2026-10-18');
  const [selectedDate,setSelectedDate]=useState(null);
  const [clicked,setClicked]=useState('');
+ const [filterClass,setFilterClass]=useState('all');
  const [weekChanges,setWeekChanges]=useState(0);
  const [dateClicks,setDateClicks]=useState(0);
  const state=new URLSearchParams(location.search).get('state');
  const markers=new URLSearchParams(location.search).get('scenario')==='markers';
  const shared={events:state==='empty'?[]:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:next=>{setWeekStart(next);setWeekChanges(count=>count+1);},onDateClick:date=>{setSelectedDate(date);setDateClicks(count=>count+1);},onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
- return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass="all" availableClassTargets={[]} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={()=>{}}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
+ return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass={filterClass} availableClassTargets={['3-10']} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={setFilterClass}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
 const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
 createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
@@ -159,6 +160,70 @@ async function verifyTeacherNavigation(page, width) {
   await page.goto(origin);
   await page.evaluate(() => document.fonts.ready);
   const section = page.locator(".teacher-week-schedule");
+  if (width < 768) {
+    const toolbar = section.locator(".teacher-week-schedule__toolbar");
+    const checkToolbar = async () => {
+      const geometry = await toolbar.evaluate((bar) => {
+        const controls = Array.from(
+          bar.querySelectorAll(
+            ".teacher-week-schedule__range, button, select, a",
+          ),
+        );
+        const boxes = controls.map((el) => el.getBoundingClientRect());
+        const rect = bar.getBoundingClientRect();
+        const strip = bar.parentElement
+          .querySelector(".teacher-week-strip")
+          .getBoundingClientRect();
+        const filter = bar.querySelector("select");
+        const style = getComputedStyle(filter);
+        const canvas = document.createElement("canvas").getContext("2d");
+        canvas.font = style.font;
+        const fitsFilter =
+          canvas.measureText(filter.selectedOptions[0].text).width <=
+          filter.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight) +
+            1;
+        return {
+          count: controls.length,
+          fitsFilter,
+          gap: strip.top - rect.bottom,
+          oneRow: boxes.every(
+            (box) =>
+              Math.abs(
+                box.top + box.height / 2 - boxes[0].top - boxes[0].height / 2,
+              ) < 1,
+          ),
+          within: boxes.every(
+            (box, i) =>
+              box.left >= rect.left - 1 &&
+              box.right <= rect.right + 1 &&
+              (!i || box.left >= boxes[i - 1].right),
+          ),
+        };
+      });
+      assert(
+        geometry.count === 6 &&
+          geometry.oneRow &&
+          geometry.within &&
+          geometry.fitsFilter &&
+          geometry.gap >= 0 &&
+          geometry.gap <= 6,
+        JSON.stringify({ width, geometry }),
+      );
+    };
+    await page.goto(origin + "/?week=2026-11-29");
+    await section.getByRole("combobox").selectOption("3-10");
+    await checkToolbar();
+    await section
+      .getByRole("button", { name: "일정 검색", exact: true })
+      .click();
+    await checkToolbar();
+    const search = section.getByRole("searchbox");
+    assert(await search.isVisible());
+    await search.press("Escape");
+    await page.goto(origin);
+  }
   const strip = section.locator(".teacher-week-strip");
   const days = strip.locator(".teacher-week-strip__day");
   const state = () =>
@@ -431,7 +496,7 @@ async function verifyTeacherNavigation(page, width) {
   });
 }
 try {
-  for (const width of [320, 390, 768, 1120, 1280, 1366, 1440]) {
+  for (const width of [320, 360, 375, 390, 430, 667, 768, 1120, 1280, 1366, 1440]) {
     const page = await browser.newPage({
       viewport: { width, height: 900 },
       hasTouch: true,

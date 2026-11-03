@@ -12,6 +12,9 @@
   min-width: 0;
   width: 100%;
   padding: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
 
 .wis-ranking-with-avatar .wis-ranking-list {
@@ -30,7 +33,7 @@
   border-width: 2px;
   border-color: rgb(var(--wis-ranking-accent-rgb) / 0.5);
   display: grid;
-  grid-template-columns: 24px repeat(3, minmax(0, 1fr));
+  grid-template-columns: 24px repeat(3, minmax(max-content, 1fr));
   grid-template-areas: "place person classroom score";
   gap: 8px;
   text-align: left;
@@ -51,12 +54,12 @@
 .wis-ranking-with-avatar .wis-ranking-person {
   justify-content: flex-start;
   flex-wrap: nowrap;
-  min-width: 0;
+  min-width: max-content;
   gap: 8px;
 }
 
 .wis-ranking-with-avatar .wis-ranking-identity {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
 }
 
 .wis-ranking-with-avatar .wis-ranking-name {
@@ -64,6 +67,8 @@
   line-height: 1.3;
   white-space: nowrap;
   overflow-wrap: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .wis-ranking-with-avatar .wis-ranking-profile {
@@ -73,12 +78,8 @@
   font-size: 16px;
 }
 
-.wis-ranking-with-avatar .wis-ranking-person .wis-ranking-rank-badge {
+.wis-ranking-with-avatar .wis-ranking-rank-badge {
   flex: 0 0 auto;
-  display: block;
-  max-width: 38%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   min-height: 18px;
   padding: 2px 4px;
   font-size: 10px;
@@ -102,6 +103,11 @@
   line-height: 1.3;
   gap: 4px;
   white-space: nowrap;
+}
+
+.wis-ranking-with-avatar .wis-ranking-score > span {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
@@ -166,7 +172,17 @@
   text-decoration: underline;
 }
 
-@container wis-ranking (max-width: 768px) {
+@container wis-ranking (max-width: 390px) {
+  .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 1023px), (max-width: 1280px) and (pointer: coarse) {
+  .wis-ranking-with-avatar .wis-ranking-list-scroll {
+    overflow: visible;
+  }
+
   .wis-ranking-with-avatar .wis-ranking-list {
     gap: 4px;
   }
@@ -178,70 +194,101 @@
     padding: 4px;
   }
 
+  .wis-ranking-with-avatar .wis-ranking-place .wis-ranking-crown {
+    right: 0;
+    top: -7px;
+  }
+
   .wis-ranking-with-avatar .wis-ranking-person {
+    min-width: 0;
+    margin-inline-start: 6px;
     gap: 4px;
   }
 
-}
-
-@container wis-ranking (max-width: 440px) {
-  .wis-ranking-with-avatar .wis-ranking-avatar-layout {
-    gap: 8px;
+  .wis-ranking-with-avatar .wis-ranking-identity {
+    flex-shrink: 1;
   }
 
-  .wis-ranking-with-avatar .wis-ranking-row {
-    grid-template-columns: 20px minmax(0, 1fr) fit-content(36%);
-    grid-template-areas: "place person score";
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-classroom {
-    display: none;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-place .wis-ranking-rank-medal {
-    width: 20px;
-    height: 20px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-profile {
-    flex-basis: 14px;
-    width: 14px;
-    height: 14px;
-    font-size: 14px;
-  }
-}
-
-@container wis-ranking (max-width: 320px) {
-  .wis-ranking-with-avatar .wis-ranking-avatar-layout {
-    margin-inline: -8px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-row {
-    padding-inline: 2px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-person,
-  .wis-ranking-with-avatar .wis-ranking-identity,
-  .wis-ranking-with-avatar .wis-ranking-score {
-    gap: 2px;
-  }
-
-  .wis-ranking-with-avatar .wis-ranking-name {
-    font-size: 13px;
+  .wis-ranking-with-avatar .wis-ranking-name,
+  .wis-ranking-with-avatar .wis-ranking-score > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .wis-ranking-with-avatar .wis-ranking-person .wis-ranking-rank-badge {
-    padding-inline: 2px;
+    display: block;
+    max-width: 38%;
+    min-height: 18px;
+    padding: 2px 4px;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .wis-ranking-with-avatar .wis-ranking-score {
-    font-size: 12px;
+  @container wis-ranking (max-width: 440px) {
+    .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+      gap: 8px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-row {
+      grid-template-columns: 20px minmax(0, 1fr) fit-content(36%);
+      grid-template-areas: "place person score";
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-classroom {
+      display: none;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-place .wis-ranking-rank-medal {
+      width: 20px;
+      height: 20px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-profile {
+      flex-basis: 14px;
+      width: 14px;
+      height: 14px;
+      font-size: 14px;
+    }
   }
 
-  .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
-    flex-basis: 12px;
-    width: 12px;
-    height: 12px;
+  @container wis-ranking (max-width: 320px) {
+    .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+      margin-inline: -8px;
+      gap: 4px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-list-scroll {
+      padding-inline: 0;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-row {
+      padding-inline: 2px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-person,
+    .wis-ranking-with-avatar .wis-ranking-identity,
+    .wis-ranking-with-avatar .wis-ranking-score {
+      gap: 2px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-name {
+      font-size: 13px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-person .wis-ranking-rank-badge {
+      padding-inline: 2px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-score {
+      font-size: 12px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
+      flex-basis: 12px;
+      width: 12px;
+      height: 12px;
+    }
   }
 }
 

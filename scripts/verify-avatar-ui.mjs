@@ -227,14 +227,37 @@ if (checkRankingLayout) {
     channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
   });
   try {
-    const page = await browser.newPage({ reducedMotion: "reduce" });
+    const page = await browser.newPage();
+    const emulation = await page.context().newCDPSession(page);
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.locator(".wis-ranking-row").first().waitFor();
+    // Use the application's crown glyph while keeping browser traffic local.
+    const iconCache = path.join(os.tmpdir(), "westory-qa-fa-solid-6.4.0.woff2");
+    const iconFont = await fs.readFile(iconCache).catch(async () => {
+      const response = await fetch(
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2",
+      );
+      assert(response.ok, "Font Awesome fixture dependency");
+      const bytes = Buffer.from(await response.arrayBuffer());
+      await fs.writeFile(iconCache, bytes);
+      return bytes;
+    });
+    await page.addStyleTag({
+      content: `
+      @font-face {font-family: QaSolid; font-weight: 900; src: url(data:font/woff2;base64,${iconFont.toString("base64")}) format("woff2")}
+      .fas.fa-crown {font: normal 900 12px/1 QaSolid}
+      .fa-crown::before {content: "\\f521"}
+    `,
+    });
+    assert(
+      await page.evaluate(
+        async () => (await document.fonts.load("900 12px QaSolid")).length > 0,
+      ),
+    );
     await page.evaluate(() => {
       window.avatarQa.entries[0].studentName = "가나다";
-      window.avatarQa.entries[1].studentName = "아주긴이름으로등록된합성학생";
-      window.avatarQa.entries[1].cumulativeEarned = 987654321098;
     });
+    let minimumRankClearance = Infinity;
     for (const role of ["teacher", "student"]) {
       await page
         .getByRole("button", {
@@ -245,15 +268,44 @@ if (checkRankingLayout) {
         .locator(".wis-ranking-name")
         .filter({ hasText: "가나다" })
         .waitFor();
-      for (const [viewport, cardWidth] of [
-        [320, 320],
-        [390, 390],
-        [768, 768],
+      for (const [viewport, cardWidth, touch = false] of [
+        [320, 320, true],
+        [390, 390, true],
+        [768, 768, true],
+        [1024, 650, true],
+        [1024, 650],
+        [1280, 480, true],
         [1280, 480],
         [1366, 500],
+        [1440, 499],
+        [1440, 533],
+        [1440, 640],
         [1440, 1000],
+        [1890, 660],
+        [1890, 694],
       ]) {
+        const mobile = viewport <= 1023 || (touch && viewport <= 1280);
         await page.setViewportSize({ width: viewport, height: 768 });
+        await emulation.send("Emulation.setTouchEmulationEnabled", {
+          enabled: touch,
+        });
+        assert.equal(
+          await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
+          touch,
+        );
+        await page.evaluate((mobile) => {
+          const entries = window.avatarQa.entries;
+          ["가나다", "라마바", "사아자", "차카타", "파하가"].forEach(
+            (name, i) => {
+              entries[i].studentName = name;
+            },
+          );
+          entries[1].studentName = mobile
+            ? "아주긴이름으로등록된합성학생"
+            : "라마바";
+          entries[1].cumulativeEarned = mobile ? 987654321098 : 3920;
+          document.querySelectorAll(".wis-ranking-row")[mobile ? 1 : 0].click();
+        }, mobile);
         await page.locator("#sample").evaluate(
           (sample, { cardWidth, role }) => {
             sample.classList.toggle(
@@ -269,6 +321,15 @@ if (checkRankingLayout) {
           },
           { cardWidth, role },
         );
+        if (viewport === 390) {
+          const first = page.locator(".wis-ranking-row").first();
+          await first.focus();
+          await first.evaluate((row) =>
+            Promise.all(
+              row.getAnimations({ subtree: true }).map((a) => a.finished),
+            ),
+          );
+        }
         const geometry = await page
           .locator(".wis-ranking-row")
           .evaluateAll((rows) =>
@@ -280,8 +341,35 @@ if (checkRankingLayout) {
                 name = rect("name"),
                 badge = rect("rank-badge"),
                 score = rect("score");
+              const crown = row
+                .querySelector(".wis-ranking-crown")
+                ?.getBoundingClientRect();
               const list = row.closest(".wis-ranking-list-scroll");
+              const textRect = (element) => {
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                return range.getBoundingClientRect();
+              };
+              const classroom = row.querySelector(".wis-ranking-classroom");
               return {
+                rowHeight: row.offsetHeight,
+                tracks: getComputedStyle(row)
+                  .gridTemplateColumns.split(" ")
+                  .map(parseFloat),
+                classroomToScore:
+                  textRect(row.querySelector(".wis-ranking-score > span"))
+                    .left - textRect(classroom).right,
+                classroomCentered:
+                  Math.abs(
+                    rect("classroom").left +
+                      rect("classroom").right -
+                      (textRect(classroom).left + textRect(classroom).right),
+                  ) < 1,
+                scoreVisible: score.right <= list.getBoundingClientRect().right,
+                rankClearance:
+                  rect("profile").left -
+                  Math.max(medal.right, crown?.right ?? 0),
+                crownWidth: crown?.width,
                 oneLine: [name, badge, score].every(
                   (r) => Math.abs(center(r) - center(medal)) < 2,
                 ),
@@ -293,23 +381,62 @@ if (checkRankingLayout) {
                 visibleName: name.width,
                 regularTextFits: ["name", "score > span"].every((s) => {
                   const element = row.querySelector(".wis-ranking-" + s);
-                  return element.scrollWidth <= element.clientWidth + 1;
+                  return (
+                    textRect(element).width <=
+                    element.getBoundingClientRect().width
+                  );
                 }),
               };
             }),
           );
-        if (viewport === 320 || viewport === 768) {
-          await page
-            .locator(".wis-ranking-panel")
-            .screenshot({
-              path: path.join(evidence, role + "-" + viewport + ".png"),
-            });
+        if (
+          [320, 390, 768].includes(viewport) ||
+          cardWidth === 533 ||
+          cardWidth === 694
+        ) {
+          await page.locator(".wis-ranking-panel").screenshot({
+            path: path.join(evidence, `${role}-${viewport}-${cardWidth}.png`),
+          });
         }
         assert.equal(geometry.length, 5);
+        assert(geometry.slice(0, 3).every((r) => r.crownWidth > 0));
+        if (mobile) {
+          minimumRankClearance = Math.min(
+            minimumRankClearance,
+            ...geometry.map((r) => r.rankClearance),
+          );
+          assert(
+            geometry.every((r) => r.rankClearance >= 8),
+            `${role} ${viewport}px rank clearance: ${geometry.map((r) => r.rankClearance)}`,
+          );
+          assert(geometry.every((r) => !r.overflow));
+        } else {
+          assert(
+            geometry.every(
+              (r) =>
+                r.rowHeight === 52 &&
+                r.tracks.length === 4 &&
+                r.tracks[0] === 24 &&
+                r.classroomCentered &&
+                r.classroomToScore >= 8 &&
+                r.scoreVisible &&
+                !r.overflow,
+            ),
+            `${role} ${viewport}/${cardWidth}px desktop columns: ${JSON.stringify(geometry[0])}`,
+          );
+          if (cardWidth >= 694) {
+            assert(
+              geometry.every(
+                (r) =>
+                  Math.abs(r.tracks[1] - r.tracks[2]) < 1 &&
+                  Math.abs(r.tracks[2] - r.tracks[3]) < 1,
+              ),
+              "Roomy desktop cards preserve three equal columns",
+            );
+          }
+        }
         assert(
-          geometry.every(
-            (r) => r.oneLine && r.separated && !r.overflow && r.visibleName > 0,
-          ),
+          geometry.every((r) => r.oneLine && r.separated && r.visibleName > 0),
           `${role} ${viewport}px: ${JSON.stringify(geometry)}`,
         );
         assert(
@@ -328,7 +455,7 @@ if (checkRankingLayout) {
       );
     }
     console.log(
-      "PASS: student and teacher ranking rows stay on one line with separated fields at 320/390/768/1280/1366/1440px; keyboard selection works.",
+      `PASS: student and teacher rankings at 320–1890px. Mobile and tablet rows stay on one line with at least ${minimumRankClearance.toFixed(1)}px between the rank and emoji. Desktop retains 52px rows, centered classes and right-aligned amounts. Keyboard selection works.`,
     );
   } finally {
     await browser.close();
