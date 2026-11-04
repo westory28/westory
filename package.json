@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews",
+    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
@@ -32,6 +32,8 @@
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:portal-design": "node scripts/verify-portal-design.mjs",
     "verify:page-scroll-lock": "node scripts/verify-page-scroll-lock.mjs",
+    "verify:score-requests": "node scripts/verify-score-request-queries.mjs && node scripts/verify-score-objection-client-contracts.mjs && node scripts/verify-performance-score-contracts.mjs",
+    "test:score-request-rules": "node scripts/run-score-request-rules.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
     "verify:teacher-readiness-rules": "node scripts/verify-teacher-readiness-rules.mjs",

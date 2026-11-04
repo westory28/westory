@@ -4,6 +4,7 @@
     "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run check"]
   },
   "firestore": {
+    "predeploy": ["npm run test:score-request-rules"],
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },

@@ -89,6 +89,7 @@ import {
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
 import { parseWrittenExamEssayScoreWorkbook } from "../../../lib/writtenExamEssayScoreWorkbook";
+import { getTeacherScoreRequestQuery } from "./teacherScoreRequestQuery";
 import {
   createManagedNotifications,
   reviewPerformanceScoreObjection,
@@ -1613,7 +1614,7 @@ interface PerformanceScoreObjectionItem {
 interface PerformanceScoreObjection {
   id: string;
   uid: string;
-  scoreKind?: string;
+  scoreKind: PerformanceScoreKind;
   studentName: string;
   grade: string;
   class: string;
@@ -1642,7 +1643,7 @@ interface PerformanceScoreObjection {
 interface PerformanceScoreAnswerSheetRequest {
   id: string;
   uid: string;
-  scoreKind?: string;
+  scoreKind: PerformanceScoreKind;
   studentName: string;
   grade: string;
   class: string;
@@ -5875,6 +5876,85 @@ const buildWrittenExamEssayTemplateWorkbook = async (params: {
   return new Blob([buffer], { type: XLSX_MIME_TYPE });
 };
 
+function useTeacherScoreRequests<T extends { scoreKind: PerformanceScoreKind }>(
+  collectionPath: string,
+  scoreKind: PerformanceScoreKind,
+  uid: string | undefined,
+  open: boolean,
+  version: number,
+  normalize: (id: string, data: DocumentData) => T,
+  sort: (items: T[]) => T[],
+) {
+  const scope = useMemo(
+    () => ({ collectionPath, scoreKind, uid }),
+    [collectionPath, scoreKind, uid],
+  );
+  const [result, setResult] = useState<{
+    scope: typeof scope;
+    version: number;
+    rows: T[] | null;
+    error: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const snapshot = await getDocsFromServer(
+          getTeacherScoreRequestQuery(
+            db,
+            scope.collectionPath,
+            scope.scoreKind,
+          ),
+        );
+        if (!active) return;
+        const rows = snapshot.docs
+          .map((item) => normalize(item.id, item.data()))
+          .filter((item) => item.scoreKind === scope.scoreKind);
+        setResult({ scope, version, rows: sort(rows), error: "" });
+      } catch (error) {
+        if (!active) return;
+        const code =
+          error instanceof Error && "code" in error ? error.code : "";
+        const message =
+          code === "permission-denied"
+            ? "점수 조회 권한을 확인한 뒤 새로고침해 주세요."
+            : code === "unavailable" || code === "deadline-exceeded"
+              ? "서버 연결을 확인한 뒤 새로고침해 주세요."
+              : "새로고침해 주세요.";
+        setResult({ scope, version, rows: null, error: message });
+        console.error(
+          "Failed to read teacher score requests:",
+          scope.collectionPath,
+          code,
+        );
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [scope, open, version, normalize, sort]);
+
+  const current =
+    result?.scope === scope && result.version === version ? result : null;
+  const updateRows = (update: (rows: T[]) => T[]) =>
+    setResult((previous) =>
+      previous?.scope === scope && previous.version === version && previous.rows
+        ? { ...previous, rows: update(previous.rows) }
+        : previous,
+    );
+
+  return {
+    rows: current?.rows ?? [],
+    loaded: current?.rows != null,
+    loading: open && !current,
+    error: current?.error || "",
+    updateRows,
+  };
+}
+
 const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   scoreKind = PERFORMANCE_SCORE_KIND,
 }) => {
@@ -6068,9 +6148,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreStatsStudentGroupKey, setScoreStatsStudentGroupKey] =
     useState<ScoreStatsStudentGroupKey>("perfect");
   const [objectionModalOpen, setObjectionModalOpen] = useState(false);
-  const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
-  const [objectionsLoading, setObjectionsLoading] = useState(false);
-  const [objectionsLoaded, setObjectionsLoaded] = useState(false);
+  const [objectionRefreshVersion, setObjectionRefreshVersion] = useState(0);
   const [objectionReviewingAction, setObjectionReviewingAction] = useState<{
     id: string;
     status: PerformanceScoreObjectionReviewAction;
@@ -6078,13 +6156,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [legacyAnswerSheetRequestsOpen, setLegacyAnswerSheetRequestsOpen] =
     useState(false);
   const objectionDialogRef = useRef<HTMLElement | null>(null);
-  const [answerSheetRequests, setAnswerSheetRequests] = useState<
-    PerformanceScoreAnswerSheetRequest[]
-  >([]);
-  const [answerSheetRequestsLoading, setAnswerSheetRequestsLoading] =
-    useState(false);
-  const [answerSheetRequestsLoaded, setAnswerSheetRequestsLoaded] =
-    useState(false);
   const [answerSheetRequestReviewingId, setAnswerSheetRequestReviewingId] =
     useState("");
   const [scoreListSort, setScoreListSort] = useState<
@@ -6187,11 +6258,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [scoreListLoadedRosterId]);
 
   useEffect(() => {
-    setObjections([]);
-    setObjectionsLoaded(false);
-  }, [year, semester]);
-
-  useEffect(() => {
     setClassSheetPreviewStudents([]);
     setClassSheetPreviewLoadedKey("");
   }, [
@@ -6235,6 +6301,36 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const answerSheetRequestCollectionPath = getSemesterCollectionPath(
     { year, semester },
     PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION,
+  );
+  const {
+    rows: objections,
+    loaded: objectionsLoaded,
+    loading: objectionsLoading,
+    error: objectionsError,
+    updateRows: setObjections,
+  } = useTeacherScoreRequests(
+    objectionCollectionPath,
+    activeScoreKind,
+    currentUser?.uid,
+    objectionModalOpen,
+    objectionRefreshVersion,
+    normalizePerformanceScoreObjection,
+    sortPerformanceScoreObjections,
+  );
+  const {
+    rows: answerSheetRequests,
+    loaded: answerSheetRequestsLoaded,
+    loading: answerSheetRequestsLoading,
+    error: answerSheetRequestsError,
+    updateRows: setAnswerSheetRequests,
+  } = useTeacherScoreRequests(
+    answerSheetRequestCollectionPath,
+    activeScoreKind,
+    currentUser?.uid,
+    objectionModalOpen,
+    objectionRefreshVersion,
+    normalizePerformanceScoreAnswerSheetRequest,
+    sortPerformanceScoreAnswerSheetRequests,
   );
   const invalidateRosterReadCaches = (...rosterIds: string[]) => {
     rosterIds.filter(Boolean).forEach((rosterId) => {
@@ -8635,52 +8731,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
-  const loadPerformanceScoreObjections = async () => {
-    if (objectionsLoading) return;
-    setObjectionsLoading(true);
-    try {
-      const objectionQuery =
-        activeScoreKind === WRITTEN_EXAM_SCORE_KIND
-          ? query(
-              collection(db, objectionCollectionPath),
-              where("scoreKind", "==", activeScoreKind),
-            )
-          : query(
-              collection(db, objectionCollectionPath),
-              orderBy("requestedAt", "desc"),
-            );
-      const snap = await getDocs(objectionQuery);
-      const loaded = snap.docs
-        .map((item) =>
-          normalizePerformanceScoreObjection(
-            item.id,
-            item.data() as Record<string, unknown>,
-          ),
-        )
-        .filter(
-          (item) =>
-            normalizePerformanceScoreKind(item.scoreKind) === activeScoreKind,
-        );
-      setObjections(sortPerformanceScoreObjections(loaded));
-      setObjectionsLoaded(true);
-    } catch (error) {
-      console.error("Failed to load performance score objections:", error);
-      setObjections([]);
-      setObjectionsLoaded(false);
-      showToast({
-        tone: "error",
-        title: "이의 목록을 불러오지 못했습니다.",
-        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
-      });
-    } finally {
-      setObjectionsLoading(false);
-    }
-  };
-
-  const refreshObjectionRequests = () => {
-    void loadPerformanceScoreObjections();
-    void loadAnswerSheetRequests();
-  };
+  const refreshObjectionRequests = () =>
+    setObjectionRefreshVersion((value) => value + 1);
 
   const openObjectionModal = () => {
     setObjectionModalOpen(true);
@@ -8699,48 +8751,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("panel");
     setSearchParams(nextParams, { replace: true });
-  };
-
-  const loadAnswerSheetRequests = async () => {
-    if (answerSheetRequestsLoading) return;
-    setAnswerSheetRequestsLoading(true);
-    try {
-      const answerSheetRequestQuery =
-        activeScoreKind === WRITTEN_EXAM_SCORE_KIND
-          ? query(
-              collection(db, answerSheetRequestCollectionPath),
-              where("scoreKind", "==", activeScoreKind),
-            )
-          : query(
-              collection(db, answerSheetRequestCollectionPath),
-              orderBy("requestedAt", "desc"),
-            );
-      const snap = await getDocs(answerSheetRequestQuery);
-      const loaded = snap.docs
-        .map((item) =>
-          normalizePerformanceScoreAnswerSheetRequest(
-            item.id,
-            item.data() as Record<string, unknown>,
-          ),
-        )
-        .filter(
-          (item) =>
-            normalizePerformanceScoreKind(item.scoreKind) === activeScoreKind,
-        );
-      setAnswerSheetRequests(sortPerformanceScoreAnswerSheetRequests(loaded));
-      setAnswerSheetRequestsLoaded(true);
-    } catch (error) {
-      console.error("Failed to load answer sheet requests:", error);
-      setAnswerSheetRequests([]);
-      setAnswerSheetRequestsLoaded(false);
-      showToast({
-        tone: "error",
-        title: "답안지 확인 요청을 불러오지 못했습니다.",
-        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
-      });
-    } finally {
-      setAnswerSheetRequestsLoading(false);
-    }
   };
 
   const markAnswerSheetRequestReviewed = async (
@@ -8784,7 +8794,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           ),
         ),
       );
-      setAnswerSheetRequestsLoaded(true);
       showToast({
         tone: "success",
         title: "답안지 확인 요청을 처리했습니다.",
@@ -9022,7 +9031,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           ),
         ),
       );
-      setObjectionsLoaded(true);
       showToast({
         tone: "success",
         title:
@@ -12665,7 +12673,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       {item.label}
                     </div>
                     <div className="mt-1 text-2xl font-black">
-                      {item.value}건
+                      {objectionsLoaded ? `${item.value}건` : "—"}
                     </div>
                   </div>
                 ))}
@@ -12681,8 +12689,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     {managerCopy.objectionsEmptyMessage}
                   </div>
                 ) : !objectionsLoaded ? (
-                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
-                    새로고침을 누르면 제출된 이의 제기 목록을 조회합니다.
+                  <div
+                    role="status"
+                    className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-600"
+                  >
+                    이의 목록을 불러오지 못했습니다. {objectionsError}
                   </div>
                 ) : (
                   <table className="w-full min-w-[1070px] table-fixed text-left text-sm">
@@ -12858,9 +12869,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       이전 답안지 확인 요청이 없습니다.
                     </div>
                   ) : !answerSheetRequestsLoaded ? (
-                    <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
-                      이전 답안지 확인 요청을 불러오지 못했습니다. 새로고침해
-                      주세요.
+                    <div
+                      role="status"
+                      className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-600"
+                    >
+                      이전 답안지 확인 요청을 불러오지 못했습니다.{" "}
+                      {answerSheetRequestsError}
                     </div>
                   ) : (
                     <table className="w-full min-w-[960px] table-fixed text-left text-sm">
@@ -14011,11 +14025,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 aria-hidden="true"
               />
               이의제기
-              {pendingObjectionRequestCount > 0 && (
-                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
-                  {pendingObjectionRequestCount}
-                </span>
-              )}
+              {objectionsLoaded &&
+                answerSheetRequestsLoaded &&
+                pendingObjectionRequestCount > 0 && (
+                  <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
+                    {pendingObjectionRequestCount}
+                  </span>
+                )}
             </button>
             <button
               type="button"

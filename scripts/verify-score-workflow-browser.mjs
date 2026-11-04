@@ -244,10 +244,30 @@ for(const kind of ['performance','written_exam_essay']){
 }
 window.scoreQa={docs,events,toasts,timestampTick:0};
 `;
+const teacherServerReadFixture = `
+export const getDocsFromServer = async (r) => {
+  const qa = window.scoreQa;
+  const isObjection = r.path?.endsWith("/performance_score_objections");
+  const isLegacy = r.path?.endsWith("/performance_score_answer_sheet_requests");
+  if (isObjection && qa.rejectObjectionReads) {
+    throw Object.assign(new Error("objections unavailable"), { code: "unavailable" });
+  }
+  const result = await getDocs(r);
+  if (qa.pausedSemester && (isObjection || isLegacy)
+      && r.path.includes("/semesters/" + qa.pausedSemester + "/")) {
+    await new Promise(resolve => qa.pausedScoreReads.push(resolve));
+  }
+  return result;
+};`;
 const mocks = {
   "qa-state": state,
-  "qa-auth": `export const useAuth=()=>({userData:{role:'teacher'},currentUser:{uid:'qa-teacher',displayName:'가상교사',email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
-  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectLegacyRequestReads&&r.path?.endsWith("/performance_score_answer_sheet_requests"))throw new Error("legacy request read denied");if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};export const getDocsFromServer=getDocs;export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=async(r,data)=>{if(window.scoreQa.pauseLegacyReview&&r.path.includes("/performance_score_answer_sheet_requests/"))await new Promise(resolve=>window.scoreQa.resumeLegacyReview=resolve);return setDoc(r,data,{merge:true});};export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
+  "qa-auth": `import { useState } from "react";
+    export const useAuth=()=>{
+      const [semester, setSemester] = useState("2");
+      window.scoreQa.switchSemester = setSemester;
+      return {userData:{role:'teacher'},currentUser:{uid:'qa-teacher',displayName:'가상교사',email:'qa-teacher@example.test'},config:{year:'2026',semester}};
+    };`,
+  "qa-firestore": `import{docs,ref,snap,apply,events}from'qa-state';export const collection=(db,...parts)=>ref(parts.join('/'));export const collectionGroup=(db,name)=>({group:name});export const doc=(db,...parts)=>ref(parts.join('/'));export const getDoc=async(r)=>{if(window.scoreQa.rejectConfirmationReads&&r.path.includes("/confirmations/"))throw new Error("confirmation read denied");return snap(r)};export const getDocFromServer=getDoc;export const query=(base,...filters)=>({...base,filters});export const where=(field,op,value)=>({field,op,value});export const orderBy=(...args)=>({order:args});export const limit=n=>({limit:n});export const serverTimestamp=()=>({seconds:1801850400+window.scoreQa.timestampTick++,nanoseconds:0});export const deleteField=()=>({__delete:true});export const getDocs=async(r)=>{if(window.scoreQa.rejectLegacyRequestReads&&r.path?.endsWith("/performance_score_answer_sheet_requests"))throw new Error("legacy request read denied");if(window.scoreQa.rejectConfirmationReads&&r.group==="confirmations")throw new Error("confirmation query denied");let entries=[...docs].filter(([key])=>r.group?key.split('/').at(-2)===r.group:key.startsWith(r.path+'/')&&key.slice(r.path.length+1).indexOf('/')<0);for(const filter of r.filters||[])if(filter.field)entries=entries.filter(([,value])=>filter.op==='=='?value[filter.field]===filter.value:true);const result=entries.map(([key])=>snap(ref(key)));return{docs:result,empty:!result.length,size:result.length,forEach:fn=>result.forEach(fn)};};${teacherServerReadFixture}export const setDoc=async(r,data,options)=>apply(r,data,options);export const updateDoc=async(r,data)=>{if(window.scoreQa.pauseLegacyReview&&r.path.includes("/performance_score_answer_sheet_requests/"))await new Promise(resolve=>window.scoreQa.resumeLegacyReview=resolve);return setDoc(r,data,{merge:true});};export const runTransaction=async(db,callback)=>{if(window.scoreQa.pauseTransactions)await new Promise(resolve=>{window.scoreQa.resumeTransaction=resolve});const pending=[];const value=await callback({get:getDoc,set:(...args)=>pending.push(['set',args]),update:(r,data)=>pending.push(['set',[r,data,{merge:true}]]),delete:r=>pending.push(['delete',[r]])});pending.forEach(([op,args])=>op==='delete'?docs.delete(args[0].path):apply(...args));return value;};export const writeBatch=()=>{const pending=[];return{set:(...args)=>pending.push(args),update:(r,data)=>pending.push([r,data,{merge:true}]),delete:r=>docs.delete(r.path),commit:async()=>pending.forEach(args=>apply(...args))}};`,
   "qa-firebase": `export const db={};export const auth={currentUser:{uid:"qa-teacher",getIdTokenResult:async()=>({claims:{auth_time:1801850400}})}};export const getHttpsCallable=async(name)=>async(input)=>({data:name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{}});`,
   "qa-student-profile-commands": `export const callStudentDataService=async(name)=>name==='getPrintClientInfo'?{maskedIp:'192.0.2.*'}:{};`,
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
@@ -654,10 +674,7 @@ try {
         await dialog
           .getByRole("button", { name: "새로고침", exact: true })
           .click();
-        await page
-          .getByRole("status")
-          .filter({ hasText: "답안지 확인 요청을 불러오지 못했습니다." })
-          .waitFor();
+        await legacy.locator("summary").getByText("조회 실패").waitFor();
         await flaggedRow
           .getByText("답안지 확인 요청", { exact: true })
           .waitFor();
@@ -676,11 +693,45 @@ try {
           .getByRole("button", { name: "새로고침", exact: true })
           .click();
         await legacy.getByText(studentName + "이전", { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.scoreQa.rejectObjectionReads = true;
+          window.scoreQa.rejectLegacyRequestReads = true;
+        });
+        const refresh = dialog.getByRole("button", { name: "새로고침", exact: true });
+        await refresh.click();
+        await dialog.getByRole("status").filter({ hasText: "이의 목록을 불러오지 못했습니다. 서버 연결" }).waitFor();
+        assert.equal(await dialog.getByText("—", { exact: true }).count(), 4);
+        assert.equal(await dialog.getByText("0건", { exact: true }).count(), 0);
+        assert.equal(await flaggedRow.count(), 0);
+        await page.evaluate(() => {
+          window.scoreQa.rejectObjectionReads = false;
+          window.scoreQa.rejectLegacyRequestReads = false;
+        });
+        await refresh.click();
+        await flaggedRow.waitFor();
+        await legacy.getByText(studentName + "이전", { exact: true }).waitFor();
+        await page.evaluate(() => {
+          window.scoreQa.pausedSemester = "2";
+          window.scoreQa.pausedScoreReads = [];
+        });
+        await refresh.click();
+        await page.waitForFunction(() => window.scoreQa.pausedScoreReads.length === 2);
+        assert.equal(await dialog.getByText("—", { exact: true }).count(), 4);
+        await page.evaluate(() => window.scoreQa.switchSemester("1"));
+        await dialog.getByText(`제출된 ${kindLabel} 이의 제기가 없습니다.`, { exact: true }).waitFor();
+        await legacy.getByText("이전 답안지 확인 요청이 없습니다.", { exact: true }).waitFor();
+        await page.evaluate(async () => {
+          window.scoreQa.pausedScoreReads.forEach(resolve => resolve());
+          await new Promise(requestAnimationFrame);
+        });
+        assert.equal(await flaggedRow.count(), 0);
+        assert.equal(await legacy.getByText(studentName + "이전", { exact: true }).count(), 0);
+        assert.equal(await dialog.getByText("0건", { exact: true }).count(), 4);
       }
       await page.close();
     }
     report.checks.push(
-      `${kindLabel}: 390/768/1280 combined objection dialog displays the new boolean flag, filters score kind, reviews legacy requests without lost fields, supports both notification panel links, keeps nested Escape scoped, and restores keyboard focus. Accept/reject stays available at 1280; pending writes block closing; failed legacy reads preserve the current objection list and recover on refresh; horizontal scroll stays inside each table.`,
+      `${kindLabel}: 390/768/1280 combined objection dialog displays the new boolean flag, filters score kind, reviews legacy requests without lost fields, supports both notification panel links, keeps nested Escape scoped, and restores keyboard focus. Accept/reject stays available at 1280; pending writes block closing; independent and simultaneous read failures recover on refresh. Pending or failed reads show unknown counts, and late responses from another semester cannot replace a confirmed empty list. Horizontal scroll stays inside each table.`,
     );
   }
   for (const width of [390, 768, 1280]) {

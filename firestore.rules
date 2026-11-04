@@ -585,20 +585,11 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
-    function canReadPerformanceScoreObjection(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || canManagePerformanceScores()
-        );
-    }
-
-    function canReadPerformanceScoreAnswerSheetRequest(data) {
-      return canUseWestory()
-        && (
-          data.uid == request.auth.uid
-          || canManagePerformanceScores()
-        );
+    function canReadPerformanceScoreRequest() {
+      // A manager's list query has no owner filter. The manager predicate
+      // already checks the full access fence, including session and maintenance.
+      return canManagePerformanceScores()
+        || (resource.data.uid == request.auth.uid && canUseWestory());
     }
 
     function performanceScorePath(userId, scoreId) {
@@ -1425,12 +1416,12 @@ service cloud.firestore {
       }
 
       match /performance_score_objections/{docId} {
-        allow read: if canReadPerformanceScoreObjection(resource.data);
+        allow read: if canReadPerformanceScoreRequest();
         allow create, update, delete: if false;
       }
 
       match /performance_score_answer_sheet_requests/{docId} {
-        allow read: if canReadPerformanceScoreAnswerSheetRequest(resource.data);
+        allow read: if canReadPerformanceScoreRequest();
         allow update: if canManagePerformanceScores();
         allow create, delete: if false;
       }
