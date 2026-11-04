@@ -162,9 +162,8 @@ service cloud.firestore {
         && config.revision >= 0;
     }
 
-    // The room listener has a tighter expression budget because it also checks
-    // canonical enrollment. Keep the general portal validator unchanged.
-    function isValidYutStudentMaintenanceConfig(config) {
+    // Room and signature checks need the same validation within a tighter budget.
+    function isValidCompactStudentMaintenanceConfig(config) {
       return config.keys().hasAll([
           'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
           'startedAt', 'updatedAt', 'updatedBy', 'revision'
@@ -668,15 +667,24 @@ service cloud.firestore {
         );
     }
 
+    function passesScoreSigningMaintenanceFence() {
+      let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
+      // The caller requires a student profile, so the blocked role is known.
+      return maintenance == null || (isValidCompactStudentMaintenanceConfig(maintenance.data)
+        && (maintenance.data.enabled == false || request.auth.token.email == 'westoria28@gmail.com'
+          || request.auth.uid in maintenance.data.bypassUids));
+    }
+
     function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
       let profile = userProfile();
       let scorePath = performanceScorePath(userId, scoreId);
       let scoreData = get(scorePath).data;
-      return canUseWestory()
-        && isOwnUser(userId)
+      return isOwnUser(userId)
+        && (hasActiveApplicationSession() || hasActiveReauthTransition())
         && profile.role == 'student'
         && profile.get('enrollmentStatus', 'active') in ['active', '', null]
         && profile.get('registrationApprovalStatus', 'APPROVED') == 'APPROVED'
+        && passesScoreSigningMaintenanceFence()
         && confirmationId == request.auth.uid
         && exists(scorePath)
         && scoreData.uid == request.auth.uid
@@ -1223,7 +1231,7 @@ service cloud.firestore {
         let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
         // One document read preserves the absent-config default without the
         // exists()+get() pair exhausting the participant-read access budget.
-        return maintenance == null || (isValidYutStudentMaintenanceConfig(maintenance.data)
+        return maintenance == null || (isValidCompactStudentMaintenanceConfig(maintenance.data)
           && (maintenance.data.enabled == false
             || request.auth.token.email == 'westoria28@gmail.com'
             || request.auth.uid in maintenance.data.bypassUids

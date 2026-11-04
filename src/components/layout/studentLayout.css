@@ -102,6 +102,35 @@
   min-height: calc(100dvh - var(--teacher-account-height));
 }
 
+.student-lesson-selection {
+  display: grid;
+  place-items: center;
+  min-height: min(32.5rem, 58dvh);
+  text-align: center;
+}
+
+.student-lesson-selection > button {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 12px;
+  color: var(--ws-text-muted);
+  font-size: 1.125rem;
+  border-radius: 8px;
+}
+
+.student-lesson-selection > button svg {
+  opacity: 0.72;
+}
+
+.student-lesson-selection > button:is(:hover, :focus-visible) {
+  color: var(--ws-primary);
+}
+
+.student-lesson-selection > button:focus-visible {
+  outline: 2px solid var(--ws-ring);
+}
+
 .student-curriculum-group + .student-curriculum-group {
   margin-top: 24px;
 }

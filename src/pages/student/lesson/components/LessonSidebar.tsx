@@ -1,14 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
-import { InlineLoading } from "../../../../components/common/LoadingState";
-import { useAuth } from "../../../../contexts/AuthContext";
-import {
-  readStudentLatestLessonSelection,
-  readStudentVisibleCurriculumTree,
-  type StudentCurriculumTreeItem,
-} from "../../../../lib/studentLessonReadCache";
+import type { StudentCurriculumTreeItem } from "../../../../lib/studentLessonReadCache";
 
 interface LessonSidebarProps {
+  tree: StudentCurriculumTreeItem[];
+  status: React.ReactNode;
+  firstGroupRef: React.Ref<HTMLButtonElement>;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   selectedUnitTitle?: string | null;
@@ -16,23 +13,19 @@ interface LessonSidebarProps {
   selectedUnitId: string | null;
 }
 
-type TreeItem = StudentCurriculumTreeItem;
-
 const shouldShowUnitTitleHint = (title?: string) =>
   String(title || "").trim().length > 18;
 
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
+  tree,
+  status,
+  firstGroupRef,
   isOpen,
   onOpenChange,
   selectedUnitTitle,
   onSelectUnit,
   selectedUnitId,
 }) => {
-  const { config } = useAuth();
-  const [tree, setTree] = useState<TreeItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set(),
   );
@@ -45,42 +38,6 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     });
   };
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
-  const selectedUnitIdRef = useRef(selectedUnitId);
-  useEffect(() => {
-    selectedUnitIdRef.current = selectedUnitId;
-  }, [selectedUnitId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const fetchTree = async () => {
-      setLoading(true);
-      setLoadError(false);
-      try {
-        const nextTree = await readStudentVisibleCurriculumTree(config);
-        if (cancelled) return;
-        setTree(nextTree);
-        if (selectedUnitIdRef.current) return;
-
-        const latestSelection = await readStudentLatestLessonSelection(
-          config,
-          nextTree,
-        );
-        if (cancelled || selectedUnitIdRef.current || !latestSelection) return;
-
-        onSelectUnit(latestSelection.node.id, latestSelection.node.title);
-      } catch (error) {
-        console.error("Error fetching curriculum:", error);
-        if (!cancelled) setLoadError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetchTree();
-    return () => {
-      cancelled = true;
-    };
-  }, [config?.year, config?.semester, onSelectUnit, reloadKey]);
 
   return (
     <PortalSubNavigation
@@ -89,31 +46,13 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       open={isOpen}
       onOpenChange={onOpenChange}
     >
-      {loading && (
-        <InlineLoading message="목차를 불러오는 중입니다." showWarning />
-      )}
-      {!loading && loadError && (
-        <div role="alert" className="px-6 py-4 text-sm text-red-700">
-          목차를 불러오지 못했습니다.
-          <button
-            type="button"
-            className="mt-2 block min-h-11 rounded-lg border px-3 font-bold"
-            onClick={() => setReloadKey((value) => value + 1)}
-          >
-            다시 불러오기
-          </button>
-        </div>
-      )}
-      {!loading && !loadError && tree.length === 0 && (
-        <div className="px-6 py-4 text-sm text-gray-500">
-          공개된 수업 자료가 없습니다.
-        </div>
-      )}
+      {status}
       {tree.map((big, bigIdx) => (
         <section key={big.id || bigIdx} className="student-curriculum-group">
           <h3 className="student-curriculum-major">
             <button
               type="button"
+              ref={bigIdx === 0 ? firstGroupRef : undefined}
               className="student-curriculum-toggle"
               aria-expanded={!collapsedGroups.has(`big-${bigIdx}`)}
               onClick={() => toggleGroup(`big-${bigIdx}`)}

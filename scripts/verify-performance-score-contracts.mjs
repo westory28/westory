@@ -30,6 +30,52 @@ const scores = load(read("src/lib/performanceScores.ts"), {
   "./firebase": {},
   "./semesterScope": {},
 });
+const reviewed = {
+  uid: "reader", id: "a", rosterId: "a", academicYear: "2026", semester: "2",
+  scoreKind: "performance", enteredScoreCount: 1, totalScore: 0,
+  updatedAt: {seconds: 1700000000, nanoseconds: 1},
+};
+const second = { ...reviewed, id: "b", rosterId: "b" };
+const blank = { ...second, enteredScoreCount: 0 };
+const matches = scores.matchesReviewedPerformanceScores;
+assert.equal(matches([reviewed, second], [second, reviewed]), true);
+assert.equal(matches([reviewed], [reviewed, blank]), true);
+assert.equal(matches([reviewed], [{...reviewed, scoreKind: undefined, enteredScoreCount: undefined}]), true);
+assert.equal(matches([reviewed, blank], [reviewed, second]), false);
+assert.equal(matches([reviewed, second], [reviewed, blank]), false);
+assert.equal(matches([blank], [blank]), false);
+for (const change of [
+  { uid: "other" }, { rosterId: "different" }, { id: "different" },
+  { academicYear: "2025" }, { semester: "1" }, { scoreKind: "written_exam_essay" },
+  { updatedAt: { ...second.updatedAt, nanoseconds: 2 } }, { updatedAt: undefined },
+]) {
+  assert.equal(matches([reviewed, second], [reviewed, {...second, ...change}]), false);
+}
+console.log("PASS signature review requires the same entered score set, scope and exact versions");
+const confirmationPaths = [];
+const projection = load(read("src/lib/performanceScores.ts"), {
+  "firebase/firestore": {
+    collection: (_, ...segments) => segments.join("/"),
+    query: (path) => path, orderBy: () => undefined,
+    getDocsFromServer: async () => ({
+      docs: [{id: "a", data: () => ({...reviewed, id: "old-embedded-id"})}],
+    }),
+    doc: (_, ...segments) => segments.join("/"),
+    getDocFromServer: async (path) => {
+      confirmationPaths.push(path);
+      return { exists: () => false };
+    },
+  },
+  "./firebase": {db: {}}, "./semesterScope": {},
+});
+const [canonical] = await projection.loadUserPerformanceScoreRecords("reader", {
+  year: "2026", semester: "2", fromServer: true,
+});
+assert.equal(canonical.id, "a");
+assert.deepEqual(confirmationPaths, ["users/reader/performance_scores/a/confirmations/reader"]);
+assert.equal(matches([reviewed], [canonical]), true);
+assert.equal(matches([reviewed], [{ ...canonical, rosterId: "old-embedded-id" }]), false);
+console.log("PASS student and teacher detail projections use the actual score document and confirmation path");
 const workbook = load(read("src/lib/writtenExamEssayScoreWorkbook.ts"), {
   "./performanceScores": scores,
 });

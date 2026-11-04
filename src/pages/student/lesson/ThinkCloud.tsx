@@ -2,6 +2,7 @@ import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import WordCloudView from "../../../components/common/WordCloudView";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
@@ -33,6 +34,9 @@ const ThinkCloud: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
+  const [topicsState, setTopicsState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [responses, setResponses] = useState<
     Array<ThinkCloudResponse & { id: string }>
@@ -62,29 +66,27 @@ const ThinkCloud: React.FC = () => {
       "student",
       selectedSessionId,
       (state) => {
+        setTopicsState("ready");
         setSessions(state.thinkCloudSessions);
         setResponses(state.thinkCloudResponses);
-        setActiveSessionId(
-          state.thinkCloudManagedClasses[0]?.activeSessionId || "",
-        );
+        const activeId =
+          state.thinkCloudManagedClasses[0]?.activeSessionId || "";
+        setActiveSessionId(activeId);
         setSelectedSessionId((selected) =>
           state.thinkCloudSessions.some((session) => session.id === selected)
             ? selected
-            : state.thinkCloudManagedClasses[0]?.activeSessionId ||
+            : state.thinkCloudSessions.find(
+                (session) => session.id === activeId,
+              )?.id ||
               state.thinkCloudSessions[0]?.id ||
               "",
         );
       },
-      (error) => {
+      () => {
+        setTopicsState("error");
         setSessions([]);
         setResponses([]);
         setActiveSessionId("");
-        setSelectedSessionId("");
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "생각모아를 불러오지 못했습니다.",
-        );
       },
     );
   }, [config, currentUser, selectedSessionId, refreshKey]);
@@ -245,11 +247,6 @@ const ThinkCloud: React.FC = () => {
           open={menuOpen}
           onOpenChange={setMenuOpen}
         >
-          {sessions.length === 0 && (
-            <p className="p-4 text-sm font-bold text-gray-500">
-              아직 등록된 주제가 없습니다.
-            </p>
-          )}
           {sessions.map((session) => {
             const isSelected = selectedSessionId === session.id;
             const isLive =
@@ -288,9 +285,27 @@ const ThinkCloud: React.FC = () => {
 
         <div className="teacher-sub-content space-y-4">
           {!selectedSession && (
-            <section className="bg-white border border-gray-200 rounded-2xl p-6">
-              <p className="text-gray-500 font-bold">주제를 선택해 주세요.</p>
-            </section>
+            <div className="student-lesson-selection">
+              {topicsState === "loading" ? (
+                <InlineLoading message="주제를 불러오는 중입니다." />
+              ) : topicsState === "error" ? (
+                <div role="alert" className="text-sm text-red-700">
+                  주제를 불러오지 못했습니다.
+                  <button
+                    type="button"
+                    className="ml-2 min-h-11 rounded-lg border px-3 font-bold"
+                    onClick={() => {
+                      setTopicsState("loading");
+                      setRefreshKey((value) => value + 1);
+                    }}
+                  >
+                    다시 불러오기
+                  </button>
+                </div>
+              ) : (
+                <p className="text-gray-500">아직 등록된 주제가 없습니다.</p>
+              )}
+            </div>
           )}
 
           {selectedSession && (

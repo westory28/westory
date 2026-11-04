@@ -17,6 +17,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
+import InfoHelp from "../../../components/common/InfoHelp";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import "./performance-score-view.css";
@@ -41,6 +42,7 @@ import {
   WRITTEN_EXAM_SCORE_KIND,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
+  getPerformanceScoreVersion,
   hasEnteredPerformanceScore,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
@@ -48,6 +50,7 @@ import {
   loadPerformanceScoreWarningConsent,
   loadUserPerformanceScoreObjections,
   loadUserPerformanceScoreRecords,
+  matchesReviewedPerformanceScores,
   normalizeSchoolValue,
   normalizeStudentName,
   normalizePerformanceScoreSettings,
@@ -289,8 +292,40 @@ const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
 const getRecordScoreId = (record: PerformanceScoreRecord) =>
   record.id || record.rosterId || "";
 
-const isRecordConfirmed = (record: PerformanceScoreRecord) =>
-  hasStoredSignature(record) || hasStoredSignature(record.confirmation);
+const getScoreDetailVisitKey = (record: PerformanceScoreRecord) =>
+  JSON.stringify([
+    getRecordScoreId(record),
+    getPerformanceScoreVersion(record.updatedAt),
+  ]);
+
+const getPerformanceDetailTabs = (records: PerformanceScoreRecord[]) => {
+  const orders = records.map((record) => {
+    const order = Number(record.assessmentOrder);
+    if (Number.isSafeInteger(order) && order > 0) return order;
+    const fromTitle = /^\s*(\d+)\s*차(?=\s|수행평가)/.exec(record.title);
+    return fromTitle ? Number(fromTitle[1]) : 0;
+  });
+  const assigned = new Set(orders);
+  let fallback = 1;
+  const tabs = records.map((record, index) => {
+    let order = orders[index];
+    if (!order) {
+      while (assigned.has(fallback)) fallback += 1;
+      order = fallback++;
+    }
+    return {
+      record,
+      id: getRecordScoreId(record),
+      order,
+      label: `${order}차 수행평가`,
+      visitKey: getScoreDetailVisitKey(record),
+    };
+  });
+  return tabs.sort((left, right) => left.order - right.order);
+};
+
+const isRecordConfirmed = (record: PerformanceScoreRecord | undefined) =>
+  hasStoredSignature(record) || hasStoredSignature(record?.confirmation);
 
 const hasStoredSignature = (data: unknown) =>
   typeof data === "object" &&
@@ -492,7 +527,29 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   scoreKind = PERFORMANCE_SCORE_KIND,
   copy,
 }) => {
-  const { currentUser, userData, config } = useAuth();
+  const auth = useAuth();
+  const { year, semester } = getYearSemester(auth.config);
+  return (
+    <ScopedScoreConfirmationView
+      key={JSON.stringify([
+        auth.currentUser?.uid,
+        year,
+        semester,
+        scoreKind,
+        auth.userData?.enrollmentStatus,
+        auth.userData?.registrationApprovalStatus,
+      ])}
+      auth={auth}
+      scoreKind={scoreKind}
+      copy={copy}
+    />
+  );
+};
+
+const ScopedScoreConfirmationView: React.FC<
+  ScoreConfirmationViewProps & { auth: ReturnType<typeof useAuth> }
+> = ({ scoreKind = PERFORMANCE_SCORE_KIND, copy, auth }) => {
+  const { currentUser, userData, config } = auth;
   const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
   const resolvedCopy = {
@@ -516,8 +573,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     PerformanceScoreAnswerSheetRequest[]
   >([]);
   const [selectedId, setSelectedId] = useState("");
+  const [visitedScoreDetails, setVisitedScoreDetails] = useState<
+    Map<string, string>
+  >(() => new Map());
   const [scoreMenuOpen, setScoreMenuOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [signatureDetailScope, setSignatureDetailScope] = useState("");
   const [signatureConsent, setSignatureConsent] = useState(false);
   const [signatureDrawn, setSignatureDrawn] = useState(false);
   const [signatureReviewStep, setSignatureReviewStep] = useState<
@@ -550,6 +611,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const requestDialogRef = useRef<HTMLElement | null>(null);
+  const signatureScopeActive = useRef(true);
+
+  React.useLayoutEffect(() => {
+    signatureScopeActive.current = true;
+    return () => {
+      signatureScopeActive.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!objectionModalOpen && !objectionResultModalOpen) return;
@@ -662,6 +731,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             ) || loaded[0]
           : loaded[0];
       setSelectedId((current) => {
+        if (scoreKind === PERFORMANCE_SCORE_KIND) {
+          return loaded.some((record) => getRecordScoreId(record) === current)
+            ? current
+            : "";
+        }
         const nextSelectedId = loaded.some((record) => record.id === current)
           ? current
           : defaultRecord?.id || "";
@@ -695,7 +769,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   const selectedRecord = useMemo(
     () =>
-      records.find((record) => record.id === selectedId) || records[0] || null,
+      records.find((record) => getRecordScoreId(record) === selectedId) ||
+      records[0] ||
+      null,
     [records, selectedId],
   );
   const selectedRecordHasScore = hasEnteredPerformanceScore(selectedRecord);
@@ -864,6 +940,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     };
   }, [
     visibleChartItems.length,
+    selectedId,
     selectedRecord?.id,
     selectedWrittenExamGroupKey,
   ]);
@@ -917,6 +994,44 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const pendingRecords = registeredRecords.filter(
     (record) => !isRecordConfirmed(record),
   );
+  const performanceDetailTabs = useMemo(
+    () =>
+      scoreKind === PERFORMANCE_SCORE_KIND
+        ? getPerformanceDetailTabs(records)
+        : [],
+    [records, scoreKind],
+  );
+  const registeredDetailTabs = performanceDetailTabs.filter(({ record }) =>
+    hasEnteredPerformanceScore(record),
+  );
+  const unvisitedDetailTabs = registeredDetailTabs.filter(
+    ({ id, visitKey }) => visitedScoreDetails.get(id) !== visitKey,
+  );
+  const currentDetailScope = JSON.stringify(
+    registeredDetailTabs.map(({ visitKey }) => visitKey).sort(),
+  );
+  const detailVisitRequired =
+    pendingRecords.length > 0 && unvisitedDetailTabs.length > 0;
+  const detailVisitMessage = detailVisitRequired
+    ? `서명하려면 ${unvisitedDetailTabs.map(({ label }) => label).join(", ")} 탭을 확인해 주세요.`
+    : "";
+  useEffect(() => {
+    if (!signatureModalOpen || signatureDetailScope === currentDetailScope)
+      return;
+    setSignatureModalOpen(false);
+    setSignatureImageDraft("");
+  }, [currentDetailScope, signatureDetailScope, signatureModalOpen]);
+
+  useEffect(() => {
+    setVisitedScoreDetails((previous) => {
+      const next = new Map<string, string>();
+      for (const { record, id, visitKey } of performanceDetailTabs) {
+        if (hasEnteredPerformanceScore(record) && previous.get(id) === visitKey)
+          next.set(id, visitKey);
+      }
+      return next.size === previous.size ? previous : next;
+    });
+  }, [performanceDetailTabs]);
   const signatureScoreSections = useMemo<SignatureScoreSection[]>(() => {
     if (pendingRecords.length === 0) return [];
 
@@ -1109,6 +1224,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const signatureButtonDisabled =
     !warningConsentCurrent ||
     pendingRecords.length === 0 ||
+    detailVisitRequired ||
     signatureBlockedByPendingRequest ||
     signatureActionPending;
   const signatureBlockedReasons = [
@@ -1296,6 +1412,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       });
       return;
     }
+    if (detailVisitRequired) {
+      showToast({
+        title: "수행평가 확인 필요",
+        message: detailVisitMessage,
+        tone: "warning",
+      });
+      return;
+    }
     if (allScoresConfirmed) {
       setSignatureError(
         "이미 점수 확인과 서명이 완료되었습니다. 재서명은 담당 교사가 반려한 경우에만 가능합니다.",
@@ -1303,6 +1427,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       return;
     }
     if (!pendingRecords.length) return;
+    setSignatureDetailScope(currentDetailScope);
     setSignatureConsent(false);
     signatureDrawnRef.current = false;
     setSignatureImageDraft("");
@@ -1575,6 +1700,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   };
 
   const moveToSignatureReview = () => {
+    if (detailVisitRequired || signatureDetailScope !== currentDetailScope) {
+      setSignatureError(
+        detailVisitMessage ||
+          "점수가 변경되었습니다. 수행평가 탭을 다시 확인해 주세요.",
+      );
+      return;
+    }
     const identityError = getStudentIdentityError();
     if (identityError) {
       setSignatureError(identityError);
@@ -1750,6 +1882,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   const submitSignatureConfirmation = async () => {
     if (!currentUser?.uid || signatureActionPending) return;
+    if (detailVisitRequired || signatureDetailScope !== currentDetailScope) {
+      setSignatureError(
+        detailVisitMessage ||
+          "점수가 변경되었습니다. 수행평가 탭을 다시 확인해 주세요.",
+      );
+      return;
+    }
     if (!warningConsentCurrent) {
       setSignatureError("안내 문구 동의를 저장한 뒤 서명할 수 있습니다.");
       return;
@@ -1804,7 +1943,54 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
     setConfirming(true);
     setSignatureError("");
+    const refreshPerformanceScores = () =>
+      loadUserPerformanceScoreRecords(currentUser.uid, {
+        year,
+        semester,
+        scoreKind,
+        fromServer: true,
+      });
+    const returnToChangedScores = (latest: PerformanceScoreRecord[]) => {
+      setSignatureModalOpen(false);
+      setSignatureImageDraft("");
+      const identityError = latest.length && getStudentIdentityError(latest);
+      if (identityError) {
+        setRecords([]);
+        setLoadError(identityError);
+        return;
+      }
+      setRecords(latest);
+      showToast({
+        tone: "warning",
+        title: "수행평가 점수가 변경되었습니다.",
+        message: "현재 등록된 점수의 세부 내용을 다시 확인한 뒤 서명해 주세요.",
+      });
+    };
+    let checkedFullSet = false;
     try {
+      const latestRecords =
+        scoreKind === PERFORMANCE_SCORE_KIND
+          ? await refreshPerformanceScores()
+          : null;
+      if (!signatureScopeActive.current) return;
+      const latestById =
+        latestRecords &&
+        new Map(latestRecords.map((record) => [record.id, record]));
+      if (latestRecords && latestById) {
+        if (
+          !matchesReviewedPerformanceScores(records, latestRecords) ||
+          getStudentIdentityError(latestRecords) ||
+          registeredRecords.some(
+            (record) =>
+              isRecordConfirmed(record) &&
+              !isRecordConfirmed(latestById.get(record.id)),
+          )
+        ) {
+          returnToChangedScores(latestRecords);
+          return;
+        }
+        checkedFullSet = true;
+      }
       const saveTargets = await Promise.all(
         recordsToConfirm.map(async (record) => {
           const scoreId = getRecordScoreId(record);
@@ -1817,6 +2003,17 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
             currentUser.uid,
           );
+          const cached = latestById?.get(scoreId);
+          if (cached) {
+            if (cached.objectionPending === true)
+              throw { code: "permission-denied" };
+            return {
+              record,
+              scoreId,
+              ref,
+              alreadyConfirmed: isRecordConfirmed(cached),
+            };
+          }
           const [snap, latestScore] = await Promise.all([
             getDocFromServer(ref),
             getDocFromServer(
@@ -1830,20 +2027,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             ),
           ]);
           const currentData = latestScore.data();
-          const sameVersion = (left: unknown, right: unknown) => {
-            const a = left as
-              | { seconds?: number; nanoseconds?: number }
-              | undefined;
-            const b = right as
-              | { seconds?: number; nanoseconds?: number }
-              | undefined;
-            return Boolean(
-              a &&
-              b &&
-              a.seconds === b.seconds &&
-              a.nanoseconds === b.nanoseconds,
-            );
-          };
           if (
             !latestScore.exists() ||
             currentData?.uid !== currentUser.uid ||
@@ -1851,7 +2034,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             currentData?.academicYear !== year ||
             currentData?.semester !== semester ||
             !hasEnteredPerformanceScore(currentData) ||
-            !sameVersion(currentData?.updatedAt, record.updatedAt) ||
+            !getPerformanceScoreVersion(record.updatedAt) ||
+            getPerformanceScoreVersion(currentData?.updatedAt) !==
+              getPerformanceScoreVersion(record.updatedAt) ||
             currentData?.objectionPending === true
           ) {
             throw { code: "permission-denied" };
@@ -1864,10 +2049,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             alreadyConfirmed:
               snap.exists() &&
               hasStoredSignature(stored) &&
-              (stored?.scoreUpdatedAt
-                ? sameVersion(stored.scoreUpdatedAt, record.updatedAt)
-                : getTimestampMillis(stored?.confirmedAt) >=
-                  getTimestampMillis(record.updatedAt)),
+              Boolean(
+                applyPerformanceScoreConfirmation(
+                  record,
+                  stored as PerformanceScoreConfirmation,
+                ).signatureImage,
+              ),
           };
         }),
       );
@@ -1875,6 +2062,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         (target) => !target.alreadyConfirmed,
       );
 
+      if (!signatureScopeActive.current) return;
       if (targetsToWrite.length > 0) {
         const batch = writeBatch(db);
         targetsToWrite.forEach(({ record, ref }) => {
@@ -1924,8 +2112,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               data?.rosterId !== scoreId ||
               !data?.confirmedAt ||
               !verified?.signatureImage ||
-              getTimestampMillis(latest?.updatedAt) !==
-                getTimestampMillis(record.updatedAt)
+              getPerformanceScoreVersion(latest?.updatedAt) !==
+                getPerformanceScoreVersion(record.updatedAt)
             ) {
               throw new Error(
                 "The saved score signature could not be verified.",
@@ -1950,11 +2138,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         try {
           // A teacher may publish another assessment while the student signs.
           // Refresh the full set, without signing any newly discovered score.
-          refreshedRecords = await loadUserPerformanceScoreRecords(
-            currentUser.uid,
-            { year, semester, scoreKind, fromServer: true },
-          );
+          refreshedRecords = await refreshPerformanceScores();
         } catch (error) {
+          if (!signatureScopeActive.current) return;
           console.error("Failed to refresh scores after signing:", error);
           setRecords([]);
           setSignatureModalOpen(false);
@@ -1965,20 +2151,39 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           return;
         }
       }
+      if (!signatureScopeActive.current) return;
       setRecords(refreshedRecords);
       setSignatureModalOpen(false);
       setSignatureImageDraft("");
       window.setTimeout(() => {
+        if (!signatureScopeActive.current) return;
         window.alert(
-          refreshedRecords.some(
-            (record) =>
-              hasEnteredPerformanceScore(record) && !isRecordConfirmed(record),
-          )
+          !refreshedRecords.some(hasEnteredPerformanceScore) ||
+            refreshedRecords.some(
+              (record) =>
+                hasEnteredPerformanceScore(record) &&
+                !isRecordConfirmed(record),
+            )
             ? "서명을 저장했습니다. 추가되거나 변경된 점수를 확인하고 다시 서명해 주세요."
             : "서명이 완료되었습니다.",
         );
       }, 0);
     } catch (error) {
+      if (!signatureScopeActive.current) return;
+      if (checkedFullSet) {
+        // A concurrent edit can invalidate the atomic batch or its readback.
+        try {
+          const latest = await refreshPerformanceScores();
+          if (!signatureScopeActive.current) return;
+          if (!matchesReviewedPerformanceScores(records, latest)) {
+            returnToChangedScores(latest);
+            return;
+          }
+        } catch {
+          // Keep the original save error and draft when refresh is unavailable.
+        }
+      }
+      if (!signatureScopeActive.current) return;
       console.error("Failed to confirm performance score:", error);
       setSignatureError(getSignatureSaveErrorMessage(error));
     } finally {
@@ -2271,16 +2476,35 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     );
   }
 
-  const scoreNavigation = selectedRecord ? (
+  const scoreNavigation = !selectedRecord ? null : scoreKind ===
+    PERFORMANCE_SCORE_KIND ? (
+    <nav
+      className="ws-page-tabs performance-score-navigation"
+      aria-label="수행평가 목록 메뉴"
+    >
+      {performanceDetailTabs.map(({ record, id, label, visitKey }) => (
+        <div key={id} className="performance-score-tab">
+          <button
+            type="button"
+            aria-current={selectedId === id ? "page" : undefined}
+            onClick={() => {
+              setSelectedId(id);
+              if (hasEnteredPerformanceScore(record)) {
+                setVisitedScoreDetails((previous) =>
+                  new Map(previous).set(id, visitKey),
+                );
+              }
+            }}
+          >
+            {label}
+          </button>
+          <InfoHelp label={`${label} 전체 평가명`}>{record.title}</InfoHelp>
+        </div>
+      ))}
+    </nav>
+  ) : (
     <PortalSubNavigation
-      title={
-        scoreKind === PERFORMANCE_SCORE_KIND ? "수행평가 목록" : "점수 목록"
-      }
-      className={
-        scoreKind === PERFORMANCE_SCORE_KIND
-          ? "performance-score-navigation"
-          : undefined
-      }
+      title="점수 목록"
       activeLabel={
         activeWrittenExamGroup
           ? `${selectedRecord.title} · ${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}`
@@ -2483,7 +2707,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             );
           })}
     </PortalSubNavigation>
-  ) : null;
+  );
   const scoreHeader = (
     <div className="ws-flat-section mb-5">
       <div className="ws-page-header">
@@ -2548,7 +2772,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   type="button"
                   onClick={openSignatureModal}
                   disabled={signatureButtonDisabled}
-                  title={signatureBlockedMessage || undefined}
+                  title={
+                    signatureBlockedMessage || detailVisitMessage || undefined
+                  }
+                  aria-describedby={
+                    detailVisitRequired
+                      ? "performance-score-visit-requirement"
+                      : undefined
+                  }
                   className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   점수 확인 및 서명하기
@@ -2562,6 +2793,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           {signatureBlockedMessage}
         </div>
       )}
+      {detailVisitRequired && (
+        <p
+          id="performance-score-visit-requirement"
+          className="mt-2 text-sm font-bold leading-6 text-slate-600"
+        >
+          {detailVisitMessage}
+        </p>
+      )}
     </div>
   );
   const scoreBody = !selectedRecord ? (
@@ -2573,7 +2812,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         {resolvedCopy.emptyDescription}
       </p>
     </div>
-  ) : (
+  ) : scoreKind === PERFORMANCE_SCORE_KIND &&
+    selectedId !== getRecordScoreId(selectedRecord) ? null : (
     <section
       className={`min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${scoreKind === PERFORMANCE_SCORE_KIND ? "" : "mt-6 md:mt-0"}`}
     >
@@ -2758,10 +2998,10 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   return (
     <>
       {scoreKind === PERFORMANCE_SCORE_KIND ? (
-        <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page performance-score-workspace">
-          {scoreNavigation}
+        <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--tabs performance-score-workspace">
           <div className="teacher-sub-content">
             {scoreHeader}
+            {scoreNavigation}
             {scoreBody}
           </div>
         </PortalWorkspace>

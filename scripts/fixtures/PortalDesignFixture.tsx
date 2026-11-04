@@ -8,6 +8,8 @@ import PortalWorkspace, {
 } from "../../src/components/common/PortalWorkspace";
 import HistoryMaps from "../../src/components/common/HistoryMaps";
 import Settings from "../../src/pages/teacher/Settings";
+import Note from "../../src/pages/student/lesson/Note";
+import ThinkCloud from "../../src/pages/student/lesson/ThinkCloud";
 import { historyAtlasDataset } from "../../src/data/historyAtlasContent";
 import "../../src/assets/index.css";
 import "../../src/components/layout/teacherLayout.css";
@@ -117,7 +119,13 @@ function Fixture() {
           onToggleSidebar={() => setCollapsed(!collapsed)}
         />
         <main className="min-h-0 w-full flex-1">
-          {kind === "settings" ? (
+          {kind === "learning" ? (
+            location.pathname.endsWith("/think-cloud") ? (
+              <ThinkCloud />
+            ) : (
+              <Note />
+            )
+          ) : kind === "settings" ? (
             <Settings />
           ) : kind === "map" ? (
             <PortalWorkspace as="div" className="history-atlas-page">

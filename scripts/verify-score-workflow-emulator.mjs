@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
 
 if (!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || "")
   || !/^127\.0\.0\.1:\d+$/.test(process.env.FIREBASE_AUTH_EMULATOR_HOST || "")) {
@@ -183,6 +183,28 @@ try {
   const nextVersion = Timestamp.fromMillis(Date.now());
   await assertSucceeds(updateDoc(doc(teacherDb, scorePath), { totalScore: 16, updatedAt: nextVersion }));
   await assertFails(setDoc(doc(studentDb, confirmationPath), signature()));
+  const siblingId = "signature-batch-sibling";
+  const siblingPath = `users/${uid}/performance_scores/${siblingId}`;
+  const siblingConfirmation = doc(studentDb, siblingPath, "confirmations", uid);
+  await assertSucceeds(setDoc(doc(teacherDb, siblingPath), { ...score, rosterId: siblingId }));
+  const staleBatch = writeBatch(studentDb);
+  staleBatch.set(doc(studentDb, confirmationPath), signature(version));
+  staleBatch.set(siblingConfirmation, { ...signature(version), rosterId: siblingId });
+  await assertFails(staleBatch.commit());
+  assert.equal((await getDoc(siblingConfirmation)).exists(), false);
+  const maintenance = admin.doc("site_settings/student_maintenance");
+  const now = require("firebase-admin/firestore").Timestamp.now();
+  await maintenance.set({
+    enabled: false, blockedRoles: ["student"],
+    bypassUids: Array.from({ length: 20 }, (_, index) => `fixture-${index}`),
+    title: "점검", message: "검증", startedAt: null,
+    updatedAt: now, updatedBy: teacher.uid, revision: 1,
+  });
+  await assertSucceeds(setDoc(siblingConfirmation, { ...signature(version), rosterId: siblingId }));
+  await maintenance.delete();
+  await assertSucceeds(deleteDoc(doc(teacherDb, siblingConfirmation.path)));
+  await assertSucceeds(deleteDoc(doc(teacherDb, siblingPath)));
+  check("a stale reviewed version rejects the whole signature batch; a current sibling can sign with valid maintenance configuration");
   await assertSucceeds(setDoc(doc(studentDb, confirmationPath), signature(nextVersion)));
   await assertSucceeds(deleteDoc(doc(teacherDb, confirmationPath)));
   const consentRef = admin.doc(`users/${uid}/performance_score_consents/current`);

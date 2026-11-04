@@ -103,6 +103,7 @@ export interface PerformanceScoreRecord {
   uid: string;
   items: PerformanceScoreItem[];
   enteredScoreCount?: number;
+  objectionPending?: boolean;
   totalScore: number;
   totalMaxScore: number;
   feedback: string;
@@ -670,8 +671,8 @@ export const loadUserPerformanceScoreRecords = async (
     .map(
       (item) =>
         ({
-          id: item.id,
           ...item.data(),
+          id: item.id,
         }) as PerformanceScoreRecord,
     )
     .filter(
@@ -732,23 +733,60 @@ export const loadPerformanceScoreConfirmation = async (
   }
 };
 
+export const getPerformanceScoreVersion = (value: unknown): string => {
+  if (!value) return "";
+  const stamp = value as {
+    seconds?: number;
+    nanoseconds?: number;
+    toMillis?: () => number;
+  };
+  if (
+    Number.isInteger(stamp.seconds) &&
+    Number.isInteger(stamp.nanoseconds ?? 0)
+  )
+    return `${stamp.seconds}:${stamp.nanoseconds ?? 0}`;
+  const millis =
+    value instanceof Date
+      ? value.getTime()
+      : typeof stamp.toMillis === "function"
+        ? stamp.toMillis()
+        : undefined;
+  if (typeof millis !== "number" || !Number.isFinite(millis)) return "";
+  const seconds = Math.floor(millis / 1000);
+  return `${seconds}:${Math.round((millis - seconds * 1000) * 1e6)}`;
+};
+
+export const matchesReviewedPerformanceScores = (
+  reviewed: PerformanceScoreRecord[],
+  latest: PerformanceScoreRecord[],
+) => {
+  const expected = reviewed.filter(hasEnteredPerformanceScore);
+  const current = latest.filter(hasEnteredPerformanceScore);
+  if (!expected.length || expected.length !== current.length) return false;
+  const byId = new Map(current.map((record) => [record.id, record]));
+  return expected.every((record) => {
+    const found = byId.get(record.id);
+    const version = getPerformanceScoreVersion(record.updatedAt);
+    return Boolean(
+      found &&
+      record.id &&
+      record.id === record.rosterId &&
+      found.rosterId === record.rosterId &&
+      found.uid === record.uid &&
+      found.academicYear === record.academicYear &&
+      found.semester === record.semester &&
+      normalizePerformanceScoreKind(found.scoreKind) ===
+        normalizePerformanceScoreKind(record.scoreKind) &&
+      version &&
+      version === getPerformanceScoreVersion(found.updatedAt),
+    );
+  });
+};
+
 export const applyPerformanceScoreConfirmation = (
   record: PerformanceScoreRecord,
   confirmation: PerformanceScoreConfirmation | null,
 ): PerformanceScoreRecord => {
-  const timestampKey = (value: unknown): string => {
-    if (!value) return "";
-    if (value instanceof Date) return String(value.getTime());
-    const stamp = value as {
-      seconds?: number;
-      nanoseconds?: number;
-      toMillis?: () => number;
-    };
-    if (typeof stamp.seconds === "number")
-      return `${stamp.seconds}:${stamp.nanoseconds || 0}`;
-    if (typeof stamp.toMillis === "function") return String(stamp.toMillis());
-    return "";
-  };
   const timestampParts = (value: unknown): [number, number] => {
     if (value instanceof Date)
       return [
@@ -770,8 +808,9 @@ export const applyPerformanceScoreConfirmation = (
     confirmation.uid === record.uid &&
     confirmation.rosterId === record.rosterId &&
     (confirmation.scoreUpdatedAt
-      ? timestampKey(confirmation.scoreUpdatedAt) ===
-        timestampKey(record.updatedAt)
+      ? Boolean(getPerformanceScoreVersion(record.updatedAt)) &&
+        getPerformanceScoreVersion(confirmation.scoreUpdatedAt) ===
+          getPerformanceScoreVersion(record.updatedAt)
       : !record.updatedAt ||
         confirmedSeconds > updatedSeconds ||
         (confirmedSeconds === updatedSeconds &&

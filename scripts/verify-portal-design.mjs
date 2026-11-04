@@ -1,7 +1,7 @@
 /**
  * Real portal header/sidebar, sub-navigation, maps and repository CSS.
  * Synthetic identities/read services only; all network requests stay on localhost.
- * Run with --serve for a persistent fixture, or --kind=map|tabs|tree|settings to narrow QA.
+ * Run with --serve for a persistent fixture, or --kind=map|tabs|tree|settings|learning to narrow QA.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -32,7 +32,7 @@ export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
 export const getDoc=async(ref)=>({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
 export const getDocFromServer=getDoc;export const getDocs=async()=>({docs:[],empty:true,size:0});
 export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>({});export const serverTimestamp=()=>({});
-window.portalDesignQa={writes:[]};
+window.portalDesignQa={writes:[], lessonReads:[], attempts:0};
 const forbidWrite=()=>{window.portalDesignQa.writes.push("blocked");throw new Error("Fixture forbids all application writes")};
 export const setDoc=forbidWrite, updateDoc=forbidWrite, deleteDoc=forbidWrite, addDoc=forbidWrite, runTransaction=forbidWrite;
 export const getHttpsCallable=()=>forbidWrite;export const createManagedNotifications=forbidWrite;
@@ -42,6 +42,23 @@ export const preloadStudentWeplay=()=>{};
 export const invalidateStudentRankPromotionSnapshotCache=()=>{};
 export const getPointRankDefaultEmojiValue=()=>"😀";
 export const loadStudentRankPromotionSnapshot=async()=>({wallet:{balance:0},rank:null,policy:{rankPolicy:null}});
+const mode=new URLSearchParams(location.search).get('mode');
+export const readStudentVisibleCurriculumTree=async()=>{
+  if(mode==='retry' && window.portalDesignQa.attempts++===0)throw Error('synthetic outage');
+  return mode==='empty'?[]:[{id:'major',title:'검증 대단원',children:[{id:'middle',title:'검증 중단원',children:[{id:'unit',title:'검증 소단원'}]}]}];
+};
+export const readStudentLesson=async(_,id)=>{
+  window.portalDesignQa.lessonReads.push(id);
+  return {unitId:id,title:'검증 소단원',contentHtml:'<p>선택한 수업 본문</p>',isVisibleToStudents:true};
+};
+export const readStudentVisibleLessons=async()=>[];
+export const subscribeThinkCloudState=(_config,_audience,_id,success,failure)=>{
+  if(mode==='retry' && window.portalDesignQa.attempts++===0) failure(Error('synthetic outage'));
+  else success({thinkCloudSessions:[], thinkCloudResponses:[], thinkCloudManagedClasses:[]});
+  return ()=>{};
+};
+export const saveLessonAnswers=forbidWrite, recordLessonCorePointFind=forbidWrite, claimLessonCorePointReward=forbidWrite;
+export const buildThinkCloudRewardSourceId=forbidWrite, claimPointActivityReward=forbidWrite, submitThinkCloudResponse=forbidWrite;
 `;
 const assets = new Map();
 const bundle = await build({
@@ -52,7 +69,7 @@ const bundle = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(evidence, "fixture.js"),
-  loader: { ".svg": "dataurl", ".webp": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl", ".html": "text" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -61,7 +78,7 @@ const bundle = await build({
         plugin.onResolve(
           {
             filter:
-              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)common\/AppToastProvider$|^\.\/AppToastProvider$|^firebase\/firestore$|^\.\/firebase$|(?:^|\/)lib\/(firebase|weplayPreload|pointRankPromotion|pointRanks|points|siteSettings|semesterReadiness|notifications)$/,
+              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)common\/AppToastProvider$|^\.\/AppToastProvider$|^firebase\/firestore$|^\.\/firebase$|(?:^|\/)lib\/(firebase|weplayPreload|pointRankPromotion|pointRanks|points|siteSettings|semesterReadiness|notifications|studentLessonReadCache|thinkCloudLifecycle|learningCommands)$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -87,6 +104,16 @@ const bundle = await build({
         plugin.onResolve({ filter: /QuillEditor$/ }, () => ({
           path: "editor",
           namespace: "read-only-widget",
+        }));
+        plugin.onResolve(
+          { filter: /(?:LessonWorksheetStage|StorageImage)$/ },
+          () => ({
+            path: "unused-lesson-media",
+            namespace: "fixture-media",
+          }),
+        );
+        plugin.onLoad({ filter: /.*/, namespace: "fixture-media" }, () => ({
+          contents: "export default function Media(){return null}",
         }));
         plugin.onLoad(
           { filter: /.*/, namespace: "read-only-widget" },
@@ -234,7 +261,9 @@ const sizes = [
 const kindFilter = process.argv
   .find((value) => value.startsWith("--kind="))
   ?.split("=")[1];
-const kinds = kindFilter ? [kindFilter] : ["map", "tabs", "tree", "settings"];
+const kinds = kindFilter
+  ? [kindFilter]
+  : ["map", "tabs", "tree", "settings", "learning"];
 async function noOverflow(page, label) {
   const size = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
@@ -244,6 +273,58 @@ async function noOverflow(page, label) {
     size.scroll <= size.viewport + 1,
     `${label}: horizontal overflow ${size.scroll}/${size.viewport}`,
   );
+}
+async function verifyStudentLearning(page, label) {
+  const url = (path, mode = "") =>
+    `${origin}/?kind=learning&mode=${mode}&page=${path}#/student/lesson/${path}`;
+  await page.goto(url("note"));
+  const prompt = page.getByRole("button", {
+    name: "수업 목차에서 학습할 단원을 선택해 주세요.",
+  });
+  await prompt.waitFor();
+  assert.equal(await prompt.locator("svg").isVisible(), true);
+  assert.deepEqual(
+    await page.evaluate(() => window.portalDesignQa.lessonReads),
+    [],
+  );
+  await noOverflow(page, label);
+  await page.screenshot({
+    path: path.join(evidence, `${label}.png`),
+    fullPage: true,
+  });
+  await prompt.press("Enter");
+  const group = page.getByRole("button", { name: "검증 대단원" });
+  await page.waitForFunction(
+    () => document.activeElement?.textContent.trim() === "검증 대단원",
+  );
+  await group.press("Enter");
+  assert.equal(await group.getAttribute("aria-expanded"), "false");
+  await group.press("Enter");
+  await page.getByRole("button", { name: "검증 소단원" }).press("Enter");
+  await page.getByText("선택한 수업 본문").waitFor();
+  assert.deepEqual(
+    await page.evaluate(() => window.portalDesignQa.lessonReads),
+    ["unit"],
+  );
+  await page.reload();
+  await page.getByText("선택한 수업 본문").waitFor();
+  assert.equal(await prompt.count(), 0);
+  await page.goto(url("note", "empty"));
+  await page.getByText("공개된 수업 자료가 없습니다.").waitFor();
+  assert.equal(await prompt.count(), 0);
+  await page.goto(url("note", "retry"));
+  await page
+    .getByRole("alert")
+    .getByRole("button", { name: "다시 불러오기" })
+    .click();
+  await prompt.waitFor();
+  await page.goto(url("think-cloud", "retry"));
+  await page
+    .getByRole("alert")
+    .getByRole("button", { name: "다시 불러오기" })
+    .click();
+  await page.getByText("아직 등록된 주제가 없습니다.").waitFor();
+  assert.deepEqual(await page.evaluate(() => window.portalDesignQa.writes), []);
 }
 async function mapLayout(page, selector, width, height) {
   const layout = await page.locator(selector).evaluate((el) => {
@@ -651,6 +732,7 @@ try {
     for (const kind of kinds)
       for (const [width, height] of sizes) {
         if (portal === "student" && kind === "settings") continue;
+        if (portal === "teacher" && kind === "learning") continue;
         const page = await browser.newPage({ viewport: { width, height } });
         page.setDefaultTimeout(10000);
         const pageErrors = [];
@@ -665,19 +747,31 @@ try {
         );
         const label = `${portal}-${kind}-${width}x${height}`;
         try {
-          await page.goto(`${origin}/?kind=${kind}#/${portal}/lesson/maps`);
-          if (kind === "settings") {
+          if (kind !== "learning")
+            await page.goto(`${origin}/?kind=${kind}#/${portal}/lesson/maps`);
+          if (kind === "learning") {
+            await verifyStudentLearning(page, label);
+            checks.push({
+              label,
+              keyboard: true,
+              lessonSelection: true,
+              retry: true,
+            });
+          } else if (kind === "settings") {
             const navigation = page.locator(".teacher-sub-navigation");
             await navigation.waitFor();
             const menu = navigation.locator("nav");
-            assert.equal(await menu.isVisible(), true);
+            const mobile = width < 768;
+            assert.equal(await menu.isVisible(), !mobile);
             const navBox = await navigation.boundingBox();
             const contentBox = await page
               .locator("#teacher-settings-content")
               .boundingBox();
             assert(
-              navBox.y + navBox.height <= contentBox.y + 1,
-              "Settings sections sit above the settings body",
+              mobile
+                ? navBox.y + navBox.height <= contentBox.y + 1
+                : navBox.x + navBox.width <= contentBox.x + 1,
+              "Settings use a desktop tree and a mobile disclosure",
             );
             const sectionLabels = [
               "기본 환경 설정",
@@ -689,9 +783,11 @@ try {
               "개인정보 동의 관리",
             ];
             for (const sectionLabel of sectionLabels) {
+              if (mobile) await navigation.locator(".teacher-settings-menu-toggle").press("Enter");
               const button = menu.getByRole("button", {
                 name: sectionLabel,
                 exact: true,
+                includeHidden: true,
               });
               await button.press("Enter");
               await page

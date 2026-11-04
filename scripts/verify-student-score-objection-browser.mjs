@@ -30,10 +30,11 @@ export const state={scenario,events:[],toasts:[],objections:[],legacy:[],hold:fa
 const written=scenario.has('written');
 export const records=[{id:'qa-score',rosterId:'qa-score',uid:'qa-student',scoreKind:written?'written_exam_essay':'performance',title:written?'가상 정기시험':'사료 해석과 역사적 판단을 설명하는 수행평가',subject:'역사',academicYear:'2026',semester:'2',grade:'3',class:'1',number:'1',studentName:'가상학생',items:written?[{name:'1-(1)',itemKey:'1-(1)',score:7,maxScore:10},{name:'1-(2)',itemKey:'1-(2)',score:8,maxScore:10}]:[{name:'자료 해석',score:15,maxScore:20}],totalScore:15,totalMaxScore:20,feedback:'자료를 읽고 근거를 잘 정리했습니다.',evidence:'가상 채점 근거',updatedAt:{seconds:1801850400},...(scenario.has('signed')?{signatureName:'가상학생',signatureImage:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=='}:{})}];
 if(scenario.has('legacy'))state.legacy.push({id:'qa-legacy',uid:'qa-student',scoreId:'qa-score',status:'pending',reason:'기존 답안지 확인 요청'});
-if(scenario.has('blank-pair')||scenario.has('blank-only')){
+if(scenario.has('blank-pair')||scenario.has('blank-only')||scenario.has('registered-pair')){
  records[0]={...records[0],title:'1차 역사 자료 해석',assessmentOrder:1,enteredScoreCount:1,items:[{name:'자료 해석',score:15,maxScore:20,scoreEntered:true}]};
  records.push({...records[0],id:'qa-blank',rosterId:'qa-blank',title:'2차 역사적 판단 글쓰기',assessmentOrder:2,enteredScoreCount:0,totalScore:0,items:[{name:'판단 글쓰기',score:0,maxScore:20,scoreEntered:false}],feedback:'',evidence:''});
  if(scenario.has('blank-only'))records.shift();
+ if(scenario.has('registered-pair'))records[1]={...records[1],enteredScoreCount:1,items:[{...records[1].items[0],scoreEntered:true}]};
 }
 if(scenario.has('real-zero'))records[0]={...records[0],enteredScoreCount:1,totalScore:0,items:[{name:'자료 해석',score:0,maxScore:20,scoreEntered:true}]};
 if(scenario.has('blank-pending')||scenario.has('stale-pending')){
@@ -44,6 +45,7 @@ if(scenario.has('blank-pending')||scenario.has('stale-pending')){
 if(scenario.has('layout')){
  records[0].title='하여가와 단심가 다시 쓰기(논술형)';
  records[0].assessmentOrder=1;
+ if(scenario.has('legacy-order'))delete records[0].assessmentOrder;
  if(records[1])records[1].title='조선 시대 신분 질서와 변화의 모습을 설명하기';
  records.reverse();
 }
@@ -57,6 +59,7 @@ window.studentScoreQa=state;
 export const collection=(db,...parts)=>({path:parts.join('/')});export const doc=(db,...parts)=>({path:parts.join('/'),id:parts.at(-1)});export const query=(ref)=>ref;export const orderBy=()=>({});export const where=()=>({});
 const readScores=async(ref,fromServer)=>{if(ref.path!=='users/qa-student/performance_scores')throw new Error('Unexpected score collection '+ref.path);state.events.push({name:'scoreListRead',fromServer});if(state.scenario.has('loaderror')||state.failNextScoreListRead){state.failNextScoreListRead=false;throw new Error('Synthetic read failure');}return{docs:[...state.serverRecords.values()].map(record=>({id:record.id,data:()=>structuredClone(record)}))};};
 export const getDocs=(ref)=>readScores(ref,false);export const getDocsFromServer=(ref)=>readScores(ref,true);
+export const onSnapshot=()=>{throw new Error('Unexpected realtime subscription');};
 export const getDoc=async(ref)=>{state.events.push({name:'serverRead',path:ref.path});const value=ref.path.includes('/confirmations/')?state.confirmations.get(ref.path):state.serverRecords.get(ref.id);return{id:ref.id,exists:()=>Boolean(value),data:()=>value};};export const getDocFromServer=getDoc;
 export const serverTimestamp=()=>({seconds:++state.clock,nanoseconds:0});export const setDoc=async()=>{throw new Error('Unexpected direct write')};
 export const writeBatch=()=>{const pending=[];return{set:(ref,value)=>pending.push({ref,value}),commit:async()=>{for(const{ref,value}of pending){if(!ref.path.includes('/confirmations/'))throw new Error('Unexpected non-signature write');state.confirmations.set(ref.path,value);state.events.push({name:'signature',path:ref.path,rosterId:value.rosterId});}state.afterSignatureCommit?.();}};};`,
@@ -82,8 +85,7 @@ return{objectionSavedCount:1,objectionSkippedProcessedCount:0,recipientCount:1,c
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
   "qa-archive-boundary": `export const SemesterArchiveBanner=()=>null;export const SemesterArchiveUnavailable=()=>null;export const isArchiveUnavailableRoute=()=>false;`,
   "qa-null-component": `export default ()=>null;`,
-  "qa-rank-promotion": `export const loadStudentRankPromotionSnapshot=async()=>({rank:null,wallet:{balance:0},policy:{rankPolicy:{}}});export const invalidateStudentRankPromotionSnapshotCache=()=>{};`,
-  "qa-point-ranks": `export const getPointRankDefaultEmojiValue=()=>'';`,
+  "qa-rank-promotion": `import {resolvePointRankPolicy} from '${root}/src/lib/pointRanks.ts';export const loadStudentRankPromotionSnapshot=async()=>({rank:null,wallet:{balance:0},policy:{rankPolicy:resolvePointRankPolicy()}});export const invalidateStudentRankPromotionSnapshotCache=()=>{};`,
 };
 const moduleFor = (request) => {
   const value = request.replaceAll("\\", "/");
@@ -103,7 +105,6 @@ const moduleFor = (request) => {
   )
     return "qa-null-component";
   if (/lib\/pointRankPromotion$/.test(value)) return "qa-rank-promotion";
-  if (/lib\/pointRanks$/.test(value)) return "qa-point-ranks";
 };
 const bundle = await build({
   stdin: {
@@ -116,7 +117,7 @@ const bundle = await build({
   metafile: true,
   format: "esm",
   platform: "browser",
-  loader: { ".css": "empty" },
+  loader: { ".css": "empty", ".webp": "dataurl" },
   define: {
     "process.env.NODE_ENV": '"production"',
     "import.meta.env.BASE_URL": '"/"',
@@ -154,7 +155,10 @@ const css = (
       "assets/css/style.css",
       "src/assets/index.css",
       "src/components/common/portalSubNavigation.css",
+      "src/components/common/portalPage.css",
+      "src/components/common/InfoHelp.css",
       "src/components/common/headerStudentWis.css",
+      "src/components/common/brandLogo.css",
       "src/components/common/Footer.css",
       "src/components/layout/teacherLayout.css",
       "src/components/layout/studentLayout.css",
@@ -211,8 +215,14 @@ try {
     headless: true,
   });
   const createPage = async (width, query = "") => {
-    const page = await browser.newPage({ viewport: { width, height: 900 } });
-    page.on("pageerror", (error) => report.pageErrors.push(error.message));
+    const page = await browser.newPage({
+      viewport: { width, height: 900 },
+      hasTouch: width === 390,
+    });
+    page.on("pageerror", (error) => {
+      report.pageErrors.push(error.message);
+      console.error("Student score fixture:", error.message);
+    });
     page.on("dialog", (dialog) => dialog.accept());
     await page.route("**/*", (route) =>
       route.request().url().startsWith(origin)
@@ -222,10 +232,15 @@ try {
     await page.goto(origin + query);
     return page;
   };
-  const openSignatureReview = async (page) => {
-    await page
-      .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
-      .click();
+  const signAction = (page) =>
+    page.getByRole("button", {
+      name: "점수 확인 및 서명하기",
+      exact: true,
+    });
+  const openSignatureReview = async (page, ordinals = [1]) => {
+    for (const ordinal of ordinals) await selectAssessment(page, ordinal);
+    assert.equal(await signAction(page).isEnabled(), true);
+    await signAction(page).click();
     const signing = page.locator("section").filter({
       has: page.getByRole("heading", {
         name: "수행평가 점수 확인 및 서명",
@@ -262,23 +277,96 @@ try {
       .waitFor();
     return signing;
   };
-  const selectAssessment = async (page, title) => {
-    const toggle = page.getByRole("button", {
-      name: /수행평가 목록 메뉴 펼치기/,
-    });
-    if (await toggle.isVisible()) await toggle.click();
-    await page
+  const assessmentChoice = (page, ordinal) =>
+    page
       .getByRole("navigation", { name: "수행평가 목록 메뉴", exact: true })
-      .getByRole("button", {
-        name: new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-      })
-      .click();
-    await page.getByRole("heading", { name: title, exact: true }).waitFor();
+      .getByRole("button", { name: `${ordinal}차 수행평가`, exact: true });
+  const selectAssessment = async (page, ordinal) => {
+    await assessmentChoice(page, ordinal).click();
   };
-  const selectBlankAssessment = (page) =>
-    selectAssessment(page, "2차 역사적 판단 글쓰기");
+  const selectBlankAssessment = async (page) => {
+    await selectAssessment(page, 2);
+    await page
+      .getByRole("heading", { name: "2차 역사적 판단 글쓰기", exact: true })
+      .waitFor();
+  };
   const firstTitle = "하여가와 단심가 다시 쓰기(논술형)";
   const secondTitle = "조선 시대 신분 질서와 변화의 모습을 설명하기";
+  for (const width of [390, 768, 1280]) {
+    const page = await createPage(width, `?layout&registered-pair${width === 768 ? "&legacy-order" : ""}`);
+    await assessmentChoice(page, 1).waitFor();
+    assert.deepEqual(await page.locator(".performance-score-tab > button").allTextContents(), ["1차 수행평가", "2차 수행평가"]);
+    const firstHeading = page.getByRole("heading", {
+      name: firstTitle,
+      exact: true,
+    });
+    await assessmentChoice(page, 1).waitFor();
+    assert.equal(await firstHeading.count(), 0);
+    assert.equal(await signAction(page).isDisabled(), true);
+    const help = page.getByRole("button", {
+      name: "2차 수행평가 전체 평가명",
+      exact: true,
+    });
+    const tooltip = page.getByRole("tooltip").filter({ hasText: secondTitle });
+    if (width === 390) {
+      await help.tap();
+    } else {
+      await help.hover();
+      await tooltip.waitFor();
+      await page.mouse.move(1, 1);
+      await assessmentChoice(page, 2).focus();
+      await page.keyboard.press("Tab");
+      assert.equal(
+        await help.evaluate((button) => document.activeElement === button),
+        true,
+      );
+    }
+    await tooltip.waitFor();
+    assert.equal(await help.getAttribute("aria-expanded"), "true");
+    assert.equal(await firstHeading.count(), 0);
+    assert.equal(await signAction(page).isDisabled(), true);
+    await page.keyboard.press("Escape");
+    await tooltip.waitFor({ state: "hidden" });
+    assert.equal(
+      await assessmentChoice(page, 1).getAttribute("aria-current"),
+      null,
+    );
+    await assessmentChoice(page, 2).focus();
+    await page.keyboard.press("Enter");
+    await page
+      .getByRole("heading", { name: secondTitle, exact: true })
+      .waitFor();
+    assert.equal(await signAction(page).isDisabled(), true);
+    await selectAssessment(page, 2);
+    assert.equal(await signAction(page).isDisabled(), true);
+    await selectAssessment(page, 1);
+    assert.equal(await signAction(page).isEnabled(), true);
+    assert.equal(
+      await page.evaluate(() => window.studentScoreQa.confirmations.size),
+      0,
+    );
+    await page.evaluate(() => window.studentScoreQa.remount());
+    await firstHeading.waitFor({ state: "hidden" });
+    await page.waitForFunction(() =>
+      Array.from(document.querySelectorAll("button")).some(
+        (button) =>
+          button.textContent.trim() === "점수 확인 및 서명하기" &&
+          button.disabled,
+      ),
+    );
+    await selectAssessment(page, 1);
+    assert.equal(await signAction(page).isDisabled(), true);
+    await selectAssessment(page, 2); // An explicitly registered zero still requires review.
+    assert.equal(await signAction(page).isEnabled(), true);
+    assert.equal(
+      await page.evaluate(() => window.studentScoreQa.confirmations.size),
+      0,
+    );
+    await page.close();
+  }
+  report.checks.push(
+    "390/768/1280: initial selection, full-title help via keyboard, hover or touch, and repeat visits to just one tab do not unlock signing. Both entered assessments, including a registered zero, require explicit visits again on re-entry. Navigation produces zero writes.",
+  );
   for (const width of [390, 768, 1280]) {
     const page = await createPage(width, "?layout&blank-pair&noconsent");
     const consentAction = page.getByRole("button", {
@@ -318,100 +406,43 @@ try {
       true,
     );
     await page.keyboard.press("Enter");
-    await page
-      .getByRole("heading", { name: firstTitle, exact: true })
-      .waitFor();
+    await assessmentChoice(page, 1).waitFor();
     assert.equal(
       await page.evaluate(() => window.studentScoreQa.consented),
       true,
     );
-    const subNavigation = page.getByRole("complementary", {
-      name: "수행평가 목록",
+    const subNavigation = page.getByRole("navigation", {
+      name: "수행평가 목록 메뉴",
       exact: true,
     });
-    const titles = subNavigation.locator(".performance-score-navigation-title");
-    const navItems = subNavigation
-      .getByRole("navigation", {
-        name: "수행평가 목록 메뉴",
-        exact: true,
-        includeHidden: true,
-      })
-      .getByRole("button", { includeHidden: true });
-    if (width < 768) {
-      const toggle = subNavigation.locator(".teacher-settings-menu-toggle");
-      await toggle.focus();
-      await page.keyboard.press("Enter");
-      assert.equal(await toggle.getAttribute("aria-expanded"), "true");
-    }
-    assert.deepEqual(await titles.allTextContents(), [firstTitle, secondTitle]);
-    assert.equal(await navItems.nth(0).getAttribute("aria-current"), "true");
-    const titleGeometry = await titles.evaluateAll((nodes) =>
+    const navItems = subNavigation.getByRole("button", {
+      name: /^\d+차 수행평가$/,
+    });
+    assert.equal(await navItems.count(), 2);
+    assert.equal(await navItems.nth(0).getAttribute("aria-current"), null);
+    const titleGeometry = await navItems.evaluateAll((nodes) =>
       nodes.map((node) => ({
-        title: node.title,
+        label: node.getAttribute("aria-label") || node.textContent.trim(),
         height: node.getBoundingClientRect().height,
-        lineHeight: parseFloat(getComputedStyle(node).lineHeight),
-        lineClamp: getComputedStyle(node).webkitLineClamp,
-        border: parseFloat(
-          getComputedStyle(node.closest("button")).borderBottomWidth,
-        ),
+        width: node.getBoundingClientRect().width,
       })),
     );
     for (const [index, item] of titleGeometry.entries()) {
-      assert.equal(item.title, [firstTitle, secondTitle][index]);
-      assert.equal(item.lineClamp, "2");
-      assert.ok(item.height <= item.lineHeight * 2 + 1, JSON.stringify(item));
-      assert.ok(item.border >= 1, JSON.stringify(item));
-    }
-    let sidebarGeometry = null;
-    if (width === 1280) {
-      sidebarGeometry = await page.evaluate(() => {
-        const main = document
-          .querySelector('[aria-label="학생 메뉴"]')
-          .getBoundingClientRect();
-        const sub = document
-          .querySelector('[aria-label="수행평가 목록"]')
-          .getBoundingClientRect();
-        const content = document
-          .querySelector(".performance-score-workspace > .teacher-sub-content")
-          .getBoundingClientRect();
-        return {
-          main: { x: main.x, right: main.right },
-          sub: { x: sub.x, right: sub.right, width: sub.width },
-          content: { x: content.x },
-        };
-      });
-      assert.equal(sidebarGeometry.main.x, 0);
-      assert.ok(
-        Math.abs(sidebarGeometry.sub.x - sidebarGeometry.main.right) <= 1,
-        JSON.stringify(sidebarGeometry),
-      );
-      assert.ok(
-        sidebarGeometry.content.x >= sidebarGeometry.sub.right - 1,
-        JSON.stringify(sidebarGeometry),
-      );
-      assert.ok(
-        titleGeometry.some((item) => item.height >= item.lineHeight * 2 - 1),
-      );
+      assert.match(item.label, new RegExp(`${index + 1}차 수행평가`));
+      assert.ok(item.height > 0 && item.width > 0, JSON.stringify(item));
     }
     await navItems.nth(1).focus();
     await page.keyboard.press("Enter");
     await page
       .getByRole("heading", { name: secondTitle, exact: true })
       .waitFor();
-    assert.equal(await navItems.nth(1).getAttribute("aria-current"), "true");
+    assert.equal(await navItems.nth(1).getAttribute("aria-current"), "page");
     assert.equal(await navItems.nth(0).getAttribute("aria-current"), null);
-    if (width < 768) {
-      const toggle = subNavigation.getByRole("button", {
-        name: /수행평가 목록 메뉴 펼치기/,
-      });
-      await toggle.click();
-      await page.keyboard.press("Escape");
-      assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-      assert.equal(
-        await toggle.evaluate((button) => button === document.activeElement),
-        true,
-      );
-    }
+    const tabs = await subNavigation.boundingBox();
+    const details = await page
+      .getByRole("heading", { name: secondTitle, exact: true })
+      .boundingBox();
+    assert.ok(tabs && details && tabs.y + tabs.height <= details.y + 1);
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -419,16 +450,17 @@ try {
       true,
     );
     await page.screenshot({
-      path: `${out}/student-sidebar-${width}.png`,
+      path: `${out}/student-score-tabs-${width}.png`,
       fullPage: true,
     });
-    report.screenshots.push(`student-sidebar-${width}.png`);
+    report.screenshots.push(`student-score-tabs-${width}.png`);
     report.layoutMetrics.push({
       width,
       consentGeometry,
       titleGeometry,
-      sidebarGeometry,
+      tabs,
     });
+    assert.equal(await signAction(page).isDisabled(), true);
     const initialReview = await openSignatureReview(page);
     assert.equal(
       await initialReview.getByText(secondTitle, { exact: true }).count(),
@@ -473,7 +505,8 @@ try {
       await page.evaluate(() => window.studentScoreQa.latestSignature()),
       null,
     );
-    const secondReview = await openSignatureReview(page);
+    assert.equal(await signAction(page).isDisabled(), true);
+    const secondReview = await openSignatureReview(page, [1, 2]);
     assert.equal(
       await secondReview.getByText(firstTitle, { exact: true }).count(),
       0,
@@ -529,7 +562,8 @@ try {
       await page.evaluate(() => window.studentScoreQa.latestSignature()),
       null,
     );
-    const revisedReview = await openSignatureReview(page);
+    assert.equal(await signAction(page).isDisabled(), true);
+    const revisedReview = await openSignatureReview(page, [2, 1]);
     await revisedReview.getByText(firstTitle, { exact: true }).waitFor();
     assert.equal(
       await revisedReview.getByText(secondTitle, { exact: true }).count(),
@@ -573,7 +607,7 @@ try {
     console.log(`PASS final-signature layout/lifecycle ${width}`);
   }
   report.checks.push(
-    "390/768/1280 actual MainLayout/Header: consent CTA is centered, at least 56px high with 18px text, capped at 384px and keyboard operable; performance list shows assessment-order-sorted two-line titles, divider borders, full title tooltips and selected-state changes. Desktop secondary sidebar adjoins the main rail; mobile disclosure supports Enter/Escape and returns focus; page does not overflow.",
+    "390/768/1280 actual MainLayout/Header: consent CTA is centered, at least 56px high with 18px text, capped at 384px and keyboard operable. Assessment-order tabs sit above the selected details, support keyboard activation, and do not overflow the page.",
     "390/768/1280 actual load/signature path: sign A with B blank (1/1), register B and reload (only B pending), sign B (2/2/latest B, original A confirmation unchanged), change A and reload (only A pending; final signature withheld), re-sign A (2/2/latest A, B confirmation unchanged), reload completion preserved. Exactly A/B/A confirmation writes; no product or production data writes.",
   );
   const concurrent = await createPage(1280, "?layout");
@@ -598,9 +632,11 @@ try {
       });
     };
   }, secondTitle);
-  await concurrentReview
-    .getByRole("button", { name: "제출하기", exact: true })
-    .click();
+  const [concurrentAlert] = await Promise.all([
+    concurrent.waitForEvent("dialog"),
+    concurrentReview.getByRole("button", { name: "제출하기", exact: true }).click(),
+  ]);
+  assert.match(concurrentAlert.message(), /추가되거나 변경된 점수/);
   await concurrentReview.waitFor({ state: "hidden" });
   await concurrent
     .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
@@ -608,11 +644,6 @@ try {
   assert.equal(
     await concurrent.getByRole("button", { name: /점수 확인 완료/ }).count(),
     0,
-  );
-  await concurrent.waitForFunction(() =>
-    window.studentScoreQa.toasts.some((toast) =>
-      toast.message.includes("추가되거나 변경된 점수"),
-    ),
   );
   const concurrentState = await concurrent.evaluate(() => ({
     writes: window.studentScoreQa.events
@@ -632,13 +663,16 @@ try {
       concurrentState.reads.every((event) => event.fromServer === true),
   );
   assert.equal(concurrentState.latest, null);
-  await selectAssessment(concurrent, secondTitle);
+  await selectAssessment(concurrent, 2);
+  await concurrent
+    .getByRole("heading", { name: secondTitle, exact: true })
+    .waitFor();
   await concurrent.screenshot({
     path: `${out}/concurrent-new-assessment-pending.png`,
     fullPage: true,
   });
   report.screenshots.push("concurrent-new-assessment-pending.png");
-  const discoveredReview = await openSignatureReview(concurrent);
+  const discoveredReview = await openSignatureReview(concurrent, [1, 2]);
   assert.equal(
     await discoveredReview.getByText(firstTitle, { exact: true }).count(),
     0,
@@ -793,6 +827,7 @@ try {
     assert.equal(signed.blank.enteredScoreCount, 0);
     assert.equal(signed.blank.items[0].scoreEntered, false);
     assert.equal(signed.blank.signatureImage, undefined);
+    await selectBlankAssessment(page);
     await mainScore.getByText("점수 미등록", { exact: true }).waitFor();
     await page.screenshot({
       path: `${out}/blank-student-signed-${width}.png`,
@@ -833,6 +868,7 @@ try {
     "Pending objection/legacy request belonging to blank B or a record absent from the current list does not block scored A; both old request records remain preserved.",
   );
   const blankOnly = await createPage(1280, "?blank-only");
+  await selectAssessment(blankOnly, 2);
   await blankOnly
     .getByRole("heading", { name: "2차 역사적 판단 글쓰기", exact: true })
     .waitFor();
@@ -879,6 +915,88 @@ try {
     1,
   );
   await zero.close();
+  const published = await createPage(1280, "?layout&blank-pair");
+  const publishedReview = await openSignatureReview(published);
+  await published.evaluate(() => {
+    const state = window.studentScoreQa;
+    const second = state.serverRecords.get("qa-blank");
+    state.serverRecords.set(second.id, {
+      ...second,
+      enteredScoreCount: 1,
+      totalScore: 0,
+      items: second.items.map((item) => ({ ...item, scoreEntered: true })),
+      updatedAt: { seconds: ++state.clock },
+    });
+  });
+  await publishedReview
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await publishedReview.waitFor({ state: "hidden" });
+  await published.waitForFunction(() =>
+    window.studentScoreQa.toasts.some(
+      (toast) => toast.title === "수행평가 점수가 변경되었습니다.",
+    ),
+  );
+  assert.equal(
+    await published.evaluate(() => window.studentScoreQa.confirmations.size),
+    0,
+  );
+  assert.equal(await signAction(published).isDisabled(), true);
+  await selectAssessment(published, 1);
+  assert.equal(await signAction(published).isDisabled(), true);
+  const reviewedPublication = await openSignatureReview(published, [2]);
+  await reviewedPublication.getByText(secondTitle, { exact: true }).waitFor();
+  await reviewedPublication
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await published
+    .getByRole("button", { name: "점수 확인 완료 2/2", exact: true })
+    .waitFor();
+  assert.deepEqual(
+    await published.evaluate(() =>
+      window.studentScoreQa.events
+        .filter((event) => event.name === "signature")
+        .map((event) => event.rosterId)
+        .sort(),
+    ),
+    ["qa-blank", "qa-score"],
+  );
+  // B is the only pending score initially. Editing already signed A while
+  // this review is open must invalidate the whole review before B is written.
+  const existingSignatures = await published.evaluate(() => [
+    ...window.studentScoreQa.confirmations,
+  ]);
+  const revise = ({ id, remount }) => {
+    const state = window.studentScoreQa;
+    const score = state.serverRecords.get(id);
+    state.serverRecords.set(id, {
+      ...score,
+      totalScore: score.totalScore + 1,
+      items: score.items.map((item, index) =>
+        index === 0 ? { ...item, score: item.score + 1 } : item,
+      ),
+      updatedAt: { seconds: ++state.clock },
+    });
+    if (remount) state.remount();
+  };
+  await published.evaluate(revise, { id: "qa-blank", remount: true });
+  await signAction(published).waitFor();
+  const revisedSibling = await openSignatureReview(published, [1, 2]);
+  await published.evaluate(revise, { id: "qa-score", remount: false });
+  await revisedSibling
+    .getByRole("button", { name: "제출하기", exact: true })
+    .click();
+  await revisedSibling.waitFor({ state: "hidden" });
+  assert.deepEqual(
+    await published.evaluate(() => [...window.studentScoreQa.confirmations]),
+    existingSignatures,
+  );
+  assert.equal(await signAction(published).isDisabled(), true);
+  await selectAssessment(published, 2);
+  assert.equal(await signAction(published).isDisabled(), true);
+  await selectAssessment(published, 1);
+  assert.equal(await signAction(published).isEnabled(), true);
+  await published.close();
   const changed = await createPage(1280, "?blank-pair");
   const changedSigning = await openSignatureReview(changed);
   await changed.evaluate(() => {
@@ -897,29 +1015,28 @@ try {
   await changedSigning
     .getByRole("button", { name: "제출하기", exact: true })
     .click();
-  await changedSigning
-    .getByText(
-      "점수 또는 확인 상태가 변경되었습니다. 새로고침한 뒤 점수를 확인하고 다시 서명해 주세요.",
-      { exact: true },
-    )
-    .waitFor();
+  await changedSigning.waitFor({ state: "hidden" });
+  await changed.waitForFunction(() =>
+    window.studentScoreQa.toasts.some(
+      (toast) => toast.title === "수행평가 점수가 변경되었습니다.",
+    ),
+  );
+  await changed.getByText("점수 미등록", { exact: true }).first().waitFor();
   assert.equal(
     await changed.evaluate(() => window.studentScoreQa.confirmations.size),
     0,
   );
-  assert.equal(await changedSigning.isVisible(), true);
   assert.ok(
-    await changed.evaluate(() =>
-      window.studentScoreQa.events.some(
-        (event) =>
-          event.name === "serverRead" &&
-          event.path === "users/qa-student/performance_scores/qa-score",
-      ),
+    await changed.evaluate(
+      () =>
+        window.studentScoreQa.events.filter(
+          (event) => event.name === "scoreListRead" && event.fromServer,
+        ).length >= 2,
     ),
   );
   await changed.close();
   report.checks.push(
-    "Unentered-only records cannot sign or object; an explicitly entered real 0 signs successfully; a same-version server re-read changing A to enteredScoreCount=0 blocks submission without any confirmation write.",
+    "Unentered-only records cannot sign or object; an explicitly entered real 0 signs successfully. A newly registered zero at submission and a same-version change to unentered return to refreshed details before any write. Both records sign only after the new score is visited.",
   );
   for (const width of [390, 768, 1280]) {
     const page = await createPage(width);
@@ -1021,6 +1138,7 @@ try {
       await trigger.evaluate((el) => el === document.activeElement),
       true,
     );
+    await selectAssessment(page, 1);
     await page
       .getByText("이의·답안지 확인 처리 대기", { exact: true })
       .last()
@@ -1114,6 +1232,7 @@ try {
   );
   await page.goto(origin + "?legacy");
   await page.getByRole("button", { name: "이의 신청", exact: true }).waitFor();
+  await selectAssessment(page, 1);
   assert.equal(
     await page
       .getByRole("button", { name: "점수 확인 및 서명하기", exact: true })
@@ -1147,6 +1266,7 @@ try {
     "Warning consent remains required before any score request.",
   );
   await page.goto(origin + "?written");
+  assert.equal(await signAction(page).isEnabled(), true);
   await page.getByRole("button", { name: "이의 신청", exact: true }).click();
   dialog = page.getByRole("dialog", {
     name: "정기시험 이의 신청",

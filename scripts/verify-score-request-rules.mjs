@@ -8,11 +8,13 @@ import {
   getDocFromServer,
   getDocsFromServer,
   query,
+  serverTimestamp,
   setDoc,
   setLogLevel,
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import {
   clientQuery,
@@ -116,6 +118,121 @@ try {
     }
   });
   clients.anon = env.unauthenticatedContext().firestore();
+  const student = "student-a";
+  const scoreId = "signature-rule-fixture";
+  const scorePath = `users/${student}/performance_scores/${scoreId}`;
+  const signaturePath = `${scorePath}/confirmations/${student}`;
+  const siblingId = "second-signature-rule-fixture";
+  const siblingPath = `users/${student}/performance_scores/${siblingId}`;
+  const signature = (version) => ({
+    uid: student,
+    rosterId: scoreId,
+    signatureName: "검증학생",
+    signatureImage: "data:image/png;base64,YQ==",
+    scoreUpdatedAt: version,
+    confirmedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  const version = Timestamp.fromMillis(Date.now() - 5000);
+  const changedVersion = Timestamp.fromMillis(Date.now());
+  await privileged(async (db) => {
+    const score = {
+      uid: student,
+      academicYear: "2026",
+      semester: "2",
+      enteredScoreCount: 1,
+      updatedAt: version,
+    };
+    await setDoc(doc(db, scorePath), { ...score, rosterId: scoreId });
+    await setDoc(doc(db, siblingPath), { ...score, rosterId: siblingId });
+  });
+  await maintenance(false, 20);
+  await setDoc(
+    doc(
+      clients[student],
+      `users/${student}/performance_score_consents/current`,
+    ),
+    {
+      uid: student,
+      academicYear: "2026",
+      semester: "2",
+      acknowledged: true,
+      warningVersion: "default-20260609",
+      warningTextHash: "fixture",
+      acknowledgedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
+  const signatureRef = doc(clients[student], signaturePath);
+  const batch = writeBatch(clients[student]);
+  batch.set(signatureRef, signature(version));
+  batch.set(doc(clients[student], siblingPath, "confirmations", student), {
+    ...signature(version),
+    rosterId: siblingId,
+  });
+  await batch.commit();
+  await denied(setDoc(signatureRef, signature(version)));
+  await privileged((db) =>
+    updateDoc(doc(db, scorePath), { updatedAt: changedVersion }),
+  );
+  await denied(setDoc(signatureRef, signature(version)));
+  await setDoc(signatureRef, signature(changedVersion));
+  await privileged((db) => deleteDoc(doc(db, signaturePath)));
+  await maintenance(true, 20);
+  await denied(setDoc(signatureRef, signature(changedVersion)));
+  await privileged((db) =>
+    updateDoc(doc(db, "site_settings/student_maintenance"), {
+      bypassUids: [
+        student,
+        ...Array.from({ length: 19 }, (_, n) => `synthetic-bypass-${n}`),
+      ],
+    }),
+  );
+  await setDoc(signatureRef, signature(changedVersion));
+  await privileged((db) => deleteDoc(doc(db, signaturePath)));
+  await denied(
+    setDoc(doc(clients["student-b"], signaturePath), signature(changedVersion)),
+  );
+  await privileged((db) =>
+    updateDoc(doc(db, "site_settings/student_maintenance"), {
+      bypassUids: [student, 12],
+    }),
+  );
+  await denied(setDoc(signatureRef, signature(changedVersion)));
+  await maintenance(false, 20);
+  for (const profile of [
+    { role: "staff" },
+    { role: "teacher" },
+    { role: "student", enrollmentStatus: "transferred" },
+    {
+      role: "student",
+      enrollmentStatus: "active",
+      registrationApprovalStatus: "PENDING",
+    },
+  ]) {
+    await privileged((db) => updateDoc(doc(db, `users/${student}`), profile));
+    await denied(setDoc(signatureRef, signature(changedVersion)));
+  }
+  await privileged((db) =>
+    updateDoc(doc(db, `users/${student}`), {
+      registrationApprovalStatus: "APPROVED",
+    }),
+  );
+  const sessionPath = `application_sessions/${student}/sessions/${authTime}`;
+  await privileged((db) =>
+    updateDoc(doc(db, sessionPath), {
+      generalExpiresAt: Timestamp.fromMillis(1),
+    }),
+  );
+  await denied(setDoc(signatureRef, signature(changedVersion)));
+  await privileged((db) =>
+    updateDoc(doc(db, sessionPath), {
+      generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000),
+    }),
+  );
+  console.log(
+    "PASS authorized score signature creation/repair, exact version, blocked maintenance and owner boundaries",
+  );
   for (const [enabled, count] of [
     [false, 0],
     [false, 1],
