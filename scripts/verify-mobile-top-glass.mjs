@@ -315,50 +315,63 @@ async function verifyContinuity(page, label) {
   }
 }
 
-// Windows browsers cannot enter iOS installed mode. Exercise the declarations from the
-// shipped stylesheet by activating just those two platform conditions, in their original order.
-async function verifyInstalledAppRules(page, label) {
-  const projected = await page.evaluateHandle(() => {
-    const link = document.querySelector('link[href*="mobile-top-glass.css"]');
-    const rules = Array.from(link.sheet.cssRules, (rule) => rule.cssText).join(
-      "\n",
-    );
-    const style = document.createElement("style");
-    style.textContent = rules
-      .replace(
-        /@supports\s*\(\s*-webkit-touch-callout\s*:\s*none\s*\)/gi,
-        "@supports (display:block)",
-      )
-      .replace(/\(\s*display-mode\s*:\s*standalone\s*\)/gi, "(min-width:0px)");
-    link.after(style);
-    link.sheet.disabled = true;
-    return style;
-  });
-  try {
-    // Decode native canvas CSS color syntax too (e.g. a computed color(srgb ...) from color-mix).
-    const rootColor = await page.evaluate(() => {
-      const context = document.createElement("canvas").getContext("2d");
-      context.fillStyle = getComputedStyle(
-        document.documentElement,
-      ).backgroundColor;
-      context.fillRect(0, 0, 1, 1);
-      return Array.from(context.getImageData(0, 0, 1, 1).data);
-    });
-    await verifyContinuity(page, "installed-rules-" + label);
-    assert(
-      Math.min(...rootColor.slice(0, 3)) >= 240 && rootColor[3] === 255,
-      "installed-mode root canvas must match the light dashboard: " +
-        JSON.stringify(rootColor),
-    );
-  } finally {
-    await projected.evaluate((node) => {
-      node.previousElementSibling.sheet.disabled = false;
-      node.remove();
-    });
-    await projected.dispose();
-  }
+// The browser harness can exercise Westory's installed-app path, but cannot paint the
+// native iOS status bar. Assert that no web box splits the title as it crosses that edge.
+async function systemEdge(page, layer = "document") {
+  const state = await page.evaluate((layer) => {
+    const glass = document.getElementById("westory-top-glass");
+    const topLayer =
+      layer === "dialog"
+        ? document.querySelector("dialog:modal")
+        : layer === "fullscreen"
+          ? document.fullscreenElement
+          : null;
+    return {
+      viewport: document.querySelector('meta[name="viewport"]').content,
+      forcedStatusStyle: !!document.querySelector(
+        'meta[name="apple-mobile-web-app-status-bar-style"]',
+      ),
+      hostBoxes: glass.getClientRects().length,
+      display: getComputedStyle(topLayer || glass, topLayer ? "::after" : null)
+        .display,
+      hasTopLayer: !!topLayer,
+    };
+  }, layer);
+  assert.doesNotMatch(state.viewport, /viewport-fit\s*=\s*cover/);
+  assert.equal(state.forcedStatusStyle, false);
+  assert.equal(
+    state.hostBoxes,
+    0,
+    "a fixed box would interfere with the native scroll edge",
+  );
+  assert.equal(state.display, "none");
+  assert.equal(state.hasTopLayer, layer !== "document");
 }
-async function scenario(engine, inset) {
+
+async function crossScheduleTitle(page) {
+  const heading = page.getByRole("heading", { name: "이번 주 학사 일정" });
+  await heading.waitFor();
+  for (const y of [65, 59, 53]) {
+    await heading.evaluate((el, y) => {
+      window.scrollTo({
+        top: scrollY + el.getBoundingClientRect().top - y,
+        behavior: "instant",
+      });
+    }, y);
+    const actual = await heading.boundingBox();
+    assert(
+      Math.abs(actual.y - y) <= 1,
+      "the real schedule title must cross the reported position",
+    );
+    await systemEdge(page);
+  }
+  await page.screenshot({
+    path: path.join(dir, "ios-home-schedule-title.png"),
+    animations: "disabled",
+  });
+}
+
+async function scenario(engine, inset, iosHome = false) {
   const webkit = engine.browserType().name() === "webkit";
   const label = engine.browserType().name() + "-" + inset;
   const page = await engine.newPage({
@@ -370,6 +383,14 @@ async function scenario(engine, inset) {
     reducedMotion: "reduce",
   });
   page.setDefaultTimeout(15000);
+  if (iosHome) {
+    // Simulate the signal exposed by a Home Screen launch; keep the actual HTML and CSS.
+    await page.addInitScript(() =>
+      Object.defineProperty(navigator, "standalone", { value: true }),
+    );
+  }
+  const checkSurface = (layer) =>
+    iosHome ? systemEdge(page, layer) : surface(page, inset, layer);
   if (!webkit) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setSafeAreaInsetsOverride", {
@@ -401,7 +422,7 @@ async function scenario(engine, inset) {
       location.hash = hash;
     }, hash);
     await page.locator(selector).first().waitFor();
-    await surface(page, inset);
+    await checkSurface();
   };
   try {
     let resume, started;
@@ -420,7 +441,7 @@ async function scenario(engine, inset) {
     await entry;
     await page.locator("#root").waitFor({ state: "attached" });
     try {
-      await surface(page, inset);
+      await checkSurface();
     } finally {
       resume();
     }
@@ -428,7 +449,7 @@ async function scenario(engine, inset) {
       .locator("#westory-top-glass")
       .elementHandle();
     await page.locator('[data-patch-target="teacher-dashboard"]').waitFor();
-    await surface(page, inset);
+    await checkSurface();
     // Let optional dashboard widgets mount, then dismiss any synthetic-session notices in the header.
     await page
       .locator("[data-patch-memo-root]")
@@ -436,7 +457,39 @@ async function scenario(engine, inset) {
       .waitFor({ state: "attached" });
     for (const close of await page.locator(".ws-toast__close").all())
       await close.click();
-    await verifyInstalledAppRules(page, label);
+    if (iosHome) {
+      await crossScheduleTitle(page);
+      await visit(
+        "/teacher/quiz/history-classroom",
+        ".history-dashboard article",
+      );
+      await visit("/student/lesson/maps", ".history-atlas__places-trigger");
+      await page.getByRole("button", { name: "장소 목록 열기" }).click();
+      await page.locator("dialog:modal").waitFor();
+      await checkSurface("dialog");
+      await page.keyboard.press("Escape");
+      await page.locator("dialog:modal").waitFor({ state: "hidden" });
+      if (await page.evaluate(() => document.fullscreenEnabled)) {
+        await page
+          .locator(".history-atlas-page")
+          .evaluate((el) => el.requestFullscreen());
+        await checkSurface("fullscreen");
+        await page.evaluate(() => document.exitFullscreen());
+      }
+      for (const file of ["2026-10-28", "before-2026-10-28"]) {
+        await page.goto(origin + "/legal/" + file + ".html");
+        await checkSurface();
+      }
+      assert.deepEqual(failures, []);
+      console.log(
+        "iOS Home Screen signal: system viewport and no fixed web glass across title, menus and windows.",
+      );
+      return;
+    }
+    assert.match(
+      await page.locator('meta[name="viewport"]').getAttribute("content"),
+      /viewport-fit\s*=\s*cover/,
+    );
     await verifyContinuity(page, label);
     console.log(
       "Browser display-mode standalone:",
@@ -446,7 +499,7 @@ async function scenario(engine, inset) {
     );
     await page.getByRole("button", { name: "교사 메뉴 열기" }).click();
     await page.locator(".teacher-sidebar-backdrop").waitFor();
-    await surface(page, inset);
+    await checkSurface();
     await comparePixels(page, `teacher-menu-overlay-${label}`);
     await page.getByRole("button", { name: "메뉴 닫기" }).click();
     let releaseSchedule;
@@ -460,12 +513,12 @@ async function scenario(engine, inset) {
     await page.getByRole("link", { name: "전체 캘린더 보기" }).click();
     try {
       await page.locator(".ws-loading-inline").waitFor();
-      await surface(page, inset);
+      await checkSurface();
     } finally {
       releaseSchedule();
     }
     await page.locator('[data-patch-target="teacher-schedule"]').waitFor();
-    await surface(page, inset);
+    await checkSurface();
     await visit(
       "/teacher/quiz/history-classroom",
       ".history-dashboard article",
@@ -478,7 +531,7 @@ async function scenario(engine, inset) {
     );
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator(".history-dashboard article").first().waitFor();
-    await surface(page, inset);
+    await checkSurface();
     await page.getByRole("button", { name: "과제 검색 열기" }).click();
     const search = page.getByRole("searchbox", {
       name: "과제명, 학생 이름, 학번 검색",
@@ -493,7 +546,7 @@ async function scenario(engine, inset) {
       ),
       "empty results fit without document scrolling",
     );
-    await surface(page, inset);
+    await checkSurface();
     await search.press("Escape");
     const card = page.locator(".history-dashboard article").nth(2);
     await card.evaluate((el) => {
@@ -503,7 +556,7 @@ async function scenario(engine, inset) {
       await page.evaluate(() => scrollY > 0),
       "long route actually scrolls",
     );
-    await surface(page, inset);
+    await checkSurface();
     const textEdges = !webkit || process.platform !== "win32";
     if (!textEdges)
       console.log(
@@ -517,20 +570,20 @@ async function scenario(engine, inset) {
     await visit("/student/lesson/maps", ".history-atlas__places-trigger");
     await page.getByRole("button", { name: "장소 목록 열기" }).click();
     await page.locator("dialog:modal").waitFor();
-    await surface(page, inset, "dialog");
+    await checkSurface("dialog");
     await comparePixels(page, `student-map-dialog-${label}`);
     await page.keyboard.press("Escape");
     await page.locator("dialog:modal").waitFor({ state: "hidden" });
-    await surface(page, inset);
+    await checkSurface();
     // Fullscreen an actual route element, using Playwright's trusted user gesture.
     if (await page.evaluate(() => document.fullscreenEnabled)) {
       await page
         .locator(".history-atlas-page")
         .evaluate((el) => el.requestFullscreen());
-      await surface(page, inset, "fullscreen");
+      await checkSurface("fullscreen");
       await comparePixels(page, `student-map-fullscreen-${label}`);
       await page.evaluate(() => document.exitFullscreen());
-      await surface(page, inset);
+      await checkSurface();
     } else console.log(label, "native fullscreen unavailable");
     assert.deepEqual(failures, []);
   } catch (error) {
@@ -549,6 +602,7 @@ try {
   const webkit = await playwright.webkit.launch();
   try {
     await scenario(webkit, 0);
+    await scenario(webkit, 0, true);
   } finally {
     await webkit.close();
   }
@@ -577,7 +631,7 @@ try {
         undefined,
         pathname + " still overrides the native status bar",
       );
-      assert.match(metadata.viewport, /viewport-fit\s*=\s*cover/);
+      assert.doesNotMatch(metadata.viewport, /viewport-fit\s*=\s*cover/);
       assert.equal(metadata["theme-color"], "#f9fafb");
     } finally {
       await tab.close();

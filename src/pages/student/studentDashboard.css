@@ -185,6 +185,27 @@
   }
 }
 
+@media (max-width: 767px) {
+  .student-portal-dashboard .student-notice-board {
+    padding-inline: 0;
+  }
+
+  .student-notice-board__header,
+  .student-notice-board__controls {
+    margin-inline: 12px;
+  }
+
+  .student-portal-dashboard .student-notice-board__viewport {
+    aspect-ratio: var(--notice-image-ratio, 16 / 9);
+    border-radius: 0;
+  }
+
+  .student-portal-dashboard .student-notice-board__viewport:focus-visible {
+    outline: 2px solid var(--ws-ring, #3b82f6);
+    outline-offset: -2px;
+  }
+}
+
 .student-attendance-history-error {
   display: flex;
   align-items: center;

@@ -178,6 +178,8 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   const carousel = useNoticeCarouselInteraction({
     activeIndex,
     imageUrl: activeNotice?.imageUrl,
+    imageWidth: activeNotice?.imageWidth,
+    imageHeight: activeNotice?.imageHeight,
     count: notices.length,
     paused: isPaused,
     move,
@@ -185,7 +187,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
 
   return (
     <div className="teacher-notice-board ws-surface flex h-full min-h-[260px] min-w-0 flex-col md:min-h-0">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="teacher-notice-board__header mb-3 flex items-center justify-between gap-3">
         <h3 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
@@ -199,6 +201,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
 
       <div
         ref={viewportRef}
+        style={carousel.frameStyle}
         className="teacher-notice-board__viewport relative aspect-[16/9] w-full min-h-0 flex-none overflow-hidden rounded-xl bg-white"
       >
         {loading && (
@@ -272,7 +275,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
                     alt="알림장"
                     loading={notice.id === activeNotice.id ? "eager" : "lazy"}
                     decoding="async"
-                    className="teacher-notice-board__image block h-full w-full shrink-0 object-cover"
+                    className="teacher-notice-board__image block h-full w-full shrink-0 object-contain"
                   />
                 ))}
               </div>

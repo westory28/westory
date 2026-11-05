@@ -72,7 +72,7 @@
 
 모바일 안내 표에는 가로 스크롤을 만들지 않는다. 학급별 일정은 학급·날짜·교시 3열을 유지한다. 전 교과 범위는 각 과목의 이름과 문항 수를 첫 행에, 범위를 다음 행의 전체 너비에 배치하며 표의 접근성 역할과 원문 수치를 유지한다. 강제 줄바꿈과 중복 단위는 줄이고 한국어 어절 단위의 자연스러운 줄바꿈을 사용한다.
 
-학생·교사 알림장은 사용자의 명시적 요청에 따라 동작 줄이기에서도 기존 슬라이드 전환(학생 820ms·교사 500ms)을 유지한다. 이 예외는 해당 알림장에만 적용하고 일시정지·재생·좌우 이동을 유지한다. 학생·교사 알림장 이미지 프레임은 테두리 없는 16:9로 원본을 꽉 채운다.
+학생·교사 알림장은 사용자의 명시적 요청에 따라 동작 줄이기에서도 기존 슬라이드 전환(학생 820ms·교사 500ms)을 유지한다. 이 예외는 해당 알림장에만 적용하고 일시정지·재생·좌우 이동을 유지한다. 모바일에서는 이미지가 카드 좌우 안쪽까지 채워지도록 하고 저장된 이미지의 비율에 맞춰 높이를 정한다. 제목과 조작 버튼에는 별도 여백을 둔다. 태블릿·PC에서는 16:9 프레임에 저장된 이미지 전체를 표시한다.
 
 학생·교사 알림장은 첫 번째 그림을 12초, 나머지를 5초 표시하며 실제 이미지 로드 후부터 시간을 센다. 수동 이동 후에는 해당 그림의 표시 시간을 새로 시작한다. 이미지의 터치·펜 좌우 스와이프는 48px 이상이고 가로 이동이 세로의 1.3배를 넘을 때 한 장씩 순환한다. 세로 스크롤·확대·짧은 터치·취소는 넘김으로 처리하지 않으며, 스와이프 뒤 발생하는 클릭은 게시글 열기나 교사 편집을 실행하지 않는다. 손가락으로 누르는 동안과 문서가 숨겨진 동안 자동 넘김을 멈춘다. 기존 일시정지 선택, 학생 820ms·교사 500ms 전환과 게시글 연결·이미지 수정 기능은 유지한다.
 
@@ -353,7 +353,7 @@
 
 ## 전 포털 공통 화면 계약: 지도 기준 (2026-10-18)
 
-모바일에서 앱이 그리는 화면 상단에는 기기가 알려 준 안전 영역의 최대 높이에서 본문 쪽으로 16px 더 이어지는 블러를 둔다. 색을 덧칠하지 않고 뒤의 글자와 이미지만 12px만큼 흐린다. 배경이 단색이면 상단도 같은 색으로 보이고, 스크롤할 때 아래쪽 경계는 부드럽게 사라진다. 아이폰 홈 화면 앱은 밝은 테마색을 사용하고 시계·배터리 표시는 iOS가 결정한다. 블러는 문서에 고정해 로그인·로딩·메뉴 이동·대화상자·전체화면·별도로 여는 약관에서도 같은 방식으로 적용하며 터치와 키보드 입력을 통과시킨다.
+아이폰·아이패드 홈 화면 앱은 기본 뷰포트를 사용하고 상태 표시줄과 스크롤 경계 처리를 iOS에 맡긴다. 일정 제목이 시계 아래를 통과할 때 앱이 블러를 덧그리지 않도록 첫 화면부터 공통 고정 레이어를 숨긴다. 학생·교사 메뉴, 대화상자와 별도로 여는 약관에도 이를 적용한다. 다른 모바일 브라우저에서는 안전 영역 아래쪽 16px까지 투명한 12px 배경 블러를 적용한다. 이 레이어는 터치와 키보드 입력을 통과시킨다.
 
 상단 블러 변경은 `node scripts/verify-mobile-top-glass.mjs`로 검사한다. 합성 계정으로 교사·학생 메뉴를 이동하며 로딩·새로고침·스크롤·대화상자에서 블러의 위치와 실제 렌더링을 확인한다.
 
@@ -552,6 +552,8 @@ Design Read: 교육 현장용 React 앱, 학생과 교사가 함께 쓰는 운�
 - `VISUAL_DENSITY`: 학생 4/10, 교사 7/10. 학생은 한 열 흐름, 교사는 정보 밀도를 허용하되 구조를 선명하게 한다.
 
 ### 순위·명예의 전당 표시 복구 (2026-10-08)
+
+화면 폭 768px 이상에서는 대시보드 위스 순위의 이름을 16~18px, 학년·반을 13~15px, 금액을 19~22px 굵기 900으로 표시한다. 실제 카드 너비에 맞춰 열을 배분하고, 같은 목록에서는 이름·학년반·금액이 모든 행에서 같은 위치에 놓인다. 금액은 오른쪽에 정렬하며 아주 긴 값은 한 줄에 말줄임하고 전체 값은 접근 가능한 이름과 제목으로 제공한다.
 
 - 위스 순위의 금액 열은 모든 행에서 128px(내용 폭 480px 이하에서는 96px)로 고정해 금액의 자릿수가 달라도 이름과 학급 열이 움직이지 않게 한다. 표시 번호는 1~5를 유지하되 행·숫자 원·왕관 색은 누적 위스의 공동 순위에 맞춘다. 같은 양수 위스는 같은 색이며 0 위스는 흰색 중성 행으로 표시한다. 이 규칙은 아래의 표시 번호별 색 규칙보다 우선한다. 양수 위스 학생이 5명 미만이면 공개 범위 안의 실제 0 위스 학생으로 최대 5명을 채우며, 0 위스 학생은 명예의 전당 시상대에 올리지 않는다.
 
@@ -893,7 +895,7 @@ No visible UI work is complete until the design contract and verification eviden
 
 ### Dashboard notice image sizing
 
-- Student and teacher dashboard notices use the full card content width in a 16:9 viewport. Let the card and its grid row grow to the image height instead of shrinking the image into a fixed-height slot. Preserve existing card gutters, `contain`, carousel behavior and no hover zoom; the existing 16:9 upload crop fills this viewport without side gaps.
+- Below 768px the notice image uses the card's full inner width and the stored image's aspect ratio. The heading and controls keep their own gutters. Larger screens use the existing 16:9 frame. Use `contain` to show the full stored image on both portals.
 - Measure the viewport with `ResizeObserver`. In the image registration/editing dialog only, recommend a 16:9 source at twice its contained image size, rounded to whole 16:9 units and capped at the existing 1200×675 upload maximum. The existing 16:9 center crop/compression contract remains unchanged; other editor entry points keep the 1200×675 fallback recommendation.
 - Do not show image size guidance below the dashboard notice image, including the empty state.
 

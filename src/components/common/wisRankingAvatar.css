@@ -292,6 +292,106 @@
   }
 }
 
+@media (min-width: 768px) {
+  .wis-ranking-with-avatar .wis-ranking-row {
+    --classroom-size: clamp(13px, 2.1cqi, 15px);
+    grid-template-columns: 24px minmax(0, 1fr) calc(
+        var(--classroom-size) * 5
+      ) clamp(96px, 31%, 140px);
+    grid-template-areas: "place person classroom score";
+    column-gap: 8px;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-person {
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-identity {
+    flex: 0 1 auto;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(16px, 2.7cqi, 18px);
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-person .wis-ranking-rank-badge {
+    display: block;
+    max-width: 36%;
+    padding-inline: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-classroom {
+    display: flex;
+    font-size: var(--classroom-size);
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-score {
+    max-width: none;
+    font-size: clamp(19px, 3.5cqi, 22px);
+    font-weight: 900;
+    line-height: 1.15;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-score > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
+    flex-basis: 1em;
+    width: 1em;
+    height: 1em;
+  }
+
+  @container wis-ranking (min-width: 650px) {
+    .wis-ranking-with-avatar .wis-ranking-row {
+      grid-template-columns: 24px repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container wis-ranking (max-width: 550px) {
+    .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+      margin-inline: -12px;
+      gap: 4px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-row {
+      column-gap: 4px;
+      padding-inline: 2px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-person {
+      margin-inline-start: 5px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-profile {
+      flex-basis: 14px;
+      width: 14px;
+      font-size: 14px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-person .wis-ranking-rank-badge {
+      padding-inline: 2px;
+      font-size: 10px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-score {
+      padding-inline-start: 4px;
+    }
+
+    .wis-ranking-with-avatar .wis-ranking-score .wis-icon {
+      flex-basis: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wis-ranking-with-avatar .wis-ranking-row,
   .wis-ranking-with-avatar .wis-ranking-row * {

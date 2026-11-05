@@ -114,6 +114,8 @@ const NoticeBoard: React.FC = () => {
   const carousel = useNoticeCarouselInteraction({
     activeIndex,
     imageUrl: activeNotice?.imageUrl,
+    imageWidth: activeNotice?.imageWidth,
+    imageHeight: activeNotice?.imageHeight,
     count: notices.length,
     paused: isPaused,
     busy: isSliding || incomingIndex !== null,
@@ -150,7 +152,7 @@ const NoticeBoard: React.FC = () => {
 
   return (
     <div className="student-notice-board flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="student-notice-board__header mb-3 flex items-center justify-between gap-3">
         <h2 className="flex items-center text-lg font-extrabold text-gray-900">
           <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
           알림장
@@ -183,7 +185,10 @@ const NoticeBoard: React.FC = () => {
               type="button"
               onClick={() => openLinkedPost(activeNotice)}
               {...carousel.pointerHandlers}
-              style={{ touchAction: "pan-y pinch-zoom" }}
+              style={{
+                ...carousel.frameStyle,
+                touchAction: "pan-y pinch-zoom",
+              }}
               aria-disabled={!activeNotice.developerLogPostId}
               tabIndex={activeNotice.developerLogPostId ? 0 : -1}
               className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
@@ -208,7 +213,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-cover object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
                     isSliding
                       ? slideDirection === 1
                         ? "-translate-x-full"
@@ -230,7 +235,7 @@ const NoticeBoard: React.FC = () => {
                   alt="알림장"
                   loading="eager"
                   decoding="async"
-                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-cover object-center will-change-transform ${
+                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
                     isSliding
                       ? "translate-x-0"
                       : slideDirection === 1

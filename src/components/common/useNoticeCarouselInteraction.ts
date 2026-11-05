@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MouseEvent, PointerEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent,
+  PointerEvent,
+  SyntheticEvent,
+} from "react";
 
 interface Options {
   activeIndex: number;
   imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
   count: number;
   paused: boolean;
   busy?: boolean;
@@ -23,12 +30,17 @@ interface Gesture {
 export default function useNoticeCarouselInteraction({
   activeIndex,
   imageUrl,
+  imageWidth,
+  imageHeight,
   count,
   paused,
   busy = false,
   move,
 }: Options) {
-  const [readyUrl, setReadyUrl] = useState<string>();
+  const [readyImage, setReadyImage] = useState<{
+    url?: string;
+    ratio?: number;
+  }>();
   const [pressed, setPressed] = useState(false);
   const [visible, setVisible] = useState(() => !document.hidden);
   const gesture = useRef<Gesture | null>(null);
@@ -50,13 +62,30 @@ export default function useNoticeCarouselInteraction({
   }, [cancelGesture]);
 
   // Cached teacher images may have loaded before becoming the active image.
-  const imageRef = useCallback(
-    (image: HTMLImageElement | null) => {
-      if (image?.complete) setReadyUrl(imageUrl);
+  const markReady = useCallback(
+    (image: HTMLImageElement) => {
+      if (image.getAttribute("src") !== imageUrl) return;
+      setReadyImage({
+        url: imageUrl,
+        ratio: image.naturalHeight
+          ? image.naturalWidth / image.naturalHeight
+          : undefined,
+      });
     },
     [imageUrl],
   );
-  const onImageReady = useCallback(() => setReadyUrl(imageUrl), [imageUrl]);
+  const imageRef = useCallback(
+    (image: HTMLImageElement | null) => {
+      if (image?.complete) markReady(image);
+    },
+    [markReady],
+  );
+  const onImageReady = (event: SyntheticEvent<HTMLImageElement>) =>
+    markReady(event.currentTarget);
+  const readyUrl = readyImage?.url;
+  const storedRatio = imageWidth && imageHeight ? imageWidth / imageHeight : 0;
+  const imageRatio =
+    (readyUrl === imageUrl && readyImage?.ratio) || storedRatio;
 
   useEffect(() => {
     if (
@@ -107,6 +136,10 @@ export default function useNoticeCarouselInteraction({
   return {
     imageRef,
     onImageReady,
+    frameStyle: {
+      "--notice-image-ratio":
+        Number.isFinite(imageRatio) && imageRatio > 0 ? imageRatio : undefined,
+    } as CSSProperties,
     pointerHandlers: {
       onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
         if (!event.isPrimary) {

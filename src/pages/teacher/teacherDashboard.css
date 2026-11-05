@@ -795,6 +795,22 @@
   .teacher-weekly-dashboard__notice {
     order: 0;
   }
+  .teacher-weekly-dashboard .teacher-notice-board {
+    padding-inline: 0;
+  }
+  .teacher-notice-board__header,
+  .teacher-weekly-dashboard .teacher-notice-board__controls {
+    margin-inline: 12px;
+  }
+  .teacher-weekly-dashboard .teacher-notice-board__viewport {
+    aspect-ratio: var(--notice-image-ratio, 16 / 9);
+    border-radius: 0;
+  }
+  .teacher-weekly-dashboard .teacher-notice-board__viewport > button:focus-visible {
+    outline: 2px solid var(--ws-ring, #3b82f6);
+    outline-offset: -2px;
+    z-index: 1;
+  }
   .teacher-weekly-dashboard__schedule {
     order: 1;
   }

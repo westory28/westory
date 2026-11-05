@@ -45,6 +45,13 @@ html:has(dialog:modal, :fullscreen:not(html)) #westory-top-glass {
   visibility: hidden;
 }
 
+/* In an iOS Home Screen app no fixed box should meet the system scroll edge,
+   including in a dialog or fullscreen. Hiding only the filter leaves the box. */
+html[data-system-top-edge] #westory-top-glass,
+html[data-system-top-edge] :is(dialog:modal, :fullscreen:not(html))::after {
+  display: none;
+}
+
 @media print {
   #westory-top-glass,
   :is(dialog:modal, :fullscreen:not(html))::after {

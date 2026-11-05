@@ -13,7 +13,7 @@ const evidence =
   process.env.NOTICE_CAROUSEL_EVIDENCE_DIR ||
   path.join(root, "output/notice-carousel-interaction");
 const mocks = {
-  state: `const params=new URLSearchParams(location.search);const count=params.get('mode')==='single'?1:params.get('mode')==='empty'?0:3;export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const getNotices=()=>Array.from({length:count},(_,index)=>({id:'notice-'+index,category:['performance','exam','notice'][index],content:'알림 안내',imageUrl:'/notice-'+index+'.svg',developerLogPostId:params.get('mode')==='unlinked'?'':'notice-'+index+'-post',createdAt:null,noticeOrder:index}));`,
+  state: `const params=new URLSearchParams(location.search);const count=params.get('mode')==='single'?1:params.get('mode')==='empty'?0:3;export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const getNotices=()=>Array.from({length:count},(_,index)=>({id:'notice-'+index,category:['performance','exam','notice'][index],content:'알림 안내',imageUrl:'/notice-'+index+'.svg'+(params.get('mode')==='ratios'?'?ratios':''),developerLogPostId:params.get('mode')==='unlinked'?'':'notice-'+index+'-post',createdAt:null,noticeOrder:index}));`,
   auth: `import {config,userData} from 'fixture:state';export const useAuth=()=>({config,userData});`,
   firebase: `export const db={};`,
   firestore: `import {getNotices} from 'fixture:state';export const collection=()=>({}),limit=()=>({}),orderBy=()=>({}),query=()=>({});export const onSnapshot=(_,next)=>{next({docs:getNotices().map(n=>({id:n.id,data:()=>n}))});return()=>{}};`,
@@ -25,7 +25,7 @@ const mocks = {
 };
 const bundle = await build({
   stdin: {
-    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,useLocation} from 'react-router-dom';import Student from './src/pages/student/components/NoticeBoard';import Teacher from './src/pages/teacher/components/TeacherNoticeBoard';function App(){const location=useLocation();return <><output data-route>{location.pathname}</output><main>{new URLSearchParams(window.location.search).get('portal')==='student'?<Student/>:<Teacher/>}</main><div className="scroll-space">세로 스크롤 확인</div></>};createRoot(document.getElementById('root')).render(<MemoryRouter><App/></MemoryRouter>);`,
+    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,useLocation} from 'react-router-dom';import Student from './src/pages/student/components/NoticeBoard';import Teacher from './src/pages/teacher/components/TeacherNoticeBoard';function App(){const location=useLocation();const student=new URLSearchParams(window.location.search).get('portal')==='student';const dashboard=student?'student-portal-dashboard':'teacher-weekly-dashboard';return <><output data-route>{location.pathname}</output><main className={dashboard}><div className={dashboard+'__grid'}><section className={dashboard+'__notice'}>{student?<Student/>:<Teacher/>}</section></div></main><div className="scroll-space">세로 스크롤 확인</div></>};createRoot(document.getElementById('root')).render(<MemoryRouter><App/></MemoryRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -84,7 +84,7 @@ const styles = await Promise.all(
   ].map((file) => fs.readFile(path.join(root, file), "utf8")),
 );
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${styles.join("\n")}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 sans-serif;background:#f8fafc}main{margin:16px;max-width:720px}button{font:inherit;cursor:pointer}output{display:block;padding:8px}.student-notice-board,.teacher-notice-board{padding:16px;background:white}.student-notice-board__viewport,.teacher-notice-board__viewport{position:relative;display:block;width:100%;aspect-ratio:16/9;overflow:hidden;padding:0;border:0}.student-notice-board__image{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}.teacher-notice-board__viewport>button{display:block;width:100%;height:100%;padding:0;border:0}.teacher-notice-board__image-track{display:flex;height:100%;width:100%;transition:transform 500ms ease-out}.teacher-notice-board__image{display:block;flex-shrink:0;width:100%;height:100%;object-fit:cover}.translate-x-0{transform:translateX(0)}.translate-x-full{transform:translateX(100%)}.-translate-x-full{transform:translateX(-100%)}.student-notice-board__controls,.teacher-notice-board__controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.student-notice-board__playback>button,.teacher-notice-board__controls button{min-width:32px;min-height:36px}.scroll-space{height:1400px;padding:32px}.hidden{display:none}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 sans-serif;background:#f8fafc}button{font:inherit;cursor:pointer}output{display:block;padding:8px}.student-notice-board,.teacher-notice-board{display:flex;flex-direction:column;background:white;border:1px solid #e5e7eb}.student-notice-board__viewport,.teacher-notice-board__viewport{position:relative;display:block;width:100%;aspect-ratio:16/9;overflow:hidden;padding:0;border:0}.student-notice-board__image{position:absolute;inset:0;display:block;width:100%;height:100%}.teacher-notice-board__viewport>button{display:block;width:100%;height:100%;padding:0;border:0}.teacher-notice-board__image-track{display:flex;height:100%;width:100%;transition:transform 500ms ease-out}.teacher-notice-board__image{display:block;flex-shrink:0;width:100%;height:100%}.object-cover{object-fit:cover}.object-contain{object-fit:contain}.translate-x-0{transform:translateX(0)}.translate-x-full{transform:translateX(100%)}.-translate-x-full{transform:translateX(-100%)}.student-notice-board__controls,.teacher-notice-board__controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.student-notice-board__playback>button,.teacher-notice-board__controls button{min-width:32px;min-height:36px}.scroll-space{height:1400px;padding:32px}.hidden{display:none}
 </style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
@@ -94,9 +94,16 @@ const server = http.createServer((req, res) => {
     res.end(bundle.outputFiles[0].text);
   } else if (/^\/notice-\d\.svg$/.test(pathname)) {
     const index = Number(pathname.match(/\d/)[0]);
+    const [width, height] = req.url.includes("?ratios")
+      ? [
+          [1600, 900],
+          [900, 1200],
+          [1800, 600],
+        ][index]
+      : [1600, 900];
     res.setHeader("Content-Type", "image/svg+xml");
     res.end(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="${["#fff7e6", "#e9fbf5", "#eff6ff"][index]}"/><text x="120" y="450" font-size="120">알림 ${index + 1}</text></svg>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${["#fff7e6", "#e9fbf5", "#eff6ff"][index]}"/><rect x="6" y="6" width="${width - 12}" height="${height - 12}" stroke="navy" stroke-width="12" fill="none"/><text x="120" y="450" font-size="120">알림 ${index + 1}</text></svg>`,
     );
   } else {
     res.setHeader("Content-Type", "text/html;charset=utf-8");
@@ -627,35 +634,80 @@ try {
       portal,
       "responsive widths preserve image bounds",
       async (f) => {
-        for (const width of [390, 768, 1280]) {
+        await f.page
+          .getByRole("button", { name: "알림 자동 넘김 일시정지" })
+          .click();
+        for (const width of [320, 390, 768, 1280]) {
           await f.page.setViewportSize({ width, height: 844 });
-          await f.advance(50);
-          const bounds = await f.page.evaluate((portal) => {
-            const board = document
-              .querySelector(`.${portal}-notice-board`)
-              .getBoundingClientRect();
-            const viewport = document
-              .querySelector(`.${portal}-notice-board__viewport`)
-              .getBoundingClientRect();
-            return {
-              viewportWidth: window.innerWidth,
-              documentWidth: document.documentElement.scrollWidth,
-              left: board.left,
-              right: board.right,
-              imageWidth: viewport.width,
-            };
-          }, portal);
-          assert(
-            bounds.documentWidth <= width,
-            `${portal} has no horizontal page overflow at ${width}px`,
-          );
-          assert(bounds.left >= 0 && bounds.right <= width);
-          assert(bounds.imageWidth > 0);
+          for (const [index, sourceRatio] of [16 / 9, 3 / 4, 3].entries()) {
+            await f.page
+              .getByRole("button", { name: `${index + 1}번째 알림 보기` })
+              .click();
+            await f.advance(1050);
+            const bounds = await f.page.evaluate(
+              ({ portal, index }) => {
+                const board = document
+                  .querySelector(`.${portal}-notice-board`)
+                  .getBoundingClientRect();
+                const frame = document.querySelector(
+                  `.${portal}-notice-board__viewport`,
+                );
+                const viewport = frame.getBoundingClientRect();
+                const image = frame.querySelector(
+                  `img[src*="notice-${index}.svg"]`,
+                );
+                return {
+                  documentWidth: document.documentElement.scrollWidth,
+                  inset: viewport.left - board.left,
+                  rightInset: board.right - viewport.right,
+                  ratio: viewport.width / viewport.height,
+                  imageRatio: image.naturalWidth / image.naturalHeight,
+                  fit: getComputedStyle(image).objectFit,
+                };
+              },
+              { portal, index },
+            );
+            assert(bounds.documentWidth <= width);
+            assert.equal(bounds.fit, "contain");
+            assert(
+              Math.abs(bounds.imageRatio - sourceRatio) < 0.001,
+              "source file loaded with original dimensions",
+            );
+            assert(
+              Math.abs(bounds.ratio - (width < 768 ? sourceRatio : 16 / 9)) <
+                0.003,
+              JSON.stringify(bounds),
+            );
+            if (width < 768)
+              assert(
+                bounds.inset <= 1 && bounds.rightInset <= 1,
+                "notice frame reaches both inner card edges",
+              );
+            else
+              assert(
+                bounds.inset >= 12 && bounds.rightInset >= 12,
+                "larger layouts keep their card spacing",
+              );
+          }
+          if (width < 768) {
+            await f.page.keyboard.press("Tab");
+            await f.viewport.focus();
+            assert(
+              await f.viewport.evaluate(
+                (button) =>
+                  button.matches(":focus-visible") &&
+                  getComputedStyle(button).outlineWidth === "2px" &&
+                  getComputedStyle(button).outlineOffset === "-2px",
+              ),
+              "keyboard focus stays inside the image edges",
+            );
+          }
           await f.page.screenshot({
             path: path.join(evidence, `${portal}-${width}.png`),
           });
         }
       },
+      "ratios",
     );
   }
   assert.deepEqual(errors, []);

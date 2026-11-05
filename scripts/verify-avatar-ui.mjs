@@ -258,6 +258,7 @@ if (checkRankingLayout) {
       window.avatarQa.entries[0].studentName = "가나다";
     });
     let minimumRankClearance = Infinity;
+    const typographySamples = [];
     for (const role of ["teacher", "student"]) {
       await page
         .getByRole("button", {
@@ -274,6 +275,7 @@ if (checkRankingLayout) {
         [768, 768, true],
         [1024, 650, true],
         [1024, 650],
+        [1024, 480, true],
         [1280, 480, true],
         [1280, 480],
         [1366, 500],
@@ -300,10 +302,10 @@ if (checkRankingLayout) {
               entries[i].studentName = name;
             },
           );
-          entries[1].studentName = mobile
-            ? "아주긴이름으로등록된합성학생"
-            : "라마바";
-          entries[1].cumulativeEarned = mobile ? 987654321098 : 3920;
+          entries[1].studentName = "아주긴이름으로등록된합성학생";
+          entries[1].class = "12";
+          entries[1].cumulativeEarned = 987654321098;
+          entries[2].cumulativeEarned = 12345;
           document.querySelectorAll(".wis-ranking-row")[mobile ? 1 : 0].click();
         }, mobile);
         await page.locator("#sample").evaluate(
@@ -351,14 +353,48 @@ if (checkRankingLayout) {
                 return range.getBoundingClientRect();
               };
               const classroom = row.querySelector(".wis-ranking-classroom");
+              const amount = row.querySelector(".wis-ranking-score > span");
+              const amountText = document.createRange();
+              amountText.selectNodeContents(amount);
+              const amountBounds = textRect(amount);
+              const amountLines = new Set(
+                Array.from(amountText.getClientRects())
+                  .filter((r) => r.width > 0)
+                  .map((r) => Math.round(r.top)),
+              );
               return {
                 rowHeight: row.offsetHeight,
+                namePx: parseFloat(
+                  getComputedStyle(row.querySelector(".wis-ranking-name"))
+                    .fontSize,
+                ),
+                classPx: parseFloat(getComputedStyle(classroom).fontSize),
+                classVisible: classroom.offsetWidth > 0,
+                amountPx: parseFloat(getComputedStyle(amount).fontSize),
+                amountWeight: getComputedStyle(amount).fontWeight,
+                amountLines: amountLines.size,
+                fullAmount: amount.textContent,
+                spokenAmount: row
+                  .querySelector(".wis-ranking-score")
+                  .getAttribute("aria-label"),
+                titleAmount: row.querySelector(".wis-ranking-score").title,
+                scoreLeft: score.left,
+                amountFits:
+                  amountBounds.left >=
+                    amount.getBoundingClientRect().left - 1 &&
+                  amountBounds.right <=
+                    amount.getBoundingClientRect().right + 1 &&
+                  amountBounds.right <= rect("score").right + 1 &&
+                  amount.scrollWidth <= amount.clientWidth + 1,
+                fullName: row.querySelector(".wis-ranking-name").title,
                 tracks: getComputedStyle(row)
                   .gridTemplateColumns.split(" ")
                   .map(parseFloat),
                 classroomToScore:
-                  textRect(row.querySelector(".wis-ranking-score > span"))
-                    .left - textRect(classroom).right,
+                  Math.max(
+                    amountBounds.left,
+                    amount.getBoundingClientRect().left,
+                  ) - textRect(classroom).right,
                 classroomCentered:
                   Math.abs(
                     rect("classroom").left +
@@ -399,6 +435,59 @@ if (checkRankingLayout) {
           });
         }
         assert.equal(geometry.length, 5);
+        if (viewport >= 768) {
+          const large = geometry[1];
+          assert(
+            geometry.every(
+              (row) =>
+                row.namePx >= 16 &&
+                row.classPx >= 13 &&
+                row.classVisible &&
+                row.amountPx >= 19 &&
+                row.amountWeight === "900" &&
+                row.classroomToScore >= 8 &&
+                row.amountLines === 1 &&
+                Math.abs(row.scoreLeft - geometry[0].scoreLeft) < 1,
+            ),
+            `${role} ${viewport}px tablet/desktop typography`,
+          );
+          assert.equal(large.fullName, "아주긴이름으로등록된합성학생");
+          assert.equal(large.fullAmount, "987,654,321,098");
+          assert(
+            geometry[0].amountFits && geometry[2].amountFits,
+            `${role} ${viewport}/${cardWidth}px ordinary amounts: ${JSON.stringify(geometry[2])}`,
+          );
+          assert(
+            large.titleAmount === large.fullAmount + " 위스" &&
+              large.spokenAmount === large.titleAmount &&
+              large.scoreVisible &&
+              !large.overflow,
+            `${role} ${viewport}/${cardWidth}px long amount: ${JSON.stringify(large)}`,
+          );
+          typographySamples.push({
+            role,
+            viewport,
+            cardWidth,
+            touch,
+            name: large.namePx,
+            classroom: large.classPx,
+            amount: large.amountPx,
+            amountLeft: large.scoreLeft,
+            minimumGap: Math.min(
+              ...geometry.map((row) => row.classroomToScore),
+            ),
+          });
+        } else {
+          assert(
+            geometry.every(
+              (row) =>
+                row.rowHeight === 44 &&
+                row.amountLines === 1 &&
+                !row.classVisible,
+            ),
+            "Narrow phone rows keep their single-line compact layout",
+          );
+        }
         assert(geometry.slice(0, 3).every((r) => r.crownWidth > 0));
         if (mobile) {
           minimumRankClearance = Math.min(
@@ -455,7 +544,11 @@ if (checkRankingLayout) {
       );
     }
     console.log(
-      `PASS: student and teacher rankings at 320–1890px. Mobile and tablet rows stay on one line with at least ${minimumRankClearance.toFixed(1)}px between the rank and emoji. Desktop retains 52px rows, centered classes and right-aligned amounts. Keyboard selection works.`,
+      `PASS: student and teacher rankings at 320–1890px. Mobile and tablet rank/emoji clearance ≥${minimumRankClearance.toFixed(1)}px. Tablet/desktop amounts share one right-aligned column; five-digit amounts fit and full 12-digit values remain accessible. Keyboard selection works.`,
+    );
+    await fs.writeFile(
+      path.join(evidence, "ranking-typography.json"),
+      JSON.stringify(typographySamples, null, 2),
     );
   } finally {
     await browser.close();
