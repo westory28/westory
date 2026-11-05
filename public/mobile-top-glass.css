@@ -1,7 +1,11 @@
 html {
   --ws-safe-top: env(safe-area-inset-top, 0px);
   --ws-glass-height: var(--ws-safe-top);
-  --ws-glass-fade: linear-gradient(to bottom, black calc(100% - 16px), transparent);
+  --ws-glass-feather: 24px;
+  --ws-glass-sample: 0px;
+  --ws-glass-fade: linear-gradient(to bottom,
+    black calc(var(--ws-glass-height) - var(--ws-glass-feather)),
+    transparent var(--ws-glass-height));
   background-color: #f9fafb;
   scroll-padding-top: var(--ws-safe-top);
 }
@@ -10,7 +14,10 @@ html {
   html {
     /* Keep the edge when the current inset shrinks during navigation, or when
        the browser reports neither a current nor a maximum inset. */
-    --ws-glass-height: calc(max(var(--ws-safe-top), env(safe-area-max-inset-top, 0px)) + 16px);
+    --ws-glass-height: calc(max(var(--ws-safe-top), env(safe-area-max-inset-top, 0px)) + var(--ws-glass-feather));
+    /* Sample past the fade so a passing letter or logo is not mirrored at the
+       visible edge of the filter. This extra area is completely masked out. */
+    --ws-glass-sample: 36px;
   }
 }
 
@@ -37,7 +44,11 @@ html {
 
 #westory-top-glass::before {
   position: absolute;
-  inset: 0;
+  inset: 0 0 calc(0px - var(--ws-glass-sample));
+}
+
+:is(dialog:modal, :fullscreen:not(html))::after {
+  height: calc(var(--ws-glass-height) + var(--ws-glass-sample));
 }
 
 /* Native dialogs and fullscreen elements paint above document siblings. */
@@ -45,10 +56,11 @@ html:has(dialog:modal, :fullscreen:not(html)) #westory-top-glass {
   visibility: hidden;
 }
 
-/* In an iOS Home Screen app no fixed box should meet the system scroll edge,
-   including in a dialog or fullscreen. Hiding only the filter leaves the box. */
-html[data-system-top-edge] #westory-top-glass,
-html[data-system-top-edge] :is(dialog:modal, :fullscreen:not(html))::after {
+/* Let the unobstructed iOS dashboard use WebKit's own scroll edge. A top-layer
+   dialog or fullscreen window still paints its own transparent filter. */
+html[data-system-top-edge]:not(:has(
+  .teacher-sidebar-backdrop, .teacher-mobile-drawer-backdrop, [aria-modal="true"]:not([hidden])
+)) #westory-top-glass {
   display: none;
 }
 

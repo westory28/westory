@@ -134,7 +134,7 @@ const browser = await playwright.chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
 });
 
-async function surface(page, inset, layer = "document") {
+async function surface(page, inset, layer = "document", cover = true) {
   const result = await page.evaluate((layer) => {
     const glass = document.getElementById("westory-top-glass");
     const host =
@@ -149,22 +149,44 @@ async function surface(page, inset, layer = "document") {
     );
     const box = glass?.getBoundingClientRect();
     return {
-      height:
-        parseFloat(style.height) || (layer === "document" ? box?.height : 0),
+      visibleHeight: box?.height,
+      filterHeight: parseFloat(style.height),
       blur: style.backdropFilter,
+      background: style.backgroundColor,
       click: style.pointerEvents,
       y: box?.y,
       display: style.display,
       content: style.content,
+      viewport: document.querySelector('meta[name="viewport"]').content,
+      hostBoxes: glass?.getClientRects().length,
     };
   }, layer);
   assert(
-    result.height > inset && result.height >= 16,
-    `${layer} edge must extend into page at inset ${inset}: ${JSON.stringify(result)}`,
+    result.filterHeight >= inset + 24 + 12,
+    `${layer} must sample beyond the visible fade at inset ${inset}: ${JSON.stringify(result)}`,
   );
   assert.match(result.blur, /blur\(/);
+  assert.equal(result.background, "rgba(0, 0, 0, 0)");
   assert.equal(result.click, "none");
-  if (layer === "document") assert.equal(result.y, 0);
+  assert.equal(
+    (result.viewport.match(/viewport-fit\s*=\s*cover/gi) || []).length,
+    cover ? 1 : 0,
+    "unexpected viewport-fit=cover declarations on " + page.url(),
+  );
+  assert.notEqual(result.display, "none");
+  if (layer === "document") {
+    assert.equal(
+      result.visibleHeight,
+      inset + 24,
+      "visible web edge must extend 24px beyond the safe inset",
+    );
+    assert.equal(
+      result.hostBoxes,
+      1,
+      "the fixed glass host must have a real box",
+    );
+    assert.equal(result.y, 0);
+  }
 }
 
 // Compare the real frame with its glass hidden, or only its blur disabled.
@@ -172,17 +194,20 @@ async function surface(page, inset, layer = "document") {
 async function comparePixels(
   page,
   name,
-  { textEdges = false, samples = [] } = {},
+  { textEdges = false, samples = [], logoBox } = {},
 ) {
-  const visible = await page.screenshot({ animations: "disabled" });
+  const screenshot = () =>
+    page.screenshot({ animations: "disabled", scale: "css" });
+  const visible = await screenshot();
   const control = await page.addStyleTag({
-    content: textEdges
-      ? "#westory-top-glass::before {backdrop-filter:none !important;-webkit-backdrop-filter:none !important}"
-      : "#westory-top-glass, dialog:modal::after, :fullscreen::after {visibility:hidden !important}",
+    content:
+      textEdges || logoBox
+        ? "#westory-top-glass::before {backdrop-filter:none !important;-webkit-backdrop-filter:none !important}"
+        : "#westory-top-glass, dialog:modal::after, :fullscreen::after {visibility:hidden !important}",
   });
   let uncovered;
   try {
-    uncovered = await page.screenshot({ animations: "disabled" });
+    uncovered = await screenshot();
   } finally {
     await control.evaluate((node) => node.remove());
   }
@@ -190,9 +215,9 @@ async function comparePixels(
     fs.writeFile(path.join(dir, name + ".png"), visible),
     fs.writeFile(path.join(dir, name + "-control.png"), uncovered),
   ]);
-  if (!samples.length && !textEdges) return;
+  if (!samples.length && !textEdges && !logoBox) return;
   const result = await page.evaluate(
-    async ({ frames, samples }) => {
+    async ({ frames, samples, logoBox }) => {
       const height = document
         .getElementById("westory-top-glass")
         .getBoundingClientRect().height;
@@ -233,6 +258,56 @@ async function comparePixels(
           }
         return sum / (8 * (image.width - 1));
       }
+      function measureWordmark() {
+        const ink = { blue: 0, orange: 0 };
+        const halo = { blue: 0, orange: 0 };
+        const from = Math.max(0, Math.floor(logoBox.x) - 12);
+        const to = Math.min(
+          on.width,
+          Math.ceil(logoBox.x + logoBox.width) + 12,
+        );
+        for (let y = 0; y < Math.floor(height); y++)
+          for (let x = from; x < to; x++) {
+            const offset = (y * on.width + x) * 4;
+            const [r, g, b] = off.data.subarray(offset, offset + 3);
+            if (b - r > 60) ink.blue++;
+            if (r - b > 60) ink.orange++;
+            // A white mask can erase the letters too. Blurring the real logo must
+            // carry both of its colors into pixels that were neutral without the filter.
+            if (
+              Math.min(r, g, b) < 205 ||
+              Math.max(r, g, b) - Math.min(r, g, b) > 12
+            )
+              continue;
+            const difference = on.data[offset + 2] - on.data[offset];
+            if (difference > 8) halo.blue++;
+            if (difference < -8) halo.orange++;
+          }
+        // The screenshot's visible cut was precisely at the native inset. The wordmark
+        // straddles that line here: an abrupt switch to white or raw lettering must fail.
+        const boundary = Math.round(logoBox.y + logoBox.height / 2);
+        function boundaryJump(image) {
+          let peak = 0;
+          for (let x = from; x < to; x++) {
+            const offset = (boundary * image.width + x) * 4;
+            for (let c = 0; c < 3; c++)
+              peak = Math.max(
+                peak,
+                Math.abs(
+                  image.data[offset + c] -
+                    image.data[offset - image.width * 4 + c],
+                ),
+              );
+          }
+          return peak;
+        }
+        return {
+          ink,
+          halo,
+          rawBoundaryJump: boundaryJump(off),
+          blurredBoundaryJump: boundaryJump(on),
+        };
+      }
       return {
         colors: samples.map((sample) => ({
           name: sample.name,
@@ -243,11 +318,13 @@ async function comparePixels(
         })),
         sharp: edgeEnergy(off),
         blurred: edgeEnergy(on),
+        wordmark: logoBox ? measureWordmark() : null,
       };
     },
     {
       frames: [visible, uncovered].map((buffer) => buffer.toString("base64")),
       samples,
+      logoBox,
     },
   );
   const difference = (a, b) =>
@@ -284,6 +361,30 @@ async function comparePixels(
       result.blurred < result.sharp * 0.6,
       "text outlines must soften: " + name + " " + JSON.stringify(result),
     );
+  }
+  if (logoBox) {
+    assert(
+      result.wordmark.rawBoundaryJump > 30 &&
+        result.wordmark.blurredBoundaryJump < 24,
+      "the safe-area boundary must soften the crossing wordmark without a hard horizontal cut: " +
+        JSON.stringify(result),
+    );
+    for (const color of ["blue", "orange"]) {
+      assert(
+        result.wordmark.ink[color] >= 12,
+        "the real " +
+          color +
+          " logo lettering must cross the top edge: " +
+          JSON.stringify(result),
+      );
+      assert(
+        result.wordmark.halo[color] >= 12,
+        "the glass must spread " +
+          color +
+          " into previously neutral pixels: " +
+          JSON.stringify(result),
+      );
+    }
   }
   console.log(name, JSON.stringify(result));
 }
@@ -371,13 +472,85 @@ async function crossScheduleTitle(page) {
   });
 }
 
+async function openGradingPlan(page, inset) {
+  await page.getByRole("button", { name: "교사 메뉴 열기" }).click();
+  await page.locator(".teacher-sidebar-backdrop").waitFor();
+  await surface(page, inset, "document", false);
+  const sidebar = page.locator(".teacher-sidebar.is-mobile-open");
+  const group = sidebar.getByRole("button", { name: "점수 관리", exact: true });
+  if ((await group.getAttribute("aria-expanded")) !== "true")
+    await group.click();
+  await sidebar
+    .getByRole("link", { name: "평가 반영 비율", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "평가 기준 등록", exact: true })
+    .waitFor();
+}
+
+async function crossGradingWordmark(page, inset, label, canRasterize) {
+  const logo = page.locator(
+    ".teacher-account-header .teacher-header-start img.ws-brand-logo",
+  );
+  await logo.evaluate(async (image) => {
+    await image.decode();
+  });
+  const midpoint = inset || 6;
+  await logo.evaluate((image, midpoint) => {
+    const box = image.getBoundingClientRect();
+    window.scrollTo({
+      top: scrollY + box.top + box.height / 2 - midpoint,
+      behavior: "instant",
+    });
+  }, midpoint);
+  const box = await logo.boundingBox();
+  assert(
+    Math.abs(box.y + box.height / 2 - midpoint) <= 1,
+    "grading page must scroll the actual wordmark through the edge",
+  );
+  await surface(page, inset);
+  await comparePixels(
+    page,
+    "ios-home-grading-wordmark-" + label,
+    canRasterize ? { logoBox: box } : {},
+  );
+}
+
+async function beforeAppMount(page, navigate, verify) {
+  const mainBundle = /\/assets\/main-[^/]+\.js$/;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const hold = async (route) => {
+    await gate;
+    await route.continue();
+  };
+  await page.route(mainBundle, hold);
+  try {
+    await Promise.all([page.waitForRequest(mainBundle), navigate()]);
+    await page.locator("#root").waitFor({ state: "attached" });
+    assert.equal(
+      await page.locator("#root > *").count(),
+      0,
+      "check the head script before React mounts",
+    );
+    await verify();
+  } finally {
+    release();
+    await page.unroute(mainBundle, hold);
+  }
+}
+
 async function scenario(engine, inset, iosHome = false) {
   const webkit = engine.browserType().name() === "webkit";
   const label = engine.browserType().name() + "-" + inset;
   const page = await engine.newPage({
     ...(webkit ? playwright.devices["iPhone 13"] : {}),
-    viewport: { width: 390, height: 780 },
-    deviceScaleFactor: 1,
+    viewport: iosHome
+      ? { width: 430, height: 932 }
+      : { width: 390, height: 780 },
+    deviceScaleFactor: iosHome ? 3 : 1,
     isMobile: true,
     hasTouch: true,
     reducedMotion: "reduce",
@@ -389,8 +562,17 @@ async function scenario(engine, inset, iosHome = false) {
       Object.defineProperty(navigator, "standalone", { value: true }),
     );
   }
-  const checkSurface = (layer) =>
-    iosHome ? systemEdge(page, layer) : surface(page, inset, layer);
+  const checkSurface = (layer) => {
+    const { hash, pathname } = new URL(page.url());
+    const dashboard =
+      pathname === "/" &&
+      /^#\/(teacher|student)\/dashboard\/?(?:\?|$)/.test(hash);
+    if (iosHome && dashboard)
+      return layer && layer !== "document"
+        ? surface(page, inset, layer, false)
+        : systemEdge(page);
+    return surface(page, inset, layer);
+  };
   if (!webkit) {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("Emulation.setSafeAreaInsetsOverride", {
@@ -425,26 +607,11 @@ async function scenario(engine, inset, iosHome = false) {
     await checkSurface();
   };
   try {
-    let resume, started;
-    const entry = new Promise((resolve) => {
-      started = resolve;
-    });
-    const pause = new Promise((resolve) => {
-      resume = resolve;
-    });
-    await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
-      started();
-      await pause;
-      await route.continue();
-    });
-    await page.goto(origin + "/#/teacher/dashboard", { waitUntil: "commit" });
-    await entry;
-    await page.locator("#root").waitFor({ state: "attached" });
-    try {
-      await checkSurface();
-    } finally {
-      resume();
-    }
+    await beforeAppMount(
+      page,
+      () => page.goto(origin + "/#/teacher/dashboard", { waitUntil: "commit" }),
+      checkSurface,
+    );
     const originalGlass = await page
       .locator("#westory-top-glass")
       .elementHandle();
@@ -458,11 +625,41 @@ async function scenario(engine, inset, iosHome = false) {
     for (const close of await page.locator(".ws-toast__close").all())
       await close.click();
     if (iosHome) {
+      // The synthetic dashboard has few entries. A shorter viewport gives its title
+      // enough real scroll distance to pass the edge; grading uses the full phone size.
+      const phone = page.viewportSize();
+      await page.setViewportSize({ ...phone, height: 780 });
       await crossScheduleTitle(page);
-      await visit(
-        "/teacher/quiz/history-classroom",
-        ".history-dashboard article",
+      await page.setViewportSize(phone);
+      if (await page.evaluate(() => document.fullscreenEnabled)) {
+        await page
+          .locator('[data-patch-target="teacher-dashboard"]')
+          .evaluate((el) => el.requestFullscreen());
+        await checkSurface("fullscreen");
+        await page.evaluate(() => document.exitFullscreen());
+        await checkSurface();
+      }
+      // Actual React Router links (including pushState) and browser history, not only hashchange.
+      await openGradingPlan(page, inset);
+      await checkSurface();
+      const canRasterize = !webkit || process.platform !== "win32";
+      await crossGradingWordmark(page, inset, label, canRasterize);
+      await page.goBack({ waitUntil: "commit" });
+      await page.locator('[data-patch-target="teacher-dashboard"]').waitFor();
+      await checkSurface();
+      await openGradingPlan(page, inset);
+      await checkSurface();
+      await beforeAppMount(
+        page,
+        () => page.reload({ waitUntil: "commit" }),
+        checkSurface,
       );
+      await page
+        .getByRole("heading", { name: "평가 기준 등록", exact: true })
+        .waitFor();
+      await checkSurface();
+      await visit("/student/dashboard", ".student-portal-dashboard");
+      await visit("/student/calendar", ".student-calendar-page");
       await visit("/student/lesson/maps", ".history-atlas__places-trigger");
       await page.getByRole("button", { name: "장소 목록 열기" }).click();
       await page.locator("dialog:modal").waitFor();
@@ -482,7 +679,7 @@ async function scenario(engine, inset, iosHome = false) {
       }
       assert.deepEqual(failures, []);
       console.log(
-        "iOS Home Screen signal: system viewport and no fixed web glass across title, menus and windows.",
+        "iOS Home Screen signal: native dashboards; transparent web glass for grading, other menus, top layers and legal documents.",
       );
       return;
     }
@@ -599,6 +796,7 @@ async function scenario(engine, inset, iosHome = false) {
 }
 try {
   for (const inset of [0, 47]) await scenario(browser, inset);
+  await scenario(browser, 59, true);
   const webkit = await playwright.webkit.launch();
   try {
     await scenario(webkit, 0);
@@ -631,7 +829,7 @@ try {
         undefined,
         pathname + " still overrides the native status bar",
       );
-      assert.doesNotMatch(metadata.viewport, /viewport-fit\s*=\s*cover/);
+      assert.match(metadata.viewport, /viewport-fit\s*=\s*cover/);
       assert.equal(metadata["theme-color"], "#f9fafb");
     } finally {
       await tab.close();

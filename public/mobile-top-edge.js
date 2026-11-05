@@ -1,16 +1,26 @@
-// Run before the first paint in both the portal and standalone documents.
+// Choose the scroll edge before the portal paints, including on direct menu links.
 (() => {
   const iosHomeScreen =
     navigator.standalone === true ||
     (matchMedia("(display-mode: standalone)").matches &&
       CSS.supports("-webkit-touch-callout", "none"));
 
-  if (iosHomeScreen) {
-    // A fixed element at the top can suppress WebKit's own scroll-edge effect.
-    document.documentElement.setAttribute("data-system-top-edge", "");
-    return;
-  }
+  if (!iosHomeScreen) return;
 
-  // Browsers using the web blur can draw into the hardware safe area.
-  document.querySelector('meta[name="viewport"]').content += ", viewport-fit=cover";
+  const viewport = document.querySelector('meta[name="viewport"]');
+  const cover = viewport.content;
+  const system = cover.replace(/,\s*viewport-fit=cover$/, "");
+  const update = () => {
+    const path = location.hash.slice(1).split(/[?#]/, 1)[0];
+    const dashboard = /^\/(?:teacher|student)\/dashboard\/*$/i.test(path);
+    document.documentElement.toggleAttribute("data-system-top-edge", dashboard);
+    const next = dashboard ? system : cover;
+    if (viewport.content !== next) viewport.content = next;
+  };
+
+  update();
+  // Router links use pushState, which does not fire hashchange.
+  window.addEventListener("westory:routechange", update);
+  window.addEventListener("hashchange", update);
+  window.addEventListener("pageshow", update);
 })();
