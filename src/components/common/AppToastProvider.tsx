@@ -193,7 +193,6 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
   const [host] = useState(() => {
     const element = document.createElement("div");
     element.className = "ws-toast-layer";
-    element.setAttribute("popover", "manual");
     return element;
   });
   const toastIndexRef = useRef(0);
@@ -258,6 +257,7 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
         setFocused(host.contains(document.activeElement));
       }
       if (
+        host.hasAttribute("popover") &&
         typeof host.showPopover === "function" &&
         !host.matches(":popover-open")
       )
@@ -301,16 +301,26 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
       host.remove();
     };
   }, [host]);
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     setFocused(host.contains(document.activeElement));
     if (!toasts.length) {
       setHovered(false);
-    } else if (
-      host.isConnected &&
-      typeof host.showPopover === "function" &&
-      !host.matches(":popover-open")
-    ) {
-      host.showPopover();
+      if (
+        typeof host.hidePopover === "function" &&
+        host.matches(":popover-open")
+      ) {
+        host.hidePopover();
+      }
+      host.removeAttribute("popover");
+    } else {
+      if (!host.hasAttribute("popover")) host.setAttribute("popover", "manual");
+      if (
+        host.isConnected &&
+        typeof host.showPopover === "function" &&
+        !host.matches(":popover-open")
+      ) {
+        host.showPopover();
+      }
     }
   }, [host, toasts]);
   const value = useMemo(

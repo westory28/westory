@@ -128,14 +128,18 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   useEffect(() => {
     if (!mobileOpen) {
       if (previousMobileOpen.current) {
-        document.getElementById(`${navigationId}-toggle`)?.focus();
+        document
+          .getElementById(`${navigationId}-toggle`)
+          ?.focus({ preventScroll: true });
       }
       previousMobileOpen.current = false;
       return;
     }
     previousMobileOpen.current = true;
     const panel = panelRef.current;
-    panel?.querySelector<HTMLButtonElement>(".teacher-sidebar-close")?.focus();
+    panel
+      ?.querySelector<HTMLButtonElement>(".teacher-sidebar-close")
+      ?.focus({ preventScroll: true });
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();

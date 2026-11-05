@@ -231,7 +231,9 @@ const readLockEffect = (file) => {
   const visit = (node) => {
     if (
       ts.isCallExpression(node) &&
-      node.expression.getText(source) === "useEffect" &&
+      ["useEffect", "useLayoutEffect"].includes(
+        node.expression.getText(source),
+      ) &&
       node.arguments[0]?.getText(source).includes("acquirePageScrollLock(")
     )
       callbacks.push(node.arguments[0].getText(source));

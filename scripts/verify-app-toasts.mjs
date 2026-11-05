@@ -98,6 +98,19 @@ try {
   const notify = async (input) =>
     page.evaluate((input) => window.toastQA.showToast(input), input);
   const count = () => page.locator(".ws-toast").count();
+  await reset();
+  const layerState = () =>
+    page.locator(".ws-toast-layer").evaluate((layer) => ({
+      open: layer.matches(":popover-open"),
+      boxes: layer.getClientRects().length,
+      live: layer.querySelectorAll("[aria-live]").length,
+    }));
+  assert.deepEqual(await layerState(), { open: false, boxes: 0, live: 2 });
+  await notify({ title: "알림 레이어 확인", persistent: true });
+  await page.waitForSelector(".ws-toast-layer:popover-open .ws-toast");
+  await page.locator(".ws-toast__close").click();
+  assert.deepEqual(await layerState(), { open: false, boxes: 0, live: 2 });
+  checks.push("idle live regions do not retain a fullscreen popover");
   for (const width of [320, 390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     await reset();

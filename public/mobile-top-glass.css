@@ -27,14 +27,10 @@ html {
   position: fixed;
   inset: 0 0 auto;
   z-index: 2147483647;
-  height: var(--ws-glass-height);
+  height: calc(var(--ws-glass-height) + var(--ws-glass-sample));
   pointer-events: none;
-}
-
-#westory-top-glass::before,
-:is(dialog:modal, :fullscreen:not(html))::after {
-  content: "";
-  /* Blur the content itself. A flat backdrop should keep its original color. */
+  /* The fixed element itself filters the backdrop; do not let WebKit sample
+     the white drawer through an unfiltered fixed wrapper. */
   background: transparent;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -42,13 +38,8 @@ html {
   mask-image: var(--ws-glass-fade);
 }
 
-#westory-top-glass::before {
-  position: absolute;
-  inset: 0 0 calc(0px - var(--ws-glass-sample));
-}
-
 :is(dialog:modal, :fullscreen:not(html))::after {
-  height: calc(var(--ws-glass-height) + var(--ws-glass-sample));
+  content: "";
 }
 
 /* Native dialogs and fullscreen elements paint above document siblings. */
@@ -58,9 +49,7 @@ html:has(dialog:modal, :fullscreen:not(html)) #westory-top-glass {
 
 /* Let the unobstructed iOS dashboard use WebKit's own scroll edge. A top-layer
    dialog or fullscreen window still paints its own transparent filter. */
-html[data-system-top-edge]:not(:has(
-  .teacher-sidebar-backdrop, .teacher-mobile-drawer-backdrop, [aria-modal="true"]:not([hidden])
-)) #westory-top-glass {
+html[data-system-top-edge] #westory-top-glass {
   display: none;
 }
 

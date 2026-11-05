@@ -289,7 +289,7 @@ const moduleFor = (request) => {
 };
 const result = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{AppDialogProvider}from'${root}/src/components/common/AppDialogProvider';import'qa-state';createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><Manager scoreKind={new URLSearchParams(window.location.search).get("scoreKind")||"performance"}/></AppDialogProvider></BrowserRouter>);`,
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{AppDialogProvider}from'${root}/src/components/common/AppDialogProvider';import'qa-state';createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><div id="qa-score-page"><Manager scoreKind={new URLSearchParams(window.location.search).get("scoreKind")||"performance"}/></div></AppDialogProvider></BrowserRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -335,6 +335,7 @@ const css = (
     [
       "assets/css/style.css",
       "src/assets/index.css",
+      "src/components/common/portalPage.css",
       "src/components/common/InfoHelp.css",
       "src/pages/teacher/components/performance-score-list.css",
     ].map((name) => fs.readFile(root + "/" + name, "utf8")),
@@ -388,6 +389,149 @@ const report = {
   ],
 };
 let browser;
+async function checkScoreToolbar(page, rosterTitle) {
+  const actions = page.locator(".score-manager-actions");
+  const filters = page.locator(".score-manager-filters");
+  const toggle = filters.locator(".score-manager-search-toggle");
+  const field = filters.getByRole("searchbox", { name: "학생 이름 검색" });
+  const lookup = filters.getByRole("button", { name: "조회", exact: true });
+  const list = page.locator(".score-list-compact");
+  if (process.env.SCORE_QA_ICON_STYLESHEET) {
+    await page.addStyleTag({ path: process.env.SCORE_QA_ICON_STYLESHEET });
+    await page.evaluate(() => document.fonts.ready);
+  }
+  await page
+    .locator("#qa-score-page")
+    .evaluate((root) => root.classList.add("ws-page", "ws-page--reading"));
+  for (const width of [320, 390, 430, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const metrics = await actions.evaluate((bar) => {
+      const buttons = [...bar.querySelectorAll("button")].map((button) =>
+        button.getBoundingClientRect(),
+      );
+      const labels = [
+        ...bar.querySelectorAll(".score-manager-action-label"),
+      ].map((label) => label.offsetWidth);
+      return {
+        count: buttons.length,
+        lines: new Set(buttons.map((b) => b.top)).size,
+        labels,
+        minTarget: Math.min(...buttons.map((b) => Math.min(b.width, b.height))),
+        pageWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        right: buttons.at(-1).right,
+      };
+    });
+    assert.equal(metrics.count, 6);
+    assert(
+      metrics.pageWidth <= metrics.clientWidth + 1 &&
+        metrics.right <= metrics.clientWidth + 1,
+    );
+    if (width < 768) {
+      assert.equal(metrics.lines, 1);
+      assert(metrics.minTarget >= 44);
+      assert(
+        metrics.labels.every((w) => (width === 320 ? w <= 1 : w > 1)),
+        "Short labels remain visible when space permits",
+      );
+      const roster = filters.getByLabel("평가명", { exact: true });
+      const grade = filters.getByLabel("학년", { exact: true });
+      const klass = filters.getByLabel("반", { exact: true });
+      const titleBox = await roster.boundingBox();
+      const gradeBox = await grade.boundingBox();
+      assert(
+        titleBox.width > gradeBox.width &&
+          titleBox.y + titleBox.height < gradeBox.y,
+      );
+      for (const control of [klass, toggle, lookup])
+        assert(Math.abs((await control.boundingBox()).y - gradeBox.y) < 1);
+      const previous = await filters.boundingBox();
+      await toggle.focus();
+      await toggle.press("Enter");
+      assert.equal(
+        await field.evaluate((el) => el === document.activeElement),
+        true,
+      );
+      assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+      assert((await field.boundingBox()).width >= 96);
+      const row = filters.locator(".score-manager-filter-row");
+      const rowBox = await row.boundingBox();
+      assert(
+        await row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+        "Expanded filters do not scroll horizontally",
+      );
+      for (const control of [grade, klass, field, toggle, lookup]) {
+        const box = await control.boundingBox();
+        assert(
+          box.x >= rowBox.x - 1 &&
+            box.x + box.width <= rowBox.x + rowBox.width + 1,
+          "Grade, class, search and lookup stay fully visible",
+        );
+      }
+      Object.assign(metrics, {
+        expandedSearch: (await field.boundingBox()).width,
+        filterWidth: rowBox.width,
+      });
+      assert(
+        Math.abs((await filters.boundingBox()).height - previous.height) < 1,
+        "Opening search keeps the roster below it in place",
+      );
+      await grade.selectOption("3");
+      await klass.selectOption("1");
+      await field.fill("가상학생02");
+      if (width === 320 || width === 390 || width === 430) {
+        await page.screenshot({
+          path: path.join(out, `score-toolbar-open-${width}.png`),
+        });
+      }
+      await field.press("Escape");
+      assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+      assert.equal(
+        await toggle.evaluate((el) => el === document.activeElement),
+        true,
+      );
+      assert.equal(await grade.inputValue(), "3");
+      assert.equal(await klass.inputValue(), "1");
+      assert(
+        Math.abs((await filters.boundingBox()).height - previous.height) < 1,
+        "Search keeps filter height",
+      );
+    } else {
+      assert((await field.isVisible()) && !(await toggle.isVisible()));
+    }
+    assert.equal(
+      await list.count(),
+      0,
+      "Filtering does not run the roster lookup",
+    );
+    report.scoreToolbar ??= [];
+    report.scoreToolbar.push({ width, ...metrics });
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await toggle.click();
+  await field.fill("가상학생02");
+  await lookup.click();
+  await list.locator("tbody tr").first().waitFor();
+  assert.equal(await list.locator("tbody tr").count(), 1);
+  assert((await list.textContent()).includes("가상학생02"));
+  await field.press("Escape");
+  assert.equal(await list.locator("tbody tr").count(), 32);
+  assert.equal(
+    await filters
+      .getByLabel("평가명", { exact: true })
+      .locator("option:checked")
+      .textContent(),
+    rosterTitle,
+  );
+  await filters.getByLabel("학년", { exact: true }).selectOption("all");
+  await filters.getByLabel("반", { exact: true }).selectOption("all");
+  await page
+    .locator("#qa-score-page")
+    .evaluate((root) => root.classList.remove("ws-page", "ws-page--reading"));
+  report.checks.push(
+    "320/390/430 mobile score toolbar: six 44px controls, one roster row and one filter row; search focus, Escape, grade/class retention, explicit lookup and live name filtering. 768/1280 retain desktop search.",
+  );
+}
 try {
   browser = await chromium.launch({
     ...(process.env.SCORE_QA_BROWSER_CHANNEL
@@ -1609,6 +1753,7 @@ try {
       has: page.getByRole("option", { name: detailedTitle, exact: true }),
     });
     await rosterSelect.selectOption({ label: detailedTitle });
+    if (width === 390) await checkScoreToolbar(page, detailedTitle);
     await page.getByRole("button", { name: "조회", exact: true }).click();
     const scoreList = page.locator(".score-list-compact");
     await scoreList.locator("tbody tr").last().waitFor();

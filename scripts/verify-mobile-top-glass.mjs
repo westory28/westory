@@ -134,7 +134,7 @@ const browser = await playwright.chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
 });
 
-async function surface(page, inset, layer = "document", cover = true) {
+async function surface(page, inset, layer = "document") {
   const result = await page.evaluate((layer) => {
     const glass = document.getElementById("westory-top-glass");
     const host =
@@ -145,13 +145,15 @@ async function surface(page, inset, layer = "document", cover = true) {
           : glass || document.documentElement;
     const style = getComputedStyle(
       host,
-      layer === "document" && glass ? "::before" : "::after",
+      layer === "document" ? null : "::after",
     );
     const box = glass?.getBoundingClientRect();
     return {
-      visibleHeight: box?.height,
+      visibleHeight:
+        box?.height - parseFloat(style.getPropertyValue("--ws-glass-sample")),
       filterHeight: parseFloat(style.height),
       blur: style.backdropFilter,
+      mask: style.maskImage,
       background: style.backgroundColor,
       click: style.pointerEvents,
       y: box?.y,
@@ -166,11 +168,12 @@ async function surface(page, inset, layer = "document", cover = true) {
     `${layer} must sample beyond the visible fade at inset ${inset}: ${JSON.stringify(result)}`,
   );
   assert.match(result.blur, /blur\(/);
+  assert.match(result.mask, /linear-gradient/);
   assert.equal(result.background, "rgba(0, 0, 0, 0)");
   assert.equal(result.click, "none");
   assert.equal(
     (result.viewport.match(/viewport-fit\s*=\s*cover/gi) || []).length,
-    cover ? 1 : 0,
+    1,
     "unexpected viewport-fit=cover declarations on " + page.url(),
   );
   assert.notEqual(result.display, "none");
@@ -202,7 +205,7 @@ async function comparePixels(
   const control = await page.addStyleTag({
     content:
       textEdges || logoBox
-        ? "#westory-top-glass::before {backdrop-filter:none !important;-webkit-backdrop-filter:none !important}"
+        ? "#westory-top-glass {backdrop-filter:none !important;-webkit-backdrop-filter:none !important}"
         : "#westory-top-glass, dialog:modal::after, :fullscreen::after {visibility:hidden !important}",
   });
   let uncovered;
@@ -218,9 +221,12 @@ async function comparePixels(
   if (!samples.length && !textEdges && !logoBox) return;
   const result = await page.evaluate(
     async ({ frames, samples, logoBox }) => {
-      const height = document
-        .getElementById("westory-top-glass")
-        .getBoundingClientRect().height;
+      const glass = document.getElementById("westory-top-glass");
+      const height =
+        glass.getBoundingClientRect().height -
+        parseFloat(
+          getComputedStyle(glass).getPropertyValue("--ws-glass-sample"),
+        );
       async function pixels(base64) {
         const image = new Image();
         image.src = "data:image/png;base64," + base64;
@@ -436,6 +442,9 @@ async function systemEdge(page, layer = "document") {
       display: getComputedStyle(topLayer || glass, topLayer ? "::after" : null)
         .display,
       hasTopLayer: !!topLayer,
+      emptyToastOpen: !!document.querySelector(
+        ".ws-toast-layer:popover-open:not(:has(.ws-toast))",
+      ),
     };
   }, layer);
   assert.doesNotMatch(state.viewport, /viewport-fit\s*=\s*cover/);
@@ -446,6 +455,11 @@ async function systemEdge(page, layer = "document") {
     "a fixed box would interfere with the native scroll edge",
   );
   assert.equal(state.display, "none");
+  assert.equal(
+    state.emptyToastOpen,
+    false,
+    "a dashboard's native edge cannot retain an empty toast popover",
+  );
   assert.equal(state.hasTopLayer, layer !== "document");
 }
 
@@ -472,20 +486,281 @@ async function crossScheduleTitle(page) {
   });
 }
 
-async function openGradingPlan(page, inset) {
-  await page.getByRole("button", { name: "교사 메뉴 열기" }).click();
-  await page.locator(".teacher-sidebar-backdrop").waitFor();
-  await surface(page, inset, "document", false);
-  const sidebar = page.locator(".teacher-sidebar.is-mobile-open");
-  const group = sidebar.getByRole("button", { name: "점수 관리", exact: true });
+async function openDrawer(page, portal, inset) {
+  const toggle = page.getByRole("button", { name: portal + " 메뉴 열기" });
+  await toggle.click();
+  const backdrop = page.locator(".teacher-sidebar-backdrop");
+  await backdrop.waitFor();
+  assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+  await surface(page, inset);
+  const bounds = await backdrop.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return {
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      width: innerWidth,
+      height: innerHeight,
+    };
+  });
+  assert(
+    bounds.left <= 1 &&
+      bounds.top <= 1 &&
+      bounds.right >= bounds.width - 1 &&
+      bounds.bottom >= bounds.height - 1,
+    "drawer backdrop must cover the viewport, even on a scrolled page: " +
+      JSON.stringify(bounds),
+  );
+  const drawer = page.getByRole("dialog", {
+    name: portal + " 메뉴",
+    exact: true,
+  });
+  const panel = await drawer.boundingBox();
+  assert(
+    Math.abs(panel.y - 8) <= 1 &&
+      Math.abs(panel.y + panel.height - bounds.height) <= 1,
+    "drawer paint starts 8px from the viewport edge and reaches the screen bottom: " +
+      JSON.stringify(panel),
+  );
+  for (const content of [
+    drawer.locator(".teacher-sidebar-wordmark"),
+    drawer.getByRole("button", { name: "메뉴 닫기", exact: true }),
+  ]) {
+    const box = await content.boundingBox();
+    assert(
+      box && box.height > 0 && box.y >= Math.max(8, inset) + 8,
+      "the drawer wordmark and close action must be visible below the safe inset: " +
+        JSON.stringify(box),
+    );
+  }
+  return drawer;
+}
+
+async function closedDrawer(page, portal) {
+  await page
+    .locator(".teacher-sidebar-backdrop")
+    .waitFor({ state: "detached" });
+  assert.equal(
+    await page.locator(".teacher-sidebar.is-mobile-open").count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: portal + " 메뉴 열기" })
+      .getAttribute("aria-expanded"),
+    "false",
+  );
+}
+
+async function checkDrawerPaint(page, drawer, portal, inset) {
+  await page.screenshot({
+    path: path.join(dir, "ios-dashboard-open-" + portal + "-" + inset + ".png"),
+    animations: "disabled",
+    scale: "css",
+  });
+  // A flat swatch beneath the real panel isolates its paint from dashboard text.
+  const strip = await drawer.evaluateHandle((node) => {
+    const el = document.createElement("div");
+    el.style.cssText =
+      "position:fixed;inset:0 0 auto;height:150px;z-index:140;pointer-events:none;background:rgb(48,116,186)";
+    node.parentElement.insertBefore(el, node);
+    return el;
+  });
+  try {
+    const shot = await page.screenshot({
+      animations: "disabled",
+      scale: "css",
+    });
+    await fs.writeFile(
+      path.join(dir, "ios-dashboard-colors-" + portal + "-" + inset + ".png"),
+      shot,
+    );
+    // The paint starts near the physical edge. Only the controls wait for the safe inset.
+    if (inset < 40) return;
+    const control = await page.addStyleTag({
+      content: "#westory-top-glass{visibility:hidden!important}",
+    });
+    let unfiltered;
+    try {
+      unfiltered = await page.screenshot({
+        animations: "disabled",
+        scale: "css",
+      });
+    } finally {
+      await control.evaluate((el) => el.remove());
+    }
+    const sample = await page.evaluate(
+      async ({ on, off, inset }) => {
+        async function colors(src) {
+          const image = new Image();
+          image.src = "data:image/png;base64," + src;
+          await image.decode();
+          const canvas = document.createElement("canvas");
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(image, 0, 0);
+          const color = (x, y) =>
+            Array.from(ctx.getImageData(x, y, 1, 1).data).slice(0, 3);
+          return (y) => ({
+            panel: color(image.width - 5, y),
+            shade: color(5, y),
+          });
+        }
+        const [visible, source] = await Promise.all([colors(on), colors(off)]);
+        return {
+          top: source(4),
+          fade: source(14),
+          solid: source(24),
+          clock: visible(Math.floor(inset / 2)),
+          above: visible(inset - 3),
+          below: visible(inset + 3),
+        };
+      },
+      {
+        on: shot.toString("base64"),
+        off: unfiltered.toString("base64"),
+        inset,
+      },
+    );
+    const delta = (a, b) =>
+      Math.max(...a.map((value, i) => Math.abs(value - b[i])));
+    const message = JSON.stringify(sample);
+    for (const side of ["panel", "shade"]) {
+      assert(
+        delta(sample.top[side], [48, 116, 186]) <= 2,
+        "the first 8px of the actual drawer paints must stay transparent: " +
+          message,
+      );
+      assert(
+        delta(sample.above[side], sample.below[side]) <= 4,
+        "no new horizontal boundary at the hardware safe inset: " + message,
+      );
+    }
+    assert(
+      Math.min(...sample.solid.panel) >= 240 && sample.solid.shade[2] < 140,
+      "by 24px the drawer must be white and the backdrop must shade the content: " +
+        message,
+    );
+    assert(
+      sample.fade.panel[0] > sample.top.panel[0] + 8 &&
+        sample.fade.panel[0] < sample.solid.panel[0] - 8 &&
+        sample.fade.shade[2] < sample.top.shade[2] - 8 &&
+        sample.fade.shade[2] > sample.solid.shade[2] + 8,
+      "both paints must transition between 8px and 20px: " + message,
+    );
+    assert(
+      sample.clock.panel[0] - sample.clock.shade[0] >= 100,
+      "the left backdrop and right panel must remain distinct behind the clock, above the safe inset: " +
+        message,
+    );
+    console.log("drawer " + portal, JSON.stringify(sample));
+  } finally {
+    await strip.evaluate((node) => node.remove());
+    await strip.dispose();
+  }
+}
+
+async function checkToastHost(page) {
+  const host = page.locator(".ws-toast-layer");
+  async function assertEmpty() {
+    assert.equal(await host.locator(".ws-toast").count(), 0);
+    const state = await host.evaluate((el) => ({
+      open: el.matches(":popover-open"),
+      boxes: el.getClientRects().length,
+    }));
+    assert.deepEqual(
+      state,
+      { open: false, boxes: 0 },
+      "an idle notification layer must leave the top edge free",
+    );
+  }
+  await assertEmpty();
+  // The actual provider turns ordinary success alerts into toasts. This has no backend effect.
+  await page.evaluate(() => window.alert("검증이 완료되었습니다."));
+  await host.locator(".ws-toast").waitFor();
+  assert(
+    await host.evaluate((el) => el.matches(":popover-open")),
+    "a live toast reaches the top layer",
+  );
+  await host.locator(".ws-toast__close").click();
+  await host.locator(".ws-toast").waitFor({ state: "detached" });
+  await assertEmpty();
+}
+
+async function dashboardDrawerClosures(page, portal, inset) {
+  const dismiss = [
+    (drawer) =>
+      drawer.getByRole("button", { name: "메뉴 닫기", exact: true }).click(),
+    () =>
+      page
+        .locator(".teacher-sidebar-backdrop")
+        .click({ position: { x: page.viewportSize().width - 5, y: 2 } }),
+    () => page.keyboard.press("Escape"),
+    (drawer) =>
+      drawer
+        .getByRole("link", {
+          name: portal === "교사" ? "대시보드" : "첫 화면",
+          exact: true,
+        })
+        .click(),
+  ];
+  for (const [index, close] of dismiss.entries()) {
+    const dashboard = page.url();
+    const before = await page.evaluate(() => {
+      scrollTo({ top: 24, behavior: "instant" });
+      return scrollY;
+    });
+    const drawer = await openDrawer(page, portal, inset);
+    if (index === 0) await checkDrawerPaint(page, drawer, portal, inset);
+    await close(drawer);
+    await closedDrawer(page, portal);
+    if (index !== 3) {
+      const after = await page.evaluate(() => scrollY);
+      assert(
+        Math.abs(after - before) <= 1,
+        "closing the " +
+          portal +
+          " menu must restore focus without scrolling the dashboard",
+      );
+      assert(
+        await page
+          .getByRole("button", { name: portal + " 메뉴 열기" })
+          .evaluate((el) => el === document.activeElement),
+      );
+    }
+    assert.equal(
+      page.url(),
+      dashboard,
+      "closing the menu or selecting the current dashboard keeps its route",
+    );
+    await systemEdge(page);
+  }
+}
+
+async function chooseScorePage(page, portal, inset, item, heading) {
+  const sidebar = await openDrawer(page, portal, inset);
+  const group = sidebar.getByRole("button", {
+    name: portal === "교사" ? "점수 관리" : "점수",
+    exact: true,
+  });
   if ((await group.getAttribute("aria-expanded")) !== "true")
     await group.click();
-  await sidebar
-    .getByRole("link", { name: "평가 반영 비율", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "평가 기준 등록", exact: true })
-    .waitFor();
+  await sidebar.getByRole("link", { name: item, exact: true }).click();
+  await page.getByRole("heading", { name: heading, exact: true }).waitFor();
+  await closedDrawer(page, portal);
+  await surface(page, inset);
+}
+
+async function openGradingPlan(page, inset) {
+  await chooseScorePage(
+    page,
+    "교사",
+    inset,
+    "평가 반영 비율",
+    "평가 기준 등록",
+  );
 }
 
 async function crossGradingWordmark(page, inset, label, canRasterize) {
@@ -542,6 +817,21 @@ async function beforeAppMount(page, navigate, verify) {
   }
 }
 
+async function switchFullscreen(page, selector) {
+  // The fullscreen promise can settle before fullscreenchange, which updates the viewport.
+  await page.evaluate(async (selector) => {
+    const changed = new Promise((resolve) =>
+      document.addEventListener("fullscreenchange", resolve, { once: true }),
+    );
+    await Promise.all([
+      changed,
+      selector
+        ? document.querySelector(selector).requestFullscreen()
+        : document.exitFullscreen(),
+    ]);
+  }, selector);
+}
+
 async function scenario(engine, inset, iosHome = false) {
   const webkit = engine.browserType().name() === "webkit";
   const label = engine.browserType().name() + "-" + inset;
@@ -569,7 +859,7 @@ async function scenario(engine, inset, iosHome = false) {
       /^#\/(teacher|student)\/dashboard\/?(?:\?|$)/.test(hash);
     if (iosHome && dashboard)
       return layer && layer !== "document"
-        ? surface(page, inset, layer, false)
+        ? surface(page, inset, layer)
         : systemEdge(page);
     return surface(page, inset, layer);
   };
@@ -625,18 +915,25 @@ async function scenario(engine, inset, iosHome = false) {
     for (const close of await page.locator(".ws-toast__close").all())
       await close.click();
     if (iosHome) {
+      await checkToastHost(page);
       // The synthetic dashboard has few entries. A shorter viewport gives its title
       // enough real scroll distance to pass the edge; grading uses the full phone size.
       const phone = page.viewportSize();
       await page.setViewportSize({ ...phone, height: 780 });
       await crossScheduleTitle(page);
       await page.setViewportSize(phone);
+      await dashboardDrawerClosures(page, "교사", inset);
+      await page.getByRole("button", { name: "일정 추가" }).click();
+      const eventDialog = page.locator(".teacher-event-dialog");
+      await eventDialog.waitFor();
+      await surface(page, inset);
+      await eventDialog.getByRole("button", { name: "팝업 닫기" }).click();
+      await eventDialog.waitFor({ state: "detached" });
+      await systemEdge(page);
       if (await page.evaluate(() => document.fullscreenEnabled)) {
-        await page
-          .locator('[data-patch-target="teacher-dashboard"]')
-          .evaluate((el) => el.requestFullscreen());
+        await switchFullscreen(page, '[data-patch-target="teacher-dashboard"]');
         await checkSurface("fullscreen");
-        await page.evaluate(() => document.exitFullscreen());
+        await switchFullscreen(page);
         await checkSurface();
       }
       // Actual React Router links (including pushState) and browser history, not only hashchange.
@@ -658,7 +955,43 @@ async function scenario(engine, inset, iosHome = false) {
         .getByRole("heading", { name: "평가 기준 등록", exact: true })
         .waitFor();
       await checkSurface();
+      // Only the query changes between these two real teacher screens.
+      await chooseScorePage(
+        page,
+        "교사",
+        inset,
+        "수행평가 점수 관리",
+        "수행평가 점수 관리",
+      );
+      assert.equal(new URL(page.url()).hash, "#/teacher/exam?tab=performance");
+      await openDrawer(page, "교사", inset);
+      await page.goBack({ waitUntil: "commit" });
+      await page
+        .getByRole("heading", { name: "평가 기준 등록", exact: true })
+        .waitFor();
+      await closedDrawer(page, "교사");
+      await surface(page, inset);
+      await page.goForward({ waitUntil: "commit" });
+      await page
+        .getByRole("heading", { name: "수행평가 점수 관리", exact: true })
+        .waitFor();
+      await closedDrawer(page, "교사");
+      await surface(page, inset);
       await visit("/student/dashboard", ".student-portal-dashboard");
+      await dashboardDrawerClosures(page, "학생", inset);
+      await chooseScorePage(
+        page,
+        "학생",
+        inset,
+        "내 수행평가 점수",
+        "내 수행평가 점수",
+      );
+      assert.equal(new URL(page.url()).hash, "#/student/score/performance");
+      await openDrawer(page, "학생", inset);
+      await page.goBack({ waitUntil: "commit" });
+      await page.locator(".student-portal-dashboard").waitFor();
+      await closedDrawer(page, "학생");
+      await systemEdge(page);
       await visit("/student/calendar", ".student-calendar-page");
       await visit("/student/lesson/maps", ".history-atlas__places-trigger");
       await page.getByRole("button", { name: "장소 목록 열기" }).click();
@@ -667,11 +1000,9 @@ async function scenario(engine, inset, iosHome = false) {
       await page.keyboard.press("Escape");
       await page.locator("dialog:modal").waitFor({ state: "hidden" });
       if (await page.evaluate(() => document.fullscreenEnabled)) {
-        await page
-          .locator(".history-atlas-page")
-          .evaluate((el) => el.requestFullscreen());
+        await switchFullscreen(page, ".history-atlas-page");
         await checkSurface("fullscreen");
-        await page.evaluate(() => document.exitFullscreen());
+        await switchFullscreen(page);
       }
       for (const file of ["2026-10-28", "before-2026-10-28"]) {
         await page.goto(origin + "/legal/" + file + ".html");
@@ -774,12 +1105,10 @@ async function scenario(engine, inset, iosHome = false) {
     await checkSurface();
     // Fullscreen an actual route element, using Playwright's trusted user gesture.
     if (await page.evaluate(() => document.fullscreenEnabled)) {
-      await page
-        .locator(".history-atlas-page")
-        .evaluate((el) => el.requestFullscreen());
+      await switchFullscreen(page, ".history-atlas-page");
       await checkSurface("fullscreen");
       await comparePixels(page, `student-map-fullscreen-${label}`);
-      await page.evaluate(() => document.exitFullscreen());
+      await switchFullscreen(page);
       await checkSurface();
     } else console.log(label, "native fullscreen unavailable");
     assert.deepEqual(failures, []);

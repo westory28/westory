@@ -20,6 +20,14 @@
   background: transparent;
   pointer-events: none;
 }
+/* Keep the live regions mounted, without a fullscreen box above the scroll
+   edge when there is nothing to announce. */
+.ws-toast-layer:not([popover]) {
+  display: contents;
+}
+.ws-toast-layer:not([popover]) .ws-toast-stack {
+  display: none;
+}
 .ws-toast-stack {
   box-sizing: content-box;
   padding: 20px;

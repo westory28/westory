@@ -1,6 +1,12 @@
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import { isSemesterArchive } from "../../lib/semesterArchive";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import HeaderStudentWis from "./HeaderStudentWis";
 import BrandLogo from "./BrandLogo";
@@ -579,7 +585,7 @@ const Header: React.FC<{
 
   logoutRef.current = performLogout;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname, location.search]);
 
@@ -594,7 +600,7 @@ const Header: React.FC<{
     return () => desktop.removeEventListener("change", closeDesktopDrawer);
   }, [usePortalSidebar, closeMobileMenu]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mobileMenuOpen) return undefined;
 
     return acquirePageScrollLock();

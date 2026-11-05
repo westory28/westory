@@ -6103,6 +6103,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreListClassFilter, setScoreListClassFilter] = useState("all");
   const [scoreListClassPage, setScoreListClassPage] = useState(1);
   const [scoreListSearch, setScoreListSearch] = useState("");
+  const [scoreSearchOpen, setScoreSearchOpen] = useState(false);
+  const scoreSearchInputId = React.useId();
+  const scoreSearchInputRef = useRef<HTMLInputElement>(null);
+  const scoreSearchToggleRef = useRef<HTMLButtonElement>(null);
+  const scoreSearchExpanded = scoreSearchOpen || scoreListSearch.length > 0;
+  useEffect(() => {
+    if (!scoreSearchOpen) return;
+    scoreSearchInputRef.current?.focus({ preventScroll: true });
+  }, [scoreSearchOpen]);
+  const closeScoreSearch = () => {
+    setScoreListSearch("");
+    setScoreSearchOpen(false);
+    scoreSearchToggleRef.current?.focus();
+  };
   const [scoreListRecords, setScoreListRecords] = useState<ScoreListRecord[]>(
     [],
   );
@@ -13964,14 +13978,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         </div>
       )}
 
-      <section className="min-w-0">
+      <section
+        className={
+          isWrittenExamMode ? "min-w-0" : "score-performance-manager min-w-0"
+        }
+      >
         <div className="ws-page-header">
           <div>
             <h2 className="text-xl font-black text-slate-900">
               {managerCopy.pageTitle}
             </h2>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="score-manager-actions flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void loadStudents({ force: true })}
@@ -14010,12 +14028,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               title={scoreStatsButtonTitle}
             >
               <i className="fas fa-chart-column text-xs" aria-hidden="true" />
-              통계
+              <span className="score-manager-action-label">통계</span>
             </button>
             <button
               type="button"
               onClick={openObjectionModal}
               disabled={objectionsLoading || scoreEditing || savingScoreEdits}
+              title="이의제기"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <i
@@ -14024,11 +14043,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 }`}
                 aria-hidden="true"
               />
-              이의제기
+              <span className="score-manager-action-label">이의제기</span>
               {objectionsLoaded &&
                 answerSheetRequestsLoaded &&
                 pendingObjectionRequestCount > 0 && (
-                  <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
+                  <span className="score-manager-action-count rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
                     {pendingObjectionRequestCount}
                   </span>
                 )}
@@ -14036,6 +14055,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             <button
               type="button"
               onClick={() => setUploadModalOpen(true)}
+              title={parsing ? "인식 중..." : "업로드"}
               disabled={parsing || scoreEditing || savingScoreEdits}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
@@ -14043,12 +14063,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 className="fas fa-file-arrow-up text-xs"
                 aria-hidden="true"
               ></i>
-              {parsing ? "인식 중..." : "업로드"}
+              <span className="score-manager-action-label">
+                {parsing ? "인식 중..." : "업로드"}
+              </span>
             </button>
             {signatureStatusModalEnabled && (
               <button
                 type="button"
                 onClick={() => setClassSheetModalOpen(true)}
+                title={isWrittenExamMode ? "서명 현황" : "일람표"}
                 disabled={
                   rostersLoading ||
                   rosters.length === 0 ||
@@ -14061,7 +14084,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   className={`fas ${isWrittenExamMode ? "fa-file-signature" : "fa-file-download"} text-xs`}
                   aria-hidden="true"
                 />
-                {isWrittenExamMode ? "서명 현황" : "일람표"}
+                <span className="score-manager-action-label">
+                  {isWrittenExamMode ? "서명 현황" : "일람표"}
+                </span>
               </button>
             )}
           </div>
@@ -14082,12 +14107,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         ) : (
           <div className="mt-5 space-y-5">
             <div className="ws-flat-section">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(8rem,0.65fr)_minmax(8rem,0.65fr)] xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
+              <div className="score-manager-filters grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(8rem,0.65fr)_minmax(8rem,0.65fr)] xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">
                     평가명
                   </span>
                   <select
+                    aria-label="평가명"
                     value={scoreListRosterId}
                     onChange={(event) => {
                       selectScoreRoster(event.target.value);
@@ -14103,81 +14129,133 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     ))}
                   </select>
                 </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    학년
-                  </span>
-                  <select
-                    value={scoreListGradeFilter}
-                    onChange={(event) =>
-                      setScoreListGradeFilter(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    <option value="all">전체 학년</option>
-                    {(scoreListGradeOptions.length
-                      ? scoreListGradeOptions
-                      : DEFAULT_GRADE_OPTIONS
-                    ).map((grade) => (
-                      <option key={grade} value={grade}>
-                        {grade}학년
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    반
-                  </span>
-                  <select
-                    value={scoreListClassFilter}
-                    onChange={(event) =>
-                      setScoreListClassFilter(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    <option value="all">전체 반</option>
-                    {(scoreListClassOptions.length
-                      ? scoreListClassOptions
-                      : DEFAULT_CLASS_OPTIONS
-                    ).map((classValue) => (
-                      <option key={classValue} value={classValue}>
-                        {classValue}반
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    학생 이름 검색
-                  </span>
-                  <input
-                    lang="ko"
-                    inputMode="text"
-                    type="search"
-                    value={scoreListSearch}
-                    onChange={(event) => setScoreListSearch(event.target.value)}
-                    placeholder="이름, 반, 번호"
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void loadScoreListRecords()}
-                  disabled={
-                    (!scoreListAllSelected && !selectedScoreRoster) ||
-                    scoreListLoading ||
-                    scoreEditing ||
-                    savingScoreEdits
-                  }
-                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 lg:mt-6"
+                <div
+                  className="score-manager-filter-row"
+                  data-search-open={scoreSearchExpanded}
                 >
-                  <i
-                    className={`fas fa-search text-xs ${scoreListLoading ? "animate-spin" : ""}`}
-                    aria-hidden="true"
-                  ></i>
-                  {scoreListLoading ? "조회 중" : "조회"}
-                </button>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      학년
+                    </span>
+                    <select
+                      aria-label="학년"
+                      value={scoreListGradeFilter}
+                      onChange={(event) =>
+                        setScoreListGradeFilter(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      <option value="all">전체 학년</option>
+                      {(scoreListGradeOptions.length
+                        ? scoreListGradeOptions
+                        : DEFAULT_GRADE_OPTIONS
+                      ).map((grade) => (
+                        <option key={grade} value={grade}>
+                          {grade}학년
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      반
+                    </span>
+                    <select
+                      aria-label="반"
+                      value={scoreListClassFilter}
+                      onChange={(event) =>
+                        setScoreListClassFilter(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      <option value="all">전체 반</option>
+                      {(scoreListClassOptions.length
+                        ? scoreListClassOptions
+                        : DEFAULT_CLASS_OPTIONS
+                      ).map((classValue) => (
+                        <option key={classValue} value={classValue}>
+                          {classValue}반
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="score-manager-search">
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black text-slate-500">
+                        학생 이름 검색
+                      </span>
+                      <input
+                        id={scoreSearchInputId}
+                        ref={scoreSearchInputRef}
+                        lang="ko"
+                        inputMode="text"
+                        type="search"
+                        value={scoreListSearch}
+                        onChange={(event) =>
+                          setScoreListSearch(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key === "Escape" &&
+                            !event.nativeEvent.isComposing &&
+                            scoreSearchToggleRef.current?.getClientRects()
+                              .length
+                          ) {
+                            event.preventDefault();
+                            closeScoreSearch();
+                          }
+                        }}
+                        placeholder="이름, 반, 번호"
+                        className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                      />
+                    </label>
+                    {!isWrittenExamMode && (
+                      <button
+                        ref={scoreSearchToggleRef}
+                        type="button"
+                        className="score-manager-search-toggle"
+                        aria-controls={scoreSearchInputId}
+                        aria-expanded={scoreSearchExpanded}
+                        aria-label={
+                          scoreSearchExpanded
+                            ? "학생 이름 검색 닫기"
+                            : "학생 이름 검색 열기"
+                        }
+                        onClick={() =>
+                          scoreSearchExpanded
+                            ? closeScoreSearch()
+                            : setScoreSearchOpen(true)
+                        }
+                      >
+                        <i
+                          aria-hidden="true"
+                          className={
+                            scoreSearchExpanded
+                              ? "fas fa-times"
+                              : "fas fa-search"
+                          }
+                        />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadScoreListRecords()}
+                    disabled={
+                      (!scoreListAllSelected && !selectedScoreRoster) ||
+                      scoreListLoading ||
+                      scoreEditing ||
+                      savingScoreEdits
+                    }
+                    className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 lg:mt-6"
+                  >
+                    <i
+                      className={`fas fa-search text-xs ${scoreListLoading ? "animate-spin" : ""}`}
+                      aria-hidden="true"
+                    ></i>
+                    {scoreListLoading ? "조회 중" : "조회"}
+                  </button>
+                </div>
               </div>
             </div>
 

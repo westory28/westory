@@ -531,6 +531,24 @@
     padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
+  /* Let the drawer and scrim show through the glass behind the clock. Keep the
+     solid surfaces off the very edge, and the controls below the safe inset. */
+  html[data-ios-home-screen] :is(.teacher-layout, .student-layout) {
+    --ws-drawer-top: 8px;
+  }
+  html[data-ios-home-screen] .teacher-sidebar.is-mobile-open {
+    top: var(--ws-drawer-top);
+    height: calc(100dvh - var(--ws-drawer-top));
+    padding-top: calc(var(--space-4) + max(0px,
+      env(safe-area-inset-top, 0px) - var(--ws-drawer-top),
+      env(safe-area-max-inset-top, 0px) - var(--ws-drawer-top)));
+    border-left: 0;
+    background: linear-gradient(to bottom, transparent, var(--ws-surface, #fff) 12px);
+  }
+  html[data-ios-home-screen] .teacher-sidebar-backdrop {
+    background: linear-gradient(to bottom, transparent var(--ws-drawer-top),
+      var(--ws-overlay, rgba(15, 23, 42, 0.62)) calc(var(--ws-drawer-top) + 12px));
+  }
   :is(.teacher-layout, .student-layout) .teacher-mobile-drawer {
     top: 0;
     bottom: auto;

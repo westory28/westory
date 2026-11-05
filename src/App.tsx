@@ -168,10 +168,10 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 };
 
 const MobileTopEdgeNavigation = () => {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   React.useLayoutEffect(() => {
     window.dispatchEvent(new Event("westory:routechange"));
-  }, [pathname]);
+  }, [pathname, search]);
   return null;
 };
 
