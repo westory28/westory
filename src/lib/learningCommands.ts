@@ -159,7 +159,7 @@ export const recordLessonCorePointFind = (
   unitId: string,
   corePointId: string,
 ) =>
-  executeLearningCommand(
+  executeLearningCommand<{ duplicate: boolean }>(
     "recordLessonCorePointFind",
     { ...getYearSemester(config), unitId, corePointId },
     "executeLessonCorePointCommand",

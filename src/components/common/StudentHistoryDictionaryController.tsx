@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { getStudentMenuLabel } from "../../constants/menus";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import StudentHistoryDictionaryWorkspace from "./StudentHistoryDictionaryWorkspace";
 import { useFloatingLauncherVisibility } from "./useFloatingLauncherVisibility";
@@ -18,7 +19,12 @@ const getFloatingOffsetClassName = (pathname: string, search: string) => {
 };
 
 export default function StudentHistoryDictionaryController() {
-  const { currentUser } = useAuth();
+  const { currentUser, menuConfig } = useAuth();
+  const title = getStudentMenuLabel(
+    menuConfig,
+    "/student/lesson/history-dictionary",
+    "역사 사전",
+  );
   const location = useLocation();
   const [saveAnchor, setSaveAnchor] = useState<{
     bottom: number;
@@ -120,8 +126,8 @@ export default function StudentHistoryDictionaryController() {
           setOpen(true);
         }}
         className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
-        aria-label="역사 사전 열기"
-        title="역사 사전"
+        aria-label={`${title} 열기`}
+        title={title}
       >
         <i className="fas fa-book-open text-lg" aria-hidden="true" />
       </button>
@@ -136,11 +142,11 @@ export default function StudentHistoryDictionaryController() {
         onClose={() => setOpen(false)}
       >
         <header className="history-dictionary-dialog-header history-dictionary-row">
-          <h2 id="floating-history-dictionary-title">역사 사전</h2>
+          <h2 id="floating-history-dictionary-title">{title}</h2>
           <button
             className="history-dictionary-dialog-close"
             type="button"
-            aria-label="역사 사전 닫기"
+            aria-label={`${title} 닫기`}
             onClick={close}
           >
             <i className="fas fa-times" aria-hidden="true" />

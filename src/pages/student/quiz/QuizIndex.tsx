@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -27,7 +28,7 @@ const getAllExpandedIndexes = (items: TreeItem[]) =>
   new Set(items.map((_, index) => index));
 
 const QuizIndex: React.FC = () => {
-  const { userData, config } = useAuth();
+  const { userData, config, menuConfig } = useAuth();
   const navigate = useNavigate();
 
   const [tree, setTree] = useState<TreeItem[]>([]);
@@ -140,7 +141,7 @@ const QuizIndex: React.FC = () => {
         </div>
       )}
       <header className="ws-page-header mb-5">
-        <h1>퀴즈</h1>
+        <h1>{getStudentMenuLabel(menuConfig, "/student/quiz", "퀴즈")}</h1>
         <button
           type="button"
           onClick={() => navigate("/student/mypage?menu=wrong_note")}

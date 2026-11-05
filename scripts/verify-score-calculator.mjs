@@ -27,7 +27,8 @@ const legacyScores=location.search.includes('legacy-decimal')?{'users/score-fixt
 export const qa=window.scoreQa={reads:[],writes:[],saved:legacyScores,hold:false,fail:false,toasts:[]};
 export const useAppToast=()=>({showToast:toast=>qa.toasts.push(toast)});
 export const config={year:'2026',semester:'2'};
-export const useAuth=()=>({config,currentUser:{uid:'score-fixture'},userData:{uid:'score-fixture',grade:'3',scoreWarningAcknowledged:true}});
+const menuConfig=new URLSearchParams(location.search).has('custom-menu')?{student:[{name:'성적 확인',url:'/student/score',children:[{name:'내 예상 등급',url:'/student/score'}]}],teacher:[]}:null;
+export const useAuth=()=>({config,menuConfig,currentUser:{uid:'score-fixture'},userData:{uid:'score-fixture',grade:'3',scoreWarningAcknowledged:true}});
 export const db={};
 export const doc=(_db,...parts)=>({path:parts.join('/')});
 export const collection=doc,query=ref=>ref,orderBy=()=>({}),serverTimestamp=()=>123;
@@ -130,7 +131,7 @@ const waitForTotal = (page, name, expected) =>
     ({ name, expected }) =>
       document
         .querySelector(`section[aria-label="${name} 점수 계산"]`)
-        ?.querySelector(".score-calculator__total strong")
+        ?.querySelector(".score-calculator__result-score")
         ?.textContent.trim() === `${expected}점` &&
       document
         .querySelector(`button[aria-label="${name} 점수 입력으로 이동"]`)
@@ -173,7 +174,7 @@ const assertAccordion = async (page, expandedSubject) => {
 const assertIntegerDisplays = async (page) => {
   const displays = await page
     .locator(
-      ".score-calculator__total strong, .score-calculator__weighted, .score-calculator__chart-value, input[type=range]",
+      ".score-calculator__result-score, .score-calculator__weighted, .score-calculator__chart-value, input[type=range]",
     )
     .evaluateAll((elements) =>
       elements.map((element) =>
@@ -193,10 +194,9 @@ try {
     activePage = page;
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(origin);
-    await page
-      .getByRole("heading", { name: "점수 계산기", exact: true })
-      .waitFor();
+    const customMenu = width === 768;
+    await page.goto(customMenu ? `${origin}/?custom-menu=1` : origin);
+    await page.getByRole("heading", { name: customMenu ? "내 예상 등급" : "점수", exact: true }).waitFor();
     const korean = subject(page, "국어");
     await korean.waitFor();
     assert.equal(await page.locator(".score-calculator__subject").count(), 9);
@@ -212,6 +212,15 @@ try {
     );
     assert.equal(await korean.getByRole("spinbutton").first().inputValue(), "");
     await korean.getByRole("spinbutton").nth(0).fill("80");
+    await waitForTotal(page, "국어", 80);
+    for (const target of [toggle(page, "국어"), chartRow(page, "국어")]) {
+      assert.equal(
+        await target.locator(".score-calculator__grade").innerText(),
+        "B",
+      );
+      assert.match(await target.innerText(), /예상/);
+      assert.match(await target.innerText(), /반영 40점/);
+    }
     await korean.getByRole("spinbutton").nth(1).fill("15");
     await korean.getByRole("spinbutton").nth(2).fill("24");
     await korean.getByRole("spinbutton").nth(2).blur();
@@ -259,11 +268,33 @@ try {
     await waitForTotal(page, "국어", 80);
     await korean.getByRole("spinbutton").nth(1).fill("");
     await korean.getByRole("spinbutton").nth(1).blur();
-    assert.equal(await korean.locator(".score-calculator__grade").count(), 0);
+    assert.equal(
+      await korean.locator(".score-calculator__grade").innerText(),
+      "B",
+    );
+    assert.match(
+      await korean.locator(".score-calculator__total").innerText(),
+      /예상/,
+    );
     await korean.getByRole("spinbutton").nth(1).fill("0");
     await korean.getByRole("spinbutton").nth(1).blur();
     assert.equal(await korean.locator(".score-calculator__grade").count(), 1);
     await waitForTotal(page, "국어", 65);
+    await chartRow(page, "체육").click();
+    const pe = subject(page, "체육");
+    await pe.getByRole("spinbutton").first().fill("80");
+    await waitForTotal(page, "체육", 80);
+    assert.equal(
+      await chartRow(page, "체육")
+        .locator(".score-calculator__grade")
+        .innerText(),
+      "A",
+    );
+    await pe.getByRole("spinbutton").first().fill("0");
+    await waitForTotal(page, "체육", 0);
+    assert.equal(await pe.locator(".score-calculator__grade").innerText(), "C");
+    await pe.getByRole("spinbutton").first().fill("");
+    assert.match(await chartRow(page, "체육").innerText(), /미입력/);
     await chartRow(page, "수학").click();
     await assertAccordion(page, "수학");
     const math = subject(page, "수학");
@@ -273,6 +304,8 @@ try {
     // 40.5 + 37.5 must total 78; adding rounded contributions would give 79.
     await waitForTotal(page, "수학", 78);
     await assertIntegerDisplays(page);
+    await math.getByRole("spinbutton").nth(1).fill("");
+    await waitForTotal(page, "수학", 81);
     await toggle(page, "수학").focus();
     await page.keyboard.press("Enter");
     await assertAccordion(page, null);

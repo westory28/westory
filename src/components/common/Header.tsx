@@ -11,7 +11,7 @@ import {
   HISTORY_DICTIONARY_PANELS,
   HISTORY_DICTIONARY_PATH,
 } from "../../constants/historyDictionaryPanels";
-import { MENUS } from "../../constants/menus";
+import { MENUS, type MenuChild } from "../../constants/menus";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import TeacherSidebar, {
   type TeacherSidebarGroup,
@@ -78,36 +78,31 @@ const resolveMenuTarget = (url: string, portal: "student" | "teacher") => {
 
 const resolveChildMenuTarget = (
   parentUrl: string,
-  childName: string,
-  childUrl: string,
+  child: MenuChild,
   portal: "student" | "teacher",
 ) => {
-  const normalizedName = (childName || "").trim().toLowerCase();
+  const normalizedName = child.name.trim().toLowerCase();
   const normalizedParent = (parentUrl || "").trim();
   const canonicalRoot =
     portal === "teacher" ? "/teacher/quiz" : "/student/quiz";
   if (
+    !child.nameCustomized &&
     normalizedName === "역사2" &&
     normalizedParent.startsWith(canonicalRoot)
   ) {
     return `${canonicalRoot}?menu=history2`;
   }
-  return resolveMenuTarget(childUrl, portal);
+  return resolveMenuTarget(child.url, portal);
 };
 
 const getResolvedChildUrls = (
   parentUrl: string,
-  children: Array<{ name: string; url: string }>,
+  children: MenuChild[],
   portal: "student" | "teacher",
 ) =>
   children.map((child) => ({
     ...child,
-    resolvedUrl: resolveChildMenuTarget(
-      parentUrl,
-      child.name,
-      child.url,
-      portal,
-    ),
+    resolvedUrl: resolveChildMenuTarget(parentUrl, child, portal),
   }));
 
 const getDesktopSubmenuChildren = (
@@ -244,9 +239,7 @@ const Header: React.FC<{
           return false;
         })
       : baseMenuItems;
-  const getVisibleChildren = (item: {
-    children?: Array<{ hidden?: boolean; url: string; name: string }>;
-  }) => {
+  const getVisibleChildren = (item: { children?: MenuChild[] }) => {
     if (!item.children?.length) return [];
     return isTeacherPortal
       ? item.children
@@ -400,7 +393,13 @@ const Header: React.FC<{
       );
       return {
         id: item.url.split("/").pop() || item.name,
-        name: item.url === "/teacher/students" ? "학생 명단 관리" : item.name,
+        name: item.name,
+        compactName:
+          !item.nameCustomized &&
+          MENUS.teacher.find((menu) => menu.url === item.url)?.name ===
+            item.name
+            ? item.name.replace(/ 관리$/, "")
+            : undefined,
         icon: teacherIcons[item.url] || "lesson",
         directUrl: item.resolvedChildren.length
           ? undefined
@@ -409,8 +408,7 @@ const Header: React.FC<{
           ? children
           : [
               {
-                name:
-                  item.url === "/teacher/students" ? "학생 명단" : item.name,
+                name: item.name,
                 resolvedUrl: resolveTarget(item.url),
               },
             ],
@@ -466,7 +464,7 @@ const Header: React.FC<{
   if (dictionaryChild)
     teacherSidebarGroups.push({
       id: "dictionary",
-      name: "역사 사전",
+      name: dictionaryChild.name,
       icon: "dictionary",
       secondary: true,
       children: HISTORY_DICTIONARY_PANELS.filter(
@@ -501,6 +499,12 @@ const Header: React.FC<{
         return {
           id,
           name: item.name,
+          compactName:
+            id === "mypage" &&
+            item.name === "마이페이지" &&
+            !item.nameCustomized
+              ? "내 정보"
+              : undefined,
           icon: studentIcons[id] || "lesson",
           directUrl:
             id === "weplay" || !children.length
@@ -834,7 +838,12 @@ const Header: React.FC<{
     <Link
       to={profileTarget}
       className="user-greeting header-user-link inline-flex items-center gap-1.5 hover:text-blue-600 transition cursor-pointer"
-      title={isTeacherPortal ? "관리자 페이지" : "마이페이지"}
+      title={
+        isTeacherPortal
+          ? "관리자 페이지"
+          : menuItems.find((item) => item.url === profileTarget)?.name ||
+            "마이페이지"
+      }
     >
       {!isTeacherPortal && (
         <span className="mr-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-[14px] leading-none">

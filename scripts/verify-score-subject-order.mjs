@@ -87,14 +87,30 @@ assert.ok(
     scores.getSubjectPriorityIndex("미술"),
 );
 
-const ScoreCard = loadTs("src/pages/student/score/components/ScoreCard.tsx", {
+const calculatorComponents = {
   react: React,
   "../../../../lib/studentScores": scores,
-  "../../../../components/common/NumericInput": loadTs(
-    "src/components/common/NumericInput.tsx",
+  "./CalculatorScoreResult": loadTs(
+    "src/pages/student/score/components/CalculatorScoreResult.tsx",
     { react: React },
   ),
-}).default;
+};
+const ScoreCard = loadTs(
+  "src/pages/student/score/components/ScoreCard.tsx",
+  calculatorComponents,
+).default;
+const ScoreOverview = loadTs(
+  "src/pages/student/score/components/ScoreOverview.tsx",
+  calculatorComponents,
+).default;
+const cardFor = (row) =>
+  renderToStaticMarkup(
+    React.createElement(ScoreCard, { row, onScoreChange() {} }),
+  );
+const overviewFor = (row) =>
+  renderToStaticMarkup(
+    React.createElement(ScoreOverview, { rows: [row], onSelect() {} }),
+  );
 
 const plan = {
   id: "weighted",
@@ -137,19 +153,62 @@ assert.equal(
   40,
   "Sum the unrounded contributions before rounding the total",
 );
-const partial = rowFor({ weighted_0: "80" });
-const partialMarkup = renderToStaticMarkup(
-  React.createElement(ScoreCard, {
-    plan,
-    userScores: { weighted_0: "80" },
-    onScoreChange() {},
-    totalScore: partial.total,
-    hasData: partial.hasData,
-  }),
-);
-assert.match(partialMarkup, /입력한 점수 합계/);
-assert.doesNotMatch(partialMarkup, /class="score-calculator__grade"/);
+const partial = scores.getCalculatorScoreRow(rowFor({ weighted_0: "80" }));
+const partialMarkup = cardFor(partial);
+for (const markup of [partialMarkup, overviewFor(partial)]) {
+  assert.match(markup, /예상/);
+  assert.match(markup, /class="score-calculator__grade">B</);
+  assert.match(markup, /class="score-calculator__result-score">80점</);
+  assert.match(markup, /반영 40점</);
+}
 assert.equal((partialMarkup.match(/type="range"/g) || []).length, 3);
+assert.equal(
+  scores.getCalculatorScoreRow(rowFor({ weighted_0: "0" })).band,
+  "E",
+);
+assert.equal(scores.getCalculatorScoreRow(rowFor({})).band, null);
+const invalidPlan = scores.buildScoreRows(
+  [{ id: "invalid", subject: "음악", items: [{ maxScore: 100, ratio: 50 }] }],
+  { invalid_0: "100" },
+)[0];
+assert.equal(scores.getCalculatorScoreRow(invalidPlan).band, null);
+const partialBoundary = scores.getCalculatorScoreRow(
+  scores.buildScoreRows(
+    [
+      {
+        id: "boundary",
+        subject: "역사",
+        items: [
+          { maxScore: 200, ratio: 40 },
+          { maxScore: 100, ratio: 60 },
+        ],
+      },
+    ],
+    { boundary_0: "179" },
+  )[0],
+);
+assert.equal(partialBoundary.achievementScore, 90);
+assert.equal(partialBoundary.band, "A");
+for (const name of [
+  "Earth Science",
+  "Computer Studies",
+  "Speech",
+  "English Language Arts",
+  "Physical Science",
+]) {
+  assert.equal(scores.getGradeBand(85, name), "B", name);
+}
+for (const name of [
+  "Music",
+  "Fine Arts",
+  "Art",
+  "Arts",
+  "P.E.",
+  "PE",
+  "Physical Education",
+]) {
+  assert.equal(scores.getGradeBand(85, name), "A", name);
+}
 for (const subject of ["음악", "미술", "체육", "국어", "영어", "기가"]) {
   const threeLevel = ["음악", "미술", "체육"].includes(subject);
   const boundaries = threeLevel
@@ -183,19 +242,24 @@ for (const subject of ["음악", "미술", "체육", "국어", "영어", "기가
       band,
       `${subject} ${score}`,
     );
-    const markup = renderToStaticMarkup(
-      React.createElement(ScoreCard, {
-        plan: { id: subject, subject, items: [] },
-        userScores: {},
-        onScoreChange() {},
-        totalScore: score,
-        hasData: true,
-      }),
+    const row = scores.getCalculatorScoreRow(
+      scores.buildScoreRows(
+        [{ id: subject, subject, items: [{ maxScore: 100, ratio: 100 }] }],
+        { [`${subject}_0`]: score },
+      )[0],
     );
-    assert.ok(
-      markup.includes(`>${band}</span>`),
-      `ScoreCard ${subject} ${score} must show ${band}`,
-    );
+    for (const markup of [cardFor(row), overviewFor(row)]) {
+      assert.ok(
+        markup.includes(`class="score-calculator__grade">${band}</`),
+        `${subject} ${score} must show ${band}`,
+      );
+      assert.ok(
+        markup.includes(
+          `class="score-calculator__result-score">${Math.round(score)}점</`,
+        ),
+      );
+      assert.match(markup, />등급</);
+    }
   }
 }
 

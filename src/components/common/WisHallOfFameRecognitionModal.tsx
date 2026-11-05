@@ -2,6 +2,7 @@ import React from "react";
 import type { HallOfFameRecognition } from "../../lib/wisHallOfFameRecognition";
 
 interface WisHallOfFameRecognitionModalProps {
+  hallOfFameTitle?: string;
   recognition: HallOfFameRecognition | null;
   onClose: () => void;
   onOpenHallOfFame?: () => void;
@@ -9,7 +10,12 @@ interface WisHallOfFameRecognitionModalProps {
 
 const WisHallOfFameRecognitionModal: React.FC<
   WisHallOfFameRecognitionModalProps
-> = ({ recognition, onClose, onOpenHallOfFame }) => {
+> = ({
+  recognition,
+  onClose,
+  onOpenHallOfFame,
+  hallOfFameTitle = "명예의 전당",
+}) => {
   if (!recognition) return null;
 
   const scopeLabel =
@@ -50,7 +56,7 @@ const WisHallOfFameRecognitionModal: React.FC<
               type="button"
               onClick={onClose}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition hover:bg-white/20"
-              aria-label="명예의 전당 팝업 닫기"
+              aria-label={`${hallOfFameTitle} 팝업 닫기`}
             >
               <i className="fas fa-times" aria-hidden="true"></i>
             </button>
@@ -92,7 +98,7 @@ const WisHallOfFameRecognitionModal: React.FC<
               onClick={onOpenHallOfFame}
               className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
             >
-              명예의 전당 보기
+              {hallOfFameTitle} 보기
             </button>
           )}
         </div>

@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bar } from "react-chartjs-2";
 import {
@@ -2713,7 +2714,13 @@ const ScopedScoreConfirmationView: React.FC<
       <div className="ws-page-header">
         <div className="min-w-0 break-keep">
           <h1 className="text-2xl font-black text-slate-900">
-            {resolvedCopy.pageTitle}
+            {getStudentMenuLabel(
+              auth.menuConfig,
+              scoreKind === WRITTEN_EXAM_SCORE_KIND
+                ? "/student/score/written-exam"
+                : "/student/score/performance",
+              resolvedCopy.pageTitle,
+            )}
           </h1>
           <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
             {year}학년도 {semester}학기

@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../../constants/menus";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import React, { useEffect, useMemo, useState } from "react";
@@ -29,7 +30,7 @@ import {
 const BANNED_WORDS = ["욕설", "비속어"];
 
 const ThinkCloud: React.FC = () => {
-  const { config, currentUser, userData } = useAuth();
+  const { config, currentUser, userData, menuConfig } = useAuth();
   const { showToast } = useAppToast();
   const [activeSessionId, setActiveSessionId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -242,7 +243,11 @@ const ThinkCloud: React.FC = () => {
       >
         <PortalSubNavigation
           variant="tabs"
-          title="생각모아"
+          title={getStudentMenuLabel(
+            menuConfig,
+            "/student/lesson/think-cloud",
+            "생각모아",
+          )}
           activeLabel={selectedSession?.title || "주제 선택"}
           open={menuOpen}
           onOpenChange={setMenuOpen}

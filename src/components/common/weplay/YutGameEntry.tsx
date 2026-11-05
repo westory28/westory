@@ -16,8 +16,10 @@ const YutGame = lazy(loadYutGame);
 export default function YutGameEntry({
   portal,
   initialSettings,
+  groupTitle = "위플레이",
 }: {
   portal: "student" | "teacher";
+  groupTitle?: string;
   initialSettings?: YutSettings;
 }) {
   const access = useYutPublication(portal);
@@ -72,7 +74,10 @@ export default function YutGameEntry({
     <main className="weplay-game-page weplay-yut-page" tabIndex={-1}>
       <header className="weplay-heading">
         <h1 tabIndex={-1}>마우저구 윷놀이</h1>
-        <nav className="weplay-game-navigation" aria-label="위플레이 화면 이동">
+        <nav
+          className="weplay-game-navigation"
+          aria-label={`${groupTitle} 화면 이동`}
+        >
           <Link className="weplay-catalog-back" to={`/${portal}/weplay`}>
             전체 게임
           </Link>

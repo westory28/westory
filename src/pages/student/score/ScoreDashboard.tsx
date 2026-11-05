@@ -23,9 +23,11 @@ import {
 } from "../../../lib/semesterScope";
 import {
   buildScoreRows,
+  getCalculatorScoreRow,
   SCORE_ACHIEVEMENT_GUIDANCE,
 } from "../../../lib/studentScores";
 import "./score-calculator.css";
+import { getStudentMenuLabel } from "../../../constants/menus";
 
 interface GradingPlan {
   id: string;
@@ -73,7 +75,8 @@ const getWarningAgreementErrorMessage = (error: unknown) => {
 };
 
 const ScoreDashboard: React.FC = () => {
-  const { userData, currentUser, config } = useAuth();
+  const { userData, currentUser, config, menuConfig } = useAuth();
+  const pageTitle = getStudentMenuLabel(menuConfig, "/student/score", "점수");
   const { showToast } = useAppToast();
   const { year: activeYear, semester: activeSemester } =
     getYearSemester(config);
@@ -503,7 +506,6 @@ const ScoreDashboard: React.FC = () => {
       showToast({
         tone: "success",
         title: "동의가 저장되었습니다.",
-        message: "이제 점수 계산기를 계속 사용할 수 있습니다.",
       });
     } catch (e) {
       console.error("Warning agreement save failed", {
@@ -528,17 +530,7 @@ const ScoreDashboard: React.FC = () => {
     semester,
     grade: String(grade),
     sortMode: sortMode as "importance" | "name" | "latest",
-  }).map((row) => ({
-    ...row,
-    total: Math.round(
-      row.breakdown.reduce((sum, item) => sum + item.weighted, 0),
-    ),
-  }));
-  const displayPlans = chartRows.map((row) => ({
-    ...plans.find((plan) => plan.id === row.id)!,
-    currentScore: row.total,
-    hasData: row.hasData,
-  }));
+  }).map(getCalculatorScoreRow);
   const expandedId =
     expandedPlanId === null
       ? null
@@ -607,12 +599,12 @@ const ScoreDashboard: React.FC = () => {
     <div className="ws-page score-calculator animate-fadeIn">
       <header className="ws-page-header mb-4">
         <div className="flex items-center gap-2">
-          <h1>점수 계산기</h1>
+          <h1>{pageTitle}</h1>
           <InfoHelp
             label="점수 계산과 성취도 기준"
             sections={[
               {
-                text: "입력 점수 ÷ 만점 × 반영 비율로 계산합니다. 입력은 정수로 반올림하며, 환산 점수는 중간 반올림 없이 합산한 뒤 정수로 표시합니다. 미입력은 합계에서 제외하고 모든 항목을 입력하면 성취도가 표시됩니다.",
+                text: "일부만 입력하면 입력한 평가의 반영 비율을 기준으로 100점 만점의 예상 점수와 등급을 표시합니다. 반영 점수는 각 평가의 입력 점수 ÷ 만점 × 반영 비율을 합한 값입니다. 모든 항목을 입력하면 반영 점수를 반올림하여 등급을 계산합니다.",
               },
               { items: Object.values(SCORE_ACHIEVEMENT_GUIDANCE) },
             ]}
@@ -635,8 +627,7 @@ const ScoreDashboard: React.FC = () => {
               확인하세요.
             </div>
             <div className="text-xs text-gray-400 mb-4 bg-gray-50 p-2 rounded">
-              입력한 점수는 사용자의 계정에 안전하게 저장되며 점수 계산기에서
-              계속 이어집니다.
+              입력한 점수는 내 계정에 저장되며 다음에 이어서 입력할 수 있습니다.
             </div>
             <label className="flex items-center justify-center gap-2 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition mb-4">
               <input
@@ -720,7 +711,7 @@ const ScoreDashboard: React.FC = () => {
         </div>
       )}
 
-      {displayPlans.length === 0 ? (
+      {chartRows.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           해당 학기의 평가 기준 데이터가 없습니다.
         </div>
@@ -728,18 +719,15 @@ const ScoreDashboard: React.FC = () => {
         <div className="score-calculator__layout">
           <div>
             <div className="score-calculator__subjects">
-              {displayPlans.map((plan) => (
+              {chartRows.map((row) => (
                 <ScoreCard
                   disabled={showWarning || !!loadError || !hasHydratedUserDoc}
-                  key={plan.id}
-                  plan={plan}
-                  userScores={userScores}
+                  key={row.id}
+                  row={row}
                   onScoreChange={handleScoreChange}
-                  totalScore={plan.currentScore}
-                  hasData={plan.hasData}
-                  expanded={expandedId === plan.id}
+                  expanded={expandedId === row.id}
                   onToggle={() =>
-                    setExpandedPlanId(expandedId === plan.id ? null : plan.id)
+                    setExpandedPlanId(expandedId === row.id ? null : row.id)
                   }
                 />
               ))}

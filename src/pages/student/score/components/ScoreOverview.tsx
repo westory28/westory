@@ -1,8 +1,9 @@
 import React from "react";
-import type { ScoreRow } from "../../../../lib/studentScores";
+import type { CalculatorScoreRow } from "../../../../lib/studentScores";
+import CalculatorScoreResult from "./CalculatorScoreResult";
 
 const ScoreOverview: React.FC<{
-  rows: ScoreRow[];
+  rows: CalculatorScoreRow[];
   expandedId: string | null;
   onSelect: (id: string) => void;
 }> = ({ rows, expandedId, onSelect }) => (
@@ -38,8 +39,6 @@ const ScoreOverview: React.FC<{
     </div>
     <div className="score-calculator__chart-rows">
       {rows.map((row) => {
-        const entered = row.breakdown.filter((item) => item.entered).length;
-        const partial = row.hasData && entered < row.breakdown.length;
         const shades = { exam: 0, performance: 0, other: 0 };
         return (
           <button
@@ -90,8 +89,7 @@ const ScoreOverview: React.FC<{
               aria-live="polite"
               aria-atomic="true"
             >
-              {row.hasData ? `${Math.round(row.total)}점` : "미입력"}
-              {partial && <small>일부 입력</small>}
+              <CalculatorScoreResult row={row} />
             </span>
           </button>
         );

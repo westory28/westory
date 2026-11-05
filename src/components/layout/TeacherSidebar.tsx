@@ -9,6 +9,7 @@ import TeacherNavigationIcon, {
 export interface TeacherSidebarGroup {
   id: string;
   name: string;
+  compactName?: string;
   icon: TeacherIconName;
   children: Array<{ name: string; resolvedUrl: string }>;
   directUrl?: string;
@@ -32,15 +33,6 @@ interface TeacherSidebarProps {
     siblings: Array<{ resolvedUrl: string }>,
   ) => boolean;
 }
-
-const compactLabels: Record<string, string> = {
-  lesson: "학습 자료",
-  quiz: "평가",
-  exam: "점수",
-  points: "위스",
-  weplay: "위플레이",
-  students: "학생",
-};
 
 const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
   portal = "teacher",
@@ -79,7 +71,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
             url: myPageGroup.directUrl || "/student/mypage",
             label: myPageGroup.name,
             title: myPageGroup.name,
-            compactLabel: "내 정보",
+            compactLabel: myPageGroup.compactName || myPageGroup.name,
             icon: myPageGroup.icon,
           }
         : undefined;
@@ -290,7 +282,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                     aria-current={active ? "page" : undefined}
                     aria-label={group.name}
                     onClick={onCloseMobile}
-                    title={collapsed ? group.name : undefined}
+                    title={group.name}
                   >
                     <TeacherNavigationIcon name={group.icon} />
                     <span className="teacher-sidebar-label">
@@ -301,7 +293,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                         className="teacher-sidebar-compact-label"
                         aria-hidden="true"
                       >
-                        {compactLabels[group.id] || group.name}
+                        {group.compactName || group.name}
                       </span>
                     </span>
                   </Link>
@@ -314,7 +306,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                       aria-label={group.name}
                       aria-controls={groupId}
                       onClick={() => toggleGroup(group.id)}
-                      title={collapsed ? group.name : undefined}
+                      title={group.name}
                     >
                       <TeacherNavigationIcon name={group.icon} />
                       <span className="teacher-sidebar-label">
@@ -325,7 +317,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                           className="teacher-sidebar-compact-label"
                           aria-hidden="true"
                         >
-                          {compactLabels[group.id] || group.name}
+                          {group.compactName || group.name}
                         </span>
                       </span>
                       <TeacherNavigationIcon

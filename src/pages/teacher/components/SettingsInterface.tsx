@@ -182,7 +182,9 @@ const SettingsInterface: React.FC = () => {
     name: string,
   ) => {
     updatePortalMenus(portal, (menus) =>
-      menus.map((item, idx) => (idx === index ? { ...item, name } : item)),
+      menus.map((item, idx) =>
+        idx === index ? { ...item, name, nameCustomized: true } : item,
+      ),
     );
   };
 
@@ -214,6 +216,7 @@ const SettingsInterface: React.FC = () => {
               ? {
                   ...child,
                   name,
+                  nameCustomized: true,
                   ...(child.url === WEPLAY_STUDENT_URL
                     ? { gameTitleCustomized: true }
                     : {}),
@@ -311,6 +314,7 @@ const SettingsInterface: React.FC = () => {
       ...menus,
       {
         name,
+        nameCustomized: true,
         url,
         icon: DEFAULT_PARENT_ICON,
         children: [],
@@ -365,6 +369,7 @@ const SettingsInterface: React.FC = () => {
             ...(item.children || []),
             {
               name,
+              nameCustomized: true,
               url,
               hidden: false,
               ...(url === WEPLAY_STUDENT_URL

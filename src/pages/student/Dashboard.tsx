@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { getStudentMenuLabel } from "../../constants/menus";
 import { db } from "../../lib/firebase";
 import { useAttendanceDates } from "./hooks/useAttendanceDates";
 import { checkStudentAttendance, attendanceErrorMessage } from "./attendance";
@@ -57,7 +58,12 @@ const DashboardCalendarFallback: React.FC = () => (
 );
 
 const StudentDashboard: React.FC = () => {
-  const { user, userData, config, interfaceConfig } = useAuth();
+  const { user, userData, config, interfaceConfig, menuConfig } = useAuth();
+  const hallOfFameTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/points?tab=hall-of-fame",
+    "명예의 전당",
+  );
   const navigate = useNavigate();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
@@ -301,7 +307,9 @@ const StudentDashboard: React.FC = () => {
 
   return (
     <div className="student-portal-dashboard">
-      <h1 className="sr-only">학생 홈</h1>
+      <h1 className="sr-only">
+        {getStudentMenuLabel(menuConfig, "/student/dashboard", "학생 홈")}
+      </h1>
       <div className="student-portal-dashboard__grid">
         <div className="student-portal-dashboard__notice">
           {secondaryPanelsReady ? (
@@ -332,6 +340,11 @@ const StudentDashboard: React.FC = () => {
           )}
           <Suspense fallback={<DashboardCalendarFallback />}>
             <StudentWeekSchedule
+              calendarLabel={getStudentMenuLabel(
+                menuConfig,
+                "/student/calendar",
+                "캘린더",
+              )}
               categories={categories}
               events={events}
               onDateClick={handleDateClick}
@@ -357,6 +370,7 @@ const StudentDashboard: React.FC = () => {
             <WisRankingPanel
               config={config}
               hallOfFamePath="/student/points?tab=hall-of-fame"
+              hallOfFameTitle={hallOfFameTitle}
             />
           ) : (
             <div className="student-dashboard-placeholder" role="status">
@@ -367,6 +381,7 @@ const StudentDashboard: React.FC = () => {
       </div>
 
       <WisHallOfFameRecognitionModal
+        hallOfFameTitle={hallOfFameTitle}
         recognition={hallOfFameRecognition}
         onClose={() => {
           if (hallOfFameRecognition) {

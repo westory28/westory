@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../constants/menus";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
@@ -242,7 +243,7 @@ const getBandTypeColor = (
 };
 
 const MyPage: React.FC = () => {
-  const { user, userData, config, authGeneration } = useAuth();
+  const { user, userData, config, authGeneration, menuConfig } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -969,8 +970,18 @@ const MyPage: React.FC = () => {
     subjectInsights
       .filter((item) => item.gap > 0)
       .sort((a, b) => b.gap - a.gap)[0] || selectedInsight;
+  const lessonMenuTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/lesson/note",
+    "수업 자료",
+  );
+  const historyClassroomTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/history-classroom",
+    "역사교실",
+  );
   const nextLessonTitle =
-    progressSummary?.lesson.latestUnitTitle || "수업 자료 이어 보기";
+    progressSummary?.lesson.latestUnitTitle || `${lessonMenuTitle} 이어 보기`;
   const nextLessonUnit =
     progressSummary?.lesson.units.find((unit) => unit.status !== "completed") ||
     progressSummary?.lesson.units[0] ||
@@ -1015,7 +1026,7 @@ const MyPage: React.FC = () => {
       ? [
           {
             icon: "fa-users",
-            label: "역사교실 통과율",
+            label: `${historyClassroomTitle} 통과율`,
             value: progressSummary?.historyClassroom.totalAttempts
               ? `${historyParticipationPercent}%`
               : "응시 기록 없음",
@@ -1033,7 +1044,7 @@ const MyPage: React.FC = () => {
       ? [
           {
             title: nextLessonTitle,
-            subtitle: "수업 자료 확인",
+            subtitle: `${lessonMenuTitle} 확인`,
             icon: "fa-book-open",
             tone: "bg-blue-50 text-blue-600",
             onClick: openNextLesson,
@@ -1060,7 +1071,11 @@ const MyPage: React.FC = () => {
       >
         <PortalSubNavigation
           variant="tabs"
-          title="마이페이지"
+          title={getStudentMenuLabel(
+            menuConfig,
+            "/student/mypage",
+            "마이페이지",
+          )}
           activeLabel={
             leftMenus.find((item) => item.key === menu)?.title || "메뉴 선택"
           }
@@ -1245,7 +1260,12 @@ const MyPage: React.FC = () => {
                         to="/student/score/report"
                         className="inline-flex shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
                       >
-                        성적 리포트 보기
+                        {getStudentMenuLabel(
+                          menuConfig,
+                          "/student/score/report",
+                          "성적 리포트",
+                        )}{" "}
+                        보기
                         <i className="fas fa-chevron-right ml-2 text-xs"></i>
                       </Link>
                     </div>
@@ -1332,14 +1352,18 @@ const MyPage: React.FC = () => {
                         className="min-h-11 rounded-lg border border-slate-200 px-4 font-bold"
                         onClick={openQuiz}
                       >
-                        평가 풀기
+                        {getStudentMenuLabel(
+                          menuConfig,
+                          "/student/quiz",
+                          "평가 풀기",
+                        )}
                       </button>
                       <button
                         type="button"
                         className="min-h-11 rounded-lg border border-slate-200 px-4 font-bold"
                         onClick={openHistoryClassroom}
                       >
-                        역사교실 기록 보기
+                        {historyClassroomTitle} 기록 보기
                       </button>
                     </div>
                   </section>
@@ -1349,7 +1373,11 @@ const MyPage: React.FC = () => {
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <h3 className="text-xl font-black text-slate-900">
-                        내 수행평가 점수
+                        {getStudentMenuLabel(
+                          menuConfig,
+                          "/student/score/performance",
+                          "내 수행평가 점수",
+                        )}
                       </h3>
                     </div>
                     <Link

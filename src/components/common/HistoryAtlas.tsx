@@ -99,6 +99,7 @@ import {
 
 interface HistoryAtlasProps {
   dataset: AtlasDataset;
+  title?: string;
   toolbar?: ReactNode;
   showTerrain?: boolean;
   initialSubject?: AtlasSubject;
@@ -467,6 +468,7 @@ function placeLabelLayout(
 /** One local atlas renderer is shared by the teacher and student reading views. */
 export default function HistoryAtlas({
   dataset,
+  title = "역사 지도",
   toolbar,
   showTerrain = false,
   initialSubject = "korea",
@@ -2376,7 +2378,7 @@ export default function HistoryAtlas({
     >
       <div className="history-atlas__heading">
         <div className="history-atlas__heading-title">
-          <h1>역사 지도</h1>
+          <h1>{title}</h1>
           <AtlasHelp />
         </div>
         <div className="history-atlas__actions">{toolbar}</div>

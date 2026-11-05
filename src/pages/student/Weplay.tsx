@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import WeplayGameCatalog from "../../components/common/weplay/WeplayGameCatalog";
 import WeplayLaunchPanel from "../../components/common/weplay/WeplayLaunchPanel";
 import { useAuth } from "../../contexts/AuthContext";
+import { getStudentMenuLabel } from "../../constants/menus";
 import {
   WEPLAY_GAMES,
   getWeplayLobby,
@@ -39,14 +40,21 @@ const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 
 export default function Weplay() {
   const [params] = useSearchParams();
+  const { menuConfig } = useAuth();
+  const groupTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/weplay",
+    "위플레이",
+    "group",
+  );
   return params.get("game") === "joseon-yut" ? (
-    <YutGameEntry portal="student" />
+    <YutGameEntry portal="student" groupTitle={groupTitle} />
   ) : (
-    <NavalWeplay />
+    <NavalWeplay groupTitle={groupTitle} />
   );
 }
 
-function NavalWeplay() {
+function NavalWeplay({ groupTitle }: { groupTitle: string }) {
   const { config, currentUser, userData, menuConfig } = useAuth();
   const [params, setParams] = useSearchParams();
   const [introComplete, setIntroComplete] = useState(false);
@@ -322,7 +330,11 @@ function NavalWeplay() {
   if (!selectedGame && !session) {
     return (
       <main className="weplay-page">
-        <WeplayGameCatalog gameTitle={gameTitle} portal="student" />
+        <WeplayGameCatalog
+          gameTitle={gameTitle}
+          groupTitle={groupTitle}
+          portal="student"
+        />
       </main>
     );
   }
@@ -330,7 +342,7 @@ function NavalWeplay() {
     <main className="weplay-page weplay-game-page" tabIndex={-1}>
       <header className="weplay-heading">
         <div>
-          <span>위플레이</span>
+          <span>{groupTitle}</span>
           <h1 tabIndex={-1}>{gameTitle}</h1>
         </div>
         <div className="weplay-heading-actions">

@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../constants/menus";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cancelCanonicalPurchase } from "../../lib/pointEconomyAdapter";
@@ -100,7 +101,14 @@ const Points: React.FC = () => {
     authGeneration,
     userData,
     interfaceConfig,
+    menuConfig,
   } = useAuth();
+  const pageTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/points",
+    "위스",
+    "group",
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab: StudentPointTab =
@@ -701,10 +709,10 @@ const Points: React.FC = () => {
         }`}
       >
         <header className="ws-page-header mb-4">
-          <h1>위스</h1>
+          <h1>{pageTitle}</h1>
         </header>
         <div className="mb-6 overflow-x-auto">
-          <nav className="ws-page-tabs" aria-label="위스 메뉴">
+          <nav className="ws-page-tabs" aria-label={`${pageTitle} 메뉴`}>
             {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map(
               (tab) => (
                 <button
@@ -713,7 +721,13 @@ const Points: React.FC = () => {
                   onClick={() => handleTabChange(tab)}
                   aria-current={activeTab === tab ? "page" : undefined}
                 >
-                  {STUDENT_POINT_TAB_LABELS[tab]}
+                  {getStudentMenuLabel(
+                    menuConfig,
+                    tab === "overview"
+                      ? "/student/points"
+                      : `/student/points?tab=${tab}`,
+                    STUDENT_POINT_TAB_LABELS[tab],
+                  )}
                 </button>
               ),
             )}

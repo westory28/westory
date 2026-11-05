@@ -56,6 +56,8 @@ import {qa} from 'fixture:service';
 qa.document={...cloneDefaultMenus(),unrelated:'keep-root-metadata'};
 qa.document.student[0].name='기존 학습 메뉴';
 qa.document.teacher[0].name='기존 교사 메뉴';
+const scores=qa.document.student.find(item=>item.url==='/student/score');
+scores.name=scores.children[0].name='점수 계산기';
 const game=qa.document.student.find(item=>item.url==='/student/weplay');
 game.children[0].name='역사가 내려와';
 game.children[0].hidden=true;
@@ -196,12 +198,20 @@ try {
   const freshSitemap = fresh.getByRole('region', {name:'사이트맵 편집'});
   await freshSitemap.getByRole('button', {name:'사이트맵 메뉴',exact:true}).click();
   const freshParentIndex = await freshSitemap.locator('input').evaluateAll(elements=>elements.findIndex(element=>element.value==='기존 학습 메뉴'));
+  const scoreInputs = await freshSitemap.locator('input').evaluateAll(elements=>elements.flatMap((element,i)=>element.value==='점수'?[i]:[]));
+  assert.equal(scoreInputs.length, 2, 'Both stored score labels recover the requested name.');
+  await freshSitemap.locator('input').nth(scoreInputs[0]).fill('성적 확인');
+  await freshSitemap.locator('input').nth(scoreInputs[1]).fill('점수 계산기');
   for(const name of ['사이트맵 첫 저장','사이트맵 두 번째 저장']) {
     await freshSitemap.locator('input').nth(freshParentIndex).fill(name);
     await freshSitemap.getByRole('button', {name:'사이트맵 저장',exact:true}).click();
     await fresh.waitForFunction(value=>window.titleQa.document.student[0].name===value,name);
   }
   assert.equal(await fresh.evaluate(()=>window.titleQa.writes.length), 2);
+  const savedScores = await fresh.evaluate(()=>window.titleQa.document.student.find(item=>item.url==='/student/score'));
+  assert.equal(savedScores.name, '성적 확인');
+  assert.equal(savedScores.children[0].name, '점수 계산기');
+  assert.equal(savedScores.children[0].nameCustomized, true);
   assert.equal(await fresh.evaluate(()=>window.titleQa.toasts.every(toast=>toast.tone==='success')),true);
   await fresh.close();
   checks.push('Actual SettingsInterface still permits sequential valid saves after refreshing its comparison baseline.');

@@ -394,15 +394,9 @@ async function expectFreePanning(page, view) {
 }
 async function waitForTerrainRaster(page) {
   await page
-    .locator("[data-atlas-terrain-raster]")
+    .locator('[data-atlas-terrain-ready="true"] [data-atlas-terrain-raster]')
     .first()
     .waitFor({ state: "attached" });
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector(".history-atlas__terrain")
-        ?.getAttribute("data-atlas-terrain-ready") !== "false",
-  );
 }
 async function terrainTileState(page, includeBuffer = true) {
   return page.evaluate((buffer) => {
@@ -489,6 +483,7 @@ async function expectBufferedNavigation(page, view) {
   const before = await camera();
   const box = await map.boundingBox();
   const start = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.8 };
+  await waitForTerrainRaster(page);
   const initialTiles = await terrainTileState(page);
   if (initialTiles.tiles.length) {
     assert(

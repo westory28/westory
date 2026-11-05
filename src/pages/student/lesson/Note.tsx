@@ -1,4 +1,5 @@
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
+import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -18,9 +19,11 @@ const LessonContent = lazyWithRetry(
 function LessonWorkspace({
   year,
   semester,
+  outlineTitle,
 }: {
   year: string;
   semester: string;
+  outlineTitle: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -74,6 +77,7 @@ function LessonWorkspace({
     <div className="student-lesson-page bg-gray-50">
       <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--lesson">
         <LessonSidebar
+          title={outlineTitle}
           tree={tree ?? []}
           status={unitId ? outlineStatus : null}
           firstGroupRef={firstGroupRef}
@@ -124,13 +128,18 @@ function LessonWorkspace({
 }
 
 const Note: React.FC = () => {
-  const { config, currentUser } = useAuth();
+  const { config, currentUser, menuConfig } = useAuth();
   const { year, semester } = getYearSemester(config);
   return (
     <LessonWorkspace
       key={`${currentUser?.uid}:${year}:${semester}`}
       year={year}
       semester={semester}
+      outlineTitle={getStudentMenuLabel(
+        menuConfig,
+        "/student/lesson/note",
+        "수업 목차",
+      )}
     />
   );
 };

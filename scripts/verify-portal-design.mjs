@@ -2,6 +2,7 @@
  * Real portal header/sidebar, sub-navigation, maps and repository CSS.
  * Synthetic identities/read services only; all network requests stay on localhost.
  * Run with --serve for a persistent fixture, or --kind=map|tabs|tree|settings|learning to narrow QA.
+ * --kind=core-points exercises the student worksheet with delayed synthetic commands.
  */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -10,10 +11,14 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import http from "node:http";
+import { verifyCorePointClicks } from "./fixtures/core-point-clicks.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const { build } = require("esbuild");
+const kindFilter = process.argv
+  .find((value) => value.startsWith("--kind="))
+  ?.split("=")[1];
 const evidence =
   process.env.PORTAL_DESIGN_EVIDENCE_DIR ||
   (await fs.mkdtemp(path.join(os.tmpdir(), "westory-portal-design-")));
@@ -29,7 +34,7 @@ export const auth={currentUser:fixtureUser};
 export const useAuth=()=>{const student=location.hash.startsWith("#/student");const teacherName=new URLSearchParams(location.search).get("teacherName")||"검증교사";return {currentUser:fixtureUser,authGeneration:1,userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":teacherName,staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
-export const getDoc=async(ref)=>({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
+export const getDoc=async(ref)=>window.corePointQa?.getProgress(ref) ?? ({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
 export const getDocFromServer=getDoc;export const getDocs=async()=>({docs:[],empty:true,size:0});
 export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>({});export const serverTimestamp=()=>({});
 window.portalDesignQa={writes:[], lessonReads:[], attempts:0};
@@ -49,15 +54,15 @@ export const readStudentVisibleCurriculumTree=async()=>{
 };
 export const readStudentLesson=async(_,id)=>{
   window.portalDesignQa.lessonReads.push(id);
-  return {unitId:id,title:'검증 소단원',contentHtml:'<p>선택한 수업 본문</p>',isVisibleToStudents:true};
+  return window.corePointQa?.lesson ?? {unitId:id,title:'검증 소단원',contentHtml:'<p>선택한 수업 본문</p>',isVisibleToStudents:true};
 };
-export const readStudentVisibleLessons=async()=>[];
+export const readStudentVisibleLessons=async()=>window.corePointQa ? [window.corePointQa.lesson] : [];
 export const subscribeThinkCloudState=(_config,_audience,_id,success,failure)=>{
   if(mode==='retry' && window.portalDesignQa.attempts++===0) failure(Error('synthetic outage'));
   else success({thinkCloudSessions:[], thinkCloudResponses:[], thinkCloudManagedClasses:[]});
   return ()=>{};
 };
-export const saveLessonAnswers=forbidWrite, recordLessonCorePointFind=forbidWrite, claimLessonCorePointReward=forbidWrite;
+export const saveLessonAnswers=forbidWrite, recordLessonCorePointFind=window.corePointQa?.find ?? forbidWrite, claimLessonCorePointReward=window.corePointQa?.claim ?? forbidWrite;
 export const buildThinkCloudRewardSourceId=forbidWrite, claimPointActivityReward=forbidWrite, submitThinkCloudResponse=forbidWrite;
 `;
 const assets = new Map();
@@ -106,7 +111,11 @@ const bundle = await build({
           namespace: "read-only-widget",
         }));
         plugin.onResolve(
-          { filter: /(?:LessonWorksheetStage|StorageImage)$/ },
+          {
+            filter: kindFilter === "core-points"
+              ? /StorageImage$/
+              : /(?:LessonWorksheetStage|StorageImage)$/,
+          },
           () => ({
             path: "unused-lesson-media",
             namespace: "fixture-media",
@@ -258,9 +267,6 @@ const sizes = [
   [1366, 768],
   [1440, 900],
 ];
-const kindFilter = process.argv
-  .find((value) => value.startsWith("--kind="))
-  ?.split("=")[1];
 const kinds = kindFilter
   ? [kindFilter]
   : ["map", "tabs", "tree", "settings", "learning"];
@@ -733,6 +739,10 @@ try {
       for (const [width, height] of sizes) {
         if (portal === "student" && kind === "settings") continue;
         if (portal === "teacher" && kind === "learning") continue;
+        if (
+          kind === "core-points" &&
+          (portal !== "student" || ![390, 768, 1280].includes(width))
+        ) continue;
         const page = await browser.newPage({ viewport: { width, height } });
         page.setDefaultTimeout(10000);
         const pageErrors = [];
@@ -747,9 +757,12 @@ try {
         );
         const label = `${portal}-${kind}-${width}x${height}`;
         try {
-          if (kind !== "learning")
+          if (kind !== "learning" && kind !== "core-points")
             await page.goto(`${origin}/?kind=${kind}#/${portal}/lesson/maps`);
-          if (kind === "learning") {
+          if (kind === "core-points") {
+            await verifyCorePointClicks(page, origin);
+            checks.push({ label, rapidClicks: true, retries: true });
+          } else if (kind === "learning") {
             await verifyStudentLearning(page, label);
             checks.push({
               label,
@@ -969,7 +982,7 @@ try {
             });
             checks.push({ label, navigation: kind, keyboard: true });
           }
-          await sidebarChecks(page, portal, width);
+          if (kind !== "core-points") await sidebarChecks(page, portal, width);
           assert.deepEqual(pageErrors, [], `${label}: browser errors`);
           console.log(`PASS ${label}`);
         } catch (error) {

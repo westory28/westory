@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
@@ -265,7 +266,7 @@ const getStatusMeta = (status: StudentHistoryClassroomStatus) => {
 };
 
 const HistoryClassroomIndex: React.FC = () => {
-  const { currentUser, userData, config } = useAuth();
+  const { currentUser, userData, config, menuConfig } = useAuth();
   const navigate = useNavigate();
   const studentUid = userData?.uid || currentUser?.uid || "";
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
@@ -920,7 +921,13 @@ const HistoryClassroomIndex: React.FC = () => {
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
             <header className="ws-page-header">
-              <h1>역사교실</h1>
+              <h1>
+                {getStudentMenuLabel(
+                  menuConfig,
+                  "/student/history-classroom",
+                  "역사교실",
+                )}
+              </h1>
             </header>
             <div className="mt-2 text-sm text-slate-600">
               면제권 {summary.availableExemptions}장 보유

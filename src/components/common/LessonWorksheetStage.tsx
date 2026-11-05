@@ -48,13 +48,14 @@ interface LessonWorksheetStageProps {
   selectedBlankId?: string | null;
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
   foundCorePointIds?: string[];
+  pendingCorePointIds?: string[];
   corePointRewardPending?: boolean;
   hideCorePointStatus?: boolean;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
   onSelectExamHighlight?: (highlightId: string) => void;
   onDeleteExamHighlight?: (highlightId: string) => void;
-  onFindCorePoint?: (highlightId: string) => void;
+  onFindCorePoint?: (highlightId: string) => Promise<boolean>;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
   onMoveFootnoteAnchor?: (
     anchorId: string,
@@ -401,6 +402,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   selectedBlankId,
   studentAnswers = {},
   foundCorePointIds = [],
+  pendingCorePointIds = [],
   corePointRewardPending = false,
   hideCorePointStatus = false,
   onSelectBlank,
@@ -1218,13 +1220,10 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     holdRef.current.page = null;
   };
 
-  const queueCorePointBurst = (
-    page: number,
-    event: React.MouseEvent<HTMLElement>,
-  ) => {
+  const queueCorePointBurst = (page: number, target: HTMLElement) => {
     const pageNode = pageRefs.current[page];
     const pageRect = pageNode?.getBoundingClientRect();
-    const targetRect = event.currentTarget.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
     const burstClientX = targetRect.left + targetRect.width / 2;
     const burstClientY = targetRect.top + targetRect.height / 2;
     const rawX = pageRect
@@ -2828,6 +2827,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     const isFoundCorePoint = foundCorePointSet.has(
                       highlight.id,
                     );
+                    const isPending = pendingCorePointIds.includes(
+                      highlight.id,
+                    );
                     const highlightClassName = isTeacherEditMode
                       ? `absolute z-[8] rounded-sm border bg-amber-200/35 mix-blend-multiply transition ${
                           isSelectedHighlight
@@ -2835,7 +2837,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             : "border-amber-300/70 hover:border-amber-500"
                         }`
                       : isStudentSolveMode
-                        ? `lesson-core-point absolute z-[8] is-found ${isFoundCorePoint ? "" : "is-unfound"}`
+                        ? `lesson-core-point absolute z-[8] is-found ${isFoundCorePoint || isPending ? "" : "is-unfound"}`
                         : "pointer-events-none absolute z-[8] rounded-sm border border-amber-300/70 bg-amber-200/35 mix-blend-multiply";
                     const highlightStyle = {
                       left: toPercent(highlight.leftRatio),
@@ -2845,33 +2847,36 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     };
 
                     if (isStudentSolveMode) {
+                      const label = isPending
+                        ? "핵심포인트 저장 중"
+                        : isFoundCorePoint
+                          ? "이미 찾은 핵심포인트"
+                          : "핵심포인트 찾기";
                       return (
                         <button
                           key={highlight.id}
                           type="button"
                           data-exam-highlight="true"
-                          aria-label={
-                            isFoundCorePoint
-                              ? "이미 찾은 핵심포인트"
-                              : "핵심포인트 찾기"
-                          }
+                          aria-label={label}
                           aria-pressed={isFoundCorePoint}
-                          title={
-                            isFoundCorePoint
-                              ? "이미 찾은 핵심포인트"
-                              : "핵심포인트"
-                          }
+                          aria-busy={isPending}
+                          disabled={isFoundCorePoint || isPending}
+                          title={label}
                           className={highlightClassName}
                           style={highlightStyle}
                           onPointerDown={(event) => {
                             event.stopPropagation();
                           }}
-                          onClick={(event) => {
+                          onClick={async (event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            if (isFoundCorePoint) return;
-                            queueCorePointBurst(pageImage.page, event);
-                            onFindCorePoint?.(highlight.id);
+                            const button = event.currentTarget;
+                            if (
+                              (await onFindCorePoint?.(highlight.id)) &&
+                              button.isConnected
+                            ) {
+                              queueCorePointBurst(pageImage.page, button);
+                            }
                           }}
                         >
                           <span

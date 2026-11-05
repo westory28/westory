@@ -32,6 +32,7 @@ import {
 } from "../../../lib/calendarWeek";
 
 interface Props {
+  calendarLabel?: string;
   events: CalendarEvent[];
   categories: ScheduleCategory[];
   weekStart: string;
@@ -79,6 +80,7 @@ const readableEventColor = (color: string) => {
 };
 
 const StudentWeekSchedule: React.FC<Props> = ({
+  calendarLabel = "캘린더",
   events,
   categories,
   weekStart,
@@ -271,8 +273,8 @@ const StudentWeekSchedule: React.FC<Props> = ({
             <Link
               to="/student/calendar"
               className="student-week-schedule__calendar-link"
-              aria-label="전체 캘린더 보기"
-              title="전체 캘린더 보기"
+              aria-label={`전체 ${calendarLabel} 보기`}
+              title={`전체 ${calendarLabel} 보기`}
             >
               <NavigationIcon name="calendar" />
             </Link>
@@ -428,7 +430,9 @@ const StudentWeekSchedule: React.FC<Props> = ({
             {!loading && error && (
               <p className="student-week-events__status" role="alert">
                 일정을 불러오지 못했습니다.{" "}
-                <Link to="/student/calendar">캘린더에서 다시 확인</Link>
+                <Link to="/student/calendar">
+                  {calendarLabel}에서 다시 확인
+                </Link>
               </p>
             )}
             {searchTerm && !loading && !error && (

@@ -17,7 +17,13 @@ const VIEWS: { id: MapView; label: string }[] = [
   { id: "globe", label: "지구본" },
 ];
 
-export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
+export default function HistoryMaps({
+  dataset,
+  title,
+}: {
+  dataset: AtlasDataset;
+  title?: string;
+}) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTerrain, setShowTerrain] = useState(false);
@@ -98,6 +104,7 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
       >
         <HistoryGlobe
           dataset={dataset}
+          title={title}
           showTerrain={showTerrain}
           toolbar={terrainControl}
           initialSubject={
@@ -117,6 +124,7 @@ export default function HistoryMaps({ dataset }: { dataset: AtlasDataset }) {
     <HistoryAtlas
       key={atlasKey}
       dataset={dataset}
+      title={title}
       showTerrain={showTerrain}
       toolbar={terrainControl}
       initialSubject={view}

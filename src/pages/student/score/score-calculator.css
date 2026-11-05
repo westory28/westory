@@ -95,23 +95,41 @@
   padding: 0 16px 8px;
 }
 
-.score-calculator__total {
-  flex-shrink: 0;
+.score-calculator__total,
+.score-calculator__chart-value {
   text-align: right;
 }
 
-.score-calculator__total strong {
-  color: var(--ws-primary);
-  font-size: 20px;
-  font-weight: 800;
+.score-calculator__result {
+  display: inline-grid;
+  justify-items: end;
+  color: var(--ws-text-muted);
+  font-size: 14px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
+.score-calculator__result-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
 .score-calculator__grade {
-  margin-left: 8px;
   color: var(--ws-primary-text);
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 800;
+  line-height: 1.2;
+}
+
+.score-calculator__result-score {
+  color: var(--ws-text-strong);
+  font-weight: 700;
+}
+
+.score-calculator__subtotal {
+  font-size: 12px;
 }
 
 .score-calculator__meta {
@@ -249,14 +267,14 @@
 .score-calculator__chart-axis {
   display: flex;
   justify-content: space-between;
-  padding: 0 60px 4px 88px;
+  padding: 0 104px 4px 88px;
   font-size: 14px;
   color: var(--ws-text-muted);
 }
 
 .score-calculator__chart-row {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr) 52px;
+  grid-template-columns: 80px minmax(0, 1fr) 96px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -290,21 +308,6 @@
 .score-calculator__bar-segment {
   flex-shrink: 0;
   height: 100%;
-}
-
-.score-calculator__chart-value {
-  color: var(--ws-text-strong);
-  font-size: 16px;
-  font-weight: 700;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.score-calculator__chart-value small {
-  display: block;
-  color: var(--ws-text-muted);
-  font-size: 12px;
-  font-weight: 400;
 }
 
 @container (min-width: 800px) {

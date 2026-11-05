@@ -244,6 +244,7 @@ function loadGeography() {
 
 interface HistoryGlobeProps {
   dataset: AtlasDataset;
+  title?: string;
   initialSubject?: GlobeSubject;
   navigation?: ReactNode;
   toolbar?: ReactNode;
@@ -252,6 +253,7 @@ interface HistoryGlobeProps {
 
 export default function HistoryGlobe({
   dataset,
+  title,
   initialSubject = "all",
   navigation,
   toolbar,
@@ -2290,7 +2292,7 @@ export default function HistoryGlobe({
       ref={rootRef}
     >
       <header className="history-globe__header">
-        <h1>{navigation ? "역사 지도" : "지구본"}</h1>
+        <h1>{title ?? (navigation ? "역사 지도" : "지구본")}</h1>
         <InfoHelp
           label="지구본 조작과 지형 정보"
           sections={[

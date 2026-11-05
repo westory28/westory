@@ -7,8 +7,10 @@ import "./weplay-catalog.css";
 export default function WeplayGameCatalog({
   gameTitle,
   portal,
+  groupTitle,
 }: {
   gameTitle: string;
+  groupTitle?: string;
   portal: "student" | "teacher";
 }) {
   const publication = useYutPublication(portal);
@@ -20,7 +22,7 @@ export default function WeplayGameCatalog({
     >
       <div className="weplay-catalog-heading">
         <h1 id="weplay-catalog-title" tabIndex={-1}>
-          {portal === "teacher" ? "위플레이 관리" : "위플레이"}
+          {groupTitle ?? (portal === "teacher" ? "위플레이 관리" : "위플레이")}
         </h1>
         <span>전체 게임 {WEPLAY_GAMES.length}</span>
       </div>

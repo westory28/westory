@@ -19,6 +19,7 @@ const router = {
 };
 const stubs = {
   "AuthContext": { useAuth: () => auth },
+  "firebase": { auth: { currentUser: null } },
   "AppToastProvider": { useAppToast: () => ({ showToast() {} }) },
   "PointRankBadge": { default: () => null },
   "HeaderStudentWis": { default: () => null },
@@ -61,7 +62,7 @@ const load = (filename) => {
   }, { filename: file });
   return exports;
 };
-const { MENUS } = load("src/constants/menus.ts");
+const { MENUS, sanitizeMenuConfig } = load("src/constants/menus.ts");
 const Header = load("src/components/common/Header.tsx").default;
 const setup = (portal, pathname, search = "") => {
   location = { pathname, search };
@@ -93,6 +94,23 @@ for (const small of [false, true]) {
   assert(!html.includes("관리자 설정"));
   assert(render("student", true).includes("is-collapsed"));
 
+  setup("student", "/student/score");
+  const scoreGroup = auth.menuConfig.student.find(item => item.url === "/student/score");
+  scoreGroup.name = "우리 반 점수";
+  scoreGroup.children.find(child => child.url === "/student/score").name = "점수";
+  const classroom = auth.menuConfig.student.find(item => item.url === "/student/quiz").children
+    .find(child => child.url === "/student/history-classroom");
+  Object.assign(classroom, { name: "역사2", nameCustomized: true });
+  auth.menuConfig.student.find(item => item.url === "/student/points").name = "나의 위스";
+  auth.menuConfig.student.find(item => item.url === "/student/mypage").name = "내 학습 기록";
+  auth.menuConfig = sanitizeMenuConfig(sanitizeMenuConfig(auth.menuConfig));
+  html = render("student", true);
+  assert(html.includes('aria-label="우리 반 점수"'));
+  assert.match(html, /<a(?=[^>]*href="#\/student\/score")(?=[^>]*aria-current="page")[^>]*>점수<\/a>/);
+  assert.match(html, /href="#\/student\/history-classroom"[^>]*>역사2<\/a>/);
+  for (const label of ["나의 위스", "내 학습 기록"])
+    assert(html.includes(`class="teacher-sidebar-compact-label" aria-hidden="true">${label}</span>`));
+
   setup("student", "/student/dashboard");
   auth.config.showQuiz = false;
   auth.menuConfig.student.find(item => item.url === "/student/lesson/note").children.find(item => item.url.endsWith("/maps")).hidden = true;
@@ -105,5 +123,14 @@ for (const small of [false, true]) {
   assert(urls(html).includes("/teacher/settings"));
   assert(urls(html).includes("/teacher/dashboard"));
   assert(!urls(html).some(url => url.startsWith("/student/")));
+  const roster = auth.menuConfig.teacher.find(item => item.url === "/teacher/students");
+  roster.name = "우리 학교 학생";
+  auth.menuConfig.teacher.find(item => item.url === "/teacher/lesson").children
+    .find(child => child.url === "/teacher/lesson/history-dictionary").name = "수업 용어 사전";
+  auth.menuConfig = sanitizeMenuConfig(auth.menuConfig);
+  html = render("teacher", true);
+  assert(html.includes('aria-label="우리 학교 학생"'));
+  assert(html.includes('aria-label="수업 용어 사전"'));
+  assert(html.includes('class="teacher-sidebar-compact-label" aria-hidden="true">우리 학교 학생</span>'));
 }
-console.log("PASS: student/teacher route separation, configured visibility, active query route, mobile/desktop navigation and collapse rendering; no backend calls.");
+console.log("PASS: student/teacher route separation, configured names and visibility, active routes, mobile/desktop navigation and collapse rendering; no backend calls.");

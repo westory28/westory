@@ -6,6 +6,7 @@ import {
 
 export interface MenuChild {
   name: string;
+  nameCustomized?: boolean;
   url: string;
   hidden?: boolean;
   gameTitleCustomized?: boolean;
@@ -13,6 +14,7 @@ export interface MenuChild {
 
 export interface MenuItem {
   name: string;
+  nameCustomized?: boolean;
   url: string;
   icon: string;
   children?: MenuChild[];
@@ -48,7 +50,7 @@ export const MENUS: MenuConfig = {
       url: "/student/score",
       icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
       children: [
-        { name: "점수 계산기", url: "/student/score" },
+        { name: "점수", url: "/student/score" },
         { name: "나의 성적 리포트", url: "/student/score/report" },
         { name: "내 수행평가 점수", url: "/student/score/performance" },
         {
@@ -214,10 +216,16 @@ const isLegacyRemovedUrl = (value: unknown) => {
   );
 };
 
-const normalizeMenuName = (value: unknown, url: string) => {
+const normalizeMenuName = (
+  value: unknown,
+  url: string,
+  customized: boolean,
+) => {
   const name = toSafeText(value);
+  if (customized) return name;
   const [path, query = ""] = url.split("?");
-  if (path === "/student/score") return "점수 계산기";
+  // Older settings overwrote both the score group and its first child.
+  if (path === "/student/score" && name === "점수 계산기") return "점수";
   if (
     name === "지도" &&
     (path === "/student/lesson/maps" || path === "/teacher/lesson/maps")
@@ -239,7 +247,12 @@ const sanitizeChildren = (children: unknown): MenuChild[] => {
   return children
     .map((child) => {
       const url = normalizeMenuUrl((child as MenuChild)?.url);
-      const name = normalizeMenuName((child as MenuChild)?.name, url);
+      const nameCustomized = (child as MenuChild)?.nameCustomized === true;
+      const name = normalizeMenuName(
+        (child as MenuChild)?.name,
+        url,
+        nameCustomized,
+      );
       const gameTitleCustomized =
         (child as MenuChild)?.gameTitleCustomized === true;
       return {
@@ -248,6 +261,7 @@ const sanitizeChildren = (children: unknown): MenuChild[] => {
             ? normalizeWeplayGameTitle(name, gameTitleCustomized)
             : name,
         url,
+        ...(nameCustomized ? { nameCustomized: true } : {}),
         hidden: (child as MenuChild)?.hidden === true,
         ...(url === WEPLAY_STUDENT_URL ? { gameTitleCustomized } : {}),
       };
@@ -297,6 +311,9 @@ const consolidateAssessmentChildren = (item: MenuItem): MenuItem => {
   };
   const workspace = (item.children || []).filter(isWorkspace);
   if (!workspace.length) return item;
+  const canonicalChild = workspace.find(
+    (child) => child.url === "/teacher/quiz",
+  );
   let inserted = false;
   return {
     ...item,
@@ -306,7 +323,8 @@ const consolidateAssessmentChildren = (item: MenuItem): MenuItem => {
       inserted = true;
       return [
         {
-          name: "평가 관리",
+          name: canonicalChild?.name || "평가 관리",
+          ...(canonicalChild?.nameCustomized ? { nameCustomized: true } : {}),
           url: "/teacher/quiz",
           hidden: workspace.every((entry) => entry.hidden === true),
         },
@@ -334,7 +352,11 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
         name: normalizeMenuName(
           (item as MenuItem)?.name,
           normalizeMenuUrl((item as MenuItem)?.url),
+          (item as MenuItem)?.nameCustomized === true,
         ),
+        ...((item as MenuItem)?.nameCustomized === true
+          ? { nameCustomized: true }
+          : {}),
         url: normalizeMenuUrl((item as MenuItem)?.url),
         icon: toSafeText((item as MenuItem)?.icon),
         children: sanitizeChildren((item as MenuItem)?.children),
@@ -367,4 +389,24 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
     student: parsePortal("student"),
     teacher: parsePortal("teacher"),
   };
+};
+
+/** A page can have its own heading until its sitemap entry is renamed. */
+export const getStudentMenuLabel = (
+  config: MenuConfig | null | undefined,
+  url: string,
+  fallback: string,
+  level: "page" | "group" = "page",
+) => {
+  const findEntry = (items: MenuItem[]) =>
+    (level === "page"
+      ? items
+          .flatMap((item) => item.children || [])
+          .find((child) => child.url === url)
+      : undefined) || items.find((item) => item.url === url);
+  const entry = findEntry(config?.student || []);
+  return entry &&
+    (entry.nameCustomized || entry.name !== findEntry(MENUS.student)?.name)
+    ? entry.name
+    : fallback;
 };

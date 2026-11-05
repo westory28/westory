@@ -149,7 +149,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [highlightedFootnoteAnchorKey, setHighlightedFootnoteAnchorKey] =
     useState("");
   const [foundCorePointIds, setFoundCorePointIds] = useState<string[]>([]);
-  const [corePointRewardPending, setCorePointRewardPending] = useState(false);
+  const [pendingCorePointRequests, setPendingCorePointRequests] = useState(
+    () => new Set<string>(),
+  );
   const [corePointRewardSettled, setCorePointRewardSettled] = useState(false);
   const [corePointOverview, setCorePointOverview] =
     useState<CorePointOverviewState>(EMPTY_CORE_POINT_OVERVIEW);
@@ -171,11 +173,32 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const answerRevisionRef = useRef<number | null>(null);
   const draftVersionRef = useRef(0);
   const savingRef = useRef(false);
-  const coreFindsPendingRef = useRef(new Set<string>());
+  const pendingCorePointRequestsRef = useRef(new Set<string>());
   const activeScopeRef = useRef("");
   const activeScope = `${currentUser?.uid}:${config?.year}:${config?.semester}:${unitId}`;
   if (activeScopeRef.current !== activeScope) answerRevisionRef.current = null;
   activeScopeRef.current = activeScope;
+  const rewardRequestKey = JSON.stringify([
+    "reward",
+    currentUser?.uid,
+    config?.year,
+    config?.semester,
+  ]);
+  const findRequestKey = (id: string) =>
+    JSON.stringify(["find", activeScope, id]);
+  const corePointRewardPending = pendingCorePointRequests.has(rewardRequestKey);
+  const beginCorePointRequest = (key: string) => {
+    const requests = pendingCorePointRequestsRef.current;
+    if (requests.has(key)) return false;
+    requests.add(key);
+    setPendingCorePointRequests(new Set(requests));
+    return true;
+  };
+  const endCorePointRequest = (key: string) => {
+    const requests = pendingCorePointRequestsRef.current;
+    requests.delete(key);
+    setPendingCorePointRequests(new Set(requests));
+  };
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
@@ -265,7 +288,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setActiveFootnoteAnchorKey("");
     setHighlightedFootnoteAnchorKey("");
     setFoundCorePointIds([]);
-    setCorePointRewardPending(false);
     setCorePointRewardSettled(false);
     setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
     viewStartedAtRef.current = Date.now();
@@ -310,7 +332,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setActiveFootnoteAnchorKey("");
         setHighlightedFootnoteAnchorKey("");
         setFoundCorePointIds([]);
-        setCorePointRewardPending(false);
         setCorePointRewardSettled(false);
         setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
         viewStartedAtRef.current = Date.now();
@@ -1129,12 +1150,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (
       !canPersist ||
       !currentUser?.uid ||
-      corePointRewardPending ||
-      corePointRewardSettled
+      corePointRewardSettled ||
+      !beginCorePointRequest(rewardRequestKey)
     )
       return;
 
-    setCorePointRewardPending(true);
     const operationScope = activeScope;
     try {
       const latestOverview =
@@ -1193,6 +1213,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         await refreshCorePointOverview(nextFoundIds);
       }
     } catch (pointError) {
+      if (activeScopeRef.current !== operationScope) return;
       console.error("Failed to claim core point reward:", pointError);
       showToast({
         tone: "warning",
@@ -1200,18 +1221,29 @@ const LessonContent: React.FC<LessonContentProps> = ({
         message: "위스 반영 상태를 바로 확인하지 못했습니다.",
       });
     } finally {
-      setCorePointRewardPending(false);
+      endCorePointRequest(rewardRequestKey);
     }
   };
 
   const handleFindCorePoint = async (highlightId: string) => {
     const operationScope = activeScope;
-    const pendingKey = `${operationScope}:${highlightId}`;
-    if (coreFindsPendingRef.current.has(pendingKey)) return;
+    const currentIdSet = new Set(currentCorePointIds);
+    if (
+      !currentIdSet.has(highlightId) ||
+      foundCorePointIdsRef.current.includes(highlightId)
+    )
+      return false;
+    let alreadyRecorded = false;
     if (canPersist && unitId) {
-      coreFindsPendingRef.current.add(pendingKey);
+      const pendingKey = findRequestKey(highlightId);
+      if (!beginCorePointRequest(pendingKey)) return false;
       try {
-        await recordLessonCorePointFind(config, unitId, highlightId);
+        const response = await recordLessonCorePointFind(
+          config,
+          unitId,
+          highlightId,
+        );
+        alreadyRecorded = response.result.duplicate;
       } catch (error) {
         if (activeScopeRef.current === operationScope)
           showToast({
@@ -1220,19 +1252,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
             message:
               error instanceof Error ? error.message : "다시 눌러 주세요.",
           });
-        return;
+        return false;
       } finally {
-        coreFindsPendingRef.current.delete(pendingKey);
+        endCorePointRequest(pendingKey);
       }
-      if (activeScopeRef.current !== operationScope) return;
+      if (activeScopeRef.current !== operationScope) return false;
     }
-    const currentIdSet = new Set(currentCorePointIds);
-    if (!currentIdSet.has(highlightId)) return;
     const previousFoundIds = foundCorePointIdsRef.current.filter((id) =>
       currentIdSet.has(id),
     );
     const nextFoundSet = new Set(previousFoundIds);
-    if (nextFoundSet.has(highlightId)) return;
+    if (nextFoundSet.has(highlightId)) return false;
     nextFoundSet.add(highlightId);
     const nextFoundIds = currentCorePointIds.filter((id) =>
       nextFoundSet.has(id),
@@ -1265,6 +1295,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     corePointOverviewRef.current = nextOverview;
     setCorePointOverview(nextOverview);
 
+    if (alreadyRecorded) {
+      void refreshCorePointOverview(nextFoundIds).catch((overviewError) => {
+        console.warn("Failed to refresh core point overview:", overviewError);
+      });
+      return false;
+    }
+
     const remainingCount = Math.max(
       0,
       nextOverview.totalCount - nextOverview.foundCount,
@@ -1283,7 +1320,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           console.warn("Failed to refresh core point overview:", overviewError);
         });
       }
-      return;
+      return true;
     }
 
     if (!nextOverview.loaded) {
@@ -1314,7 +1351,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
             );
           });
       }
-      return;
+      return true;
     }
 
     showToast({
@@ -1324,6 +1361,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         ? `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`
         : "완료했습니다.",
     });
+    return true;
   };
 
   const floatingSaveButtonLabel = isSaving
@@ -1454,10 +1492,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
               <button
                 type="button"
                 className={`lesson-core-point-floating-status lesson-core-point-floating-status--reward ${
-                  corePointRewardReady ? "is-claimable" : ""
+                  corePointRewardReady && !corePointRewardPending
+                    ? "is-claimable"
+                    : ""
                 } ${corePointRewardPending ? "is-pending" : ""}`}
                 onClick={handleCorePointRewardClaim}
                 disabled={corePointRewardPending}
+                aria-busy={corePointRewardPending}
                 aria-label={
                   corePointRewardPending
                     ? "핵심포인트 보상 반영 중"
@@ -1573,6 +1614,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 footnoteAnchors={worksheet.footnoteAnchors}
                 selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
                 foundCorePointIds={foundCorePointIds}
+                pendingCorePointIds={currentCorePointIds.filter((id) =>
+                  pendingCorePointRequests.has(findRequestKey(id)),
+                )}
                 corePointRewardPending={corePointRewardPending}
                 hideCorePointStatus
                 footnoteTitles={Object.fromEntries(

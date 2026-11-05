@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../constants/menus";
 import { getScheduleEventColor } from "../../lib/scheduleCategories";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -14,7 +15,7 @@ import type { CalendarEvent } from "../../types";
 import { useAttendanceDates } from "./hooks/useAttendanceDates";
 
 const Calendar = () => {
-  const { user } = useAuth();
+  const { user, menuConfig } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [userClass, setUserClass] = useState<string | null>(null);
   const [currentConfig, setCurrentConfig] = useState<{
@@ -104,7 +105,9 @@ const Calendar = () => {
   return (
     <div className="student-calendar-page ws-page">
       <div className="ws-page-header mb-4">
-        <h1 className="text-xl font-extrabold text-gray-900">학사 일정</h1>
+        <h1 className="text-xl font-extrabold text-gray-900">
+          {getStudentMenuLabel(menuConfig, "/student/calendar", "학사 일정")}
+        </h1>
         {currentConfig && (
           <span className="text-sm text-gray-500">
             {currentConfig.year}학년도 {currentConfig.semester}학기

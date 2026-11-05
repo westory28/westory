@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -156,9 +157,9 @@ const getNextOpenItem = (row: ScoreRow) =>
     .filter((item) => !item.entered)
     .sort((a, b) => Number(b.ratio || 0) - Number(a.ratio || 0))[0] || null;
 
-const getActionText = (analysis: SubjectAnalysis | null) => {
+const getActionText = (analysis: SubjectAnalysis | null, scoreMenu: string) => {
   if (!analysis) {
-    return "점수 계산기에 점수를 입력하면 이번 주 집중 과목이 자동으로 정리됩니다.";
+    return `‘${scoreMenu}’에서 점수를 입력하면 이번 주 집중 과목이 표시됩니다.`;
   }
 
   const { row, nextOpenItem, dominantType } = analysis;
@@ -217,7 +218,8 @@ const ContributionPopover: React.FC<{
 };
 
 const ScoreReport: React.FC = () => {
-  const { user, userData, config } = useAuth();
+  const { user, userData, config, menuConfig } = useAuth();
+  const scoreMenu = getStudentMenuLabel(menuConfig, "/student/score", "점수");
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ScoreRow[]>([]);
   const [semester, setSemester] = useState(config?.semester || "1");
@@ -359,7 +361,7 @@ const ScoreReport: React.FC = () => {
   const strategyItems = [
     focusAnalysis
       ? `${focusAnalysis.row.subject}의 미입력 항목과 낮은 반영 구간을 먼저 점검하세요.`
-      : "점수 계산기에서 최근 평가 점수를 먼저 입력하세요.",
+      : `‘${scoreMenu}’에서 최근 평가 점수를 먼저 입력하세요.`,
     examShare >= performanceShare
       ? "정기시험 비중이 높으므로 오답 정리와 개념 확인 시간을 확보하세요."
       : "수행평가 비중이 높으므로 제출물 누락과 완성도를 확인하세요.",
@@ -374,7 +376,13 @@ const ScoreReport: React.FC = () => {
   return (
     <div className="ws-page">
       <header className="ws-page-header mb-4">
-        <h1>성적 리포트</h1>
+        <h1>
+          {getStudentMenuLabel(
+            menuConfig,
+            "/student/score/report",
+            "성적 리포트",
+          )}
+        </h1>
       </header>
       <div className="ws-flat-section mb-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
@@ -676,7 +684,7 @@ const ScoreReport: React.FC = () => {
                   이번 주 포인트
                 </h3>
                 <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
-                  {getActionText(focusAnalysis)}
+                  {getActionText(focusAnalysis, scoreMenu)}
                 </p>
               </div>
             </div>

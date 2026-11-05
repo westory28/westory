@@ -115,7 +115,9 @@ export const normalizePlanItemType = (
 };
 
 export const isThreeLevelSubject = (subject: string) =>
-  /(음악|미술|체육|music|art|pe|physical)/i.test(String(subject || ""));
+  /음악|미술|체육|\b(?:music|art|fine arts|visual arts|p\.?e|physical education)\b|^\s*arts\b/i.test(
+    subject,
+  );
 
 export const getGradeBand = (score: number, subject: string): ScoreBand => {
   const roundedScore = Math.round(score);
@@ -132,6 +134,45 @@ export const getGradeBand = (score: number, subject: string): ScoreBand => {
   if (roundedScore >= 60) return "D";
   return "E";
 };
+
+// Arithmetic on assessment ratios can put an exact half point one float below
+// the rounding boundary (e.g. 179/200 at 40% projects to 89.49999999999999).
+const roundCalculatorScore = (score: number) =>
+  Math.round(score + Number.EPSILON * score);
+
+export const getCalculatorScoreRow = (row: ScoreRow) => {
+  const entered = row.breakdown.filter((item) => item.entered);
+  const ratioTotal = row.breakdown.reduce((sum, item) => sum + item.ratio, 0);
+  const validPlan =
+    row.breakdown.length === 0 ||
+    (Math.abs(ratioTotal - 100) < 0.01 &&
+      row.breakdown.every((item) => item.maxScore > 0));
+  const weighted = entered.reduce((sum, item) => sum + item.weighted, 0);
+  const enteredRatio = entered.reduce((sum, item) => sum + item.ratio, 0);
+  const estimated = entered.length < row.breakdown.length;
+  const achievementScore =
+    validPlan && enteredRatio > 0
+      ? roundCalculatorScore(
+          estimated ? (weighted / enteredRatio) * 100 : weighted,
+        )
+      : null;
+
+  return {
+    ...row,
+    total: roundCalculatorScore(weighted),
+    enteredCount: entered.length,
+    ratioTotal,
+    validPlan,
+    estimated,
+    achievementScore,
+    band:
+      achievementScore === null
+        ? null
+        : getGradeBand(achievementScore, row.subject),
+  };
+};
+
+export type CalculatorScoreRow = ReturnType<typeof getCalculatorScoreRow>;
 
 export const getScoreBandColor = (band: ScoreBand) => {
   const palette: Record<ScoreBand, string> = {

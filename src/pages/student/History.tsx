@@ -1,3 +1,4 @@
+import { getStudentMenuLabel } from "../../constants/menus";
 import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { PageLoading } from "../../components/common/LoadingState";
@@ -30,7 +31,12 @@ interface ObjectiveMark {
 }
 
 const StudentExamAnswer: React.FC = () => {
-  const { config } = useAuth();
+  const { config, menuConfig } = useAuth();
+  const pageTitle = getStudentMenuLabel(
+    menuConfig,
+    "/student/history",
+    "정기 시험 답안",
+  );
   const [examConfig, setExamConfig] = useState<ExamConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [objectiveMarks, setObjectiveMarks] = useState<
@@ -162,7 +168,7 @@ const StudentExamAnswer: React.FC = () => {
               <i className="fas fa-file-alt"></i>
             </div>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
-              정기 시험 답안
+              {pageTitle}
             </h1>
             <p className="text-gray-500 font-bold">아직 입력된게 없습니다.</p>
             <p className="text-sm text-gray-400 mt-2">
@@ -180,7 +186,7 @@ const StudentExamAnswer: React.FC = () => {
         <div className="ws-page-header mb-6">
           <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
             <i className="fas fa-clipboard-check text-blue-500"></i>
-            정기 시험 답안
+            {pageTitle}
           </h1>
           <div className="text-right">
             <div className="text-xs text-gray-400 font-bold">내 점수</div>

@@ -3,6 +3,7 @@ import PortalSubNavigation from "../../../../components/common/PortalSubNavigati
 import type { StudentCurriculumTreeItem } from "../../../../lib/studentLessonReadCache";
 
 interface LessonSidebarProps {
+  title?: string;
   tree: StudentCurriculumTreeItem[];
   status: React.ReactNode;
   firstGroupRef: React.Ref<HTMLButtonElement>;
@@ -17,6 +18,7 @@ const shouldShowUnitTitleHint = (title?: string) =>
   String(title || "").trim().length > 18;
 
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
+  title = "수업 목차",
   tree,
   status,
   firstGroupRef,
@@ -41,7 +43,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
 
   return (
     <PortalSubNavigation
-      title="수업 목차"
+      title={title}
       activeLabel={selectedUnitTitle || "학습할 단원 선택"}
       open={isOpen}
       onOpenChange={onOpenChange}

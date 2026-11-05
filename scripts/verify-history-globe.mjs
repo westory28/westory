@@ -329,6 +329,15 @@ for (const portal of ["student", "teacher"]) {
     "우리 반 지도 자료",
     "Explicitly customized menu names stay intact",
   );
+  savedMap.name = "지도";
+  savedMap.nameCustomized = true;
+  assert.equal(
+    sanitizeMenuConfig(old)[portal]
+      .flatMap((item) => item.children || [])
+      .find((item) => item.url === mapsUrl).name,
+    "지도",
+    "An explicitly chosen legacy label survives the next settings read",
+  );
 }
 const { canAccessTeacherPath } = load("src/lib/permissions.ts");
 for (const pathname of ["/teacher/lesson/globe", "/teacher/lesson/maps"]) {
@@ -449,7 +458,7 @@ vm.runInNewContext(
     },
   },
 );
-const renderMaps = () => wrapperExports.default({ dataset: {} });
+const renderMaps = () => wrapperExports.default({ dataset: {}, title: "우리 반 지도" });
 const contentOf = (element) =>
   element.type === React.Suspense ? element.props.children : element;
 const press = (element, label) =>
@@ -459,6 +468,7 @@ const press = (element, label) =>
     )
     .props.onClick();
 let rendered = renderMaps();
+assert.equal(contentOf(rendered).props.title, "우리 반 지도");
 assert.equal(lazyRegistrations, 1);
 assert.equal(rendered.type, Atlas, "Initial map never mounts the globe");
 assert.equal(rendered.props.initialSubject, "korea");
@@ -491,6 +501,7 @@ assert.equal(
   "The globe has a lazy loading boundary",
 );
 assert.equal(contentOf(rendered).type, Globe);
+assert.equal(contentOf(rendered).props.title, "우리 반 지도");
 assert.equal(contentOf(rendered).props.initialSubject, "all");
 assert.equal(contentOf(rendered).props.onOpenOriginals, undefined);
 assert(
@@ -573,9 +584,7 @@ for (const wrapperPath of [
     "Both map portals remove the retired original-resource entry",
   );
   assert(
-    portalWrapperSource.includes(
-      "<HistoryMaps dataset={historyAtlasDataset} />",
-    ),
+    /<HistoryMaps\s+dataset=\{historyAtlasDataset\}[\s\S]*?\/>/.test(portalWrapperSource),
     "Both portals retain the shared atlas and globe navigation",
   );
 }
