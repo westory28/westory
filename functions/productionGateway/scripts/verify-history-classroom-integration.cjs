@@ -438,6 +438,44 @@ const probeGrant = async (payload, failedBatch = 0) => {
   await db.doc(`${root}/history_classroom_results/direct-legacy-passed`).set({ uid: students[6], assignmentId: directSourceId, status: "passed", passed: true });
   await assert.rejects(applyDirect(6), (error) => error.details?.reason === "HISTORY_EXEMPTION_ALREADY_PASSED");
   const directAttempt = await executeAuthenticated(student(), "startAssessmentAttempt", { definitionId: directDefinitionId });
+  // Measure the actual adapter queries against a classroom with other students
+  // and past assignments. Roll back the probe so the real replay test below
+  // still exercises the first use of this ticket through the deployed callable.
+  const scopedCollections = [
+    "semester_assessment_results", "semester_assessment_attempts",
+    `${root}/history_classroom_results`, `${root}/history_classroom_exemption_requests`,
+  ];
+  const otherRows = db.batch();
+  for (const [index, uid] of students.slice(12).entries()) {
+    otherRows.set(db.doc(`semester_assessment_results/peer_${index}`), { studentUid: uid, definitionId: directDefinitionId, passed: true });
+    otherRows.set(db.doc(`semester_assessment_attempts/peer_${index}`), { studentUid: uid, definitionId: directDefinitionId, status: "IN_PROGRESS" });
+    otherRows.set(db.doc(`${root}/history_classroom_results/past_${index}`), { uid: students[0], assignmentId: `past_${index}`, passed: true });
+    otherRows.set(db.doc(`${root}/history_classroom_exemption_requests/past_${index}`), { uid: students[0], assignmentId: `past_${index}`, status: "pending" });
+  }
+  await otherRows.commit();
+  const oldQueryRows = (await Promise.all(scopedCollections.map((collection, index) =>
+    db.collection(collection).where(index < 2 ? "definitionId" : "uid", "==", index < 2 ? directDefinitionId : students[0]).count().get(),
+  ))).reduce((sum, snapshot) => sum + snapshot.data().count, 0);
+  const measuredRows = new Map();
+  const rollback = new Error("Rollback direct exemption query probe");
+  await assert.rejects(store.runTransaction(async (transaction) => {
+    const measured = {
+      ...transaction,
+      query: async (path, filter) => {
+        const rows = await transaction.query(path, filter);
+        if (scopedCollections.includes(path)) measuredRows.set(path, rows.length);
+        return rows;
+      },
+    };
+    await adapter.apply({ transaction: measured, commandType: "applyHistoryClassroomExemption", commandId: randomUUID(),
+      payload: directPayload(0), actor: { actorUid: teacher.uid, actorRole: "teacher" }, timestamp: FieldValue.serverTimestamp() });
+    throw rollback;
+  }), error => error === rollback);
+  assert.equal(measuredRows.size, 4);
+  const matched = [...measuredRows.values()].reduce((sum, value) => sum + value, 0);
+  assert.equal(matched, 1, "only the selected student's started attempt belongs to this assignment");
+  assert.ok(oldQueryRows >= 4 * students.slice(12).length + matched);
+  console.log(`PASS direct exemption query rows: ${oldQueryRows} before, ${matched} after (four result, attempt and request queries).`);
   const directCommandId = randomUUID();
   const [directResult, directReplay] = await Promise.all([applyDirect(0, "a", directCommandId), applyDirect(0, "a", directCommandId)]);
   assert.equal(directResult.result.resultId, directReplay.result.resultId);

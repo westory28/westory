@@ -471,12 +471,13 @@
       "sourceFile": null,
       "file": "historyClassroomExemptions.js",
       "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "sha256": "e2b8e9bccebe006c32bdab54d89cf2ccbda212698beda81cbca487b54bcd643f",
+      "sha256": "43ca8cef624ed46f8ccfb414b8850a32cd90a6f58eb52ac5d5c15e7da469ecae",
       "changes": [
         "New canonical adapter, not restored legacy code: active semester/enrollment/class validated reusable grants, requests, reviews, and atomic compatible/canonical exemption results.",
         "Batch and reuse transaction-local grant validation reads while retaining canonical semester, enrollment-slot, profile and class checks; preserve atomic receipt-protected writes.",
         "2026-10-15: atomic History Classroom save and audited teacher-direct exemption.",
-        "2026-10-21: Commit grant/request/review notifications with canonical exemption commands and preserve receipt idempotency."
+        "2026-10-21: Commit grant/request/review notifications with canonical exemption commands and preserve receipt idempotency.",
+        "2026-11-05: Scope completion and request queries to one student and assignment and batch independent reads within the transaction. Compared with live Seoul executeCommand generation 1793712351743062."
       ]
     },
     {

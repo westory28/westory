@@ -130,12 +130,25 @@ const assertTicketAssignment = (ticket, assignmentId, now) => {
   const expires = ticket.expiresAt?.toMillis?.() || (typeof ticket.expiresAt === "string" ? Date.parse(ticket.expiresAt) : 0);
   if (expires && expires <= now().getTime()) fail("failed-precondition", "사용 기간이 지난 면제권입니다.");
 };
+const studentAssignmentQuery = (uidField, uid, assignmentField, assignmentId, fieldMask) => ({
+  filters: [
+    { field: uidField, operator: "==", value: uid },
+    { field: assignmentField, operator: "==", value: assignmentId },
+  ],
+  fieldMask,
+});
+const assignmentRequests = (transaction, semesterId, assignmentId, uid) =>
+  transaction.query(`${root(semesterId)}/history_classroom_exemption_requests`,
+    studentAssignmentQuery("uid", uid, "assignmentId", assignmentId, ["status"]));
 const assertNotPassed = async (transaction, semesterId, assignmentId, uid, assignment) => {
+  const outcomeFields = ["completionSource", "passed", "status", "percent"];
   const [canonical, legacy] = await Promise.all([
-    transaction.query("semester_assessment_results", { field: "definitionId", operator: "==", value: assignment.definitionId }),
-    transaction.query(`${root(semesterId)}/history_classroom_results`, { field: "uid", operator: "==", value: uid }),
+    transaction.query("semester_assessment_results",
+      studentAssignmentQuery("studentUid", uid, "definitionId", assignment.definitionId, outcomeFields)),
+    transaction.query(`${root(semesterId)}/history_classroom_results`,
+      studentAssignmentQuery("uid", uid, "assignmentId", assignmentId, outcomeFields)),
   ]);
-  const passed = [...canonical.filter((row) => row.data?.studentUid === uid), ...legacy.filter((row) => row.data?.assignmentId === assignmentId)]
+  const passed = [...canonical, ...legacy]
     .some(({ data }) => data.completionSource === "exemption" || data.passed === true || data.status === "passed" ||
       (data.passed == null && data.status !== "cancelled" && Number(data.percent) >= thresholdFor(assignment.source)));
   if (passed) fail("failed-precondition", "이미 통과한 역사교실에는 면제권을 사용할 수 없습니다.", "HISTORY_EXEMPTION_ALREADY_PASSED");
@@ -161,15 +174,18 @@ const assertAssignment = async (transaction, semesterId, assignmentId, uid, help
 };
 
 const prepareCompletion = async (transaction, semesterId, assignmentId, uid, assignment) => {
-  await assertNotPassed(transaction, semesterId, assignmentId, uid, assignment);
   const resultId = resultIdFor(semesterId, assignmentId, uid);
   const canonicalRef = `semester_assessment_results/${resultId}`;
   const legacyRef = `${root(semesterId)}/history_classroom_results/${resultId}`;
-  const [canonical, legacy, attempts] = await Promise.all([transaction.get(canonicalRef), transaction.get(legacyRef),
-    transaction.query("semester_assessment_attempts", { field: "definitionId", operator: "==", value: assignment.definitionId })]);
+  const [[canonical, legacy], attempts] = await Promise.all([
+    transaction.getAll([canonicalRef, legacyRef], { fieldMask: ["resultId"] }),
+    transaction.query("semester_assessment_attempts",
+      studentAssignmentQuery("studentUid", uid, "definitionId", assignment.definitionId, ["resetAt", "status", "revision"])),
+    assertNotPassed(transaction, semesterId, assignmentId, uid, assignment),
+  ]);
   if (canonical.exists || legacy.exists) fail("already-exists", "이미 면제 처리된 역사교실입니다.");
   return { assignment, resultId, canonicalRef, legacyRef,
-    attempts: attempts.filter((row) => row.data?.studentUid === uid && row.data?.resetAt == null && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(row.data.status)) };
+    attempts: attempts.filter((row) => row.data?.resetAt == null && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(row.data.status)) };
 };
 const writeCompletion = (transaction, approval, current, requestId, actor, timestamp, now, audit = {}) => {
   const { assignment, resultId, canonicalRef, legacyRef, attempts } = approval;
@@ -263,8 +279,8 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
     if (ticketStatus(ticket.data) !== "available" || completed.exists) fail("failed-precondition", "이미 사용 중이거나 처리된 면제권입니다.", "HISTORY_EXEMPTION_NOT_AVAILABLE");
     assertTicketAssignment(ticket.data, payload.assignmentId, helpers.now);
     await assertNotPassed(transaction, semesterId, payload.assignmentId, actor.actorUid, assignment);
-    const requests = await transaction.query(`${root(semesterId)}/history_classroom_exemption_requests`, { field: "uid", operator: "==", value: actor.actorUid });
-    if (requests.some((row) => row.data?.assignmentId === payload.assignmentId && ["pending", "requested", "approved"].includes(row.data.status)))
+    const requests = await assignmentRequests(transaction, semesterId, payload.assignmentId, actor.actorUid);
+    if (requests.some((row) => ["pending", "requested", "approved"].includes(row.data.status)))
       fail("already-exists", "이 역사교실의 면제권 사용 요청이 이미 있습니다.");
     const notifications = await helpers.historySync.prepareExemptions({ transaction, semesterId, kind: "requested", actorUid: actor.actorUid, timestamp,
       items: [{ requestId, studentName: ticket.data.studentName, assignmentTitle: assignment.source.title }] });
@@ -281,22 +297,24 @@ const apply = async ({ transaction, commandId, commandType, payload, actor, time
   if (commandType === COMMAND_TYPES.APPLY_HISTORY_CLASSROOM_EXEMPTION) {
     if (!["teacher", "admin"].includes(actor.actorRole)) fail("permission-denied", "교사만 면제권을 사용할 수 있습니다.");
     const { assignmentId, studentUid, exemptionId } = payload;
-    const assignment = await assertAssignment(transaction, semesterId, assignmentId, studentUid, helpers);
+    const ticketRef = ticketPath(semesterId, exemptionId);
+    const [assignment, [ticket, profile], requests] = await Promise.all([
+      assertAssignment(transaction, semesterId, assignmentId, studentUid, helpers),
+      transaction.getAll([ticketRef, `users/${studentUid}`]),
+      assignmentRequests(transaction, semesterId, assignmentId, studentUid),
+    ]);
     const milliseconds = (value) => value?.toMillis?.() || (typeof value === "string" ? Date.parse(value) : 0);
     const nowMs = helpers.now().getTime();
     if ((milliseconds(assignment.definition.opensAt) && nowMs < milliseconds(assignment.definition.opensAt)) ||
         [assignment.definition.closesAt, assignment.source.dueAt].some(value => milliseconds(value) && nowMs > milliseconds(value)))
       fail("failed-precondition", "응시 기간이 아닌 역사교실에는 면제권을 사용할 수 없습니다.", "HISTORY_EXEMPTION_WINDOW_CLOSED");
-    const ticketRef = ticketPath(semesterId, exemptionId);
-    const [ticket, profile, requests] = await Promise.all([transaction.get(ticketRef), transaction.get(`users/${studentUid}`),
-      transaction.query(`${root(semesterId)}/history_classroom_exemption_requests`, { field: "uid", operator: "==", value: studentUid })]);
     if (!profile.exists || profile.data?.role !== "student") fail("failed-precondition", "학생 계정을 다시 확인해 주세요.");
     if (!ticket.exists || ticketOwner(ticket.data) !== studentUid) fail("permission-denied", "해당 학생의 면제권만 사용할 수 있습니다.");
     if (ticket.data.semesterId !== undefined && ticket.data.semesterId !== semesterId)
       fail("failed-precondition", "면제권의 학기 정보를 확인해 주세요.", "HISTORY_EXEMPTION_SEMESTER_MISMATCH");
     if (ticketStatus(ticket.data) !== "available") fail("failed-precondition", "사용 가능한 면제권을 선택해 주세요.", "HISTORY_EXEMPTION_NOT_AVAILABLE");
     assertTicketAssignment(ticket.data, assignmentId, helpers.now);
-    if (requests.some(row => row.data?.assignmentId === assignmentId && ["pending", "requested"].includes(row.data?.status)))
+    if (requests.some(row => ["pending", "requested"].includes(row.data?.status)))
       fail("failed-precondition", "학생이 신청한 면제권 사용 요청을 먼저 검토해 주세요.", "HISTORY_EXEMPTION_REQUEST_PENDING");
     const approval = await prepareCompletion(transaction, semesterId, assignmentId, studentUid, assignment);
     const requestId = `exemption_direct_${hash(`${semesterId}\n${assignmentId}\n${studentUid}`)}`;

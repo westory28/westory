@@ -3,9 +3,10 @@
   --entry-width: 1520px;
 }
 .public-entry .entry-header {
-  inset: 16px auto auto 50%;
+  --entry-cutout: max(env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  inset: calc(16px + env(safe-area-inset-top, 0px)) auto auto 50%;
   transform: translateX(-50%);
-  width: min(1040px, calc(100% - 32px - var(--entry-scrollbar, 0px)));
+  width: min(1040px, calc(100% - 32px - var(--entry-scrollbar, 0px) - 2 * var(--entry-cutout)));
   height: 64px;
   padding: 8px 24px;
   gap: 24px;
@@ -395,8 +396,8 @@
 }
 @media (max-width: 767px) {
   .public-entry .entry-header {
-    top: 8px;
-    width: calc(100% - 24px - var(--entry-scrollbar, 0px));
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    width: calc(100% - 24px - var(--entry-scrollbar, 0px) - 2 * var(--entry-cutout));
     padding: 8px 12px;
     border-radius: 16px;
     gap: 8px;

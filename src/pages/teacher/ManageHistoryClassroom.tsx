@@ -12,6 +12,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   onSnapshot,
   orderBy,
@@ -138,6 +139,7 @@ interface HistoryClassroomExemption {
 
 interface HistoryClassroomExemptionRequest {
   id: string;
+  exemptionId: string;
   uid: string;
   studentName: string;
   grade: string;
@@ -623,6 +625,7 @@ const normalizeHistoryClassroomExemptionRequest = (
   data: Record<string, unknown>,
 ): HistoryClassroomExemptionRequest => ({
   id,
+  exemptionId: String(data.exemptionId || "").trim(),
   uid: String(data.uid || data.studentUid || "").trim(),
   studentName: String(data.studentName || data.name || "").trim(),
   grade: String(data.grade || data.studentGrade || "").trim(),
@@ -1487,8 +1490,10 @@ const ManageHistoryClassroom: React.FC = () => {
     useState("");
   const [resettingGrantedExemptions, setResettingGrantedExemptions] =
     useState(false);
-  const [reviewingExemptionRequestId, setReviewingExemptionRequestId] =
-    useState("");
+  const pendingReviewsRef = useRef(new Set<string>());
+  const [reviewingExemptionRequestIds, setReviewingExemptionRequestIds] =
+    useState<string[]>([]);
+  const reviewDocumentReadsRef = useRef(new Map<string, symbol>());
   const exemptionSectionRef = React.useRef<HTMLElement | null>(null);
   const [selectedMapId, setSelectedMapId] = useState("");
   const [title, setTitle] = useState("");
@@ -1607,6 +1612,17 @@ const ManageHistoryClassroom: React.FC = () => {
   }, [isCreateModalOpen]);
   const [assignmentPage, setAssignmentPage] = useState(1);
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardSearchOpen, setDashboardSearchOpen] = useState(false);
+  const dashboardSearchInputRef = useRef<HTMLInputElement>(null);
+  const dashboardSearchButtonRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (dashboardSearchOpen) dashboardSearchInputRef.current?.focus();
+  }, [dashboardSearchOpen]);
+  const closeDashboardSearch = () => {
+    setDashboardSearchOpen(false);
+    setDashboardSearch("");
+    dashboardSearchButtonRef.current?.focus();
+  };
   const [dashboardStatusFilter, setDashboardStatusFilter] =
     useState<DashboardStatusFilter>("all");
   const [dashboardSortOrder, setDashboardSortOrder] =
@@ -1618,11 +1634,32 @@ const ManageHistoryClassroom: React.FC = () => {
   const blankEditorComposingRef = React.useRef(false);
   const blankEditorCommitLockRef = React.useRef(false);
   const exemptionReadVersionRef = React.useRef(0);
+  const exemptionReadPendingRef = React.useRef(false);
   const exemptionReadScopeRef = React.useRef("");
-  exemptionReadScopeRef.current = `${getAssessmentSemesterId(config)}:${userData?.uid || ""}`;
+  const exemptionReadScope = `${getAssessmentSemesterId(config)}:${userData?.uid || ""}`;
+  useLayoutEffect(() => {
+    exemptionReadScopeRef.current = exemptionReadScope;
+    setAppliedExemptionKeys([]);
+    setDirectExemptionFeedback({});
+    setExemptions([]);
+    setExemptionRequests([]);
+    setLoadingExemptions(false);
+    setExemptionLoadError("");
+    pendingReviewsRef.current = new Set();
+    setReviewingExemptionRequestIds([]);
+    return () => {
+      exemptionReadScopeRef.current = "";
+      exemptionReadVersionRef.current++;
+      exemptionReadPendingRef.current = false;
+      reviewDocumentReadsRef.current.clear();
+    };
+  }, [exemptionReadScope]);
 
   const loadExemptionData = React.useCallback(async () => {
+    if (!userData?.uid || exemptionReadScopeRef.current !== exemptionReadScope)
+      return;
     const version = ++exemptionReadVersionRef.current;
+    exemptionReadPendingRef.current = true;
     const scope = exemptionReadScopeRef.current;
     const isCurrent = () =>
       version === exemptionReadVersionRef.current &&
@@ -1675,14 +1712,18 @@ const ManageHistoryClassroom: React.FC = () => {
         "면제권 내역을 불러오지 못했습니다. 새로고침해 주세요.",
       );
     } finally {
-      if (isCurrent()) setLoadingExemptions(false);
+      if (isCurrent()) {
+        exemptionReadPendingRef.current = false;
+        setLoadingExemptions(false);
+      }
     }
-  }, [config, userData?.uid]);
+  }, [config, exemptionReadScope, userData?.uid]);
 
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
       setRefreshingDashboard(true);
+      void loadExemptionData();
       try {
         const studentSnap = await getDocs(collection(db, "users"));
         const loadedStudents = studentSnap.docs
@@ -1739,8 +1780,6 @@ const ManageHistoryClassroom: React.FC = () => {
             )
             .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
         );
-
-        void loadExemptionData();
       } catch (error) {
         console.error(
           "Failed to load history classroom dashboard data:",
@@ -3338,17 +3377,65 @@ const ManageHistoryClassroom: React.FC = () => {
     }
   };
 
+  const refreshReviewedDocument = async <Item extends { id: string }>(
+    collectionName: string,
+    id: string,
+    normalize: (id: string, data: Record<string, unknown>) => Item,
+    setItems: React.Dispatch<React.SetStateAction<Item[]>>,
+  ) => {
+    const reference = doc(
+      db,
+      getSemesterCollectionPath(config, collectionName),
+      id,
+    );
+    const reads = reviewDocumentReadsRef.current;
+    const version = exemptionReadVersionRef.current;
+    const token = Symbol();
+    reads.set(reference.path, token);
+    const isLatest = () =>
+      reads.get(reference.path) === token &&
+      exemptionReadVersionRef.current === version;
+    try {
+      const snapshot = await getDocFromServer(reference);
+      if (!isLatest()) return;
+      if (!snapshot.exists()) throw new Error("Missing reviewed document");
+      const fresh = normalize(snapshot.id, snapshot.data());
+      setItems((items) => items.map((item) => (item.id === id ? fresh : item)));
+    } catch {
+      if (isLatest())
+        setExemptionLoadError(
+          "면제권 처리를 완료했습니다. 최신 내역을 보려면 새로고침해 주세요.",
+        );
+    } finally {
+      if (reads.get(reference.path) === token) reads.delete(reference.path);
+    }
+  };
+
   const handleReviewExemptionRequest = async (
     requestId: string,
     status: "approved" | "rejected",
   ) => {
-    setReviewingExemptionRequestId(requestId);
+    const pending = pendingReviewsRef.current;
+    const request = exemptionRequests.find((item) => item.id === requestId);
+    if (!request || request.status !== "pending" || pending.has(requestId))
+      return;
+    pending.add(requestId);
+    setReviewingExemptionRequestIds([...pending]);
     try {
       await reviewHistoryClassroomExemptionRequest(config, {
         requestId,
         approved: status === "approved",
       });
-      await loadExemptionData();
+      if (
+        pending !== pendingReviewsRef.current ||
+        !exemptionReadScopeRef.current
+      )
+        return;
+      setExemptionRequests((items) =>
+        items.map((item) =>
+          item.id === requestId ? { ...item, status } : item,
+        ),
+      );
       showToast({
         tone: "success",
         title:
@@ -3359,7 +3446,29 @@ const ManageHistoryClassroom: React.FC = () => {
           ? { message: "면제권 1장을 사용해 역사교실을 완료했습니다." }
           : {}),
       });
+      // An explicit full refresh started before the commit needs a new snapshot.
+      if (exemptionReadPendingRef.current || !request.exemptionId) {
+        void loadExemptionData();
+        return;
+      }
+      void refreshReviewedDocument(
+        "history_classroom_exemption_requests",
+        requestId,
+        normalizeHistoryClassroomExemptionRequest,
+        setExemptionRequests,
+      );
+      void refreshReviewedDocument(
+        "history_classroom_exemptions",
+        request.exemptionId,
+        normalizeHistoryClassroomExemption,
+        setExemptions,
+      );
     } catch (error) {
+      if (
+        pending !== pendingReviewsRef.current ||
+        !exemptionReadScopeRef.current
+      )
+        return;
       console.error("Failed to review history classroom exemption request:", {
         requestId,
         status,
@@ -3372,7 +3481,9 @@ const ManageHistoryClassroom: React.FC = () => {
         ),
       );
     } finally {
-      setReviewingExemptionRequestId("");
+      pending.delete(requestId);
+      if (pending === pendingReviewsRef.current)
+        setReviewingExemptionRequestIds([...pending]);
     }
   };
 
@@ -4000,7 +4111,9 @@ const ManageHistoryClassroom: React.FC = () => {
     )
       return;
     const key = `${assignment.id}:${student.uid}`;
-    if (appliedExemptionKeys.includes(key)) return;
+    const scope = exemptionReadScopeRef.current;
+    if (scope !== assignmentReadScope || appliedExemptionKeys.includes(key))
+      return;
     applyingExemptionRef.current = true;
     setApplyingExemptionUid(student.uid);
     setDirectExemptionFeedback((previous) => ({ ...previous, [key]: "" }));
@@ -4010,52 +4123,26 @@ const ManageHistoryClassroom: React.FC = () => {
         studentUid: student.uid,
         exemptionId: exemption.id,
       });
+      if (scope !== exemptionReadScopeRef.current) return;
+      // The result listeners already own both projections. The receipt confirms
+      // this row immediately, even when their snapshots arrive later.
       setAppliedExemptionKeys((previous) => [...new Set([...previous, key])]);
+      reviewDocumentReadsRef.current.delete(
+        `${getSemesterCollectionPath(config, "history_classroom_exemptions")}/${applied.exemptionId}`,
+      );
       setExemptions((previous) =>
         previous.map((item) =>
           item.id === applied.exemptionId ? { ...item, status: "used" } : item,
         ),
       );
+      if (exemptionReadPendingRef.current) void loadExemptionData();
       showToast({
         tone: "success",
         title: "면제권을 사용했습니다.",
         message: `${student.name} 학생의 면제권 1장을 사용해 역사교실을 완료했습니다.`,
       });
-      try {
-        const resultSnapshot = await getDoc(
-          doc(
-            db,
-            getSemesterCollectionPath(config, "history_classroom_results"),
-            applied.resultId,
-          ),
-        );
-        if (resultSnapshot.exists()) {
-          const result = normalizeHistoryClassroomResult(
-            resultSnapshot.id,
-            resultSnapshot.data(),
-          );
-          setResultsByAssignment((previous) => ({
-            ...previous,
-            [assignment.id]: [
-              result,
-              ...(previous[assignment.id] || []).filter(
-                (item) => item.id !== result.id,
-              ),
-            ],
-          }));
-        }
-        await loadExemptionData();
-      } catch (error) {
-        console.error(
-          "Failed to refresh applied history classroom exemption",
-          error,
-        );
-        setDirectExemptionFeedback((previous) => ({
-          ...previous,
-          [key]: "면제 처리되었습니다. 제출 내역은 새로고침해 주세요.",
-        }));
-      }
     } catch (error) {
+      if (scope !== exemptionReadScopeRef.current) return;
       const message = getHistoryClassroomErrorMessage(
         error,
         "면제권을 사용하지 못했습니다. 다시 시도해 주세요.",
@@ -4584,18 +4671,55 @@ const ManageHistoryClassroom: React.FC = () => {
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
           </div>
-          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 xl:h-12 xl:px-4">
-            <input
-              lang="ko"
-              inputMode="text"
-              value={dashboardSearch}
-              onChange={(event) => setDashboardSearch(event.target.value)}
-              placeholder="과제명, 학생 이름, 학번 검색"
-              className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm outline-none placeholder:text-gray-400"
-            />
-            <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
-          </div>
           <div className="history-filter-actions">
+            <div className="history-dashboard-search" role="search">
+              <div
+                className="history-search-field"
+                data-open={dashboardSearchOpen}
+                aria-hidden={!dashboardSearchOpen}
+              >
+                <input
+                  id="history-dashboard-search-input"
+                  ref={dashboardSearchInputRef}
+                  type="search"
+                  lang="ko"
+                  inputMode="text"
+                  aria-label="과제명, 학생 이름, 학번 검색"
+                  placeholder="과제명, 학생 이름, 학번 검색"
+                  disabled={!dashboardSearchOpen}
+                  value={dashboardSearch}
+                  onChange={(event) => setDashboardSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Escape" &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      closeDashboardSearch();
+                    }
+                  }}
+                  className="h-11 rounded-xl border border-gray-200 bg-white px-3 text-base placeholder:text-gray-400"
+                />
+              </div>
+              <button
+                ref={dashboardSearchButtonRef}
+                type="button"
+                aria-expanded={dashboardSearchOpen}
+                aria-controls="history-dashboard-search-input"
+                aria-label={
+                  dashboardSearchOpen ? "과제 검색 닫기" : "과제 검색 열기"
+                }
+                title={dashboardSearchOpen ? "검색 닫기" : "과제 검색"}
+                onClick={() =>
+                  dashboardSearchOpen
+                    ? closeDashboardSearch()
+                    : setDashboardSearchOpen(true)
+                }
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                <DashboardIcon name="search" className="h-5 w-5" />
+              </button>
+            </div>
             {[
               ["all", "전체"],
               ["published", "공개"],
@@ -4616,6 +4740,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   }
                   label={String(label)}
                   type="button"
+                  aria-pressed={dashboardStatusFilter === value}
                   onClick={() =>
                     setDashboardStatusFilter(value as DashboardStatusFilter)
                   }
@@ -4937,9 +5062,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                   "rejected",
                                 )
                               }
-                              disabled={
-                                reviewingExemptionRequestId === request.id
-                              }
+                              disabled={reviewingExemptionRequestIds.includes(
+                                request.id,
+                              )}
                               className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                             ></HistoryActionButton>
                             <HistoryActionButton
@@ -4952,9 +5077,9 @@ const ManageHistoryClassroom: React.FC = () => {
                                   "approved",
                                 )
                               }
-                              disabled={
-                                reviewingExemptionRequestId === request.id
-                              }
+                              disabled={reviewingExemptionRequestIds.includes(
+                                request.id,
+                              )}
                               className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
                             ></HistoryActionButton>
                           </div>
@@ -5672,8 +5797,9 @@ const ManageHistoryClassroom: React.FC = () => {
                         const isPending = request.status === "pending";
                         const isHighlighted =
                           highlightedExemptionRequestId === request.id;
-                        const reviewing =
-                          reviewingExemptionRequestId === request.id;
+                        const reviewing = reviewingExemptionRequestIds.includes(
+                          request.id,
+                        );
                         return (
                           <div
                             key={request.id}

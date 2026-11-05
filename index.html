@@ -2,9 +2,46 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f5cff" />
-    <link rel="manifest" href="/manifest.webmanifest?v=20261025" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f9fafb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest?v=20261105" />
+    <style>
+      /* This surface must be present before the app or its external styles load. */
+      html {
+        --ws-safe-top: env(safe-area-inset-top, 0px);
+        --ws-status-surface: 249 250 251;
+        background-color: #f9fafb;
+        scroll-padding-top: var(--ws-safe-top);
+      }
+      :is(html, dialog:modal, :fullscreen)::after {
+        content: "";
+        position: fixed;
+        inset: 0 0 auto;
+        z-index: 11001;
+        height: var(--ws-safe-top);
+        pointer-events: none;
+        background: rgb(var(--ws-status-surface));
+        -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 8px), transparent);
+        mask-image: linear-gradient(to bottom, black calc(100% - 8px), transparent);
+      }
+      @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+        :is(html, dialog:modal, :fullscreen)::after {
+          background: rgb(var(--ws-status-surface) / 76%);
+          -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(12px);
+        }
+      }
+      /* A native modal paints above the document, including its backdrop. */
+      html:has(dialog:modal, :fullscreen)::after { content: none; }
+      @supports (-webkit-touch-callout: none) {
+        @media (display-mode: standalone) {
+          html { --ws-status-surface: 31 41 55; }
+        }
+      }
+    </style>
     <link
       rel="icon"
       type="image/x-icon"

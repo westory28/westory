@@ -941,7 +941,7 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  padding: 12px 16px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .history-atlas__drawer-heading h2 {

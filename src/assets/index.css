@@ -5,6 +5,10 @@
 @tailwind components;
 @tailwind utilities;
 
+#root {
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+}
+
 /* Prefer Korean word boundaries across both portals, including body portals. */
 body {
   word-break: keep-all;

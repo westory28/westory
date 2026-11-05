@@ -1198,7 +1198,7 @@ const HistoryClassroomAssignmentView: React.FC<
       <div
         ref={toolbarRef}
         data-history-toolbar="true"
-        className={`sticky top-0 z-30 rounded-xl border border-gray-200 bg-white px-2 py-1 shadow-sm sm:px-3 ${isStudentSolve ? "mb-1" : "mb-2"}`}
+        className={`sticky z-30 rounded-xl border border-gray-200 bg-white px-2 py-1 shadow-sm sm:px-3 ${isStudentSolve ? "top-[env(safe-area-inset-top,0px)] mb-1" : "top-0 mb-2"}`}
       >
         <div
           data-history-actions="true"

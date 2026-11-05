@@ -43,7 +43,7 @@
 
 .history-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -54,8 +54,46 @@
 
 .history-filter-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.history-filter-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.history-dashboard-search {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.history-search-field {
+  width: 0;
+  overflow: hidden;
+  transition: width 160ms ease-out;
+}
+
+.history-search-field[data-open="true"] {
+  width: clamp(200px, 60vw, 264px);
+}
+
+.history-search-field input {
+  display: block;
+  width: calc(100% - 8px);
+}
+
+.history-filter-actions :is(input, button):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-search-field {
+    transition: none;
+  }
 }
 
 .history-sort-label,
@@ -550,7 +588,11 @@
   }
 
   .history-classroom .history-filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .history-classroom .history-date-label {
+    grid-column: 1 / -1;
   }
 
   .history-classroom .history-edit-body {
@@ -628,6 +670,10 @@
 @container history-content (max-width: 640px) {
   .history-classroom .history-filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .history-classroom .history-filter-actions {
+    gap: 4px;
   }
 }
 

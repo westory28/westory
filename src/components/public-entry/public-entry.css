@@ -14,7 +14,7 @@
   position: relative;
   color: var(--entry-ink);
   background: #fff;
-  padding-top: 80px;
+  padding-top: calc(80px + env(safe-area-inset-top, 0px));
   overflow-x: clip;
 }
 .public-entry *,

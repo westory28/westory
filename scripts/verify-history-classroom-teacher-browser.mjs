@@ -297,11 +297,15 @@ export const getDoc=async(reference)=>{fixture.reads.push(reference.path);return
 export const getDocs=async(reference)=>{fixture.reads.push(reference.path);if(fixture.failResultReads&&reference.path==='semester_assessment_results')throw new Error('Expected canonical result read failure');const docs=Object.entries(fixture.store).filter(([key,value])=>key.startsWith(reference.path+'/')&&!key.slice(reference.path.length+1).includes('/')&&(reference.filters||[]).every(filter=>filter.operator==='in'?filter.value.includes(value[filter.field]):value[filter.field]===filter.value)).map(([key,value])=>snap(key,value));return {docs,empty:!docs.length,size:docs.length};};
 export const onSnapshot=(reference,next,error)=>{
  let active=true;
- const refresh=()=>{getDocs(reference).then(snapshot=>{if(active)next(snapshot);}).catch(failure=>{if(active)error(failure);});};
+ const refresh=()=>{if(fixture.holdResultSnapshots)return;getDocs(reference).then(snapshot=>{if(active)next(snapshot);}).catch(failure=>{if(active)error(failure);});};
  refresh();window.addEventListener('fixture-change',refresh);
  return ()=>{active=false;window.removeEventListener('fixture-change',refresh);};
 };
-export const getDocFromServer=getDoc;
+export const getDocFromServer=async reference=>{
+ const snapshot=await getDoc(reference);
+ if(fixture.holdReviewPath===reference.path){delete fixture.holdReviewPath;await new Promise(resolve=>{fixture.releaseReviewRead=resolve;});}
+ return snapshot;
+};
 export const getDocsFromServer=getDocs;
 export const setDoc=async(reference,payload,options)=>{
  const data=structuredClone(payload);fixture.writes.push({path:reference.path,data,options});changed();
@@ -373,6 +377,16 @@ export const executeAssessmentManagementCommand=async(commandType,payload)=>{
   fixture.store['semester_assessment_results/'+resultId]=structuredClone(result);
   fixture.store[${JSON.stringify(scope)}+'/history_classroom_exemption_requests/'+requestId]={...result,status:'approved',reviewedByUid:'teacher-fixture',reviewedAt:timestamp};
   return completed({studentUid:payload.studentUid,assignmentId:payload.assignmentId,exemptionId:payload.exemptionId,resultId,status:'approved',origin:'teacher_direct'});
+ }
+ if(commandType==='reviewHistoryClassroomExemptionRequest') {
+  if(fixture.holdReviewCommands){await new Promise(resolve=>{fixture.releaseReviews[payload.requestId]=resolve;});}
+  const requestPath=${JSON.stringify(scope)}+'/history_classroom_exemption_requests/'+payload.requestId;
+  const request=fixture.store[requestPath];
+  const ticketPath=${JSON.stringify(scope)}+'/history_classroom_exemptions/'+request.exemptionId;
+  const status=payload.approved?'approved':'rejected';
+  fixture.store[requestPath]={...request,status,reviewedAt:serverTimestamp()};
+  fixture.store[ticketPath]={...fixture.store[ticketPath],status:payload.approved?'used':'available'};
+  return completed({requestId:payload.requestId,status,resultId:''});
  }
  throw new Error('Unexpected command '+commandType);
  } catch(error) {fixture.failedCommands.push({commandType,payload:structuredClone(payload),code:error?.code||'error',message:String(error?.message||error)});changed();throw error;}
@@ -1020,6 +1034,27 @@ try {
     );
     const dashboardCard = page.locator(".history-dashboard article").first();
     await dashboardCard.waitFor();
+    const actions = page.locator(".history-filter-actions");
+    const searchToggle = actions.getByRole("button", { name: "과제 검색 열기" });
+    const toolbarHeight = (await actions.boundingBox()).height;
+    await searchToggle.focus();
+    await searchToggle.press("Enter");
+    const searchInput = actions.getByRole("searchbox", { name: "과제명, 학생 이름, 학번 검색" });
+    await page.waitForFunction(() => {
+      const input = document.activeElement;
+      return input?.id === "history-dashboard-search-input" && input.getBoundingClientRect().width >= 175;
+    });
+    assert.equal((await actions.boundingBox()).height, toolbarHeight, "opening search keeps the toolbar height");
+    const buttonRows = await actions.getByRole("button").evaluateAll((buttons) =>
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    );
+    assert.equal(new Set(buttonRows).size, 1, "search and all dashboard actions share one row");
+    await searchInput.fill("일치하지 않는 합성 과제명");
+    await page.getByText("현재 검색 조건에 맞는 역사교실이 없습니다.").waitFor();
+    await searchInput.press("Escape");
+    await dashboardCard.waitFor();
+    assert.equal(await searchToggle.evaluate((button) => button === document.activeElement), true);
+    assert.equal(await searchToggle.getAttribute("aria-expanded"), "false");
     const dashboardGeometry = await page.locator(".history-dashboard").filter({ has: page.locator(".history-timeline-marker") }).evaluate((dashboard) => {
       const marker = dashboard.querySelector(".history-timeline-marker").getBoundingClientRect();
       const dashboardBox = dashboard.getBoundingClientRect();
@@ -1905,8 +1940,24 @@ try {
   await resultPage.getByText("학생에게 공개로 전환했습니다.", { exact: true }).waitFor();
   await dismissToasts(resultPage);
   await resultPage.getByRole("button", { name: `${longTitle} 설정 수정`, exact: true }).click();
-  await resultPage.getByRole("button", { name: new RegExp(`${resultStudents[2].name} 면제권 1장 사용`) }).click();
+  const applyTicket = resultPage.getByRole("button", { name: new RegExp(`${resultStudents[2].name} 면제권 1장 사용`) });
+  const exemptionRow = resultPanel.getByRole("row", { name: `${resultStudents[2].name} 응시 현황`, exact: true });
+  await resultPage.evaluate(() => { window.__fixture.failNextExemption = true; window.__fixture.pauseExemption = true; });
+  await applyTicket.evaluate(button => { button.click(); button.click(); });
+  await resultPage.waitForFunction(() => !!window.__fixture.releaseExemption);
+  assert(await applyTicket.isDisabled(), "Pending apply blocks a repeated click");
+  assert.equal(await exemptionRow.getByText("면제 완료", { exact: true }).count(), 0, "No premature completion");
+  await resultPage.evaluate(() => window.__fixture.releaseExemption());
+  await resultPage.getByText("면제권을 사용하지 못했습니다.", { exact: true }).waitFor();
+  assert.equal(await exemptionRow.getByText("면제 완료", { exact: true }).count(), 0);
+  await dismissToasts(resultPage);
+  await resultPage.evaluate(() => { window.__fixture.holdResultSnapshots = true; window.__fixture.reads.length = 0; });
+  await applyTicket.click();
   await resultPage.getByText("면제권을 사용했습니다.", { exact: true }).waitFor();
+  await exemptionRow.getByText("면제 완료", { exact: true }).waitFor();
+  assert.deepEqual(await resultPage.evaluate(() => window.__fixture.reads), [],
+    "Direct apply accepts its receipt with zero extra reads while result snapshots are delayed");
+  await resultPage.evaluate(() => { window.__fixture.holdResultSnapshots = false; window.dispatchEvent(new CustomEvent("fixture-change")); });
   await dismissToasts(resultPage);
   await resultPanel.getByRole("row", { name: `${resultStudents[2].name} 응시 현황`, exact: true }).getByText("면제 완료", { exact: true }).waitFor();
   assert.equal(await resultPanel.getByText("4명 · 제출 4건", { exact: true }).count(), 1,
@@ -1919,11 +1970,75 @@ try {
   await unresolved.getByText("확인 불가", { exact: true }).waitFor();
   assert.equal(await unresolved.getByText("응시 전", { exact: true }).count(), 0, "Read failures are not shown as an unattempted student");
   assert.equal(await unresolved.getByRole("button", { name: /재응시 제한 리셋$/ }).count(), 0);
-  assert.equal(await resultPage.evaluate(() => window.__fixture.commands.filter(command => command.commandType === "applyHistoryClassroomExemption").length), 1);
+  const applyCommands = await resultPage.evaluate(() => window.__fixture.commands.filter(command => command.commandType === "applyHistoryClassroomExemption"));
+  assert.equal(applyCommands.length, 2);
+  assert.deepEqual(applyCommands[0], applyCommands[1], "An explicit retry preserves the target and ticket");
   assert.deepEqual(resultErrors, [], "Canonical result, review, publication and exemption actions have no runtime errors");
   reports.push({ viewport: { width: 1280, height: 900 }, canonicalResults: "live pass; failed then passed; immutable review; publication and exemption toasts; preserved results on read error", errors: resultErrors });
   await resultPage.close();
   console.log("teacher canonical realtime results, retry history, deep links, publication/exemption toasts and read failure: passed");
+
+  const reviewPage = await browser.newPage();
+  await reviewPage.route("**/*", route => route.request().url().startsWith(`http://127.0.0.1:${server.address().port}`) ? route.continue() : route.abort());
+  await reviewPage.goto(`http://127.0.0.1:${server.address().port}/`);
+  for (const approved of [true, false]) {
+    const requestId = "synthetic-review";
+    const ticketId = "synthetic-review-ticket";
+    const student = resultStudents[3];
+    await reviewPage.evaluate(({ scope, requestId, ticketId, student, sourceId }) => {
+      window.__fixture.store[`${scope}/history_classroom_exemptions/${ticketId}`] = { uid: student.uid, status: "requested" };
+      window.__fixture.store[`${scope}/history_classroom_exemption_requests/${requestId}`] = { uid: student.uid, studentName: student.name, exemptionId: ticketId, assignmentId: sourceId, status: "pending" };
+      window.__remount("/?panel=exemption-requests");
+    }, { scope, requestId, ticketId, student, sourceId });
+    const decision = reviewPage.getByRole("button", { name: approved ? "승인" : "반려", exact: true });
+    await decision.waitFor();
+    await reviewPage.evaluate(() => { window.__fixture.reads.length = 0; });
+    await decision.click();
+    await reviewPage.locator(".ws-toast__title").filter({ hasText: approved ? "면제권 사용 요청을 승인했습니다." : "면제권 사용 요청을 반려했습니다." }).waitFor();
+    await reviewPage.waitForFunction(() => window.__fixture.reads.some(path => path.includes("/history_classroom_exemption_requests/")));
+    const readPaths = await reviewPage.evaluate(() => window.__fixture.reads.filter(path => path.includes("/history_classroom_exemption")));
+    assert.deepEqual(readPaths.sort(), [`${scope}/history_classroom_exemption_requests/${requestId}`, `${scope}/history_classroom_exemptions/${ticketId}`].sort(),
+      "Review reconciliation only reads the affected request and ticket");
+  }
+  // Two independent teachers' queue items may be processed back-to-back while
+  // a previously confirmed ticket snapshot is still in flight.
+  const ticketPath = `${scope}/history_classroom_exemptions/synthetic-review-ticket`;
+  await reviewPage.evaluate(({ scope, ticketPath, requestId, sourceId, student }) => {
+    const fx=window.__fixture;
+    fx.store[ticketPath]={uid:student.uid,studentName:student.name,status:"requested"};
+    const request={uid:student.uid,studentName:student.name,exemptionId:"synthetic-review-ticket",assignmentId:sourceId,status:"pending"};
+    fx.store[`${scope}/history_classroom_exemption_requests/${requestId}`]={...request,assignmentTitle:"첫 번째 요청"};
+    fx.store[`${scope}/history_classroom_exemption_requests/other-review`]={...request,exemptionId:"other-ticket",assignmentTitle:"두 번째 요청"};
+    fx.store[`${scope}/history_classroom_exemptions/other-ticket`]={uid:student.uid,status:"requested"};
+    fx.releaseReviews={};
+    fx.holdReviewCommands=true;
+    fx.holdReviewPath=ticketPath;
+    window.__remount("/?panel=exemption-requests");
+  }, { scope, ticketPath, requestId:"synthetic-review", sourceId, student:resultStudents[3] });
+  const reject=reviewPage.getByRole("button",{name:"반려",exact:true}).first();
+  const approve=reviewPage.getByRole("button",{name:"승인",exact:true}).last();
+  await reject.click();
+  await approve.click();
+  await reviewPage.waitForFunction(()=>Object.keys(window.__fixture.releaseReviews).length===2);
+  await reviewPage.evaluate(()=>window.__fixture.releaseReviews["synthetic-review"]());
+  await reviewPage.waitForFunction(()=>!!window.__fixture.releaseReviewRead);
+  assert(await approve.isDisabled(), "Completing the first review does not clear the second pending review");
+  await reviewPage.evaluate(()=>{window.__fixture.holdReviewCommands=false;window.__fixture.releaseReviews["other-review"]();});
+  await approve.waitFor({state:"hidden"});
+  await reviewPage.evaluate(({scope,ticketPath})=>{
+    const fx=window.__fixture;
+    fx.store[ticketPath].status="requested";
+    fx.store[`${scope}/history_classroom_exemption_requests/synthetic-review`].status="pending";
+  },{scope,ticketPath});
+  await reviewPage.getByRole("dialog").getByRole("button",{name:"새로고침",exact:true}).click();
+  await reviewPage.getByRole("button",{name:"승인",exact:true}).click();
+  await reviewPage.getByRole("button",{name:"승인",exact:true}).waitFor({state:"hidden"});
+  await reviewPage.evaluate(()=>window.__fixture.releaseReviewRead());
+  await reviewPage.getByRole("button",{name:/부여된 면제권/}).click();
+  assert(await reviewPage.getByRole("button",{name:`${resultStudents[3].name} 면제권 회수`,exact:true}).isDisabled(),
+    "The late rejection snapshot cannot re-enable an already-consumed ticket");
+  await reviewPage.close();
+  console.log("exemption apply: 0 extra reads; review: 2 target documents; approval and rejection passed");
 
   // Completion is about every assigned student, not the number of submissions.
   // Use the actual list at each required width; fixture records never leave localhost.
