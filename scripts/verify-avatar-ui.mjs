@@ -276,6 +276,9 @@ if (checkRankingLayout) {
         [1024, 650, true],
         [1024, 650],
         [1024, 480, true],
+        [1024, 390, true],
+        [1120, 390],
+        [1120, 382],
         [1280, 480, true],
         [1280, 480],
         [1366, 500],
@@ -426,7 +429,7 @@ if (checkRankingLayout) {
             }),
           );
         if (
-          [320, 390, 768].includes(viewport) ||
+          [320, 390, 768, 1120].includes(viewport) ||
           cardWidth === 533 ||
           cardWidth === 694
         ) {
@@ -435,6 +438,39 @@ if (checkRankingLayout) {
           });
         }
         assert.equal(geometry.length, 5);
+        const layout = await page
+          .locator(".wis-ranking-avatar-layout")
+          .evaluate((node) => {
+            const list = node
+              .querySelector(".wis-ranking-list-scroll")
+              .getBoundingClientRect();
+            const avatar = node
+              .querySelector(".wis-ranking-avatar__frame")
+              .getBoundingClientRect();
+            return {
+              listWidth: list.width,
+              avatarWidth: avatar.width,
+              overlap: list.right > avatar.left,
+            };
+          });
+        assert(!layout.overlap && layout.avatarWidth >= 48);
+        if (viewport >= 768 && cardWidth <= 390) {
+          assert(
+            layout.listWidth >= 315.5 &&
+              geometry[0].regularTextFits &&
+              geometry[2].regularTextFits,
+            `${role} ${viewport}/${cardWidth}px readable ordinary names and balances: ${JSON.stringify({ layout, first: geometry[0] })}`,
+          );
+          await page.locator(".wis-ranking-row").nth(1).click();
+          await page
+            .locator('[data-avatar-student="qa-1"] .wis-ranking-avatar__image')
+            .waitFor({ state: "visible" });
+        } else if (cardWidth >= 500 || viewport < 768) {
+          assert(
+            Math.abs(layout.listWidth - 2 * layout.avatarWidth) < 1,
+            "Regular panels keep their 2:1 split",
+          );
+        }
         if (viewport >= 768) {
           const large = geometry[1];
           assert(
@@ -476,6 +512,8 @@ if (checkRankingLayout) {
             minimumGap: Math.min(
               ...geometry.map((row) => row.classroomToScore),
             ),
+            ...layout,
+            ordinaryNameWidth: geometry[0].visibleName,
           });
         } else {
           assert(

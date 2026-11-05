@@ -295,9 +295,9 @@
 @media (min-width: 768px) {
   .wis-ranking-with-avatar .wis-ranking-row {
     --classroom-size: clamp(13px, 2.1cqi, 15px);
-    grid-template-columns: 24px minmax(0, 1fr) calc(
-        var(--classroom-size) * 5
-      ) clamp(96px, 31%, 140px);
+    grid-template-columns:
+      24px minmax(0, 1fr) calc(var(--classroom-size) * 5)
+      clamp(96px, 31%, 140px);
     grid-template-areas: "place person classroom score";
     column-gap: 8px;
   }
@@ -358,6 +358,11 @@
     .wis-ranking-with-avatar .wis-ranking-avatar-layout {
       margin-inline: -12px;
       gap: 4px;
+      /* Keep ordinary names and amounts readable when the dashboard sidebar is open. */
+      grid-template-columns: minmax(min(316px, calc(100% - 52px)), 2fr) minmax(
+          0,
+          1fr
+        );
     }
 
     .wis-ranking-with-avatar .wis-ranking-row {
