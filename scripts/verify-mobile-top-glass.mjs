@@ -80,10 +80,12 @@ const firebase = `
   import { getFirestore } from "@firebase/firestore";
   export const app = initializeApp({ projectId:"demo-mobile-glass", apiKey:"synthetic-key" });
   export const db=getFirestore(app), analytics=null, authPersistenceReady=Promise.resolve(), configuredAuthDomain="localhost";
-  export const currentUser={uid:"glass-fixture",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{auth_time:Date.now()/1000}})};
+  const authTime=Math.floor(Date.now()/1000);
+  export const currentUser={uid:"glass-fixture",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{auth_time:authTime}})};
   const subscribe=next=>{queueMicrotask(()=>next?.(currentUser));return ()=>{}};
   export const auth={currentUser,onAuthStateChanged:subscribe,onIdTokenChanged:subscribe}, getFirebaseFunctions=async()=>({}), getFirebaseStorage=async()=>({});
-  export const getHttpsCallable=async()=>async()=>({data:{}});
+  export const getHttpsCallable=async name=>async input=>({data:name==="openApplicationSession"
+    ? {...input, status:"active", authTime, revision:"0".repeat(64)} : {}});
 `;
 const firestore = `
   export * from "@firebase/firestore";
@@ -165,55 +167,196 @@ async function surface(page, inset, layer = "document") {
   if (layer === "document") assert.equal(result.y, 0);
 }
 
-// Compare the real frame with its glass hidden. No test style creates the glass or its backdrop.
-async function comparePixels(page, name, { filterOnly = false } = {}) {
-  const screenshot = () => page.screenshot({ animations: "disabled" });
-  const visible = await screenshot();
+// Compare the real frame with its glass hidden, or only its blur disabled.
+// A uniform background SHOULD look the same with the glass turned off.
+async function comparePixels(
+  page,
+  name,
+  { textEdges = false, samples = [] } = {},
+) {
+  const visible = await page.screenshot({ animations: "disabled" });
   const control = await page.addStyleTag({
-    content: filterOnly
+    content: textEdges
       ? "#westory-top-glass::before {backdrop-filter:none !important;-webkit-backdrop-filter:none !important}"
       : "#westory-top-glass, dialog:modal::after, :fullscreen::after {visibility:hidden !important}",
   });
   let uncovered;
   try {
-    uncovered = await screenshot();
+    uncovered = await page.screenshot({ animations: "disabled" });
   } finally {
     await control.evaluate((node) => node.remove());
   }
-  await fs.writeFile(path.join(dir, name + ".png"), visible);
-  await fs.writeFile(path.join(dir, name + "-control.png"), uncovered);
+  await Promise.all([
+    fs.writeFile(path.join(dir, name + ".png"), visible),
+    fs.writeFile(path.join(dir, name + "-control.png"), uncovered),
+  ]);
+  if (!samples.length && !textEdges) return;
   const result = await page.evaluate(
-    async ([a, b]) => {
-      async function pixels(b64) {
+    async ({ frames, samples }) => {
+      const height = document
+        .getElementById("westory-top-glass")
+        .getBoundingClientRect().height;
+      async function pixels(base64) {
         const image = new Image();
-        image.src = "data:image/png;base64," + b64;
+        image.src = "data:image/png;base64," + base64;
         await image.decode();
         const canvas = document.createElement("canvas");
         canvas.width = image.width;
-        canvas.height = 16;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(image, 0, 0);
-        return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        canvas.height = Math.ceil(height) + 10;
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+        return context.getImageData(0, 0, canvas.width, canvas.height);
       }
-      const [on, off] = await Promise.all([pixels(a), pixels(b)]);
-      let changed = 0,
-        peak = 0;
-      for (let i = 0; i < on.length; i += 4) {
-        const diff = Math.max(
-          ...[0, 1, 2].map((c) => Math.abs(on[i + c] - off[i + c])),
-        );
-        peak = Math.max(peak, diff);
-        if (diff >= 3) changed++;
+      const [on, off] = await Promise.all(frames.map(pixels));
+      function patch(image, x, y) {
+        const sums = [0, 0, 0];
+        for (let j = y; j < y + 3; j++)
+          for (let i = x - 4; i <= x + 4; i++) {
+            const offset = (j * image.width + i) * 4;
+            sums.forEach((_, c) => (sums[c] += image.data[offset + c]));
+          }
+        return sums.map((value) => Math.round(value / 27));
       }
-      return { changed, peak };
+      function edgeEnergy(image) {
+        const luma = (offset) =>
+          0.2126 * image.data[offset] +
+          0.7152 * image.data[offset + 1] +
+          0.0722 * image.data[offset + 2];
+        let sum = 0;
+        for (let y = 0; y < 8; y++)
+          for (let x = 1; x < image.width; x++) {
+            const offset = (y * image.width + x) * 4;
+            const center = luma(offset);
+            sum +=
+              Math.abs(center - luma(offset - 4)) +
+              Math.abs(center - luma(offset + image.width * 4));
+          }
+        return sum / (8 * (image.width - 1));
+      }
+      return {
+        colors: samples.map((sample) => ({
+          name: sample.name,
+          top: patch(on, sample.x, 3),
+          below: patch(on, sample.x, Math.ceil(height) + 3),
+          uncovered: patch(off, sample.x, 3),
+          uncoveredBelow: patch(off, sample.x, Math.ceil(height) + 3),
+        })),
+        sharp: edgeEnergy(off),
+        blurred: edgeEnergy(on),
+      };
     },
-    [visible.toString("base64"), uncovered.toString("base64")],
+    {
+      frames: [visible, uncovered].map((buffer) => buffer.toString("base64")),
+      samples,
+    },
   );
-  assert(
-    result.changed > 12 && result.peak >= 8,
-    `${name}: glass did not visibly affect the actual page: ${JSON.stringify(result)}`,
-  );
-  console.log(name, result);
+  const difference = (a, b) =>
+    Math.max(...a.map((value, i) => Math.abs(value - b[i])));
+  for (const [i, sample] of result.colors.entries()) {
+    const message = name + " " + sample.name + ": " + JSON.stringify(sample);
+    if (samples[i].expected)
+      assert(
+        difference(sample.uncovered, samples[i].expected) <= 2,
+        "calibration failed: " + message,
+      );
+    assert(
+      difference(sample.top, sample.uncovered) <= 3,
+      "glass repainted a flat background: " + message,
+    );
+    // The real header can have a subtle gradient. The glass must not add a band of its own.
+    const originalStep = difference(sample.uncovered, sample.uncoveredBelow);
+    assert(
+      difference(sample.top, sample.below) <= originalStep + 3,
+      "visible seam added below glass: " + message,
+    );
+    if (samples[i].expected)
+      assert(
+        originalStep <= 2,
+        "reference surface must be uniform: " + message,
+      );
+  }
+  if (textEdges) {
+    assert(
+      result.sharp > 2,
+      "test must observe actual sharp lettering: " + name,
+    );
+    assert(
+      result.blurred < result.sharp * 0.6,
+      "text outlines must soften: " + name + " " + JSON.stringify(result),
+    );
+  }
+  console.log(name, JSON.stringify(result));
+}
+
+async function verifyContinuity(page, label) {
+  // Middle of the real teacher dashboard's mobile header; the wordmark and menu occupy the sides.
+  await comparePixels(page, "dashboard-" + label, {
+    samples: [{ name: "dashboard", x: 195 }],
+  });
+  // This strip is test content behind the real production glass, never a replacement for the glass.
+  const strip = await page.evaluateHandle(() => {
+    const element = document.createElement("div");
+    element.style.cssText =
+      "position:fixed;inset:0 0 auto;height:150px;z-index:2147483646;pointer-events:none;background:linear-gradient(to right,white 0 33.333%,#2563eb 33.333% 66.667%,#059669 66.667% 100%)";
+    document.body.append(element);
+    return element;
+  });
+  try {
+    await comparePixels(page, "colors-" + label, {
+      samples: [
+        { name: "white", x: 65, expected: [255, 255, 255] },
+        { name: "blue", x: 195, expected: [37, 99, 235] },
+        { name: "green", x: 325, expected: [5, 150, 105] },
+      ],
+    });
+  } finally {
+    await strip.evaluate((node) => node.remove());
+    await strip.dispose();
+  }
+}
+
+// Windows browsers cannot enter iOS installed mode. Exercise the declarations from the
+// shipped stylesheet by activating just those two platform conditions, in their original order.
+async function verifyInstalledAppRules(page, label) {
+  const projected = await page.evaluateHandle(() => {
+    const link = document.querySelector('link[href*="mobile-top-glass.css"]');
+    const rules = Array.from(link.sheet.cssRules, (rule) => rule.cssText).join(
+      "\n",
+    );
+    const style = document.createElement("style");
+    style.textContent = rules
+      .replace(
+        /@supports\s*\(\s*-webkit-touch-callout\s*:\s*none\s*\)/gi,
+        "@supports (display:block)",
+      )
+      .replace(/\(\s*display-mode\s*:\s*standalone\s*\)/gi, "(min-width:0px)");
+    link.after(style);
+    link.sheet.disabled = true;
+    return style;
+  });
+  try {
+    // Decode native canvas CSS color syntax too (e.g. a computed color(srgb ...) from color-mix).
+    const rootColor = await page.evaluate(() => {
+      const context = document.createElement("canvas").getContext("2d");
+      context.fillStyle = getComputedStyle(
+        document.documentElement,
+      ).backgroundColor;
+      context.fillRect(0, 0, 1, 1);
+      return Array.from(context.getImageData(0, 0, 1, 1).data);
+    });
+    await verifyContinuity(page, "installed-rules-" + label);
+    assert(
+      Math.min(...rootColor.slice(0, 3)) >= 240 && rootColor[3] === 255,
+      "installed-mode root canvas must match the light dashboard: " +
+        JSON.stringify(rootColor),
+    );
+  } finally {
+    await projected.evaluate((node) => {
+      node.previousElementSibling.sheet.disabled = false;
+      node.remove();
+    });
+    await projected.dispose();
+  }
 }
 async function scenario(engine, inset) {
   const webkit = engine.browserType().name() === "webkit";
@@ -286,6 +429,15 @@ async function scenario(engine, inset) {
       .elementHandle();
     await page.locator('[data-patch-target="teacher-dashboard"]').waitFor();
     await surface(page, inset);
+    // Let optional dashboard widgets mount, then dismiss any synthetic-session notices in the header.
+    await page
+      .locator("[data-patch-memo-root]")
+      .first()
+      .waitFor({ state: "attached" });
+    for (const close of await page.locator(".ws-toast__close").all())
+      await close.click();
+    await verifyInstalledAppRules(page, label);
+    await verifyContinuity(page, label);
     console.log(
       "Browser display-mode standalone:",
       await page.evaluate(
@@ -352,13 +504,13 @@ async function scenario(engine, inset) {
       "long route actually scrolls",
     );
     await surface(page, inset);
-    const filterOnly = !webkit || process.platform !== "win32";
-    if (!filterOnly)
+    const textEdges = !webkit || process.platform !== "win32";
+    if (!textEdges)
       console.log(
-        "Windows WebKit headless cannot rasterize backdrop blur; comparing the painted tint against the uncovered page.",
+        "Windows WebKit headless cannot rasterize backdrop blur. Geometry and flat-color continuity are checked on this engine.",
       );
     await comparePixels(page, `teacher-assignment-scroll-${label}`, {
-      filterOnly,
+      textEdges,
     });
     await visit("/student/dashboard", ".student-portal-dashboard");
     await visit("/student/calendar", ".student-calendar-page");
@@ -399,6 +551,37 @@ try {
     await scenario(webkit, 0);
   } finally {
     await webkit.close();
+  }
+  for (const pathname of [
+    "/",
+    "/legal/2026-10-28.html",
+    "/legal/before-2026-10-28.html",
+  ]) {
+    const tab = await browser.newPage();
+    try {
+      const response = await fetch(new URL(pathname, origin));
+      assert(response.ok);
+      const metadata = await tab.evaluate(
+        (html) => {
+          const doc = new DOMParser().parseFromString(html, "text/html");
+          const metas = Array.from(doc.querySelectorAll("meta"), (element) => [
+            element.name.toLowerCase(),
+            element.content.toLowerCase(),
+          ]);
+          return Object.fromEntries(metas);
+        },
+        await response.text(),
+      );
+      assert.equal(
+        metadata["apple-mobile-web-app-status-bar-style"],
+        undefined,
+        pathname + " still overrides the native status bar",
+      );
+      assert.match(metadata.viewport, /viewport-fit\s*=\s*cover/);
+      assert.equal(metadata["theme-color"], "#f9fafb");
+    } finally {
+      await tab.close();
+    }
   }
   console.log(
     "Mobile top glass passed across real routes, scrolling and top layers.",

@@ -1,8 +1,7 @@
 html {
   --ws-safe-top: env(safe-area-inset-top, 0px);
   --ws-glass-height: var(--ws-safe-top);
-  --ws-glass-color: 249 250 251;
-  --ws-glass-fade: linear-gradient(to bottom, black calc(100% - 8px), transparent);
+  --ws-glass-fade: linear-gradient(to bottom, black calc(100% - 16px), transparent);
   background-color: #f9fafb;
   scroll-padding-top: var(--ws-safe-top);
 }
@@ -15,24 +14,7 @@ html {
   }
 }
 
-@supports (-webkit-touch-callout: none) {
-  @media (display-mode: standalone) {
-    html {
-      --ws-glass-color: 31 41 55;
-      /* Also give WebKit a matching color for any pixels it paints outside
-         the page in an installed app. The document itself stays light. */
-      background-color: color-mix(in srgb, rgb(var(--ws-glass-color)) 72%, #f9fafb);
-    }
-    body {
-      margin: 0;
-      min-height: 100dvh;
-      background-color: #f9fafb;
-    }
-  }
-}
-
-/* Outside the route tree. Keep the viewport-edge surface separate from the
-   filter so WebKit can composite the page behind the inner layer. */
+/* The surface stays outside the route tree so menus can scroll underneath. */
 #westory-top-glass,
 :is(dialog:modal, :fullscreen:not(html))::after {
   position: fixed;
@@ -42,14 +24,11 @@ html {
   pointer-events: none;
 }
 
-#westory-top-glass {
-  background: linear-gradient(to bottom, rgb(var(--ws-glass-color) / 18%) calc(100% - 8px), transparent);
-}
-
 #westory-top-glass::before,
 :is(dialog:modal, :fullscreen:not(html))::after {
   content: "";
-  background: rgb(var(--ws-glass-color) / 66%);
+  /* Blur the content itself. A flat backdrop should keep its original color. */
+  background: transparent;
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   -webkit-mask-image: var(--ws-glass-fade);
