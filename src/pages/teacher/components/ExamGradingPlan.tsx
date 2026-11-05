@@ -24,6 +24,7 @@ import {
 } from "../../../lib/semesterScope";
 import {
   buildScoreRows,
+  getCalculatorScoreRow,
   getScoreKey,
   getSubjectPriorityIndex,
   getTypeLabel,
@@ -406,6 +407,15 @@ const ExamGradingPlan: React.FC = () => {
       )
     : [];
   const previewRow = previewRows[0] || null;
+  const previewPlanReady =
+    previewValidItems.length === previewPlan?.items.length &&
+    Math.abs(previewRatioTotal - 100) < 0.000001;
+  const previewAchievement =
+    previewRow && previewPlanReady ? getCalculatorScoreRow(previewRow) : null;
+  const previewGradeLabel =
+    previewAchievement?.band && previewAchievement.estimated
+      ? "예상 등급"
+      : "등급";
   const previewContribution = previewScoreTypes.reduce(
     (acc, type) => {
       acc[type] =
@@ -472,7 +482,7 @@ const ExamGradingPlan: React.FC = () => {
                         학생 점수 입력 예시
                       </h4>
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-black ${previewRatioTotal === 100 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-800"}`}
+                        className={`rounded-full px-3 py-1 text-xs font-black ${previewPlanReady ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-800"}`}
                       >
                         반영 합계 {previewRatioTotal}%
                       </span>
@@ -552,14 +562,31 @@ const ExamGradingPlan: React.FC = () => {
                           실시간 반영 그래프
                         </h4>
                       </div>
-                      <div className="text-right">
+                      <div className="grading-preview-achievement text-right">
                         <div className="grading-score-help-label text-xs font-bold text-slate-400">
-                          환산 점수
+                          {previewGradeLabel}
                           <GradingScoreHelp subject={previewPlan.subject} />
                         </div>
-                        <div className="text-3xl font-black text-blue-600">
-                          {formatPreviewScore(previewTotalScore)}
-                        </div>
+                        <output
+                          className="flex items-baseline justify-end gap-2"
+                          aria-label={previewGradeLabel}
+                          aria-atomic="true"
+                        >
+                          {previewAchievement?.band ? (
+                            <>
+                              <strong className="text-3xl font-black text-blue-600">
+                                {previewAchievement.band}
+                              </strong>
+                              <span className="text-sm font-bold text-slate-700">
+                                {previewAchievement.achievementScore}점
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-sm font-bold text-slate-500">
+                              {previewRow?.hasData ? "산출 불가" : "미입력"}
+                            </span>
+                          )}
+                        </output>
                       </div>
                     </div>
                     <div className="mb-4 flex flex-wrap gap-3">
@@ -581,8 +608,10 @@ const ExamGradingPlan: React.FC = () => {
                         <span className="min-w-0 truncate text-base font-black text-slate-900">
                           {previewPlan.subject}
                         </span>
-                        <span className="shrink-0 text-xl font-black text-blue-600">
-                          {formatPreviewScore(previewTotalScore)}
+                        <span className="shrink-0 text-sm font-bold text-slate-700">
+                          {previewRow?.hasData
+                            ? `반영 ${formatPreviewScore(previewTotalScore)}`
+                            : "미입력"}
                         </span>
                       </div>
 
@@ -642,7 +671,7 @@ const ExamGradingPlan: React.FC = () => {
                             </div>
                             <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3">
                               <span className="font-bold text-slate-500">
-                                현재 점수
+                                반영 합계
                               </span>
                               <span className="text-xl font-black text-slate-900">
                                 {formatPreviewScore(previewTotalScore)}
@@ -655,6 +684,9 @@ const ExamGradingPlan: React.FC = () => {
                       <div className="mt-4 grid gap-2 sm:grid-cols-3">
                         {previewScoreTypes.map((type) => {
                           const value = previewContribution[type];
+                          const hasEntry = previewEnteredItems.some(
+                            (item) => item.type === type,
+                          );
                           const percent =
                             previewTotalScore > 0
                               ? (value / previewTotalScore) * 100
@@ -671,10 +703,10 @@ const ExamGradingPlan: React.FC = () => {
                               </div>
                               <div className="mt-1 flex items-end justify-between gap-2">
                                 <span className="text-sm font-black text-slate-900">
-                                  {formatPreviewScore(value)}
+                                  {hasEntry ? formatPreviewScore(value) : "—"}
                                 </span>
                                 <span className="text-[11px] font-extrabold text-slate-500">
-                                  {formatPreviewPercent(percent)}
+                                  {hasEntry && formatPreviewPercent(percent)}
                                 </span>
                               </div>
                             </div>
@@ -696,9 +728,10 @@ const ExamGradingPlan: React.FC = () => {
                       </div>
                     </div>
 
-                    {previewRatioTotal !== 100 && (
+                    {!previewPlanReady && (
                       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
-                        저장하려면 반영 비율 합계가 100%여야 합니다.
+                        모든 항목의 만점과 반영 비율을 입력하고 반영 합계를
+                        100%로 맞춰 주세요.
                       </div>
                     )}
                   </section>

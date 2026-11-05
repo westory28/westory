@@ -1,4 +1,4 @@
-/** Exercise the real calculator UI with synthetic Firestore boundaries. */
+/** Exercise the student calculator and teacher preview with synthetic Firestore boundaries. */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -26,9 +26,10 @@ const service = `
 const legacyScores=location.search.includes('legacy-decimal')?{'users/score-fixture/academic_records/2026_2':{scores:{korean_0:'81.7',korean_1:'15.4',korean_2:'24.2'}}}:{};
 export const qa=window.scoreQa={reads:[],writes:[],saved:legacyScores,hold:false,fail:false,toasts:[]};
 export const useAppToast=()=>({showToast:toast=>qa.toasts.push(toast)});
+export const useAppDialog=()=>({confirm:async()=>false});
 export const config={year:'2026',semester:'2'};
 const menuConfig=new URLSearchParams(location.search).has('custom-menu')?{student:[{name:'성적 확인',url:'/student/score',children:[{name:'내 예상 등급',url:'/student/score'}]}],teacher:[]}:null;
-export const useAuth=()=>({config,menuConfig,currentUser:{uid:'score-fixture'},userData:{uid:'score-fixture',grade:'3',scoreWarningAcknowledged:true}});
+export const useAuth=()=>({config,userConfig:config,menuConfig,currentUser:{uid:'score-fixture'},userData:{uid:'score-fixture',grade:'3',scoreWarningAcknowledged:true}});
 export const db={};
 export const doc=(_db,...parts)=>({path:parts.join('/')});
 export const collection=doc,query=ref=>ref,orderBy=()=>({}),serverTimestamp=()=>123;
@@ -36,11 +37,29 @@ const plans=[{id:'korean',subject:'국어',targetGrade:'3',items:[{name:'2차 �
 export const onSnapshot=(ref,next,error)=>{qa.reads.push(ref.path);queueMicrotask(()=>{if(location.search.includes('load-error'))error(new Error('fixture read failure'));else next({docs:(location.search.includes('empty')?[]:plans).map(plan=>({id:plan.id,data:()=>plan}))});});return ()=>{};};
 export const getDoc=async ref=>{qa.reads.push(ref.path);return {exists:()=>Boolean(qa.saved[ref.path]),data:()=>qa.saved[ref.path]};};
 export const getDocFromServer=getDoc;
+export const getDocs=async ref=>{
+  qa.reads.push(ref.path);
+  return plans.map(plan=>({id:plan.id,data:()=>plan}));
+};
+export const addDoc=(ref,data)=>qa.writes.push({op:'add',path:ref.path,data});
+export const updateDoc=(ref,data)=>qa.writes.push({op:'update',path:ref.path,data});
+export const deleteDoc=ref=>qa.writes.push({op:'delete',path:ref.path});
 export const setDoc=async(ref,data)=>{qa.writes.push({path:ref.path,data:structuredClone(data)});if(qa.hold)await new Promise(resolve=>{qa.release=resolve});if(qa.fail)throw new Error('fixture write failure');qa.saved[ref.path]=structuredClone(data);};
 `;
 const bundle = await build({
   stdin: {
-    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import Dashboard from ${source("src/pages/student/score/ScoreDashboard.tsx")};import ${source("src/assets/index.css")};import ${source("src/components/layout/studentLayout.css")};createRoot(document.getElementById('root')).render(<div className="student-layout"><Dashboard/></div>);`,
+    contents: `
+      import React from 'react';
+      import {createRoot} from 'react-dom/client';
+      import Dashboard from ${source("src/pages/student/score/ScoreDashboard.tsx")};
+      import ExamGradingPlan from ${source("src/pages/teacher/components/ExamGradingPlan.tsx")};
+      import ${source("src/assets/index.css")};
+      import ${source("src/components/layout/studentLayout.css")};
+      const teacherPreview=new URLSearchParams(location.search).has('teacher-preview');
+      createRoot(document.getElementById('root')).render(teacherPreview
+        ? <main className="grading-page mx-auto flex w-full flex-1 flex-col px-4 py-6"><ExamGradingPlan/></main>
+        : <div className="student-layout"><Dashboard/></div>);
+    `,
     loader: "tsx",
     resolveDir: root,
   },
@@ -59,7 +78,7 @@ const bundle = await build({
         plugin.onResolve(
           {
             filter:
-              /^firebase\/firestore$|(?:^|\/)(?:firebase|AuthContext|AppToastProvider)$/,
+              /^firebase\/firestore$|(?:^|\/)(?:firebase|AuthContext|AppToastProvider|AppDialogProvider)$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -126,6 +145,104 @@ const chartRow = (page, name) =>
       name: `${name} 점수 입력으로 이동`,
       exact: true,
     });
+
+async function verifyTeacherPreview(page, width, artsSubject) {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(origin + "/?teacher-preview");
+  const dialog = page.locator(".grading-preview-dialog");
+  const result = dialog.locator(".grading-preview-achievement");
+  const verifyResult = async (label, value) => {
+    assert.equal(
+      await result.locator(".grading-score-help-label").innerText(),
+      label,
+    );
+    const rendered = await result
+      .getByRole("status", { name: label })
+      .innerText();
+    assert.equal(rendered.replace(/\s+/g, ""), value);
+  };
+  const close = () =>
+    dialog.getByRole("button", { name: "미리보기 닫기" }).click();
+  await page
+    .getByRole("button", { name: "국어 미리보기", exact: true })
+    .click();
+  const inputs = dialog.getByRole("spinbutton");
+  await verifyResult("등급", "미입력");
+  await inputs.nth(0).fill("80");
+  await verifyResult("예상 등급", "B80점");
+  assert.equal(await dialog.getByText("반영 40점", { exact: true }).count(), 1);
+  await result.scrollIntoViewIfNeeded();
+  const fits = await result.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return (
+      bounds.left >= 0 &&
+      bounds.right <= innerWidth &&
+      bounds.top >= 0 &&
+      bounds.bottom <= innerHeight &&
+      element.scrollWidth <= element.clientWidth + 1 &&
+      document.documentElement.scrollWidth <= innerWidth + 1
+    );
+  });
+  assert(fits, `Teacher preview result must fit at ${width}px`);
+  await page.screenshot({
+    path: path.join(evidence, `grading-preview-${width}.png`),
+  });
+  await inputs.nth(1).fill("20");
+  await inputs.nth(2).fill("30");
+  await verifyResult("등급", "A90점");
+  await close();
+
+  const editor = page.getByRole("region", { name: "평가 기준 등록" });
+  await editor.getByLabel("과목명", { exact: true }).fill(artsSubject);
+  await editor.getByLabel("영역명", { exact: true }).fill("실기");
+  await editor.getByPlaceholder("만점", { exact: true }).fill("100");
+  const ratio = editor.getByPlaceholder("%", { exact: true });
+  await ratio.fill("100");
+  const draftPreview = editor.getByRole("button", {
+    name: "미리보기",
+    exact: true,
+  });
+  await draftPreview.click();
+  await verifyResult("등급", "미입력");
+  for (const [score, band] of [
+    [0, "C"],
+    [59, "C"],
+    [60, "B"],
+    [79, "B"],
+    [80, "A"],
+  ]) {
+    await inputs.first().fill(String(score));
+    await verifyResult("등급", `${band}${score}점`);
+  }
+  await inputs.first().fill("");
+  await verifyResult("등급", "미입력");
+  await close();
+  await ratio.fill("80");
+  await draftPreview.click();
+  await inputs.first().fill("90");
+  await verifyResult("등급", "산출불가");
+  await close();
+  await ratio.fill("100");
+  await editor.getByRole("button", { name: "항목 추가" }).click();
+  await draftPreview.click();
+  await inputs.first().fill("90");
+  await verifyResult("등급", "산출불가");
+  await close();
+  assert.equal(
+    await editor.getByLabel("과목명", { exact: true }).inputValue(),
+    artsSubject,
+  );
+  const io = await page.evaluate(() => ({
+    reads: window.scoreQa.reads,
+    writes: window.scoreQa.writes,
+  }));
+  assert.deepEqual(io, {
+    reads: ["years/2026/semesters/2/grading_plans"],
+    writes: [],
+  });
+  assert.deepEqual(errors, []);
+}
 const waitForTotal = (page, name, expected) =>
   page.waitForFunction(
     ({ name, expected }) =>
@@ -196,7 +313,12 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     const customMenu = width === 768;
     await page.goto(customMenu ? `${origin}/?custom-menu=1` : origin);
-    await page.getByRole("heading", { name: customMenu ? "내 예상 등급" : "점수", exact: true }).waitFor();
+    await page
+      .getByRole("heading", {
+        name: customMenu ? "내 예상 등급" : "점수",
+        exact: true,
+      })
+      .waitFor();
     const korean = subject(page, "국어");
     await korean.waitFor();
     assert.equal(await page.locator(".score-calculator__subject").count(), 9);
@@ -603,6 +725,20 @@ try {
   await legacyPage.goto(origin + "/?load-error");
   await legacyPage.getByRole("alert").waitFor();
   results.push({ emptyState: true, loadError: true });
+  await legacyPage.close();
+  for (const [width, artsSubject] of [
+    [390, "음악"],
+    [768, "미술"],
+    [1280, "체육"],
+  ]) {
+    const teacherPage = await browser.newPage({
+      viewport: { width, height: 900 },
+    });
+    activePage = teacherPage;
+    await verifyTeacherPreview(teacherPage, width, artsSubject);
+    results.push({ teacherPreview: true, width, artsSubject, writes: 0 });
+    await teacherPage.close();
+  }
   await fs.writeFile(
     path.join(evidence, "results.json"),
     JSON.stringify(results, null, 2),

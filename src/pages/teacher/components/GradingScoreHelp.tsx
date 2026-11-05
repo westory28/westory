@@ -18,6 +18,11 @@ export default function GradingScoreHelp({ subject }: { subject: string }) {
                 : SCORE_ACHIEVEMENT_GUIDANCE.general,
             },
             { label: "반올림", content: SCORE_ACHIEVEMENT_GUIDANCE.rounding },
+            {
+              label: "예상 등급",
+              content:
+                "일부 항목만 입력하면 입력한 항목의 반영 비율을 기준으로 100점 만점으로 환산합니다.",
+            },
           ],
         },
       ]}
