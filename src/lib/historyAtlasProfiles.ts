@@ -6,6 +6,7 @@ import {
 import { historyAtlasReferenceDefinitions } from "../data/historyAtlasReferenceDefinitions";
 import { historyAtlasEncyclopediaDefinitions } from "../data/historyAtlasEncyclopediaDefinitions";
 import { atlasEastAsiaReferences } from "../data/historyAtlasEastAsia";
+import { atlasWorksheetDictionaryReferences } from "../data/historyAtlasWorksheetSupplement";
 
 export type {
   AtlasPlaceProfile,
@@ -25,6 +26,17 @@ const geographicProfilesById = new Map<string, AtlasPlaceProfile>(
     {
       definition: reference.definition,
       facts: reference.facts,
+      sources: reference.sources,
+      quality: "verified",
+    },
+  ]),
+);
+const worksheetProfilesById = new Map<string, AtlasPlaceProfile>(
+  atlasWorksheetDictionaryReferences.map((reference) => [
+    reference.placeId,
+    {
+      definition: reference.definition,
+      facts: [],
       sources: reference.sources,
       quality: "verified",
     },
@@ -110,6 +122,7 @@ export const getAtlasPlaceProfile = (
   entries: AtlasEntry[] = [],
 ): AtlasPlaceProfile => {
   const profile =
+    worksheetProfilesById.get(place.id) ||
     geographicProfilesById.get(place.id) ||
     profilesById.get(place.id) ||
     profilesByName.get(normalizeName(place.name));

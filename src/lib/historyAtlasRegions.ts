@@ -4,6 +4,10 @@ import { worldAtlasRegionIdsByPlace } from "../data/historyAtlasWorldRegions";
 import { atlasKoreaRestoredRegionOverrides } from "../data/historyAtlasKoreaRestoration";
 import { atlasLandformRegionOverrides } from "../data/historyAtlasLandformRestoration";
 import { atlasEastAsiaReferences } from "../data/historyAtlasEastAsia";
+import {
+  atlasWorksheetRegionOverrides,
+  atlasWorksheetWorldRegionOverrides,
+} from "../data/historyAtlasWorksheetSupplement";
 
 export interface AtlasRegionOption {
   id: string;
@@ -119,9 +123,11 @@ export function getAtlasPlaceRegionIds(
 ): readonly string[] {
   const ids =
     subject === "korea"
-      ? atlasKoreaRestoredRegionOverrides[place.id] ||
+      ? atlasWorksheetRegionOverrides[place.id] ||
+        atlasKoreaRestoredRegionOverrides[place.id] ||
         koreaAtlasRegionIdsByPlace[place.id]
-      : atlasLandformRegionOverrides[place.id] ||
+      : atlasWorksheetWorldRegionOverrides[place.id] ||
+        atlasLandformRegionOverrides[place.id] ||
         worldAtlasRegionIdsByPlace[place.id];
   if (ids?.length && !ids.every((id) => id === "unclassified")) return ids;
   if (eastAsiaReferenceIds.has(place.id))

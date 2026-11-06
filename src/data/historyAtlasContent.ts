@@ -3,6 +3,11 @@ import { addAtlasHistoricalStories } from "../lib/historyAtlasStories";
 import { buildAtlasMapDataset } from "../lib/historyAtlasMapDataset";
 import { addAtlasGeographicReferences } from "../lib/historyAtlasGeographicReferences";
 import { atlasEastAsiaReferences } from "./historyAtlasEastAsia";
+import {
+  atlasWorksheetNewPlaces,
+  atlasWorksheetPlaceUpdates,
+  atlasWorksheetStories,
+} from "./historyAtlasWorksheetSupplement";
 import { profileHistoricalStories } from "./historyAtlasProfileStories";
 import { atlasWorldRestoredHistoricalStories } from "./historyAtlasWorldRestoration";
 import { atlasLandformHistoricalStories } from "./historyAtlasLandformRestoration";
@@ -1763,6 +1768,7 @@ for (const place of [
   ...originalHistoryAtlasDataset.places,
   ...koreaExpansionPlaces,
   ...worldExpansionPlaces,
+  ...atlasWorksheetNewPlaces,
 ]) {
   if (places.has(place.id))
     throw new Error(`Duplicate atlas place: ${place.id}`);
@@ -1772,6 +1778,7 @@ for (const update of [
   ...koreaPlaceUpdates,
   ...worldPlaceUpdates,
   ...atlasKoreaForeignContextPlaceUpdates,
+  ...atlasWorksheetPlaceUpdates,
 ]) {
   const current = places.get(update.id);
   if (!current) throw new Error(`Unknown atlas place update: ${update.id}`);
@@ -1817,6 +1824,7 @@ export const historyAtlasSourceDataset: AtlasDataset =
       ...atlasKoreaRestoredHistoricalStories,
       ...atlasWorldAdditionalHistoricalStories,
       ...atlasKoreaForeignContextStories,
+      ...atlasWorksheetStories,
     ],
   );
 

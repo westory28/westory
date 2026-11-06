@@ -11,6 +11,8 @@ const cache = new Map();
 // Update the reviewed geography without rewriting unrelated dictionary entries
 // or dropping their published attribution records.
 const geographicOnly = process.argv.includes("--geographic-references-only");
+const worksheetOnly = process.argv.includes("--worksheet-references-only");
+assert(!(geographicOnly && worksheetOnly), "Choose one reviewed source scope");
 function load(filename) {
   const path = resolve(filename);
   if (cache.has(path)) return cache.get(path);
@@ -43,9 +45,18 @@ const { atlasEastAsiaReferences } = load("src/data/historyAtlasEastAsia.ts");
 const geographicReferences = new Map(
   atlasEastAsiaReferences.map((reference) => [reference.place.id, reference]),
 );
-const previous = geographicOnly
-  ? load("src/data/historyDictionaryPlaces.ts")
-  : { historyDictionaryPlaceRows: [], historyDictionaryPlaceSources: [] };
+const worksheetReferences = new Map(
+  load(
+    "src/data/historyAtlasWorksheetSupplement.ts",
+  ).atlasWorksheetDictionaryReferences.map((reference) => [
+    reference.placeId,
+    reference,
+  ]),
+);
+const previous =
+  geographicOnly || worksheetOnly
+    ? load("src/data/historyDictionaryPlaces.ts")
+    : { historyDictionaryPlaceRows: [], historyDictionaryPlaceSources: [] };
 const previousRows = new Map(
   previous.historyDictionaryPlaceRows.map((row) => [row[0], row]),
 );
@@ -99,7 +110,9 @@ const omitted = [];
 for (const sourcePlace of original.places) {
   const place = displayedPlaces.get(sourcePlace.id) || sourcePlace;
   const geographicReference = geographicReferences.get(place.id);
+  const worksheetReference = worksheetReferences.get(place.id);
   if (geographicOnly && !geographicReference) continue;
+  if (worksheetOnly && !worksheetReference) continue;
   const previousRow = previousRows.get(place.id);
   const entries = entriesByPlace.get(place.id) || [];
   const profile = getAtlasPlaceProfile(place, entries);
@@ -108,7 +121,22 @@ for (const sourcePlace of original.places) {
   let attributionIds;
   // Prefer reviewed map explanations for visible places. Otherwise the already
   // checked revision-based open source definition is the reusable fallback.
-  if (geographicReference) {
+  if (worksheetReference) {
+    definition = worksheetReference.definition;
+    attributionIds = [
+      internSource({
+        title: "위스토리 업로드 학습지 지명 보강",
+        author: "위스토리",
+        url: "",
+        changes:
+          "현재 학습지의 지명을 확인하고 기관 자료의 사실에 근거해 뜻풀이를 새로 작성",
+        retrievedAt: "2026-11-06",
+      }),
+      ...worksheetReference.sources.map((source) =>
+        internSource(toSource(source, "2026-11-06")),
+      ),
+    ];
+  } else if (geographicReference) {
     definition = geographicReference.definition;
     attributionIds = [
       internSource({

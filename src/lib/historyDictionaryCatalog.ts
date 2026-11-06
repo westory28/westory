@@ -1,6 +1,7 @@
 import { searchHistoryDictionaryCatalog as searchCatalogEntries } from "./historyDictionarySearch";
 import { historyDictionaryCoreRows } from "../data/historyDictionaryCore";
 import { applyHistoryDictionaryTextbookReviews } from "./historyDictionaryTextbooks";
+import { applyHistoryDictionaryWorksheetSupplement } from "./historyDictionaryWorksheets";
 import {
   historyDictionaryCoreClassification,
   historyDictionaryPlaceClassification,
@@ -111,8 +112,10 @@ export const getHistoryDictionaryBaselineCatalog =
   };
 
 export const getHistoryDictionaryCatalog = (): HistoryDictionaryCatalogTerm[] =>
-  (catalog ||= applyHistoryDictionaryTextbookReviews(
-    getHistoryDictionaryBaselineCatalog(),
+  (catalog ||= applyHistoryDictionaryWorksheetSupplement(
+    applyHistoryDictionaryTextbookReviews(
+      getHistoryDictionaryBaselineCatalog(),
+    ),
   ));
 
 /** Preserve the static catalog API used by validation and publishing tools. */

@@ -404,6 +404,7 @@ saveGenerated(
 const audit = {
   reviewedAt: "2026-10-18",
   geographicReferencesReviewedAt: "2026-10-20",
+  worksheetReferencesReviewedAt: "2026-11-06",
   total: historyDictionaryCoreRows.length + historyDictionaryPlaceRows.length,
   coreCount: historyDictionaryCoreRows.length,
   placeCount: historyDictionaryPlaceRows.length,
