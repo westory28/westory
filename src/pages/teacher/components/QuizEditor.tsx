@@ -49,6 +49,16 @@ import {
   type QuizQuestionCatalogEntry,
 } from "./quizQuestionPaging";
 import "./QuizWorkspace.css";
+import {
+  MOCK_EXAM_ROUNDS,
+  formatMockExamRoundShortLabel,
+} from "../../../lib/mockExamRounds";
+import {
+  sortMockExamChoices,
+  validateMockExamPlacement,
+  mockExamQuestionSizeError,
+} from "./mockExamAuthoring";
+import MockExamFileTools from "./MockExamFileTools";
 
 interface TreeUnit {
   id: string;
@@ -72,6 +82,10 @@ export interface QuizQuestionDraft extends QuizLearningMetadata {
   unitId: string;
   subUnitId?: string | null;
   category: string;
+  examRound?: string;
+  paperOrder?: number;
+  points?: number;
+  paperBreakBefore?: boolean;
   type: QuestionType;
   question: string;
   options?: string[];
@@ -189,6 +203,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   sourceQuestion,
 }) => {
   const { config } = useAuth();
+  const questionImageOptions =
+    type === "special"
+      ? {
+          ...QUIZ_QUESTION_IMAGE_OPTIONS,
+          targetDataUrlBytes: 48 * 1024,
+          maxDataUrlBytes: 72 * 1024,
+        }
+      : QUIZ_QUESTION_IMAGE_OPTIONS;
+  const choiceImageOptions =
+    type === "special"
+      ? {
+          ...QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
+          targetDataUrlBytes: 8 * 1024,
+          maxDataUrlBytes: 12 * 1024,
+        }
+      : QUIZ_CHOICE_OPTION_IMAGE_OPTIONS;
   const { year: questionYear, semester: questionSemester } =
     getYearSemester(config);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -238,6 +268,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [formImage, setFormImage] = useState<string | null>(null);
   const [formPassage, setFormPassage] = useState("");
   const [formSubUnit, setFormSubUnit] = useState("");
+  const [examRoundFilter, setExamRoundFilter] = useState("");
+  const [formExamRound, setFormExamRound] = useState("round_1");
+  const [formPaperOrder, setFormPaperOrder] = useState(1);
+  const [formPoints, setFormPoints] = useState(4);
+  const [formPaperBreakBefore, setFormPaperBreakBefore] = useState(false);
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
   );
@@ -595,12 +630,24 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     const list = searchedQuestions.filter((q) => {
       if (q.category !== category) return false;
       if (type !== "special") return matchesNormalSubUnit(q);
+      if (
+        examRoundFilter &&
+        (examRoundFilter === "unassigned"
+          ? !!q.examRound
+          : q.examRound !== examRoundFilter)
+      )
+        return false;
       if (epFilter.big && q.refBig !== epFilter.big) return false;
       if (epFilter.mid && q.refMid !== epFilter.mid) return false;
       if (epFilter.small && q.refSmall !== epFilter.small) return false;
       return true;
     });
-    return list.sort((a, b) => a.id - b.id);
+    return list.sort((a, b) =>
+      type === "special"
+        ? String(a.examRound || "").localeCompare(String(b.examRound || "")) ||
+          Number(a.paperOrder || a.id) - Number(b.paperOrder || b.id)
+        : a.id - b.id,
+    );
   }, [
     category,
     epFilter.big,
@@ -610,6 +657,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     type,
     normalSubUnitFilter,
     normalSubUnitIds,
+    examRoundFilter,
   ]);
   const categoryQuestionCounts = useMemo(
     () =>
@@ -628,6 +676,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     normalSubUnitFilter,
     epFilter,
     settledSearch,
+    examRoundFilter,
   ]);
   const pageCount = Math.max(
     1,
@@ -786,6 +835,20 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormExp("");
     setFormImage(null);
     setFormPassage("");
+    const nextRound = MOCK_EXAM_ROUNDS.includes(examRoundFilter)
+      ? examRoundFilter
+      : "round_1";
+    setFormExamRound(nextRound);
+    setFormPaperOrder(
+      Math.max(
+        0,
+        ...catalog
+          .filter((q) => q.examRound === nextRound)
+          .map((q) => Number(q.paperOrder || 0)),
+      ) + 1,
+    );
+    setFormPoints(4);
+    setFormPaperBreakBefore(false);
     setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
     setChoiceOptionImages(createDefaultChoiceOptionImages(defaultCategory));
     setChoiceAnswerIndex(null);
@@ -814,9 +877,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (!file) return;
     setOptimizingImageCount((prev) => prev + 1);
     try {
-      setFormImage(
-        await optimizeQuizImageFile(file, QUIZ_QUESTION_IMAGE_OPTIONS),
-      );
+      setFormImage(await optimizeQuizImageFile(file, questionImageOptions));
     } catch (error) {
       console.error("Quiz image optimization failed", error);
       alert(
@@ -837,7 +898,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     setOptimizingImageCount((prev) => prev + 1);
-    optimizeQuizImageFile(file, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS)
+    optimizeQuizImageFile(file, choiceImageOptions)
       .then((image) => {
         setChoiceOptionImages((prev) =>
           normalizeChoiceOptionImages(prev, choiceOptions.length).map(
@@ -902,7 +963,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const optimizeChoiceOptionImages = async (images: ChoiceOptionImage[]) => {
     const optimized = await Promise.all(
       images.map((image) =>
-        optimizeQuizImageDataUrl(image, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS),
+        optimizeQuizImageDataUrl(image, choiceImageOptions),
       ),
     );
     const totalBytes = optimized.reduce(
@@ -974,6 +1035,18 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setIsComposerOpen(true);
     setFormType(question.type);
     setFormText(question.question || "");
+    setFormExamRound(question.examRound || "round_1");
+    setFormPaperOrder(
+      question.paperOrder ||
+        Math.max(
+          0,
+          ...catalog
+            .filter((q) => q.examRound === (question.examRound || "round_1"))
+            .map((q) => Number(q.paperOrder || 0)),
+        ) + 1,
+    );
+    setFormPoints(question.points || 4);
+    setFormPaperBreakBefore(question.paperBreakBefore === true);
     setFormExp(question.explanation || "");
     setFormImage(question.image || null);
     setFormPassage(
@@ -1093,6 +1166,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const startDerivedQuestion = (question: Question) => {
     startEdit(question);
+    if (type === "special")
+      setFormPaperOrder(
+        Math.max(
+          0,
+          ...catalog
+            .filter((q) => q.examRound === (question.examRound || "round_1"))
+            .map((q) => Number(q.paperOrder || 0)),
+        ) + 1,
+      );
     pendingQuestionId.current = null;
     setEditingQuestionId(null);
     setCategory(question.category);
@@ -1171,14 +1253,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return null;
     }
     if (formType === "choice") {
-      const optionItems = getChoiceOptionItems(
+      const rawOptionItems = getChoiceOptionItems(
         choiceOptions,
         choiceOptionImages,
       );
+      const optionItems =
+        type === "special"
+          ? sortMockExamChoices(rawOptionItems)
+          : rawOptionItems;
       const options = optionItems.map((item) => item.text);
       const optionImages = optionItems.map((item) => item.image);
       if (options.length < 2)
         return (alert("객관식 보기는 최소 2개 이상 필요합니다."), null);
+      if (
+        type === "special" &&
+        (options.length !== 5 || new Set(options).size !== 5)
+      )
+        return (
+          alert("시험지 객관식은 서로 다른 선지 5개를 입력해 주세요."),
+          null
+        );
       if (choiceAnswerIndex === null)
         return (alert("객관식 정답 보기를 선택하세요."), null);
       const answer =
@@ -1228,6 +1322,30 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     }
     const payload = buildQuestionPayload();
     if (!payload) return;
+    if (type === "special") {
+      const placementError = validateMockExamPlacement({
+        examRound: formExamRound,
+        paperOrder: formPaperOrder,
+        points: formPoints,
+      });
+      if (placementError) {
+        setFormError(placementError);
+        return;
+      }
+      if (
+        catalog.some(
+          (q) =>
+            q.id !== editingQuestionId &&
+            q.examRound === formExamRound &&
+            q.paperOrder === formPaperOrder,
+        )
+      ) {
+        setFormError(
+          "이 회차에 같은 문항 번호가 있습니다. 다른 번호를 입력해 주세요.",
+        );
+        return;
+      }
+    }
     const metadataError = validateQuizLearningMetadata(
       metadata,
       payload.options,
@@ -1263,7 +1381,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     try {
       const optimizedImage = await optimizeQuizImageDataUrl(
         formImage,
-        QUIZ_QUESTION_IMAGE_OPTIONS,
+        questionImageOptions,
       );
       const optimizedChoiceOptionImages =
         formType === "choice"
@@ -1287,6 +1405,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             ? epSource.small || epSource.mid || epSource.big || null
             : formSubUnit || null,
         category,
+        ...(type === "special"
+          ? {
+              examRound: formExamRound,
+              paperOrder: formPaperOrder,
+              points: formPoints,
+              paperBreakBefore: formPaperBreakBefore,
+            }
+          : {}),
         type: formType,
         question: formText.trim(),
         answer: payload.answer,
@@ -1309,6 +1435,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const questionData = { ...newQuestion };
       delete questionData.createdAt;
       delete questionData.updatedAt;
+      if (type === "special") {
+        const sizeError = mockExamQuestionSizeError(questionData);
+        if (sizeError) {
+          setFormError(sizeError);
+          return;
+        }
+      }
       const saved = await executeAssessmentManagementCommand<{
         contentRevision: number;
       }>("upsertQuizQuestion", {
@@ -1403,10 +1536,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         ? "형성평가"
         : "모의고사";
   const previewPassageText = formPassage.trim();
-  const previewChoiceItems = getChoiceOptionItems(
+  const unsortedPreviewChoiceItems = getChoiceOptionItems(
     choiceOptions,
     choiceOptionImages,
   );
+  const previewChoiceItems =
+    type === "special"
+      ? sortMockExamChoices(unsortedPreviewChoiceItems)
+      : unsortedPreviewChoiceItems;
   const hasPreviewChoiceSupportPanel =
     formType === "choice" && (!!formImage || !!previewPassageText);
   const hasPreviewChoiceOptionImages =
@@ -1515,6 +1652,35 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               </span>
             </button>
           ))}
+        </div>
+      )}
+
+      {type === "special" && (
+        <div className="quiz-editor-toolbar flex-wrap px-4 py-3">
+          <label className="flex items-center gap-2 text-sm font-bold">
+            회차
+            <select
+              className="min-h-11 rounded border border-gray-300 px-3 font-normal"
+              value={examRoundFilter}
+              onChange={(event) => setExamRoundFilter(event.target.value)}
+            >
+              <option value="">전체 회차</option>
+              {MOCK_EXAM_ROUNDS.map((round) => (
+                <option key={round} value={round}>
+                  {formatMockExamRoundShortLabel(round)}
+                </option>
+              ))}
+              <option value="unassigned">기존 공통 문제은행</option>
+            </select>
+          </label>
+          <MockExamFileTools
+            key={questionScope}
+            canEdit={canEdit && !loading && catalogScope === questionScope}
+            catalog={catalog}
+            entries={filteredQuestions}
+            loadQuestions={(entries) => pager.page(entries)}
+            onChanged={fetchQuestions}
+          />
         </div>
       )}
 
@@ -1675,7 +1841,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   >
                     <div className="flex justify-between items-start mb-1.5">
                       <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
-                        Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} |{" "}
+                        {type === "special" && q.examRound
+                          ? `${formatMockExamRoundShortLabel(q.examRound)} · ${q.paperOrder}번 · ${q.points}점`
+                          : `Q${idx + 1}`}{" "}
+                        | {TYPE_LABEL[q.type] || q.type} |{" "}
                         {getQuestionSubUnitLabel(q)}
                       </span>
                       {canEdit && (
@@ -2009,6 +2178,80 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 </div>
 
                 <div className="quiz-composer-body">
+                  {type === "special" && (
+                    <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <legend className="mb-2 text-sm font-bold">
+                        시험지 배치
+                      </legend>
+                      <label className="quiz-composer-field">
+                        <span>회차</span>
+                        <select
+                          className="quiz-compose-field min-h-11 rounded border p-2"
+                          value={formExamRound}
+                          onChange={(event) => {
+                            const round = event.target.value;
+                            setFormExamRound(round);
+                            setFormPaperOrder(
+                              Math.max(
+                                0,
+                                ...catalog
+                                  .filter(
+                                    (q) =>
+                                      q.examRound === round &&
+                                      q.id !== editingQuestionId,
+                                  )
+                                  .map((q) => Number(q.paperOrder || 0)),
+                              ) + 1,
+                            );
+                          }}
+                        >
+                          {MOCK_EXAM_ROUNDS.map((round) => (
+                            <option key={round} value={round}>
+                              {formatMockExamRoundShortLabel(round)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="quiz-composer-field">
+                        <span>문항 번호</span>
+                        <input
+                          className="quiz-compose-field min-h-11 rounded border p-2"
+                          type="number"
+                          min={1}
+                          max={200}
+                          step={1}
+                          value={formPaperOrder || ""}
+                          onChange={(event) =>
+                            setFormPaperOrder(Number(event.target.value))
+                          }
+                        />
+                      </label>
+                      <label className="quiz-composer-field">
+                        <span>배점</span>
+                        <input
+                          className="quiz-compose-field min-h-11 rounded border p-2"
+                          type="number"
+                          min={0.01}
+                          max={100}
+                          step={0.01}
+                          value={formPoints || ""}
+                          onChange={(event) =>
+                            setFormPoints(Number(event.target.value))
+                          }
+                        />
+                      </label>
+                      <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-3">
+                        <input
+                          type="checkbox"
+                          checked={formPaperBreakBefore}
+                          onChange={(event) =>
+                            setFormPaperBreakBefore(event.target.checked)
+                          }
+                        />
+                        이 문항부터 새 쪽
+                      </label>
+                    </fieldset>
+                  )}
                   <section
                     className="quiz-composer-section"
                     aria-label="문항과 자료"

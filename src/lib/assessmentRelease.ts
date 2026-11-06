@@ -107,12 +107,23 @@ const readSource = async (config: ConfigLike, payload: Data) => {
           : []),
       ),
     );
-    const answerKey = snapshot.docs
+    const documents = snapshot.docs
       .map((document) => ({ id: document.id, data: document.data() }))
       .filter(
         ({ data }) =>
           data.unitId === payload.sourceId &&
           (!payload.category || data.category === payload.category),
+      );
+    // Match the server's bank migration boundary: once rounds are authored,
+    // an empty round must never silently receive another round or legacy items.
+    const fixedPaper =
+      payload.category === "exam_prep" &&
+      documents.some(({ data }) => Boolean(data.examRound));
+    const answerKey = documents
+      .filter(
+        ({ data }) =>
+          !fixedPaper ||
+          data.examRound === (payload.examRound || DEFAULT_MOCK_EXAM_ROUND),
       )
       .map(({ id, data }) => ({
         id: String(data.id ?? id).trim(),
@@ -123,10 +134,21 @@ const readSource = async (config: ConfigLike, payload: Data) => {
             data.updatedAt?.toMillis?.() ||
             "legacy",
         ),
+        ...(payload.category === "exam_prep" && data.examRound
+          ? {
+              examRound: data.examRound,
+              paperOrder: data.paperOrder,
+              points: data.points,
+            }
+          : {}),
       }))
       .filter((item) => item.id && item.answer)
       .sort((a, b) => a.id.localeCompare(b.id));
-    return { itemCount: answerKey.length, sourceHash: await hash(answerKey) };
+    return {
+      itemCount: answerKey.length,
+      sourceHash: await hash(answerKey),
+      fixedPaper,
+    };
   }
   const snapshot = await getDoc(
     doc(db, getSemesterDocPath(config, "history_classrooms", payload.sourceId)),
@@ -153,6 +175,7 @@ const readSource = async (config: ConfigLike, payload: Data) => {
       ? [String(data.targetStudentUid).trim()]
       : [];
   return {
+    fixedPaper: false,
     itemCount:
       data.deletedAt || data.isPublished !== true ? 0 : answerKey.length,
     sourceHash: await hash({ answerKey, assignedStudentUids }),
@@ -219,9 +242,19 @@ const buildItem = async (
     readSource(config, payload),
     readDefinition(payload.definitionId),
   ]);
+  if (source.fixedPaper && source.itemCount > 0) {
+    payload = {
+      ...payload,
+      questionCount: source.itemCount,
+      presentationSettings: {
+        ...payload.presentationSettings,
+        questionCount: source.itemCount,
+      },
+    };
+  }
   const reason = !source.itemCount
     ? "문항과 정답이 없습니다."
-    : payload.questionCount > source.itemCount
+    : !source.fixedPaper && payload.questionCount > source.itemCount
       ? `문항 ${source.itemCount}개보다 출제 수가 많습니다.`
       : payload.assessmentKind === "QUIZ" && !payload.assignedClassIds.length
         ? "공개할 학급을 선택해 주세요."

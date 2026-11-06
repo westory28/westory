@@ -892,7 +892,16 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 </section>
                 <div className="quiz-settings-columns">
                   <section className="quiz-settings-section">
-                    <h3>출제·제한 시간</h3>
+                    <div className="quiz-settings-section-heading">
+                      <h3>출제·제한 시간</h3>
+                      {isMockExam && (
+                        <InfoHelp label="시험지 출제 방식 도움말">
+                          회차 지정 시험지는 등록한 전체 문항을 문항 번호순으로
+                          출제합니다. 아래 문항 수와 순서 설정은 회차를 지정하지
+                          않은 기존 공통 문제은행에 적용합니다.
+                        </InfoHelp>
+                      )}
+                    </div>
                     <div className="quiz-settings-option">
                       {renderNumberField(
                         "questionCount",

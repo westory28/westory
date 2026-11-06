@@ -6,6 +6,9 @@ export interface QuizQuestionCatalogEntry {
   unitId: string;
   subUnitId?: string | null;
   category: string;
+  examRound?: string;
+  paperOrder?: number;
+  points?: number;
   type?: string;
   refBig?: string;
   refMid?: string;
@@ -21,6 +24,9 @@ export const quizQuestionCatalogEntry = (
     id: number;
     unitId: string;
     category: string;
+    examRound?: string;
+    paperOrder?: number;
+    points?: number;
     subUnitId?: string | null;
     refBig?: string;
     refMid?: string;
@@ -40,6 +46,9 @@ export const quizQuestionCatalogEntry = (
   id: question.id,
   unitId: question.unitId,
   category: question.category,
+  examRound: question.examRound,
+  paperOrder: question.paperOrder,
+  points: question.points,
   subUnitId: question.subUnitId,
   refBig: question.refBig,
   refMid: question.refMid,

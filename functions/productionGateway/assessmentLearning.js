@@ -113,13 +113,13 @@ const rankLearningCandidates = (source, priorAttempts) => {
 const boundQuestionSnapshots = (candidates, questionIds, baseDocument = {}, limits = {}) => {
   let remaining = limits.responseOnly
     ? 4 * 1024 * 1024
-    : Math.max(0, Math.min(128 * 1024, 750_000 - Buffer.byteLength(JSON.stringify(baseDocument), "utf8")));
+    : Math.max(0, Math.min(limits.paper ? 500 * 1024 : 128 * 1024, 750_000 - Buffer.byteLength(JSON.stringify(baseDocument), "utf8")));
   const byId = new Map(candidates.map(item => [String(item.id), item]));
   const questionSnapshots = [], questionSnapshotOmittedIds = [];
   for (const id of questionIds) {
     const snapshot = byId.get(String(id));
     const size = snapshot ? Buffer.byteLength(JSON.stringify(snapshot), "utf8") + 2 : Infinity;
-    if (size > (limits.responseOnly ? 900_000 : 32 * 1024) || size > remaining) { questionSnapshotOmittedIds.push(String(id)); continue; }
+    if (size > (limits.responseOnly ? 900_000 : limits.paper ? 96 * 1024 : 32 * 1024) || size > remaining) { questionSnapshotOmittedIds.push(String(id)); continue; }
     questionSnapshots.push(snapshot);
     remaining -= size;
   }
@@ -135,6 +135,12 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
     if (!selected.has(id) || typeof source.question !== "string"
       || !["choice", "ox", "short", "word", "order", "matching"].includes(source.type)) continue;
     const snapshot = { id, question: source.question, type: source.type, answer: String(source.answer ?? "") };
+    if (source.category === "exam_prep" && source.examRound) {
+      snapshot.examRound = source.examRound;
+      snapshot.paperOrder = source.paperOrder;
+      snapshot.points = source.points;
+      snapshot.paperBreakBefore = source.paperBreakBefore === true;
+    }
     for (const key of ["explanation", "passage", "image", "hint", "unitId", "subUnitId", "refBig", "refMid", "refSmall"])
       if (typeof source[key] === "string") snapshot[key] = source[key];
     if (typeof source.hintEnabled === "boolean") snapshot.hintEnabled = source.hintEnabled;

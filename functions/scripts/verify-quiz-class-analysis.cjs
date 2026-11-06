@@ -78,6 +78,28 @@ test('catalog has real current classes, no student names or answers and no resul
   assert.equal(f.queries.some(query => /users|results|enrollments/.test(query.path)), false);
 });
 
+test('mock paper catalogs and question analysis separate authored rounds from legacy pools', async () => {
+  const f = memory();
+  for (const [id, examRound] of [[91, 'round_1'], [92, 'round_1'], [93, 'round_2']]) {
+    f.data.set(`${ROOT}/quiz_questions/${id}`, { id, unitId: 'exam_prep', category: 'exam_prep', examRound,
+      paperOrder: id === 92 ? 2 : 1, points: 50, question: '합성 역사 문항', type: 'choice', options: ['가', '나', '다', '라', '마'] });
+  }
+  f.data.set(`${ROOT}/quiz_questions/legacy`, { id: 90, unitId: 'exam_prep', category: 'exam_prep', question: '이전 자료' });
+  f.data.set('semester_assessment_results/mock-result', { assessmentKind: 'QUIZ', semesterId: SCOPE, sourceId: 'exam_prep',
+    category: 'exam_prep', examRound: 'round_1', studentUid: 'a', classId: 'class_a', attemptId: 'mock-result',
+    score: 1, total: 2, percent: 30, earnedPoints: 30, maxPoints: 100, submittedAtIso: '2026-11-06T01:00:00Z',
+    answerChecks: [{ id: 91, correct: true }, { id: 92, correct: false }] });
+  const service = createQuizClassAnalysisService({ db: f.db });
+  const catalog = await service.query({ semesterId: SCOPE, mode: 'catalog' });
+  const papers = catalog.assessments.filter(item => item.category === 'exam_prep');
+  assert.deepEqual(papers.map(item => [item.examRound, item.questionCount]), [['round_1', 2], ['round_2', 1]]);
+  assert.match(papers[0].title, /초시/); assert.match(papers[1].title, /복시/);
+  const summary = await service.query({ ...q, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_2' });
+  assert.deepEqual(summary.classes[0].questions.map(item => String(item.id)), ['93']);
+  const first = await service.query({ ...q, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' });
+  assert.equal(first.classes[0].averageScore, 30, 'authoritative weighted percent must not be replaced by 1/2 correct');
+});
+
 test('class summary uses recent score, deduplicates legacy and carries repeated outcomes without identities', async () => {
   const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
   const result = await service.query(q), summary = result.classes[0];

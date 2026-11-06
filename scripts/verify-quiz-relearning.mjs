@@ -129,8 +129,20 @@ assert.equal(
 );
 assert.equal(
   history.historyCategoryLabel("exam_prep", "round_2"),
-  "모의고사 2회",
+  "중학교 3학년 복시 (2회 모의고사)",
 );
+const savedPaper = history.historyReviewQuestion({
+  id: "paper-2", correct: false, u: "고려",
+  questionSnapshot: { type: "choice", question: "저장 당시 문항", answer: "조선",
+    options: ["고려", "조선"], examRound: "round_2", paperOrder: 2, points: 5,
+    paperBreakBefore: true },
+}, 0);
+assert.equal(savedPaper.snapshot.examRound, "round_2");
+assert.equal(savedPaper.snapshot.paperOrder, 2);
+assert.equal(savedPaper.snapshot.points, 5);
+assert.equal(savedPaper.snapshot.paperBreakBefore, true);
+assert.equal(savedPaper.snapshot.submittedAnswer, "고려");
+assert.equal(savedPaper.snapshot.question, "저장 당시 문항");
 assert.equal(history.formatHistoryDate(null), "날짜 미보관");
 console.log(
   "Student relearning: 21 snapshot, six-type, matching, history and missing-answer assertions passed.",

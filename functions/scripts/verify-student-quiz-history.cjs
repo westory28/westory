@@ -44,6 +44,17 @@ test('normalization preserves 0, unknown scores, owner/term isolation and canoni
     source('mirror', { canonicalAttemptId: 'a', score: 100 }, 'legacy')], uid, semesterId);
   assert.equal(rows.length, 2); assert.equal(rows.find(r => r.id === 'a').score, 0); assert.equal(rows.find(r => r.id === 'b').score, null);
 });
+
+test('weighted paper history keeps authoritative percent and frozen paper points', () => {
+  const paper = source('paper', { category: 'exam_prep', sourceId: 'exam_prep', examRound: 'round_1',
+    percent: 30, earnedPoints: 30, maxPoints: 100,
+    questionSnapshots: [{ id: '1', question: '원래 문항', answer: '고려', examRound: 'round_1', paperOrder: 1, points: 30 }] });
+  const row = normalizeRows([paper], uid, semesterId)[0];
+  assert.equal(row.score, 30); assert.equal(row.totalCount, 2); assert.equal(row.wrongCount, 1);
+  const detail = canonicalDetail('paper', paper.raw, { 1: '고려' });
+  assert.equal(detail.score, 30); assert.equal(detail.earnedPoints, 30); assert.equal(detail.maxPoints, 100);
+  assert.equal(detail.details[0].questionSnapshot.points, 30);
+});
 test('only selected owner metadata is read; 20 item paging reuses cache and rechecks session', async () => {
   const f = fixture();
   for (let n = 0; n < 25; n++) f.values.set(`semester_assessment_results/${n}`, source(String(n)).raw);

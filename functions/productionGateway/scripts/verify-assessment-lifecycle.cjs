@@ -823,7 +823,72 @@ const runAnswerLimits = async () => {
   assert.deepEqual(store.documents.get(`semester_assessment_submissions/${attemptId}`).answers, answers);
 };
 
+const runMockExamPaper = async () => {
+  const paperStore = new MemoryStore(seed);
+  const apply = (commandType, payload, studentActor = false) => paperStore.runTransaction(transaction => adapter.apply({
+    transaction, commandId: commandId(), receiptId: "paper-test-receipt", timestamp: { __serverTimestamp: nowMs },
+    actor: { actorUid: studentActor ? student.uid : admin.uid, actorRole: studentActor ? "student" : "admin" },
+    commandType, payload: assessment.normalizeAssessmentPayload(commandType, payload),
+  }));
+  const question = (id, paperOrder, points, examRound = "round_1") => ({ id, unitId: "exam_prep", category: "exam_prep", type: "choice",
+    question: `합성 문항 ${id}`, answer: "고려", options: ["대한 제국", "발해", "고려", "고구려", "신라"],
+    choiceOptionImages: [null, null, "https://example.test/goryeo.png", null, null],
+    explanation: "제출 전에는 공개하지 않는 해설", examRound, paperOrder, points, paperBreakBefore: paperOrder === 2 });
+  const save = q => apply("upsertQuizQuestion", { semesterId, questionId: String(q.id), question: q, expectedRevision: 0, reason: "Synthetic paper test" });
+  await save(question(902, 2, 70));
+  await save(question(901, 1, 30));
+  await save(question(903, 1, 100, "round_2"));
+  const saved = paperStore.snapshot("years/2026/semesters/2/quiz_questions/901").data;
+  assert.deepEqual(saved.options, ["고려", "발해", "신라", "고구려", "대한 제국"]);
+  assert.equal(saved.choiceOptionImages[0], "https://example.test/goryeo.png");
+  await assert.rejects(save(question(904, 1, 10)), error => error?.details?.reason === "ASSESSMENT_PAPER_ORDER_DUPLICATE");
+  await assert.rejects(save({ ...question(904, 3, 10), options: ["고려"] }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+  await assert.rejects(save({ ...question(904, 3, -1) }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+  await assert.rejects(save({ ...question(904, 3, 0.001) }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+  await save({ ...question(905, 1, 3.2, "round_3"), type: "word", options: undefined, answer: "조선" });
+  await save({ ...question(906, 2, 96.8, "round_3"), type: "short", options: undefined, answer: "고려" });
+  paperStore.documents.set("years/2026/semesters/2/quiz_questions/legacy", { id: 900, unitId: "exam_prep", category: "exam_prep", type: "short", question: "이전 문항", answer: "정답" });
+  const base = definitionPayload("QUIZ");
+  const config = { ...base, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1", definitionId: "quiz:2026-2:exam_prep:exam_prep:round_1",
+    questionCount: 20, maxAttempts: 20, legacyConfigKey: "exam_prep_exam_prep__round_1", expectedRevision: 0, reason: "Synthetic paper test",
+    presentationSettings: { ...base.presentationSettings, questionCount: 20 } };
+  await apply("saveQuizAssessmentSettings", config);
+  const definition = paperStore.snapshot(`${assessment.DEFINITION_COLLECTION}/${config.definitionId}`).data;
+  assert.equal(definition.questionCount, 2);
+  assert.equal(definition.presentationSettings.randomOrder, false);
+  const count = paperStore.writeCount;
+  await assert.rejects(apply("saveQuizAssessmentSettings", { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_4", examRound: "round_4", legacyConfigKey: "exam_prep_exam_prep__round_4" }),
+    error => error?.details?.reason === "ASSESSMENT_SOURCE_EMPTY");
+  assert.equal(paperStore.writeCount, count, "An empty round never substitutes legacy or other-round questions");
+  const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId }, true)).result;
+  assert.deepEqual(started.questionIds, ["901", "902"]);
+  assert.deepEqual(started.questionPresentation.map(q => q.points), [30, 70]);
+  assert.equal(started.questionPresentation[1].paperBreakBefore, true);
+  assert.ok(started.questionPresentation.every(q => !Object.hasOwn(q, "answer") && !Object.hasOwn(q, "explanation")));
+  const altered = paperStore.snapshot("years/2026/semesters/2/quiz_questions/901").data;
+  paperStore.documents.set("years/2026/semesters/2/quiz_questions/901", { ...altered, points: 99, answer: "신라", question: "수정된 문제", contentRevision: 2 });
+  const submit = { attemptId: started.attemptId, expectedRevision: 1, answers: { 901: "고려", 902: "신라" }, submitReason: "STUDENT" };
+  const graded = (await apply("submitAssessmentAttempt", submit, true)).result;
+  assert.equal(graded.score, 1); assert.equal(graded.total, 2);
+  assert.equal(graded.percent, 30); assert.equal(graded.earnedPoints, 30); assert.equal(graded.maxPoints, 100);
+  assert.equal(graded.questionSnapshots[0].question, "합성 문항 901");
+  assert.equal(graded.questionSnapshots[0].answer, "고려");
+  assert.equal(graded.questionSnapshots[0].points, 30);
+  const persisted = paperStore.snapshot(graded.resultRef).data;
+  assert.equal(persisted.percent, 30); assert.equal(persisted.earnedPoints, 30);
+  const replay = (await apply("submitAssessmentAttempt", submit, true)).result;
+  assert.equal(replay.replayedSubmission, true); assert.equal(replay.earnedPoints, 30);
+  assert.deepEqual(replay.questionSnapshots, graded.questionSnapshots);
+  const third = { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_3", examRound: "round_3", legacyConfigKey: "exam_prep_exam_prep__round_3" };
+  await apply("saveQuizAssessmentSettings", third);
+  const decimalAttempt = (await apply("startAssessmentAttempt", { definitionId: third.definitionId }, true)).result;
+  const decimal = (await apply("submitAssessmentAttempt", { attemptId: decimalAttempt.attemptId, expectedRevision: 1,
+    answers: { 905: "조선", 906: "오답" }, submitReason: "STUDENT" }, true)).result;
+  assert.equal(decimal.percent, 3.2); assert.equal(decimal.earnedPoints, 3.2); assert.equal(decimal.maxPoints, 100);
+};
+
 (async () => {
+  await runMockExamPaper();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
   await runKind("QUIZ");
@@ -967,6 +1032,7 @@ const runAnswerLimits = async () => {
     passed: true,
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
+      "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
       "HISTORY_LESSON_METADATA_PRESERVED",
       "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",
       "QUIZ_PREFLIGHT_ZERO_WRITE",

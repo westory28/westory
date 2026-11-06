@@ -67,11 +67,15 @@ export const isPresetMockExamRound = (round: unknown) =>
 export const isAdditionalMockExamRound = (round: unknown) =>
   !isPresetMockExamRound(round);
 
+export const getMockExamRoundName = (round: unknown) =>
+  ["초시", "복시", "전시"][getMockExamRoundNumber(round) - 1] ||
+  "추가 모의고사";
+
 export const formatMockExamRoundShortLabel = (round: unknown) =>
-  `${isAdditionalMockExamRound(round) ? "N" : getMockExamRoundNumber(round)}회`;
+  `${getMockExamRoundName(round)} (${getMockExamRoundNumber(round)}회)`;
 
 export const formatMockExamRoundLabel = (round: unknown) =>
-  `모의고사 ${formatMockExamRoundShortLabel(round)}`;
+  `중학교 3학년 ${getMockExamRoundName(round)} (${getMockExamRoundNumber(round)}회 모의고사)`;
 
 export const sortMockExamRounds = (rounds: Iterable<unknown>) =>
   Array.from(

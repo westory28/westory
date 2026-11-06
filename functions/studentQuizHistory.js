@@ -79,6 +79,8 @@ function canonicalDetail(id, raw, answers) {
     category: originalCategory.startsWith('exam_prep') ? 'exam_prep' : originalCategory,
     examRound: text(raw.examRound || parts[4] || (originalCategory.match(/round_\d+/) || [])[0]),
     score: scoreValue(raw.percent), submittedAtIso: raw.submittedAtIso || '',
+    ...(Number.isFinite(raw.earnedPoints) && Number.isFinite(raw.maxPoints)
+      ? { earnedPoints: raw.earnedPoints, maxPoints: raw.maxPoints } : {}),
     timestamp: { seconds: (recordedAtMs || 0) / 1000 }, recordedAtMs,
     details: (raw.answerChecks || []).map(check => ({ ...metadata.get(String(check.id)),
       id: check.id, correct: typeof check.correct === 'boolean' ? check.correct : undefined,

@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import http from 'node:http';
+import { createRequire } from 'node:module';
+import { build } from 'esbuild';
+
+const require = createRequire(import.meta.url);
+const root = process.cwd();
+const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
+const evidence = process.env.MOCK_EXAM_EVIDENCE_DIR || await fs.mkdtemp(path.join(os.tmpdir(),'westory-mock-authoring-'));
+await fs.mkdir(evidence,{recursive:true});
+const fixture = await fs.readFile('scripts/verify-assessment-teacher-browser.mjs','utf8');
+let service = fixture.match(/const service = `([\s\S]*?)`;/)[1];
+service = service.replace('category:q.category,type:q.type,refBig:', 'category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,refBig:');
+service = service.replace("if(command==='upsertQuizQuestion'){const q=", "if(command==='upsertQuizQuestion'){if(fixtureState.failQuestionId===payload.questionId){fixtureState.failQuestionId='';throw new Error('합성 저장 실패')}const q=");
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import QuizEditor from './src/pages/teacher/components/QuizEditor.tsx';import {tree} from 'fixture:service';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';createRoot(document.getElementById('root')).render(<QuizEditor node={{id:'exam_prep',title:'모의고사'}} type="special" treeData={tree} canEdit={!new URLSearchParams(location.search).has('readonly')} onOpenSettings={()=>{}}/>);`;
+const bundle = await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,format:'esm',platform:'browser',outfile:'fixture.js',loader:{'.woff2':'dataurl','.woff':'dataurl','.webp':'dataurl','.svg':'dataurl','.png':'dataurl'},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic-services',setup(plugin){plugin.onResolve({filter:/^fixture:service$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(?:lib\/)?(firebase|assessmentRelease|assessmentLifecycle|historyDictionarySession)$|^firebase\/firestore$/},()=>({path:'service',namespace:'fixture'}));plugin.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
+const js = bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
+const css = bundle.outputFiles.find(f=>f.path.endsWith('.css')).text.replace(/@import\s+(?:url\()?['"]?https?:[^;]+;/g,'');
+let tailwind;
+for (const candidate of [process.env.PORTAL_DESIGN_TAILWIND_PATH,path.join(os.tmpdir(),'westory-qa-tailwind.js'),path.join(os.tmpdir(),'westory-assessment-qa-tailwind.js')].filter(Boolean)) {try {tailwind=await fs.readFile(candidate,'utf8');break;} catch {}}
+assert(tailwind,'Run existing portal browser check once to cache the official Tailwind runtime.');
+const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><body style="margin:0"><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+const server=http.createServer((req,res)=>{const p=new URL(req.url,'http://localhost').pathname;const [type,body]=({'/fixture.js':['text/javascript',js],'/fixture.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[p]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const origin=`http://127.0.0.1:${server.address().port}`;
+const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
+const checks=[],external=[],errors=[];
+const q={id:7001,type:'choice',examRound:'round_2',paperOrder:1,points:4,question:'자료를 근거로 옳은 설명을 고르시오.',passage:'{{box:(가)}} 고대 국가가 중앙 집권 체제를 강화하였다.',options:['긴 선지입니다','나','가','두 글자','마지막으로 가장 긴 선지입니다'],answer:'나',explanation:'선지와 자료의 관계를 확인한다.'};
+const upload=(questions)=>({name:'exam.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,questions}))});
+try {
+  const context=await browser.newContext({viewport:{width:1280,height:900}});
+  await context.route('**/*',route=>{if(route.request().url().startsWith(origin)||route.request().url().startsWith('data:'))return route.continue();external.push(route.request().url());return route.abort();});
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(origin);await page.getByRole('button',{name:'JSON 가져오기',exact:true}).waitFor();
+  await page.getByRole('button',{name:'문제 등록',exact:true}).click();
+  const compose=page.getByRole('dialog',{name:'새 문제 등록',exact:true});
+  await compose.getByLabel('발문',{exact:true}).fill('다음 자료를 보고 옳은 설명을 고르시오.');
+  await compose.getByRole('spinbutton',{name:'배점',exact:true}).fill('3.5');
+  for(let i=0;i<5;i++)await compose.getByLabel(`${i+1}번 보기`,{exact:true}).fill(q.options[i]);
+  await compose.getByRole('button',{name:'2번 보기 정답 선택',exact:true}).click();
+  await compose.getByRole('button',{name:'등록',exact:true}).click();
+  await compose.waitFor({state:'hidden'});
+  const saved=await page.evaluate(()=>window.assessmentTeacherFixture.questions.find(q=>q.category==='exam_prep'));
+  assert.equal(saved.examRound,'round_1');assert.equal(saved.points,3.5);assert.equal(saved.paperOrder,1);assert.equal(saved.answer,'나');assert.deepEqual(saved.options,['가','나','두 글자','긴 선지입니다','마지막으로 가장 긴 선지입니다']);
+  checks.push('Direct authoring preserves decimal points and answer while sorting five choices.');
+  await page.locator('input[type=file][accept=".json,application/json"]').setInputFiles(upload([q,{...q,id:7002,paperOrder:2,question:'두 번째 문항'}]));
+  let preview=page.getByRole('dialog',{name:'시험지 JSON 확인',exact:true});await preview.waitFor();
+  assert.equal(await preview.locator('.mock-exam-sheet').count()>0,true);
+  assert.equal(await page.evaluate(()=>window.assessmentTeacherFixture.writes.length),1,'import preview must not save');
+  await page.evaluate(()=>{window.assessmentTeacherFixture.failQuestionId='7002';});
+  await preview.getByRole('button',{name:'문항 저장',exact:true}).click();
+  await preview.getByRole('alert').filter({hasText:'1/2문항 저장'}).waitFor();
+  await preview.getByRole('button',{name:'남은 문항 저장',exact:true}).click();await preview.waitFor({state:'hidden'});
+  const writes=await page.evaluate(()=>window.assessmentTeacherFixture.writes.filter(w=>w.command==='upsertQuizQuestion'));
+  assert.equal(writes.filter(w=>w.payload.questionId==='7001').length,1,'retry must not repeat successful item');
+  assert.equal(writes.filter(w=>w.payload.questionId==='7002').length,2);checks.push('Imported paper preview makes no writes; partial save retries only unsaved questions.');
+  await page.locator('input[type=file][accept=".json,application/json"]').setInputFiles(upload([{...q,id:7003,paperOrder:3,options:['가','가','다','라','마']}]));
+  await page.getByRole('alert').filter({hasText:'서로 다른 선지 5개'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);checks.push('Malformed import rejected before mutation.');
+  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'JSON 내보내기',exact:true}).click()]);
+  await download.saveAs(path.join(evidence,'roundtrip.json'));const exported=JSON.parse(await fs.readFile(path.join(evidence,'roundtrip.json'),'utf8'));assert.equal(exported.questions.length,3);checks.push('Export reads complete selected catalog, including saved questions.');
+  for(const width of [390,768,1280]) {
+    await page.setViewportSize({width,height:900});await page.getByRole('button',{name:'시험지 미리보기',exact:true}).click();
+    const view=page.getByRole('dialog',{name:'시험지 미리보기',exact:true});await view.waitFor();await view.locator('.mock-exam-sheet').first().waitFor();
+    await page.screenshot({path:path.join(evidence,`teacher-paper-${width}.png`),fullPage:true});
+    const layout=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,width:innerWidth,dialog:document.querySelector('[role=dialog]').getBoundingClientRect().width}));
+    assert(layout.doc<=width+1,JSON.stringify(layout));assert(layout.dialog<=width,JSON.stringify(layout));
+    await page.keyboard.press('Escape');await view.waitFor({state:'hidden'});
+  }
+  checks.push('Whole paper preview at 390/768/1280px; no horizontal document overflow; Escape restores authoring.');
+  await page.goto(origin+'/?readonly');await page.getByRole('button',{name:'JSON 양식',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'JSON 가져오기',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'문제 등록',exact:true}).count(),0);checks.push('Read-only view cannot register/import questions.');
+  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
+  console.log(JSON.stringify({ok:true,checks,evidence},null,2));
+} finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

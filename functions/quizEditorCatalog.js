@@ -9,7 +9,7 @@ const MAX_CATALOG_BYTES = 8 * 1024 * 1024;
 const CATALOG_FIELDS = Object.freeze([
   'id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'createdAt', 'updatedAt', 'contentRevision', 'question', 'explanation',
-  'passage', 'concepts',
+  'passage', 'concepts', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
 ]);
 
 const fail = (code, message, reason) => {
@@ -54,6 +54,10 @@ const catalogEntry = (document) => {
     createdAt: timestampMs(value.createdAt),
     updatedAt: timestampMs(value.updatedAt),
     contentRevision: Number(value.contentRevision || 0),
+    ...(value.category === 'exam_prep' && value.examRound ? {
+      examRound: value.examRound, paperOrder: value.paperOrder, points: value.points,
+      paperBreakBefore: value.paperBreakBefore === true,
+    } : {}),
     // Preserve the editor's complete substring-search contract. No truncation,
     // tokenization or stripping markup that could silently hide search matches.
     searchText: [value.question, value.explanation, value.passage,

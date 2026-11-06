@@ -42,6 +42,22 @@ export function historyReviewQuestion(
           typeof item === "string" ? item : null,
         )
       : undefined,
+    ...(typeof saved.examRound === "string"
+      ? { examRound: saved.examRound }
+      : {}),
+    ...(typeof saved.paperOrder === "number" &&
+    Number.isInteger(saved.paperOrder) &&
+    saved.paperOrder > 0
+      ? { paperOrder: saved.paperOrder }
+      : {}),
+    ...(typeof saved.points === "number" &&
+    Number.isFinite(saved.points) &&
+    saved.points > 0
+      ? { points: saved.points }
+      : {}),
+    ...(typeof saved.paperBreakBefore === "boolean"
+      ? { paperBreakBefore: saved.paperBreakBefore }
+      : {}),
     matchingPairs: Array.isArray(saved.matchingPairs)
       ? saved.matchingPairs.flatMap((item) => {
           if (

@@ -205,6 +205,48 @@ for (const explicitFirstRound of [false, true]) {
 console.log("PASS targeted mock-exam refresh preserves all active rounds, legacy first-round fallback and explicit-round precedence");
 {
   const { api, docs, calls } = harness();
+  const paper = (id, examRound, paperOrder, points) => ({
+    id, unitId: "unit_1", category: "exam_prep", type: "choice", question: "당시 원문",
+    options: ["가", "나", "다", "라", "마"], answer: "가", contentRevision: 1,
+    examRound, paperOrder, points, paperBreakBefore: false,
+  });
+  docs.set(`${root}/quiz_questions/paper-1b`, paper("paper-1b", "round_1", 2, 3));
+  docs.set(`${root}/quiz_questions/paper-1a`, paper("paper-1a", "round_1", 1, 5));
+  docs.set(`${root}/quiz_questions/paper-2`, paper("paper-2", "round_2", 1, 4));
+  docs.set(`${root}/quiz_questions/legacy-mock`, {
+    id: "legacy-mock", unitId: "unit_1", category: "exam_prep", type: "word", question: "옛 문항", answer: "답",
+  });
+  const mockSettings = Object.fromEntries([1, 2, 3].map(round => [
+    `unit_1_exam_prep__round_${round}`, { ...settings, questionCount: 20 },
+  ]));
+  docs.set(`${root}/assessment_config/settings`, mockSettings);
+  const plan = await api.planCurrentAssessmentRelease(config);
+  const first = plan.items.find(item => item.payload.examRound === "round_1");
+  const second = plan.items.find(item => item.payload.examRound === "round_2");
+  const empty = plan.items.find(item => item.payload.examRound === "round_3");
+  assert.equal(first.itemCount, 2);
+  assert.equal(first.payload.questionCount, 2);
+  assert.equal(first.payload.presentationSettings.questionCount, 2);
+  assert.equal(second.itemCount, 1);
+  assert.equal(empty.itemCount, 0, "An unconfigured paper must not receive legacy or another round's questions");
+  assert.equal(empty.status, "BLOCKED");
+  assert.notEqual(first.sourceHash, second.sourceHash);
+  mockSettings.unit_1_exam_prep__round_3.active = false;
+  await api.refreshPublishedQuizDefinitions(config, "unit_1", "exam_prep");
+  assert.equal(calls.length, 2);
+  for (const item of [first, second]) {
+    const saved = docs.get(`semester_assessment_definitions/${item.definitionId}`);
+    assert.equal(saved.sourceHash, item.sourceHash, "Browser planner and server hash exactly the same saved paper");
+    assert.equal(saved.questionCount, item.itemCount);
+  }
+  docs.get(`${root}/quiz_questions/paper-2`).points = 9;
+  const changed = await api.planCurrentAssessmentRelease(config);
+  assert.equal(changed.items.find(item => item.payload.examRound === "round_1").sourceHash, first.sourceHash);
+  assert.notEqual(changed.items.find(item => item.payload.examRound === "round_2").sourceHash, second.sourceHash);
+}
+console.log("PASS fixed mock papers isolate rounds, reject empty rounds, normalize counts and share exact server hashes");
+{
+  const { api, docs, calls } = harness();
   const plan = await api.planCurrentAssessmentRelease(config);
   docs.get(`${root}/quiz_questions/q1`).answer = "CHANGED";
   await assert.rejects(api.prepareCurrentAssessmentRelease(plan), /바뀌었습니다/);

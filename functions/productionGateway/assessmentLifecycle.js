@@ -369,9 +369,31 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       "options", "choiceOptionImages", "matchingPairs", "explanation", "image",
       "passage", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
       "concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
+      "examRound", "paperOrder", "points", "paperBreakBefore",
     ], "question");
     if (String(question.id) !== questionId || !question.unitId || !question.category || !question.type || !question.question) {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
+    }
+    if (["examRound", "paperOrder", "points", "paperBreakBefore"].some(key => Object.hasOwn(question, key))) {
+      if (question.category !== "exam_prep" || question.unitId !== "exam_prep"
+        || !/^round_[1-3]$/.test(question.examRound || "")
+        || !Number.isInteger(question.paperOrder) || question.paperOrder < 1 || question.paperOrder > 200
+        || !Number.isFinite(question.points) || question.points < 0.01 || question.points > 100
+        || Math.abs(question.points * 100 - Math.round(question.points * 100)) > 1e-7
+        || (question.paperBreakBefore !== undefined && typeof question.paperBreakBefore !== "boolean")
+        || !["choice", "word", "short"].includes(question.type) || typeof question.answer !== "string" || !question.answer.trim()
+        || (question.type === "choice" ? (!Array.isArray(question.options) || question.options.length !== 5
+          || question.options.some(option => typeof option !== "string" || !option.trim())
+          || new Set(question.options.map(option => option.trim())).size !== 5 || !question.options.includes(question.answer))
+          : question.answer.length > SHORT_ANSWER_LIMIT)) {
+        fail("invalid-argument", "시험지의 회차·문항 번호·배점, 객관식 5선지 또는 20자 이내 단답형 정답을 확인해 주세요.", "ASSESSMENT_PAPER_QUESTION_INVALID");
+      }
+      if (question.type === "choice") {
+        const orderedOptions = question.options.map((option, index) => ({ option, image: question.choiceOptionImages?.[index] || null }))
+          .sort((a, b) => Array.from(a.option.trim()).length - Array.from(b.option.trim()).length || a.option.localeCompare(b.option, "ko"));
+        question.options = orderedOptions.map(item => item.option);
+        if (question.choiceOptionImages) question.choiceOptionImages = orderedOptions.map(item => item.image);
+      }
     }
     return {
       semesterId: normalizeSemesterId(payload.semesterId),
@@ -471,6 +493,9 @@ const extractQuizQuestion = (document) => {
     id,
     answer: String(data.answer ?? ""),
     sourceRevision: String(data.contentRevision || data.revision || data.updatedAt?.toMillis?.() || "legacy"),
+    ...(data.category === "exam_prep" && data.examRound ? {
+      examRound: data.examRound, paperOrder: data.paperOrder, points: data.points,
+    } : {}),
   };
 };
 
@@ -550,10 +575,14 @@ const collectHistoryAnswerKey = (data) => {
 
 const loadDefinitionSource = async (transaction, payload) => {
   if (payload.assessmentKind === "QUIZ") {
-    const documents = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
+    const bankDocuments = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
       { field: "unitId", operator: "==", value: payload.sourceId },
       ...(payload.category ? [{ field: "category", operator: "==", value: payload.category }] : []),
     ] });
+    const fixedPaper = payload.category === "exam_prep" && bankDocuments.some(document => document.data?.examRound);
+    // Once a teacher assigns rounds, an empty round stays empty. Never substitute
+    // another round or a former unassigned question pool for an authored paper.
+    const documents = fixedPaper ? bankDocuments.filter(document => document.data?.examRound === (payload.examRound || "round_1")) : bankDocuments;
     const questions = documents
       .filter((document) => !payload.category || String(document.data?.category || "") === payload.category)
       .map(extractQuizQuestion)
@@ -562,7 +591,13 @@ const loadDefinitionSource = async (transaction, payload) => {
     if (!questions.length) {
       fail("failed-precondition", "No canonical quiz questions were found.", "ASSESSMENT_SOURCE_EMPTY");
     }
-    return { itemCount: questions.length, answerKey: questions, quizDocuments: documents,
+    if (fixedPaper && (questions.length !== documents.length || questions.length > 200 || new Set(questions.map(question => question.paperOrder)).size !== questions.length
+      || questions.some(question => !Number.isInteger(question.paperOrder) || question.paperOrder < 1 || question.paperOrder > 200
+        || !Number.isFinite(question.points) || question.points < 0.01 || question.points > 100
+        || Math.abs(question.points * 100 - Math.round(question.points * 100)) > 1e-7))) {
+      fail("failed-precondition", "시험지의 중복 문항 번호와 배점을 확인해 주세요.", "ASSESSMENT_PAPER_QUESTION_INVALID");
+    }
+    return { itemCount: questions.length, answerKey: questions, quizDocuments: documents, fixedPaper,
       learningSnapshot: documents.filter(document => questions.some(item => item.id === String(document.data?.id ?? document.path.split("/").at(-1)))).map(learning.questionLearningSnapshot),
       assignedStudentUids: [], sourceHash: sha256(canonicalJson(questions)) };
   }
@@ -659,6 +694,7 @@ const getQuizQuestionCycle = (allIds, priorAttempts) => {
 const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumber, attemptOrdinal, priorAttempts = [] }) => {
   const allIds = source.answerKey.map((item) => item.id);
   if (definition.assessmentKind !== "QUIZ") return { questionIds: allIds };
+  if (source.fixedPaper) return { questionIds: [...source.answerKey].sort((a, b) => a.paperOrder - b.paperOrder).map(item => item.id) };
   const requestedCount = Number(definition.questionCount || 0);
   const count = Math.min(requestedCount, allIds.length);
   if (count < 1) {
@@ -691,6 +727,7 @@ const selectAttemptQuestionIds = ({ source, definition, studentUid, attemptNumbe
 // once so solving, resuming, grading and historical review share one sequence.
 const orderAttemptQuestionIds = async ({ transaction, source, definition, questionIds }) => {
   if (definition.assessmentKind !== "QUIZ") return questionIds;
+  if (source.fixedPaper) return questionIds;
   const settings = definition.presentationSettings || {};
   const order = ["created", "unit", "random"].includes(settings.questionOrder)
     ? settings.questionOrder : settings.randomOrder === false ? "created" : "random";
@@ -848,6 +885,15 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const path = `${semesterRoot(payload.semesterId)}/quiz_questions/${payload.questionId}`;
       const snapshot = await transaction.get(path);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "Quiz question");
+      if (payload.question.examRound) {
+        const existing = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
+          { field: "unitId", operator: "==", value: "exam_prep" },
+          { field: "category", operator: "==", value: "exam_prep" },
+        ] });
+        if (existing.some(document => document.path !== path && document.data?.examRound === payload.question.examRound
+          && document.data?.paperOrder === payload.question.paperOrder))
+          fail("already-exists", "이 회차에 같은 문항 번호가 있습니다.", "ASSESSMENT_PAPER_ORDER_DUPLICATE");
+      }
       const nextRevision = currentRevision + 1;
       const question = {
         ...payload.question,
@@ -1025,7 +1071,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       // Closing access must succeed even if questions/classes have since been
       // removed. Only publication needs to read and validate the source bank.
       const source = published ? await loadDefinitionSource(transaction, payload) : null;
-      if (source && payload.questionCount > source.itemCount) {
+      if (source && !source.fixedPaper && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "출제 문항 수가 등록된 문항 수보다 많습니다.", "ASSESSMENT_QUESTION_SET_INVALID");
       }
       if (source && payload.expectedSourceHash && payload.expectedSourceHash !== source.sourceHash) {
@@ -1035,6 +1081,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         ? await resolveAssignedClassIds(transaction, payload.semesterId, payload.assignedClassIds)
         : payload.assignedClassIds.length ? current.assignedClassIds || [] : [];
       const { expectedRevision, expectedSourceHash: _expectedSourceHash, reason, ...definitionPayload } = payload;
+      if (source?.fixedPaper) {
+        definitionPayload.questionCount = source.itemCount;
+        definitionPayload.presentationSettings = { ...payload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
+      }
       const definition = {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION, policyVersion: ASSESSMENT_POLICY_VERSION,
         ...definitionPayload, assignedClassIds,
@@ -1047,7 +1097,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       };
       const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
       transaction.set(path, definition, { merge: true });
-      transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: payload.presentationSettings }, { merge: true });
+      transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionPayload.presentationSettings }, { merge: true });
       return { target: { kind: "assessment-definition", id: payload.definitionId, refs: [path, legacyConfigPath] },
         sourceHash: definition.sourceHash || null,
         result: { definitionId: payload.definitionId, status: definition.status, revision: definition.revision,
@@ -1064,7 +1114,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType: "ASSESSMENT_DEFINITIONS", allowWithoutMarker: true });
       }
       const source = await loadDefinitionSource(transaction, payload);
-      if (payload.assessmentKind === "QUIZ" && payload.questionCount > source.itemCount) {
+      if (payload.assessmentKind === "QUIZ" && !source.fixedPaper && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "questionCount exceeds the canonical question set.", "ASSESSMENT_QUESTION_SET_INVALID");
       }
       const assignedClassIds = await resolveAssignedClassIds(
@@ -1073,6 +1123,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         payload.assignedClassIds,
       );
       const { expectedSourceRevision: _expectedSourceRevision, ...definitionPayload } = payload;
+      if (source.fixedPaper) {
+        definitionPayload.questionCount = source.itemCount;
+        definitionPayload.presentationSettings = { ...payload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
+      }
       const definition = {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION,
         policyVersion: ASSESSMENT_POLICY_VERSION,
@@ -1094,7 +1148,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const refs = [path];
       if (payload.assessmentKind === "QUIZ") {
         const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
-        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: payload.presentationSettings }, { merge: true });
+        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionPayload.presentationSettings }, { merge: true });
         refs.push(legacyConfigPath);
       }
       return { target: { kind: "assessment-definition", id: payload.definitionId, refs }, sourceHash: source.sourceHash, result: { definition: { ...definition, createdAt: null, updatedAt: null } } };
@@ -1114,7 +1168,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (current.status === "CLOSED") fail("failed-precondition", "A closed assessment definition cannot be edited.", "ASSESSMENT_DEFINITION_CLOSED");
       if (current.semesterId !== payload.semesterId || current.assessmentKind !== payload.assessmentKind || current.sourceId !== payload.sourceId) fail("failed-precondition", "Assessment definition identity cannot be changed.", "ASSESSMENT_IDENTITY_IMMUTABLE");
       const source = await loadDefinitionSource(transaction, payload);
-      if (payload.assessmentKind === "QUIZ" && payload.questionCount > source.itemCount) {
+      if (payload.assessmentKind === "QUIZ" && !source.fixedPaper && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "questionCount exceeds the canonical question set.", "ASSESSMENT_QUESTION_SET_INVALID");
       }
       const assignedClassIds = await resolveAssignedClassIds(
@@ -1124,6 +1178,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       );
       const revision = payload.expectedRevision + 1;
       const { expectedRevision: _expectedRevision, expectedSourceRevision: _expectedSourceRevision, reason, ...definitionUpdate } = payload;
+      if (source.fixedPaper) {
+        definitionUpdate.questionCount = source.itemCount;
+        definitionUpdate.presentationSettings = { ...payload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
+      }
       transaction.set(path, {
         ...definitionUpdate,
         assignedClassIds,
@@ -1140,7 +1198,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const refs = [path];
       if (payload.assessmentKind === "QUIZ") {
         const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
-        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: payload.presentationSettings }, { merge: true });
+        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionUpdate.presentationSettings }, { merge: true });
         refs.push(legacyConfigPath);
       }
       return { target: { kind: "assessment-definition", id: payload.definitionId, refs }, sourceHash: source.sourceHash, result: { definitionId: payload.definitionId, status: current.status, revision, sourceHash: source.sourceHash, itemCount: source.itemCount } };
@@ -1266,6 +1324,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         currentItemId: selectedIds[0] || "",
         questionIds: selectedIds,
         gradingSnapshot,
+        ...(source.fixedPaper ? { paperVersion: 1 } : {}),
         ...(definition.assessmentKind === "QUIZ" ? {
           sourceId: definition.sourceId || "", category: definition.category || "", examRound: definition.examRound || "",
           learningSnapshot: (source.learningSnapshot || []).filter(item => selectedIds.includes(item.id)),
@@ -1286,7 +1345,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         updatedAt: timestamp,
       };
       if (definition.assessmentKind === "QUIZ") Object.assign(attempt,
-        learning.captureQuestionSnapshots(source.quizDocuments || [], selectedIds, attempt));
+        learning.captureQuestionSnapshots(source.quizDocuments || [], selectedIds, attempt, { paper: source.fixedPaper }));
+      if (source.fixedPaper && attempt.questionSnapshotOmittedIds.length)
+        fail("failed-precondition", "시험지 자료가 너무 큽니다. 이미지 크기를 줄이거나 저장된 이미지 주소를 사용해 주세요.", "ASSESSMENT_PAPER_TOO_LARGE");
       transaction.create(path, attempt);
       return { target: { kind: "assessment-attempt", id: attemptId, refs: [path] }, sourceHash: source.sourceHash, result: serializeAttempt(attempt, false) };
     }
@@ -1311,7 +1372,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         const historyPlan = await historySync.prepareAttempt({ transaction, attempt, result, timestamp });
         historyPlan.apply();
         return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef, ...historyPlan.refs] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
-          score: result.score, total: result.total, percent: result.percent, ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
+          score: result.score, total: result.total, percent: result.percent, ...(result.earnedPoints !== undefined ? { earnedPoints: result.earnedPoints, maxPoints: result.maxPoints } : {}), ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
@@ -1326,7 +1387,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const checks = attempt.gradingSnapshot.map((item) => ({ id: item.id, correct: normalizeAnswer(effectiveAnswers[item.id]) === normalizeAnswer(item.answer) }));
       const correctCount = checks.filter((item) => item.correct).length;
       const total = checks.length;
-      const percent = total ? Math.round((correctCount / total) * 100) : 0;
+      const roundedPoints = value => Math.round(value * 10000) / 10000;
+      const weighted = attempt.paperVersion === 1;
+      const maxPoints = roundedPoints(attempt.gradingSnapshot.reduce((sum, item) => sum + (weighted ? item.points : 1), 0));
+      const earnedPoints = roundedPoints(attempt.gradingSnapshot.reduce((sum, item, index) => sum + (checks[index].correct ? (weighted ? item.points : 1) : 0), 0));
+      const pointResult = weighted ? { earnedPoints, maxPoints } : {};
+      const percent = maxPoints ? (weighted ? Math.round((earnedPoints / maxPoints) * 10000) / 100 : Math.round((earnedPoints / maxPoints) * 100)) : 0;
       const historyOutcome = attempt.assessmentKind === "HISTORY_CLASSROOM" && Number.isFinite(attempt.passThresholdPercent)
         ? { passThresholdPercent: attempt.passThresholdPercent, passed: percent >= attempt.passThresholdPercent }
         : {};
@@ -1338,7 +1404,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const rewardPlan = await wisRewards.prepare({ transaction, attempt, percent, commandId, receiptId, nowDate, concreteTimestamp });
       const reviewSnapshots = attempt.assessmentKind === "QUIZ" && Array.isArray(attempt.questionSnapshots)
         ? learning.boundQuestionSnapshots(attempt.questionSnapshots, attempt.questionIds || [],
-          { ...attempt, questionSnapshots: undefined, answers: effectiveAnswers, analytics }) : {};
+          { ...attempt, questionSnapshots: undefined, answers: effectiveAnswers, analytics }, { paper: weighted }) : {};
       const historyPlan = await historySync.prepareAttempt({ transaction, attempt, answers: effectiveAnswers,
         result: { score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, submittedAtIso, createdAt: timestamp }, timestamp });
       // No reads below this point: score, reward ledger/projections and receipt
@@ -1374,6 +1440,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         score: correctCount,
         total,
         percent,
+        ...pointResult,
         ...historyOutcome,
         answerChecks: checks,
         ...(attempt.assessmentKind === "QUIZ" ? {
@@ -1392,7 +1459,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       transaction.set(path, submittedFields, { mergeFields: Object.keys(submittedFields) });
       rewardPlan.apply();
       historyPlan.apply();
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...pointResult, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {

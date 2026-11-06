@@ -16,6 +16,11 @@ import {
 } from "../../../lib/assessmentTelemetry";
 import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
+import MockExamWorkspace from "./MockExamWorkspace";
+import type {
+  MockExamPaperQuestion,
+  MockExamPaperCheck,
+} from "../../../components/common/MockExamPaper";
 import {
   buildQuizRelearningItems,
   type QuizRelearningItem,
@@ -63,6 +68,10 @@ import {
 const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
 
 interface Question {
+  examRound?: string;
+  paperOrder?: number;
+  points?: number;
+  paperBreakBefore?: boolean;
   id: number;
   type: "choice" | "ox" | "short" | "word" | "order" | "matching";
   question: string;
@@ -202,6 +211,10 @@ const QuizRunner: React.FC = () => {
     useState<QuizScoreComparison | null>(null);
   const [resultCounts, setResultCounts] = useState({ correct: 0, total: 0 });
   const [reviewItems, setReviewItems] = useState<QuizRelearningItem[]>([]);
+  const [paperResult, setPaperResult] = useState<{
+    questions: MockExamPaperQuestion[];
+    checks: MockExamPaperCheck[];
+  } | null>(null);
   const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -622,6 +635,16 @@ const QuizRunner: React.FC = () => {
       analytics: pendingSubmitAnalyticsRef.current,
     });
     setScore(submitted.percent);
+    setPaperResult({
+      questions: questionList.map(
+        (question) =>
+          submitted.questionSnapshots?.find(
+            (snapshot) => String(snapshot.id) === String(question.id),
+          ) || question,
+      ),
+      checks: submitted.answerChecks,
+    });
+    setAnswers(answerMap);
     setReviewItems(buildQuizRelearningItems(submitted, answerMap));
     setResultCounts({
       correct: submitted.answerChecks.filter((check) => check.correct === true)
@@ -1273,10 +1296,10 @@ const QuizRunner: React.FC = () => {
     schedulePersistQuizProgress();
   };
 
-  const nextQuestion = async () => {
+  const nextQuestion = async (submitAll = false) => {
     if (finishSubmittingRef.current) return;
     emitSessionActivity();
-    if (currentIndex < selectedQuestions.length - 1) {
+    if (!submitAll && currentIndex < selectedQuestions.length - 1) {
       setMatchingActiveLeft("");
       setCurrentIndex((prev) => prev + 1);
       schedulePersistQuizProgress();
@@ -1557,6 +1580,34 @@ const QuizRunner: React.FC = () => {
         <div className="flex h-screen items-center justify-center font-bold text-gray-500">
           문항을 불러오지 못했습니다.
         </div>
+      );
+    }
+
+    if (isMockExamAttempt) {
+      return (
+        <MockExamWorkspace
+          questions={selectedQuestions}
+          answers={answers}
+          round={examRound}
+          studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
+          currentIndex={currentIndex}
+          onSelect={(index) => void goToQuestion(index)}
+          onAnswer={handleAnswer}
+          onSubmit={() => {
+            if (submitError && !submitConflict)
+              void finishQuiz(timeoutHandledRef.current);
+            else void nextQuestion(true);
+          }}
+          submitting={finishSubmitting}
+          submitError={submitError}
+          submitConflict={submitConflict}
+          timeLeft={timeLeft}
+          saveStatus={saveStatus}
+          onSaveRetry={() => void persistQuizProgress()}
+          orderOptions={orderOptionMap}
+          onImageReady={finishImageLoad}
+          answeredCount={selectedQuestions.filter(isQuestionAnswered).length}
+        />
       );
     }
 
@@ -2233,6 +2284,23 @@ const QuizRunner: React.FC = () => {
           finalizedResultId,
         )}`
       : "/student/mypage?menu=wrong_note";
+    if (isMockExamAttempt && paperResult && resultCounts.total > 0) {
+      return (
+        <MockExamWorkspace
+          key={finalizedResultId}
+          questions={paperResult.questions}
+          answers={answers}
+          round={examRound}
+          studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
+          currentIndex={currentIndex}
+          onSelect={setCurrentIndex}
+          score={score}
+          checks={paperResult.checks}
+          onReview={() => navigate(resultReviewUrl)}
+          onReturn={() => navigate("/student/quiz")}
+        />
+      );
+    }
     if (resultCounts.total === 0) {
       return (
         <div role="alert" className="mx-auto w-full max-w-2xl p-6">

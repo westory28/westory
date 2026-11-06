@@ -372,6 +372,10 @@ export const getAssessmentRemainingSeconds = (
 };
 
 export interface AssessmentQuestionSnapshot {
+  examRound?: string;
+  paperOrder?: number;
+  points?: number;
+  paperBreakBefore?: boolean;
   id: string;
   type: "choice" | "ox" | "short" | "word" | "order" | "matching";
   question: string;
@@ -453,6 +457,8 @@ export interface AssessmentRewardResult {
 }
 
 export interface AssessmentSubmissionResult {
+  earnedPoints?: number;
+  maxPoints?: number;
   attemptId: string;
   status: "SUBMITTED";
   revision: number;

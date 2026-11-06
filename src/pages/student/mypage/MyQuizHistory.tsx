@@ -7,6 +7,8 @@ import {
 } from "../../../lib/myQuizHistory";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
+import MockExamPaper from "../../../components/common/MockExamPaper";
+import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import QuizRelearning from "../quiz/QuizRelearning";
 import { formatQuizPracticeAnswer } from "../quiz/quizPracticeData";
 import {
@@ -64,6 +66,7 @@ export default function MyQuizHistory({
   const returnFocusKey = useRef("");
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
   const listHeading = useRef<HTMLHeadingElement>(null);
+  const questionDetail = useRef<HTMLElement>(null);
 
   const loadList = async (more = false, refresh = false) => {
     const request = ++listRequest.current;
@@ -203,6 +206,31 @@ export default function MyQuizHistory({
         .map((item) => item.snapshot),
     [questions],
   );
+  const paperQuestions = useMemo(
+    () => questions.map((item) => item.snapshot),
+    [questions],
+  );
+  const paperAnswers = useMemo(
+    () =>
+      Object.fromEntries(
+        questions
+          .filter((item) => item.saved.userAnswerAvailable)
+          .map((item) => [item.snapshot.id, item.snapshot.submittedAnswer]),
+      ),
+    [questions],
+  );
+  const paperChecks = useMemo(
+    () =>
+      questions.map((item) => ({
+        id: item.snapshot.id,
+        correct: typeof item.correct === "boolean" ? item.correct : null,
+      })),
+    [questions],
+  );
+  const hasSavedPaper =
+    isMockExamCategory(detail?.row?.category || detail?.record.category) &&
+    questions.length > 0 &&
+    questions.every((item) => item.saved.questionAvailable);
   const visibleQuestions = wrongOnly
     ? questions.filter((item) => item.correct === false)
     : questions;
@@ -275,6 +303,27 @@ export default function MyQuizHistory({
                 />
               ) : (
                 <>
+                  {hasSavedPaper && (
+                    <MockExamPaper
+                      questions={paperQuestions}
+                      answers={paperAnswers}
+                      checks={paperChecks}
+                      round={detail.row?.examRound || detail.record.examRound}
+                      score={detail.record.score ?? undefined}
+                      onQuestionSelect={(questionIndex) => {
+                        setWrongOnly(false);
+                        setIndex(questionIndex);
+                        requestAnimationFrame(() => {
+                          questionDetail.current?.scrollIntoView({
+                            block: "start",
+                          });
+                          questionDetail.current?.focus({
+                            preventScroll: true,
+                          });
+                        });
+                      }}
+                    />
+                  )}
                   <div className="my-quiz-history__toolbar">
                     <span>
                       채점 기록{" "}
@@ -342,7 +391,12 @@ export default function MyQuizHistory({
                         </label>
                       </div>
                       {current ? (
-                        <article className="my-quiz-history__question">
+                        <article
+                          ref={questionDetail}
+                          tabIndex={-1}
+                          className="my-quiz-history__question"
+                          aria-label={`${questions.indexOf(current) + 1}번 문항 상세`}
+                        >
                           <h4>
                             {questions.indexOf(current) + 1}번 ·{" "}
                             {current.saved.correctKnown

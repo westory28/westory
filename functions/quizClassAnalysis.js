@@ -7,7 +7,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 
-const SCHEMA = 3;
+const SCHEMA = 4;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 const PAGE_SIZE = 250;
 const MAX_RESULTS = 10000;
@@ -43,6 +43,10 @@ const json = value => {
 const categoryOf = value => text(value).startsWith('exam_prep__round_') ? 'exam_prep' : text(value);
 const roundOf = (category, value) => categoryOf(category) === 'exam_prep'
   ? /^round_[1-9]\d*$/.test(text(value)) ? text(value) : text(category).split('__')[1] || 'round_1' : '';
+const mockExamTitle = round => {
+  const n = Number(text(round).replace('round_', '')) || 1;
+  return `${['초시', '복시', '전시'][n - 1] || '모의고사'} (${n}회 모의고사)`;
+};
 const definitionId = q => ['quiz', q.semesterId, q.unitId, q.category, q.examRound].filter(Boolean).join(':')
   .replace(/[^A-Za-z0-9_.:-]/g, '-').slice(0, 180);
 const classAlias = data => `${number(data.grade || data.studentGrade)}-${number(data.classNumber || data.class || data.studentClass)}`;
@@ -114,7 +118,7 @@ const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'stu
   'learningSnapshot', 'questionSnapshots', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
   'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
-  'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options'];
+  'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore'];
 const SEARCH_FIELDS = [...QUESTION_FIELDS, 'passage', 'explanation', 'matchingPairs'];
 const searchText = value => text(value).normalize('NFC').toLocaleLowerCase('ko')
   .replace(/<[^>]*>/g, ' ').replace(/&(?:nbsp|amp|lt|gt|quot|apos);/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -305,12 +309,18 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     const [classes, definitions, questionDocs, treeData] = await Promise.all([
       readBounded(db.collection('semester_classes').where('semesterId', '==', query.semesterId), 300, '학급'),
       readBounded(db.collection('semester_assessment_definitions').where('semesterId', '==', query.semesterId), 1000, '평가'),
-      readBounded(db.collection(`${root(query.semesterId)}/quiz_questions`).select('unitId', 'category'), MAX_QUESTIONS, '문항 목록'),
+      readBounded(db.collection(`${root(query.semesterId)}/quiz_questions`).select('unitId', 'category', 'examRound'), MAX_QUESTIONS, '문항 목록'),
       loadTree(query.semesterId),
     ]);
     const unitTitles = new Map(treeData.flatMap(big => (big.children || []).map(mid => [String(mid.id), `${big.title} · ${mid.title}`])));
     const counts = new Map();
     questionDocs.forEach(doc => { const q = doc.data(); const key = `${q.unitId}\n${categoryOf(q.category)}`; counts.set(key, (counts.get(key) || 0) + 1); });
+    const taggedUnits = new Set(questionDocs.filter(doc => categoryOf(doc.data().category) === 'exam_prep' && doc.data().examRound).map(doc => text(doc.data().unitId)));
+    const paperCounts = new Map();
+    questionDocs.forEach(doc => { const q = doc.data(); if (categoryOf(q.category) !== 'exam_prep' || !q.examRound) return;
+      const key = `${q.unitId}\n${q.examRound}`; paperCounts.set(key, (paperCounts.get(key) || 0) + 1); });
+    const questionCountFor = (unitId, category, round) => category === 'exam_prep' && taggedUnits.has(unitId)
+      ? paperCounts.get(`${unitId}\n${round}`) || 0 : counts.get(`${unitId}\n${category}`) || 0;
     const assessments = new Map();
     definitions.forEach(doc => {
       const item = doc.data();
@@ -318,17 +328,27 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const category = categoryOf(item.category);
       if (!['diagnostic', 'formative', 'exam_prep'].includes(category)) return;
       const unitId = text(item.sourceId); const examRound = roundOf(item.category, item.examRound);
-      const title = category === 'exam_prep' ? `모의고사 ${Number(examRound.replace('round_', ''))}회` : category === 'diagnostic' ? '진단평가' : '형성평가';
+      const title = category === 'exam_prep' ? mockExamTitle(examRound) : category === 'diagnostic' ? '진단평가' : '형성평가';
       assessments.set(`${unitId}\n${category}\n${examRound}`, { id: doc.id, unitId, unitTitle: unitTitles.get(unitId) || '모의고사', category, examRound,
-        title, questionCount: counts.get(`${unitId}\n${category}`) || 0 });
+        title, questionCount: questionCountFor(unitId, category, examRound) });
     });
     for (const [key, questionCount] of counts) {
       const [unitId, category] = key.split('\n');
       if (!['diagnostic', 'formative', 'exam_prep'].includes(category)) continue;
+      if (category === 'exam_prep' && taggedUnits.has(unitId)) {
+        for (const [paperKey, paperCount] of paperCounts) {
+          const [paperUnit, examRound] = paperKey.split('\n');
+          if (paperUnit !== unitId) continue;
+          const identity = `${unitId}\n${category}\n${examRound}`;
+          if (!assessments.has(identity)) assessments.set(identity, { id: definitionId({ ...query, unitId, category, examRound }),
+            unitId, unitTitle: '모의고사', category, examRound, title: mockExamTitle(examRound), questionCount: paperCount });
+        }
+        continue;
+      }
       const examRound = roundOf(category, ''); const identity = `${unitId}\n${category}\n${examRound}`;
       if (!assessments.has(identity)) assessments.set(identity, { id: definitionId({ ...query, unitId, category, examRound }),
         unitId, unitTitle: unitTitles.get(unitId) || (category === 'exam_prep' ? '모의고사' : '단원명 미등록'), category, examRound,
-        title: category === 'exam_prep' ? '모의고사 1회' : category === 'diagnostic' ? '진단평가' : '형성평가', questionCount });
+        title: category === 'exam_prep' ? mockExamTitle(examRound) : category === 'diagnostic' ? '진단평가' : '형성평가', questionCount });
     }
     return { semesterId: query.semesterId, classes: classes.filter(doc => doc.data().status === 'ACTIVE').map(doc => {
       const data = doc.data(); return { id: doc.id, label: `${data.grade}학년 ${data.classNumber}반`, grade: text(data.grade), classNumber: text(data.classNumber) };
@@ -378,7 +398,9 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   const loadQuestions = async (query, detail) => {
     let q = db.collection(`${root(query.semesterId)}/quiz_questions`).where('unitId', '==', query.unitId);
     if (!detail) q = q.select(...QUESTION_FIELDS);
-    return (await readBounded(q, MAX_QUESTIONS, '문항')).filter(doc => categoryOf(doc.data().category) === query.category).map(doc => ({
+    const bank = (await readBounded(q, MAX_QUESTIONS, '문항')).filter(doc => categoryOf(doc.data().category) === query.category);
+    const fixedPaper = query.category === 'exam_prep' && bank.some(doc => doc.data().examRound);
+    return bank.filter(doc => !fixedPaper || doc.data().examRound === query.examRound).map(doc => ({
       ...json(doc.data()), id: doc.data().id ?? Number(doc.id), docId: doc.id,
       sourceRevision: String(doc.data().contentRevision || doc.data().revision || 'legacy'),
     }));

@@ -1,0 +1,280 @@
+.mock-exam-paper {
+  position: relative;
+  width: 100%;
+  max-width: 794px;
+  margin: 0 auto;
+  color: #111;
+}
+.mock-exam-sheet-space {
+  position: relative;
+  margin-bottom: 24px;
+}
+.mock-exam-sheet {
+  position: absolute;
+  inset: 0 auto auto 0;
+  box-sizing: border-box;
+  padding: 32px 40px 56px;
+  background: #fff;
+  box-shadow: 0 1px 8px #0002;
+  transform-origin: top left;
+  font-family: "Noto Serif KR", serif;
+  font-size: 14px;
+  line-height: 1.65;
+  letter-spacing: -0.02em;
+}
+.mock-exam-title-box {
+  border: 2px solid #111;
+  text-align: center;
+  padding: 8px 16px;
+  margin-bottom: 12px;
+}
+.mock-exam-title-box h2 {
+  font:
+    900 28px/1.45 "Noto Serif KR",
+    serif;
+  margin: 0;
+  transform: scaleX(0.95);
+}
+.mock-exam-title-box p {
+  margin: 0;
+  font-weight: 700;
+  font-size: 17px;
+}
+.mock-exam-title-box .mock-exam-student {
+  margin-top: 8px;
+  font-size: 15px;
+}
+.mock-exam-cover-line {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.mock-exam-score {
+  color: #b91c1c;
+  font:
+    italic 700 44px/1 "Noto Serif KR",
+    serif;
+  transform: rotate(-8deg);
+  border-bottom: 2px solid currentColor;
+  padding: 0 8px;
+}
+.mock-exam-score small {
+  font-size: 20px;
+  padding-left: 4px;
+}
+.mock-exam-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.mock-exam-running-title {
+  height: 92px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-weight: 700;
+  padding-top: 12px;
+}
+.mock-exam-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.mock-exam-column {
+  position: relative;
+  min-width: 0;
+}
+.mock-exam-column + .mock-exam-column::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #111;
+}
+.mock-exam-question {
+  position: relative;
+  margin: 0 0 24px;
+  text-align: left;
+  break-inside: avoid;
+  outline-offset: 4px;
+}
+.mock-exam-question.is-interactive {
+  cursor: zoom-in;
+}
+.mock-exam-question.is-interactive:hover {
+  background: #f8fafc;
+}
+.mock-exam-question.is-interactive:focus-visible {
+  outline: 2px solid #2563eb;
+}
+.mock-exam-question-ink {
+  width: calc(100% / 0.95);
+  transform: scaleX(0.95);
+  transform-origin: top left;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.mock-exam-stem {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.mock-exam-number {
+  font-size: 1.2em;
+  font-style: italic;
+}
+.mock-exam-points {
+  white-space: nowrap;
+}
+.mock-exam-question-ink .mock-exam-passage {
+  margin: 8px 0 12px;
+  padding: 8px;
+  border: 1px solid #111;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: inherit;
+  color: inherit;
+  background: #fff;
+}
+.mock-exam-passage > div {
+  gap: 4px;
+  margin: 0;
+}
+.mock-exam-image {
+  display: block;
+  max-width: 100%;
+  max-height: 250px;
+  object-fit: contain;
+  margin: 8px auto 12px;
+}
+.mock-exam-image-wrap {
+  display: block;
+  max-width: 100%;
+}
+.mock-exam-image-error {
+  display: block;
+  font-size: 14px;
+  color: #b91c1c;
+}
+.mock-exam-image-error button {
+  min-height: 44px;
+  padding: 8px;
+  text-decoration: underline;
+  font: inherit;
+}
+.mock-exam-options {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px 12px;
+}
+.mock-exam-options--five {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.mock-exam-options--two {
+  grid-template-columns: repeat(2, 1fr);
+}
+.mock-exam-options li {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+.mock-exam-option-number {
+  flex: none;
+}
+.mock-exam-options li.is-selected .mock-exam-option-number {
+  color: #1d4ed8;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px #1d4ed8;
+}
+.mock-exam-options img,
+.mock-exam-matching-material img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+}
+.mock-exam-written-answer {
+  border-bottom: 1px solid #64748b;
+  margin: 12px 0 0;
+  color: #1e3a8a;
+  min-height: 24px;
+}
+.mock-exam-matching-material {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.mock-exam-matching-material p {
+  margin: 4px 0;
+}
+.mock-exam-page-number {
+  position: absolute;
+  bottom: 20px;
+  left: 40px;
+  right: 40px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+.mock-exam-pencil {
+  position: absolute;
+  top: -18px;
+  left: -24px;
+  width: 72px;
+  height: 72px;
+  color: #b91c1c;
+  pointer-events: none;
+}
+.mock-exam-pencil svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.7;
+  stroke-linecap: round;
+  opacity: 0.86;
+}
+.mock-exam-pencil path + path {
+  opacity: 0.5;
+  stroke-width: 1.6;
+}
+.mock-exam-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 345px;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+  font:
+    400 14px/1.65 "Noto Serif KR",
+    serif;
+  letter-spacing: -0.02em;
+}
+.mock-exam-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media print {
+  .mock-exam-sheet-space {
+    break-after: page;
+  }
+  .mock-exam-sheet {
+    box-shadow: none;
+  }
+}
