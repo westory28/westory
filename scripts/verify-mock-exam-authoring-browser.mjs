@@ -37,6 +37,7 @@ try {
   await page.goto(origin);await page.getByRole('button',{name:'JSON 가져오기',exact:true}).waitFor();
   await page.getByRole('button',{name:'문제 등록',exact:true}).click();
   const compose=page.getByRole('dialog',{name:'새 문제 등록',exact:true});
+  assert.deepEqual(await compose.getByRole('combobox',{name:'문항 유형',exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['choice','word'],'Mock paper editor only offers server-supported school-exam types');
   await compose.getByLabel('발문',{exact:true}).fill('다음 자료를 보고 옳은 설명을 고르시오.');
   await compose.getByRole('spinbutton',{name:'배점',exact:true}).fill('3.5');
   for(let i=0;i<5;i++)await compose.getByLabel(`${i+1}번 보기`,{exact:true}).fill(q.options[i]);

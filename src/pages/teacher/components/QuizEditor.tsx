@@ -1320,6 +1320,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
       return;
     }
+    if (type === "special" && !["choice", "word"].includes(formType)) {
+      setFormError("시험지 문항은 객관식 또는 단답형으로 선택해 주세요.");
+      return;
+    }
     const payload = buildQuestionPayload();
     if (!payload) return;
     if (type === "special") {
@@ -2269,10 +2273,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
                         >
                           <option value="choice">객관식</option>
-                          <option value="ox">O/X</option>
+                          {type !== "special" && (
+                            <option value="ox">O/X</option>
+                          )}
                           <option value="word">단답형</option>
-                          <option value="order">순서 나열형</option>
-                          <option value="matching">단어 연결하기</option>
+                          {type !== "special" && (
+                            <>
+                              <option value="order">순서 나열형</option>
+                              <option value="matching">단어 연결하기</option>
+                            </>
+                          )}
+                          {type === "special" &&
+                            !["choice", "word"].includes(formType) && (
+                              <option value={formType} disabled>
+                                기존 문항 · 유형 변경 필요
+                              </option>
+                            )}
                         </select>
                       </label>
                       {type === "normal" && (
