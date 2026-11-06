@@ -65,7 +65,13 @@ try {
     await page.getByRole("button", { name: "2번 문제 확대, 답안 입력됨", exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.getByLabel("점수 75점, 100점 만점", { exact: true }).waitFor();
-    assert.equal(await page.locator(".mock-exam-sheet").count() >= 2, true, "Saved authored page breaks survive history reconstruction");
+    assert.equal(await page.locator(".mock-exam-sheet").count(), 1, "Saved manual breaks no longer force extra pages; content is automatically placed");
+    const savedQuestions = await page.locator(".mock-exam-sheet article").evaluateAll(articles => articles.map(article => {
+      const box = article.getBoundingClientRect(), sheet = article.closest(".mock-exam-sheet").getBoundingClientRect();
+      return { text: article.textContent, fits: box.left >= sheet.left - 1 && box.right <= sheet.right + 1 && box.bottom <= sheet.bottom + 1 };
+    }));
+    assert.equal(savedQuestions.length, record.details.length, "Every saved question survives automatic placement");
+    assert(savedQuestions.every((question, index) => question.fits && question.text.includes(`${index + 1}번 저장 당시 원문`)), "Saved questions retain their order and fit within the paper");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, `No document horizontal overflow at ${width}px`);
     await page.screenshot({ path: path.join(evidence, `paper-${width}.png`), fullPage: true });
     await page.getByRole("button", { name: "2번 문제 확대, 답안 입력됨", exact: true }).click();
@@ -83,7 +89,7 @@ try {
     await page.close();
   }
   assert.deepEqual(errors, []);
-  console.log(`Mock exam history browser passed: 390/768/1280, saved page breaks/score/answers, click focus, missing-snapshot fallback. Evidence: ${evidence}`);
+  console.log(`Mock exam history browser passed: 390/768/1280, automatic pagination with saved score/answers, click focus, missing-snapshot fallback. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

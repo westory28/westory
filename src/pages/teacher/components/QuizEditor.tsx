@@ -58,7 +58,7 @@ import {
   validateMockExamPlacement,
   mockExamQuestionSizeError,
 } from "./mockExamAuthoring";
-import MockExamFileTools from "./MockExamFileTools";
+import MockExamPreview from "./MockExamPreview";
 
 interface TreeUnit {
   id: string;
@@ -272,7 +272,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [formExamRound, setFormExamRound] = useState("round_1");
   const [formPaperOrder, setFormPaperOrder] = useState(1);
   const [formPoints, setFormPoints] = useState(4);
-  const [formPaperBreakBefore, setFormPaperBreakBefore] = useState(false);
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
   );
@@ -626,6 +625,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       ? !normalSubUnitIds.has(question.subUnitId || "")
       : question.subUnitId === normalSubUnitFilter;
   };
+  const previewEntries = useMemo(() => {
+    const exams = catalog.filter((q) => q.category === "exam_prep");
+    const hasRoundPapers = exams.some((q) => !!q.examRound);
+    return exams.filter((q) => {
+      if (examRoundFilter === "unassigned") return !q.examRound;
+      if (examRoundFilter) return q.examRound === examRoundFilter;
+      return !hasRoundPapers || !!q.examRound;
+    });
+  }, [catalog, examRoundFilter]);
   const filteredQuestions = useMemo(() => {
     const list = searchedQuestions.filter((q) => {
       if (q.category !== category) return false;
@@ -848,7 +856,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       ) + 1,
     );
     setFormPoints(4);
-    setFormPaperBreakBefore(false);
     setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
     setChoiceOptionImages(createDefaultChoiceOptionImages(defaultCategory));
     setChoiceAnswerIndex(null);
@@ -873,7 +880,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
     setOptimizingImageCount((prev) => prev + 1);
     try {
@@ -887,7 +895,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       );
     } finally {
       setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-      e.currentTarget.value = "";
+      input.value = "";
     }
   };
 
@@ -895,7 +903,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     index: number,
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
     setOptimizingImageCount((prev) => prev + 1);
     optimizeQuizImageFile(file, choiceImageOptions)
@@ -916,7 +925,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       })
       .finally(() => {
         setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-        e.currentTarget.value = "";
+        input.value = "";
       });
   };
 
@@ -924,7 +933,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     index: number,
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
     setOptimizingImageCount((prev) => prev + 1);
     optimizeQuizImageFile(file, QUIZ_MATCHING_IMAGE_OPTIONS)
@@ -945,7 +955,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       })
       .finally(() => {
         setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-        e.currentTarget.value = "";
+        input.value = "";
       });
   };
 
@@ -1046,7 +1056,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         ) + 1,
     );
     setFormPoints(question.points || 4);
-    setFormPaperBreakBefore(question.paperBreakBefore === true);
     setFormExp(question.explanation || "");
     setFormImage(question.image || null);
     setFormPassage(
@@ -1414,7 +1423,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               examRound: formExamRound,
               paperOrder: formPaperOrder,
               points: formPoints,
-              paperBreakBefore: formPaperBreakBefore,
             }
           : {}),
         type: formType,
@@ -1677,13 +1685,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               <option value="unassigned">기존 공통 문제은행</option>
             </select>
           </label>
-          <MockExamFileTools
-            key={questionScope}
-            canEdit={canEdit && !loading && catalogScope === questionScope}
-            catalog={catalog}
-            entries={filteredQuestions}
+          <MockExamPreview
+            key={`${questionScope}:${examRoundFilter}`}
+            disabled={loading || catalogScope !== questionScope}
+            entries={previewEntries}
             loadQuestions={(entries) => pager.page(entries)}
-            onChanged={fetchQuestions}
           />
         </div>
       )}
@@ -2185,7 +2191,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   {type === "special" && (
                     <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                       <legend className="mb-2 text-sm font-bold">
-                        시험지 배치
+                        문항 정보
                       </legend>
                       <label className="quiz-composer-field">
                         <span>회차</span>
@@ -2243,16 +2249,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             setFormPoints(Number(event.target.value))
                           }
                         />
-                      </label>
-                      <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-3">
-                        <input
-                          type="checkbox"
-                          checked={formPaperBreakBefore}
-                          onChange={(event) =>
-                            setFormPaperBreakBefore(event.target.checked)
-                          }
-                        />
-                        이 문항부터 새 쪽
                       </label>
                     </fieldset>
                   )}

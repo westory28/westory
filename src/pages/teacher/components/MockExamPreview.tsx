@@ -1,0 +1,172 @@
+import React, { useEffect, useRef, useState } from "react";
+import { formatMockExamRoundShortLabel } from "../../../lib/mockExamRounds";
+import type { QuizQuestionDraft } from "./QuizEditor";
+import {
+  QUIZ_QUESTION_PAGE_SIZE,
+  type QuizQuestionCatalogEntry,
+} from "./quizQuestionPaging";
+import { useQuizDialog } from "./useQuizDialog";
+import MockExamPaper from "../../../components/common/MockExamPaper";
+
+interface Props {
+  disabled?: boolean;
+  entries: QuizQuestionCatalogEntry[];
+  loadQuestions: (
+    entries: QuizQuestionCatalogEntry[],
+  ) => Promise<QuizQuestionDraft[]>;
+}
+
+export default function MockExamPreview({
+  disabled = false,
+  entries,
+  loadQuestions,
+}: Props) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const [questions, setQuestions] = useState<QuizQuestionDraft[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [previewRound, setPreviewRound] = useState("round_1");
+  const locked = useRef(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const close = () => setQuestions([]);
+  useQuizDialog(questions.length > 0, dialog, close);
+
+  const preview = async () => {
+    if (disabled || locked.current) return;
+    locked.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const loaded: QuizQuestionDraft[] = [];
+      for (
+        let start = 0;
+        start < entries.length;
+        start += QUIZ_QUESTION_PAGE_SIZE
+      ) {
+        loaded.push(
+          ...(await loadQuestions(
+            entries.slice(start, start + QUIZ_QUESTION_PAGE_SIZE),
+          )),
+        );
+        if (!active.current) return;
+      }
+      if (!loaded.length) throw new Error("미리 볼 문항이 없습니다.");
+      setPreviewRound(loaded[0].examRound || "round_1");
+      setQuestions(loaded);
+    } catch (cause) {
+      if (active.current)
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "시험지를 불러오지 못했습니다. 다시 시도해 주세요.",
+        );
+    } finally {
+      locked.current = false;
+      if (active.current) setBusy(false);
+    }
+  };
+  const previewQuestions = questions
+    .filter((q) => (q.examRound || "round_1") === previewRound)
+    .sort(
+      (a, b) => Number(a.paperOrder || a.id) - Number(b.paperOrder || b.id),
+    );
+
+  return (
+    <>
+      <button
+        type="button"
+        className="quiz-authoring-button"
+        disabled={disabled || busy || !entries.length}
+        onClick={() => void preview()}
+      >
+        {busy ? "불러오는 중…" : "미리보기"}
+      </button>
+      {error && (
+        <p role="alert" className="w-full text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {!!questions.length && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div
+            ref={dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-label="시험지 미리보기"
+            tabIndex={-1}
+            className="quiz-authoring-surface quiz-composer-dialog"
+          >
+            <div className="quiz-composer-header">
+              <h3 className="text-lg font-bold">
+                시험지 미리보기 · {previewQuestions.length}문항
+              </h3>
+              <button
+                type="button"
+                className="quiz-authoring-button"
+                onClick={close}
+              >
+                닫기
+              </button>
+            </div>
+            <div className="quiz-composer-body">
+              <label className="mb-3 flex min-h-11 items-center gap-2 text-sm font-bold">
+                회차
+                <select
+                  className="min-h-11 rounded border border-gray-300 px-3"
+                  value={previewRound}
+                  onChange={(event) => setPreviewRound(event.target.value)}
+                >
+                  {[...new Set(questions.map((q) => q.examRound || "round_1"))]
+                    .sort()
+                    .map((round) => (
+                      <option key={round} value={round}>
+                        {formatMockExamRoundShortLabel(round)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <MockExamPaper
+                questions={previewQuestions}
+                round={previewRound}
+              />
+              <details className="py-3">
+                <summary className="min-h-11 cursor-pointer text-sm font-bold">
+                  정답·해설 확인
+                </summary>
+                {previewQuestions.map((q, index) => (
+                  <section key={q.id} className="border-b border-gray-200 py-3">
+                    <h4 className="font-bold">
+                      {q.paperOrder || index + 1}번 · {q.points ?? 1}점
+                    </h4>
+                    <p className="mt-2 text-sm text-blue-700">
+                      정답: {q.answer}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm">
+                      {q.explanation}
+                    </p>
+                  </section>
+                ))}
+              </details>
+            </div>
+            <div className="quiz-composer-footer">
+              <span role="status">
+                {Number(
+                  previewQuestions
+                    .reduce((sum, q) => sum + (q.points ?? 1), 0)
+                    .toFixed(2),
+                )}
+                점
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

@@ -315,18 +315,11 @@ export default function MockExamPaper({
     const output: PaperPage[] = [{ columns: [[], []], height: PAGE_HEIGHT }];
     let column = 0,
       used = 0;
-    questions.forEach((question, index) => {
+    questions.forEach((_, index) => {
       let page = output[output.length - 1];
       const room = output.length === 1 ? FIRST_COLUMN_ROOM : COLUMN_ROOM;
       const height = heights[index] || 260;
-      if (
-        question.paperBreakBefore &&
-        page.columns.some((items) => items.length)
-      ) {
-        output.push({ columns: [[], []], height: PAGE_HEIGHT });
-        column = 0;
-        used = 0;
-      } else if (used > 0 && used + height > room) {
+      if (used > 0 && used + height > room) {
         if (column === 0) column = 1;
         else {
           output.push({ columns: [[], []], height: PAGE_HEIGHT });

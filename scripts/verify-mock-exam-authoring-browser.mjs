@@ -1,77 +1,479 @@
-import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import http from 'node:http';
-import { createRequire } from 'node:module';
-import { build } from 'esbuild';
+/** Real teacher authoring and paper rendering with synthetic services only. */
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import http from "node:http";
+import { createRequire } from "node:module";
+import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
-const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const evidence = process.env.MOCK_EXAM_EVIDENCE_DIR || await fs.mkdtemp(path.join(os.tmpdir(),'westory-mock-authoring-'));
-await fs.mkdir(evidence,{recursive:true});
-const fixture = await fs.readFile('scripts/verify-assessment-teacher-browser.mjs','utf8');
+const playwright = require(
+  process.env.PLAYWRIGHT_MODULE_PATH ||
+    path.join(
+      os.homedir(),
+      ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
+    ),
+);
+const evidence =
+  process.env.MOCK_EXAM_EVIDENCE_DIR ||
+  (await fs.mkdtemp(path.join(os.tmpdir(), "westory-mock-authoring-")));
+await fs.mkdir(evidence, { recursive: true });
+const fixture = await fs.readFile(
+  "scripts/verify-assessment-teacher-browser.mjs",
+  "utf8",
+);
 let service = fixture.match(/const service = `([\s\S]*?)`;/)[1];
-service = service.replace('category:q.category,type:q.type,refBig:', 'category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,refBig:');
-service = service.replace("if(command==='upsertQuizQuestion'){const q=", "if(command==='upsertQuizQuestion'){if(fixtureState.failQuestionId===payload.questionId){fixtureState.failQuestionId='';throw new Error('합성 저장 실패')}const q=");
+service = service.replace(
+  "category:q.category,type:q.type,refBig:",
+  "category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,refBig:",
+);
+service = service.replace(
+  "if(command==='upsertQuizQuestion'){const q=",
+  "if(command==='upsertQuizQuestion'){if(fixtureState.failNextSave){fixtureState.failNextSave=false;throw new Error('합성 저장 실패')}const q=",
+);
+const image =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="220"><rect width="640" height="220" fill="#f8fafc"/><path d="M40 180L200 60L320 120L540 40" stroke="#334155" fill="none" stroke-width="8"/><text x="60" y="205" font-size="26">합성 문항 자료</text></svg>',
+  );
+const common = {
+  unitId: "exam_prep",
+  category: "exam_prep",
+  type: "choice",
+  options: [
+    "가",
+    "나",
+    "두 글자",
+    "긴 선지입니다",
+    "마지막으로 가장 긴 선지입니다",
+  ],
+  answer: "나",
+  points: 4,
+  contentRevision: 1,
+  explanation: "자료의 근거를 확인한다.",
+  refBig: "big-1",
+  refMid: "mid-1",
+  refSmall: "lesson-1",
+};
+const seed = [
+  ...Array.from({ length: 24 }, (_, index) => ({
+    ...common,
+    id: 7001 + index,
+    examRound: "round_2",
+    paperOrder: index + 1,
+    question: `복시 ${index + 1}번 자료를 근거로 옳은 설명을 고르시오.`,
+    passage:
+      "중앙 집권 체제의 강화와 지방 제도의 정비는 국가 운영 방식에 변화를 가져왔다. 자료의 시기와 정책의 목적을 살펴보자. ".repeat(
+        4,
+      ),
+    image: index % 4 === 0 ? image : null,
+  })),
+  ...Array.from({ length: 4 }, (_, index) => ({
+    ...common,
+    id: 8001 + index,
+    examRound: "round_3",
+    paperOrder: index + 1,
+    question: `전시 ${index + 1}번 옳은 설명을 고르시오.`,
+    paperBreakBefore: true,
+  })),
+];
+service += `\nquestions.push(...${JSON.stringify(seed)});`;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import QuizEditor from './src/pages/teacher/components/QuizEditor.tsx';import {tree} from 'fixture:service';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';createRoot(document.getElementById('root')).render(<QuizEditor node={{id:'exam_prep',title:'모의고사'}} type="special" treeData={tree} canEdit={!new URLSearchParams(location.search).has('readonly')} onOpenSettings={()=>{}}/>);`;
-const bundle = await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,format:'esm',platform:'browser',outfile:'fixture.js',loader:{'.woff2':'dataurl','.woff':'dataurl','.webp':'dataurl','.svg':'dataurl','.png':'dataurl'},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic-services',setup(plugin){plugin.onResolve({filter:/^fixture:service$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(?:lib\/)?(firebase|assessmentRelease|assessmentLifecycle|historyDictionarySession)$|^firebase\/firestore$/},()=>({path:'service',namespace:'fixture'}));plugin.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
-const js = bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
-const css = bundle.outputFiles.find(f=>f.path.endsWith('.css')).text.replace(/@import\s+(?:url\()?['"]?https?:[^;]+;/g,'');
+const bundle = await build({
+  stdin: { contents: entry, loader: "tsx", resolveDir: root },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "browser",
+  outfile: "fixture.js",
+  loader: {
+    ".woff2": "dataurl",
+    ".woff": "dataurl",
+    ".webp": "dataurl",
+    ".svg": "dataurl",
+    ".png": "dataurl",
+  },
+  define: { "process.env.NODE_ENV": '"production"' },
+  plugins: [
+    {
+      name: "synthetic-services",
+      setup(plugin) {
+        plugin.onResolve(
+          {
+            filter:
+              /^fixture:service$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(?:lib\/)?(firebase|assessmentRelease|assessmentLifecycle|historyDictionarySession)$|^firebase\/firestore$/,
+          },
+          () => ({ path: "service", namespace: "fixture" }),
+        );
+        plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
+          contents: service,
+          loader: "ts",
+          resolveDir: root,
+        }));
+      },
+    },
+  ],
+});
+const js = bundle.outputFiles.find((f) => f.path.endsWith(".js")).text;
+const css = bundle.outputFiles
+  .find((f) => f.path.endsWith(".css"))
+  .text.replace(/@import\s+(?:url\()?['"]?https?:[^;]+;/g, "");
 let tailwind;
-for (const candidate of [process.env.PORTAL_DESIGN_TAILWIND_PATH,path.join(os.tmpdir(),'westory-qa-tailwind.js'),path.join(os.tmpdir(),'westory-assessment-qa-tailwind.js')].filter(Boolean)) {try {tailwind=await fs.readFile(candidate,'utf8');break;} catch {}}
-assert(tailwind,'Run existing portal browser check once to cache the official Tailwind runtime.');
-const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><body style="margin:0"><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
-const server=http.createServer((req,res)=>{const p=new URL(req.url,'http://localhost').pathname;const [type,body]=({'/fixture.js':['text/javascript',js],'/fixture.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[p]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
-await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const origin=`http://127.0.0.1:${server.address().port}`;
-const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
-const checks=[],external=[],errors=[];
-const q={id:7001,type:'choice',examRound:'round_2',paperOrder:1,points:4,question:'자료를 근거로 옳은 설명을 고르시오.',passage:'{{box:(가)}} 고대 국가가 중앙 집권 체제를 강화하였다.',options:['긴 선지입니다','나','가','두 글자','마지막으로 가장 긴 선지입니다'],answer:'나',explanation:'선지와 자료의 관계를 확인한다.'};
-const upload=(questions)=>({name:'exam.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:1,questions}))});
+for (const candidate of [
+  process.env.PORTAL_DESIGN_TAILWIND_PATH,
+  path.join(os.tmpdir(), "westory-qa-tailwind.js"),
+  path.join(os.tmpdir(), "westory-assessment-qa-tailwind.js"),
+].filter(Boolean)) {
+  try {
+    tailwind = await fs.readFile(candidate, "utf8");
+    break;
+  } catch {}
+}
+assert(
+  tailwind,
+  "Run an existing portal browser check once to cache the official Tailwind runtime.",
+);
+const html =
+  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><body style="margin:0"><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+const server = http.createServer((req, res) => {
+  const p = new URL(req.url, "http://localhost").pathname;
+  const [type, body] = {
+    "/fixture.js": ["text/javascript", js],
+    "/fixture.css": ["text/css", css],
+    "/tailwind.js": ["text/javascript", tailwind],
+  }[p] || ["text/html", html];
+  res.setHeader("Content-Type", type + ";charset=utf-8");
+  res.end(body);
+});
+await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+const origin = `http://127.0.0.1:${server.address().port}`;
+const browser = await playwright.chromium.launch({
+  channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+  headless: true,
+});
+const checks = [],
+  external = [],
+  errors = [],
+  alerts = [],
+  layouts = [];
+const authoredOptions = [
+  "긴 선지입니다",
+  "나",
+  "가",
+  "두 글자",
+  "마지막으로 가장 긴 선지입니다",
+];
+async function paperReady(page, view, expectedCount) {
+  await view.locator(".mock-exam-sheet").first().waitFor();
+  await page.waitForFunction(
+    (count) =>
+      document.querySelectorAll('[role="dialog"] .mock-exam-sheet article')
+        .length === count,
+    expectedCount,
+  );
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(
+      Array.from(
+        document.querySelectorAll('[role="dialog"] .mock-exam-sheet img'),
+      ).map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              img.addEventListener("load", resolve, { once: true });
+              img.addEventListener("error", resolve, { once: true });
+            }),
+      ),
+    );
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)),
+    );
+  });
+}
+async function openPaper(page, round, count) {
+  await page.getByRole("button", { name: "미리보기", exact: true }).click();
+  const view = page.getByRole("dialog", {
+    name: "시험지 미리보기",
+    exact: true,
+  });
+  await view.waitFor();
+  await view
+    .getByRole("combobox", { name: "회차", exact: true })
+    .selectOption(round);
+  await paperReady(page, view, count);
+  return view;
+}
 try {
-  const context=await browser.newContext({viewport:{width:1280,height:900}});
-  await context.route('**/*',route=>{if(route.request().url().startsWith(origin)||route.request().url().startsWith('data:'))return route.continue();external.push(route.request().url());return route.abort();});
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-  await page.goto(origin);await page.getByRole('button',{name:'JSON 가져오기',exact:true}).waitFor();
-  await page.getByRole('button',{name:'문제 등록',exact:true}).click();
-  const compose=page.getByRole('dialog',{name:'새 문제 등록',exact:true});
-  assert.deepEqual(await compose.getByRole('combobox',{name:'문항 유형',exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['choice','word'],'Mock paper editor only offers server-supported school-exam types');
-  await compose.getByLabel('발문',{exact:true}).fill('다음 자료를 보고 옳은 설명을 고르시오.');
-  await compose.getByRole('spinbutton',{name:'배점',exact:true}).fill('3.5');
-  for(let i=0;i<5;i++)await compose.getByLabel(`${i+1}번 보기`,{exact:true}).fill(q.options[i]);
-  await compose.getByRole('button',{name:'2번 보기 정답 선택',exact:true}).click();
-  await compose.getByRole('button',{name:'등록',exact:true}).click();
-  await compose.waitFor({state:'hidden'});
-  const saved=await page.evaluate(()=>window.assessmentTeacherFixture.questions.find(q=>q.category==='exam_prep'));
-  assert.equal(saved.examRound,'round_1');assert.equal(saved.points,3.5);assert.equal(saved.paperOrder,1);assert.equal(saved.answer,'나');assert.deepEqual(saved.options,['가','나','두 글자','긴 선지입니다','마지막으로 가장 긴 선지입니다']);
-  checks.push('Direct authoring preserves decimal points and answer while sorting five choices.');
-  await page.locator('input[type=file][accept=".json,application/json"]').setInputFiles(upload([q,{...q,id:7002,paperOrder:2,question:'두 번째 문항'}]));
-  let preview=page.getByRole('dialog',{name:'시험지 JSON 확인',exact:true});await preview.waitFor();
-  assert.equal(await preview.locator('.mock-exam-sheet').count()>0,true);
-  assert.equal(await page.evaluate(()=>window.assessmentTeacherFixture.writes.length),1,'import preview must not save');
-  await page.evaluate(()=>{window.assessmentTeacherFixture.failQuestionId='7002';});
-  await preview.getByRole('button',{name:'문항 저장',exact:true}).click();
-  await preview.getByRole('alert').filter({hasText:'1/2문항 저장'}).waitFor();
-  await preview.getByRole('button',{name:'남은 문항 저장',exact:true}).click();await preview.waitFor({state:'hidden'});
-  const writes=await page.evaluate(()=>window.assessmentTeacherFixture.writes.filter(w=>w.command==='upsertQuizQuestion'));
-  assert.equal(writes.filter(w=>w.payload.questionId==='7001').length,1,'retry must not repeat successful item');
-  assert.equal(writes.filter(w=>w.payload.questionId==='7002').length,2);checks.push('Imported paper preview makes no writes; partial save retries only unsaved questions.');
-  await page.locator('input[type=file][accept=".json,application/json"]').setInputFiles(upload([{...q,id:7003,paperOrder:3,options:['가','가','다','라','마']}]));
-  await page.getByRole('alert').filter({hasText:'서로 다른 선지 5개'}).waitFor();assert.equal(await page.getByRole('dialog').count(),0);checks.push('Malformed import rejected before mutation.');
-  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'JSON 내보내기',exact:true}).click()]);
-  await download.saveAs(path.join(evidence,'roundtrip.json'));const exported=JSON.parse(await fs.readFile(path.join(evidence,'roundtrip.json'),'utf8'));assert.equal(exported.questions.length,3);checks.push('Export reads complete selected catalog, including saved questions.');
-  for(const width of [390,768,1280]) {
-    await page.setViewportSize({width,height:900});await page.getByRole('button',{name:'시험지 미리보기',exact:true}).click();
-    const view=page.getByRole('dialog',{name:'시험지 미리보기',exact:true});await view.waitFor();await view.locator('.mock-exam-sheet').first().waitFor();
-    await page.screenshot({path:path.join(evidence,`teacher-paper-${width}.png`),fullPage:true});
-    const layout=await page.evaluate(()=>({doc:document.documentElement.scrollWidth,width:innerWidth,dialog:document.querySelector('[role=dialog]').getBoundingClientRect().width}));
-    assert(layout.doc<=width+1,JSON.stringify(layout));assert(layout.dialog<=width,JSON.stringify(layout));
-    await page.keyboard.press('Escape');await view.waitFor({state:'hidden'});
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+  });
+  await context.route("**/*", (route) => {
+    if (
+      route.request().url().startsWith(origin) ||
+      route.request().url().startsWith("data:")
+    )
+      return route.continue();
+    external.push(route.request().url());
+    return route.abort();
+  });
+  const page = await context.newPage();
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("dialog", async (dialog) => {
+    alerts.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.goto(origin);
+  await page.getByRole("button", { name: "문제 등록", exact: true }).waitFor();
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+  const compose = page.getByRole("dialog", {
+    name: "새 문제 등록",
+    exact: true,
+  });
+  await compose
+    .getByLabel("발문", { exact: true })
+    .fill("직접 등록한 자료를 보고 옳은 설명을 고르시오.");
+  await compose
+    .getByRole("spinbutton", { name: "배점", exact: true })
+    .fill("3.5");
+  for (let index = 0; index < 5; index++)
+    await compose
+      .getByLabel(`${index + 1}번 보기`, { exact: true })
+      .fill(authoredOptions[index]);
+  await compose
+    .getByRole("button", { name: "1번 보기 정답 선택", exact: true })
+    .click();
+  await compose
+    .getByRole("textbox", { name: /핵심 개념/ })
+    .fill("왕권 강화, 중앙 집권");
+  await compose
+    .getByRole("combobox", { name: "사고 과정", exact: true })
+    .selectOption("사료 해석");
+  await compose
+    .getByRole("combobox", { name: "다시 볼 수업자료", exact: true })
+    .selectOption("lesson-1");
+  await compose.getByText("선지별 혼동 지점", { exact: true }).click();
+  await compose
+    .getByRole("textbox", { name: "3. 가", exact: true })
+    .fill("정치 기구와 통치 제도의 혼동");
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 120;
+    canvas.height = 80;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(0, 0, 120, 80);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await compose
+    .getByLabel("1번 보기 이미지 첨부", { exact: true })
+    .setInputFiles({
+      name: "choice.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(png, "base64"),
+    });
+  await compose.getByAltText("1번 보기 이미지", { exact: true }).waitFor();
+  await compose
+    .getByLabel("2번 보기", { exact: true })
+    .fill(authoredOptions[2]);
+  await compose.getByRole("button", { name: "등록", exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector('[role="dialog"]') !== null,
+  );
+  assert(alerts.some((text) => text.includes("서로 다른 선지 5개")));
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
+    0,
+  );
+  await compose
+    .getByLabel("2번 보기", { exact: true })
+    .fill(authoredOptions[1]);
+  await compose
+    .getByRole("spinbutton", { name: "배점", exact: true })
+    .fill("3.333");
+  await compose.getByRole("button", { name: "등록", exact: true }).click();
+  await compose
+    .getByRole("alert")
+    .filter({ hasText: "소수 둘째 자리" })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
+    0,
+  );
+  await compose
+    .getByRole("spinbutton", { name: "배점", exact: true })
+    .fill("3.5");
+  await page.evaluate(() => {
+    window.assessmentTeacherFixture.failNextSave = true;
+  });
+  await compose.getByRole("button", { name: "등록", exact: true }).click();
+  await compose
+    .getByRole("alert")
+    .filter({ hasText: "합성 저장 실패" })
+    .waitFor();
+  assert.equal(
+    await compose.getByLabel("발문", { exact: true }).inputValue(),
+    "직접 등록한 자료를 보고 옳은 설명을 고르시오.",
+  );
+  await compose.getByRole("button", { name: "등록", exact: true }).click();
+  await compose.waitFor({ state: "hidden" });
+  const state = await page.evaluate(() => ({
+    saved: window.assessmentTeacherFixture.questions.find(
+      (q) => q.category === "exam_prep" && q.examRound === "round_1",
+    ),
+    writes: window.assessmentTeacherFixture.writes,
+  }));
+  assert.equal(state.saved.paperOrder, 1);
+  assert.equal(state.saved.points, 3.5);
+  assert.equal(state.saved.answer, "긴 선지입니다");
+  assert.deepEqual(state.saved.options, [
+    "가",
+    "나",
+    "두 글자",
+    "긴 선지입니다",
+    "마지막으로 가장 긴 선지입니다",
+  ]);
+  assert(state.saved.choiceOptionImages[3]?.startsWith("data:image/"));
+  assert.equal(state.saved.choiceOptionImages.filter(Boolean).length, 1);
+  assert.deepEqual(state.saved.concepts, ["왕권 강화", "중앙 집권"]);
+  assert.equal(state.saved.cognitiveProcess, "사료 해석");
+  assert.equal(state.saved.reviewLessonId, "lesson-1");
+  assert.equal(
+    state.saved.misconceptionTags["가"],
+    "정치 기구와 통치 제도의 혼동",
+  );
+  assert.equal(state.writes.length, 2);
+  assert.equal(
+    state.writes[0].payload.questionId,
+    state.writes[1].payload.questionId,
+    "retry keeps the same question identity",
+  );
+  checks.push(
+    "Direct registration: distinct-five-choice/decimal validation blocks writes, image and selected answer stay paired through sorting, learning metadata persists, failed save retains input and retries the same ID.",
+  );
+  await page
+    .getByRole("searchbox", { name: "검색", exact: true })
+    .fill("직접 등록한");
+  await page.waitForFunction(
+    () => document.querySelectorAll("[data-quiz-question-card]").length === 1,
+  );
+  const writesBeforePreview = await page.evaluate(
+    () => window.assessmentTeacherFixture.writes.length,
+  );
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const view = await openPaper(page, "round_2", 24);
+    assert(
+      (await view.locator(".mock-exam-sheet").count()) > 1,
+      "long passages and images should paginate automatically",
+    );
+    const layout = await view.evaluate((element) => ({
+      width: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      dialogWidth: element.getBoundingClientRect().width,
+      pages: element.querySelectorAll(".mock-exam-sheet").length,
+      questions: Array.from(
+        element.querySelectorAll(".mock-exam-sheet article"),
+      ).map((article) => {
+        const box = article.getBoundingClientRect(),
+          sheet = article.closest(".mock-exam-sheet").getBoundingClientRect();
+        return {
+          text: article.querySelector(".mock-exam-stem").textContent,
+          left: box.left,
+          right: box.right,
+          bottom: box.bottom,
+          sheetLeft: sheet.left,
+          sheetRight: sheet.right,
+          sheetBottom: sheet.bottom,
+        };
+      }),
+      images: Array.from(element.querySelectorAll(".mock-exam-sheet img")).map(
+        (img) => ({ complete: img.complete, width: img.naturalWidth }),
+      ),
+    }));
+    assert(layout.documentWidth <= width + 1, JSON.stringify(layout));
+    assert(layout.dialogWidth <= width, JSON.stringify(layout));
+    assert.equal(layout.questions.length, 24);
+    assert.equal(new Set(layout.questions.map((q) => q.text)).size, 24);
+    assert(
+      layout.questions.every(
+        (q) =>
+          q.left >= q.sheetLeft - 1 &&
+          q.right <= q.sheetRight + 1 &&
+          q.bottom <= q.sheetBottom + 1,
+      ),
+      "every complete question must fit its page",
+    );
+    assert.equal(layout.images.length, 6);
+    assert(layout.images.every((img) => img.complete && img.width > 0));
+    await page.screenshot({
+      path: path.join(evidence, `teacher-auto-paper-${width}.png`),
+      fullPage: false,
+    });
+    layouts.push({
+      width,
+      pages: layout.pages,
+      questions: layout.questions.length,
+    });
+    await page.keyboard.press("Escape");
+    await view.waitFor({ state: "hidden" });
+    assert(
+      await page
+        .getByRole("button", { name: "미리보기", exact: true })
+        .evaluate((el) => el === document.activeElement),
+      "Escape returns keyboard focus to preview action",
+    );
   }
-  checks.push('Whole paper preview at 390/768/1280px; no horizontal document overflow; Escape restores authoring.');
-  await page.goto(origin+'/?readonly');await page.getByRole('button',{name:'JSON 양식',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'JSON 가져오기',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'문제 등록',exact:true}).count(),0);checks.push('Read-only view cannot register/import questions.');
-  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({ok:true,checks,evidence},null,2));
-} finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
+    writesBeforePreview,
+  );
+  const short = await openPaper(page, "round_3", 4);
+  assert.equal(
+    await short.locator(".mock-exam-sheet").count(),
+    1,
+    "legacy manual page breaks must not force four pages",
+  );
+  await page.keyboard.press("Escape");
+  await short.waitFor({ state: "hidden" });
+  checks.push(
+    "Round-wide preview ignores the list search, loads all 24 questions beyond the 20-row list page, automatically paginates complete passages/images at 390/768/1280, and performs no writes. Legacy manual page breaks are ignored.",
+  );
+  await page.goto(origin + "/?readonly");
+  await page.getByRole("button", { name: "미리보기", exact: true }).waitFor();
+  const readonly = await openPaper(page, "round_2", 24);
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
+    0,
+  );
+  await page.keyboard.press("Escape");
+  await readonly.waitFor({ state: "hidden" });
+  assert.equal(
+    await page.getByRole("button", { name: "문제 등록", exact: true }).count(),
+    0,
+  );
+  checks.push(
+    "Read-only teacher can inspect the full paper without a write operation.",
+  );
+  assert.deepEqual(external, []);
+  assert.deepEqual(errors, []);
+  await fs.writeFile(
+    path.join(evidence, "report.json"),
+    JSON.stringify(
+      {
+        ok: true,
+        checks,
+        layouts,
+        externalRequests: external,
+        pageErrors: errors,
+      },
+      null,
+      2,
+    ),
+  );
+  console.log(JSON.stringify({ ok: true, checks, layouts, evidence }, null, 2));
+} finally {
+  await browser.close();
+  await new Promise((resolve) => server.close(resolve));
+}
