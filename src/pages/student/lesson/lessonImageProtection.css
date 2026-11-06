@@ -1,0 +1,12 @@
+/* Limit native image export gestures to the student lesson, including dialogs.
+   Keep text selection, input menus, scrolling and pinch gestures unchanged. */
+[data-lesson-image-protection] img,
+[data-lesson-image-protection] a:has(img) {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+[data-lesson-image-protection] img {
+  -webkit-user-select: none;
+  user-select: none;
+}

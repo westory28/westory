@@ -36,6 +36,7 @@ import {
   readStudentVisibleLessons,
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
+import "../lessonImageProtection.css";
 
 const LessonWorksheetStage = lazyWithRetry(
   () => import("../../../../components/common/LessonWorksheetStage"),
@@ -100,6 +101,17 @@ const getInlineBlankWidth = (answer: string) =>
   Math.min(220, Math.max(76, answer.length * 14 + 24));
 const getInlineBlankFontSize = (width: number, textLength: number) =>
   Math.max(11, Math.min(19, (width - 12) / (Math.max(1, textLength) * 0.92)));
+const preventLessonImageExport = (
+  event: React.SyntheticEvent<HTMLDivElement>,
+) => {
+  const target = event.target;
+  if (
+    target instanceof Element &&
+    (target.closest("img") || target.closest("a")?.querySelector("img"))
+  ) {
+    event.preventDefault();
+  }
+};
 const LessonContent: React.FC<LessonContentProps> = ({
   unitId,
   fallbackTitle,
@@ -1533,6 +1545,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
   const content = (
     <div
+      data-lesson-image-protection={!disablePersistence || undefined}
+      onContextMenuCapture={
+        disablePersistence ? undefined : preventLessonImageExport
+      }
+      onDragStartCapture={
+        disablePersistence ? undefined : preventLessonImageExport
+      }
       className={
         fullscreenPreview
           ? `relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn ${canPersist ? "pb-36" : ""}`
