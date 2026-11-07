@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -79,9 +86,11 @@ export default function QuizClassAnalysis({
   refreshVersion,
   initialUnitId = "",
   initialCategory = "",
+  unitScoped = false,
 }: {
   initialUnitId?: string;
   initialCategory?: string;
+  unitScoped?: boolean;
   canEdit: boolean;
   onEdit: (question: Question) => void;
   onDerive?: (question: QuizQuestionDraft) => void;
@@ -115,6 +124,11 @@ export default function QuizClassAnalysis({
     unitId: initialUnitId,
     category: initialCategory,
   });
+  if (unitScoped)
+    initialSelection.current = {
+      unitId: initialUnitId,
+      category: initialCategory,
+    };
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [comparisonGrade, setComparisonGrade] = useState("");
   const [comparisonOpen, setComparisonOpen] = useState(false);
@@ -190,7 +204,7 @@ export default function QuizClassAnalysis({
             (!initialSelection.current.category ||
               entry.category === initialSelection.current.category),
         );
-        if (selected) {
+        if (selected && !unitScoped) {
           setUnitId(selected.unitId);
           setAssessmentId(selected.id);
           setAnalysisMode(
@@ -253,9 +267,17 @@ export default function QuizClassAnalysis({
       groups.push({ id: "__other", label: "기타 평가", entries: others });
     return groups.filter((group) => group.entries.length);
   }, [catalog]);
-  const assessments = catalog?.assessments || [];
+  const assessments = (catalog?.assessments || []).filter(
+    (entry) =>
+      !unitScoped ||
+      (entry.unitId === initialUnitId &&
+        (initialUnitId === "exam_prep"
+          ? entry.category === "exam_prep"
+          : ["diagnostic", "formative"].includes(entry.category))),
+  );
   const assessment = assessments.find((entry) => entry.id === assessmentId);
   const isMockExam =
+    (unitScoped && initialUnitId === "exam_prep") ||
     assessment?.category === "exam_prep" ||
     (catalogLoading && initialCategory === "exam_prep");
   const showAchievement =
@@ -291,6 +313,29 @@ export default function QuizClassAnalysis({
     setDetailError("");
     setFailedDetailId("");
   };
+  // The sidebar owns the unit. Moving within it resets results without
+  // remounting this component or fetching the catalog again.
+  useLayoutEffect(() => {
+    if (!unitScoped) return;
+    const selected = catalog?.assessments.find(
+      (entry) =>
+        entry.unitId === initialUnitId &&
+        (initialUnitId === "exam_prep"
+          ? entry.category === "exam_prep"
+          : ["diagnostic", "formative"].includes(entry.category)) &&
+        (!initialCategory || entry.category === initialCategory),
+    );
+    clearResult();
+    setUnitId(initialUnitId);
+    setAssessmentId(selected?.id || "");
+    setAnalysisMode(initialUnitId === "exam_prep" ? "achievement" : "summary");
+    setAchievementView(0);
+    setCompareIds([]);
+    setComparisonGrade("");
+    setComparisonOpen(false);
+    setSearchOpen(false);
+    setKeyword("");
+  }, [unitScoped, initialUnitId, initialCategory, catalog]);
   const queryResults = () => {
     if (!canQuery) return;
     if (showAchievement && assessment) {
@@ -320,8 +365,10 @@ export default function QuizClassAnalysis({
   };
   const resetQuery = () => {
     clearResult();
-    setUnitId("");
-    setAssessmentId("");
+    if (!unitScoped) {
+      setUnitId("");
+      setAssessmentId("");
+    }
     setClassId("");
     setCompareIds([]);
     setComparisonGrade("");
@@ -555,8 +602,10 @@ export default function QuizClassAnalysis({
             queryResults();
           }}
         >
-          <label className="qca-assessment-select">
-            평가
+          <label
+            className={`qca-assessment-select${unitScoped ? " qca-assessment-select--scoped" : ""}`}
+          >
+            {unitScoped && isMockExam ? "회차" : "평가"}
             <select
               aria-label="분석할 평가"
               value={assessmentId}
@@ -574,16 +623,30 @@ export default function QuizClassAnalysis({
                 );
               }}
             >
-              <option value="">평가 선택</option>
-              {assessmentGroups.map((group) => (
-                <optgroup key={group.id} label={group.label}>
-                  {group.entries.map((entry) => (
+              {(!unitScoped || !assessmentId) && (
+                <option value="">
+                  {unitScoped && !catalogLoading && !assessments.length
+                    ? "등록된 평가 없음"
+                    : "평가 선택"}
+                </option>
+              )}
+              {unitScoped
+                ? assessments.map((entry) => (
                     <option key={entry.id} value={entry.id}>
-                      {entry.label}
+                      {entry.category === "exam_prep"
+                        ? formatMockExamRoundShortLabel(entry.examRound)
+                        : assessmentLabel(entry.category, entry.examRound)}
                     </option>
+                  ))
+                : assessmentGroups.map((group) => (
+                    <optgroup key={group.id} label={group.label}>
+                      {group.entries.map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              ))}
             </select>
           </label>
           <label>
@@ -883,9 +946,9 @@ export default function QuizClassAnalysis({
             다시 시도
           </button>
         </div>
-      ) : !catalog?.assessments.length ? (
+      ) : !assessments.length ? (
         <p className="qca-empty">등록된 평가가 없습니다.</p>
-      ) : !catalog.classes.length ? (
+      ) : !catalog?.classes.length ? (
         <p className="qca-empty">조회할 학급이 없습니다.</p>
       ) : !showAchievement && !summary && !error && !loading ? (
         <p className="qca-empty">

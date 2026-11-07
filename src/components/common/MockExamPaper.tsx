@@ -52,6 +52,64 @@ export interface MockExamPaperCheck {
 export const examChoiceNumber = (index: number) =>
   ["①", "②", "③", "④", "⑤"][index] || `${index + 1}.`;
 
+export function MockExamAnswerCheck() {
+  return (
+    <svg
+      className="mock-exam-answer-check"
+      viewBox="0 0 36 36"
+      aria-hidden="true"
+    >
+      <path d="M7 18L14 27L30 5" />
+      <path d="M6 20L13 29L31 7" />
+      <path d="M8 19L14 26L29 6" />
+    </svg>
+  );
+}
+
+function ApprovalStamp({ role }: { role: string }) {
+  const royal = role === "왕";
+  return (
+    <svg
+      className={`mock-exam-stamp${royal ? " mock-exam-stamp--royal" : ""}`}
+      viewBox="0 0 56 56"
+      role="img"
+      aria-label={`${role} 도장`}
+    >
+      {royal ? (
+        <>
+          <path d="M7 6L50 7L49 50L6 49Z M11 11L45 11L45 45L11 45Z" />
+          <g className="mock-exam-seal-letters">
+            <text x="20" y="25">
+              國
+            </text>
+            <text x="36" y="25">
+              王
+            </text>
+            <text x="20" y="41">
+              之
+            </text>
+            <text x="36" y="41">
+              印
+            </text>
+          </g>
+        </>
+      ) : (
+        <>
+          <ellipse cx="28" cy="28" rx={role === "양반" ? 22 : 20} ry="22" />
+          <ellipse cx="28" cy="28" rx={role === "양반" ? 18 : 16} ry="18" />
+          <text x="28" y="33">
+            {role}
+          </text>
+        </>
+      )}
+      <path
+        className="mock-exam-stamp-wear"
+        d="M5 16L42 12M14 37L51 32M8 45L24 42M30 6L33 50"
+      />
+    </svg>
+  );
+}
+
 export function MockExamImage({
   src,
   alt,
@@ -156,6 +214,7 @@ export function MockExamQuestionContent({
             >
               <span className="mock-exam-option-number">
                 {examChoiceNumber(optionIndex)}{" "}
+                {answer === option && <MockExamAnswerCheck />}
               </span>
               <span className="mock-exam-option-text">
                 {formatMockExamChoiceLabel(option)}
@@ -277,13 +336,13 @@ type PaperPage = { columns: number[][]; height: number };
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
 const COLUMN_ROOM = 906;
-const FIRST_COLUMN_ROOM = 778;
+const FIRST_COLUMN_ROOM = 824;
 
 export default function MockExamPaper({
   questions,
   answers = {},
   round = "round_1",
-  studentLabel = "3학년　　반　　번　 이름:",
+  studentLabel = "3학년 00반 00번 이름:",
   score,
   checks = [],
   onQuestionSelect,
@@ -304,8 +363,10 @@ export default function MockExamPaper({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const measurements = useRef<HTMLDivElement>(null);
+  const instructions = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(PAGE_WIDTH);
   const [heights, setHeights] = useState<number[]>([]);
+  const [instructionsHeight, setInstructionsHeight] = useState(120);
   const [lastSelectedId, setLastSelectedId] = useState<string | number | null>(
     null,
   );
@@ -322,7 +383,57 @@ export default function MockExamPaper({
   const roundNumber = getMockExamRoundNumber(round);
   const roundName =
     ["초시", "복시", "전시"][roundNumber - 1] || `${roundNumber}회`;
-  const title = `중학교 3학년 ${roundName}`;
+  const title = `중학교 3학년 역사과 ${roundName}`;
+  const totalPoints = Number(
+    questions
+      .reduce(
+        (sum, question) =>
+          sum + (Number.isFinite(question.points) ? question.points! : 1),
+        0,
+      )
+      .toFixed(2),
+  );
+  const questionGroups = [
+    {
+      label: "선다형",
+      types: ["choice", "ox"],
+      instruction: "물음에 알맞은 답 하나를 골라 해당 보기를 선택하시오.",
+    },
+    {
+      label: "단답형",
+      types: ["short", "word"],
+      instruction: "물음에 알맞은 답을 답안 입력칸에 작성하시오.",
+    },
+    {
+      label: "순서형",
+      types: ["order"],
+      instruction: "보기를 알맞은 순서대로 선택하시오.",
+    },
+    {
+      label: "연결형",
+      types: ["matching"],
+      instruction: "각 항목에 알맞은 답을 선택하시오.",
+    },
+  ]
+    .map((group) => {
+      const items = questions.filter((question) =>
+        group.types.includes(question.type),
+      );
+      return {
+        ...group,
+        count: items.length,
+        points: Number(
+          items
+            .reduce(
+              (sum, question) =>
+                sum + (Number.isFinite(question.points) ? question.points! : 1),
+              0,
+            )
+            .toFixed(2),
+        ),
+      };
+    })
+    .filter((group, index) => index < 2 || group.count > 0);
   const checkMap = useMemo(
     () => new Map(checks.map((check) => [String(check.id), check.correct])),
     [checks],
@@ -334,6 +445,18 @@ export default function MockExamPaper({
     const update = () => {
       if (element.clientWidth > 0)
         setWidth(Math.min(PAGE_WIDTH, element.clientWidth));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const element = instructions.current;
+    if (!element) return;
+    const update = () => {
+      if (element.offsetWidth > 0)
+        setInstructionsHeight(element.offsetHeight + 16);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -387,7 +510,7 @@ export default function MockExamPaper({
   const pages = useMemo(() => {
     const output: PaperPage[] = [{ columns: [[], []], height: PAGE_HEIGHT }];
     let column = 0,
-      used = 0;
+      used = instructionsHeight;
     for (let index = 0; index < questions.length; ) {
       const run = getMockExamSetRun(questions, index);
       const last = run?.end ?? index;
@@ -397,7 +520,7 @@ export default function MockExamPaper({
         { length: last - index + 1 },
         (_, i) => heights[index + i] || 260,
       ).reduce((sum, value) => sum + value, 0);
-      if (used > 0 && used + height > room) {
+      if (page.columns[column].length > 0 && used + height > room) {
         if (column === 0) column = 1;
         else {
           output.push({ columns: [[], []], height: PAGE_HEIGHT });
@@ -418,7 +541,7 @@ export default function MockExamPaper({
       index = last + 1;
     }
     return output;
-  }, [questions, heights]);
+  }, [questions, heights, instructionsHeight]);
   const scale = Math.max(0.1, width / PAGE_WIDTH);
   return (
     <div
@@ -466,7 +589,6 @@ export default function MockExamPaper({
             {pageIndex === 0 ? (
               <>
                 <div className="mock-exam-cover-line">
-                  <span>역사과 · {roundNumber}회 모의고사</span>
                   {score != null && revealed >= questions.length && (
                     <strong
                       className="mock-exam-score"
@@ -492,8 +614,8 @@ export default function MockExamPaper({
                     <tbody>
                       <tr>
                         {["노비", "상민", "양반", "왕"].map((role) => (
-                          <td key={role} aria-label={`${role} 결재 공란`}>
-                            {"\u00a0"}
+                          <td key={role}>
+                            <ApprovalStamp role={role} />
                           </td>
                         ))}
                       </tr>
@@ -501,29 +623,58 @@ export default function MockExamPaper({
                   </table>
                 </div>
                 <header className="mock-exam-title-box">
-                  <h2>{title}</h2>
-                  <p>역사과　({roundNumber}회 모의고사)</p>
+                  <h2>
+                    {title}(역사과 {roundNumber}회 모의고사)
+                  </h2>
                   <p className="mock-exam-student">{studentLabel}</p>
                 </header>
-                <div className="mock-exam-meta">
-                  <span>총 {questions.length}문항</span>
-                  <span>
-                    {questions.every((question) =>
-                      Number.isFinite(question.points),
-                    )
-                      ? `총 ${questions.reduce((sum, question) => sum + (question.points || 0), 0)}점`
-                      : "100점 만점"}
-                  </span>
-                </div>
               </>
             ) : (
-              <header className="mock-exam-running-title">
-                {title} · 역사과
-              </header>
+              <header className="mock-exam-running-title">{title}</header>
             )}
             <div className="mock-exam-columns">
               {page.columns.map((items, column) => (
                 <div className="mock-exam-column" key={column}>
+                  {pageIndex === 0 && column === 0 && (
+                    <aside
+                      ref={instructions}
+                      className="mock-exam-instructions"
+                      aria-label="시험 안내사항"
+                    >
+                      <h3>시험 안내사항</h3>
+                      <ol>
+                        <li>문제지가 총 {pages.length}쪽인지 확인하시오.</li>
+                        <li>
+                          화면에 표시된 학년, 반, 번호, 이름과 과목을
+                          확인하시오.
+                        </li>
+                        <li>
+                          답안은 다음과 같은 방식으로 작성하시오.
+                          <ul>
+                            {questionGroups.map((group) => (
+                              <li key={group.label}>
+                                {group.label}: {group.instruction}
+                              </li>
+                            ))}
+                          </ul>
+                          제출 전까지 답안을 수정할 수 있습니다.
+                        </li>
+                        <li>
+                          <strong>
+                            배점: 총 {questions.length}문항 · 총 {totalPoints}점
+                          </strong>
+                          <ul>
+                            {questionGroups.map((group) => (
+                              <li key={group.label}>
+                                {group.label}: {group.count}문항 · 총{" "}
+                                {group.points}점
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      </ol>
+                    </aside>
+                  )}
                   {items.map((index) => {
                     const question = questions[index];
                     return (

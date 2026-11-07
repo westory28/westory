@@ -16,6 +16,7 @@ import { useSyncExternalStore } from 'react';
 const listeners = new Set();
 export const qa = window.analysisEntryQa = {
   calls: [], directReads: [], writes: [], pending: [], hold: '', fail: '',
+  readOnly:new URLSearchParams(new URLSearchParams(location.search).get('entry')?.split('?')[1]||location.search).has('readonly'),
   auth: { config: {year:'2026',semester:'2'}, currentUser:{uid:'teacher-fixture',email:'fixture@example.invalid'}, userData:{role:'teacher'},authGeneration:1 },
 };
 qa.changeIdentity = (uid, semester) => {
@@ -25,7 +26,7 @@ qa.changeIdentity = (uid, semester) => {
 qa.release = () => { const pending=qa.pending.splice(0); pending.forEach(resolve=>resolve()); };
 export const useAuth = () => useSyncExternalStore(listener=>{listeners.add(listener);return()=>listeners.delete(listener)},()=>qa.auth);
 export const db = {};
-const tree=[{id:'big',title:'조선의 성립과 발전',children:[{id:'unit-a',title:'조선의 통치 체제'}]}];
+const tree=[{id:'big',title:'조선의 성립과 발전',children:[{id:'unit-a',title:'조선의 통치 체제'},{id:'unit-b',title:'사림 세력의 성장'},{id:'unit-empty',title:'등록 전 단원'}]}];
 export const doc=(_db,...parts)=>parts.join('/');
 export const getDoc=async path=>{
   if(!path.endsWith('/curriculum/tree'))throw new Error('Unexpected direct read '+path);
@@ -37,9 +38,9 @@ export const getHttpsCallable=()=>forbidden;
 export const executeLearningCommand=forbidden,executeAssessmentManagementCommand=forbidden,refreshPublishedQuizDefinitions=forbidden;
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
 export const useAppToast=()=>({showToast:()=>{}});
-export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>true;
+export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>!qa.readOnly;
 const classes=[1,2].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)}));
-const assessments=[{id:'normal',unitId:'unit-a',unitTitle:'조선의 통치 체제',category:'formative',examRound:'',title:'형성평가',questionCount:1},...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
+const assessments=[...['unit-a','unit-b'].flatMap(unitId=>['diagnostic','formative'].map(category=>({id:unitId+'-'+category,unitId,unitTitle:unitId==='unit-a'?'조선의 통치 체제':'사림 세력의 성장',category,examRound:'',title:category==='diagnostic'?'진단평가':'형성평가',questionCount:1}))),...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
 const questions=[1,2].map(n=>({id:n,docId:String(n),unitId:'exam_prep',category:'exam_prep',examRound:'round_1',type:'choice',question:n+'번 합성 문항',options:['정답','오답'],answer:'정답',paperOrder:n,points:50,sourceRevision:'1',contentRevision:1,curriculumVersion:'2018-162',achievementStandardCodes:['9역12-01'],targetAchievementLevel:'C',intendedDifficulty:'medium'}));
 const attempts=(scope,paper)=>!qa.withAttempt?[]:[{id:'fixture-result',source:'canonical',raw:{studentUid:'synthetic-1',semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt',submittedAtIso:'2026-11-07T09:00:00Z',startedAtIso:'2026-11-07T08:40:00Z',percent:100,total:2,answerChecks:paper.map(q=>({id:q.id,correct:true})),answers:{1:'정답',2:'정답'},learningSnapshot:paper,questionSnapshots:paper}}];
 export const callWithApplicationSession=async(name,input)=>{
@@ -57,8 +58,8 @@ export const callWithApplicationSession=async(name,input)=>{
   throw new Error('Unnecessary '+data.mode+' request on achievement entry');
 };
 `;
-const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';import View from ${imp("src/pages/teacher/ManageQuiz.tsx")};import ${imp("src/assets/index.css")};import ${imp("src/components/common/portalPage.css")};
-const initial=new URLSearchParams(location.search).get('entry')||'/teacher/quiz?tab=manage';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[initial]}><View/></MemoryRouter>);`;
+const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import View from ${imp("src/pages/teacher/ManageQuiz.tsx")};import ${imp("src/assets/index.css")};import ${imp("src/components/common/portalPage.css")};
+const initial=new URLSearchParams(location.search).get('entry');if(initial)history.replaceState(null,'',initial);else if(location.pathname==='/')history.replaceState(null,'','/teacher/quiz?tab=manage');createRoot(document.getElementById('root')).render(<BrowserRouter><View/></BrowserRouter>);`;
 const bundle = await build({
   stdin: {contents:entry,resolveDir:root,loader:"tsx"}, bundle:true,write:false,format:"esm",platform:"browser",outfile:path.join(evidence,"fixture.js"),
   loader:{".svg":"dataurl",".webp":"dataurl",".woff":"dataurl",".woff2":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},
@@ -89,20 +90,28 @@ try {
   const analysis=()=>page.getByRole("region",{name:"성취기준 분석",exact:true});
   const assertNoOverflow=async(width)=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`no page overflow at ${width}`);
   const screenshot=async(name)=>{await page.screenshot({path:path.join(evidence,name),fullPage:true});screenshots.push(name);};
+  const selectNode=async(name)=>{const button=page.locator('.quiz-navigation').getByRole('button',{name,exact:true});if(!await button.isVisible())await page.locator('.quiz-navigation .teacher-settings-menu-toggle').click();await button.click();};
+  const optionLabels=()=>assessment().locator('option').evaluateAll(options=>options.filter(option=>option.value).map(option=>option.textContent.trim()));
 
   // Exercise the real ManageQuiz -> QuizBankTab -> QuizClassAnalysis route.
   await page.goto(origin);
-  await page.getByRole("button",{name:"모의고사",exact:true}).click();
+  await selectNode("모의고사");
+  const manageLayout=await page.locator("main.teacher-sub-content").boundingBox();
+  await page.evaluate(()=>window.analysisEntryQa.navigation=document.querySelector(".quiz-navigation"));
   const readsBefore=await page.evaluate(()=>window.analysisEntryQa.directReads.length);
   await page.getByRole("button",{name:"평가 분석",exact:true}).click();
   await pending().waitFor();
   assert.equal(await assessment().inputValue(),"mock-1");
   assert.equal(await page.getByRole("combobox",{name:/분석할 (대단원|중단원)/}).count(),0);
-  assert.equal(await page.locator('optgroup[label="모의고사"] option').count(),2);
+  assert.deepEqual(await optionLabels(),["초시 (1회)","복시 (2회)"]);
+  assert.equal(await page.locator(".quiz-navigation").count(),1);
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.navigation===document.querySelector(".quiz-navigation")),true,"tab switches preserve the same table of contents");
+  const analysisLayout=await page.locator("main.teacher-sub-content").boundingBox();
+  assert.ok(Math.abs(manageLayout.x-analysisLayout.x)<=1&&Math.abs(manageLayout.y-analysisLayout.y)<=1,"only the right body switches position");
   assert.deepEqual(await modes(),["catalog"]);
   assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),readsBefore,"analysis reuses server catalog tree without direct Firestore tree reads");
   assert.equal(await report().inputValue(),"0");
-  assert.equal(await page.getByRole("navigation").count(),1,"only the page-level management tabs remain");
+  assert.equal(await page.locator(".quiz-class-analysis nav").count(),0,"the analysis body has no nested tabs");
   assert.equal(await page.getByRole("combobox",{name:"분석 보기",exact:true}).count(),0);
   assert.equal(await page.getByRole("button",{name:"최신 결과 조회",exact:true}).count(),0);
   assert.equal(await query().count(),1,"one result query action");
@@ -207,14 +216,75 @@ try {
   }
   checks.push("pending responses discarded on class, identity and semester changes");
 
+  // Navigation remains available inside analysis and scopes the two normal assessments.
+  await page.setViewportSize({width:1440,height:900});
+  const catalogsBeforeNavigation=await page.evaluate(()=>window.analysisEntryQa.calls.filter(call=>call.mode==='catalog').length);
+  await selectNode("조선의 통치 체제");
+  await page.waitForURL(/unitId=unit-a/);
+  await page.waitForFunction(()=>[...document.querySelector('[aria-label="분석할 평가"]').options].some(option=>option.value==='unit-a-diagnostic'));
+  assert.deepEqual(await optionLabels(),["진단평가","형성평가"]);
+  assert.equal(await report().count(),0,"normal units expose no mock report selector");
+  await assessment().selectOption("unit-a-formative");await classSelect().selectOption("class_1");
+  await query().click();await page.getByRole("heading",{name:"학급 결과",exact:true}).waitFor();
+  const normalScope=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
+  assert.equal(normalScope.unitId,"unit-a");assert.equal(normalScope.category,"formative");
+  await page.evaluate(()=>window.analysisEntryQa.hold="summary");
+  await query().click();await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
+  await selectNode("사림 세력의 성장");await page.waitForURL(/unitId=unit-b/);
+  await page.waitForFunction(()=>[...document.querySelector('[aria-label="분석할 평가"]').options].some(option=>option.value==='unit-b-diagnostic'));
+  await page.evaluate(()=>{window.analysisEntryQa.hold="";window.analysisEntryQa.release();});
+  await page.waitForTimeout(100);
+  assert.equal(await page.getByRole("heading",{name:"학급 결과",exact:true}).count(),0,"a prior unit's delayed result cannot return");
+  assert.deepEqual(await optionLabels(),["진단평가","형성평가"]);
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.calls.filter(call=>call.mode==='catalog').length),catalogsBeforeNavigation,"unit navigation reuses the catalog");
+  await page.goBack();await page.waitForURL(/unitId=unit-a/);
+  await page.waitForFunction(()=>[...document.querySelector('[aria-label="분석할 평가"]').options].some(option=>option.value==='unit-a-diagnostic'));
+  assert.equal(await page.locator('.quiz-navigation').getByRole("button",{name:"조선의 통치 체제",exact:true}).getAttribute("aria-current"),"page");
+  await page.goForward();await page.waitForURL(/unitId=unit-b/);
+  await page.reload();await page.waitForFunction(()=>document.querySelector('[aria-label="분석할 평가"] option[value="unit-b-diagnostic"]'));
+  assert.equal(await page.locator('.quiz-navigation').getByRole("button",{name:"사림 세력의 성장",exact:true}).getAttribute("aria-current"),"page");
+  assert.deepEqual(await optionLabels(),["진단평가","형성평가"]);
+  assert.deepEqual(await modes(),["catalog"]);
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),1);
+  for(const width of [320,390,768,1280,1440]){
+    await page.setViewportSize({width,height:900});await assertNoOverflow(width);
+    await screenshot(`normal-analysis-${width}.png`);
+    if(width<=768){
+      const menuToggle=page.locator('.quiz-navigation .teacher-settings-menu-toggle');
+      if(await menuToggle.isVisible()){
+        await menuToggle.click();
+        assert.equal(await page.locator('.quiz-navigation').getByRole("button",{name:"모의고사",exact:true}).isVisible(),true);
+        await assertNoOverflow(width);await screenshot(`navigation-expanded-${width}.png`);
+        await page.keyboard.press("Escape");
+        assert.equal(await menuToggle.getAttribute("aria-expanded"),"false");
+      }
+      await selectNode("모의고사");await pending().waitFor();
+      await selectNode("사림 세력의 성장");
+      await page.waitForFunction(()=>document.querySelector('[aria-label="분석할 평가"] option[value="unit-b-diagnostic"]'));
+      assert.deepEqual(await optionLabels(),["진단평가","형성평가"]);
+    }
+  }
+  assert.deepEqual(await modes(),["catalog"],"mobile navigation also reuses the catalog");
+  await selectNode("등록 전 단원");
+  await page.getByRole("heading",{name:"등록 전 단원",exact:true}).waitFor();
+  await page.getByText("등록된 평가가 없습니다.",{exact:true}).waitFor();
+  assert.equal(await assessment().isDisabled(),true);
+  assert.deepEqual(await optionLabels(),[]);
+  assert.equal(await query().isDisabled(),true);
+  assert.deepEqual(await modes(),["catalog"],"empty units never query results");
+  checks.push("persistent navigation scopes normal assessments; URL back, forward and reload restore the unit without repeated catalogs");
+
   // Direct analysis entry must not load the editor's curriculum or submissions.
   await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=exam_prep&category=exam_prep")}`);
   await pending().waitFor();
   assert.deepEqual(await modes(),["catalog"]);
-  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.directReads),[]);
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),1,"one shared curriculum read supplies the persistent navigation");
   assert.equal(await assessment().inputValue(),"mock-1");
+  await assessment().selectOption("mock-2");
   await page.getByRole("button",{name:"조회 전체 초기화",exact:true}).click();
-  assert.equal(await assessment().inputValue(),"");
+  assert.equal(await assessment().inputValue(),"mock-2","reset preserves the selected round");
+  assert.deepEqual(await optionLabels(),["초시 (1회)","복시 (2회)"]);
+  assert.equal(await page.locator(".quiz-mock-exam-entry").getAttribute("aria-current"),"page","reset preserves the current unit");
   assert.deepEqual(await modes(),["catalog"],"reset is local");
   await assessment().selectOption("mock-1");await classSelect().selectOption("class_1");
   await report().selectOption("summary");
@@ -234,9 +304,18 @@ try {
   assert.equal(await detail.getByRole("button",{name:"최신 결과 조회",exact:true}).isVisible(),true);
   await detail.getByRole("button",{name:"상세 닫기",exact:true}).click();
   await detail.waitFor({state:"hidden"});
-  checks.push("one grouped assessment selector and report selector; no nested main tabs or duplicate query; detail dialog controls preserved");
+  checks.push("unit-scoped assessment and report selectors; no nested main tabs or duplicate query; detail dialog controls preserved");
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
-  checks.push("direct analysis entry and reset use no editor reads or writes");
+  checks.push("direct analysis entry shares one tree read and reset preserves its unit without writes");
+  await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=unit-a&readonly=1")}`);
+  await page.waitForFunction(()=>document.querySelector('[aria-label="분석할 평가"] option[value="unit-a-diagnostic"]'));
+  assert.equal(await page.getByRole("button",{name:"문제 등록",exact:true}).count(),0,"read-only teachers cannot open authoring");
+  assert.equal(await page.locator('.quiz-navigation').count(),1,"read-only teachers retain the navigation");
+  await selectNode("모의고사");await pending().waitFor();
+  assert.deepEqual(await optionLabels(),["초시 (1회)","복시 (2회)"]);
+  assert.deepEqual(await modes(),["catalog"],"read-only unit navigation does not reread the catalog");
+  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
+  checks.push("read-only teachers retain navigation and analysis without authoring controls");
   assert.deepEqual(errors,[]);
   console.log(`PASS ${checks.join("; ")}; 320/390/768/1280/1440px layouts`);
 } finally {

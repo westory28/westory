@@ -831,6 +831,7 @@ const runMockExamPaper = async () => {
     commandType, payload: assessment.normalizeAssessmentPayload(commandType, payload),
   }));
   const question = (id, paperOrder, points, examRound = "round_1") => ({ id, unitId: "exam_prep", category: "exam_prep", type: "choice",
+    hintEnabled: true, hint: "제공하면 안 되는 모의고사 힌트",
     question: `합성 문항 ${id}`, answer: "고려", options: ["대한 제국", "발해", "고려", "고구려", "신라"],
     choiceOptionImages: [null, null, "https://example.test/goryeo.png", null, null],
     explanation: "제출 전에는 공개하지 않는 해설Ω", passage: "공개 자료 {{blank:숨은정답Ξ}}", examRound, paperOrder, points, paperBreakBefore: paperOrder === 2,
@@ -842,6 +843,8 @@ const runMockExamPaper = async () => {
   await save(question(901, 1, 30));
   await save(question(903, 1, 100, "round_2"));
   const saved = paperStore.snapshot("years/2026/semesters/2/quiz_questions/901").data;
+  assert.equal(saved.hintEnabled, false, "Mock authoring always disables hints even for older editors");
+  assert.equal(saved.hint, "");
   assert.deepEqual(saved.options, ["고려", "발해", "신라", "고구려", "대한 제국"]);
   assert.equal(saved.choiceOptionImages[0], "https://example.test/goryeo.png");
   await assert.rejects(save(question(904, 1, 10)), error => error?.details?.reason === "ASSESSMENT_PAPER_ORDER_DUPLICATE");
@@ -909,6 +912,22 @@ const runMockExamPaper = async () => {
   assert.deepEqual(started.questionPresentation[0].passageSet, question(901, 1, 30).passageSet);
   assert.equal(started.questionPresentation[0].examplePassage, question(901, 1, 30).examplePassage);
   assert.equal(started.questionPresentation[0].passage, "공개 자료 {{blank:_____}}");
+  assert.ok(started.questionPresentation.every(item => !Object.hasOwn(item, "hint") && !Object.hasOwn(item, "hintEnabled")));
+  const attemptPath = `${assessment.ATTEMPT_COLLECTION}/${started.attemptId}`;
+  const originalAttempt = paperStore.snapshot(attemptPath).data;
+  const legacyAttempt = { ...originalAttempt, questionSnapshots: originalAttempt.questionSnapshots.map(item => {
+    const { examRound: _examRound, ...legacy } = item;
+    return { ...legacy, hintEnabled: true, hint: "기존 응시 스냅샷 힌트" };
+  }) };
+  paperStore.documents.set(attemptPath, legacyAttempt);
+  const beforeHintRead = paperStore.writeCount;
+  const restored = await query.getAssessmentState({ auth: student, data: { definitionId: config.definitionId } });
+  const resumed = (await apply("startAssessmentAttempt", { definitionId: config.definitionId }, true)).result;
+  for (const attempt of [restored.attempt, resumed])
+    assert.ok(attempt.questionPresentation.every(item => !Object.hasOwn(item, "hint") && !Object.hasOwn(item, "hintEnabled")));
+  assert.equal(paperStore.writeCount, beforeHintRead, "Reading/resuming filters hints without rewriting old attempts");
+  assert.equal(paperStore.snapshot(attemptPath).data.questionSnapshots[0].hint, "기존 응시 스냅샷 힌트");
+  paperStore.documents.set(attemptPath, originalAttempt);
   const altered = paperStore.snapshot("years/2026/semesters/2/quiz_questions/901").data;
   paperStore.documents.set("years/2026/semesters/2/quiz_questions/901", { ...altered, points: 99, answer: "신라", question: "수정된 문제", contentRevision: 2,
     examplePassage: "수정된 보기", passageSet: { ...altered.passageSet, passage: "수정된 공통 지문" } });
@@ -945,7 +964,61 @@ const runMockExamPaper = async () => {
   assert.equal(decimal.percent, 3.2); assert.equal(decimal.earnedPoints, 3.2); assert.equal(decimal.maxPoints, 100);
 };
 
+const runLegacyReceiptHints = async () => {
+  const cases = [
+    { name: "mock-definition", category: "exam_prep", remove: [0, 1] },
+    { name: "legacy-mock-definition", category: "exam_prep__round_2", remove: [0, 1] },
+    { name: "mock-question-category", category: "formative", question: { category: "exam_prep" }, remove: [0] },
+    { name: "mock-question-round", category: "formative", question: { examRound: "2" }, remove: [0] },
+    { name: "diagnostic-hints", category: "diagnostic", remove: [] },
+    { name: "formative-hints", category: "formative", remove: [] },
+    { name: "other-assessment-kind", category: "exam_prep", kind: "HISTORY_CLASSROOM", remove: [] },
+    { name: "other-command-result", category: "exam_prep", commandType: "submitAssessmentAttempt", remove: [] },
+  ];
+  for (const fixture of cases) {
+    const type = fixture.commandType || "startAssessmentAttempt";
+    const id = commandId();
+    const attemptId = `attempt_${"a".repeat(64)}`;
+    const definitionId = `quiz:${semesterId}:exam_prep:${fixture.category}`;
+    const payload = type === "startAssessmentAttempt" ? { definitionId }
+      : { attemptId, expectedRevision: 1, answers: { 1: "고려" }, submitReason: "STUDENT" };
+    const result = {
+      assessmentKind: fixture.kind || "QUIZ", definitionId, attemptId,
+      answers: { 1: "고려" }, score: 3, total: 5, percent: 60,
+      questionPresentation: [
+        { id: "1", type: "matching", hint: "기존 힌트", hintEnabled: true,
+          matchingLeftOptions: ["나", "가"], matchingRightOptions: [{ right: "조선", rightImage: "fixture.png" }, { right: "고려", rightImage: null }],
+          matchingPairs: [{ left: "나", right: "조선" }], ...fixture.question },
+        { id: "2", type: "order", hint: "일반 힌트", hintEnabled: true, options: ["나", "가"], passage: "그대로 보존" },
+      ],
+    };
+    const receiptPath = `${commandGateway.RECEIPT_COLLECTION}/${commandGateway.buildReceiptId(student.uid, type, id)}`;
+    const receipt = {
+      commandId: id, commandType: type, status: "SUCCEEDED", actorUid: student.uid,
+      payloadHash: commandGateway.sha256(commandGateway.canonicalize(assessment.normalizeAssessmentPayload(type, payload))),
+      target: { refs: ["years/2026/semesters/2/quiz_questions/fixture"] }, result,
+    };
+    store.documents.set(receiptPath, clone(receipt));
+    const expected = clone(result);
+    for (const index of fixture.remove) {
+      delete expected.questionPresentation[index].hint;
+      delete expected.questionPresentation[index].hintEnabled;
+    }
+    const writesBefore = store.writeCount;
+    const replay = await execute(student, type, payload, id);
+    const status = await core.getStatus({ auth: student, data: { commandId: id, commandType: type } });
+    assert.equal(replay.replayed, true, fixture.name);
+    assert.equal(status.replayed, true, fixture.name);
+    assert.deepEqual(replay.result, expected, `${fixture.name}: replay preserves all fields except mock hints`);
+    assert.deepEqual(status.result, expected, `${fixture.name}: status preserves all fields except mock hints`);
+    assert.deepEqual(store.documents.get(receiptPath), receipt, `${fixture.name}: receipt remains immutable`);
+    assert.equal(store.writeCount, writesBefore, `${fixture.name}: no business or receipt writes`);
+    store.documents.delete(receiptPath);
+  }
+};
+
 (async () => {
+  await runLegacyReceiptHints();
   await runMockExamPaper();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
@@ -1091,6 +1164,7 @@ const runMockExamPaper = async () => {
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
+      "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
       "HISTORY_LESSON_METADATA_PRESERVED",
       "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",
       "QUIZ_PREFLIGHT_ZERO_WRITE",

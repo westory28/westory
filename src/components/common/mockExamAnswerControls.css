@@ -9,6 +9,7 @@
   gap: 8px;
 }
 .mock-exam-answer-controls [role="radiogroup"] label {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -18,14 +19,17 @@
   border-radius: 8px;
   cursor: pointer;
 }
-.mock-exam-answer-controls [role="radiogroup"] .is-selected {
-  border-color: #2563eb;
-  background: #eff6ff;
+.mock-exam-answer-controls [role="radiogroup"] label:has(input:focus-visible) {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
 }
 .mock-exam-answer-controls input[type="radio"] {
-  width: 18px;
-  height: 18px;
-  flex: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .mock-exam-answer-controls img {
   max-width: 100%;

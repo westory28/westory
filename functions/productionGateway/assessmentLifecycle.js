@@ -384,6 +384,10 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
     }
     mockMaterials.normalizeMockExamMaterials(question, fail);
+    if (question.category === "exam_prep") {
+      question.hintEnabled = false;
+      question.hint = "";
+    }
     if (["examRound", "paperOrder", "points", "paperBreakBefore"].some(key => Object.hasOwn(question, key))) {
       if (question.category !== "exam_prep" || question.unitId !== "exam_prep"
         || !/^round_[1-3]$/.test(question.examRound || "")
@@ -1546,7 +1550,7 @@ const serializeAttempt = (attempt, resumed) => ({
   revision: attempt.revision,
   answers: attempt.answers || {},
   ...(attempt.assessmentKind === "QUIZ" ? { analytics: attempt.analytics || null, learningSnapshot: attempt.learningSnapshot || [],
-    ...(Array.isArray(attempt.questionSnapshots) ? { questionPresentation: learning.questionPresentation(attempt.questionSnapshots), questionSnapshotOmittedIds: attempt.questionSnapshotOmittedIds || [] } : {}) } : {}),
+    ...(Array.isArray(attempt.questionSnapshots) ? { questionPresentation: learning.questionPresentation(attempt.questionSnapshots, attempt.category || String(attempt.definitionId || "").split(":")[3]), questionSnapshotOmittedIds: attempt.questionSnapshotOmittedIds || [] } : {}) } : {}),
   currentItemId: attempt.currentItemId || "",
   questionIds: attempt.questionIds || [],
   startedAtIso: attempt.startedAtIso,
@@ -1759,7 +1763,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
               && document.data.unitId === definition.sourceId && (!definition.category || document.data.category === definition.category);
           });
           const fallback = learning.captureQuestionSnapshots(matching, missingIds, {}, { responseOnly: true });
-          attempt.questionPresentation = [...(attempt.questionPresentation || []), ...learning.questionPresentation(fallback.questionSnapshots)];
+          attempt.questionPresentation = [...(attempt.questionPresentation || []), ...learning.questionPresentation(fallback.questionSnapshots, definition.category)];
           attempt.questionSnapshotOmittedIds = fallback.questionSnapshotOmittedIds;
         }
       }

@@ -148,7 +148,7 @@ const browser = await playwright.chromium.launch({
 });
 const reports = [];
 try {
-  for (const width of [390, 768, 1440]) {
+  for (const width of [390, 768, 1280, 1440]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     const errors = [];
     const unexpected = [];
@@ -180,6 +180,35 @@ try {
         pages: sheets.length,
         count: articles.length,
         titlePosition: getComputedStyle(title).position,
+        titleRows: [...title.children].map((e) => e.textContent),
+        titleOverflow:
+          title.querySelector("h2").scrollWidth >
+          title.querySelector("h2").clientWidth,
+        instructions: document.querySelector(".mock-exam-instructions")
+          .textContent,
+        instructionSteps: document.querySelectorAll(
+          ".mock-exam-instructions > ol > li",
+        ).length,
+        instructionsBeforeQuestion:
+          document
+            .querySelector(".mock-exam-instructions")
+            .getBoundingClientRect().bottom <
+          articles[0].getBoundingClientRect().top,
+        stamps: document.querySelectorAll(".mock-exam-stamp").length,
+        royalStamps: document.querySelectorAll(".mock-exam-stamp--royal")
+          .length,
+        toolbarHeight: document
+          .querySelector(".mock-exam-preview-toolbar")
+          .getBoundingClientRect().height,
+        toolbarSingleRow:
+          Math.abs(
+            document
+              .querySelector(".mock-exam-preview-round select")
+              .getBoundingClientRect().top -
+              document
+                .querySelector(".mock-exam-preview-toolbar > button")
+                .getBoundingClientRect().top,
+          ) < 2,
         approval: [...document.querySelectorAll(".mock-exam-approval th")].map(
           (e) => e.textContent,
         ),
@@ -199,7 +228,30 @@ try {
       };
     });
     assert.equal(layout.titlePosition, "static");
+    assert.equal(await page.locator(".quiz-composer-footer").count(), 0);
     assert.equal(layout.count, 16);
+    assert.deepEqual(layout.titleRows, [
+      "중학교 3학년 역사과 초시(역사과 1회 모의고사)",
+      "3학년 00반 00번 이름:",
+    ]);
+    assert(!layout.titleOverflow);
+    assert.match(layout.instructions, /총 16문항 · 총 75점/);
+    assert.equal(layout.instructionSteps, 4);
+    assert(
+      layout.instructions.includes(
+        `문제지가 총 ${layout.pages}쪽인지 확인하시오.`,
+      ),
+    );
+    assert.match(layout.instructions, /학년, 반, 번호, 이름과 과목/);
+    assert.match(layout.instructions, /선다형: 13문항 · 총 63점/);
+    assert.match(layout.instructions, /단답형: 1문항 · 총 4점/);
+    assert.match(layout.instructions, /답안 입력칸에 작성하시오/);
+    assert(!layout.instructions.includes("논술형"));
+    assert(layout.instructionsBeforeQuestion);
+    assert.equal(layout.stamps, 4);
+    assert.equal(layout.royalStamps, 1);
+    assert(layout.toolbarSingleRow);
+    assert(layout.toolbarHeight <= 64);
     assert.deepEqual(layout.approval, ["노비", "상민", "양반", "왕"]);
     assert.match(layout.choice, /^①\s+조준/);
     assert(parseFloat(layout.gap) >= 4);
@@ -240,7 +292,44 @@ try {
       1,
       "No nested preview dialog",
     );
-    await page.getByRole("radio", { name: "① 조준" }).check();
+    assert.equal(await page.locator(".quiz-composer-footer").count(), 1);
+    await page
+      .locator(".mock-exam-answer-controls label")
+      .filter({ hasText: "① 조준" })
+      .click();
+    const selectedRadio = page.getByRole("radio", { name: "① 조준" });
+    assert(await selectedRadio.isChecked());
+    assert.equal(
+      await selectedRadio.evaluate(
+        (e) => getComputedStyle(e.closest("label")).outlineStyle,
+      ),
+      "none",
+      "Pointer selection shows only the pencil check",
+    );
+    await page.screenshot({
+      path: path.join(evidence, `teacher-solve-pointer-${width}.png`),
+    });
+    assert.equal(
+      await selectedRadio.evaluate((e) => getComputedStyle(e).clipPath),
+      "inset(50%)",
+    );
+    assert.equal(
+      await page
+        .locator(".mock-exam-answer-controls .mock-exam-answer-check")
+        .count(),
+      1,
+    );
+    await selectedRadio.focus();
+    await page.keyboard.press("ArrowDown");
+    assert(await page.getByRole("radio", { name: "② 이방원" }).isChecked());
+    assert(
+      await page
+        .getByRole("radio", { name: "② 이방원" })
+        .evaluate(
+          (e) => getComputedStyle(e.closest("label")).outlineStyle === "solid",
+        ),
+    );
+    await page.keyboard.press("ArrowUp");
     await page.screenshot({
       path: path.join(evidence, `teacher-solve-${width}.png`),
     });
@@ -248,10 +337,12 @@ try {
     await first.waitFor({ state: "visible" });
     assert.equal(await first.getAttribute("aria-pressed"), "true");
     assert(await first.evaluate((e) => e === document.activeElement));
-    assert.equal(
+    assert.notEqual(
       await first.evaluate((e) => getComputedStyle(e).backgroundColor),
       "rgb(239, 246, 255)",
     );
+    assert.equal(await first.locator(".mock-exam-answer-check").count(), 1);
+    assert(await first.evaluate((e) => e.matches(":focus-visible")));
     await first.click();
     assert(await page.getByRole("radio", { name: "① 조준" }).isChecked());
     await page.getByRole("button", { name: "다음 문제", exact: true }).click();
@@ -287,7 +378,33 @@ try {
         selectedRect.bottom > bodyRect.top && selectedRect.top < bodyRect.bottom
       );
     });
+    assert.equal(
+      await page
+        .locator('.mock-exam-question[aria-pressed="true"]')
+        .evaluate((e) => getComputedStyle(e).outlineStyle),
+      "none",
+      "Pointer return has no persistent selection rectangle",
+    );
     assert.equal(await page.evaluate(() => window.paperQa.loads), 1);
+    await page.getByLabel("모의고사 회차").selectOption("round_2");
+    assert.equal(
+      await page.locator(".mock-exam-title-box h2").innerText(),
+      "중학교 3학년 역사과 복시(역사과 2회 모의고사)",
+    );
+    assert.match(
+      await page.locator(".mock-exam-instructions").innerText(),
+      /총 1문항 · 총 5점/,
+    );
+    assert.match(
+      await page.locator(".mock-exam-instructions").innerText(),
+      /단답형: 0문항 · 총 0점/,
+    );
+    assert.match(
+      await page.locator(".mock-exam-instructions").innerText(),
+      /단답형: 물음에 알맞은 답을 답안 입력칸에 작성하시오/,
+    );
+    assert.equal(await page.locator(".mock-exam-sheet").count(), 1);
+    await page.getByLabel("모의고사 회차").selectOption("round_1");
     assert.equal(
       await page.evaluate(() => localStorage.length + sessionStorage.length),
       0,
@@ -304,7 +421,10 @@ try {
     await page
       .getByRole("button", { name: "문제 풀이 미리보기", exact: true })
       .click();
-    await page.getByRole("radio", { name: "① 조준" }).check();
+    await page
+      .locator(".mock-exam-answer-controls label")
+      .filter({ hasText: "① 조준" })
+      .click();
     await page.keyboard.press("Escape");
     await page
       .getByRole("button", { name: "문제 풀이 미리보기", exact: true })
@@ -315,13 +435,28 @@ try {
     );
     await page.goto(origin + "/?mode=student");
     await page.locator(".mock-exam-sheet .mock-exam-question").first().click();
-    await page.getByRole("radio", { name: "① 조준" }).check();
+    await page
+      .locator(".mock-exam-answer-controls label")
+      .filter({ hasText: "① 조준" })
+      .click();
     await page
       .getByRole("button", { name: "시험지로 돌아가기", exact: true })
       .click();
     assert.equal(
       await page.locator('.mock-exam-question[aria-pressed="true"]').count(),
       1,
+    );
+    assert.equal(
+      await page.locator(".mock-exam-sheet .mock-exam-answer-check").count(),
+      1,
+    );
+    assert.equal(
+      await page.locator(".mock-exam-student").innerText(),
+      "가상 학생",
+    );
+    assert.match(
+      await page.locator(".mock-exam-instructions").innerText(),
+      /총 4문항 · 총 15점/,
     );
     await page.screenshot({
       path: path.join(evidence, `student-selected-${width}.png`),
@@ -341,7 +476,7 @@ try {
       evidence,
       widths: reports.map((r) => r.width),
       checks:
-        "teacher and draft local practice, student shared controls, keyboard focus, selection fill/border, no storage/network writes, scroll-fixed-to-paper heading, approval labels, spacing, footer pagination and no overlaps",
+        "teacher and draft local practice, student shared controls, pencil checks and keyboard radio controls, no persistent selection rectangle, no storage/network writes, two-line paper heading, compact one-row preview toolbar, four stamps, four-step instructions with dynamic page/count/type totals, round changes, footer pagination and no overlaps",
     }),
   );
 } finally {

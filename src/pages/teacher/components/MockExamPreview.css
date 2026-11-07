@@ -1,0 +1,36 @@
+.quiz-composer-header.mock-exam-preview-toolbar {
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+}
+.mock-exam-preview-round {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mock-exam-preview-round select {
+  min-height: 44px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  padding: 8px;
+  font: inherit;
+}
+.quiz-composer-header.mock-exam-preview-toolbar > button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.mock-exam-preview-round select:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+.quiz-composer-footer.mock-exam-preview-footer {
+  justify-content: flex-end;
+}

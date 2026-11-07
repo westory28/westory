@@ -372,6 +372,23 @@ const runQuestionSnapshotCases = () => {
   assert.equal(hiddenPresentation.examplePassage, "{{blank:______________}}", "Legacy maximum width stays 14ch");
   assert.equal(hiddenPresentation.passageSet.passage, "{{blank:____}} {{blankbox:3.125|(가)}}", "New blank labels and width stay public");
   assert.equal(hiddenSource.passageSet.passage, "{{blank:Ω}} {{blankbox:3.125|(가)}}", "Public redaction never mutates stored snapshots");
+  for (const category of ["exam_prep", "exam_prep__round_2"]) {
+    const original = doc("mock", { category });
+    const capturedMock = learning.captureQuestionSnapshots([original], ["mock"]);
+    assert.equal(Object.hasOwn(capturedMock.questionSnapshots[0], "hint"), false);
+    assert.equal(Object.hasOwn(capturedMock.questionSnapshots[0], "hintEnabled"), false);
+    const legacy = { ...original.data, category: undefined, examRound: undefined };
+    const presented = learning.questionPresentation([legacy], category)[0];
+    assert.equal(Object.hasOwn(presented, "hint"), false, "Old mock snapshots cannot expose a hint in resumed presentations");
+    assert.equal(Object.hasOwn(presented, "hintEnabled"), false);
+    assert.equal(legacy.hint, "참고", "Response filtering never rewrites the immutable snapshot");
+  }
+  for (const category of ["diagnostic", "formative"]) {
+    const input = doc(category, { category });
+    const preserved = learning.questionPresentation(learning.captureQuestionSnapshots([input], [category]).questionSnapshots, category)[0];
+    assert.equal(preserved.hint, "참고");
+    assert.equal(preserved.hintEnabled, true);
+  }
   for (const type of ["choice", "ox", "short", "word", "order", "matching"]) {
     const input = doc(type, {type, choiceOptionImages: [null, "option-image"], matchingPairs: [{left: "a", right: "b", rightImage: "matching-image"}], answer: type === "matching" ? "a=>b" : "둘"});
     const bounded = learning.captureQuestionSnapshots([input], [type]);

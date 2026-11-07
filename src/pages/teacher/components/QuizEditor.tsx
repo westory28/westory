@@ -57,6 +57,7 @@ import "./QuizWorkspace.css";
 import {
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundShortLabel,
+  isMockExamCategory,
 } from "../../../lib/mockExamRounds";
 import {
   sortMockExamChoices,
@@ -313,6 +314,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   );
   const [hintEnabled, setHintEnabled] = useState(false);
   const [hintText, setHintText] = useState("");
+  const hintsAllowed = type !== "special" && !isMockExamCategory(category);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -1283,8 +1285,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     );
     setPreviewOpen(false);
     resetPreview();
-    setHintEnabled(!!(question.hintEnabled && question.hint));
-    setHintText(question.hint || "");
+    setHintEnabled(
+      !isMockExamCategory(question.category) &&
+        !!(question.hintEnabled && question.hint),
+    );
+    setHintText(
+      isMockExamCategory(question.category) ? "" : question.hint || "",
+    );
 
     if (type === "normal") {
       setFormSubUnit(question.subUnitId || "");
@@ -1477,7 +1484,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       alert("문제 내용을 입력하세요.");
       return null;
     }
-    if (hintEnabled && !hintText.trim()) {
+    if (hintsAllowed && hintEnabled && !hintText.trim()) {
       alert("힌트 제공을 선택한 경우 힌트 내용을 입력하세요.");
       return null;
     }
@@ -1679,8 +1686,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         explanation: formExp.trim(),
         image: optimizedImage,
         passage: supportsQuestionPassage(formType) ? formPassage.trim() : "",
-        hintEnabled,
-        hint: hintEnabled ? hintText.trim() : "",
+        hintEnabled: hintsAllowed && hintEnabled,
+        hint: hintsAllowed && hintEnabled ? hintText.trim() : "",
         createdAt: existingQuestion?.createdAt || nowMs,
         updatedAt: nowMs,
         ...(type === "special" && epSource.big ? { refBig: epSource.big } : {}),
@@ -2105,55 +2112,76 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       )}
 
       {type === "special" && (
-        <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="quiz-unit-filter-bar bg-blue-50 border-b border-blue-100 px-4 py-3">
+          <div className="quiz-unit-filter-row">
             <span className="font-bold text-blue-800 mr-1">단원 필터</span>
-            <select
-              value={epFilter.big}
-              onChange={(e) =>
-                setEpFilter({ big: e.target.value, mid: "", small: "" })
-              }
-              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
-            >
-              <option value="">대단원 전체</option>
-              {allBigUnits.map((big) => (
-                <option key={big.id} value={big.id}>
-                  {big.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={epFilter.mid}
-              onChange={(e) =>
-                setEpFilter((prev) => ({
-                  ...prev,
-                  mid: e.target.value,
-                  small: "",
-                }))
-              }
-              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
-            >
-              <option value="">중단원 전체</option>
-              {filterMidUnits.map((mid) => (
-                <option key={mid.id} value={mid.id}>
-                  {mid.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={epFilter.small}
-              onChange={(e) =>
-                setEpFilter((prev) => ({ ...prev, small: e.target.value }))
-              }
-              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
-            >
-              <option value="">소단원 전체</option>
-              {filterSmallUnits.map((small) => (
-                <option key={small.id} value={small.id}>
-                  {small.title}
-                </option>
-              ))}
-            </select>
+            <label className="quiz-unit-filter-select">
+              <span aria-hidden="true">
+                {findNodeTitle(epFilter.big) || "대단원 전체"}
+              </span>
+              <select
+                aria-label="모의고사 대단원 필터"
+                title={findNodeTitle(epFilter.big) || "대단원 전체"}
+                value={epFilter.big}
+                onChange={(e) =>
+                  setEpFilter({ big: e.target.value, mid: "", small: "" })
+                }
+                className="rounded border border-blue-200 bg-white"
+              >
+                <option value="">대단원 전체</option>
+                {allBigUnits.map((big) => (
+                  <option key={big.id} value={big.id}>
+                    {big.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="quiz-unit-filter-select">
+              <span aria-hidden="true">
+                {findNodeTitle(epFilter.mid) || "중단원 전체"}
+              </span>
+              <select
+                aria-label="모의고사 중단원 필터"
+                title={findNodeTitle(epFilter.mid) || "중단원 전체"}
+                value={epFilter.mid}
+                onChange={(e) =>
+                  setEpFilter((prev) => ({
+                    ...prev,
+                    mid: e.target.value,
+                    small: "",
+                  }))
+                }
+                className="rounded border border-blue-200 bg-white"
+              >
+                <option value="">중단원 전체</option>
+                {filterMidUnits.map((mid) => (
+                  <option key={mid.id} value={mid.id}>
+                    {mid.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="quiz-unit-filter-select">
+              <span aria-hidden="true">
+                {findNodeTitle(epFilter.small) || "소단원 전체"}
+              </span>
+              <select
+                aria-label="모의고사 소단원 필터"
+                title={findNodeTitle(epFilter.small) || "소단원 전체"}
+                value={epFilter.small}
+                onChange={(e) =>
+                  setEpFilter((prev) => ({ ...prev, small: e.target.value }))
+                }
+                className="rounded border border-blue-200 bg-white"
+              >
+                <option value="">소단원 전체</option>
+                {filterSmallUnits.map((small) => (
+                  <option key={small.id} value={small.id}>
+                    {small.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             <span className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
               {filteredQuestions.length.toLocaleString("ko-KR")}문제
             </span>
@@ -2444,7 +2472,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           : ""}
                       </p>
                     )}
-                    {!!(q.hintEnabled && q.hint) && (
+                    {!!(
+                      !isMockExamCategory(q.category) &&
+                      q.hintEnabled &&
+                      q.hint
+                    ) && (
                       <p className="text-xs text-amber-600 font-bold mt-1">
                         <i className="fas fa-lightbulb mr-1"></i>힌트 제공
                       </p>
@@ -3146,7 +3178,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
                     <section
                       className="quiz-composer-section"
-                      aria-label="해설과 힌트"
+                      aria-label={hintsAllowed ? "해설과 힌트" : "해설"}
                     >
                       <label className="quiz-composer-field">
                         <span>해설</span>
@@ -3162,28 +3194,29 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         />
                       </label>
 
-                      <div className="quiz-hint-field">
-                        <label className="inline-flex min-h-11 items-center gap-2 text-sm font-bold cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={hintEnabled}
-                            onChange={(e) => setHintEnabled(e.target.checked)}
-                          />
-                          힌트 제공
-                        </label>
-                        {hintEnabled && (
-                          <QuizTextField
-                            grow={type === "special"}
-                            lang="ko"
-                            inputMode="text"
-                            aria-label="힌트"
-                            value={hintText}
-                            onChange={(e) => setHintText(e.target.value)}
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                          />
-                        )}
-                      </div>
+                      {hintsAllowed && (
+                        <div className="quiz-hint-field">
+                          <label className="inline-flex min-h-11 items-center gap-2 text-sm font-bold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={hintEnabled}
+                              onChange={(e) => setHintEnabled(e.target.checked)}
+                            />
+                            힌트 제공
+                          </label>
+                          {hintEnabled && (
+                            <QuizTextField
+                              lang="ko"
+                              inputMode="text"
+                              aria-label="힌트"
+                              value={hintText}
+                              onChange={(e) => setHintText(e.target.value)}
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                            />
+                          )}
+                        </div>
+                      )}
                     </section>
 
                     {type !== "special" && previewOpen && (

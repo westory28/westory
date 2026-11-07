@@ -1,6 +1,7 @@
 import React from "react";
 import {
   MockExamImage,
+  MockExamAnswerCheck,
   examChoiceNumber,
   type MockExamPaperQuestion,
 } from "./MockExamPaper";
@@ -53,7 +54,10 @@ export default function MockExamAnswerControls({
                   checked={answer === option}
                   onChange={() => onAnswer(option)}
                 />
-                <span>{examChoiceNumber(index)} </span>
+                <span className="mock-exam-option-number">
+                  {examChoiceNumber(index)}{" "}
+                  {answer === option && <MockExamAnswerCheck />}
+                </span>
                 <span>
                   {option}
                   {question.choiceOptionImages?.[index] && (

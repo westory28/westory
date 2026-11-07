@@ -2,6 +2,7 @@
 const { redactLegacyBlankText } = require("./mockExamMaterials");
 const { normalizeAchievementMetadata } = require("../historyAchievementMetadata");
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const isMockExamCategory = value => /^exam_prep(?:__round_[1-9]\d*)?$/.test(String(value || "").trim());
 const safeText = (value, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const safeKey = value => value && !["__proto__", "constructor", "prototype"].includes(value);
 const finiteInteger = (value, max) => Number.isFinite(value) && value >= 0 && value <= max ? Math.round(value) : null;
@@ -145,7 +146,7 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
       snapshot.points = source.points;
       snapshot.paperBreakBefore = source.paperBreakBefore === true;
     }
-    for (const key of ["explanation", "passage", "image", "hint", "unitId", "subUnitId", "refBig", "refMid", "refSmall"])
+    for (const key of ["explanation", "passage", "image", "unitId", "subUnitId", "refBig", "refMid", "refSmall"])
       if (typeof source[key] === "string") snapshot[key] = source[key];
     if (typeof source.examplePassage === "string") snapshot.examplePassage = source.examplePassage;
     if (source.category === "exam_prep" && object(source.passageSet)) {
@@ -153,7 +154,10 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
       snapshot.passageSet = { id: String(set.id || ""), instruction: String(set.instruction || ""),
         passage: String(set.passage || ""), ...(typeof set.image === "string" ? { image: set.image } : {}) };
     }
-    if (typeof source.hintEnabled === "boolean") snapshot.hintEnabled = source.hintEnabled;
+    if (!isMockExamCategory(source.category)) {
+      if (typeof source.hint === "string") snapshot.hint = source.hint;
+      if (typeof source.hintEnabled === "boolean") snapshot.hintEnabled = source.hintEnabled;
+    }
     if (Array.isArray(source.options) && source.options.every(item => typeof item === "string")) snapshot.options = [...source.options];
     if (source.type === "order" && !snapshot.options?.length)
       snapshot.options = snapshot.answer.split("||").map(item => item.trim()).filter(Boolean);
@@ -169,8 +173,14 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
   return boundQuestionSnapshots(candidates, questionIds, baseDocument, limits);
 };
 
-const questionPresentation = (snapshots) => snapshots.map(snapshot => {
+const questionPresentation = (snapshots, category = "") => snapshots.map(snapshot => {
   const { answer, explanation, matchingPairs, ...presentation } = snapshot;
+  // Older frozen mock questions may still contain hints. Filter the response
+  // without changing the saved question, attempt, answer or score.
+  if (isMockExamCategory(category) || isMockExamCategory(snapshot.category) || snapshot.examRound) {
+    delete presentation.hint;
+    delete presentation.hintEnabled;
+  }
   for (const key of ["passage", "examplePassage"])
     if (typeof presentation[key] === "string") presentation[key] = redactLegacyBlankText(presentation[key]);
   if (presentation.passageSet) presentation.passageSet = { ...presentation.passageSet,

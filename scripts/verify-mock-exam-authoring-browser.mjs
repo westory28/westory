@@ -52,6 +52,8 @@ const common = {
   answer: "나",
   points: 4,
   contentRevision: 1,
+  hintEnabled: true,
+  hint: "기존 모의고사 힌트는 노출하지 않습니다",
   explanation: "자료의 근거를 확인한다.",
   refBig: "big-1",
   refMid: "mid-1",
@@ -200,7 +202,7 @@ async function openPaper(page, round, count) {
   });
   await view.waitFor();
   await view
-    .getByRole("combobox", { name: "회차", exact: true })
+    .getByRole("combobox", { name: "모의고사 회차", exact: true })
     .selectOption(round);
   await paperReady(page, view, count);
   return view;
@@ -246,6 +248,8 @@ try {
     name: "새 문제 등록",
     exact: true,
   });
+  assert.equal(await compose.getByRole("checkbox", { name: "힌트 제공", exact: true }).count(), 0);
+  assert.equal(await page.getByText("기존 모의고사 힌트는 노출하지 않습니다", { exact: true }).count(), 0);
   const readsBeforeDraft = await page.evaluate(() => window.assessmentTeacherFixture.reads.length);
   await compose
     .getByLabel("발문", { exact: true })
@@ -589,6 +593,8 @@ try {
     writes: window.assessmentTeacherFixture.writes,
   }));
   assert.equal(state.saved.paperOrder, 1);
+  assert.equal(state.saved.hintEnabled, false);
+  assert.equal(state.saved.hint, "");
   assert.equal(state.saved.examplePassage, "ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
   assert.equal(state.saved.passageSet.passage, "세트 자료는 두 문항에서 함께 사용합니다.");
   assert.equal(state.saved.points, 3.5);
@@ -745,6 +751,10 @@ try {
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   const normal = page.getByRole("dialog", { name: "새 문제 등록", exact: true });
   await normal.waitFor();
+  await normal.getByRole("checkbox", { name: "힌트 제공", exact: true }).check();
+  await normal.getByRole("textbox", { name: "힌트", exact: true }).fill("진단·형성평가의 힌트는 유지합니다");
+  assert.equal(await normal.getByRole("textbox", { name: "힌트", exact: true }).inputValue(), "진단·형성평가의 힌트는 유지합니다");
+  await normal.getByRole("checkbox", { name: "힌트 제공", exact: true }).uncheck();
   assert.equal(await normal.locator(".mock-exam-draft-preview").count(), 0);
   assert.equal(await normal.locator(".quiz-composer-preview").count(), 0);
   for (const width of [390, 768, 1280]) {

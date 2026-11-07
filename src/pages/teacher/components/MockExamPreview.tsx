@@ -10,6 +10,7 @@ import MockExamPaper, {
   MockExamQuestionContent,
 } from "../../../components/common/MockExamPaper";
 import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
+import "./MockExamPreview.css";
 
 interface Props {
   disabled?: boolean;
@@ -148,10 +149,28 @@ export default function MockExamPreview({
             tabIndex={-1}
             className="quiz-authoring-surface quiz-composer-dialog"
           >
-            <div className="quiz-composer-header">
-              <h3 className="text-lg font-bold">
-                시험지 미리보기 · {previewQuestions.length}문항
-              </h3>
+            <div className="quiz-composer-header mock-exam-preview-toolbar">
+              <label className="mock-exam-preview-round">
+                모의고사 회차
+                <select
+                  value={previewRound}
+                  onChange={(event) => {
+                    setPreviewRound(event.target.value);
+                    setSelectedQuestionId(null);
+                    setQuestionIndex(null);
+                    paperScroll.current = 0;
+                    if (body.current) body.current.scrollTop = 0;
+                  }}
+                >
+                  {[...new Set(questions.map((q) => q.examRound || "round_1"))]
+                    .sort()
+                    .map((round) => (
+                      <option key={round} value={round}>
+                        {formatMockExamRoundShortLabel(round)}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className="quiz-authoring-button"
@@ -162,29 +181,6 @@ export default function MockExamPreview({
             </div>
             <div ref={body} className="quiz-composer-body">
               <div hidden={questionIndex != null}>
-                <label className="mb-3 flex min-h-11 items-center gap-2 text-sm font-bold">
-                  회차
-                  <select
-                    className="min-h-11 rounded border border-gray-300 px-3"
-                    value={previewRound}
-                    onChange={(event) => {
-                      setPreviewRound(event.target.value);
-                      setSelectedQuestionId(null);
-                    }}
-                  >
-                    {[
-                      ...new Set(
-                        questions.map((q) => q.examRound || "round_1"),
-                      ),
-                    ]
-                      .sort()
-                      .map((round) => (
-                        <option key={round} value={round}>
-                          {formatMockExamRoundShortLabel(round)}
-                        </option>
-                      ))}
-                  </select>
-                </label>
                 <MockExamPaper
                   questions={previewQuestions}
                   round={previewRound}
@@ -261,16 +257,8 @@ export default function MockExamPreview({
                 </section>
               )}
             </div>
-            <div className="quiz-composer-footer">
-              <span role="status">
-                {Number(
-                  previewQuestions
-                    .reduce((sum, q) => sum + (q.points ?? 1), 0)
-                    .toFixed(2),
-                )}
-                점
-              </span>
-              {questionIndex != null && (
+            {questionIndex != null && (
+              <div className="quiz-composer-footer mock-exam-preview-footer">
                 <div className="quiz-composer-footer-actions">
                   <button
                     type="button"
@@ -299,8 +287,8 @@ export default function MockExamPreview({
                     다음 문제
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

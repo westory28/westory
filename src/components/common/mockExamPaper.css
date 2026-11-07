@@ -13,7 +13,7 @@
   position: absolute;
   inset: 0 auto auto 0;
   box-sizing: border-box;
-  padding: 32px 40px 80px;
+  padding: 24px 40px 80px;
   background: #fff;
   box-shadow: 0 1px 8px #0002;
   transform-origin: top left;
@@ -29,12 +29,12 @@
   min-height: 0;
   border: 2px solid #111;
   text-align: center;
-  padding: 8px 16px;
-  margin-bottom: 12px;
+  padding: 6px 12px;
+  margin-bottom: 16px;
 }
 .mock-exam-title-box h2 {
   font:
-    900 28px/1.45 "Noto Serif KR",
+    900 24px/1.45 "Noto Serif KR",
     serif;
   margin: 0;
   transform: scaleX(0.95);
@@ -46,11 +46,11 @@
   font-size: 17px;
 }
 .mock-exam-title-box .mock-exam-student {
-  margin-top: 8px;
+  margin-top: 2px;
   font-size: 15px;
 }
 .mock-exam-cover-line {
-  height: 88px;
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -66,10 +66,42 @@
 }
 .mock-exam-approval :is(th, td) {
   border: 1px solid #111;
-  padding: 4px;
+  padding: 0 4px;
 }
 .mock-exam-approval td {
-  height: 32px;
+  height: 44px;
+}
+.mock-exam-stamp {
+  display: block;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  color: #b91c1c;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  transform: rotate(-8deg);
+  opacity: 0.82;
+}
+.mock-exam-stamp text {
+  fill: currentColor;
+  stroke: none;
+  text-anchor: middle;
+  font:
+    900 14px "Noto Serif KR",
+    serif;
+}
+.mock-exam-stamp--royal {
+  transform: rotate(4deg);
+  stroke-width: 2.4;
+}
+.mock-exam-seal-letters text {
+  font-size: 15px;
+}
+.mock-exam-stamp .mock-exam-stamp-wear {
+  stroke: #fff;
+  stroke-width: 0.8;
+  opacity: 0.65;
 }
 .mock-exam-score {
   color: #b91c1c;
@@ -84,11 +116,33 @@
   font-size: 20px;
   padding-left: 4px;
 }
-.mock-exam-meta {
-  display: flex;
-  justify-content: space-between;
+.mock-exam-instructions {
+  border: 1px solid #111;
+  padding: 8px;
   font-size: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  word-break: keep-all;
+}
+.mock-exam-instructions h3,
+.mock-exam-instructions p {
+  margin: 0;
+  font: inherit;
+}
+.mock-exam-instructions h3 {
+  font-weight: 700;
+}
+.mock-exam-instructions ol {
+  list-style: decimal;
+  margin: 4px 0 0;
+  padding-left: 1.5em;
+}
+.mock-exam-instructions ul {
+  list-style: disc;
+  margin: 0;
+  padding-left: 1em;
+}
+.mock-exam-instructions ol > li + li {
+  margin-top: 2px;
 }
 .mock-exam-running-title {
   position: static;
@@ -133,13 +187,6 @@
 }
 .mock-exam-question.is-interactive:hover {
   background: #f8fafc;
-}
-.mock-exam-question.is-interactive.is-current {
-  outline: 2px solid var(--ws-primary, #2563eb);
-  background: var(--ws-primary-soft, #eff6ff);
-}
-.mock-exam-question.is-interactive.is-current .mock-exam-passage {
-  background: transparent;
 }
 .mock-exam-question.is-interactive:focus-visible {
   outline: 2px solid #2563eb;
@@ -255,16 +302,31 @@
   gap: 0.33em;
 }
 .mock-exam-option-number {
+  position: relative;
   flex: none;
 }
 .mock-exam-option-text {
   min-width: 0;
   white-space: pre-line;
 }
-.mock-exam-options li.is-selected .mock-exam-option-number {
-  color: #1d4ed8;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1.5px #1d4ed8;
+.mock-exam-answer-check {
+  position: absolute;
+  width: 1.65em;
+  height: 1.65em;
+  top: -0.55em;
+  left: -0.22em;
+  fill: none;
+  stroke: #374151;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transform: rotate(-7deg);
+}
+.mock-exam-answer-check path + path {
+  stroke-width: 0.9;
+  opacity: 0.5;
+  stroke-dasharray: 1.7 0.8;
 }
 .mock-exam-options img,
 .mock-exam-matching-material img {
@@ -318,11 +380,6 @@
 }
 .mock-exam-draft-preview-paper.is-interactive {
   cursor: zoom-in;
-}
-.mock-exam-draft-preview-paper.is-current {
-  outline: 2px solid var(--ws-primary, #2563eb);
-  outline-offset: -2px;
-  background: var(--ws-primary-soft, #eff6ff);
 }
 .mock-exam-draft-preview-paper:focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);

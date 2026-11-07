@@ -23,17 +23,29 @@ interface TreeUnit {
 }
 
 const ManageQuiz: React.FC = () => {
-  const { config, userData, currentUser } = useAuth();
+  const { config, userData, currentUser, authGeneration } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedNode, setSelectedNode] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
-  const [selectedNodeType, setSelectedNodeType] = useState<
-    "special" | "normal"
-  >("normal");
-  const [parentTitle, setParentTitle] = useState("");
-  const [treeData, setTreeData] = useState<TreeUnit[]>([]);
+  const identityKey = `${currentUser?.uid || ""}:${authGeneration}:${config?.year}:${config?.semester}`;
+  const [treeState, setTreeState] = useState<{
+    identity: string;
+    data: TreeUnit[];
+    loading: boolean;
+    error: boolean;
+  }>({ identity: "", data: [], loading: true, error: false });
+  const [treeVersion, setTreeVersion] = useState(0);
+  const treeData = treeState.identity === identityKey ? treeState.data : [];
+  const treeLoading = treeState.identity !== identityKey || treeState.loading;
+  const requestedUnitId = searchParams.get("unitId") || "";
+  const parent = treeData.find((big) =>
+    big.children?.some((mid) => mid.id === requestedUnitId),
+  );
+  const selectedNode =
+    requestedUnitId === "exam_prep"
+      ? { id: "exam_prep", title: "모의고사" }
+      : parent?.children?.find((mid) => mid.id === requestedUnitId) || null;
+  const selectedNodeType =
+    selectedNode?.id === "exam_prep" ? "special" : "normal";
+  const parentTitle = parent?.title || "";
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState("diagnostic");
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
@@ -46,7 +58,6 @@ const ManageQuiz: React.FC = () => {
     canWrite && !["analysis", "bank", "log"].includes(requestedTab || "")
       ? "manage"
       : "analysis";
-  const isManageTab = activeTab === "manage";
 
   useEffect(() => {
     setMobileTreeOpen(false);
@@ -58,8 +69,14 @@ const ManageQuiz: React.FC = () => {
   }, [requestedTab, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (!isManageTab || !canRead) return;
+    if (!canRead) return;
     let active = true;
+    setTreeState({
+      identity: identityKey,
+      data: [],
+      loading: true,
+      error: false,
+    });
     const loadTree = async () => {
       try {
         const semesterTree = await getDoc(
@@ -67,15 +84,31 @@ const ManageQuiz: React.FC = () => {
         );
         if (!active) return;
         if (semesterTree.exists()) {
-          setTreeData(semesterTree.data().tree || []);
+          setTreeState({
+            identity: identityKey,
+            data: semesterTree.data().tree || [],
+            loading: false,
+            error: false,
+          });
           return;
         }
 
         const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (active && legacyTree.exists()) {
-          setTreeData(legacyTree.data().tree || []);
-        }
+        if (active)
+          setTreeState({
+            identity: identityKey,
+            data: legacyTree.exists() ? legacyTree.data().tree || [] : [],
+            loading: false,
+            error: false,
+          });
       } catch (error) {
+        if (active)
+          setTreeState({
+            identity: identityKey,
+            data: [],
+            loading: false,
+            error: true,
+          });
         console.error(error);
       }
     };
@@ -83,67 +116,46 @@ const ManageQuiz: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [config?.year, config?.semester, isManageTab, canRead]);
+  }, [identityKey, canRead, treeVersion]);
 
   if (!canRead) return null;
 
-  const handleNodeSelect = (
-    node: TreeUnit,
-    type: "special" | "normal",
-    parent?: string,
-  ) => {
+  const handleNodeSelect = (node: TreeUnit, type: "special" | "normal") => {
     setSourceQuestion(null);
-    setSelectedNode(node);
-    setSelectedNodeType(type);
-    setParentTitle(parent || "");
+    const nextParams = new URLSearchParams({ tab: activeTab, unitId: node.id });
+    if (type === "special") nextParams.set("category", "exam_prep");
+    setSearchParams(nextParams);
     setMobileTreeOpen(false);
   };
 
   const openDerivedQuestion = (question: QuizQuestionDraft) => {
-    const parent = treeData.find((big) =>
-      big.children?.some((mid) => mid.id === question.unitId),
-    );
-    const unit = parent?.children?.find((mid) => mid.id === question.unitId);
-    setSelectedNode(
-      unit || {
-        id: question.unitId,
-        title: question.category === "exam_prep" ? "모의고사" : "선택 단원",
-      },
-    );
-    setSelectedNodeType(
-      question.category === "exam_prep" ? "special" : "normal",
-    );
-    setParentTitle(parent?.title || "");
     setSourceQuestion(question);
-    setSearchParams({ tab: "manage" });
+    setSearchParams({
+      tab: "manage",
+      unitId: question.unitId,
+      category: question.category,
+    });
   };
 
   return (
-    <PortalWorkspace
-      footerActive={isManageTab && canWrite}
-      className={
-        isManageTab && canWrite
-          ? "teacher-sub-workspace teacher-sub-workspace--page quiz-workspace"
-          : "min-h-[calc(100dvh-64px)] bg-gray-50"
-      }
-    >
-      {canWrite && isManageTab && (
-        <TeacherSubNavigation
-          className="quiz-navigation"
-          title="문제 등록"
-          activeLabel={selectedNode?.title || "단원 및 평가 선택"}
-          open={mobileTreeOpen}
-          onOpenChange={setMobileTreeOpen}
-        >
-          <QuizUnitTree
-            onSelect={handleNodeSelect}
-            selectedId={selectedNode?.id}
-          />
-        </TeacherSubNavigation>
-      )}
-      <main
-        className={isManageTab && canWrite ? "teacher-sub-content" : "ws-page"}
+    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page quiz-workspace">
+      <TeacherSubNavigation
+        className="quiz-navigation"
+        title="평가 목차"
+        activeLabel={selectedNode?.title || "단원 및 평가 선택"}
+        open={mobileTreeOpen}
+        onOpenChange={setMobileTreeOpen}
       >
+        <QuizUnitTree
+          onSelect={handleNodeSelect}
+          selectedId={selectedNode?.id}
+          treeData={treeData}
+          loading={treeLoading}
+          loadError={treeState.identity === identityKey && treeState.error}
+          onRetry={() => setTreeVersion((value) => value + 1)}
+        />
+      </TeacherSubNavigation>
+      <main className="teacher-sub-content">
         <header className="quiz-workspace-header">
           <h1 className="text-2xl font-extrabold text-gray-900">평가 관리</h1>
           <nav className="ws-page-tabs mt-4" aria-label="평가 관리 보기">
@@ -209,14 +221,30 @@ const ManageQuiz: React.FC = () => {
           </div>
         )}
 
-        {activeTab === "analysis" && (
-          <div>
+        {activeTab === "analysis" && selectedNode && (
+          <div className="quiz-analysis-content">
+            <div className="quiz-analysis-unit-heading">
+              {parentTitle && <p>{parentTitle}</p>}
+              <h2>{selectedNode.title}</h2>
+            </div>
             <QuizBankTab
-              initialUnitId={searchParams.get("unitId") || ""}
+              initialUnitId={selectedNode.id}
               initialCategory={searchParams.get("category") || ""}
+              unitScoped
               canEdit={canWrite}
               onDeriveQuestion={openDerivedQuestion}
             />
+          </div>
+        )}
+        {activeTab === "analysis" && !selectedNode && (
+          <div className="h-full min-h-[520px] py-16 flex flex-col items-center justify-center text-gray-400">
+            <i
+              className="fas fa-mouse-pointer text-4xl mb-4"
+              aria-hidden="true"
+            />
+            <p className="text-lg text-center">
+              모의고사 또는 중단원을 선택해 주세요.
+            </p>
           </div>
         )}
 

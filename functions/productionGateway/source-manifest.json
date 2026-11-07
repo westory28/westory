@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-07: Before disabling mock-exam hints, live Seoul executeCommand/getCommandStatus archives matched baseline 79c2d446 in all tracked runtime files except the separately released quizClassAnalysis cache optimization. Live getAssessmentState 00008 has older achievement metadata and worksheet alternative-answer dependencies; its query, serializeAttempt and questionPresentation bodies match the baseline. Only mock hint filtering and new-question normalization change in this patch; preserved attempts and submitted scores are not rewritten.",
     "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
     "Only explicitly reviewed canonical command/status, assessment and isolated query exports are attached to the root Functions entry; unrelated nested exports remain excluded.",
     "Package files are excluded; dependencies resolve from the existing functions/package.json.",
@@ -50,7 +51,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "e05b1f0f4ecea69c8912072763f36bffe921e9d33502721235ebfa616b31d062",
+      "sha256": "a61d74a2aa78c99f7b3941199548dfbe4794c47e61c0199e1b85ad4dcdd1343b",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -77,8 +78,9 @@
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "da0728238b6847c1f13664a97523d4c0e3d84a899e1c912f44e5850eaf16c430",
+      "sha256": "5273e7ece75c9b6c666c71782da9afdc91fb98f3d06668578122e04f454c0667",
       "changes": [
+        "2026-11-07: Omit only hint/hintEnabled from historical mock QUIZ start receipt presentations on execute replay and status reads; preserve stored receipts, answers, choices and all other command results.",
         "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default.",
         "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default.",
         "2026-10-27: Add nam5-local Wis-only command/status callables using the identical session, permissions and durable receipt namespace."
@@ -495,7 +497,7 @@
       "sourceFile": "assessmentLearning.js",
       "file": "assessmentLearning.js",
       "originalSha256": "eda2e5e2924fad5353422a00a0eb42a280e0f5af1c95853481699bdc48b553a5",
-      "sha256": "ce45bc1fcc651ec15afdbe6e8acda2e03743814985bf4746cbdb6c4279515fae",
+      "sha256": "888a2bbc88a90fc35a7409f4cd2d609152dee8355a422819ffd120278bc5bafe",
       "changes": [
         "New diagnostic-only validation, metadata snapshot and recheck ranking module; no production ancestor.",
         "Remove confidence collection and ranking; preserve behavior-only observation bounds and unknown initial response times on resume.",

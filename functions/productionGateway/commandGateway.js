@@ -80,6 +80,27 @@ const COMMAND_TYPES = Object.freeze({
   APPROVE_STUDENT_REGISTRATION: studentRegistrationApproval.COMMAND_TYPE,
 });
 
+// Old start receipts bypass attempt serialization. Remove only mock-exam hints
+// from the returned presentation, preserving the immutable receipt and choices.
+const receiptResultPresentation = (commandType, result) => {
+  if (commandType !== COMMAND_TYPES.START_ASSESSMENT_ATTEMPT
+      || result?.assessmentKind !== "QUIZ"
+      || !Array.isArray(result.questionPresentation)) return result;
+  const isMock = value => /^exam_prep(?:__round_[1-9]\d*)?$/.test(String(value || "").trim());
+  const mockDefinition = isMock(String(result.definitionId || "").split(":")[3]);
+  let changed = false;
+  const questionPresentation = result.questionPresentation.map(item => {
+    if (!item || !(mockDefinition || isMock(item.category) || item.examRound)
+        || !(Object.hasOwn(item, "hint") || Object.hasOwn(item, "hintEnabled"))) return item;
+    changed = true;
+    const presentation = { ...item };
+    delete presentation.hint;
+    delete presentation.hintEnabled;
+    return presentation;
+  });
+  return changed ? { ...result, questionPresentation } : result;
+};
+
 const resolveProjectId = (environment = process.env) => {
   const direct = String(
     environment.GCLOUD_PROJECT || environment.GOOGLE_CLOUD_PROJECT || "",
@@ -1376,7 +1397,7 @@ const createCommandGatewayCore = ({
           commandType: command.commandType,
           status: existing.data?.status || "SUCCEEDED",
           replayed: true,
-          result: existing.data?.result || null,
+          result: receiptResultPresentation(command.commandType, existing.data?.result || null),
         };
       }
 
@@ -1485,7 +1506,7 @@ const createCommandGatewayCore = ({
       commandType: command.commandType,
       status: snapshot.data?.status || "SUCCEEDED",
       replayed: true,
-      result: snapshot.data?.result || null,
+      result: receiptResultPresentation(command.commandType, snapshot.data?.result || null),
     };
   };
 

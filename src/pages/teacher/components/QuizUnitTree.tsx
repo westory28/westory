@@ -1,8 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { db } from "../../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { useAuth } from "../../../contexts/AuthContext";
-import { getSemesterDocPath } from "../../../lib/semesterScope";
+import React from "react";
 
 interface TreeUnit {
   id: string;
@@ -12,6 +8,10 @@ interface TreeUnit {
 
 interface QuizUnitTreeProps {
   selectedId?: string;
+  treeData: TreeUnit[];
+  loading: boolean;
+  loadError: boolean;
+  onRetry: () => void;
   onSelect: (
     node: TreeUnit,
     type: "special" | "normal",
@@ -22,51 +22,16 @@ interface QuizUnitTreeProps {
 const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
   onSelect,
   selectedId,
+  treeData,
+  loading,
+  loadError,
+  onRetry,
 }) => {
-  const { config } = useAuth();
-  const [treeData, setTreeData] = useState<TreeUnit[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [retryKey, setRetryKey] = useState(0);
-
-  useEffect(() => {
-    setActiveId(selectedId || null);
-  }, [selectedId]);
-
-  useEffect(() => {
-    const loadTree = async () => {
-      setLoading(true);
-      setLoadError(false);
-      try {
-        const scopedTree = await getDoc(
-          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-        );
-        if (scopedTree.exists()) {
-          setTreeData(scopedTree.data().tree || []);
-          return;
-        }
-
-        const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (legacyTree.exists()) {
-          setTreeData(legacyTree.data().tree || []);
-        }
-      } catch (e) {
-        setLoadError(true);
-        console.error("Failed to load curriculum tree", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadTree();
-  }, [config, retryKey]);
-
   const handleSelect = (
     node: TreeUnit,
     type: "special" | "normal",
     parentTitle?: string,
   ) => {
-    setActiveId(node.id);
     onSelect(node, type, parentTitle);
   };
 
@@ -74,8 +39,8 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
     <div className="quiz-unit-tree">
       <button
         type="button"
-        className={`teacher-settings-section quiz-mock-exam-entry${activeId === "exam_prep" ? " is-active" : ""}`}
-        aria-current={activeId === "exam_prep" ? "page" : undefined}
+        className={`teacher-settings-section quiz-mock-exam-entry${selectedId === "exam_prep" ? " is-active" : ""}`}
+        aria-current={selectedId === "exam_prep" ? "page" : undefined}
         onClick={() =>
           handleSelect({ id: "exam_prep", title: "모의고사" }, "special")
         }
@@ -94,7 +59,7 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
           <button
             type="button"
             className="block min-h-11 font-bold underline"
-            onClick={() => setRetryKey((key) => key + 1)}
+            onClick={onRetry}
           >
             다시 불러오기
           </button>
@@ -109,8 +74,8 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
             <button
               type="button"
               key={mid.id}
-              className={`teacher-settings-section${activeId === mid.id ? " is-active" : ""}`}
-              aria-current={activeId === mid.id ? "page" : undefined}
+              className={`teacher-settings-section${selectedId === mid.id ? " is-active" : ""}`}
+              aria-current={selectedId === mid.id ? "page" : undefined}
               onClick={() => handleSelect(mid, "normal", big.title)}
               title={mid.title}
             >

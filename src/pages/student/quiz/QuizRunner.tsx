@@ -1433,6 +1433,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const revealHint = (question: Question) => {
+    if (isMockExamAttempt) return;
     const questionId = question.id;
     if (revealedHints[questionId]) return;
     if (!canUseHints || hintUsedCount >= maxHintUses) {
@@ -1984,7 +1985,8 @@ const QuizRunner: React.FC = () => {
               >
                 <QuizQuestionText value={question.question} />
               </h2>
-              {openHintQuestionId === question.id &&
+              {canUseHints &&
+                openHintQuestionId === question.id &&
                 revealedHints[question.id] && (
                   <div
                     id={`quiz-hint-${question.id}`}

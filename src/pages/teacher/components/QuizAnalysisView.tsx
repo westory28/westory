@@ -1422,7 +1422,13 @@ export default function QuizAnalysisView({
   );
 }
 
-function QuestionContent({ question }: { question: Partial<Question> }) {
+function QuestionContent({
+  question,
+  category = question.category,
+}: {
+  question: Partial<Question>;
+  category?: string;
+}) {
   return (
     <div className="qa-question-content">
       <h4>{question.question || "원문 미보관"}</h4>
@@ -1463,12 +1469,14 @@ function QuestionContent({ question }: { question: Partial<Question> }) {
           ))}
         </ol>
       )}
-      {question.hintEnabled && question.hint && (
-        <details>
-          <summary>힌트</summary>
-          <p>{question.hint}</p>
-        </details>
-      )}
+      {normalizeMockExamCategory(category) !== "exam_prep" &&
+        question.hintEnabled &&
+        question.hint && (
+          <details>
+            <summary>힌트</summary>
+            <p>{question.hint}</p>
+          </details>
+        )}
       {question.answer != null && (
         <p>
           <strong>정답</strong> {answerLabel(question.answer, question.type)}
@@ -1602,7 +1610,12 @@ function StudentDetail({
                     </strong>
                   </summary>
                   <div className="qa-student-answer-body">
-                    {snapshot && <QuestionContent question={snapshot} />}
+                    {snapshot && (
+                      <QuestionContent
+                        question={snapshot}
+                        category={record.category}
+                      />
+                    )}
                     <p>
                       <strong>제출한 답</strong>{" "}
                       {item.answer == null

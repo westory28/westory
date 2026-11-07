@@ -18,7 +18,7 @@ const evidence = process.env.MOCK_EXAM_RUNNER_EVIDENCE_DIR || await fs.mkdtemp(p
 await fs.mkdir(evidence, { recursive: true });
 const tailwindPath = process.env.ASSESSMENT_QA_TAILWIND || process.env.PORTAL_DESIGN_TAILWIND_PATH || path.join(os.tmpdir(), "westory-qa-tailwind.js");
 const tailwind = await fs.readFile(tailwindPath, "utf8");
-const common = { unitId: "exam_prep", category: "exam_prep", examRound: "round_2", concepts: ["조선의 성립"], explanation: "저장 당시 해설: 조선은 한양을 도읍으로 삼았다." };
+const common = { unitId: "exam_prep", category: "exam_prep", examRound: "round_2", concepts: ["조선의 성립"], explanation: "저장 당시 해설: 조선은 한양을 도읍으로 삼았다.", hintEnabled: true, hint: "모의고사에서 숨겨야 하는 기존 힌트" };
 const passageSet = { id: 'fixture-set', instruction: '다음 자료를 읽고 물음에 답하시오.', passage: '1392년 새로운 나라가 세워졌고, 1394년 도읍을 옮겼다.', image: '/qa-set-material.svg' };
 const questions = [
   { ...common, id: 1, type: "choice", question: "저장 당시 1번 원문: 자료에 해당하는 나라로 옳은 것은?", passage: "한양으로 도읍을 옮기고 새로운 통치 체제를 마련하였다.", image: "/qa-material.svg", options: ["가야", "고려", "발해", "신라", "조선"], answer: "조선", paperOrder: 1, points: 30 },
@@ -174,6 +174,8 @@ try {
     const page = await open(width, 1024, false, "?submit-error");
     assert.equal(await page.evaluate(() => window.mockRunnerQa.snapshotAnswerLeak), false);
     assert.equal(await page.getByText("저장 당시 해설:", { exact: false }).count(), 0, "No answer explanation is rendered before submission");
+    assert.equal(await page.getByRole("button", { name: /힌트/ }).count(), 0);
+    assert.equal(await page.getByText("모의고사에서 숨겨야 하는 기존 힌트", { exact: false }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: path.join(evidence, `paper-${width}.png`), fullPage: true });
@@ -181,7 +183,7 @@ try {
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("button", { name: "3번 문제 확대", exact: true }).evaluate(element => element === document.activeElement), true);
     const first = await openQuestion(page, 1);
-    await first.getByRole("radio", { name: /조선/ }).check();
+    await first.getByRole("radio", { name: /조선/ }).locator("..").click();
     await page.screenshot({ path: path.join(evidence, `zoom-${width}.png`), fullPage: true });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => window.mockRunnerQa.attempt.answers['1'] === '조선');
@@ -229,7 +231,7 @@ try {
   await landscape.locator(".mock-exam-workspace.is-rotated").waitFor();
   assert.equal(await landscape.locator(".mock-exam-workspace").evaluate(element => getComputedStyle(element).transform !== "none"), true);
   const rotatedDialog = await openQuestion(landscape, 1);
-  await rotatedDialog.getByRole("radio", { name: /조선/ }).check();
+  await rotatedDialog.getByRole("radio", { name: /조선/ }).locator("..").click();
   await landscape.screenshot({ path: path.join(evidence, "landscape-zoom.png"), fullPage: true });
   await landscape.keyboard.press("Escape");
   await landscape.setViewportSize({ width: 768, height: 1024 });

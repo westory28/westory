@@ -333,6 +333,78 @@
   background: transparent;
   border: 0;
 }
+.quiz-analysis-unit-heading {
+  margin-bottom: 24px;
+}
+.quiz-analysis-unit-heading p {
+  margin: 0 0 8px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.quiz-analysis-unit-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.quiz-unit-filter-bar {
+  container: quiz-unit-filters / inline-size;
+}
+.quiz-unit-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+.quiz-unit-filter-row > span,
+.quiz-unit-filter-row > button {
+  flex-shrink: 0;
+}
+.quiz-unit-filter-select {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.quiz-unit-filter-select > span,
+.quiz-unit-filter-select > select {
+  display: block;
+  min-height: 44px;
+  padding: 10px 32px 10px 8px;
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.quiz-unit-filter-select > span {
+  visibility: hidden;
+  overflow: hidden;
+  border: 1px solid transparent;
+}
+.quiz-unit-filter-select > select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+}
+@container quiz-unit-filters (max-width: 600px) {
+  .quiz-unit-filter-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .quiz-unit-filter-row > span:first-child {
+    grid-column: 1 / -1;
+  }
+  .quiz-unit-filter-row > button {
+    grid-column: 3;
+  }
+}
 .quiz-workspace-tabs {
   display: flex;
   gap: 8px;

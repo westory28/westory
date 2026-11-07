@@ -8,6 +8,7 @@ import QuizPassage from "../../../components/common/QuizPassage";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
 import { getYearSemester } from "../../../lib/semesterScope";
+import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
   QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
@@ -115,10 +116,17 @@ const QuizBankTab: React.FC<{
   canEdit: boolean;
   initialUnitId?: string;
   initialCategory?: string;
+  unitScoped?: boolean;
   onDeriveQuestion?: (question: QuizQuestionDraft) => void;
   focusedQuestionIds?: string[];
   onClearFocus?: () => void;
-}> = ({ canEdit, onDeriveQuestion, initialUnitId, initialCategory }) => {
+}> = ({
+  canEdit,
+  onDeriveQuestion,
+  initialUnitId,
+  initialCategory,
+  unitScoped,
+}) => {
   const { config, currentUser, authGeneration } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
@@ -164,6 +172,7 @@ const QuizBankTab: React.FC<{
   );
   const [editHintEnabled, setEditHintEnabled] = useState(false);
   const [editHintText, setEditHintText] = useState("");
+  const editHintsAllowed = !isMockExamCategory(editCategory);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewChoiceAnswer, setPreviewChoiceAnswer] = useState("");
   const [previewOxAnswer, setPreviewOxAnswer] = useState("");
@@ -485,8 +494,13 @@ const QuizBankTab: React.FC<{
     setEditPassage(
       supportsQuestionPassage(normalizedType) ? question.passage || "" : "",
     );
-    setEditHintEnabled(!!(question.hintEnabled && question.hint));
-    setEditHintText(question.hint || "");
+    setEditHintEnabled(
+      !isMockExamCategory(question.category) &&
+        !!(question.hintEnabled && question.hint),
+    );
+    setEditHintText(
+      isMockExamCategory(question.category) ? "" : question.hint || "",
+    );
     setPreviewOpen(false);
     setPreviewChoiceAnswer("");
     setPreviewOxAnswer("");
@@ -631,8 +645,8 @@ const QuizBankTab: React.FC<{
       choiceOptionImages: editType === "choice" ? choiceOptionImages : [],
       answer,
       matchingPairs: editType === "matching" ? matchingOptions : [],
-      hintEnabled: editHintEnabled,
-      hint: editHintEnabled ? editHintText.trim() : "",
+      hintEnabled: editHintsAllowed && editHintEnabled,
+      hint: editHintsAllowed && editHintEnabled ? editHintText.trim() : "",
     };
   };
 
@@ -687,9 +701,13 @@ const QuizBankTab: React.FC<{
         normalizedType === "matching"
           ? trimMatchingPairs(parseMatchingAnswer(question))
           : [],
-      hintEnabled: !!(question.hintEnabled && question.hint),
+      hintEnabled:
+        !isMockExamCategory(question.category) &&
+        !!(question.hintEnabled && question.hint),
       hint:
-        question.hintEnabled && question.hint
+        !isMockExamCategory(question.category) &&
+        question.hintEnabled &&
+        question.hint
           ? String(question.hint).trim()
           : "",
     };
@@ -841,7 +859,7 @@ const QuizBankTab: React.FC<{
       options = orderOptions;
     }
 
-    if (editHintEnabled && !editHintText.trim()) {
+    if (editHintsAllowed && editHintEnabled && !editHintText.trim()) {
       alert("힌트 제공을 선택한 경우 힌트 내용을 입력하세요.");
       return;
     }
@@ -879,8 +897,8 @@ const QuizBankTab: React.FC<{
         options,
         choiceOptionImages: optimizedChoiceOptionImages,
         matchingPairs: optimizedMatchingOptions,
-        hintEnabled: editHintEnabled,
-        hint: editHintEnabled ? editHintText.trim() : "",
+        hintEnabled: editHintsAllowed && editHintEnabled,
+        hint: editHintsAllowed && editHintEnabled ? editHintText.trim() : "",
       };
       const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
       const shouldRecalculateCorrections =
@@ -1009,6 +1027,7 @@ const QuizBankTab: React.FC<{
       <QuizClassAnalysis
         initialUnitId={initialUnitId}
         initialCategory={initialCategory}
+        unitScoped={unitScoped}
         key={`${currentUser?.uid || ""}:${authGeneration}:${getAssessmentSemesterId(config)}`}
         editedQuestions={questions}
         onDetailData={receiveDetailData}
@@ -1464,26 +1483,28 @@ const QuizBankTab: React.FC<{
                   className="w-full border p-2 rounded text-sm min-h-[80px]"
                 />
 
-                <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
-                  <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editHintEnabled}
-                      onChange={(e) => setEditHintEnabled(e.target.checked)}
-                    />
-                    힌트 제공
-                  </label>
-                  {editHintEnabled && (
-                    <textarea
-                      lang="ko"
-                      inputMode="text"
-                      placeholder="학생에게 보여줄 힌트를 입력하세요"
-                      value={editHintText}
-                      onChange={(e) => setEditHintText(e.target.value)}
-                      className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                    />
-                  )}
-                </div>
+                {editHintsAllowed && (
+                  <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
+                    <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editHintEnabled}
+                        onChange={(e) => setEditHintEnabled(e.target.checked)}
+                      />
+                      힌트 제공
+                    </label>
+                    {editHintEnabled && (
+                      <textarea
+                        lang="ko"
+                        inputMode="text"
+                        placeholder="학생에게 보여줄 힌트를 입력하세요"
+                        value={editHintText}
+                        onChange={(e) => setEditHintText(e.target.value)}
+                        className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                      />
+                    )}
+                  </div>
+                )}
 
                 {previewOpen && (
                   <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-3">
