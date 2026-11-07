@@ -366,6 +366,33 @@
   align-items: center;
   min-height: 44px;
 }
+.quiz-unit-tree .teacher-settings-section.quiz-mock-exam-entry {
+  min-height: 64px;
+  margin-bottom: 8px;
+  padding: 16px;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 18px;
+  font-weight: 800;
+}
+.quiz-unit-tree .quiz-mock-exam-entry::before {
+  display: none;
+}
+.quiz-unit-tree .quiz-mock-exam-entry > i {
+  font-size: 20px;
+}
+.quiz-unit-tree .quiz-mock-exam-entry:hover {
+  border-color: var(--ws-primary, #2563eb);
+}
+.quiz-unit-tree .teacher-settings-section.quiz-mock-exam-entry.is-active {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary, #2563eb);
+  color: var(--ws-surface, #ffffff);
+}
+.quiz-unit-tree .quiz-mock-exam-entry.is-active:hover {
+  background: var(--ws-primary-hover, #1d4ed8);
+}
 .quiz-unit-tree .quiz-unit-label,
 .quiz-unit-tree .teacher-settings-section > span.quiz-unit-label,
 .quiz-navigation .teacher-settings-menu-toggle > span:not(.sr-only) {

@@ -74,7 +74,7 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
     <div className="quiz-unit-tree">
       <button
         type="button"
-        className={`teacher-settings-section${activeId === "exam_prep" ? " is-active" : ""}`}
+        className={`teacher-settings-section quiz-mock-exam-entry${activeId === "exam_prep" ? " is-active" : ""}`}
         aria-current={activeId === "exam_prep" ? "page" : undefined}
         onClick={() =>
           handleSelect({ id: "exam_prep", title: "모의고사" }, "special")
