@@ -587,6 +587,11 @@
   background: var(--ws-surface, #fff);
   box-shadow: var(--shadow-xl, 0 24px 60px rgb(15 23 42 / 0.22));
 }
+.quiz-authoring-surface.quiz-composer-dialog :focus-visible,
+.quiz-composer-dialog .quiz-attachment-button:focus-within {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
+}
 .quiz-composer-viewport {
   position: absolute;
   inset: 0;
@@ -690,6 +695,29 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+.mock-exam-insert-tools {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.quiz-composer-body .mock-exam-insert-tools > :is(button, label) {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
+  border-radius: 4px;
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 12px;
+  line-height: 1.4;
+}
+@media (pointer: coarse) {
+  .quiz-composer-body .mock-exam-insert-tools > :is(button, label) {
+    min-height: 44px;
+  }
 }
 .mock-exam-shared-editor {
   display: grid;

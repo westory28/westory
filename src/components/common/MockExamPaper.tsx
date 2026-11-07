@@ -109,10 +109,6 @@ export function MockExamQuestionContent({
   const shortOptions =
     !imageOptions &&
     options.length === 5 &&
-    options.every((option) => option.length <= 5);
-  const mediumOptions =
-    !imageOptions &&
-    options.length === 5 &&
     options.every((option) => option.length <= 12);
   return (
     <div className="mock-exam-question-ink">
@@ -150,7 +146,7 @@ export function MockExamQuestionContent({
       )}
       {!hideAnswers && options.length > 0 && (
         <ol
-          className={`mock-exam-options ${shortOptions ? "mock-exam-options--five" : mediumOptions ? "mock-exam-options--two" : ""}`}
+          className={`mock-exam-options ${shortOptions ? "mock-exam-options--three" : ""}`}
         >
           {options.map((option, optionIndex) => (
             <li

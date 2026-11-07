@@ -317,6 +317,22 @@ try {
   await compose
     .getByRole("textbox", { name: "3. 가", exact: true })
     .fill("정치 기구와 통치 제도의 혼동");
+  for (const control of [
+    compose.getByRole("textbox", { name: /핵심 개념/ }),
+    compose.getByRole("combobox", { name: "사고 과정", exact: true }),
+    compose.getByRole("combobox", { name: "다시 볼 수업자료", exact: true }),
+    compose.getByRole("textbox", { name: "3. 가", exact: true }),
+    compose.getByLabel("발문", { exact: true }),
+    compose.getByLabel("읽기 자료 글상자", { exact: true }),
+    compose.getByRole("spinbutton", { name: "배점", exact: true }),
+  ]) {
+    await control.focus();
+    const focus = await control.evaluate(el => {
+      const style = getComputedStyle(el);
+      return { width: parseFloat(style.outlineWidth), offset: parseFloat(style.outlineOffset), style: style.outlineStyle };
+    });
+    assert(focus.width >= 2 && focus.style === "solid" && focus.offset <= -focus.width, `focus remains visible inside the control: ${JSON.stringify(focus)}`);
+  }
   const png = await page.evaluate(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 120;
@@ -326,6 +342,15 @@ try {
     ctx.fillRect(0, 0, 120, 80);
     return canvas.toDataURL("image/png").split(",")[1];
   });
+  await compose.getByLabel("문항 이미지 첨부", { exact: true }).setInputFiles({
+    name: "material.png", mimeType: "image/png", buffer: Buffer.from(png, "base64"),
+  });
+  await compose.getByAltText("문항 첨부 이미지", { exact: true }).waitFor();
+  assert(await compose.getByAltText("문항 첨부 이미지", { exact: true }).evaluate(el => !!el.closest(".quiz-visual-frame")), "material image stays inside the passage editor");
+  assert(await compose.getByLabel("문항 이미지 첨부", { exact: true }).evaluate(el => !!el.closest('[role="toolbar"]')), "image insertion belongs to the editor tools");
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0, "image preparation remains local until save");
+  await compose.getByLabel("읽기 자료 글상자", { exact: true }).focus();
+  await page.screenshot({ path: path.join(evidence, "teacher-material-tools.png") });
   await compose
     .getByLabel("1번 보기 이미지 첨부", { exact: true })
     .setInputFiles({
@@ -388,6 +413,7 @@ try {
   assert.equal(state.saved.examplePassage, "ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
   assert.equal(state.saved.passageSet.passage, "세트 자료는 두 문항에서 함께 사용합니다.");
   assert.equal(state.saved.points, 3.5);
+  assert(state.saved.image?.startsWith("data:image/"));
   assert.equal(state.saved.answer, "긴 선지입니다");
   assert.deepEqual(state.saved.options, [
     "가",

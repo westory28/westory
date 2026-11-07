@@ -198,12 +198,8 @@
   display: grid;
   gap: 2px 12px;
 }
-.mock-exam-options--five {
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-}
-.mock-exam-options--two {
-  grid-template-columns: repeat(2, 1fr);
+.mock-exam-options--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 .mock-exam-options li {
   display: flex;

@@ -23,6 +23,8 @@ interface Props {
   onSetChange: (value: MockExamPassageSet | null, linked: boolean) => void;
   loadSets: () => Promise<MockExamSetChoice[]>;
   onSetImage: (file: File) => Promise<void>;
+  attachmentAction?: React.ReactNode;
+  renderEditor: (tools: React.ReactNode) => React.ReactNode;
   disabled?: boolean;
 }
 
@@ -37,6 +39,8 @@ export default function MockExamMaterialFields({
   onSetChange,
   loadSets,
   onSetImage,
+  attachmentAction,
+  renderEditor,
   disabled = false,
 }: Props) {
   const [chooseExisting, setChooseExisting] = useState(false);
@@ -90,37 +94,44 @@ export default function MockExamMaterialFields({
   };
   return (
     <div className="mock-exam-material-fields">
-      <div className="mock-exam-material-actions">
-        <button
-          type="button"
-          className="quiz-authoring-button"
-          disabled={disabled}
-          aria-pressed={exampleEnabled}
-          onClick={() => onExampleEnabledChange(!exampleEnabled)}
+      {renderEditor(
+        <div
+          className="mock-exam-insert-tools"
+          role="group"
+          aria-label="자료 삽입"
         >
-          {exampleEnabled ? "보기 없애기" : "〈보기〉 추가"}
-        </button>
-        {!passageSet && (
-          <>
-            <button
-              type="button"
-              className="quiz-authoring-button"
-              disabled={disabled}
-              onClick={newSet}
-            >
-              새 세트 지문
-            </button>
-            <button
-              type="button"
-              className="quiz-authoring-button"
-              disabled={disabled || busy}
-              onClick={() => void loadExisting()}
-            >
-              {busy ? "불러오는 중…" : "기존 세트 연결"}
-            </button>
-          </>
-        )}
-      </div>
+          <button
+            type="button"
+            className="quiz-authoring-button"
+            disabled={disabled}
+            aria-pressed={exampleEnabled}
+            onClick={() => onExampleEnabledChange(!exampleEnabled)}
+          >
+            {exampleEnabled ? "보기 없애기" : "〈보기〉 추가"}
+          </button>
+          {!passageSet && (
+            <>
+              <button
+                type="button"
+                className="quiz-authoring-button"
+                disabled={disabled}
+                onClick={newSet}
+              >
+                새 세트 지문
+              </button>
+              <button
+                type="button"
+                className="quiz-authoring-button"
+                disabled={disabled || busy}
+                onClick={() => void loadExisting()}
+              >
+                {busy ? "불러오는 중…" : "기존 세트 연결"}
+              </button>
+            </>
+          )}
+          {attachmentAction}
+        </div>,
+      )}
       {chooseExisting && !passageSet && (
         <div className="mock-exam-set-picker">
           {busy ? (

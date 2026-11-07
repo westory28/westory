@@ -1730,6 +1730,94 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     ],
   );
 
+  const questionTypeField = (
+    <label className="quiz-composer-field">
+      <span>문항 유형</span>
+      <select
+        value={formType}
+        aria-label="문항 유형"
+        onChange={(e) => handleTypeChange(e.target.value as QuestionType)}
+        onKeyDown={handleVerticalFocus}
+        className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+      >
+        <option value="choice">객관식</option>
+        {type !== "special" && <option value="ox">O/X</option>}
+        <option value="word">단답형</option>
+        {type !== "special" && (
+          <>
+            <option value="order">순서 나열형</option>
+            <option value="matching">단어 연결하기</option>
+          </>
+        )}
+        {type === "special" && !["choice", "word"].includes(formType) && (
+          <option value={formType} disabled>
+            기존 문항 · 유형 변경 필요
+          </option>
+        )}
+      </select>
+    </label>
+  );
+  const questionImageAttachment = (
+    <label className="quiz-attachment-button">
+      이미지 첨부
+      <input
+        type="file"
+        className="sr-only"
+        accept="image/*"
+        aria-label="문항 이미지 첨부"
+        ref={fileInputRef}
+        onChange={handleImageSelect}
+      />
+    </label>
+  );
+  const questionImagePreview =
+    optimizingImage || formImage ? (
+      <>
+        {optimizingImage && (
+          <p className="text-xs font-bold text-blue-600">
+            이미지 용량을 줄이는 중...
+          </p>
+        )}
+        {formImage && (
+          <div
+            className={
+              type === "special"
+                ? "relative"
+                : "relative border rounded p-2 bg-gray-50"
+            }
+          >
+            <img
+              src={formImage}
+              alt="문항 첨부 이미지"
+              className="max-h-44 max-w-full mx-auto rounded"
+            />
+            <button
+              type="button"
+              disabled={savingQuestion || optimizingImage}
+              onClick={() => {
+                questionImageRequest.current += 1;
+                setFormImage(null);
+              }}
+              className="quiz-authoring-button absolute top-2 right-2"
+            >
+              제거
+            </button>
+          </div>
+        )}
+      </>
+    ) : undefined;
+  const renderQuestionPassage = (tools?: React.ReactNode) => (
+    <QuizVisualPassageEditor
+      label={formType === "word" ? "단답형 본문 글상자" : "읽기 자료 글상자"}
+      value={formPassage}
+      onChange={setFormPassage}
+      allowBlank={formType === "word"}
+      onImagePaste={handleImagePaste}
+      tools={tools}
+      attachment={type === "special" ? questionImagePreview : undefined}
+    />
+  );
+
   return (
     <div className="quiz-authoring-surface quiz-registration-workspace flex h-full min-h-0 flex-col">
       <div className="quiz-editor-toolbar quiz-registration-heading">
@@ -2369,7 +2457,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 >
                   <div className="quiz-composer-body">
                     {type === "special" && (
-                      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <legend className="mb-2 text-sm font-bold">
                           문항 정보
                         </legend>
@@ -2437,63 +2525,37 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             }
                           />
                         </label>
+                        {questionTypeField}
                       </fieldset>
                     )}
                     <section
                       className="quiz-composer-section"
                       aria-label="문항과 자료"
                     >
-                      <div className="quiz-composer-fields">
-                        <label className="quiz-composer-field">
-                          <span>문항 유형</span>
-                          <select
-                            value={formType}
-                            aria-label="문항 유형"
-                            onChange={(e) =>
-                              handleTypeChange(e.target.value as QuestionType)
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
-                          >
-                            <option value="choice">객관식</option>
-                            {type !== "special" && (
-                              <option value="ox">O/X</option>
-                            )}
-                            <option value="word">단답형</option>
-                            {type !== "special" && (
-                              <>
-                                <option value="order">순서 나열형</option>
-                                <option value="matching">단어 연결하기</option>
-                              </>
-                            )}
-                            {type === "special" &&
-                              !["choice", "word"].includes(formType) && (
-                                <option value={formType} disabled>
-                                  기존 문항 · 유형 변경 필요
-                                </option>
-                              )}
-                          </select>
-                        </label>
-                        {type === "normal" && (
-                          <label className="quiz-composer-field">
-                            <span>소단원</span>
-                            <select
-                              value={formSubUnit}
-                              aria-label="소단원"
-                              onChange={(e) => setFormSubUnit(e.target.value)}
-                              onKeyDown={handleVerticalFocus}
-                              className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
-                            >
-                              <option value="">소단원 전체</option>
-                              {normalSubUnits.map((sub) => (
-                                <option key={sub.id} value={sub.id}>
-                                  {sub.title}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        )}
-                      </div>
+                      {type === "normal" && (
+                        <div className="quiz-composer-fields">
+                          {questionTypeField}
+                          {type === "normal" && (
+                            <label className="quiz-composer-field">
+                              <span>소단원</span>
+                              <select
+                                value={formSubUnit}
+                                aria-label="소단원"
+                                onChange={(e) => setFormSubUnit(e.target.value)}
+                                onKeyDown={handleVerticalFocus}
+                                className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                              >
+                                <option value="">소단원 전체</option>
+                                {normalSubUnits.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>
+                                    {sub.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                        </div>
+                      )}
 
                       {type === "special" && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2579,19 +2641,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         />
                       </label>
 
-                      {supportsQuestionPassage(formType) && (
-                        <QuizVisualPassageEditor
-                          label={
-                            formType === "word"
-                              ? "단답형 본문 글상자"
-                              : "읽기 자료 글상자"
-                          }
-                          value={formPassage}
-                          onChange={setFormPassage}
-                          allowBlank={formType === "word"}
-                          onImagePaste={handleImagePaste}
-                        />
-                      )}
+                      {type !== "special" &&
+                        supportsQuestionPassage(formType) &&
+                        renderQuestionPassage()}
 
                       {type === "special" && (
                         <MockExamMaterialFields
@@ -2613,46 +2665,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           }}
                           loadSets={loadExistingSets}
                           onSetImage={handleSetImage}
+                          attachmentAction={questionImageAttachment}
+                          renderEditor={renderQuestionPassage}
                           disabled={savingQuestion || optimizingImage}
                         />
                       )}
 
-                      <label className="quiz-attachment-button">
-                        이미지 첨부
-                        <input
-                          type="file"
-                          className="sr-only"
-                          accept="image/*"
-                          aria-label="문항 이미지 첨부"
-                          ref={fileInputRef}
-                          onChange={handleImageSelect}
-                        />
-                      </label>
-                      {optimizingImage && (
-                        <p className="text-xs font-bold text-blue-600">
-                          이미지 용량을 줄이는 중...
-                        </p>
-                      )}
-                      {formImage && (
-                        <div className="relative border rounded p-2 bg-gray-50">
-                          <img
-                            src={formImage}
-                            alt="문항 첨부 이미지"
-                            className="max-h-44 mx-auto rounded"
-                          />
-                          <button
-                            type="button"
-                            disabled={savingQuestion || optimizingImage}
-                            onClick={() => {
-                              questionImageRequest.current += 1;
-                              setFormImage(null);
-                            }}
-                            className="quiz-authoring-button absolute top-2 right-2"
-                          >
-                            제거
-                          </button>
-                        </div>
-                      )}
+                      {type !== "special" && questionImageAttachment}
+                      {type !== "special" && questionImagePreview}
                     </section>
 
                     <section

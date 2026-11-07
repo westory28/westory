@@ -1,6 +1,29 @@
 .quiz-visual-editor {
   min-width: 0;
 }
+.quiz-visual-frame {
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+}
+.quiz-visual-frame > .quiz-visual-toolbar {
+  border: 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.quiz-visual-frame > .quiz-visual-content {
+  border: 0;
+}
+.quiz-visual-frame > .quiz-visual-blank-settings {
+  border-inline: 0;
+  border-top: 0;
+}
+.quiz-visual-attachment {
+  padding: 8px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.quiz-visual-attachment img {
+  max-width: 100%;
+  object-fit: contain;
+}
 .quiz-visual-editor-label {
   display: flex;
   align-items: center;

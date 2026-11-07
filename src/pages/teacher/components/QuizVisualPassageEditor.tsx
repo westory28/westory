@@ -25,6 +25,8 @@ interface Props {
   label?: string;
   allowBlank?: boolean;
   onImagePaste?: (file: File) => void | Promise<void>;
+  tools?: React.ReactNode;
+  attachment?: React.ReactNode;
 }
 interface Snapshot {
   value: string;
@@ -38,6 +40,8 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
   label = "지문",
   allowBlank = false,
   onImagePaste,
+  tools,
+  attachment,
 }) => {
   const blankSettingsId = useId();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -399,206 +403,212 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
           지원하는 서식만 가져옵니다. Ctrl+Z로 실행을 취소할 수 있습니다.
         </InfoHelp>
       </div>
-      <div
-        className="quiz-visual-toolbar"
-        role="toolbar"
-        aria-label={`${label} 서식`}
-      >
-        {(
-          [
-            ["underline", "밑줄"],
-            ["box", "네모"],
-            ...(allowBlank ? [["blank", "답안 빈칸"]] : []),
-            ["bullet", "글머리표"],
-            ["text", "서식 지우기"],
-          ] as [QuizVisualMark | "bullet", string][]
-        ).map(([mark, title]) => (
-          <button
-            key={mark}
-            type="button"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => apply(mark)}
-            aria-label={`${label} ${title}`}
-            title={
-              mark === "bullet"
-                ? "선택한 줄의 글머리표 전환"
-                : "선택한 글자에 적용"
-            }
-            className={
-              mark === "underline" ? "quiz-visual-underline-button" : ""
-            }
-          >
-            {title}
-          </button>
-        ))}
-        <button
-          type="button"
-          aria-label={`${label} 빈칸 네모`}
-          aria-expanded={!!blankSettings}
-          aria-controls={blankSettingsId}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={openBlankSettings}
-        >
-          빈칸 네모
-        </button>
-        <button
-          type="button"
-          aria-label={`${label} 복사`}
-          disabled={!selectionLength || clipboardBusy}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => void copyToClipboard()}
-        >
-          복사
-        </button>
-        <button
-          type="button"
-          aria-label={`${label} 잘라내기`}
-          disabled={!selectionLength || clipboardBusy}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => void copyToClipboard(true)}
-        >
-          잘라내기
-        </button>
-        <button
-          type="button"
-          aria-label={`${label} 붙여넣기`}
-          disabled={clipboardBusy}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => void pasteFromClipboard()}
-        >
-          붙여넣기
-        </button>
-        <span className="quiz-visual-toolbar-spacer" />
-        <button
-          type="button"
-          aria-label={`${label} 실행 취소`}
-          disabled={historyState.index === 0}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => moveHistory(-1)}
-        >
-          실행 취소
-        </button>
-        <button
-          type="button"
-          aria-label={`${label} 다시 실행`}
-          disabled={historyState.index >= historyState.length - 1}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => moveHistory(1)}
-        >
-          다시 실행
-        </button>
-      </div>
-      {blankSettings && (
+      <div className={tools || attachment ? "quiz-visual-frame" : undefined}>
         <div
-          id={blankSettingsId}
-          className="quiz-visual-blank-settings"
-          role="group"
-          aria-label={`${label} 빈칸 설정`}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
-            if (event.key === "Escape") {
-              event.preventDefault();
-              closeBlankSettings();
-            } else if (event.key === "Enter") {
-              event.preventDefault();
-              insertBlank();
-            }
-          }}
+          className="quiz-visual-toolbar"
+          role="toolbar"
+          aria-label={`${label} 서식`}
         >
-          <label>
-            표시 기호
-            <input
-              aria-label={`${label} 빈칸 기호`}
-              autoFocus
-              value={blankSettings.label}
-              maxLength={20}
-              onChange={(event) =>
-                setBlankSettings({
-                  ...blankSettings,
-                  label: event.target.value,
-                })
+          {(
+            [
+              ["underline", "밑줄"],
+              ["box", "네모"],
+              ...(allowBlank ? [["blank", "답안 빈칸"]] : []),
+              ["bullet", "글머리표"],
+              ["text", "서식 지우기"],
+            ] as [QuizVisualMark | "bullet", string][]
+          ).map(([mark, title]) => (
+            <button
+              key={mark}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => apply(mark)}
+              aria-label={`${label} ${title}`}
+              title={
+                mark === "bullet"
+                  ? "선택한 줄의 글머리표 전환"
+                  : "선택한 글자에 적용"
               }
-            />
-          </label>
-          <label>
-            너비 기준 글자 (선택)
-            <input
-              aria-label={`${label} 빈칸 너비 기준 글자`}
-              autoComplete="off"
-              value={blankSettings.reference}
-              maxLength={120}
-              onChange={(event) =>
-                setBlankSettings({
-                  ...blankSettings,
-                  reference: event.target.value,
-                })
+              className={
+                mark === "underline" ? "quiz-visual-underline-button" : ""
               }
-            />
-          </label>
-          <button type="button" onClick={insertBlank}>
-            빈칸 넣기
+            >
+              {title}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-label={`${label} 빈칸 네모`}
+            aria-expanded={!!blankSettings}
+            aria-controls={blankSettingsId}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={openBlankSettings}
+          >
+            빈칸 네모
           </button>
-          <button type="button" onClick={closeBlankSettings}>
-            취소
+          <button
+            type="button"
+            aria-label={`${label} 복사`}
+            disabled={!selectionLength || clipboardBusy}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void copyToClipboard()}
+          >
+            복사
           </button>
+          <button
+            type="button"
+            aria-label={`${label} 잘라내기`}
+            disabled={!selectionLength || clipboardBusy}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void copyToClipboard(true)}
+          >
+            잘라내기
+          </button>
+          <button
+            type="button"
+            aria-label={`${label} 붙여넣기`}
+            disabled={clipboardBusy}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void pasteFromClipboard()}
+          >
+            붙여넣기
+          </button>
+          <span className="quiz-visual-toolbar-spacer" />
+          <button
+            type="button"
+            aria-label={`${label} 실행 취소`}
+            disabled={historyState.index === 0}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => moveHistory(-1)}
+          >
+            실행 취소
+          </button>
+          <button
+            type="button"
+            aria-label={`${label} 다시 실행`}
+            disabled={historyState.index >= historyState.length - 1}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => moveHistory(1)}
+          >
+            다시 실행
+          </button>
+          {tools}
         </div>
-      )}
-      <div
-        ref={editorRef}
-        role="textbox"
-        aria-label={label}
-        aria-multiline="true"
-        tabIndex={0}
-        contentEditable
-        suppressContentEditableWarning
-        lang="ko"
-        inputMode="text"
-        className="quiz-visual-content quiz-compose-field"
-        onInput={captureInput}
-        onPaste={paste}
-        onCopy={(event) => copy(event)}
-        onCut={(event) => copy(event, true)}
-        onDrop={(event) => event.preventDefault()}
-        onDragStart={(event) => event.preventDefault()}
-        onCompositionStart={() => {
-          rememberSelection();
-          snapshotSelection();
-          composing.current = true;
-        }}
-        onCompositionEnd={() => {
-          composing.current = false;
-          captureInput();
-        }}
-        onMouseUp={rememberSelection}
-        onKeyUp={rememberSelection}
-        onBlur={rememberSelection}
-        onBeforeInput={(event) => {
-          const input = event.nativeEvent as InputEvent;
-          if (!composing.current) {
+        {blankSettings && (
+          <div
+            id={blankSettingsId}
+            className="quiz-visual-blank-settings"
+            role="group"
+            aria-label={`${label} 빈칸 설정`}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Escape") {
+                event.preventDefault();
+                closeBlankSettings();
+              } else if (event.key === "Enter") {
+                event.preventDefault();
+                insertBlank();
+              }
+            }}
+          >
+            <label>
+              표시 기호
+              <input
+                aria-label={`${label} 빈칸 기호`}
+                autoFocus
+                value={blankSettings.label}
+                maxLength={20}
+                onChange={(event) =>
+                  setBlankSettings({
+                    ...blankSettings,
+                    label: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              너비 기준 글자 (선택)
+              <input
+                aria-label={`${label} 빈칸 너비 기준 글자`}
+                autoComplete="off"
+                value={blankSettings.reference}
+                maxLength={120}
+                onChange={(event) =>
+                  setBlankSettings({
+                    ...blankSettings,
+                    reference: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <button type="button" onClick={insertBlank}>
+              빈칸 넣기
+            </button>
+            <button type="button" onClick={closeBlankSettings}>
+              취소
+            </button>
+          </div>
+        )}
+        <div
+          ref={editorRef}
+          role="textbox"
+          aria-label={label}
+          aria-multiline="true"
+          tabIndex={0}
+          contentEditable
+          suppressContentEditableWarning
+          lang="ko"
+          inputMode="text"
+          className="quiz-visual-content quiz-compose-field"
+          onInput={captureInput}
+          onPaste={paste}
+          onCopy={(event) => copy(event)}
+          onCut={(event) => copy(event, true)}
+          onDrop={(event) => event.preventDefault()}
+          onDragStart={(event) => event.preventDefault()}
+          onCompositionStart={() => {
             rememberSelection();
             snapshotSelection();
-          }
-          if (
-            input.inputType === "historyUndo" ||
-            input.inputType === "historyRedo"
-          ) {
-            event.preventDefault();
-            moveHistory(input.inputType === "historyUndo" ? -1 : 1);
-          }
-        }}
-        onKeyDown={(event) => {
-          if ((event.ctrlKey || event.metaKey) && !composing.current) {
-            const key = event.key.toLowerCase();
-            if (key === "z" || key === "y") {
+            composing.current = true;
+          }}
+          onCompositionEnd={() => {
+            composing.current = false;
+            captureInput();
+          }}
+          onMouseUp={rememberSelection}
+          onKeyUp={rememberSelection}
+          onBlur={rememberSelection}
+          onBeforeInput={(event) => {
+            const input = event.nativeEvent as InputEvent;
+            if (!composing.current) {
+              rememberSelection();
+              snapshotSelection();
+            }
+            if (
+              input.inputType === "historyUndo" ||
+              input.inputType === "historyRedo"
+            ) {
               event.preventDefault();
-              moveHistory(key === "y" || event.shiftKey ? 1 : -1);
-            } else if (key === "u") {
-              event.preventDefault();
-              apply("underline");
-            } else if (key === "b" || key === "i") event.preventDefault();
-          }
-        }}
-      />
+              moveHistory(input.inputType === "historyUndo" ? -1 : 1);
+            }
+          }}
+          onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && !composing.current) {
+              const key = event.key.toLowerCase();
+              if (key === "z" || key === "y") {
+                event.preventDefault();
+                moveHistory(key === "y" || event.shiftKey ? 1 : -1);
+              } else if (key === "u") {
+                event.preventDefault();
+                apply("underline");
+              } else if (key === "b" || key === "i") event.preventDefault();
+            }
+          }}
+        />
+        {attachment && (
+          <div className="quiz-visual-attachment">{attachment}</div>
+        )}
+      </div>
       <div className="quiz-visual-status" aria-live="polite">
         {message || (selectionLength ? `${selectionLength}자 선택됨` : "")}
       </div>
