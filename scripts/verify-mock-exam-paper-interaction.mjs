@@ -605,21 +605,23 @@ try {
       "Close clears local practice",
     );
     await page.goto(origin + "/?mode=draft");
-    await page
-      .getByRole("button", { name: "문제 풀이 미리보기", exact: true })
-      .click();
-    await page
-      .locator(".mock-exam-answer-controls label")
-      .filter({ hasText: "① 조준" })
-      .click();
-    await page.keyboard.press("Escape");
-    await page
-      .getByRole("button", { name: "문제 풀이 미리보기", exact: true })
-      .waitFor();
-    assert.equal(
-      await page.locator(".mock-exam-options .is-selected").count(),
-      1,
-    );
+    const draftCard = page.locator('.mock-exam-draft-preview-paper');
+    const draftHeading = page.locator('.mock-exam-draft-preview-heading');
+    await page.getByRole('radio', { name: '① 조준', exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: /문제 풀이 미리보기|돌아가기/ }).count(), 0, 'Draft preview has no separate expand/return stage');
+    assert.equal(await draftCard.getAttribute('role'), null);
+    assert.notEqual(await draftCard.evaluate(element => getComputedStyle(element).cursor), 'zoom-in');
+    assert.equal(await draftHeading.evaluate(element => element.getBoundingClientRect().height), 44);
+    layout.draftToggle = await checkStableChoiceToggle(page, { touch,
+      dialog: '.quiz-authoring-surface', scroll: '.mock-exam-draft-preview', question: '.mock-exam-draft-preview-paper' });
+    layout.draftAnimation = await checkAnswerMark(page, '① 조준', 'reduce');
+    await draftCard.locator('.mock-exam-stem').click();
+    assert.equal(await page.getByRole('dialog').count(), 0, 'Clicking the draft question never opens another preview');
+    assert(await page.getByRole('radio', { name: '① 조준', exact: true }).isChecked(), 'Clicking the question preserves its practice answer');
+    await page.keyboard.press('Escape');
+    assert(await page.getByRole('radio', { name: '① 조준', exact: true }).isVisible(), 'Draft controls remain directly available without a solving mode');
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
+    await page.screenshot({ path: path.join(evidence, `draft-direct-${width}.png`) });
     await page.goto(origin + "/?mode=student");
     await page.locator(".mock-exam-sheet .mock-exam-question").first().click();
     assert.equal(await page.locator('details, summary').count(), 0, 'Student solving has no answer/explanation disclosure');

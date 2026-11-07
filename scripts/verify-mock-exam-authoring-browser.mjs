@@ -343,7 +343,15 @@ try {
       .fill(authoredOptions[index]);
   const choiceField = (index) =>
     compose.getByLabel(`${index + 1}번 보기`, { exact: true });
-  assert.match(await live.locator(".mock-exam-options li").first().textContent(), /^\s*①\s+가/);
+  assert.match(await live.locator('.mock-exam-answer-controls label').first().textContent(), /^\s*①\s+가/);
+  assert.equal(await live.getByRole('button', {name:/문제 풀이 미리보기|돌아가기|답안 지우기/}).count(),0);
+  const directAnswer = live.getByRole('radio').first();
+  await directAnswer.locator('..').click();
+  assert(await directAnswer.isChecked(), 'The authoring side preview accepts answers directly');
+  await directAnswer.locator('..').click();
+  assert(!(await directAnswer.isChecked()), 'Repeating an answer clears it in the authoring side preview');
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0, 'Practicing in the side preview never saves the question');
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, 'Practicing in the side preview never fetches another preview');
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await choiceField(1).focus();
