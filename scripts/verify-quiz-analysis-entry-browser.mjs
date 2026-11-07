@@ -136,7 +136,7 @@ try {
     assert.ok(actions.every(action=>action.height>=44));
     await screenshot(`mock-pending-${width}.png`);
   }
-  for(const value of ["0","1","2","3","4"]){
+  for(const value of ["0","1","2","3","4","5"]){
     await report().selectOption(value);
     assert.ok(await analysis().getByRole("table").count()>0,"each pending view shows a table shell");
   }
@@ -157,13 +157,14 @@ try {
     await page.setViewportSize({width,height:900});await assertNoOverflow(width);
     await screenshot(`mock-empty-${width}.png`);
   }
-  for(const value of ["0","1","2","3","4"]){
+  for(const value of ["0","1","2","3","4","5"]){
     await report().selectOption(value);
     assert.equal(await analysis().isVisible(),true);
   }
   assert.deepEqual(await modes(),["catalog","achievement"]);
 
   // Assessment-specific criterion filters must never carry into another round.
+  await report().selectOption("0");
   await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
   await query().click();await analysis().getByText("첫 제출 1명",{exact:true}).waitFor();
   await analysis().getByRole("combobox",{name:"성취기준",exact:true}).selectOption("9역10-01");
