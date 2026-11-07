@@ -7,7 +7,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
-const { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots } = require('./quizAchievementEvidence');
+const { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots, packAchievementEvidence } = require('./quizAchievementEvidence');
 const achievementRubrics = require('./shared/historyAchievementRubrics.json');
 
 const SCHEMA = 4;
@@ -59,13 +59,16 @@ const studentRevisionRef = (db, scope, uid) => db.doc(`quiz_analysis_student_rev
 const dataOf = snap => snap?.exists ? snap.data() : {};
 
 function normalizeQuery(data) {
-  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', '_session'];
+  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
     || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
-    || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')) {
+    || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')
+    || (data.compactEvidence !== undefined && typeof data.compactEvidence !== 'boolean')
+    || (data.compactEvidence === true && data.mode !== 'achievement')) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
-  const query = { semesterId: data.semesterId, mode: data.mode, forceRefresh: data.forceRefresh === true };
+  const query = { semesterId: data.semesterId, mode: data.mode, forceRefresh: data.forceRefresh === true,
+    ...(data.compactEvidence === true ? { compactEvidence: true } : {}) };
   const keyword = typeof data.keyword === 'string' ? data.keyword.normalize('NFC').trim().replace(/\s+/g, ' ') : undefined;
   if (data.keyword !== undefined && (typeof data.keyword !== 'string' || !keyword
     || keyword.length > 80 || /[\x00-\x1f]/.test(keyword) || !searchText(keyword))) {
@@ -600,7 +603,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const packed = packHistoricalQuestionSnapshots(rawRows);
       const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
-        version, complete: true, achievementEvidence, profiles, rubricVersion: achievementRubrics.version,
+        version, complete: true, achievementEvidence: input.compactEvidence ? packAchievementEvidence(achievementEvidence) : achievementEvidence,
+        profiles, rubricVersion: achievementRubrics.version,
         ...(input.grade ? { grade: input.grade } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
       if (await scopeRevision(input.semesterId, selectedClasses) !== version

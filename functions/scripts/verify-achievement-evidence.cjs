@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { normalizeAchievementMetadata } = require('../historyAchievementMetadata');
-const { buildQuizAchievementEvidence, packHistoricalQuestionSnapshots } = require('../quizAchievementEvidence');
+const { buildQuizAchievementEvidence, packHistoricalQuestionSnapshots, packAchievementEvidence } = require('../quizAchievementEvidence');
 const { normalizeProfilePayload, applyProfile, profileId } = require('../achievementProfiles');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const rubrics = require('../shared/historyAchievementRubrics.json');
@@ -30,6 +30,68 @@ test('achievement metadata validates the catalog and preserves omitted old-clien
 const evidenceInput = () => ({ semesterId: scope, students: [{ uid: 'a' }], questions: [],
   priorRows: [{ id: 'prior', source: 'canonical', raw: structuredClone(priorRaw) }],
   examRows: [{ id: 'exam', source: 'canonical', raw: structuredClone(examRaw) }] });
+
+const unpackEvidence = packed => {
+  if (!packed.observationTable) return packed;
+  const { observationTable: { version, keys, values, rows }, ...metadata } = packed;
+  assert.equal(version, 1);
+  return { ...metadata, observations: rows.map(row => Object.fromEntries(row.flatMap((index, position) =>
+    index === -1 ? [] : [[keys[position], values[index]]]))) };
+};
+
+test('compact evidence preserves own fields, nested JSON values and missing/unknown/false distinctions', () => {
+  const observations = Array.from({ length: 180 }, (_, index) => ({
+    id: `synthetic-observation-${index}`, studentUid: `synthetic-${index % 6}`, semesterId: scope,
+    source: 'diagnostic', correct: index % 3 ? true : false, hintViewed: index % 2 ? null : false,
+    achievementStandardCodes: ['9역07-01', '9역07-02'], metadata: { nested: ['값', 0, false, null], source: 'snapshot' },
+    ...(index % 4 ? { optional: '' } : {}), number: index % 2 ? 1 : '1',
+  }));
+  const evidence = { version: 1, status: 'partial', observations, examCutoffs: [{ studentUid: 'synthetic-0', startedAt: '2026-11-07T01:00:00Z' }], exclusions: { missingSourceRevision: 2 } };
+  const original = structuredClone(evidence), packed = packAchievementEvidence(evidence);
+  assert.ok(packed.observationTable);
+  assert.equal(Object.hasOwn(packed, 'observations'), false);
+  assert.ok(packed.observationTable.rows.some(row => row.includes(-1)));
+  assert.deepEqual(unpackEvidence(JSON.parse(JSON.stringify(packed))), evidence);
+  assert.deepEqual(evidence, original, 'packing never mutates the analysis evidence');
+  assert.ok(packed.observationTable.values.some(value => value === false));
+  assert.ok(packed.observationTable.values.some(value => value === null));
+  assert.ok(packed.observationTable.values.some(value => value === 1));
+  assert.ok(packed.observationTable.values.some(value => value === '1'));
+});
+
+test('compact evidence keeps the original shape when a dictionary is not smaller', () => {
+  for (const observations of [[], [{ id: 'one' }]]) {
+    const evidence = { version: 1, status: 'ready', observations, examCutoffs: [], exclusions: {} };
+    assert.equal(packAchievementEvidence(evidence), evidence);
+  }
+  const unsupported = { observations: [{ presentButUndefined: undefined }] };
+  assert.equal(packAchievementEvidence(unsupported), unsupported);
+});
+
+test('a 316-pupil grade with 27,899 worksheet observations fits the unchanged 8 MiB response bound losslessly', (context) => {
+  const students = Array.from({ length: 316 }, (_, index) => ({ uid: `synthetic-student-${String(index).padStart(11, '0')}`,
+    classId: `class-${Math.floor(index / 32)}`, name: `합성 학생 ${index + 1}`, number: String(index % 32 + 1) }));
+  const lessons = [88, 1].map((count, index) => ({ unitId: `synthetic-lesson-unit-${index}`, contentRevision: 9,
+    contentHtml: Array.from({ length: count }, (_, item) => `[합성 정답 ${item}]`).join(' '), ...metadata }));
+  const progressRows = students.flatMap((student, index) => lessons.slice(0, index < 91 ? 2 : 1).map((lesson, lessonIndex) => ({
+    id: lesson.unitId, studentUid: student.uid, raw: { studentUid: student.uid, semesterId: scope, contentRevision: 9,
+      updatedAt: new Date(Date.UTC(2026, 10, 1, 0, index)).toISOString(),
+      answers: Object.fromEntries(Array.from({ length: lessonIndex ? 1 : 88 }, (_, item) => [String(item),
+        { value: item % 3 ? '합성 입력' : '', status: item % 2 ? 'correct' : 'wrong' }])) } })));
+  const evidence = buildQuizAchievementEvidence({ semesterId: scope, students, questions: [], priorRows: [], examRows: [], lessons, progressRows });
+  assert.equal(evidence.observations.length, 27899);
+  const originalBytes = Buffer.byteLength(JSON.stringify(evidence));
+  assert.ok(originalBytes > 8 * 1024 * 1024, 'the regression fixture exceeds the old response limit');
+  const packed = packAchievementEvidence(evidence);
+  assert.ok(packed.observationTable);
+  const response = { semesterId: scope, grade: '3', students, rawRows: [], questions: [{ id: '91', question: '합성 모의 문항' }],
+    complete: true, achievementEvidence: packed, configuredClasses: [], generatedAt: '2026-11-07T01:00:00Z', version: 'synthetic' };
+  const packedBytes = Buffer.byteLength(JSON.stringify(response));
+  assert.ok(packedBytes < 8 * 1024 * 1024, `packed grade response: ${packedBytes} bytes`);
+  assert.ok(packedBytes < originalBytes / 2);
+  assert.deepEqual(unpackEvidence(JSON.parse(JSON.stringify(packed))), evidence);
+  context.diagnostic(`Synthetic grade transport: ${originalBytes} bytes of evidence -> ${packedBytes} bytes for the complete response; 316 pupils, 27899 observations retained.`);
+});
 test('evidence keeps snapshot metadata, exact onset and unknown assistance distinct from false', () => {
   const input = evidenceInput();
   const result = buildQuizAchievementEvidence(input);

@@ -76,6 +76,19 @@ test('achievement mode is explicit, one-class and mock-exam only', () => {
     assert.throws(() => normalizeQuery({ ...request, ...patch }), e => e.code === 'invalid-argument');
 });
 
+test('compact evidence is an explicit achievement-only transport capability', () => {
+  const achievement = { ...q, mode: 'achievement', category: 'exam_prep', unitId: 'exam_prep', examRound: 'round_1' };
+  assert.equal(normalizeQuery({ ...achievement, compactEvidence: true }).compactEvidence, true);
+  assert.equal(Object.hasOwn(normalizeQuery(achievement), 'compactEvidence'), false);
+  assert.equal(Object.hasOwn(normalizeQuery({ ...achievement, compactEvidence: false }), 'compactEvidence'), false);
+  for (const mode of ['catalog', 'summary', 'detail']) {
+    assert.throws(() => normalizeQuery({ ...q, mode, compactEvidence: true }), error => error.code === 'invalid-argument');
+    assert.equal(Object.hasOwn(normalizeQuery({ ...q, mode, compactEvidence: false }), 'compactEvidence'), false);
+  }
+  for (const compactEvidence of [1, 'true', null, {}, []])
+    assert.throws(() => normalizeQuery({ ...achievement, compactEvidence }), error => error.code === 'invalid-argument');
+});
+
 test('whole-grade scope is explicit and cannot combine client classes or comparison grades', () => {
   for (const mode of ['summary', 'detail', 'achievement']) {
     const request = { ...q, mode, grade: '3', classIds: [], category: 'exam_prep', unitId: 'exam_prep', examRound: 'round_1' };
@@ -209,6 +222,28 @@ test('whole-grade achievement shares reference reads, preserves pupil class and 
   assert.equal(empty.students.length, 3);
   assert.deepEqual(empty.rawRows, []);
   assert.equal(empty.complete, true);
+});
+
+test('achievement service negotiates lossless compact evidence and preserves old-client responses', async () => {
+  const f = memory(gradeExamFixture());
+  f.data.set(`${ROOT}/lessons/compact-fixture`, { unitId: 'compact-fixture', contentRevision: 1,
+    contentHtml: Array.from({ length: 24 }, (_, index) => `[합성 정답 ${index}]`).join(' ') });
+  for (const uid of ['a', 'b', 'c']) f.data.set(`${ROOT}/lesson_progress/${uid}/units/compact-fixture`, {
+    studentUid: uid, semesterId: SCOPE, contentRevision: 1, updatedAt: '2026-10-30T01:00:00Z', answers: {},
+  });
+  const service = createQuizClassAnalysisService({ db: f.db, now: () => Date.UTC(2026, 10, 7) });
+  const plain = await service.query(gradeExamQuery());
+  const old = await service.query({ ...gradeExamQuery(), compactEvidence: false });
+  assert.deepEqual(old, plain);
+  const compact = await service.query({ ...gradeExamQuery(), compactEvidence: true });
+  const { observationTable, ...metadata } = compact.achievementEvidence;
+  assert.ok(observationTable);
+  assert.equal(Object.hasOwn(compact.achievementEvidence, 'observations'), false);
+  const { keys, values, rows } = observationTable;
+  const restored = { ...metadata, observations: rows.map(row => Object.fromEntries(row.flatMap((index, position) =>
+    index === -1 ? [] : [[keys[position], values[index]]]))) };
+  assert.deepEqual({ ...compact, achievementEvidence: restored }, plain);
+  assert.deepEqual(f.writes, []);
 });
 
 test('whole-grade reads fail instead of returning a partial class or a changing scope', async () => {

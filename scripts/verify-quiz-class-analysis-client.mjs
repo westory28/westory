@@ -67,4 +67,53 @@ resolveRequest({ data: { students: [] } });
 await keywordDetail;
 assert.match(exports.quizClassAnalysisError(denied), /권한/);
 assert.match(exports.quizClassAnalysisError({ code: "functions/unauthenticated" }), /로그인/);
+
+const gradeScope = { ...scope, unitId: "exam_prep", category: "exam_prep", examRound: "round_1", classIds: [], grade: "3" };
+const observations = [
+  { id: "worksheet:a:unit:0", studentUid: "a", semesterId: "2026-2", source: "worksheet", itemId: "unit:0", correct: false, filled: false, hintViewed: null, achievementStandardCodes: ["9역10-01"] },
+  { id: "canonical:b:q", studentUid: "b", semesterId: "2026-2", source: "diagnostic", itemId: "q", correct: true, filled: true, hintViewed: false, achievementStandardCodes: [], resultId: "result-b" },
+];
+const keys = [...new Set(observations.flatMap(Object.keys))];
+const values = [];
+const rows = observations.map(observation => keys.map(key => {
+  if (!Object.hasOwn(observation, key)) return -1;
+  const serialized = JSON.stringify(observation[key]);
+  let index = values.findIndex(value => JSON.stringify(value) === serialized);
+  if (index === -1) { index = values.length; values.push(observation[key]); }
+  return index;
+}));
+const table = { version: 1, keys, values, rows };
+const achievementResponse = evidence => ({ grade: "3", rawRows: [], achievementEvidence: { version: 1, status: "ready", examCutoffs: [], ...evidence } });
+const compact = exports.getQuizClassAchievement(gradeScope, "teacher-a:1");
+assert.equal(calls.at(-1).input.compactEvidence, true, "Compact responses are explicitly negotiated with the server");
+assert.equal(calls.at(-1).input.grade, "3");
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).input.classIds)), []);
+resolveRequest({ data: achievementResponse({ observationTable: table }) });
+const decoded = await compact;
+assert.deepEqual(JSON.parse(JSON.stringify(decoded.achievementEvidence.observations)), observations);
+assert.equal(Object.hasOwn(decoded.achievementEvidence, "observationTable"), false);
+assert.equal(Object.hasOwn(decoded.achievementEvidence.observations[0], "resultId"), false, "Absent properties remain absent, not null");
+
+const plain = exports.getQuizClassAchievement(gradeScope, "teacher-a:1");
+resolveRequest({ data: achievementResponse({ observations }) });
+assert.deepEqual(JSON.parse(JSON.stringify((await plain).achievementEvidence.observations)), observations, "Existing uncompressed responses remain compatible");
+
+for (const malformed of [
+  { ...table, version: 2 },
+  { ...table, keys: [...keys, keys[0]] },
+  { ...table, keys: ["__proto__", ...keys.slice(1)] },
+  { ...table, rows: [[...rows[0], 0]] },
+  { ...table, rows: [[values.length, ...rows[0].slice(1)]] },
+  { ...table, rows: [[-2, ...rows[0].slice(1)]] },
+  { ...table, rows: [[0.5, ...rows[0].slice(1)]] },
+  { ...table, rows: [[-1, ...rows[0].slice(1)]] },
+]) {
+  const request = exports.getQuizClassAchievement(gradeScope, "teacher-a:1");
+  resolveRequest({ data: achievementResponse({ observationTable: malformed }) });
+  await assert.rejects(request, /학습 근거/);
+}
+const ambiguous = exports.getQuizClassAchievement(gradeScope, "teacher-a:1");
+resolveRequest({ data: achievementResponse({ observationTable: table, observations }) });
+await assert.rejects(ambiguous, /학습 근거/);
+console.log("PASS whole-grade evidence: lossless table restoration, false/null/absent distinctions, negotiated compatibility, malformed table rejection");
 console.log("PASS class analysis client: session-only reads, concurrent deduplication, no retained result cache, isolated identities, permission denial, explicit refresh, single-class detail");

@@ -32,6 +32,33 @@ function packHistoricalQuestionSnapshots(rows) {
   return { rawRows, historicalQuestionSnapshots };
 }
 
+// The transport table deduplicates JSON values only. It never samples evidence,
+// changes an observation, or merges unknown/false/missing values.
+function packAchievementEvidence(evidence) {
+  if (!Array.isArray(evidence?.observations) || !evidence.observations.length) return evidence;
+  const keys = [...new Set(evidence.observations.flatMap(observation => Object.keys(observation)))];
+  const values = [], indexes = new Map(), rows = [];
+  for (const observation of evidence.observations) {
+    const row = [];
+    for (const key of keys) {
+      if (!Object.hasOwn(observation, key)) { row.push(-1); continue; }
+      const value = observation[key], encoded = JSON.stringify(value);
+      // Existing evidence is JSON-safe. Preserve the old transport if a future
+      // field cannot be represented in the versioned JSON-value dictionary.
+      if (encoded === undefined) return evidence;
+      if (!indexes.has(encoded)) {
+        indexes.set(encoded, values.length);
+        values.push(value);
+      }
+      row.push(indexes.get(encoded));
+    }
+    rows.push(row);
+  }
+  const { observations, ...metadata } = evidence;
+  const packed = { ...metadata, observationTable: { version: 1, keys, values, rows } };
+  return Buffer.byteLength(JSON.stringify(packed)) < Buffer.byteLength(JSON.stringify(evidence)) ? packed : evidence;
+}
+
 // An immutable historical presentation can identify a pre-revision question.
 // Its current bank entry never participates in this recovery.
 function historicalQuestionEvidence(raw, itemId) {
@@ -165,4 +192,4 @@ function buildQuizAchievementEvidence({ semesterId, students, questions, priorRo
     ? 'partial' : 'ready', observations, examCutoffs, exclusions };
 }
 
-module.exports = { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots };
+module.exports = { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots, packAchievementEvidence };
