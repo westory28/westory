@@ -66,10 +66,6 @@
 .mock-exam-matching-input p {
   margin: 8px 0;
 }
-.mock-exam-answer-controls .mock-exam-clear-answer {
-  margin-top: 8px;
-}
-
 .mock-exam-answer-controls button {
   min-height: 44px;
   padding: 8px 16px;

@@ -104,6 +104,47 @@ const openQuestion = async (page, index) => {
   assert.equal(await dialog.getByRole("button", { name: "시험지로 돌아가기" }).evaluate(element => element === document.activeElement), true);
   return dialog;
 };
+const checkRunnerToggle = async (page, dialog, touch) => {
+  const radios = dialog.getByRole('radio');
+  const first = radios.nth(0), second = radios.nth(1);
+  const snapshot = () => page.evaluate(() => {
+    const bounds = ['.mock-exam-zoom', '.mock-exam-zoom-scroll .mock-exam-question-ink', '.mock-exam-answer-controls'].flatMap(selector => {
+      const rect = document.querySelector(selector).getBoundingClientRect();
+      return [rect.x, rect.y, rect.width, rect.height];
+    });
+    const scroll = document.querySelector('.mock-exam-zoom-scroll');
+    return [...bounds, scroll.scrollTop, scroll.scrollLeft, window.scrollX, window.scrollY];
+  });
+  const stable = async (action, expected, label) => {
+    const before = await snapshot();
+    await action();
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    assert.equal(await radios.evaluateAll(inputs => inputs.findIndex(input => input.checked)), expected, label);
+    const after = await snapshot();
+    assert(after.every((value, index) => Math.abs(value-before[index])<=0.6), `${label}: runner bounds/scroll changed ${JSON.stringify({before,after})}`);
+    assert.equal(await page.getByRole('button',{name:'답안 지우기',exact:true}).count(),0);
+  };
+  // Bring the first two targets into view before measuring; any subsequent
+  // shift is caused by the answer update, not Playwright's target scrolling.
+  await first.locator('..').evaluate(element => element.scrollIntoView({block:'center'}));
+  await stable(() => first.locator('..').click(),0,'Runner click selects');
+  await stable(() => first.locator('..').click(),-1,'Runner repeated click clears');
+  if(touch){
+    await stable(() => first.locator('..').tap(),0,'Runner tap selects');
+    await stable(() => first.locator('..').tap(),-1,'Runner repeated tap clears');
+  }
+  await first.focus();
+  await stable(() => page.keyboard.press('Space'),0,'Runner Space selects');
+  await stable(() => page.keyboard.press('Space'),-1,'Runner repeated Space clears');
+  await stable(() => page.keyboard.press('Space'),0,'Runner Space restores');
+  await stable(() => page.keyboard.press('ArrowDown'),1,'Runner native ArrowDown selects next');
+  await stable(() => page.keyboard.press('ArrowUp'),0,'Runner native ArrowUp selects previous');
+  await stable(() => second.locator('..').click(),1,'Runner changes to a different answer');
+  await stable(() => second.locator('..').click(),-1,'Runner clears the changed answer');
+  assert.equal(await dialog.locator('details,summary').count(),0,'No student answer/explanation disclosure before submission');
+  assert.equal(await page.getByText('정답·해설 확인',{exact:true}).count(),0);
+  assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
+};
 try {
   const preparedPage = await browser.newPage({viewport:{width:1280,height:1024}});
   let releaseImage;const imageGate=new Promise(resolve=>{releaseImage=resolve;});
@@ -170,8 +211,9 @@ try {
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.prepares.length),0);
   await expiredPage.close();
 
-  for (const width of [390, 768, 1280, 1440]) {
-    const page = await open(width, 1024, false, "?submit-error");
+  for (const [width,height] of [[320,568],[360,800],[390,844],[768,1024],[820,1180],[1280,1024],[1440,1024]]) {
+    const touch=width<=820;
+    const page = await open(width, height, touch, "?submit-error");
     assert.equal(await page.evaluate(() => window.mockRunnerQa.snapshotAnswerLeak), false);
     assert.equal(await page.getByText("저장 당시 해설:", { exact: false }).count(), 0, "No answer explanation is rendered before submission");
     assert.equal(await page.getByRole("button", { name: /힌트/ }).count(), 0);
@@ -183,6 +225,7 @@ try {
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("button", { name: "3번 문제 확대", exact: true }).evaluate(element => element === document.activeElement), true);
     const first = await openQuestion(page, 1);
+    await checkRunnerToggle(page,first,touch);
     const controls = await first.locator('.mock-exam-answer-controls [role="radiogroup"]').evaluate(group => ({
       height: group.getBoundingClientRect().height,
       gap: parseFloat(getComputedStyle(group).rowGap),
@@ -204,7 +247,7 @@ try {
     assert(Math.abs(footerLayout.buttons[0].left-footerLayout.left-footerLayout.padding)<=1,'Student return button stays at the left edge');
     assert(footerLayout.buttons.every(button => button.height>=44 && Math.abs(button.top-footerLayout.buttons[0].top)<=1 && button.right<=footerLayout.right+1));
     assert(footerLayout.buttons[0].right<=footerLayout.buttons[1].left && footerLayout.buttons[1].right<=footerLayout.buttons[2].left,'Student footer actions do not overlap');
-    assert(footerLayout.bodyBottom<=footerLayout.top+1 && footerLayout.bottom<=1025,'Student scroll area cannot cover footer actions');
+    assert(footerLayout.bodyBottom<=footerLayout.top+1 && footerLayout.bottom<=height+1,'Student scroll area cannot cover footer actions');
     for (const [motion, choice] of [['no-preference','고려'], ['reduce','조선']]) {
       await page.emulateMedia({reducedMotion:motion});
       const radio=first.getByRole('radio',{name:new RegExp(choice)});
@@ -275,12 +318,14 @@ try {
     await page.getByText("저장된 답안 확인 경로", { exact: true }).waitFor();
     await page.close();
   }
-  const landscape = await open(1024, 768, true);
+  for(const [landscapeWidth,landscapeHeight] of [[844,390],[1024,768]]) {
+  const landscape = await open(landscapeWidth, landscapeHeight, true);
   await landscape.locator(".mock-exam-workspace.is-rotated").waitFor();
   assert.equal(await landscape.locator(".mock-exam-workspace").evaluate(element => getComputedStyle(element).transform !== "none"), true);
   const rotatedDialog = await openQuestion(landscape, 1);
+  await checkRunnerToggle(landscape,rotatedDialog,true);
   await rotatedDialog.getByRole("radio", { name: /조선/ }).locator("..").click();
-  await landscape.screenshot({ path: path.join(evidence, "landscape-zoom.png"), fullPage: true });
+  await landscape.screenshot({ path: path.join(evidence, `landscape-zoom-${landscapeWidth}x${landscapeHeight}.png`), fullPage: true });
   await landscape.keyboard.press("Escape");
   await landscape.setViewportSize({ width: 768, height: 1024 });
   await landscape.waitForFunction(() => !document.querySelector('.mock-exam-workspace').classList.contains('is-rotated'));
@@ -296,6 +341,7 @@ try {
   await landscape.setViewportSize({ width: 768, height: 1024 });
   assert.equal(await keyboardInput.inputValue(), '입력 유지');
   await landscape.close();
+  }
   const densePage = await open(1280, 1024, false, "?dense");
   await densePage.evaluate(() => document.fonts.ready);
   await densePage.waitForFunction(() => document.querySelectorAll('.mock-exam-sheet .mock-exam-question').length === 16);
@@ -308,7 +354,7 @@ try {
   await densePage.screenshot({ path: path.join(evidence, 'dense-long-question.png'), fullPage: true });
   await densePage.close();
   assert.deepEqual(pageErrors, []);
-  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, 390/768/1280/1440, compact accessible choices, footer return/previous/next ordering, pencil drawing under normal and reduced motion, touch rotation, keyboard zoom/focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
+  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, touch 320x568/360x800/390x844/768x1024/820x1180 and desktop 1280/1440, click/tap/Space toggle with native Arrow navigation, stationary answer/dialog/scroll layout, no clear button or pre-submit explanation, pencil drawing under normal and reduced motion, touch rotation 844x390/1024x768, keyboard focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

@@ -53,6 +53,15 @@ export default function MockExamAnswerControls({
                   value={option}
                   checked={answer === option}
                   onChange={() => onAnswer(option)}
+                  onClick={() => {
+                    if (!disabled && answer === option) onAnswer("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== " ") return;
+                    event.preventDefault();
+                    if (!disabled && !event.repeat)
+                      onAnswer(answer === option ? "" : option);
+                  }}
                 />
                 <span className="mock-exam-option-number">
                   {examChoiceNumber(index)}{" "}
@@ -154,15 +163,6 @@ export default function MockExamAnswerControls({
             </label>
           ))}
         </div>
-      )}
-      {answer && (
-        <button
-          type="button"
-          className="mock-exam-clear-answer"
-          onClick={() => onAnswer("")}
-        >
-          답안 지우기
-        </button>
       )}
     </fieldset>
   );

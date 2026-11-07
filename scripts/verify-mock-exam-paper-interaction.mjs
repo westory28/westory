@@ -101,7 +101,7 @@ const fittingQuestions = [
     image: "/qa-fitting-material.svg",
   },
   {
-    ...questions[0], id: 2, paperOrder: 2,
+    ...questions[0], id: 2, paperOrder: 2, points: 4,
     question: "(가) 인물이 추진한 정책으로 옳은 것은?",
     passage: "조선 건국에 참여한 (가)은/는 왕자의 난을 거치면서 정치적 실권을 장악한 뒤 왕위에 올랐다. 그는 공신과 왕자들의 세력을 견제하며 국왕 중심의 정치를 지향하였다.",
     options: [
@@ -114,7 +114,7 @@ const fittingQuestions = [
     answer: "사병을 없애 군사권을 장악하였다.",
   },
 ];
-const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import Preview from './src/pages/teacher/components/MockExamPreview';import Draft from './src/pages/teacher/components/MockExamDraftPreview';import Workspace from './src/pages/student/quiz/MockExamWorkspace';import './src/pages/teacher/components/QuizWorkspace.css';const questions=${JSON.stringify(questions)};const fittingQuestions=${JSON.stringify(fittingQuestions)};window.paperQa={loads:0};function App(){const [answers,setAnswers]=useState({});const [index,setIndex]=useState(0);const mode=new URLSearchParams(location.search).get('mode');const previewQuestions=mode==='fit'?fittingQuestions:questions;return mode==='student'?<Workspace questions={questions.slice(0,4)} answers={answers} round="round_1" studentLabel="가상 학생" currentIndex={index} onSelect={setIndex} onAnswer={value=>setAnswers(previous=>({...previous,[questions[index].id]:value}))} timeLeft={600}/>:mode==='draft'?<div className="quiz-authoring-surface" style={{maxWidth:720,margin:'auto'}}><Draft question={questions[0]}/></div>:<Preview entries={previewQuestions.map(q=>({id:q.id}))} loadQuestions={async()=>{window.paperQa.loads++;return previewQuestions}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
+const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import Preview from './src/pages/teacher/components/MockExamPreview';import Draft from './src/pages/teacher/components/MockExamDraftPreview';import Controls from './src/components/common/MockExamAnswerControls';import Workspace from './src/pages/student/quiz/MockExamWorkspace';import './src/pages/teacher/components/QuizWorkspace.css';const questions=${JSON.stringify(questions)};const fittingQuestions=${JSON.stringify(fittingQuestions)};window.paperQa={loads:0,disabledChanges:[]};function App(){const [answers,setAnswers]=useState({});const [index,setIndex]=useState(0);const mode=new URLSearchParams(location.search).get('mode');const previewQuestions=mode==='fit'?fittingQuestions:questions;return mode==='disabled'?<Controls question={questions[0]} index={0} answer="조준" disabled onAnswer={value=>window.paperQa.disabledChanges.push(value)}/>:mode==='student'?<Workspace questions={questions.slice(0,4)} answers={answers} round="round_1" studentLabel="가상 학생" currentIndex={index} onSelect={setIndex} onAnswer={value=>setAnswers(previous=>({...previous,[questions[index].id]:value}))} timeLeft={600}/>:mode==='draft'?<div className="quiz-authoring-surface" style={{maxWidth:720,margin:'auto'}}><Draft question={questions[0]}/></div>:<Preview entries={previewQuestions.map(q=>({id:q.id}))} loadQuestions={async()=>{window.paperQa.loads++;return previewQuestions}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
 const built = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -177,6 +177,53 @@ const reports = [];
 const settleAnswerMarks = (page) => page.locator('.mock-exam-answer-check').evaluateAll((marks) =>
   Promise.all(marks.flatMap((mark) => mark.getAnimations({ subtree: true })).map((animation) => animation.finished)),
 );
+const checkStableChoiceToggle = async (page, { touch, dialog, scroll, question }) => {
+  let maxShift = 0;
+  const group = page.locator('.mock-exam-answer-controls [role="radiogroup"]');
+  const radios = group.getByRole('radio');
+  const first = radios.nth(0), second = radios.nth(1);
+  const snapshot = () => page.evaluate(({ dialog, scroll, question }) => {
+    const rect = (selector) => {
+      const bounds = document.querySelector(selector).getBoundingClientRect();
+      return [bounds.x, bounds.y, bounds.width, bounds.height];
+    };
+    return { dialog: rect(dialog), question: rect(question), controls: rect('.mock-exam-answer-controls'),
+      scrollTop: document.querySelector(scroll).scrollTop, scrollLeft: document.querySelector(scroll).scrollLeft,
+      window: [window.scrollX, window.scrollY] };
+  }, { dialog, scroll, question });
+  const stable = async (action, expected, description) => {
+    const before = await snapshot();
+    await action();
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    assert.equal(await radios.evaluateAll((items) => items.findIndex((input) => input.checked)), expected, description);
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
+    const after = await snapshot();
+    for (const key of ['dialog', 'question', 'controls', 'window']) {
+      after[key].forEach((value, index) => {
+        maxShift = Math.max(maxShift, Math.abs(value - before[key][index]));
+        assert(Math.abs(value - before[key][index]) <= 0.6, `${description}: ${key}[${index}] moved ${before[key][index]} -> ${value}`);
+      });
+    }
+    maxShift = Math.max(maxShift, Math.abs(after.scrollTop-before.scrollTop), Math.abs(after.scrollLeft-before.scrollLeft));
+    assert(Math.abs(after.scrollTop - before.scrollTop) <= 0.6 && Math.abs(after.scrollLeft - before.scrollLeft) <= 0.6, `${description}: answer action changes scroll position`);
+  };
+  await first.locator('..').evaluate((element) => element.scrollIntoView({ block: 'center' }));
+  await stable(() => first.locator('..').click(), 0, 'Pointer selects a choice without movement');
+  await stable(() => first.locator('..').click(), -1, 'Repeated pointer selection clears it without movement');
+  if (touch) {
+    await stable(() => first.locator('..').tap(), 0, 'Touch selects a choice without movement');
+    await stable(() => first.locator('..').tap(), -1, 'Repeated touch clears a choice without movement');
+  }
+  await first.focus();
+  await stable(() => page.keyboard.press('Space'), 0, 'Space selects the focused choice');
+  await stable(() => page.keyboard.press('Space'), -1, 'Space clears the selected choice');
+  await stable(() => page.keyboard.press('Space'), 0, 'Space restores the choice');
+  await stable(() => page.keyboard.press('ArrowDown'), 1, 'Native ArrowDown selects the next choice');
+  await stable(() => page.keyboard.press('ArrowUp'), 0, 'Native ArrowUp selects the previous choice');
+  await stable(() => second.locator('..').click(), 1, 'Selecting a different choice keeps the layout stable');
+  await stable(() => second.locator('..').click(), -1, 'Clearing the changed choice keeps the layout stable');
+  return { touch, finalSelected: -1, stationary: true, maxShift };
+};
 const checkAnswerMark = async (page, radioName, motion) => {
   await page.emulateMedia({ reducedMotion: motion });
   const radio = page.getByRole("radio", { name: radioName, exact: true });
@@ -245,8 +292,9 @@ const checkPreviewFooter = async (page) => {
   return layout;
 };
 try {
-  for (const width of [390, 768, 1280, 1440]) {
-    const page = await browser.newPage({ viewport: { width, height: 900 } });
+  for (const [width, height] of [[320, 568], [360, 800], [390, 844], [768, 1024], [820, 1180], [1280, 900], [1440, 900]]) {
+    const touch = width <= 820;
+    const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
     const errors = [];
     const unexpected = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -407,6 +455,8 @@ try {
     );
     assert.equal(await page.locator(".quiz-composer-footer").count(), 1);
     layout.previewFooter = await checkPreviewFooter(page);
+    layout.toggle = await checkStableChoiceToggle(page, { touch,
+      dialog: '.quiz-composer-dialog', scroll: '.quiz-composer-body', question: '.mock-exam-preview-question' });
     layout.compactAnswers = await page.locator('.mock-exam-answer-controls [role="radiogroup"]').evaluate((group) => {
       const labels = [...group.querySelectorAll("label")].map((label) => label.getBoundingClientRect());
       return { height: group.getBoundingClientRect().height, gap: parseFloat(getComputedStyle(group).rowGap), heights: labels.map((rect) => rect.height),
@@ -474,11 +524,23 @@ try {
     const short = page.getByRole("textbox", { name: "답안", exact: true });
     await short.fill("한양");
     assert.equal(await short.getAttribute("maxlength"), "20");
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
+    await short.fill('');
+    assert.equal(await short.inputValue(), '', 'Short answers can be erased using their input');
+    await short.fill('한양');
     await page.getByRole("button", { name: "다음 문제", exact: true }).click();
     await page.getByRole("button", { name: "첫째", exact: true }).click();
     await page.getByRole("button", { name: "둘째", exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
+    const orderedAnswers = page.locator('.mock-exam-order > div').first();
+    await orderedAnswers.getByRole('button').first().click();
+    await orderedAnswers.getByRole('button').first().click();
+    assert.equal(await orderedAnswers.getByRole('button').count(), 0, 'Order answers can be removed using their existing selected items');
     await page.getByRole("button", { name: "다음 문제", exact: true }).click();
     await page.getByLabel("왼쪽 가", { exact: true }).selectOption("오른쪽 가");
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
+    await page.getByLabel('왼쪽 가', { exact: true }).selectOption('');
+    assert.equal(await page.getByLabel('왼쪽 가', { exact: true }).inputValue(), '', 'Matching answers can return to their unselected option');
     for (let step = 0; step < 4; step++)
       await page
         .getByRole("button", { name: "다음 문제", exact: true })
@@ -560,6 +622,10 @@ try {
     );
     await page.goto(origin + "/?mode=student");
     await page.locator(".mock-exam-sheet .mock-exam-question").first().click();
+    assert.equal(await page.locator('details, summary').count(), 0, 'Student solving has no answer/explanation disclosure');
+    assert.equal(await page.getByText('합성 문항의 해설입니다.', { exact: true }).count(), 0);
+    layout.studentToggle = await checkStableChoiceToggle(page, { touch,
+      dialog: '.mock-exam-zoom', scroll: '.mock-exam-zoom-scroll', question: '.mock-exam-zoom-scroll .mock-exam-question-ink' });
     await page
       .locator(".mock-exam-answer-controls label")
       .filter({ hasText: "① 조준" })
@@ -626,9 +692,25 @@ try {
     await page.getByRole('radio', { name: '① 조준', exact: true }).locator('..').click();
     await settleAnswerMarks(page);
     await page.screenshot({ path: path.join(evidence, `teacher-picture-solve-${width}.png`) });
+    await page.goto(origin + '/?mode=disabled');
+    const disabledRadios = page.getByRole('radio');
+    assert(await disabledRadios.first().isDisabled());
+    const disabledFirst = await disabledRadios.first().locator('..').boundingBox();
+    const disabledSecond = await disabledRadios.nth(1).locator('..').boundingBox();
+    // Coordinates exercise real pointer events; locator.click deliberately
+    // refuses disabled fieldset descendants before sending an event.
+    await page.mouse.click(disabledFirst.x + 20, disabledFirst.y + disabledFirst.height / 2);
+    await page.mouse.click(disabledSecond.x + 20, disabledSecond.y + disabledSecond.height / 2);
+    if (touch) await page.touchscreen.tap(disabledFirst.x + 20, disabledFirst.y + disabledFirst.height / 2);
+    await disabledRadios.first().focus();
+    await page.keyboard.press('Space');
+    assert(await disabledRadios.first().isChecked(), 'Disabled selected choice remains selected');
+    assert.equal(await disabledRadios.nth(1).isChecked(), false);
+    assert.deepEqual(await page.evaluate(() => window.paperQa.disabledChanges), [], 'Disabled controls never emit an answer change');
+    assert.equal(await page.getByRole('button', { name: '답안 지우기', exact: true }).count(), 0);
     assert.deepEqual(errors, []);
     assert.deepEqual(unexpected, []);
-    reports.push({ width, ...layout });
+    reports.push({ width, height, touch, ...layout });
     await page.close();
   }
   await fs.writeFile(
@@ -641,7 +723,7 @@ try {
       evidence,
       widths: reports.map((r) => r.width),
       checks:
-        "teacher and draft local practice, student shared controls, compact accessible choices, larger dark pencil checks with bounded drawing under normal and reduced motion, footer return/previous/next ordering, keyboard focus, no storage/network writes, blank student fields, dynamic notices, two-question picture/long-choice fitting, exact two-line copyright, pagination without footer overlaps",
+        "teacher/draft/student shared controls, click/tap/Space toggle, native Arrow navigation, stationary dialog/question/scroll on select/deselect/change, disabled controls, no clear button or pre-submit student explanation, short/order/matching erasure, compact choices, normal/reduced-motion pencil drawing, footer ordering, no storage/network writes, two-question fitting, exact two-line copyright",
     }),
   );
 } finally {
