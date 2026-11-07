@@ -170,7 +170,7 @@ try {
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.prepares.length),0);
   await expiredPage.close();
 
-  for (const width of [390, 768, 1280]) {
+  for (const width of [390, 768, 1280, 1440]) {
     const page = await open(width, 1024, false, "?submit-error");
     assert.equal(await page.evaluate(() => window.mockRunnerQa.snapshotAnswerLeak), false);
     assert.equal(await page.getByText("저장 당시 해설:", { exact: false }).count(), 0, "No answer explanation is rendered before submission");
@@ -183,7 +183,55 @@ try {
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("button", { name: "3번 문제 확대", exact: true }).evaluate(element => element === document.activeElement), true);
     const first = await openQuestion(page, 1);
-    await first.getByRole("radio", { name: /조선/ }).locator("..").click();
+    const controls = await first.locator('.mock-exam-answer-controls [role="radiogroup"]').evaluate(group => ({
+      height: group.getBoundingClientRect().height,
+      gap: parseFloat(getComputedStyle(group).rowGap),
+      heights: [...group.querySelectorAll('label')].map(label => label.getBoundingClientRect().height),
+    }));
+    assert(controls.gap <= 4 && controls.height <= 256, 'Actual runner keeps the choice group compact');
+    assert(controls.heights.every(height => height >= 44 && height <= 48), 'Actual runner preserves usable touch targets');
+    const footer = first.locator('footer');
+    assert.deepEqual((await footer.getByRole('button').allTextContents()).map(text => text.trim()), ['시험지로 돌아가기', '이전 문제', '다음 문제']);
+    const footerLayout = await footer.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      const buttons = [...element.querySelectorAll('button')].map(button => {
+        const rect = button.getBoundingClientRect();
+        return {left:rect.left,right:rect.right,top:rect.top,height:rect.height};
+      });
+      return {left:bounds.left,right:bounds.right,top:bounds.top,bottom:bounds.bottom,padding:parseFloat(getComputedStyle(element).paddingLeft),buttons,
+        bodyBottom:document.querySelector('.mock-exam-zoom-scroll').getBoundingClientRect().bottom};
+    });
+    assert(Math.abs(footerLayout.buttons[0].left-footerLayout.left-footerLayout.padding)<=1,'Student return button stays at the left edge');
+    assert(footerLayout.buttons.every(button => button.height>=44 && Math.abs(button.top-footerLayout.buttons[0].top)<=1 && button.right<=footerLayout.right+1));
+    assert(footerLayout.buttons[0].right<=footerLayout.buttons[1].left && footerLayout.buttons[1].right<=footerLayout.buttons[2].left,'Student footer actions do not overlap');
+    assert(footerLayout.bodyBottom<=footerLayout.top+1 && footerLayout.bottom<=1025,'Student scroll area cannot cover footer actions');
+    for (const [motion, choice] of [['no-preference','고려'], ['reduce','조선']]) {
+      await page.emulateMedia({reducedMotion:motion});
+      const radio=first.getByRole('radio',{name:new RegExp(choice)});
+      await radio.locator('..').click();
+      assert(await radio.isChecked());
+      const state=await radio.locator('..').locator('.mock-exam-answer-check').evaluate(async svg => {
+        const reveal=svg.querySelector('.mock-exam-answer-check-reveal');
+        const animation=reveal?.getAnimations()[0];
+        if(!animation)return {animated:false};
+        const timing=animation.effect.getComputedTiming();
+        animation.pause();animation.currentTime=timing.delay;
+        await new Promise(requestAnimationFrame);
+        const start=parseFloat(getComputedStyle(reveal).strokeDashoffset);
+        animation.currentTime=timing.delay+Number(timing.duration)*0.5;
+        await new Promise(requestAnimationFrame);
+        const middle=parseFloat(getComputedStyle(reveal).strokeDashoffset);
+        animation.finish();
+        const end=parseFloat(getComputedStyle(reveal).strokeDashoffset);
+        const ink=getComputedStyle(svg.querySelector('.mock-exam-answer-check-ink'));
+        return {animated:true,start,middle,end,duration:timing.duration,iterations:timing.iterations,
+          strokeWidth:parseFloat(ink.strokeWidth),widthRatio:parseFloat(getComputedStyle(svg).width)/parseFloat(getComputedStyle(svg).fontSize)};
+      });
+      assert(state.animated && state.start>state.middle && state.middle>state.end && state.end===0,`${width}px actual runner draws the selected check under ${motion}`);
+      assert(state.duration>=150 && state.duration<=1000 && state.iterations===1);
+      assert(state.strokeWidth>=3 && state.widthRatio>=1.8);
+    }
+    await page.emulateMedia({reducedMotion:'no-preference'});
     await page.screenshot({ path: path.join(evidence, `zoom-${width}.png`), fullPage: true });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => window.mockRunnerQa.attempt.answers['1'] === '조선');
@@ -260,7 +308,7 @@ try {
   await densePage.screenshot({ path: path.join(evidence, 'dense-long-question.png'), fullPage: true });
   await densePage.close();
   assert.deepEqual(pageErrors, []);
-  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, 390/768/1280, touch rotation, keyboard zoom/focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
+  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, 390/768/1280/1440, compact accessible choices, footer return/previous/next ordering, pencil drawing under normal and reduced motion, touch rotation, keyboard zoom/focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

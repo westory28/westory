@@ -107,7 +107,9 @@ export default function MockExamWorkspace(props: Props) {
   useEffect(() => {
     if (!zoomed) return;
     const release = acquirePageScrollLock();
-    zoomPanel.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    zoomPanel.current
+      ?.querySelector<HTMLButtonElement>(".mock-exam-zoom-back")
+      ?.focus();
     return () => {
       release();
       lastFocus.current?.isConnected && lastFocus.current.focus();
@@ -297,9 +299,6 @@ export default function MockExamWorkspace(props: Props) {
               <strong>
                 {currentIndex + 1} / {questions.length}번
               </strong>
-              <button type="button" onClick={() => setZoomed(false)}>
-                시험지로 돌아가기
-              </button>
             </header>
             <div ref={zoomScroll} className="mock-exam-zoom-scroll">
               <MockExamQuestionContent
@@ -337,6 +336,13 @@ export default function MockExamWorkspace(props: Props) {
               )}
             </div>
             <footer>
+              <button
+                type="button"
+                className="mock-exam-zoom-back"
+                onClick={() => setZoomed(false)}
+              >
+                시험지로 돌아가기
+              </button>
               <button
                 type="button"
                 disabled={currentIndex === 0 || submitting}

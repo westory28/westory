@@ -32,5 +32,29 @@
   outline-offset: 2px;
 }
 .quiz-composer-footer.mock-exam-preview-footer {
-  justify-content: flex-end;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 8px 16px;
+}
+.mock-exam-preview-footer .quiz-authoring-button {
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+.mock-exam-preview-footer .quiz-composer-footer-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+@media (max-width: 389px) {
+  .quiz-composer-footer.mock-exam-preview-footer {
+    padding-inline: 8px;
+    gap: 4px;
+  }
+  .mock-exam-preview-footer .quiz-authoring-button {
+    font-size: 12px;
+    padding-inline: 6px;
+  }
+  .mock-exam-preview-footer .quiz-composer-footer-actions {
+    gap: 4px;
+  }
 }

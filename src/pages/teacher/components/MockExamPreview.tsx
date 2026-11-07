@@ -219,14 +219,6 @@ export default function MockExamPreview({
                   className="mock-exam-preview-question"
                   aria-label={`${questionIndex + 1}번 문제 풀이 미리보기`}
                 >
-                  <button
-                    ref={backButton}
-                    type="button"
-                    className="quiz-authoring-button mock-exam-preview-back"
-                    onClick={returnToPaper}
-                  >
-                    시험지로 돌아가기
-                  </button>
                   <MockExamQuestionContent
                     question={currentQuestion}
                     index={questionIndex}
@@ -259,6 +251,14 @@ export default function MockExamPreview({
             </div>
             {questionIndex != null && (
               <div className="quiz-composer-footer mock-exam-preview-footer">
+                <button
+                  ref={backButton}
+                  type="button"
+                  className="quiz-authoring-button mock-exam-preview-back"
+                  onClick={returnToPaper}
+                >
+                  시험지로 돌아가기
+                </button>
                 <div className="quiz-composer-footer-actions">
                   <button
                     type="button"

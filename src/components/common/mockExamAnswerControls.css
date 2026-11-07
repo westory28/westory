@@ -1,20 +1,22 @@
 .mock-exam-answer-controls {
   border: 0;
   padding: 0;
-  margin: 16px 0 0;
+  margin: 8px 0 0;
   min-width: 0;
 }
 .mock-exam-answer-controls [role="radiogroup"] {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 .mock-exam-answer-controls [role="radiogroup"] label {
   position: relative;
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 8px;
-  min-height: 48px;
+  margin: 0;
+  padding: 6px 8px;
+  min-height: 44px;
+  line-height: 1.4;
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
@@ -65,7 +67,7 @@
   margin: 8px 0;
 }
 .mock-exam-answer-controls .mock-exam-clear-answer {
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 .mock-exam-answer-controls button {

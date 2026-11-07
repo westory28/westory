@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -53,15 +54,34 @@ export const examChoiceNumber = (index: number) =>
   ["①", "②", "③", "④", "⑤"][index] || `${index + 1}.`;
 
 export function MockExamAnswerCheck() {
+  const maskId = useId();
   return (
     <svg
       className="mock-exam-answer-check"
       viewBox="0 0 36 36"
       aria-hidden="true"
     >
-      <path d="M7 18L14 27L30 5" />
-      <path d="M6 20L13 29L31 7" />
-      <path d="M8 19L14 26L29 6" />
+      <defs>
+        <mask
+          id={maskId}
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          width="36"
+          height="36"
+        >
+          <path
+            className="mock-exam-answer-check-reveal"
+            d="M6 19L14 28L31 5"
+            pathLength="100"
+          />
+        </mask>
+      </defs>
+      <g mask={`url(#${maskId})`}>
+        <path className="mock-exam-answer-check-ink" d="M7 18L14 27L30 5" />
+        <path className="mock-exam-answer-check-grain" d="M6 20L13 29L31 7" />
+        <path className="mock-exam-answer-check-grain" d="M8 19L14 26L29 6" />
+      </g>
     </svg>
   );
 }
@@ -335,14 +355,14 @@ function PencilMark({ correct }: { correct: boolean | null }) {
 type PaperPage = { columns: number[][]; height: number };
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
-const COLUMN_ROOM = 906;
-const FIRST_COLUMN_ROOM = 824;
+const QUESTION_GAP = 16;
+const FOOTER_GAP = 16;
 
 export default function MockExamPaper({
   questions,
   answers = {},
   round = "round_1",
-  studentLabel = "3학년 00반 00번 이름:",
+  studentLabel = "3학년　　반　　번　 이름:",
   score,
   checks = [],
   onQuestionSelect,
@@ -364,9 +384,17 @@ export default function MockExamPaper({
   const container = useRef<HTMLDivElement>(null);
   const measurements = useRef<HTMLDivElement>(null);
   const instructions = useRef<HTMLElement>(null);
+  const firstSheet = useRef<HTMLElement>(null);
+  const firstColumns = useRef<HTMLDivElement>(null);
+  const firstFooter = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(PAGE_WIDTH);
   const [heights, setHeights] = useState<number[]>([]);
   const [instructionsHeight, setInstructionsHeight] = useState(120);
+  const [pageLayout, setPageLayout] = useState({
+    firstTop: 194,
+    laterTop: 116,
+    footerReserve: 90,
+  });
   const [lastSelectedId, setLastSelectedId] = useState<string | number | null>(
     null,
   );
@@ -456,7 +484,10 @@ export default function MockExamPaper({
     if (!element) return;
     const update = () => {
       if (element.offsetWidth > 0)
-        setInstructionsHeight(element.offsetHeight + 16);
+        setInstructionsHeight(
+          element.offsetHeight +
+            parseFloat(getComputedStyle(element).marginBottom),
+        );
     };
     update();
     const observer = new ResizeObserver(update);
@@ -464,13 +495,51 @@ export default function MockExamPaper({
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
+    const sheet = firstSheet.current;
+    const columns = firstColumns.current;
+    const footer = firstFooter.current;
+    if (!sheet || !columns || !footer) return;
+    let active = true;
+    const update = () => {
+      if (!active || sheet.offsetWidth === 0) return;
+      const sheetStyle = getComputedStyle(sheet);
+      const next = {
+        firstTop: columns.offsetTop,
+        laterTop:
+          parseFloat(sheetStyle.paddingTop) +
+          parseFloat(
+            sheetStyle.getPropertyValue("--mock-exam-running-title-height"),
+          ),
+        footerReserve:
+          footer.offsetHeight +
+          parseFloat(getComputedStyle(footer).bottom) +
+          FOOTER_GAP,
+      };
+      setPageLayout((previous) =>
+        previous.firstTop === next.firstTop &&
+        previous.laterTop === next.laterTop &&
+        previous.footerReserve === next.footerReserve
+          ? previous
+          : next,
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    Array.from(sheet.children).forEach((node) => observer.observe(node));
+    void document.fonts.ready.then(update);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, []);
+  useLayoutEffect(() => {
     const element = measurements.current;
     if (!element) return;
     let active = true;
     const update = () => {
       if (!active || element.offsetWidth === 0) return;
-      const next = Array.from(element.children).map(
-        (node) => Math.ceil((node as HTMLElement).offsetHeight) + 24,
+      const next = Array.from(element.children).map((node) =>
+        Math.ceil((node as HTMLElement).offsetHeight),
       );
       setHeights((previous) =>
         previous.join() === next.join() ? previous : next,
@@ -515,12 +584,20 @@ export default function MockExamPaper({
       const run = getMockExamSetRun(questions, index);
       const last = run?.end ?? index;
       let page = output[output.length - 1];
-      const room = output.length === 1 ? FIRST_COLUMN_ROOM : COLUMN_ROOM;
-      const height = Array.from(
-        { length: last - index + 1 },
-        (_, i) => heights[index + i] || 260,
-      ).reduce((sum, value) => sum + value, 0);
-      if (page.columns[column].length > 0 && used + height > room) {
+      const room =
+        PAGE_HEIGHT -
+        (output.length === 1 ? pageLayout.firstTop : pageLayout.laterTop) -
+        pageLayout.footerReserve;
+      const height =
+        Array.from(
+          { length: last - index + 1 },
+          (_, i) => heights[index + i] || 260,
+        ).reduce((sum, value) => sum + value, 0) +
+        QUESTION_GAP * (last - index);
+      if (
+        page.columns[column].length > 0 &&
+        used + QUESTION_GAP + height > room
+      ) {
         if (column === 0) column = 1;
         else {
           output.push({ columns: [[], []], height: PAGE_HEIGHT });
@@ -529,19 +606,19 @@ export default function MockExamPaper({
         used = 0;
       }
       page = output[output.length - 1];
+      if (page.columns[column].length > 0) used += QUESTION_GAP;
       for (let i = index; i <= last; i++) page.columns[column].push(i);
       used += height;
       page.height = Math.max(
         page.height,
         used +
-          (output.length === 1
-            ? PAGE_HEIGHT - FIRST_COLUMN_ROOM
-            : PAGE_HEIGHT - COLUMN_ROOM),
+          (output.length === 1 ? pageLayout.firstTop : pageLayout.laterTop) +
+          pageLayout.footerReserve,
       );
       index = last + 1;
     }
     return output;
-  }, [questions, heights, instructionsHeight]);
+  }, [questions, heights, instructionsHeight, pageLayout]);
   const scale = Math.max(0.1, width / PAGE_WIDTH);
   return (
     <div
@@ -578,6 +655,7 @@ export default function MockExamPaper({
           style={{ height: page.height * scale }}
         >
           <section
+            ref={pageIndex === 0 ? firstSheet : undefined}
             className="mock-exam-sheet"
             aria-label={`${pageIndex + 1}쪽`}
             style={{
@@ -632,7 +710,10 @@ export default function MockExamPaper({
             ) : (
               <header className="mock-exam-running-title">{title}</header>
             )}
-            <div className="mock-exam-columns">
+            <div
+              ref={pageIndex === 0 ? firstColumns : undefined}
+              className="mock-exam-columns"
+            >
               {page.columns.map((items, column) => (
                 <div className="mock-exam-column" key={column}>
                   {pageIndex === 0 && column === 0 && (
@@ -736,12 +817,19 @@ export default function MockExamPaper({
                 </div>
               ))}
             </div>
-            <footer className="mock-exam-page-number">
+            <footer
+              ref={pageIndex === 0 ? firstFooter : undefined}
+              className="mock-exam-page-number"
+            >
               <div>
                 3학년 역사　{pages.length} - {pageIndex + 1}
               </div>
               <div className="mock-exam-copyright">
-                이 시험지의 저작권은 위스토리에 있습니다.
+                <p>이 시험문제의 저작권은 위스토리에 있습니다.</p>
+                <p>
+                  저작권법에 보호받는 저작물이므로 무단 전재 및 복제는 금지되며,
+                  이를 어길 시 저작권법에 의거해 처벌될 수 있습니다.
+                </p>
               </div>
             </footer>
           </section>
