@@ -442,7 +442,38 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
                 mark === "underline" ? "quiz-visual-underline-button" : ""
               }
             >
-              {title}
+              {mark === "bullet" && (
+                <svg
+                  className="quiz-visual-tool-icon"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <circle cx="3" cy="5" r="1.25" fill="currentColor" />
+                  <circle cx="3" cy="10" r="1.25" fill="currentColor" />
+                  <circle cx="3" cy="15" r="1.25" fill="currentColor" />
+                  <path d="M7 5h10M7 10h10M7 15h10" />
+                </svg>
+              )}
+              {mark === "text" && (
+                <svg
+                  className="quiz-visual-tool-icon"
+                  viewBox="0 0 20 20"
+                  aria-hidden="true"
+                >
+                  <path d="m7 15-4-4a1.5 1.5 0 0 1 0-2l6-6a1.5 1.5 0 0 1 2 0l6 6a1.5 1.5 0 0 1 0 2l-4 4H7Zm-2-8 8 8M7 17h11" />
+                </svg>
+              )}
+              <span
+                className={
+                  mark === "box"
+                    ? "quiz-visual-box-sample"
+                    : mark === "blank"
+                      ? "quiz-visual-blank-sample"
+                      : undefined
+                }
+              >
+                {title}
+              </span>
             </button>
           ))}
           <button
@@ -453,6 +484,9 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
             onMouseDown={(event) => event.preventDefault()}
             onClick={openBlankSettings}
           >
+            <span className="quiz-visual-box-sample" aria-hidden="true">
+              (가)
+            </span>
             빈칸 네모
           </button>
           <button

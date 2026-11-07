@@ -39,10 +39,10 @@ export const executeLearningCommand=forbidden,executeAssessmentManagementCommand
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
 export const useAppToast=()=>({showToast:()=>{}});
 export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>!qa.readOnly;
-const classes=[1,2].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)}));
+const classes=[1,2,3,4,5,6].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)})).concat({id:'other_grade',label:'2학년 1반',grade:'2',classNumber:'1'});
 const assessments=[...['unit-a','unit-b'].flatMap(unitId=>['diagnostic','formative'].map(category=>({id:unitId+'-'+category,unitId,unitTitle:unitId==='unit-a'?'조선의 통치 체제':'사림 세력의 성장',category,examRound:'',title:category==='diagnostic'?'진단평가':'형성평가',questionCount:1}))),...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
 const questions=[1,2].map(n=>({id:n,docId:String(n),unitId:'exam_prep',category:'exam_prep',examRound:'round_1',type:'choice',question:n+'번 합성 문항',options:['정답','오답'],answer:'정답',paperOrder:n,points:50,sourceRevision:'1',contentRevision:1,curriculumVersion:'2018-162',achievementStandardCodes:['9역12-01'],targetAchievementLevel:'C',intendedDifficulty:'medium'}));
-const attempts=(scope,paper)=>!qa.withAttempt?[]:[{id:'fixture-result',source:'canonical',raw:{studentUid:'synthetic-1',semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt',submittedAtIso:'2026-11-07T09:00:00Z',startedAtIso:'2026-11-07T08:40:00Z',percent:100,total:2,answerChecks:paper.map(q=>({id:q.id,correct:true})),answers:{1:'정답',2:'정답'},learningSnapshot:paper,questionSnapshots:paper}}];
+const attempts=(scope,paper,students)=>!qa.withAttempt?[]:students.filter((_,i)=>i%2===0).map((student,i)=>({id:'fixture-result-'+i,source:'canonical',raw:{studentUid:student.uid,semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt-'+i,submittedAtIso:'2026-11-07T09:00:00Z',startedAtIso:'2026-11-07T08:40:00Z',percent:100,total:2,answerChecks:paper.map(q=>({id:q.id,correct:true})),answers:{1:'정답',2:'정답'},learningSnapshot:paper,questionSnapshots:paper}}));
 export const callWithApplicationSession=async(name,input)=>{
   if(name!=='getQuizClassAnalysis')throw new Error('Unexpected callable '+name);
   const data=structuredClone(input);
@@ -50,10 +50,15 @@ export const callWithApplicationSession=async(name,input)=>{
   if(qa.hold===data.mode)await new Promise(resolve=>qa.pending.push(resolve));
   if(qa.fail===data.mode){qa.fail='';throw new Error('Synthetic outage');}
   if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes,assessments,treeData:tree,generatedAt:'2026-11-07T09:00:00Z'}};
-  if(data.mode==='summary')return {data:{...data,classes:data.classIds.map(classId=>({classId,label:classes.find(c=>c.id===classId).label,rosterCount:2,submittedCount:0,unsubmittedCount:2,scoredCount:0,averageScore:null,behaviorCounts:{suspected_guessing:0,repeated_choice:0,unflagged:0,insufficient:0,no_attempt:2},scoreHistogram:[0,20,40,60,80].map((lower,i)=>({label:'',lower,upper:i===4?101:lower+20,count:0})),questions:[],concepts:[],relearning:{repeatedStudentCount:0,wrongToCorrectCount:0,correctToWrongCount:0},generatedAt:'2026-11-07T09:00:00Z',version:'v1',complete:true,smallSample:true})),generatedAt:'2026-11-07T09:00:00Z'}};
+  const selectedClasses=classes.filter(c=>data.grade?c.grade===data.grade:data.classIds.includes(c.id));
+  const students=selectedClasses.flatMap(c=>[1,2].map(n=>({uid:'synthetic-'+c.id+'-'+n,name:'합성 미응시 '+n,number:String(n),classId:c.id})));
+  if(data.mode==='summary'){
+    const rows=selectedClasses.map(c=>({classId:c.id,label:c.label,rosterCount:2,submittedCount:0,unsubmittedCount:2,scoredCount:0,averageScore:null,behaviorCounts:{suspected_guessing:0,repeated_choice:0,unflagged:0,insufficient:0,no_attempt:2},scoreHistogram:[0,20,40,60,80].map((lower,i)=>({label:'',lower,upper:i===4?101:lower+20,count:0})),questions:[],concepts:[],relearning:{repeatedStudentCount:0,wrongToCorrectCount:0,correctToWrongCount:0},generatedAt:'2026-11-07T09:00:00Z',version:'v1',complete:true,smallSample:true}));
+    return {data:{...data,classes:rows,...(data.grade?{gradeComparison:{...rows[0],grade:data.grade,classId:'grade:'+data.grade,label:data.grade+'학년 전체',rosterCount:students.length,unsubmittedCount:students.length,classCount:rows.length,respondingClassCount:0,weighting:'scored_students'}}:{}),generatedAt:'2026-11-07T09:00:00Z'}};
+  }
   if(data.mode==='achievement'||data.mode==='detail'){
     const paper=questions.map(q=>({...q,examRound:data.examRound,achievementStandardCodes:[data.examRound==='round_1'?'9역10-01':'9역10-02']}));
-    return {data:{semesterId:data.semesterId,complete:true,students:[1,2].map(n=>({uid:'synthetic-'+n,name:'합성 미응시 '+n,number:String(n),classId:data.classIds[0]})),rawRows:attempts(data,paper),questions:paper,treeData:tree,configuredClasses:classes.filter(c=>data.classIds.includes(c.id)),generatedAt:'2026-11-07T09:00:00Z',version:'v1',achievementEvidence:{version:1,status:'ready',observations:[]},profiles:[],canReview:false}};
+    return {data:{semesterId:data.semesterId,...(data.grade?{grade:qa.wrongGrade?'2':data.grade}:{}),complete:true,students,rawRows:attempts(data,paper,students),questions:paper,treeData:tree,configuredClasses:selectedClasses,generatedAt:'2026-11-07T09:00:00Z',version:'v1',achievementEvidence:{version:1,status:'ready',observations:[]},profiles:[],canReview:false}};
   }
   throw new Error('Unnecessary '+data.mode+' request on achievement entry');
 };
@@ -86,7 +91,7 @@ try {
   const classSelect=()=>page.getByRole("combobox",{name:"분석할 학급",exact:true});
   const query=()=>page.getByRole("button",{name:"결과 조회",exact:true});
   const report=()=>page.getByRole("combobox",{name:"분석 항목",exact:true});
-  const pending=()=>page.getByText("학급을 선택하고 결과를 조회해 주세요.",{exact:true});
+  const pending=()=>page.getByText("학년 또는 학급을 선택하고 결과를 조회해 주세요.",{exact:true});
   const analysis=()=>page.getByRole("region",{name:"성취기준 분석",exact:true});
   const assertNoOverflow=async(width)=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`no page overflow at ${width}`);
   const screenshot=async(name)=>{await page.screenshot({path:path.join(evidence,name),fullPage:true});screenshots.push(name);};
@@ -307,6 +312,51 @@ try {
   checks.push("unit-scoped assessment and report selectors; no nested main tabs or duplicate query; detail dialog controls preserved");
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
   checks.push("direct analysis entry shares one tree read and reset preserves its unit without writes");
+  // A whole grade is one explicit server scope, not a series of class requests.
+  await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=exam_prep&category=exam_prep")}`);
+  await pending().waitFor();
+  await classSelect().selectOption({label:'3학년 전체'});
+  assert.deepEqual(await modes(),['catalog']);
+  await query().click();await analysis().getByText('첫 제출 0명',{exact:true}).waitFor();
+  assert.deepEqual(await modes(),['catalog','achievement']);
+  const gradeRequest=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
+  assert.equal(gradeRequest.grade,'3');assert.deepEqual(gradeRequest.classIds,[]);
+  assert.equal(Object.hasOwn(gradeRequest,'comparisonGrade'),false);
+  await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
+  await query().click();await analysis().getByText('첫 제출 6명',{exact:true}).waitFor();
+  await report().selectOption('4');
+  await analysis().getByText('3학년 1반 1번 합성 미응시 1',{exact:true}).waitFor();
+  assert.equal(await analysis().getByText('3학년 6반 1번 합성 미응시 1',{exact:true}).count(),1);
+  assert.equal(await analysis().getByText(/2학년 1반/).count(),0);
+  for(const width of [320,390,768,1440]){
+    await page.setViewportSize({width,height:900});await assertNoOverflow(width);
+    await screenshot(`grade-analysis-${width}.png`);
+  }
+  await report().selectOption('summary');await query().click();
+  await page.getByRole('button',{name:'문항·학생 상세 3학년 전체',exact:true}).click();
+  const gradeDetail=page.getByRole('dialog',{name:'3학년 전체 · 문항·학생 상세',exact:true});
+  await gradeDetail.waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.calls.at(-1).grade),'3');
+  await gradeDetail.getByRole('button',{name:'학생',exact:true}).click();
+  await gradeDetail.getByText('학생 12명',{exact:true}).waitFor();
+  await gradeDetail.getByRole('button',{name:'상세 닫기',exact:true}).click();
+  await page.getByRole('button',{name:'문항·학생 상세 3학년 2반',exact:true}).click();
+  await page.getByRole('dialog',{name:'3학년 2반 · 문항·학생 상세',exact:true}).waitFor();
+  const classRequest=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
+  assert.deepEqual(classRequest.classIds,['class_2']);assert.equal(Object.hasOwn(classRequest,'grade'),false);
+  await page.getByRole('button',{name:'상세 닫기',exact:true}).click();
+  await report().selectOption('0');
+  await page.evaluate(()=>window.analysisEntryQa.wrongGrade=true);
+  await query().click();await analysis().getByRole('alert').waitFor();
+  assert.equal(await analysis().getByText('첫 제출 6명',{exact:true}).count(),0,'wrong grade responses never render');
+  await page.evaluate(()=>{window.analysisEntryQa.wrongGrade=false;window.analysisEntryQa.hold='achievement';});
+  await query().click();await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
+  await classSelect().selectOption('class_1');
+  await page.evaluate(()=>{window.analysisEntryQa.hold='';window.analysisEntryQa.release();});
+  await pending().waitFor();
+  assert.equal(await analysis().getByText('첫 제출 6명',{exact:true}).count(),0,'stale grade response never repopulates a class selection');
+  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
+  checks.push('whole-grade achievement and student detail, six classes, class labels, explicit single request, scope rejection and delayed response isolation');
   await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=unit-a&readonly=1")}`);
   await page.waitForFunction(()=>document.querySelector('[aria-label="분석할 평가"] option[value="unit-a-diagnostic"]'));
   assert.equal(await page.getByRole("button",{name:"문제 등록",exact:true}).count(),0,"read-only teachers cannot open authoring");

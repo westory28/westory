@@ -61,6 +61,21 @@ const statisticReason = (reason: string | null) =>
     constant_rest_score: "나머지 정답수 동일",
   })[reason || ""] || "자료 부족";
 
+const studentLabel = (
+  student: QuizClassAchievement["students"][number] | undefined,
+  data: QuizClassAchievement,
+) =>
+  [
+    data.grade || data.configuredClasses.length > 1
+      ? data.configuredClasses.find((entry) => entry.id === student?.classId)
+          ?.label
+      : "",
+    student?.number ? `${student.number}번` : "",
+    student?.name || "이름 미등록",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
 export default function QuizAchievementAnalysis({
   scope,
   identityKey,
@@ -106,8 +121,10 @@ export default function QuizAchievementAnalysis({
     identityKey,
     scope.semesterId,
     scope.unitId,
+    scope.category,
     scope.examRound,
     scope.classIds,
+    scope.grade,
   ]);
   useEffect(() => {
     let active = true;
@@ -132,8 +149,17 @@ export default function QuizAchievementAnalysis({
       .then((result) => {
         if (
           result.semesterId !== scope.semesterId ||
+          result.complete === false ||
+          (result.grade || "") !== (scope.grade || "") ||
+          (scope.grade && !result.configuredClasses.length) ||
+          new Set(result.students.map((student) => student.uid)).size !==
+            result.students.length ||
           result.students.some(
-            (student) => student.classId !== scope.classIds[0],
+            (student) =>
+              !result.configuredClasses.some(
+                (entry) => entry.id === student.classId,
+              ) ||
+              (!scope.grade && student.classId !== scope.classIds[0]),
           )
         )
           throw new Error("분석 범위가 바뀌었습니다. 다시 조회해 주세요.");
@@ -329,7 +355,7 @@ export default function QuizAchievementAnalysis({
         ) : (
           <p role="status" className="qca-muted">
             {!enabled
-              ? "학급을 선택하고 결과를 조회해 주세요."
+              ? "학년 또는 학급을 선택하고 결과를 조회해 주세요."
               : "성취기준과 사전 학습 근거를 불러오는 중입니다."}
           </p>
         )}
@@ -342,6 +368,16 @@ export default function QuizAchievementAnalysis({
   };
   const saveLevel = async (uid: string) => {
     if (!standardCode || !canEdit || data.canReview !== true || saving) return;
+    const studentClassId = data.students.find(
+      (student) => student.uid === uid,
+    )?.classId;
+    if (
+      !studentClassId ||
+      !data.configuredClasses.some((entry) => entry.id === studentClassId)
+    ) {
+      setSaveError("학생의 학급을 확인하지 못했습니다. 다시 조회해 주세요.");
+      return;
+    }
     const attempt = analysis.attempts.find((value) => value.studentUid === uid);
     const existing = data.profiles?.find(
       (value) =>
@@ -376,7 +412,7 @@ export default function QuizAchievementAnalysis({
     try {
       await executeLearningCommand("saveAchievementProfile", {
         semesterId: scope.semesterId,
-        classId: scope.classIds[0],
+        classId: studentClassId,
         unitId: scope.unitId,
         examRound: scope.examRound,
         studentUid: uid,
@@ -466,6 +502,7 @@ export default function QuizAchievementAnalysis({
           </p>
         )}
       <div className="qaa-scope">
+        {data.grade && <span>{data.grade}학년 전체</span>}
         <span>첫 제출 {analysis.attempts.length}명</span>
         {analysis.unclassifiedItemCount > 0 && (
           <span>미연결 응답 {analysis.unclassifiedItemCount}건</span>
@@ -910,8 +947,7 @@ export default function QuizAchievementAnalysis({
                     return (
                       <tr key={row.student.uid}>
                         <th>
-                          {row.student.number || ""}{" "}
-                          {row.student.name || "이름 미등록"}
+                          {studentLabel(row.student, data)}
                           <button
                             type="button"
                             className="qaa-text-button"
@@ -952,7 +988,7 @@ export default function QuizAchievementAnalysis({
                             <small>준거 변경 · 재확인 필요</small>
                           )}
                           <select
-                            aria-label={`${row.student.name || row.student.number} 성취수준`}
+                            aria-label={`${data.grade ? studentLabel(row.student, data) : row.student.name || row.student.number} 성취수준`}
                             value={selected}
                             disabled={!canEdit || !data.canReview || !!saving}
                             onChange={(event) =>
@@ -1135,11 +1171,9 @@ function EvidenceDetails({
               achievementTimestamp(a.observedAt)!,
           );
   return (
-    <section aria-label={`${student?.name || "학생"} 사전 근거`}>
+    <section aria-label={`${studentLabel(student, data)} 사전 근거`}>
       <div className="qca-section-heading">
-        <h4>
-          {student?.number || ""} {student?.name || "학생"} · 사전 근거
-        </h4>
+        <h4>{studentLabel(student, data)} · 사전 근거</h4>
         <InfoHelp label="근거 보관 범위">
           모의고사 시작 전 기록입니다. 같은 문항의 반복 응답은 각각 확인할 수
           있으나 요약에는 마지막 상태, 예상에는 독립 문항계열 최초 응답을
@@ -1719,9 +1753,7 @@ function SpTable({
             );
             return (
               <tr key={row.studentId}>
-                <th>
-                  {student?.number || ""} {student?.name || "학생"}
-                </th>
+                <th>{studentLabel(student, data)}</th>
                 <td>{row.correctCount}</td>
                 <td>{number(row.cautionIndex, 3)}</td>
                 {ids.map((id, index) => {

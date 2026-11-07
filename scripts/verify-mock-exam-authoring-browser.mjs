@@ -277,6 +277,44 @@ try {
   await compose.getByLabel("발문", { exact: true }).fill("직접 등록한 자료를 보고 옳은 설명을 고르시오.");
   const live = compose.getByRole("complementary", { name: "학생 화면 미리보기" });
   await live.locator('.mock-exam-stem').filter({hasText:"직접 등록한 자료를 보고 옳은 설명을 고르시오."}).waitFor();
+  const passageToolbar = compose.getByRole("toolbar", { name: "읽기 자료 글상자 서식", exact: true });
+  const passageEditor = compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true });
+  await passageEditor.fill("서식 예시");
+  await passageEditor.press("Control+A");
+  await passageToolbar.getByRole("button", { name: "읽기 자료 글상자 밑줄", exact: true }).click();
+  assert.equal(await passageEditor.locator('[data-quiz-mark="underline"]').textContent(), "서식 예시", "Toolbar pointer actions retain the editor selection");
+  await passageToolbar.getByRole("button", { name: "읽기 자료 글상자 실행 취소", exact: true }).click();
+  assert.equal(await passageEditor.locator('[data-quiz-mark="underline"]').count(), 0);
+  await passageToolbar.getByRole("button", { name: "읽기 자료 글상자 네모", exact: true }).click();
+  assert.equal(await passageEditor.locator('[data-quiz-mark="box"]').textContent(), "서식 예시");
+  await passageToolbar.getByRole("button", { name: "읽기 자료 글상자 서식 지우기", exact: true }).click();
+  assert.equal(await passageEditor.locator('[data-quiz-mark="box"]').count(), 0);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await passageToolbar.scrollIntoViewIfNeeded();
+    const tools = await passageToolbar.evaluate(el => {
+      const outer = el.getBoundingClientRect();
+      return {
+        outer: { left: outer.left, right: outer.right },
+        document: document.documentElement.scrollWidth,
+        controls: Array.from(el.children).filter(child => child.tagName === "BUTTON").map(button => {
+          const box = button.getBoundingClientRect(), style = getComputedStyle(button);
+          return { name: button.getAttribute("aria-label"), width: box.width, height: box.height, left: box.left, right: box.right, border: parseFloat(style.borderTopWidth), borderStyle: style.borderTopStyle, background: style.backgroundColor };
+        }),
+        boxSample: getComputedStyle(el.querySelector('[aria-label="읽기 자료 글상자 네모"] span')).borderTopStyle,
+        underline: getComputedStyle(el.querySelector('[aria-label="읽기 자료 글상자 밑줄"]')).textDecorationLine,
+      };
+    });
+    assert(tools.document <= width + 1, JSON.stringify(tools));
+    assert.equal(tools.controls.length, 10);
+    assert(tools.controls.every(button => button.width >= 44 && button.height >= 44 && button.left >= tools.outer.left && button.right <= tools.outer.right && button.border >= 1 && button.borderStyle === "solid" && button.background !== "rgba(0, 0, 0, 0)"), JSON.stringify(tools));
+    assert.equal(tools.boxSample, "solid");
+    assert(tools.underline.includes("underline"));
+    await page.screenshot({ path: path.join(evidence, `teacher-passage-toolbar-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await passageEditor.fill("");
+  checks.push("Passage formatting tools use individual bordered buttons and visible format samples at 320/390/768/1280px; mouse formatting preserves selection and undo/clear still work.");
   await compose.getByRole("button", { name: "〈보기〉 추가", exact: true }).click();
   await compose.getByRole("textbox", { name: "보기", exact: true }).fill("ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
   await live.locator('.mock-exam-example').filter({hasText:"ㄱ. 합성 첫 번째 설명"}).waitFor();

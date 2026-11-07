@@ -283,12 +283,15 @@ export default function QuizClassAnalysis({
   const showAchievement =
     isMockExam && analysisMode === "achievement" && !searchOpen;
   const selectedClass = catalog?.classes.find((entry) => entry.id === classId);
+  const selectedGrade = classId.startsWith("grade:") ? classId.slice(6) : "";
   const grades = [
     ...new Set(
       catalog?.classes.map((entry) => entry.grade).filter(Boolean) || [],
     ),
   ];
-  const classIds = [classId, ...compareIds].filter(Boolean);
+  const classIds = selectedGrade
+    ? []
+    : [classId, ...compareIds].filter(Boolean);
   const queryKeyword = searchOpen
     ? keyword.normalize("NFC").trim().replace(/\s+/g, " ")
     : "";
@@ -345,7 +348,8 @@ export default function QuizClassAnalysis({
         unitId: assessment.unitId,
         category: assessment.category,
         examRound: assessment.examRound,
-        classIds: [classId],
+        classIds: selectedGrade ? [] : [classId],
+        ...(selectedGrade ? { grade: selectedGrade } : {}),
       });
       setAchievementVersion((value) => value + 1);
     } else void loadSummary(!!summary);
@@ -390,8 +394,9 @@ export default function QuizClassAnalysis({
             category: queryKeyword ? "" : assessment!.category,
             examRound: queryKeyword ? "" : assessment!.examRound || "",
             classIds,
+            ...(selectedGrade ? { grade: selectedGrade } : {}),
             ...(queryKeyword ? { keyword: queryKeyword } : {}),
-            ...(comparisonGrade ? { comparisonGrade } : {}),
+            ...(!selectedGrade && comparisonGrade ? { comparisonGrade } : {}),
           };
     const run = ++requestId.current;
     ++detailRequestId.current;
@@ -408,22 +413,30 @@ export default function QuizClassAnalysis({
       const data = await getQuizClassSummary(scope, identityKey, forceRefresh);
       if (run !== requestId.current || identityRef.current !== identityKey)
         return;
+      const expectedClasses = scope.grade
+        ? data.classes.map((entry) => entry.classId)
+        : scope.classIds;
       if (
         data.semesterId !== scope.semesterId ||
+        (data.grade || "") !== (scope.grade || "") ||
         data.unitId !== scope.unitId ||
         data.category !== scope.category ||
         (data.examRound || "") !== scope.examRound ||
         (data.keyword || "") !== (scope.keyword || "") ||
-        data.classes.length !== scope.classIds.length ||
+        (scope.grade &&
+          (!data.classes.length ||
+            data.gradeComparison?.classCount !== data.classes.length)) ||
+        data.classes.length !== expectedClasses.length ||
         new Set(data.classes.map((row) => row.classId)).size !==
-          scope.classIds.length ||
+          expectedClasses.length ||
         data.classes.some(
           (row) =>
-            !scope.classIds.includes(row.classId) || row.complete === false,
+            !expectedClasses.includes(row.classId) || row.complete === false,
         ) ||
-        (scope.comparisonGrade &&
-          (data.gradeComparison?.grade !== scope.comparisonGrade ||
-            data.gradeComparison.complete === false))
+        ((scope.grade || scope.comparisonGrade) &&
+          (data.gradeComparison?.grade !==
+            (scope.grade || scope.comparisonGrade) ||
+            data.gradeComparison?.complete === false))
       )
         throw new Error("Analysis scope mismatch");
       setLoadedScope(scope);
@@ -444,8 +457,20 @@ export default function QuizClassAnalysis({
   ) => {
     if (!loadedScope) return;
     const run = ++detailRequestId.current;
-    const { comparisonGrade: _comparisonGrade, ...detailScope } = loadedScope;
-    const scope = { ...detailScope, classIds: [row.classId] };
+    const {
+      comparisonGrade: _comparisonGrade,
+      grade: _grade,
+      ...detailScope
+    } = loadedScope;
+    const grade =
+      row.classId === summary?.gradeComparison?.classId
+        ? loadedScope.grade
+        : undefined;
+    const scope = {
+      ...detailScope,
+      classIds: grade ? [] : [row.classId],
+      ...(grade ? { grade } : {}),
+    };
     detailFilter.current = behaviorFilter || detail?.behaviorFilter;
     if (!detail && document.activeElement instanceof HTMLElement)
       detailTrigger.current = document.activeElement;
@@ -463,7 +488,16 @@ export default function QuizClassAnalysis({
         return;
       if (
         data.complete === false ||
-        data.students.some((student) => student.classId !== row.classId) ||
+        data.semesterId !== scope.semesterId ||
+        (data.grade || "") !== (grade || "") ||
+        data.students.some(
+          (student) =>
+            !data.configuredClasses.some(
+              (entry) => entry.id === student.classId,
+            ),
+        ) ||
+        (!grade &&
+          data.students.some((student) => student.classId !== row.classId)) ||
         (data.keyword || "") !== (scope.keyword || "")
       )
         throw new Error("Detail scope mismatch");
@@ -587,8 +621,13 @@ export default function QuizClassAnalysis({
       : "평가 결과";
   const rows = summary
     ? [
+        ...(summary.grade && summary.gradeComparison
+          ? [summary.gradeComparison]
+          : []),
         ...summary.classes,
-        ...(summary.gradeComparison ? [summary.gradeComparison] : []),
+        ...(!summary.grade && summary.gradeComparison
+          ? [summary.gradeComparison]
+          : []),
       ]
     : [];
 
@@ -650,7 +689,7 @@ export default function QuizClassAnalysis({
             </select>
           </label>
           <label>
-            학급
+            학년·학급
             <select
               aria-label="분석할 학급"
               value={classId}
@@ -658,8 +697,11 @@ export default function QuizClassAnalysis({
               onChange={(event) => {
                 clearResult();
                 setClassId(event.target.value);
+                setComparisonOpen(false);
                 setCompareIds((ids) =>
-                  ids.filter((id) => id !== event.target.value),
+                  event.target.value.startsWith("grade:")
+                    ? []
+                    : ids.filter((id) => id !== event.target.value),
                 );
                 if (comparisonGrade)
                   setComparisonGrade(
@@ -670,6 +712,11 @@ export default function QuizClassAnalysis({
               }}
             >
               <option value="">학급 선택</option>
+              {grades.map((grade) => (
+                <option value={`grade:${grade}`} key={`grade:${grade}`}>
+                  {grade}학년 전체
+                </option>
+              ))}
               {catalog?.classes.map((entry) => (
                 <option value={entry.id} key={entry.id}>
                   {entry.label}
@@ -716,7 +763,12 @@ export default function QuizClassAnalysis({
                 aria-expanded={comparisonOpen}
                 aria-controls={comparisonOpen ? comparisonId : undefined}
                 onClick={() => setComparisonOpen(!comparisonOpen)}
-                disabled={!classId || catalogLoading || showAchievement}
+                disabled={
+                  !classId ||
+                  !!selectedGrade ||
+                  catalogLoading ||
+                  showAchievement
+                }
               >
                 <svg
                   width="20"
@@ -952,7 +1004,7 @@ export default function QuizClassAnalysis({
         <p className="qca-empty">조회할 학급이 없습니다.</p>
       ) : !showAchievement && !summary && !error && !loading ? (
         <p className="qca-empty">
-          평가와 학급을 선택한 뒤 결과를 조회해 주세요.
+          평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.
         </p>
       ) : null}
       {showAchievement && (
@@ -989,7 +1041,7 @@ export default function QuizClassAnalysis({
       )}
       {loading && !showAchievement && (
         <p className="qca-empty" role="status">
-          선택한 학급의 결과를 불러오는 중입니다.
+          선택한 {selectedGrade ? "학년" : "학급"}의 결과를 불러오는 중입니다.
         </p>
       )}
       {summary && !showAchievement && (
@@ -1119,7 +1171,7 @@ export default function QuizClassAnalysis({
                               />
                             </td>
                             <td>
-                              {!aggregate && (
+                              {(!aggregate || !!loadedScope?.grade) && (
                                 <button
                                   ref={(button) => {
                                     if (button)
@@ -1201,7 +1253,8 @@ export default function QuizClassAnalysis({
                               <td key={category}>
                                 {counts == null ? (
                                   "—"
-                                ) : !aggregate && counts[category] > 0 ? (
+                                ) : (!aggregate || !!loadedScope?.grade) &&
+                                  counts[category] > 0 ? (
                                   <button
                                     type="button"
                                     className="qca-count-button"
@@ -1299,9 +1352,7 @@ export default function QuizClassAnalysis({
           <button
             type="button"
             onClick={() => {
-              const row = summary?.classes.find(
-                (item) => item.classId === failedDetailId,
-              );
+              const row = rows.find((item) => item.classId === failedDetailId);
               if (row) void loadDetail(row, false, detailFilter.current);
             }}
           >
@@ -1401,7 +1452,7 @@ export default function QuizClassAnalysis({
                     : undefined
                 }
                 onReload={() => {
-                  const row = summary?.classes.find(
+                  const row = rows.find(
                     (entry) => entry.classId === detail.classId,
                   );
                   if (row) void loadDetail(row, true);
@@ -1410,7 +1461,7 @@ export default function QuizClassAnalysis({
                   unitId: detail.scope.unitId,
                   category: detail.scope.category,
                   examRound: detail.scope.examRound,
-                  classId: detail.classId,
+                  classId: detail.scope.grade ? "" : detail.classId,
                   keyword: detail.scope.keyword,
                   questionIds: detail.data.search?.questionIds,
                 }}

@@ -22,6 +22,9 @@ const seed = {
   [`semester_manifests/${semesterId}`]: { semesterId, status: 'ACTIVE', revision: 1 },
   'semester_classes/class_1': { semesterId, grade: '3', classNumber: '1', status: 'ACTIVE' },
   'semester_classes/class_2': { semesterId, grade: '3', classNumber: '2', status: 'ACTIVE' },
+  'semester_classes/other_grade': { semesterId, grade: '2', classNumber: '1', status: 'ACTIVE' },
+  'semester_classes/inactive_class': { semesterId, grade: '3', classNumber: '3', status: 'INACTIVE' },
+  'semester_classes/old_class': { semesterId: '2026-1', grade: '3', classNumber: '4', status: 'ACTIVE' },
   [`users/${teacher}`]: { role: 'teacher', registrationApprovalStatus: 'APPROVED' },
   [`users/${student}`]: { role: 'student', name: '가상학생 A', grade: '3', class: '1', number: '1', email: 'a@example.invalid', registrationApprovalStatus: 'APPROVED' },
   [`users/${other}`]: { role: 'student', name: '가상학생 B', grade: '3', class: '2', number: '1', email: 'b@example.invalid', registrationApprovalStatus: 'APPROVED' },
@@ -50,7 +53,7 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
 (async () => {
   const batch = db.batch(); Object.entries(seed).forEach(([path, value]) => batch.set(db.doc(path), value)); await batch.commit();
   const catalog = await deployed.getQuizClassAnalysis.run(request(teacher, { mode: 'catalog' }));
-  assert.equal(catalog.classes.length, 2); assert.ok(catalog.assessments.some(a => a.unitId === 'unit-a'));
+  assert.equal(catalog.classes.length, 3); assert.ok(catalog.assessments.some(a => a.unitId === 'unit-a'));
   const scope = { mode: 'summary', unitId: 'unit-a', category: 'formative', classIds: ['class_1', 'class_2'] };
   const summary = await deployed.getQuizClassAnalysis.run(request(teacher, scope));
   assert.deepEqual(summary.classes.map(c => [c.rosterCount, c.submittedCount, c.averageScore]), [[1, 1, 0], [1, 1, 100]]);
@@ -60,6 +63,49 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   const detail = await deployed.getQuizClassAnalysis.run(request(teacher, { ...scope, mode: 'detail', classIds: ['class_1'] }));
   assert.deepEqual(detail.students.map(s => s.uid), [student]); assert.equal(detail.rawRows.length, 1);
   assert.equal(detail.rawRows[0].raw.answers['1'], '오답');
+  const gradeScope = { ...scope, classIds: [], grade: '3' };
+  const grade = await deployed.getQuizClassAnalysis.run(request(teacher, gradeScope));
+  assert.equal(grade.grade, '3');
+  assert.deepEqual(grade.classes.map(row => row.classId), ['class_1', 'class_2']);
+  assert.equal(grade.gradeComparison.averageScore, 50);
+  const warmGrade = await deployed.getQuizClassAnalysis.run(request(teacher, gradeScope));
+  assert.deepEqual(warmGrade.classes, grade.classes);
+  // Firestore-only emulator: no enrollment trigger is running during these changes.
+  await db.doc(`semester_enrollments/enroll_${student}`).update({ classId: 'class_2' });
+  const movedGrade = await deployed.getQuizClassAnalysis.run(request(teacher, gradeScope));
+  assert.deepEqual(movedGrade.classes.map(row => row.rosterCount), [0, 2]);
+  assert.equal(movedGrade.gradeComparison.rosterCount, 2);
+  await db.doc(`semester_enrollments/enroll_${student}`).update({ classId: 'class_1' });
+  const newUid = 'analysis-grade-new';
+  await db.doc(`semester_enrollments/enroll_${newUid}`).set({ semesterId, studentUid: newUid, classId: 'class_1', enrollmentStatus: 'ACTIVE' });
+  await db.doc(`semester_enrollment_slots/${slot(newUid)}`).set({ semesterId, studentUid: newUid, status: 'ACTIVE', activeEnrollmentId: `enroll_${newUid}` });
+  const addedGrade = await deployed.getQuizClassAnalysis.run(request(teacher, gradeScope));
+  assert.equal(addedGrade.gradeComparison.rosterCount, 3);
+  assert.equal(addedGrade.gradeComparison.scoredCount, 2);
+  await db.doc(`semester_enrollments/enroll_${newUid}`).update({ enrollmentStatus: 'INACTIVE' });
+  const removedGrade = await deployed.getQuizClassAnalysis.run(request(teacher, gradeScope));
+  assert.equal(removedGrade.gradeComparison.rosterCount, 2);
+  const gradeDetail = await deployed.getQuizClassAnalysis.run(request(teacher, { ...gradeScope, mode: 'detail' }));
+  assert.equal(gradeDetail.grade, '3');
+  assert.deepEqual(gradeDetail.students.map(row => row.uid).sort(), [student, other].sort());
+  assert.deepEqual(gradeDetail.configuredClasses.map(row => row.id), ['class_1', 'class_2']);
+  await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, gradeScope)), error => error.code === 'permission-denied');
+  await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, { ...gradeScope, classIds: ['class_1'] })), error => error.code === 'invalid-argument');
+  await db.doc('years/2026/semesters/2/quiz_questions/91').set({ id: 91, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    type: 'choice', question: '합성 모의 문항', contentRevision: 1, curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'] });
+  for (const uid of [student, other]) await db.doc(`semester_assessment_results/grade_exam_${uid}`).set({
+    semesterId, studentUid: uid, assessmentKind: 'QUIZ', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    attemptId: `grade_exam_${uid}`, startedAtIso: new Date(now - 60000).toISOString(), submittedAtIso: new Date(now).toISOString(),
+    total: 1, percent: 100, answerChecks: [{ id: 91, correct: true }], answers: { 91: '합성 답안' },
+  });
+  const gradeAchievement = await deployed.getQuizClassAnalysis.run(request(teacher, { ...gradeScope, mode: 'achievement',
+    unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' }));
+  assert.equal(gradeAchievement.grade, '3');
+  assert.equal(gradeAchievement.complete, true);
+  assert.deepEqual(gradeAchievement.rawRows.map(row => row.raw.studentUid).sort(), [student, other].sort());
+  assert.deepEqual(gradeAchievement.configuredClasses.map(row => row.id), ['class_1', 'class_2']);
+  // Remove only the synthetic extra exam records before the unchanged history assertions.
+  for (const uid of [student, other]) await db.doc(`semester_assessment_results/grade_exam_${uid}`).delete();
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, scope)), e => e.code === 'permission-denied');
   const history = await deployed.getMyQuizHistory.run(request(student, { mode: 'list' }));
   assert.equal(history.totalCount, 1); assert.equal(history.rows[0].score, 0);

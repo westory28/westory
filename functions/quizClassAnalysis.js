@@ -59,7 +59,7 @@ const studentRevisionRef = (db, scope, uid) => db.doc(`quiz_analysis_student_rev
 const dataOf = snap => snap?.exists ? snap.data() : {};
 
 function normalizeQuery(data) {
-  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'forceRefresh', 'keyword', 'comparisonGrade', '_session'];
+  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
     || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
     || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')) {
@@ -75,19 +75,25 @@ function normalizeQuery(data) {
     || !/^[1-9]\d?$/.test(data.comparisonGrade))) {
     fail('invalid-argument', '비교할 학년을 확인해 주세요.', 'QUIZ_ANALYSIS_GRADE_INVALID');
   }
+  if (data.grade !== undefined && (data.mode === 'catalog' || typeof data.grade !== 'string'
+    || !/^[1-9]\d?$/.test(data.grade) || data.comparisonGrade !== undefined)) {
+    fail('invalid-argument', '분석할 학년을 확인해 주세요.', 'QUIZ_ANALYSIS_GRADE_INVALID');
+  }
   if (query.mode === 'catalog') return query;
-  if (!Array.isArray(data.classIds) || data.classIds.length < 1 || data.classIds.length > (['detail', 'achievement'].includes(query.mode) ? 1 : 4)
+  if (!Array.isArray(data.classIds) || (data.grade ? data.classIds.length !== 0
+    : data.classIds.length < 1 || data.classIds.length > (['detail', 'achievement'].includes(query.mode) ? 1 : 4))
     || !data.classIds.every(validId) || new Set(data.classIds).size !== data.classIds.length
     || (!keyword && (!validId(data.unitId) || !['diagnostic', 'formative', 'exam_prep'].includes(data.category)
       || (data.category === 'exam_prep' && !/^round_[1-9]\d*$/.test(data.examRound || 'round_1'))
       || (data.category !== 'exam_prep' && data.examRound)))) {
-    fail('invalid-argument', '평가와 학급을 선택해 주세요. 비교는 최대 4개 학급까지 가능합니다.', 'QUIZ_ANALYSIS_QUERY_INVALID');
+    fail('invalid-argument', '평가와 학급 또는 학년을 선택해 주세요. 학급 비교는 최대 4개까지 가능합니다.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
   if (query.mode === 'achievement' && (keyword || data.comparisonGrade || data.category !== 'exam_prep'))
-    fail('invalid-argument', '성취 분석은 모의고사와 한 학급을 선택해 주세요.', 'QUIZ_ACHIEVEMENT_SCOPE_INVALID');
+    fail('invalid-argument', '성취 분석은 모의고사와 학급 또는 학년을 선택해 주세요.', 'QUIZ_ACHIEVEMENT_SCOPE_INVALID');
   return { ...query, unitId: keyword ? '' : data.unitId, category: keyword ? '' : data.category,
     examRound: keyword ? '' : roundOf(data.category, data.examRound), classIds: data.classIds,
-    ...(keyword ? { keyword } : {}), ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}) };
+    ...(keyword ? { keyword } : {}), ...(data.grade ? { grade: data.grade } : {}),
+    ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}) };
 }
 
 // Every source query is paginated and has a hard failure bound. A partial page
@@ -255,6 +261,18 @@ function summarizeGrade(grade, classes, generatedAt) {
     smallSample: scoredCount < 20, basis: classes[0]?.basis, complete: true };
 }
 
+function selectClasses(classes, input) {
+  const selected = input.grade ? classes.filter(entry => entry.grade === input.grade)
+    : input.classIds.map(id => classes.find(entry => entry.id === id || `${number(entry.grade)}-${number(entry.classNumber)}` === id));
+  if (input.grade && (!selected.length || selected.length > MAX_GRADE_CLASSES))
+    fail('invalid-argument', '분석할 학년의 학급 범위를 확인해 주세요.', 'QUIZ_ANALYSIS_GRADE_INVALID');
+  if (input.grade && new Set(selected.map(entry => entry.classNumber)).size !== selected.length)
+    fail('aborted', '학급 정보가 중복되어 있습니다. 학급 목록을 확인한 뒤 다시 조회해 주세요.', 'QUIZ_ANALYSIS_ROSTER_CONFLICT');
+  if (selected.some(entry => !entry) || new Set(selected.map(entry => entry.id)).size !== selected.length)
+    fail('invalid-argument', '현재 학기의 학급을 다시 선택해 주세요.', 'QUIZ_ANALYSIS_CLASS_INVALID');
+  return selected;
+}
+
 function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   const inFlight = new Map();
   const serial = (key, build) => {
@@ -268,6 +286,10 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     const value = { catalog: state.catalogGeneration || '', roster: state.rosterGeneration || '',
       content: state.contentGeneration || '', results: dataOf(snapshots[1]).generation || '' };
     return { refs, value, version: versionOf(snapshots, kind) };
+  };
+  const scopeRevision = async (scope, classes) => {
+    const snapshots = await db.getAll(stateRef(db, scope), ...classes.map(entry => classStateRef(db, scope, entry.id)));
+    return hash(classes.map((entry, index) => `${entry.id}:${versionOf([snapshots[0], snapshots[index + 1]])}`).join('\n'));
   };
   const cached = async (scope, key, classId, forceRefresh, build, kind) => serial(key, async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -406,6 +428,22 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     if (students.size > MAX_STUDENTS) fail('resource-exhausted', '학급 학생 수가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_ROSTER_LIMIT');
     return [...students.values()].sort((a, b) => Number(a.number) - Number(b.number) || a.uid.localeCompare(b.uid));
   };
+  const loadScopeRoster = async (scope, classes, budget) => {
+    const rosters = new Array(classes.length);
+    let cursor = 0, failure;
+    await Promise.all(Array.from({ length: Math.min(3, classes.length) }, async () => {
+      while (!failure && cursor < classes.length) {
+        const index = cursor++;
+        try { rosters[index] = await loadRoster(scope, classes[index], budget); }
+        catch (error) { failure ||= error; }
+      }
+    }));
+    if (failure) throw failure;
+    const students = rosters.flat();
+    if (new Set(students.map(student => student.uid)).size !== students.length)
+      fail('aborted', '학생의 소속 학급이 중복되어 있습니다. 학급 명단을 확인한 뒤 다시 조회해 주세요.', 'QUIZ_ANALYSIS_ROSTER_CONFLICT');
+    return students;
+  };
   const loadQuestions = async (query, detail) => {
     let q = db.collection(`${root(query.semesterId)}/quiz_questions`).where('unitId', '==', query.unitId);
     if (!detail) q = q.select(...QUESTION_FIELDS);
@@ -455,25 +493,26 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   };
   const query = async input => {
     const budget = { documents: 0, bytes: 0 };
+    const gradeRevision = input.grade ? await revision(input.semesterId, '') : null;
     if (input.mode === 'achievement') {
       // Explicitly requested evidence is read afresh. This route never creates
       // a catalog/cache record and never changes grading or worksheet progress.
       const classDocs = await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId), 300, '학급', budget);
-      const targetDoc = classDocs.find(doc => doc.data().status === 'ACTIVE'
-        && (doc.id === input.classIds[0] || classAlias(doc.data()) === input.classIds[0]));
-      if (!targetDoc) fail('invalid-argument', '현재 학기의 학급을 다시 선택해 주세요.', 'QUIZ_ANALYSIS_CLASS_INVALID');
-      const targetClass = { ...targetDoc.data(), id: targetDoc.id,
-        grade: text(targetDoc.data().grade), classNumber: text(targetDoc.data().classNumber),
-        label: `${targetDoc.data().grade}학년 ${targetDoc.data().classNumber}반` };
-      const state = await revision(input.semesterId, targetClass.id);
-      const students = await loadRoster(input.semesterId, targetClass, budget);
+      const selectedClasses = selectClasses(classDocs.filter(doc => doc.data().status === 'ACTIVE').map(doc => ({
+        id: doc.id, grade: text(doc.data().grade), classNumber: text(doc.data().classNumber),
+        label: `${doc.data().grade}학년 ${doc.data().classNumber}반`,
+      })).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })), input);
+      const version = await scopeRevision(input.semesterId, selectedClasses);
+      const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
+      const profileQuery = db.collection('semester_achievement_profiles').where('classId',
+        selectedClasses.length === 1 ? '==' : 'in', selectedClasses.length === 1 ? selectedClasses[0].id : selectedClasses.map(entry => entry.id));
       const [allRows, questionDocs, treeData, lessonDocs, profileDocs] = await Promise.all([
         loadResults(input, students, true, budget, true),
         readBounded(db.collection(`${root(input.semesterId)}/quiz_questions`).where('unitId', '==', input.unitId)
           .select(...QUESTION_FIELDS, 'answer'), MAX_QUESTIONS, '성취 분석 문항', budget),
         loadTree(input.semesterId),
         readBounded(db.collection(`${root(input.semesterId)}/lessons`).select('unitId', 'subUnitId', 'contentRevision', 'contentHtml', 'worksheetBlanks', ...ACHIEVEMENT_FIELDS), 1000, '학습지', budget),
-        readBounded(db.collection('semester_achievement_profiles').where('classId', '==', targetClass.id), 5000, '분석 성취수준', budget),
+        readBounded(profileQuery, 5000, '분석 성취수준', budget),
       ]);
       const allQuestions = questionDocs.map(doc => ({ ...json(doc.data()), id: doc.data().id ?? doc.id, docId: doc.id,
         sourceRevision: String(doc.data().contentRevision ?? doc.data().revision ?? 'legacy') }));
@@ -540,12 +579,12 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const achievementEvidence = buildQuizAchievementEvidence({ semesterId: input.semesterId, students,
         questions: allQuestions, priorRows: allRows, examRows: rawRows, attempts,
         lessons: lessonDocs.map(doc => json(doc.data())), progressRows });
-      const studentIds = new Set(students.map(student => student.uid));
+      const studentClasses = new Map(students.map(student => [student.uid, student.classId]));
       const observationByRef = new Map(achievementEvidence.observations.filter(item => item.recordSource === 'canonical')
         .map(item => [`${item.studentUid}:${item.resultId}:${item.questionId}`, item]));
       const profiles = profileDocs.filter(doc => {
-        const p = doc.data(); return p.semesterId === input.semesterId && p.classId === targetClass.id
-          && p.unitId === input.unitId && p.examRound === input.examRound && studentIds.has(p.studentUid);
+        const p = doc.data(); return p.semesterId === input.semesterId && studentClasses.get(p.studentUid) === p.classId
+          && p.unitId === input.unitId && p.examRound === input.examRound;
       }).map(doc => {
         const profile = json(doc.data());
         const cutoff = achievementEvidence.examCutoffs.find(item => item.studentUid === profile.studentUid && item.attemptId === profile.examAttemptId);
@@ -560,21 +599,23 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       });
       const packed = packHistoricalQuestionSnapshots(rawRows);
       const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
-        configuredClasses: [{ id: targetClass.id, label: targetClass.label }], generatedAt: new Date(now()).toISOString(),
-        version: state.version, complete: true, achievementEvidence, profiles, rubricVersion: achievementRubrics.version };
+        configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
+        version, complete: true, achievementEvidence, profiles, rubricVersion: achievementRubrics.version,
+        ...(input.grade ? { grade: input.grade } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
-      if ((await revision(input.semesterId, targetClass.id)).version !== state.version)
+      if (await scopeRevision(input.semesterId, selectedClasses) !== version
+        || (gradeRevision && (await revision(input.semesterId, '')).version !== gradeRevision.version))
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       return result;
     }
-    const requestRevision = input.keyword || input.comparisonGrade ? await revision(input.semesterId, '') : null;
+    const requestRevision = gradeRevision || (input.keyword || input.comparisonGrade ? await revision(input.semesterId, '') : null);
     const catalog = await loadCatalog({ ...input, forceRefresh: input.mode === 'catalog' && input.forceRefresh });
     if (input.mode === 'catalog') return catalog;
-    const selectedClasses = input.classIds.map(id => catalog.classes.find(c => c.id === id || `${c.grade}-${c.classNumber}` === id));
-    if (selectedClasses.some(c => !c) || new Set(selectedClasses.map(c => c.id)).size !== selectedClasses.length) fail('invalid-argument', '현재 학기의 학급을 다시 선택해 주세요.', 'QUIZ_ANALYSIS_CLASS_INVALID');
+    const selectedClasses = selectClasses(catalog.classes, input);
     if (!input.keyword && !catalog.assessments.some(a => a.unitId === input.unitId && a.category === input.category && a.examRound === input.examRound)) fail('not-found', '선택한 평가를 찾을 수 없습니다. 목록을 다시 불러와 주세요.', 'QUIZ_ANALYSIS_ASSESSMENT_NOT_FOUND');
     const searchResult = input.keyword ? await loadSearchCatalog(input) : null;
-    const gradeClasses = input.comparisonGrade ? catalog.classes.filter(c => c.grade === input.comparisonGrade) : [];
+    const aggregateGrade = input.grade || input.comparisonGrade;
+    const gradeClasses = aggregateGrade ? catalog.classes.filter(c => c.grade === aggregateGrade) : [];
     if (input.comparisonGrade && (!gradeClasses.length || gradeClasses.length > MAX_GRADE_CLASSES)) {
       fail('invalid-argument', '비교할 학년의 학급 범위를 확인해 주세요.', 'QUIZ_ANALYSIS_GRADE_INVALID');
     }
@@ -600,8 +641,9 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       }
     };
     if (input.mode === 'detail') {
-      const targetClass = selectedClasses[0]; const students = await loadRoster(input.semesterId, targetClass, budget);
-      const [rawRows, questionRows, state] = await Promise.all([searchResult && !searchResult.questions.length ? [] : loadResults(input, students, true, budget), questions(), revision(input.semesterId, targetClass.id)]);
+      const version = await scopeRevision(input.semesterId, selectedClasses);
+      const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
+      const [rawRows, questionRows] = await Promise.all([searchResult && !searchResult.questions.length ? [] : loadResults(input, students, true, budget), questions()]);
       // Older canonical results contain checks but keep answers only in the
       // immutable submission. Fetch these only for explicit detail requests.
       const missingAnswers = rawRows.filter(row => row.source === 'canonical'
@@ -639,13 +681,24 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         }
       }
       const result = { semesterId: input.semesterId, students, rawRows, questions: questionRows, treeData: catalog.treeData,
-        configuredClasses: [{ id: targetClass.id, label: targetClass.label }], generatedAt: new Date(now()).toISOString(), version: state.version, complete: true,
+        configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(), version, complete: true,
+        ...(input.grade ? { grade: input.grade } : {}),
         ...(searchResult ? { keyword: input.keyword, search: searchResult.search, basis: KEYWORD_BASIS } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '학급 상세 자료가 너무 큽니다. 요약을 확인하거나 평가 기록 범위를 점검해 주세요.', 'QUIZ_ANALYSIS_DETAIL_TOO_LARGE');
       await verifySearch();
+      if (await scopeRevision(input.semesterId, selectedClasses) !== version)
+        fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       return result;
     }
     const allClasses = [...new Map([...selectedClasses, ...gradeClasses].map(c => [c.id, c])).values()];
+    // Whole-grade analysis must not combine a pre-transfer class cache with a
+    // freshly read destination class while the enrollment trigger is pending.
+    // Resolve the roster once, then keep result caches keyed by that membership.
+    const gradeRosters = input.grade ? new Map(selectedClasses.map(entry => [entry.id, []])) : null;
+    if (gradeRosters) {
+      const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
+      for (const student of students) gradeRosters.get(student.classId).push(student);
+    }
     const summaries = new Map();
     // A small pool avoids serial cold-start round trips for a whole grade while
     // preserving the shared read/byte budget and per-class cache coalescing.
@@ -654,10 +707,13 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       while (!buildError && nextClass < allClasses.length) {
         const targetClass = allClasses[nextClass++];
         try {
-          const summary = await cached(input.semesterId,
-            searchResult ? `keyword:v1:${input.semesterId}:${hash(searchText(input.keyword))}:${searchResult.version}:${targetClass.id}`
-              : `summary:${input.semesterId}:${input.unitId}:${input.category}:${input.examRound}:${targetClass.id}`, targetClass.id, input.forceRefresh, async version => {
-              const students = await loadRoster(input.semesterId, targetClass, budget);
+          const roster = gradeRosters?.get(targetClass.id);
+          const rosterKey = roster ? `:roster:${hash(JSON.stringify(roster.map(student => [student.uid, student.email || ''])
+            .sort((a, b) => a[0].localeCompare(b[0]))))}` : '';
+          const cacheKey = searchResult ? `keyword:v1:${input.semesterId}:${hash(searchText(input.keyword))}:${searchResult.version}:${targetClass.id}`
+            : `summary:${input.semesterId}:${input.unitId}:${input.category}:${input.examRound}:${targetClass.id}`;
+          const summary = await cached(input.semesterId, cacheKey + rosterKey, targetClass.id, input.forceRefresh, async version => {
+              const students = roster || await loadRoster(input.semesterId, targetClass, budget);
               const [rawRows, questionRows] = await Promise.all([searchResult && !searchResult.questions.length ? [] : loadResults(input, students, false, budget), questions()]);
               return summarizeClass(input, targetClass, students, questionRows, rawRows, new Date(now()).toISOString(), version);
             });
@@ -667,17 +723,21 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }));
     if (buildError) throw buildError;
     await verifySearch();
-    if (input.comparisonGrade) {
+    if (aggregateGrade) {
       const states = await db.getAll(stateRef(db, input.semesterId), ...allClasses.map(c => classStateRef(db, input.semesterId, c.id)));
       if (allClasses.some((c, index) => summaries.get(c.id).version !== versionOf([states[0], states[index + 1]]))) {
         fail('aborted', '비교 중 학급 결과가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       }
     }
-    return { semesterId: input.semesterId, unitId: input.unitId, category: input.category, examRound: input.examRound,
+    const result = { semesterId: input.semesterId, unitId: input.unitId, category: input.category, examRound: input.examRound,
       classes: selectedClasses.map(c => { const value = summaries.get(c.id); return { ...value, concepts: value.concepts.filter(item => item.wrongCount > 0) }; }), generatedAt: new Date(now()).toISOString(),
+      ...(input.grade ? { grade: input.grade } : {}),
       ...(searchResult ? { keyword: input.keyword, search: searchResult.search } : {}),
-      ...(input.comparisonGrade ? { gradeComparison: summarizeGrade(input.comparisonGrade,
+      ...(aggregateGrade ? { gradeComparison: summarizeGrade(aggregateGrade,
         gradeClasses.map(c => summaries.get(c.id)), new Date(now()).toISOString()) } : {}) };
+    if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES)
+      fail('resource-exhausted', '평가 분석 자료가 조회 한도를 초과했습니다. 학급을 선택해 다시 조회해 주세요.', 'QUIZ_ANALYSIS_RESPONSE_LIMIT');
+    return result;
   };
   return { query, loadRoster, loadResults, loadCatalog, revision };
 }

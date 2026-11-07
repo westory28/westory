@@ -45,13 +45,21 @@
   background: var(--ws-surface-subtle, #f8fafc);
 }
 .quiz-visual-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-height: 44px;
   min-width: 44px;
   padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 4px;
+  background: var(--ws-surface, #fff);
   color: var(--ws-text, #1f2937);
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 .quiz-visual-toolbar button:hover:not(:disabled) {
   background: var(--ws-primary-soft, #eff6ff);
@@ -67,6 +75,28 @@
 }
 .quiz-visual-underline-button {
   text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.quiz-visual-tool-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.quiz-visual-box-sample {
+  display: inline-block;
+  padding: 0 3px;
+  border: 1px solid currentColor;
+  line-height: 1.2;
+}
+.quiz-visual-blank-sample {
+  border-bottom: 2px solid currentColor;
+  background: var(--ws-accent-soft, #fffbeb);
 }
 .quiz-visual-toolbar-spacer {
   flex: 1;

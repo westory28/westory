@@ -178,8 +178,8 @@ const fixture = {
     exclusions: {},
   },
 };
-const service = `const data=window.fixture=${JSON.stringify(fixture)};window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});const index=data.profiles.findIndex(p=>p.studentUid===payload.studentUid&&p.standardCode===payload.standardCode);const p={...payload,asOf:${JSON.stringify(cutoff)},reviewedAt:'2026-11-07T01:00:00Z',curriculumVersion:'2018-162',revision:payload.expectedRevision+1};if(index<0)data.profiles.push(p);else data.profiles[index]=p;return {result:p};};export const useAppToast=()=>({showToast:()=>{}});`;
-const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 1반 · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_1',classIds:['class_1']}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
+const service = `const data=window.fixture=${JSON.stringify(fixture)};if(new URLSearchParams(location.search).get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});const index=data.profiles.findIndex(p=>p.studentUid===payload.studentUid&&p.standardCode===payload.standardCode);const p={...payload,asOf:${JSON.stringify(cutoff)},reviewedAt:'2026-11-07T01:00:00Z',curriculumVersion:'2018-162',revision:payload.expectedRevision+1};if(index<0)data.profiles.push(p);else data.profiles[index]=p;return {result:p};};export const useAppToast=()=>({showToast:()=>{}});`;
+const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const grade=new URLSearchParams(location.search).get('grade');function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_1',classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -341,6 +341,18 @@ try {
     await page.evaluate(() => window.qa.saves[0].payload.expectedRubricVersion),
     fixture.rubricVersion,
   );
+  await page.goto(`${origin}/?grade=3`);
+  await page.getByRole('combobox',{name:'성취기준',exact:true}).selectOption(code);
+  await page.getByRole('combobox',{name:'분석 보기',exact:true}).selectOption('3');
+  const gradeStudent=page.getByRole('row').filter({has:page.getByRole('combobox',{name:'3학년 2반 21번 합성학생21 성취수준',exact:true})});
+  await gradeStudent.getByRole('combobox').selectOption('C');
+  await gradeStudent.getByRole('checkbox').check();
+  await gradeStudent.getByRole('button',{name:'저장',exact:true}).click();
+  await page.waitForFunction(()=>window.qa.saves.length===1&&window.qa.calls.length>=2);
+  const gradeSave=await page.evaluate(()=>window.qa.saves[0].payload);
+  assert.equal(gradeSave.classId,'class_2','Whole-grade review saves to the selected student actual class');
+  assert.equal(gradeSave.studentUid,'s20');
+  assert.equal(await page.evaluate(()=>window.qa.calls[0].grade),'3');
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(evidence, "verification.json"),
@@ -359,6 +371,7 @@ try {
           "rubric",
           "evidence details",
           "profile save",
+          "whole-grade review saves the actual student class",
         ],
       },
       null,

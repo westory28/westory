@@ -79,6 +79,7 @@ export interface QuizClassSummary {
 
 export interface QuizClassSummaryResponse {
   semesterId: string;
+  grade?: string;
   unitId: string;
   category: string;
   examRound: string;
@@ -104,6 +105,7 @@ export interface QuizClassSearch {
 
 export interface QuizClassDetail {
   semesterId?: string;
+  grade?: string;
   keyword?: string;
   search?: QuizClassSearch;
   basis?: string;
@@ -135,6 +137,8 @@ export interface QuizClassScope {
   category: string;
   examRound: string;
   classIds: string[];
+  /** The server resolves all active classes in this grade; classIds is empty. */
+  grade?: string;
   keyword?: string;
   comparisonGrade?: string;
 }

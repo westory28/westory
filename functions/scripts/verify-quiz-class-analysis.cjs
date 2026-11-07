@@ -76,6 +76,203 @@ test('achievement mode is explicit, one-class and mock-exam only', () => {
     assert.throws(() => normalizeQuery({ ...request, ...patch }), e => e.code === 'invalid-argument');
 });
 
+test('whole-grade scope is explicit and cannot combine client classes or comparison grades', () => {
+  for (const mode of ['summary', 'detail', 'achievement']) {
+    const request = { ...q, mode, grade: '3', classIds: [], category: 'exam_prep', unitId: 'exam_prep', examRound: 'round_1' };
+    assert.equal(normalizeQuery(request).grade, '3');
+    assert.deepEqual(normalizeQuery(request).classIds, []);
+    for (const patch of [{ grade: 3 }, { grade: '' }, { grade: '03' }, { grade: '3학년' }, { grade: '0' },
+      { classIds: ['class_a'] }, { comparisonGrade: '3' }])
+      assert.throws(() => normalizeQuery({ ...request, ...patch }), error => error.code === 'invalid-argument');
+  }
+  assert.throws(() => normalizeQuery({ semesterId: SCOPE, mode: 'catalog', grade: '3' }), error => error.code === 'invalid-argument');
+});
+
+const gradeFixture = () => {
+  const initial = fixture();
+  initial['semester_classes/class_empty'] = { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: '3' };
+  initial['semester_classes/class_other'] = { semesterId: SCOPE, status: 'ACTIVE', grade: '2', classNumber: '1' };
+  initial['semester_classes/class_inactive'] = { semesterId: SCOPE, status: 'INACTIVE', grade: '3', classNumber: '4' };
+  for (const [uid, classId] of [['c', 'class_a'], ['foreign', 'class_other'], ['inactive', 'class_inactive'], ['old', 'old_class']]) {
+    const semesterId = uid === 'old' ? '2026-1' : SCOPE;
+    initial[`semester_enrollments/en_${uid}`] = { semesterId, studentUid: uid, classId, enrollmentStatus: 'ACTIVE', studentNumber: '3' };
+    initial[`semester_enrollment_slots/${buildEnrollmentSlotId(semesterId, uid)}`] = { semesterId, studentUid: uid, activeEnrollmentId: `en_${uid}`, status: 'ACTIVE' };
+    initial[`semester_assessment_results/result_${uid}`] = { ...initial['semester_assessment_results/r2'], semesterId, studentUid: uid,
+      classId, attemptId: `result_${uid}`, percent: 0 };
+  }
+  return initial;
+};
+const gradeQuery = overrides => normalizeQuery({ ...q, classIds: [], grade: '3', ...overrides });
+
+test('whole-grade summary resolves active semester classes and weights students rather than class averages', async () => {
+  const f = memory(gradeFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(gradeQuery());
+  assert.equal(result.grade, '3');
+  assert.deepEqual(result.classes.map(row => row.classId), ['class_a', 'class_b', 'class_empty']);
+  assert.equal(result.gradeComparison.rosterCount, 3);
+  assert.equal(result.gradeComparison.averageScore, 40, '(100 + 0 + 20) / 3, not (50 + 20) / 2');
+  assert.equal(result.gradeComparison.classCount, 3);
+  assert.equal(result.classes[2].averageScore, null);
+  assert.equal(result.classes[2].rosterCount, 0);
+  assert.equal(JSON.stringify(result).includes('학생 A'), false);
+  const rosterClasses = f.queries.filter(query => query.path === 'semester_enrollments').map(query => query.filters[0][2]);
+  assert.deepEqual(rosterClasses.sort(), ['class_a', 'class_b', 'class_empty'].sort());
+  const resultReads = () => f.queries.filter(query => query.path.endsWith('results')).length;
+  const readCount = resultReads();
+  await service.query(gradeQuery());
+  assert.equal(resultReads(), readCount, 'unchanged whole-grade rosters reuse result caches');
+  await assert.rejects(service.query(gradeQuery({ grade: '1' })), error => error.code === 'invalid-argument');
+});
+
+test('whole-grade roster fingerprint avoids transfer and membership races before invalidation triggers run', async () => {
+  const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
+  await service.query(q); // The previous implementation reused this pre-transfer class cache.
+  const original = await service.query(gradeQuery());
+  assert.equal(original.gradeComparison.rosterCount, 2);
+  const resultReads = () => f.queries.filter(query => query.path.endsWith('results')).length;
+  const warmReads = resultReads();
+  await service.query(gradeQuery());
+  assert.equal(resultReads(), warmReads, 'unchanged memberships keep the warm result-cache benefit');
+  f.data.set('semester_enrollments/en_a', { ...f.data.get('semester_enrollments/en_a'), classId: 'class_b' });
+  const moved = await service.query(gradeQuery());
+  assert.deepEqual(moved.classes.map(row => row.rosterCount), [0, 2]);
+  assert.equal(moved.gradeComparison.rosterCount, 2, 'a pupil is not counted in both old and current classes');
+  assert.equal(moved.gradeComparison.averageScore, 60);
+  f.data.set('semester_enrollments/en_new', { semesterId: SCOPE, studentUid: 'new-pupil', classId: 'class_a', enrollmentStatus: 'ACTIVE' });
+  f.data.set(`semester_enrollment_slots/${buildEnrollmentSlotId(SCOPE, 'new-pupil')}`, { semesterId: SCOPE, studentUid: 'new-pupil', activeEnrollmentId: 'en_new', status: 'ACTIVE' });
+  const added = await service.query(gradeQuery());
+  assert.deepEqual(added.classes.map(row => row.rosterCount), [1, 2]);
+  assert.equal(added.gradeComparison.rosterCount, 3);
+  assert.equal(added.gradeComparison.scoredCount, 2, 'a new nonparticipant never receives a fabricated zero');
+  f.data.set('semester_enrollments/en_new', { ...f.data.get('semester_enrollments/en_new'), rosterExclusionStatus: 'excluded' });
+  const removed = await service.query(gradeQuery());
+  assert.deepEqual(removed.classes.map(row => row.rosterCount), [0, 2]);
+  assert.equal(removed.gradeComparison.rosterCount, 2);
+  assert.equal(f.data.has(`quiz_class_analysis_state/${SCOPE}`), false, 'all transitions were checked before roster triggers');
+});
+
+test('whole-grade roster fingerprint includes legacy result email matching without exposing identities', async () => {
+  const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
+  f.data.set('users/legacy-pupil', { role: 'student', grade: '3', class: '1', number: '9', email: 'old@example.invalid' });
+  f.data.set(`${ROOT}/quiz_results/email-only`, { email: 'new@example.invalid', unitId: 'unit-a', category: 'formative',
+    score: 40, timestamp: '2026-10-25T01:00:00Z', details: [{ id: 1, correct: false, sourceRevision: '2' }] });
+  assert.equal((await service.query(gradeQuery())).gradeComparison.scoredCount, 2);
+  f.data.set('users/legacy-pupil', { ...f.data.get('users/legacy-pupil'), email: 'new@example.invalid' });
+  const changed = await service.query(gradeQuery());
+  assert.equal(changed.gradeComparison.scoredCount, 3);
+  assert.equal(changed.gradeComparison.averageScore, 160 / 3);
+  assert.equal(JSON.stringify(changed).includes('example.invalid'), false);
+  assert.equal(JSON.stringify(changed).includes('legacy-pupil'), false);
+});
+
+test('whole-grade detail retains actual classes, merges each pupil once and excludes other scopes', async () => {
+  const f = memory(gradeFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(gradeQuery({ mode: 'detail' }));
+  assert.equal(result.grade, '3');
+  assert.equal(result.complete, true);
+  assert.deepEqual(result.students.map(row => [row.uid, row.classId]), [['a', 'class_a'], ['c', 'class_a'], ['b', 'class_b']]);
+  assert.deepEqual(result.configuredClasses.map(row => row.id), ['class_a', 'class_b', 'class_empty']);
+  assert.ok(result.rawRows.every(row => ['a', 'b', 'c'].includes(row.raw.studentUid || row.raw.uid)));
+  assert.equal(new Set(result.rawRows.map(row => `${row.source}:${row.id}`)).size, result.rawRows.length);
+});
+
+const gradeExamFixture = () => {
+  const initial = gradeFixture();
+  initial[`${ROOT}/quiz_questions/91`] = { id: 91, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    question: '합성 모의 문항', contentRevision: 1, curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'] };
+  for (const uid of ['a', 'b', 'foreign', 'inactive']) initial[`semester_assessment_results/exam_${uid}`] = {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: uid, sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    attemptId: `exam_${uid}`, startedAtIso: '2026-11-01T01:00:00.000Z', submittedAtIso: '2026-11-01T02:00:00.000Z',
+    answerChecks: [{ id: 91, correct: true }], percent: 100, answers: { 91: '합성 답안' },
+  };
+  initial['semester_achievement_profiles/wrong_class'] = { semesterId: SCOPE, classId: 'class_b', studentUid: 'a', unitId: 'exam_prep', examRound: 'round_1' };
+  initial['semester_achievement_profiles/right_class'] = { semesterId: SCOPE, classId: 'class_b', studentUid: 'b', unitId: 'exam_prep', examRound: 'round_1', level: null };
+  return initial;
+};
+const gradeExamQuery = () => gradeQuery({ mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' });
+
+test('whole-grade achievement shares reference reads, preserves pupil class and remains read-only', async () => {
+  const f = memory(gradeExamFixture()), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(gradeExamQuery());
+  assert.equal(result.grade, '3');
+  assert.deepEqual(result.students.map(row => row.uid), ['a', 'c', 'b']);
+  assert.deepEqual(result.configuredClasses.map(row => row.id), ['class_a', 'class_b', 'class_empty']);
+  assert.deepEqual(result.rawRows.map(row => row.raw.studentUid).sort(), ['a', 'b']);
+  assert.deepEqual(result.profiles.map(row => row.id), ['right_class']);
+  assert.equal(f.queries.filter(query => query.path === `${ROOT}/quiz_questions`).length, 1);
+  assert.equal(f.queries.filter(query => query.path === `${ROOT}/lessons`).length, 1);
+  assert.equal(f.reads.filter(path => path === `${ROOT}/curriculum/tree`).length, 1);
+  assert.equal(f.queries.some(query => /lesson_progress\/(foreign|inactive)\//.test(query.path)), false);
+  assert.deepEqual(f.writes, []);
+  for (const path of [...f.data.keys()]) if (path.startsWith('semester_assessment_results/') || path.includes('/quiz_results/')) f.data.delete(path);
+  const empty = await service.query(gradeExamQuery());
+  assert.equal(empty.students.length, 3);
+  assert.deepEqual(empty.rawRows, []);
+  assert.equal(empty.complete, true);
+});
+
+test('whole-grade reads fail instead of returning a partial class or a changing scope', async () => {
+  for (const mode of ['summary', 'detail', 'achievement']) {
+    const f = memory(gradeExamFixture()), originalCollection = f.db.collection;
+    f.db.collection = path => {
+      const source = originalCollection(path), get = source.get, where = source.where;
+      let classId;
+      source.where = (field, operator, value) => {
+        if (field === 'classId') classId = value;
+        return where(field, operator, value);
+      };
+      source.get = async () => {
+        const value = await get();
+        if (path === 'semester_enrollments' && classId === 'class_b')
+          throw new Error('Synthetic class read failure');
+        return value;
+      };
+      return source;
+    };
+    const service = createQuizClassAnalysisService({ db: f.db });
+    await assert.rejects(service.query(mode === 'achievement' ? gradeExamQuery() : gradeQuery({ mode })), /Synthetic class read failure/);
+  }
+  for (const mode of ['detail', 'achievement']) {
+    for (const changed of ['class', 'catalog']) {
+      const f = memory(gradeExamFixture()), originalCollection = f.db.collection;
+      let changedOnce = false;
+      f.db.collection = path => {
+        const source = originalCollection(path), get = source.get;
+        source.get = async () => {
+          const value = await get();
+          if (!changedOnce && path === 'semester_assessment_results') {
+            changedOnce = true;
+            f.data.set(changed === 'class' ? `quiz_class_analysis_state/${SCOPE}/classes/${hash('class_b')}` : `quiz_class_analysis_state/${SCOPE}`,
+              changed === 'class' ? { generation: 'changed' } : { catalogGeneration: 'changed' });
+          }
+          return value;
+        };
+        return source;
+      };
+      await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(mode === 'achievement' ? gradeExamQuery() : gradeQuery({ mode })),
+        error => error.code === 'aborted');
+    }
+  }
+});
+
+test('whole-grade scope rejects excessive or duplicate classes and retains role authorization', async () => {
+  for (const mode of ['summary', 'detail', 'achievement']) {
+    const f = memory(gradeExamFixture());
+    for (let n = 4; n <= 31; n++) f.data.set(`semester_classes/extra_${n}`, { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: String(n) });
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(mode === 'achievement' ? gradeExamQuery() : gradeQuery({ mode })),
+      error => error.code === 'invalid-argument');
+    const duplicate = memory(gradeExamFixture());
+    duplicate.data.set('semester_classes/duplicate', { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: '1' });
+    await assert.rejects(createQuizClassAnalysisService({ db: duplicate.db }).query(mode === 'achievement' ? gradeExamQuery() : gradeQuery({ mode })),
+      error => error.code === 'aborted');
+    const authority = memory(gradeExamFixture());
+    const handler = createQuizClassAnalysisHandler({ db: authority.db, assertSession: async () => ({ uid: 'a' }) });
+    await assert.rejects(handler({ auth: { uid: 'a', token: {} }, data: mode === 'achievement' ? gradeExamQuery() : gradeQuery({ mode }) }),
+      error => error.code === 'permission-denied');
+    assert.equal(authority.queries.length, 0);
+  }
+});
+
 test('achievement route reads only selected pupils, preserves result cutoff and never writes cache or scores', async () => {
   const f = memory();
   const metadata = { curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'],
