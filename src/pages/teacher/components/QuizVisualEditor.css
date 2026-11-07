@@ -165,14 +165,26 @@
 .quiz-visual-content [data-quiz-line] {
   min-height: 1.8em;
 }
-.quiz-visual-content [data-quiz-bullet="true"] {
+.quiz-visual-content [data-quiz-bullet] {
   position: relative;
-  padding-left: 24px;
+  padding-inline-start: 1.75em;
 }
-.quiz-visual-content [data-quiz-bullet="true"]::before {
+.quiz-visual-content [data-quiz-bullet]::before {
   content: "•";
   position: absolute;
-  left: 4px;
+  inset-inline-start: 0;
+  width: 1.5em;
+  text-align: center;
+}
+.quiz-visual-content [data-quiz-bullet="hangul"]::before {
+  content: attr(data-quiz-list-marker);
+}
+.quiz-visual-content [data-quiz-leading-label="true"] {
+  padding-inline-start: var(--quiz-leading-label-width);
+  text-indent: calc(-1 * var(--quiz-leading-label-width));
+}
+.quiz-visual-content [data-quiz-leading-label="true"] [data-quiz-mark] {
+  text-indent: 0;
 }
 .quiz-visual-content [data-quiz-mark="underline"] {
   text-decoration: underline;

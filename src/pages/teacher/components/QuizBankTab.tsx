@@ -141,6 +141,7 @@ const QuizBankTab: React.FC<{
   );
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [editMetadata, setEditMetadata] = useState<QuizLearningMetadata>({});
+  const editMetadataBaseline = useRef<QuizLearningMetadata>({});
   const pendingCorrectionsRef = useRef(new Set<string>());
   const [savingEdit, setSavingEdit] = useState(false);
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
@@ -476,8 +477,19 @@ const QuizBankTab: React.FC<{
     const normalizedType = normalizeQuestionType(question.type);
     setEditingQuestion(question);
     const achievement = resolveQuestionAchievement(question, treeData);
-    setEditMetadata({
+    const initialMetadata: QuizLearningMetadata = {
       ...question,
+      reviewLessonId: Object.prototype.hasOwnProperty.call(
+        question,
+        "reviewLessonId",
+      )
+        ? question.reviewLessonId
+        : treeData
+            .flatMap((big) => big.children || [])
+            .flatMap((mid) => mid.children || [])
+            .find(
+              (small) => small.id === (question.refSmall || question.subUnitId),
+            )?.id || "",
       ...(achievement.source === "unit-inferred"
         ? {
             curriculumVersion: HISTORY_ACHIEVEMENT_CURRICULUM_VERSION,
@@ -485,7 +497,9 @@ const QuizBankTab: React.FC<{
             achievementMappingSource: "unit" as const,
           }
         : {}),
-    });
+    };
+    editMetadataBaseline.current = initialMetadata;
+    setEditMetadata(initialMetadata);
     setEditCategory(question.category || "diagnostic");
     setEditType(normalizedType);
     setEditQuestionText(question.question || "");
@@ -723,7 +737,10 @@ const QuizBankTab: React.FC<{
         normalizeQuizLearningMetadata(editMetadata, current.options),
       ) !==
         JSON.stringify(
-          normalizeQuizLearningMetadata(editingQuestion, original.options),
+          normalizeQuizLearningMetadata(
+            editMetadataBaseline.current,
+            original.options,
+          ),
         )
     );
   }, [

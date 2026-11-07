@@ -40,12 +40,17 @@
   stroke-linejoin: round;
 }
 .quiz-cognitive-options {
+  position: fixed;
+  z-index: 40;
   display: grid;
-  margin-top: 4px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   border: 1px solid var(--ws-border, #d1d5db);
   border-radius: 4px;
   background: var(--ws-surface, #fff);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgb(0 0 0 / 0.1));
 }
 .quiz-cognitive-options label {
   display: flex;

@@ -787,6 +787,14 @@ export default function MockExamPaper({
             <div
               ref={pageIndex === 0 ? firstColumns : undefined}
               className="mock-exam-columns"
+              style={{
+                minHeight:
+                  page.height -
+                  (pageIndex === 0
+                    ? pageLayout.firstTop
+                    : pageLayout.laterTop) -
+                  pageLayout.footerReserve,
+              }}
             >
               {page.columns.map((items, column) => (
                 <div className="mock-exam-column" key={column}>

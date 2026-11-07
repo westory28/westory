@@ -28,6 +28,8 @@ const runDomChecks = () => {
     "",
     "앞\n\n뒤\n",
     "{{bullet}}\n다음 줄",
+    "{{hangul}}첫 진술\n{{hangul}}{{u:둘째}} 진술\n다음 줄",
+    "(가) 연산군이 무오사화를 일으켰다.\n(나) 중종이 즉위하였다.",
     "{{blank:}} {{box:}}",
     "{{box:(가)}}{{box:(나)}}와 {{blank:가}}{{blank:나}}",
     "{{blankbox:3.5|(가)}}의 정책",
@@ -117,6 +119,9 @@ const runDomChecks = () => {
     /\{\{|\}\}|<<|>>/.test(clipboard.html),
     false,
   );
+  const hangulClipboard = quizVisualClipboard(parseQuizVisualDocument("{{hangul}}첫 진술\n{{hangul}}{{u:둘째}} 진술"));
+  check("Hangul clipboard has visible labels", hangulClipboard.text, "ㄱ. 첫 진술\nㄴ. 둘째 진술");
+  check("Hangul clipboard round trip", serializeQuizVisualDocument(importQuizVisualHtml(hangulClipboard.html)), "{{hangul}}첫 진술\n{{hangul}}{{u:둘째}} 진술");
   return results.length;
 };
 export default function QuizVisualEditorFixture() {

@@ -3,6 +3,7 @@ import InfoHelp from "../../../components/common/InfoHelp";
 import { isQuizPassageBlankLabel } from "../../../lib/quizPassageMarkup";
 import {
   createQuizVisualFragment,
+  decorateQuizVisualRows,
   formatQuizVisualDocument,
   getQuizVisualSelection,
   importQuizVisualHtml,
@@ -115,6 +116,7 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
     const root = editorRef.current;
     if (!root) return;
     root.replaceChildren(createQuizVisualFragment(doc));
+    decorateQuizVisualRows(root);
     if (selection) {
       root.focus();
       setQuizVisualSelection(root, selection.start, selection.end);
@@ -140,6 +142,13 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
     setMessage("");
     setBlankSettings(null);
   }, [value]);
+  useLayoutEffect(() => {
+    const root = editorRef.current;
+    if (!root) return;
+    const observer = new ResizeObserver(() => decorateQuizVisualRows(root));
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
   const commit = (
     doc: QuizVisualDocument,
     selection: { start: number; end: number },
@@ -169,7 +178,13 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
         else delete box.dataset.quizLabelBox;
       });
     const selection = getQuizVisualSelection(root) || selectionRef.current;
-    commit(readQuizVisualDom(root), selection, false);
+    const needsLineWrappers = Array.from(root.childNodes).some(
+      (node) =>
+        node.nodeType !== 1 ||
+        !["DIV", "P"].includes((node as HTMLElement).tagName),
+    );
+    decorateQuizVisualRows(root);
+    commit(readQuizVisualDom(root), selection, needsLineWrappers);
   };
   const snapshotSelection = (selection = selectionRef.current) => {
     history.current[historyIndex.current] = {
@@ -446,7 +461,8 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
         <InfoHelp label="지문 서식 도움말">
           글자를 선택한 뒤 밑줄·네모를 적용합니다. 빈칸은 표시할 기호와 너비를
           정해 넣습니다. 너비 기준 글자는 저장되지 않습니다. 붙여넣기는 본문과
-          지원하는 서식만 가져옵니다. Ctrl+Z로 실행을 취소할 수 있습니다.
+          지원하는 서식만 가져옵니다. 글머리표는 • → ㄱ·ㄴ·ㄷ → 해제 순서로
+          전환합니다. Ctrl+Z로 실행을 취소할 수 있습니다.
         </InfoHelp>
       </div>
       <div className={tools || attachment ? "quiz-visual-frame" : undefined}>
@@ -473,7 +489,7 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
                 aria-label={`${label} ${title}`}
                 title={
                   mark === "bullet"
-                    ? "선택한 줄의 글머리표 전환"
+                    ? "글머리표: • → ㄱ·ㄴ·ㄷ → 해제"
                     : "선택한 글자에 적용"
                 }
                 className={

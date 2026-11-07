@@ -274,6 +274,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   }, [questionSearch]);
   const [normalSubUnitFilter, setNormalSubUnitFilter] = useState("");
   const [metadata, setMetadata] = useState<QuizLearningMetadata>({});
+  const reviewLessonAutomatic = useRef(true);
   const [derivationSource, setDerivationSource] = useState<Question | null>(
     null,
   );
@@ -556,6 +557,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     () => new Set(normalSubUnits.map((unit) => unit.id)),
     [normalSubUnits],
   );
+  const reviewLessonUnitId = type === "special" ? epSource.small : formSubUnit;
+  const defaultReviewLessonId = treeData.some((big) =>
+    big.children?.some((mid) =>
+      mid.children?.some((small) => small.id === reviewLessonUnitId),
+    ),
+  )
+    ? reviewLessonUnitId
+    : "";
+  useLayoutEffect(() => {
+    if (!isComposerOpen || !reviewLessonAutomatic.current) return;
+    setMetadata((current) =>
+      current.reviewLessonId === defaultReviewLessonId
+        ? current
+        : { ...current, reviewLessonId: defaultReviewLessonId },
+    );
+  }, [isComposerOpen, defaultReviewLessonId]);
   const achievementInference = useMemo(
     () =>
       inferHistoryAchievementStandards(
@@ -986,6 +1003,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const resetForm = () => {
     composerInteracted.current = false;
+    reviewLessonAutomatic.current = true;
     questionImageRequest.current += 1;
     sharedImageRequest.current += 1;
     setFormError("");
@@ -1316,6 +1334,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const startEdit = (question: Question) => {
     composerInteracted.current = false;
+    reviewLessonAutomatic.current = !Object.prototype.hasOwnProperty.call(
+      question,
+      "reviewLessonId",
+    );
     questionImageRequest.current += 1;
     sharedImageRequest.current += 1;
     setMetadata(question);
@@ -3633,6 +3655,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       <QuizLearningMetadataFields
                         value={metadata}
                         onChange={setMetadata}
+                        onReviewLessonChange={(reviewLessonId) => {
+                          reviewLessonAutomatic.current = false;
+                          setMetadata((current) => ({
+                            ...current,
+                            reviewLessonId,
+                          }));
+                        }}
                         options={
                           formType === "choice"
                             ? getChoiceOptionItems(

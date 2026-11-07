@@ -22,6 +22,7 @@ const samples = [
   "왕권을 강화하고 사회를 통합하였다.",
   "{{box:(가)}}의 정책은 {{u:왕권 강화}}를 위한 것이었다.",
   "{{bullet}}삼국의 {{u:불교 수용}}\n{{bullet}}중앙 집권 체제",
+  "{{hangul}}삼국의 {{u:불교 수용}}\n{{hangul}}중앙 집권 체제",
   "(가)는 {{blank:소수림왕}}이다.",
   "앞줄\n\n뒷줄\n",
   "<img src=x onerror=alert(1)>는 실행되지 않는 문자열",
@@ -70,8 +71,23 @@ check(
 );
 check(
   save(format(parse("{{bullet}}왕권\n{{bullet}}불교"), 0, 5, "bullet")),
+  "{{hangul}}왕권\n{{hangul}}불교",
+  "Second bullet click changes to Hangul markers",
+);
+check(
+  save(format(parse("{{hangul}}왕권\n{{hangul}}불교"), 0, 5, "bullet")),
   "왕권\n불교",
-  "Bullet toggle",
+  "Third bullet click clears Hangul markers",
+);
+check(
+  save(format(parse("{{hangul}}왕권\n{{hangul}}불교\n다음 줄"), 3, 5, "bullet")),
+  "{{hangul}}왕권\n불교\n다음 줄",
+  "Marker cycle changes only selected lines",
+);
+check(
+  save(slice(parse("{{hangul}}왕권\n{{hangul}}불교"), 0, 5)),
+  "{{hangul}}왕권\n{{hangul}}불교",
+  "Hangul style survives copy of complete lines",
 );
 check(
   save(base),
@@ -323,6 +339,68 @@ if (process.argv.includes("--browser")) {
         ({ start, end }) => window.quizVisualFixture.select(start, end),
         { start, end },
       );
+    await reset("첫 진술\n둘째 진술");
+    await select(0, 10);
+    const bulletTool = page.getByRole("button", { name: "검증 지문 글머리표", exact: true });
+    for (const expected of [
+      "{{bullet}}첫 진술\n{{bullet}}둘째 진술",
+      "{{hangul}}첫 진술\n{{hangul}}둘째 진술",
+      "첫 진술\n둘째 진술",
+    ]) {
+      await bulletTool.click();
+      checkBrowser(await page.evaluate(() => window.quizVisualFixture.value), expected, "Visible bullet tool three-state cycle");
+    }
+    await page.getByRole("button", { name: "검증 지문 실행 취소", exact: true }).click();
+    checkBrowser(await page.evaluate(() => window.quizVisualFixture.value), "{{hangul}}첫 진술\n{{hangul}}둘째 진술", "Undo restores Hangul list");
+    await select(4);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("추가");
+    checkBrowser(await page.locator('[contenteditable] [data-quiz-bullet="hangul"]').evaluateAll(rows => rows.map(row => row.dataset.quizListMarker)), ["ㄱ.", "ㄴ.", "ㄷ."], "Native Enter updates consecutive Hangul markers");
+    const longStatement = "연산군이 무오사화와 갑자사화를 일으켰고 중종반정 이후 정치 세력의 구성이 달라졌다. ".repeat(8);
+    await reset("일반 문단");
+    await page.locator('[contenteditable="true"]').click();
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.insertText(`(가) ${longStatement}`);
+    checkBrowser(await page.locator('[contenteditable] [data-quiz-leading-label]').count(), 1, "Native replace-all text receives immediate leading-label indent");
+    checkBrowser(await page.evaluate(() => window.quizVisualFixture.value), `(가) ${longStatement}`, "Native leading labels do not change saved text");
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await reset(`(가) ${longStatement}\n{{hangul}}${longStatement}\n{{hangul}}${longStatement}\n{{bullet}}${longStatement}\n문장 중간의 (가) 표시는 그대로 둔다.`);
+      const wraps = await page.evaluate(() => {
+        const lineStarts = (element, skip = 0) => {
+          const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+          const tops = new Map();
+          let offset = 0, node;
+          while ((node = walker.nextNode())) {
+            for (let i = 0; i < node.textContent.length; i++, offset++) {
+              if (offset < skip || /\s/.test(node.textContent[i])) continue;
+              const range = document.createRange(); range.setStart(node, i); range.setEnd(node, i + 1);
+              const rect = range.getBoundingClientRect(); const top = Math.round(rect.top);
+              tops.set(top, Math.min(tops.get(top) ?? Infinity, rect.left));
+            }
+          }
+          return [...tops.values()];
+        };
+        const editorRows = [...document.querySelector('[contenteditable]').children];
+        const rendered = [...document.querySelectorAll('.quiz-passage-list-text')];
+        return {
+          editor: editorRows.slice(0, 4).map((row, index) => lineStarts(row, index === 0 ? 4 : 0)),
+          rendered: rendered.map(row => lineStarts(row)),
+          labels: [...document.querySelectorAll('.quiz-passage-list-marker')].map(row => row.textContent),
+          leading: document.querySelectorAll('[data-quiz-leading-label]').length,
+          tokenLeak: document.querySelector('.quiz-passage').textContent.includes('{{'),
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+      checkBrowser(wraps.labels, ["ㄱ.", "ㄴ.", "•"], `${width}: mixed passage keeps Hangul sequence`);
+      checkBrowser(wraps.leading, 1, `${width}: only line-start labels receive hanging indent`);
+      for (const [kind, rows] of [["editor", wraps.editor], ["preview", wraps.rendered]]) {
+        checkBrowser(rows.every(starts => starts.length > 1 && Math.max(...starts) - Math.min(...starts) < 1), true, `${width}: ${kind} wrapped bodies align after markers`);
+      }
+      checkBrowser(wraps.tokenLeak || wraps.overflow, false, `${width}: marker rendering has no token leak or page overflow`);
+      await page.screenshot({ path: path.join(artifactDir, `hanging-lists-${width}.png`), fullPage: true });
+    }
     await reset("태종의 정책");
     await select(0, 2);
     await page

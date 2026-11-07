@@ -101,6 +101,10 @@ assert.equal(
   "옛 목록\r\n새 목록",
 );
 assert.equal(markup.stripQuizPassageMarkup(null), "");
+assert.deepEqual(markup.parseQuizPassageMarkup("{{hangul}}첫째"), [
+  { type: "bullet", text: "첫째", bulletStyle: "hangul" },
+]);
+assert.equal(markup.stripQuizPassageMarkup("{{hangul}}첫째\n{{hangul}}둘째 {{u:강조}}"), "첫째\n둘째 강조");
 
 const { cloneMapResourceBlanks } = evaluate(
   `${read("src/lib/lessonBlankClip.ts")}\n${extract(
@@ -143,7 +147,8 @@ globalThis.document = {
   },
 };
 try {
-  const { handleDownloadExcelTemplate } = evaluate(
+  const { handleDownloadExcelTemplate, toastEvents } = evaluate(
+    `export const toastEvents = []; const showToast = (toast) => toastEvents.push(toast);\n` +
     extract("src/pages/teacher/ManageHistoryDictionary.tsx", [
       "EXCEL_TEMPLATE_HEADERS",
       "handleDownloadExcelTemplate",
@@ -151,6 +156,7 @@ try {
     { "write-excel-file/browser": excelBrowser },
   );
   await handleDownloadExcelTemplate();
+  assert.deepEqual(toastEvents, [{ tone: "success", title: "다운로드를 시작했습니다." }]);
   assert.equal(downloadedName, "westory_history_dictionary_template.xlsx");
   const archive = unzipSync(new Uint8Array(await downloadedBlob));
   assert.match(strFromU8(archive["xl/workbook.xml"]), /역사 사전 업로드/);

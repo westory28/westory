@@ -187,7 +187,15 @@
 }
 .mock-exam-column {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+.mock-exam-column > :is(.mock-exam-instructions, .mock-exam-question) {
+  flex-shrink: 0;
+}
+.mock-exam-column > .mock-exam-question + .mock-exam-question {
+  margin-top: auto;
 }
 .mock-exam-column + .mock-exam-column::before {
   content: "";

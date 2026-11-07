@@ -331,6 +331,7 @@ export default function MockExamWorkspace(props: Props) {
                 <MockExamAnswerControls
                   question={question}
                   index={currentIndex}
+                  choiceLayout="paper"
                   answer={answer}
                   disabled={submitting}
                   onAnswer={(value) => onAnswer?.(value)}

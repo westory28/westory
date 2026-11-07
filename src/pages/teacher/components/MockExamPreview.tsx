@@ -280,6 +280,7 @@ export default function MockExamPreview({
                   <MockExamAnswerControls
                     question={currentQuestion}
                     index={questionIndex}
+                    choiceLayout="paper"
                     answer={practiceAnswers[String(currentQuestion.id)] || ""}
                     onAnswer={(value) =>
                       setPracticeAnswers((previous) => ({

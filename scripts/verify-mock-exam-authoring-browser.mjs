@@ -766,7 +766,10 @@ try {
   assert(await edit.getByRole("checkbox", { name: "인과 관계", exact: true }).isChecked());
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await edit.getByRole("group", { name: "사고 과정 항목", exact: true }).scrollIntoViewIfNeeded();
+    const processTrigger = edit.getByRole("button", { name: "사고 과정 선택", exact: true });
+    await processTrigger.scrollIntoViewIfNeeded();
+    if ((await processTrigger.getAttribute("aria-expanded")) !== "true") await processTrigger.click();
+    await edit.getByRole("group", { name: "사고 과정 항목", exact: true }).waitFor();
     const processLayout = await edit.locator(".quiz-cognitive-select").evaluate(node => ({
       right: node.getBoundingClientRect().right, left: node.getBoundingClientRect().left,
       overflow: document.documentElement.scrollWidth > innerWidth,

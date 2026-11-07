@@ -2,6 +2,8 @@ import React from "react";
 import {
   isQuizPassageBlankLabel,
   parseQuizPassageMarkup,
+  quizPassageHangulMarker,
+  splitQuizPassageLeadingLabel,
   type QuizPassageSegment,
 } from "../../lib/quizPassageMarkup";
 import "./quizPassage.css";
@@ -31,12 +33,6 @@ const paddingClasses: Record<NonNullable<QuizPassageProps["size"]>, string> = {
   default: "px-4 py-3",
   large: "px-4 py-3",
 };
-
-const isLineBreakTextSegment = (segment: QuizPassageSegment | undefined) =>
-  segment?.type === "text" && /^\r?\n+$/.test(segment.text);
-
-const isBulletSegment = (segment: QuizPassageSegment | undefined) =>
-  segment?.type === "bullet";
 
 const renderMarkedSegment = (segment: QuizPassageSegment, key: React.Key) => {
   if (segment.type === "blankBox") {
@@ -116,7 +112,8 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
   size = "default",
   surface = "white",
 }) => {
-  const segments = parseQuizPassageMarkup(value);
+  let hangulIndex = 0;
+  const sourceLines = String(value || "").split(/\r?\n/);
   const surfaceClass =
     surface === "muted"
       ? "border-slate-300 bg-slate-50"
@@ -126,31 +123,43 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
     <div
       className={`quiz-passage whitespace-pre-wrap break-keep rounded-xl border font-medium text-slate-900 ${paddingClasses[size]} ${sizeClasses[size]} ${surfaceClass} ${className}`}
     >
-      {segments.map((segment, index) => {
-        if (
-          isLineBreakTextSegment(segment) &&
-          (isBulletSegment(segments[index - 1]) ||
-            isBulletSegment(segments[index + 1]))
-        ) {
-          return null;
-        }
-
-        if (segment.type === "text") {
-          return <React.Fragment key={index}>{segment.text}</React.Fragment>;
-        }
-
-        if (segment.type === "bullet") {
+      {sourceLines.map((line, index) => {
+        const segment = parseQuizPassageMarkup(line)[0];
+        if (segment?.type === "bullet") {
+          const marker =
+            segment.bulletStyle === "hangul"
+              ? quizPassageHangulMarker(hangulIndex++)
+              : "•";
+          if (segment.bulletStyle !== "hangul") hangulIndex = 0;
           return (
-            <div key={index} className="my-1 flex items-start gap-2">
-              <span className="mt-2 h-2 w-2 shrink-0 rounded-full border-2 border-slate-900" />
-              <span className="min-w-0 flex-1 whitespace-pre-wrap">
+            <div key={index} className="quiz-passage-list-row">
+              <span className="quiz-passage-list-marker">{marker}</span>
+              <span className="quiz-passage-list-text">
                 {renderInlineSegments(segment.text, `bullet-${index}`)}
               </span>
             </div>
           );
         }
 
-        return renderMarkedSegment(segment, index);
+        hangulIndex = 0;
+        const leading = splitQuizPassageLeadingLabel(line);
+        if (leading)
+          return (
+            <div className="quiz-passage-label-row" key={index}>
+              <span className="quiz-passage-leading-label">
+                {renderInlineSegments(leading.label, `label-${index}`)}
+                {leading.gap}
+              </span>
+              <span className="quiz-passage-list-text">
+                {renderInlineSegments(leading.body, `body-${index}`)}
+              </span>
+            </div>
+          );
+        return (
+          <div className="quiz-passage-text-line" key={index}>
+            {line ? renderInlineSegments(line, `line-${index}`) : <br />}
+          </div>
+        );
       })}
     </div>
   );

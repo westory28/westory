@@ -188,6 +188,23 @@ try {
     name: "새 문제 등록",
     exact: true,
   });
+  const reviewLesson = compose.getByRole("combobox", {
+    name: "다시 볼 수업자료",
+    exact: true,
+  });
+  assert.equal(
+    await reviewLesson.inputValue(),
+    "lesson-1",
+    "new form defaults to its selected lesson",
+  );
+  await compose.getByRole("button", { name: "취소", exact: true }).click();
+  await compose.waitFor({ state: "hidden" });
+  assert.deepEqual(
+    alerts,
+    [],
+    "automatic defaults do not mark untouched form dirty",
+  );
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   const standard = compose.getByRole("combobox", {
     name: "성취기준",
     exact: true,
@@ -203,6 +220,18 @@ try {
     .getByRole("combobox", { name: "소단원", exact: true })
     .selectOption("lesson-1");
   assert.equal(await standard.inputValue(), "9역10-01");
+  assert.equal(await reviewLesson.inputValue(), "lesson-1");
+  await compose
+    .getByRole("combobox", { name: "소단원", exact: true })
+    .selectOption("lesson-2");
+  assert.equal(
+    await reviewLesson.inputValue(),
+    "lesson-2",
+    "automatic review link follows selected lesson",
+  );
+  await compose
+    .getByRole("combobox", { name: "소단원", exact: true })
+    .selectOption("lesson-1");
   await compose
     .getByRole("combobox", { name: "목표 성취수준", exact: true })
     .selectOption("C");
@@ -237,6 +266,28 @@ try {
     .getByRole("button", { name: "단원 기준 적용", exact: true })
     .click();
   assert.equal(await standard.inputValue(), "9역10-01");
+  await compose
+    .getByRole("combobox", { name: "소단원", exact: true })
+    .selectOption("lesson-1");
+  await reviewLesson.selectOption("lesson-3");
+  await compose
+    .getByRole("combobox", { name: "소단원", exact: true })
+    .selectOption("lesson-2");
+  assert.equal(
+    await reviewLesson.inputValue(),
+    "lesson-3",
+    "manual review link survives a changed unit",
+  );
+  await reviewLesson.selectOption("");
+  await compose
+    .getByRole("combobox", { name: "소단원", exact: true })
+    .selectOption("lesson-1");
+  assert.equal(
+    await reviewLesson.inputValue(),
+    "",
+    "intentional unlink survives a changed unit",
+  );
+  await reviewLesson.selectOption("lesson-2");
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await standard.scrollIntoViewIfNeeded();
@@ -295,6 +346,56 @@ try {
     await page.screenshot({
       path: path.join(evidence, `achievement-authoring-${width}.png`),
     });
+    const cognitive = compose.getByRole("button", {
+      name: "사고 과정 선택",
+      exact: true,
+    });
+    await cognitive.scrollIntoViewIfNeeded();
+    const before = await reviewLesson.evaluate((el) => ({
+      top: el.getBoundingClientRect().top,
+      left: el.getBoundingClientRect().left,
+      height: el.getBoundingClientRect().height,
+      scrollTop: el.closest(".quiz-composer-body").scrollTop,
+      scrollHeight: el.closest(".quiz-composer-body").scrollHeight,
+    }));
+    await cognitive.click();
+    const popup = compose.getByRole("group", {
+      name: "사고 과정 항목",
+      exact: true,
+    });
+    await popup.waitFor();
+    const after = await reviewLesson.evaluate((el) => ({
+      top: el.getBoundingClientRect().top,
+      left: el.getBoundingClientRect().left,
+      height: el.getBoundingClientRect().height,
+      scrollTop: el.closest(".quiz-composer-body").scrollTop,
+      scrollHeight: el.closest(".quiz-composer-body").scrollHeight,
+    }));
+    assert.deepEqual(
+      after,
+      before,
+      "opening process options never moves adjacent fields or scroll position",
+    );
+    const popupRect = await popup.boundingBox();
+    assert(
+      popupRect.x >= 0 &&
+        popupRect.x + popupRect.width <= width + 1 &&
+        popupRect.y >= 0 &&
+        popupRect.y + popupRect.height <= 901,
+      JSON.stringify(popupRect),
+    );
+    await popup
+      .getByRole("checkbox", { name: "개념 이해", exact: true })
+      .check();
+    await popup
+      .getByRole("checkbox", { name: "사료 해석", exact: true })
+      .check();
+    await page.screenshot({
+      path: path.join(evidence, `cognitive-overlay-${width}.png`),
+    });
+    await page.keyboard.press("Escape");
+    assert.equal(await cognitive.getAttribute("aria-expanded"), "false");
+    assert(await compose.isVisible(), "Escape only closes the dropdown");
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await compose
@@ -330,6 +431,11 @@ try {
   assert.equal(saved.achievementMappingSource, "unit");
   assert.equal(saved.targetAchievementLevel, "C");
   assert.equal(saved.intendedDifficulty, "medium");
+  assert.equal(
+    saved.reviewLessonId,
+    "lesson-2",
+    "explicit lesson link persists",
+  );
   // Existing item is reopened through the actual list; clearing must persist.
   await page
     .getByRole("button", { name: "1번 문제 수정", exact: true })
@@ -337,6 +443,16 @@ try {
     .click();
   const edit = page.getByRole("dialog", { name: "문제 수정", exact: true });
   await edit.waitFor();
+  assert.equal(
+    await edit
+      .getByRole("combobox", { name: "다시 볼 수업자료", exact: true })
+      .inputValue(),
+    "lesson-2",
+    "saved review link survives reopening",
+  );
+  await edit
+    .getByRole("combobox", { name: "다시 볼 수업자료", exact: true })
+    .selectOption("");
   assert.equal(
     await edit
       .getByRole("combobox", { name: "성취기준", exact: true })
@@ -353,6 +469,13 @@ try {
     .first()
     .click();
   await edit.waitFor();
+  assert.equal(
+    await edit
+      .getByRole("combobox", { name: "다시 볼 수업자료", exact: true })
+      .inputValue(),
+    "",
+    "saved intentional unlink survives reopening",
+  );
   assert.equal(
     await edit
       .getByRole("combobox", { name: "성취기준", exact: true })
@@ -375,6 +498,8 @@ try {
     "row placement and responsive layout",
     "persist metadata",
     "manual clearing survives reopen",
+    "default lesson follows source unit without extra reads; explicit links and unlink preserved",
+    "process overlay has zero layout shift and Escape preserves composer at 390/768/1280",
   );
   await fs.writeFile(
     path.join(evidence, "report.json"),

@@ -1,6 +1,7 @@
 import {
   isQuizPassageBlankLabel,
   parseQuizPassageMarkup,
+  quizPassageHangulMarker,
 } from "../../../lib/quizPassageMarkup";
 
 export type QuizVisualMark =
@@ -16,7 +17,7 @@ export interface QuizVisualRun {
   widthEm?: number;
 }
 export interface QuizVisualLine {
-  bullet: boolean;
+  bullet: boolean | "hangul";
   runs: QuizVisualRun[];
 }
 export type QuizVisualDocument = QuizVisualLine[];
@@ -44,7 +45,7 @@ export const parseQuizVisualDocument = (value: string): QuizVisualDocument =>
       const parse = (source: string) =>
         parseQuizPassageMarkup(source).forEach((part) => {
           if (part.type === "bullet") {
-            line.bullet = true;
+            line.bullet = part.bulletStyle === "hangul" ? "hangul" : true;
             parse(part.text);
           } else
             appendRun(line, {
@@ -68,7 +69,11 @@ export const serializeQuizVisualDocument = (
   lines
     .map(
       (line) =>
-        (line.bullet ? "{{bullet}}" : "") +
+        (line.bullet === "hangul"
+          ? "{{hangul}}"
+          : line.bullet
+            ? "{{bullet}}"
+            : "") +
         line.runs
           .map((run) => {
             const text = run.text.replace(/\u200b/g, "");
@@ -102,7 +107,7 @@ export const sliceQuizVisualDocument = (
     const length = quizVisualText([line]).length;
     if (end > offset && start <= offset + length) {
       const next: QuizVisualLine = {
-        bullet: line.bullet && start <= offset,
+        bullet: start <= offset ? line.bullet : false,
         runs: [],
       };
       let cursor = offset;
@@ -122,13 +127,22 @@ export const sliceQuizVisualDocument = (
 
 export const quizVisualClipboard = (lines: QuizVisualDocument) => {
   const root = document.createElement("div");
+  let hangulIndex = 0;
+  const plainLines: string[] = [];
   lines.forEach((line) => {
     const row = document.createElement("div");
+    const marker =
+      line.bullet === "hangul" ? quizPassageHangulMarker(hangulIndex++) : "•";
+    if (line.bullet !== "hangul") hangulIndex = 0;
     if (line.bullet) {
-      row.dataset.quizBullet = "true";
+      row.dataset.quizBullet = String(line.bullet);
       row.dataset.quizClipboardBullet = "true";
-      row.appendChild(document.createTextNode("• "));
+      row.appendChild(document.createTextNode(`${marker} `));
     }
+    plainLines.push(
+      (line.bullet ? `${marker} ` : "") +
+        quizVisualText([line]).replace(/\u200b/g, ""),
+    );
     line.runs.forEach((run) => {
       if (run.mark === "text")
         row.appendChild(document.createTextNode(run.text));
@@ -161,13 +175,7 @@ export const quizVisualClipboard = (lines: QuizVisualDocument) => {
     root.appendChild(row);
   });
   return {
-    text: lines
-      .map(
-        (line) =>
-          (line.bullet ? "• " : "") +
-          quizVisualText([line]).replace(/\u200b/g, ""),
-      )
-      .join("\n"),
+    text: plainLines.join("\n"),
     html: root.innerHTML,
   };
 };
@@ -240,17 +248,20 @@ export const formatQuizVisualDocument = (
     offset += length + 1;
     return selected;
   });
-  const removeBullets = lines.every(
-    (line, index) => !selectedLines[index] || line.bullet,
-  );
+  const selectedBullets = lines.filter((_line, index) => selectedLines[index]);
+  const nextBullet: QuizVisualLine["bullet"] = selectedBullets.every(
+    (line) => line.bullet === "hangul",
+  )
+    ? false
+    : selectedBullets.every((line) => line.bullet === true)
+      ? "hangul"
+      : true;
   const formatGroup = ++nextMarkGroup;
   offset = 0;
   return lines.map((line, index) => {
     const next = {
       bullet:
-        mark === "bullet" && selectedLines[index]
-          ? !removeBullets
-          : line.bullet,
+        mark === "bullet" && selectedLines[index] ? nextBullet : line.bullet,
       runs: [] as QuizVisualRun[],
     };
     line.runs.forEach((run) => {
@@ -405,13 +416,17 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
         hasContent = true;
         previousBlock = block;
       });
-    if (element?.tagName === "LI" || element?.dataset?.quizBullet === "true")
-      output[0].bullet = true;
-    if (
-      element?.dataset?.quizClipboardBullet === "true" &&
-      output[0].runs[0]?.text.startsWith("• ")
+    if (element?.dataset?.quizBullet === "hangul") output[0].bullet = "hangul";
+    else if (
+      element?.tagName === "LI" ||
+      element?.dataset?.quizBullet === "true"
     )
-      output[0].runs[0].text = output[0].runs[0].text.slice(2);
+      output[0].bullet = true;
+    if (element?.dataset?.quizClipboardBullet === "true" && output[0].runs[0])
+      output[0].runs[0].text = output[0].runs[0].text.replace(
+        output[0].bullet === "hangul" ? /^(?:[ㄱ-ㅎ]|\d+)\. / : /^• /,
+        "",
+      );
     return output;
   };
   return read(root);
@@ -428,10 +443,14 @@ export const createQuizVisualFragment = (
   lines: QuizVisualDocument,
 ): DocumentFragment => {
   const fragment = document.createDocumentFragment();
+  let hangulIndex = 0;
   lines.forEach((line) => {
     const row = document.createElement("div");
     row.dataset.quizLine = "true";
-    if (line.bullet) row.dataset.quizBullet = "true";
+    if (line.bullet) row.dataset.quizBullet = String(line.bullet);
+    if (line.bullet === "hangul")
+      row.dataset.quizListMarker = quizPassageHangulMarker(hangulIndex++);
+    else hangulIndex = 0;
     line.runs.forEach((run) => {
       if (run.mark === "text")
         row.appendChild(document.createTextNode(run.text));
@@ -454,6 +473,45 @@ export const createQuizVisualFragment = (
     fragment.appendChild(row);
   });
   return fragment;
+};
+
+/** Keep generated markers and hanging indents current after native editing. */
+export const decorateQuizVisualRows = (root: HTMLElement) => {
+  let hangulIndex = 0;
+  Array.from(root.children).forEach((child) => {
+    const row = child as HTMLElement;
+    if (row.dataset.quizBullet === "hangul") {
+      row.dataset.quizListMarker = quizPassageHangulMarker(hangulIndex++);
+    } else {
+      hangulIndex = 0;
+      delete row.dataset.quizListMarker;
+    }
+    delete row.dataset.quizLeadingLabel;
+    row.style.removeProperty("--quiz-leading-label-width");
+    if (row.dataset.quizBullet) return;
+    const leading = /^\([가-힣ㄱ-ㅎA-Za-z0-9]{1,3}\)[ \t]+(?=\S)/u.exec(
+      row.textContent || "",
+    );
+    if (!leading) return;
+    let remaining = leading[0].length;
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    let text: Node | null;
+    while ((text = walker.nextNode())) {
+      const length = text.textContent?.length || 0;
+      if (remaining <= length) {
+        const range = document.createRange();
+        range.selectNodeContents(row);
+        range.setEnd(text, remaining);
+        const width = range.getBoundingClientRect().width;
+        if (width > 0) {
+          row.dataset.quizLeadingLabel = "true";
+          row.style.setProperty("--quiz-leading-label-width", `${width}px`);
+        }
+        break;
+      }
+      remaining -= length;
+    }
+  });
 };
 
 /** Selection offsets are derived from a clone of the visible editor DOM. */

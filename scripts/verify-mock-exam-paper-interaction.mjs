@@ -178,6 +178,15 @@ const browser = await playwright.chromium.launch({
   headless: true,
 });
 const reports = [];
+const choiceRows = (locator) => locator.evaluateAll((items) => {
+  const tops = [];
+  return items.map((item) => {
+    const top = item.getBoundingClientRect().top;
+    let row = tops.findIndex((value) => Math.abs(value - top) < 1);
+    if (row === -1) { row = tops.length; tops.push(top); }
+    return row;
+  });
+});
 const settleAnswerMarks = (page) => page.locator('.mock-exam-answer-check').evaluateAll((marks) =>
   Promise.all(marks.flatMap((mark) => mark.getAnimations({ subtree: true })).map((animation) => animation.finished)),
 );
@@ -447,6 +456,8 @@ try {
       path: path.join(evidence, `teacher-paper-${width}.png`),
     });
     const first = page.locator(".mock-exam-sheet .mock-exam-question").first();
+    layout.paperChoiceRows = await choiceRows(first.locator('.mock-exam-options li'));
+    assert.deepEqual(layout.paperChoiceRows, [0, 0, 0, 1, 1]);
     await first.focus();
     await page.keyboard.press("Enter");
     await page
@@ -459,17 +470,23 @@ try {
     );
     assert.equal(await page.locator(".quiz-composer-footer").count(), 1);
     layout.previewFooter = await checkPreviewFooter(page);
+    assert.deepEqual(await choiceRows(page.locator('.mock-exam-answer-controls [role="radiogroup"] label')), layout.paperChoiceRows,
+      'Teacher solving preserves the paper choice row/column order');
     layout.toggle = await checkStableChoiceToggle(page, { touch,
       dialog: '.quiz-composer-dialog', scroll: '.quiz-composer-body', question: '.mock-exam-preview-question' });
     layout.compactAnswers = await page.locator('.mock-exam-answer-controls [role="radiogroup"]').evaluate((group) => {
       const labels = [...group.querySelectorAll("label")].map((label) => label.getBoundingClientRect());
       return { height: group.getBoundingClientRect().height, gap: parseFloat(getComputedStyle(group).rowGap), heights: labels.map((rect) => rect.height),
-        overlaps: labels.slice(1).some((rect, index) => rect.top < labels[index].bottom - 0.5) };
+        rows: [...new Set(labels.map((rect) => Math.round(rect.top)))].length,
+        overlaps: labels.some((rect, index) => labels.slice(index + 1).some((other) =>
+          rect.left < other.right - 0.5 && other.left < rect.right - 0.5 &&
+          rect.top < other.bottom - 0.5 && other.top < rect.bottom - 0.5)) };
     });
     assert(layout.compactAnswers.gap <= 4, "Choice rows are more compact than the old 8px gaps");
     assert(layout.compactAnswers.heights.every((height) => height >= 44 && height <= 48), "Compact choices preserve touch targets");
     assert(!layout.compactAnswers.overlaps);
-    assert(layout.compactAnswers.height <= 256, "Five short choices fit in a compact vertical group");
+    assert.equal(layout.compactAnswers.rows, 2, "Paper's 3+2 choices stay in two rows when opened");
+    assert(layout.compactAnswers.height <= 100, "Five short choices use the same compact two rows as the paper");
     layout.normalAnimation = await checkAnswerMark(page, "① 조준", "no-preference");
     layout.reduceAnimation = await checkAnswerMark(page, "② 이방원", "reduce");
     await page.getByRole("radio", { name: "① 조준", exact: true }).locator("..").click();
@@ -612,6 +629,8 @@ try {
     const draftCard = page.locator('.mock-exam-draft-preview-paper');
     const draftHeading = page.locator('.mock-exam-draft-preview-heading');
     await page.getByRole('radio', { name: '① 조준', exact: true }).waitFor();
+    assert.deepEqual(await choiceRows(page.locator('.mock-exam-answer-controls [role="radiogroup"] label')), layout.paperChoiceRows,
+      'Authoring preview preserves the paper choice row/column order');
     assert.equal(await page.getByRole('button', { name: /문제 풀이 미리보기|돌아가기/ }).count(), 0, 'Draft preview has no separate expand/return stage');
     assert.equal(await draftCard.getAttribute('role'), null);
     assert.notEqual(await draftCard.evaluate(element => getComputedStyle(element).cursor), 'zoom-in');
@@ -628,6 +647,8 @@ try {
     await page.screenshot({ path: path.join(evidence, `draft-direct-${width}.png`) });
     await page.goto(origin + "/?mode=student");
     await page.locator(".mock-exam-sheet .mock-exam-question").first().click();
+    assert.deepEqual(await choiceRows(page.locator('.mock-exam-answer-controls [role="radiogroup"] label')), layout.paperChoiceRows,
+      'Student solving preserves the paper choice row/column order');
     assert.equal(await page.locator('details, summary').count(), 0, 'Student solving has no answer/explanation disclosure');
     assert.equal(await page.getByText('합성 문항의 해설입니다.', { exact: true }).count(), 0);
     layout.studentToggle = await checkStableChoiceToggle(page, { touch,
@@ -681,6 +702,9 @@ try {
         room: (footer.top - firstColumn.top) / scale - 16,
         required: noticeHeight + questionHeights.reduce((sum, height) => sum + height, 0) + gap,
         noticeHeight, questionHeights, gap,
+        firstTopGap: (questions[0].getBoundingClientRect().top - notice.getBoundingClientRect().bottom) / scale,
+        betweenQuestions: (questions[1].getBoundingClientRect().top - questions[0].getBoundingClientRect().bottom) / scale,
+        bottomGap: (firstColumn.bottom - questions[1].getBoundingClientRect().bottom) / scale,
         order: questions.map((question) => question.textContent.trim().slice(0, 2)),
         overlaps: questions.some((question) => question.getBoundingClientRect().bottom > footer.top),
         overflow: document.documentElement.scrollWidth > innerWidth + 1,
@@ -690,6 +714,9 @@ try {
     assert(fitting.required <= fitting.room + 1, `Fixture physically fits in the first column at ${width}px: ${JSON.stringify(fitting)}`);
     assert.deepEqual(fitting.columnCounts, [2, 0], "Q2 follows Q1 in the same column when both fit below the notice");
     assert.equal(fitting.pages, 1);
+    assert(Math.abs(fitting.firstTopGap - 10) < 1, 'Instructions stay next to the first question');
+    assert(fitting.betweenQuestions > fitting.gap + 20, 'Unused column space is placed between Q1 and Q2');
+    assert(Math.abs(fitting.bottomGap) < 1, 'Q2 is aligned with the bottom of the text column');
     assert(!fitting.overlaps && !fitting.overflow);
     assert.deepEqual(fitting.order, ["1.", "2."]);
     layout.fitting = fitting;

@@ -4,7 +4,20 @@ export interface QuizPassageSegment {
   type: "text" | "blankBox" | QuizPassageMarkType;
   text: string;
   widthEm?: number;
+  bulletStyle?: "hangul";
 }
+
+export const quizPassageHangulMarker = (index: number) =>
+  `${Array.from("ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ")[index] || index + 1}.`;
+
+/** A paragraph label must start a line and be followed by space, not a particle. */
+export const splitQuizPassageLeadingLabel = (value: string) => {
+  const label = "\\([가-힣ㄱ-ㅎA-Za-z0-9]{1,3}\\)";
+  const match = new RegExp(
+    `^(${label}|\\{\\{(?:box|u):${label}\\}\\}|\\{\\{blankbox:\\d+(?:\\.\\d{1,3})?\\|${label}\\}\\})([ \\t]+)(\\S[\\s\\S]*)$`,
+  ).exec(value);
+  return match ? { label: match[1], gap: match[2], body: match[3] } : null;
+};
 
 export const isQuizPassageBlankLabel = (value: string) =>
   /^\([가-힣ㄱ-ㅎA-Za-z0-9]{1,3}\)$/u.test(value.trim());
@@ -104,9 +117,15 @@ export const parseQuizPassageMarkup = (
       return;
     }
 
-    const bulletMatch = /^(\s*)\{\{bullet\}\}\s?([\s\S]*)$/.exec(part);
+    const bulletMatch = /^(\s*)\{\{(bullet|hangul)\}\}\s?([\s\S]*)$/.exec(part);
     if (bulletMatch) {
-      segments.push({ type: "bullet", text: bulletMatch[2] });
+      segments.push({
+        type: "bullet",
+        text: bulletMatch[3],
+        ...(bulletMatch[2] === "hangul"
+          ? { bulletStyle: "hangul" as const }
+          : {}),
+      });
       return;
     }
 
@@ -125,8 +144,7 @@ export const stripQuizPassageMarkup = (value: string | null | undefined) =>
           ? text.split("|").slice(1).join("|") || "(가)"
           : text,
     )
-    .split(BULLET_TOKEN)
-    .join("");
+    .replace(/\{\{(?:bullet|hangul)\}\}/g, "");
 
 const findLineStart = (value: string, index: number) =>
   value.lastIndexOf("\n", Math.max(0, index - 1)) + 1;

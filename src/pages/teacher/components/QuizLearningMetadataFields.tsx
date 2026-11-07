@@ -1,4 +1,10 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { getQuestionCognitiveProcesses } from "../../../lib/cognitiveProcesses";
 import "./QuizLearningMetadataFields.css";
 import {
@@ -31,6 +37,7 @@ interface Props {
   onChange: (value: QuizLearningMetadata) => void;
   options: string[];
   units: { id: string; title: string }[];
+  onReviewLessonChange?: (lessonId: string) => void;
 }
 
 function CognitiveProcessSelect({
@@ -41,12 +48,51 @@ function CognitiveProcessSelect({
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState<React.CSSProperties>({});
   const selected = getQuestionCognitiveProcesses(value);
   const legacyOptions = useRef(new Set<string>());
   selected
     .filter((item) => !COGNITIVE_PROCESS_OPTIONS.includes(item))
     .forEach((item) => legacyOptions.current.add(item));
   const choices = [...COGNITIVE_PROCESS_OPTIONS, ...legacyOptions.current];
+  useLayoutEffect(() => {
+    if (!open) return;
+    const placeOptions = () => {
+      const button = trigger.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const scrollArea = button.closest(".quiz-composer-body");
+      const boundary = scrollArea?.getBoundingClientRect();
+      const topEdge = Math.max(8, boundary?.top ?? 8);
+      const bottomEdge = Math.min(
+        window.innerHeight - 8,
+        boundary?.bottom ?? window.innerHeight - 8,
+      );
+      if (rect.bottom < topEdge || rect.top > bottomEdge) {
+        setOpen(false);
+        return;
+      }
+      const below = Math.max(0, bottomEdge - rect.bottom - 4);
+      const above = Math.max(0, rect.top - topEdge - 4);
+      const desired = Math.min(320, choices.length * 44 + 10);
+      const upwards = below < desired && above > below;
+      const height = Math.min(desired, upwards ? above : below);
+      const width = Math.min(rect.width, window.innerWidth - 16);
+      setPosition({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top: upwards ? rect.top - height - 4 : rect.bottom + 4,
+        width,
+        maxHeight: height,
+      });
+    };
+    placeOptions();
+    window.addEventListener("resize", placeOptions);
+    document.addEventListener("scroll", placeOptions, true);
+    return () => {
+      window.removeEventListener("resize", placeOptions);
+      document.removeEventListener("scroll", placeOptions, true);
+    };
+  }, [open, choices.length]);
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
@@ -91,6 +137,7 @@ function CognitiveProcessSelect({
         <div
           id={`${id}-options`}
           className="quiz-cognitive-options"
+          style={position}
           role="group"
           aria-label="사고 과정 항목"
         >
@@ -124,6 +171,7 @@ const QuizLearningMetadataFields: React.FC<Props> = ({
   onChange,
   options,
   units,
+  onReviewLessonChange,
 }) => (
   <fieldset className="space-y-3 border-t border-gray-200 pt-4">
     <legend className="px-1 text-sm font-bold text-gray-800">
@@ -152,7 +200,9 @@ const QuizLearningMetadataFields: React.FC<Props> = ({
       <select
         value={value.reviewLessonId || ""}
         onChange={(event) =>
-          onChange({ ...value, reviewLessonId: event.target.value })
+          onReviewLessonChange
+            ? onReviewLessonChange(event.target.value)
+            : onChange({ ...value, reviewLessonId: event.target.value })
         }
         className="mt-1 min-h-11 w-full rounded border border-gray-300 p-2 font-normal"
       >
