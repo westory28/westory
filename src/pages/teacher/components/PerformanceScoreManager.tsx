@@ -13000,15 +13000,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
       {signatureStatusModalEnabled && classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+          <section
+            className={`${!isWrittenExamMode ? "score-class-sheet--compact " : ""}flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
+          >
+            <div className="score-class-sheet-header flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
                   {classSheetModalTitle}
                 </h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  {classSheetModalDescription}
-                </p>
+                {isWrittenExamMode && (
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {classSheetModalDescription}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -13021,107 +13025,114 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_110px_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_130px_130px_auto]">
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    {classSheetFirstRosterLabel}
-                  </span>
-                  <select
-                    value={classSheetFirstRosterId}
-                    onChange={(event) =>
-                      setClassSheetFirstRosterId(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    {classSheetFirstRosterOptions.length === 0 ? (
-                      <option value="">
-                        {isWrittenExamMode
-                          ? "서답형 점수표 없음"
-                          : "1차 점수표 없음"}
-                      </option>
-                    ) : (
-                      classSheetFirstRosterOptions.map((roster) => (
-                        <option key={roster.id} value={roster.id}>
-                          {roster.title}
+            <div className="score-class-sheet-body min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              <div className="score-class-sheet-filters grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_110px_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_130px_130px_auto]">
+                <div className="score-class-sheet-filter-fields">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      {isWrittenExamMode ? classSheetFirstRosterLabel : "1차"}
+                    </span>
+                    <select
+                      aria-label={classSheetFirstRosterLabel}
+                      value={classSheetFirstRosterId}
+                      onChange={(event) =>
+                        setClassSheetFirstRosterId(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {classSheetFirstRosterOptions.length === 0 ? (
+                        <option value="">
+                          {isWrittenExamMode
+                            ? "서답형 점수표 없음"
+                            : "1차 점수표 없음"}
                         </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    {classSheetSecondRosterLabel}
-                  </span>
-                  <select
-                    value={classSheetSecondRosterId}
-                    onChange={(event) =>
-                      setClassSheetSecondRosterId(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    {classSheetSecondRosterOptions.length === 0 ? (
-                      <option value="">
-                        {isWrittenExamMode
-                          ? "논술형 점수표 없음"
-                          : "2차 점수표 없음"}
-                      </option>
-                    ) : (
-                      classSheetSecondRosterOptions.map((roster) => (
-                        <option key={roster.id} value={roster.id}>
-                          {roster.title}
+                      ) : (
+                        classSheetFirstRosterOptions.map((roster) => (
+                          <option key={roster.id} value={roster.id}>
+                            {roster.title}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      {isWrittenExamMode ? classSheetSecondRosterLabel : "2차"}
+                    </span>
+                    <select
+                      aria-label={classSheetSecondRosterLabel}
+                      value={classSheetSecondRosterId}
+                      onChange={(event) =>
+                        setClassSheetSecondRosterId(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {classSheetSecondRosterOptions.length === 0 ? (
+                        <option value="">
+                          {isWrittenExamMode
+                            ? "논술형 점수표 없음"
+                            : "2차 점수표 없음"}
                         </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    학년
-                  </span>
-                  <select
-                    value={classSheetGradeFilter}
-                    onChange={(event) =>
-                      setClassSheetGradeFilter(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    {(classSheetGradeOptions.length
-                      ? classSheetGradeOptions
-                      : DEFAULT_GRADE_OPTIONS
-                    ).map((grade) => (
-                      <option key={grade} value={grade}>
-                        {grade}학년
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    반
-                  </span>
-                  <select
-                    value={classSheetClassFilter}
-                    onChange={(event) =>
-                      setClassSheetClassFilter(event.target.value)
-                    }
-                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                  >
-                    {classSheetClassOptions.length === 0 ? (
-                      <option value="">반 없음</option>
-                    ) : (
-                      classSheetClassOptions.map((classValue) => (
-                        <option key={classValue} value={classValue}>
-                          {classValue}반
+                      ) : (
+                        classSheetSecondRosterOptions.map((roster) => (
+                          <option key={roster.id} value={roster.id}>
+                            {roster.title}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      학년
+                    </span>
+                    <select
+                      value={classSheetGradeFilter}
+                      onChange={(event) =>
+                        setClassSheetGradeFilter(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {(classSheetGradeOptions.length
+                        ? classSheetGradeOptions
+                        : DEFAULT_GRADE_OPTIONS
+                      ).map((grade) => (
+                        <option key={grade} value={grade}>
+                          {grade}학년
                         </option>
-                      ))
-                    )}
-                  </select>
-                </label>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black text-slate-500">
+                      반
+                    </span>
+                    <select
+                      value={classSheetClassFilter}
+                      onChange={(event) =>
+                        setClassSheetClassFilter(event.target.value)
+                      }
+                      className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {classSheetClassOptions.length === 0 ? (
+                        <option value="">반 없음</option>
+                      ) : (
+                        classSheetClassOptions.map((classValue) => (
+                          <option key={classValue} value={classValue}>
+                            {classValue}반
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                </div>
                 <div className="flex items-end">
                   <button
                     type="button"
                     onClick={() => void refreshClassSheetPreview()}
+                    aria-label={
+                      classSheetPreviewLoading ? "조회 중" : "현황 조회"
+                    }
                     disabled={
                       classSheetPreviewLoading ||
                       exportingClassSheet ||
@@ -13133,15 +13144,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       className={`fas fa-search text-xs ${classSheetPreviewLoading ? "animate-spin" : ""}`}
                       aria-hidden="true"
                     ></i>
-                    {classSheetPreviewLoading ? "조회 중" : "현황 조회"}
+                    {classSheetPreviewLoading
+                      ? "조회 중"
+                      : isWrittenExamMode
+                        ? "현황 조회"
+                        : "조회"}
                   </button>
                 </div>
               </div>
 
               {classSheetPreviewReady ? (
-                <div className="mt-4 space-y-4">
+                <div
+                  className={`score-class-sheet-results mt-4 ${isWrittenExamMode ? "space-y-4" : ""}`}
+                >
                   <div
-                    className={`grid gap-2 sm:grid-cols-2 ${
+                    className={`score-class-sheet-summary grid gap-2 sm:grid-cols-2 ${
                       isWrittenExamMode ? "lg:grid-cols-6" : "lg:grid-cols-5"
                     }`}
                   >
@@ -13203,7 +13220,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       ))}
                   </div>
 
-                  <div className="max-h-[min(46vh,520px)] overflow-auto rounded-xl border border-slate-200">
+                  <div
+                    className="score-class-sheet-table max-h-[min(46vh,520px)] overflow-auto rounded-xl border border-slate-200"
+                    tabIndex={isWrittenExamMode ? undefined : 0}
+                    aria-label={
+                      isWrittenExamMode ? undefined : "학생별 점수와 서명 현황"
+                    }
+                  >
                     <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
                         <col className="w-[10%]" />
@@ -13398,7 +13421,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   {transferredStudent &&
                                   !isWrittenExamMode ? null : signatureDisplayRecord &&
                                     signatureImage ? (
-                                    <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2">
+                                    <div className="score-class-sheet-signature mx-auto flex max-w-full flex-wrap items-center justify-center gap-2">
                                       <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
                                           src={signatureImage}
@@ -13463,19 +13486,24 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               )}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setClassSheetModalOpen(false)}
-                disabled={classSheetPreviewLoading || exportingClassSheet}
-                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                닫기
-              </button>
+            <div className="score-class-sheet-footer flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              {isWrittenExamMode && (
+                <button
+                  type="button"
+                  onClick={() => setClassSheetModalOpen(false)}
+                  disabled={classSheetPreviewLoading || exportingClassSheet}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  닫기
+                </button>
+              )}
               {classSheetEnabled && (
                 <button
                   type="button"
                   onClick={() => void downloadClassSummarySheet()}
+                  aria-label={
+                    exportingClassSheet ? "생성 중" : "일람표 다운로드"
+                  }
                   disabled={
                     classSheetPreviewLoading ||
                     exportingClassSheet ||
@@ -13487,7 +13515,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     className={`fas fa-file-excel text-xs ${exportingClassSheet ? "animate-pulse" : ""}`}
                     aria-hidden="true"
                   ></i>
-                  {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
+                  {exportingClassSheet ? "생성 중" : "다운로드"}
                 </button>
               )}
             </div>
