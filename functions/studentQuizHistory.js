@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
+const { loadQuizReviewNotes } = require('./studentQuizReviewNotes');
 
 const PAGE_SIZE = 20;
 const MAX_RECORDS = 5000;
@@ -81,6 +82,7 @@ function canonicalDetail(id, raw, answers) {
     score: scoreValue(raw.percent), submittedAtIso: raw.submittedAtIso || '',
     ...(Number.isFinite(raw.earnedPoints) && Number.isFinite(raw.maxPoints)
       ? { earnedPoints: raw.earnedPoints, maxPoints: raw.maxPoints } : {}),
+    ...(raw.paperHeader ? { paperHeader: raw.paperHeader } : {}),
     timestamp: { seconds: (recordedAtMs || 0) / 1000 }, recordedAtMs,
     details: (raw.answerChecks || []).map(check => ({ ...metadata.get(String(check.id)),
       id: check.id, correct: typeof check.correct === 'boolean' ? check.correct : undefined,
@@ -117,7 +119,8 @@ const createStudentQuizHistoryHandler = ({ db, assertSession = assertScoreWorkfl
         title || (String(node.id) === unitId ? text(node.title) : find(node.children)), '');
       raw.unitTitle = find(tree.data()?.tree);
     }
-    if (source === 'legacy') return { semesterId, key: input.key, record: { ...raw, id,
+    const reviewNotes = await loadQuizReviewNotes(db, semesterId, uid, input.key);
+    if (source === 'legacy') return { semesterId, key: input.key, reviewNotes, record: { ...raw, id,
       recordedAtMs: milliseconds(raw.timestamp) || null,
       timestamp: { seconds: milliseconds(raw.timestamp) / 1000 }, score: scoreValue(raw.score) } };
     let answers = raw.answers && typeof raw.answers === 'object' && !Array.isArray(raw.answers) ? raw.answers : null;
@@ -127,7 +130,14 @@ const createStudentQuizHistoryHandler = ({ db, assertSession = assertScoreWorkfl
         answers = submission.answers && typeof submission.answers === 'object' && !Array.isArray(submission.answers) ? submission.answers : null;
       }
     }
-    return { semesterId, key: input.key, record: canonicalDetail(id, raw, answers) };
+    if (!raw.paperHeader && text(raw.category || text(raw.definitionId).split(':')[3]).startsWith('exam_prep')
+      && raw.attemptId === id) {
+      const attempt = (await db.doc(`semester_assessment_attempts/${id}`).get()).data();
+      if (attempt?.studentUid === uid && attempt.semesterId === semesterId && attempt.attemptId === id
+        && attempt.assessmentKind === 'QUIZ' && attempt.resultRef === path && attempt.status === 'SUBMITTED'
+        && attempt.definitionId === raw.definitionId && attempt.paperHeader) raw.paperHeader = attempt.paperHeader;
+    }
+    return { semesterId, key: input.key, reviewNotes, record: canonicalDetail(id, raw, answers) };
   }
   const cacheId = hash(`${semesterId}\n${uid}`), cacheRef = db.doc(`quiz_analysis_student_history/${cacheId}`);
   const revisionRef = db.doc(`quiz_analysis_student_revisions/${cacheId}`);

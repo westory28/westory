@@ -3,9 +3,10 @@ const { randomUUID } = require("node:crypto");
 const projectId = process.env.GCLOUD_PROJECT || "";
 assert.match(projectId, /^demo-westory-session-[a-z0-9-]+$/);
 assert.match(process.env.FIRESTORE_EMULATOR_HOST || "", /^(127\.0\.0\.1|localhost):\d+$/);
-const { initializeApp, deleteApp } = require("firebase-admin/app");
+const { getApp, deleteApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
-const app = initializeApp({ projectId });
+const deployed = require("../../index");
+const app = getApp();
 const db = getFirestore(app);
 const production = require("../productionSource");
 const authority = require("../sessionAuthority");
@@ -24,6 +25,8 @@ const execute = (uid, commandType, payload, commandId = randomUUID()) =>
 const state = (uid, data) => production.getAssessmentState.run(request(uid, data));
 const get = async path => (await db.doc(path).get()).data();
 const reason = expected => error => error.details?.reason === expected;
+const history = (uid, data) => deployed.getMyQuizHistory.run(request(uid, { semesterId, ...data }));
+const saveNote = (uid, data) => deployed.saveMyQuizReviewNote.run(request(uid, { semesterId, ...data }));
 const settings = { active: true, questionCount: 3, questionOrder: "created", randomOrder: false,
   timeLimit: 600, allowRetake: true, cooldown: 0, hintLimit: 0, visibleTargetGrade: "3", visibleClassIds: ["3-1"], visibilityVersion: 2 };
 const payload = (revision, update = {}) => {
@@ -102,7 +105,11 @@ const payload = (revision, update = {}) => {
   assert.deepEqual((await state("student-one", { attemptId: attempt.attemptId })).attempt.questionSnapshotOmittedIds, ["3"]);
   await db.doc(`${root}/quiz_questions/3`).update({ contentRevision: 1 });
   assert.equal((await get(`semester_assessment_attempts/${attempt.attemptId}`)).revision, 1, "Read recovery must not write progress");
-  const answers = { "1": "O", "2": "왼쪽1=>오른쪽2||왼쪽2=>오른쪽1", "3": "다||나||가" };
+  const answers = { "1": "X", "2": "왼쪽1=>오른쪽2||왼쪽2=>오른쪽1", "3": "다||나||가" };
+  const notePayload = { key: `canonical:${attempt.attemptId}`, questionId: "1", practiceAnswer: "O", reason: "개념이 헷갈렸어요",
+    note: "보관된 자료를 다시 확인했습니다.", expectedRevision: 0, saveId: randomUUID() };
+  await assert.rejects(history("student-one", { mode: "detail", key: notePayload.key }), error => error.code === "not-found");
+  await assert.rejects(saveNote("student-one", notePayload), reason("QUIZ_REVIEW_RESULT_NOT_FOUND"));
   const savePayload = { attemptId: attempt.attemptId, expectedRevision: 1, answers, currentItemId: "3", saveId: randomUUID() };
   const attemptRef = db.doc(`semester_assessment_attempts/${attempt.attemptId}`);
   await attemptRef.update({ answers: { unassigned: "legacy" } });
@@ -117,9 +124,82 @@ const payload = (revision, update = {}) => {
   assert.deepEqual((await attemptRef.get()).data().answers, answers, "Saving replaces legacy unknown entries in the entire Firestore answer map");
   assert.equal((await production.saveAssessmentProgress.run(request("student-one", savePayload))).replayed, true);
   const submitted = await execute("student-one", "submitAssessmentAttempt", { attemptId: attempt.attemptId, expectedRevision: 2, answers, submitReason: "STUDENT" });
-  assert.equal(submitted.result.percent, 100);
+  assert.equal(submitted.result.percent, 67);
+  assert.deepEqual(submitted.result.answers, answers);
   assert.equal((await state("student-one", { attemptId: attempt.attemptId })).status, "SUBMITTED");
-  console.log("PASS selected-class start, answer-free large-image recovery, stale/foreign attempt denial, autosave replay and authenticated 100% submission");
+  const resultPath = `semester_assessment_results/${attempt.attemptId}`;
+  const submissionPath = `semester_assessment_submissions/${attempt.attemptId}`;
+  const original = await get(resultPath), originalSubmission = await get(submissionPath);
+  const repeated = await execute("student-one", "submitAssessmentAttempt", { attemptId: attempt.attemptId,
+    expectedRevision: 1, answers: { ...answers, 1: "O" }, submitReason: "STUDENT" });
+  assert.equal(repeated.result.replayedSubmission, true);
+  assert.deepEqual(repeated.result.answers, answers, "A stale tab receives the original submitted answers");
+  const detail = await history("student-one", { mode: "detail", key: notePayload.key });
+  assert.equal(detail.record.details.find(item => item.id === "1").u, "X");
+  assert.equal(detail.record.details.find(item => item.id === "1").questionSnapshot.answer, "O");
+  assert.equal(detail.record.details.find(item => item.id === "1").questionSnapshot.explanation, "비공개 해설");
+  assert.equal(detail.reviewNotes.revision, 0);
+  assert.equal((await history("student-one", { mode: "list", forceRefresh: true })).rows[0].wrongCount, 1);
+  await assert.rejects(history("student-two", { mode: "detail", key: notePayload.key }), error => error.code === "not-found");
+  await assert.rejects(saveNote("student-two", notePayload), reason("QUIZ_REVIEW_RESULT_NOT_FOUND"));
+  await assert.rejects(saveNote("teacher", notePayload), reason("QUIZ_REVIEW_STUDENT_REQUIRED"));
+  await assert.rejects(saveNote("student-one", { ...notePayload, questionId: "2" }), reason("QUIZ_REVIEW_QUESTION_INVALID"));
+  const savedNote = await saveNote("student-one", notePayload);
+  assert.equal(savedNote.reviewNotes.items[0].correct, true);
+  assert.deepEqual((await history("student-one", { mode: "detail", key: notePayload.key })).reviewNotes, savedNote.reviewNotes);
+  assert.equal((await saveNote("student-one", notePayload)).replayed, true);
+  await assert.rejects(saveNote("student-one", { ...notePayload, note: "변경" }), reason("QUIZ_REVIEW_SAVE_ID_REUSED"));
+  const noteRaces = await Promise.allSettled(["첫째", "둘째"].map(note => saveNote("student-one", {
+    ...notePayload, practiceAnswer: "", expectedRevision: 1, saveId: randomUUID(), note,
+  })));
+  assert.equal(noteRaces.filter(result => result.status === "fulfilled").length, 1);
+  assert.equal(noteRaces.find(result => result.status === "rejected").reason.details.reason, "QUIZ_REVIEW_REVISION_CONFLICT");
+  assert.equal((await history("student-one", { mode: "detail", key: notePayload.key })).reviewNotes.items[0].correct, null);
+  assert.deepEqual(await get(resultPath), original);
+  assert.deepEqual(await get(submissionPath), originalSubmission);
+  console.log("PASS authenticated diagnostic submit -> private original review -> explicit notes save/re-read, CAS/retry, stale-tab original answers and immutable scores");
+
+  for (const category of ["formative", "exam_prep"]) {
+    const unit = category === "exam_prep" ? "exam_prep" : "release-formative";
+    const defId = `quiz:${semesterId}:${unit}:${category}${category === "exam_prep" ? ":round_1" : ""}`;
+    const questionIds = category === "exam_prep" ? [21, 22] : [11, 12];
+    for (const [index, id] of questionIds.entries()) await db.doc(`${root}/quiz_questions/${id}`).set({
+      id, unitId: unit, category, type: "choice", question: "격리된 합성 검증 문항", answer: "고려", options: ["고려", "신라"],
+      explanation: "제출 뒤 확인하는 해설", contentRevision: 1,
+      ...(category === "exam_prep" ? { examRound: "round_1", paperOrder: index + 1, points: index ? 70 : 30 } : {}),
+    });
+    const config = { ...payload(0), definitionId: defId, sourceId: unit, category, questionCount: 2,
+      examRound: category === "exam_prep" ? "round_1" : "", legacyConfigKey: `${unit}_${category}${category === "exam_prep" ? "__round_1" : ""}`,
+      presentationSettings: { ...settings, questionCount: 2, ...(category === "exam_prep" ? { paperTitle: "합성 시험 제목", paperHeading: "합성 머리말" } : {}) } };
+    await execute("teacher", "saveQuizAssessmentSettings", config);
+    const startedReview = (await execute("student-one", "startAssessmentAttempt", { definitionId: defId })).result;
+    assert.ok(startedReview.questionPresentation.every(item => !("answer" in item) && !("explanation" in item)));
+    const submittedAnswers = { [questionIds[0]]: "고려", [questionIds[1]]: "신라" };
+    const result = (await execute("student-one", "submitAssessmentAttempt", {
+      attemptId: startedReview.attemptId, expectedRevision: 1, answers: submittedAnswers, submitReason: "STUDENT",
+    })).result;
+    assert.equal(result.percent, category === "exam_prep" ? 30 : 50);
+    const key = `canonical:${startedReview.attemptId}`;
+    const reviewed = await history("student-one", { mode: "detail", key });
+    assert.equal(reviewed.record.details[1].u, "신라");
+    if (category === "exam_prep") {
+      assert.deepEqual(result.paperHeader, startedReview.paperHeader);
+      assert.deepEqual(reviewed.record.paperHeader, startedReview.paperHeader);
+    }
+    await saveNote("student-one", { ...notePayload, key, questionId: String(questionIds[1]), practiceAnswer: "고려", saveId: randomUUID() });
+    assert.equal((await history("student-one", { mode: "detail", key })).reviewNotes.items[0].correct, true);
+  }
+  const legacyKey = "legacy:old-flat";
+  await db.doc(`${root}/quiz_results/old-flat`).set({ uid: "student-one", category: "formative", score: 0, timestamp: Timestamp.now(),
+    details: [{ id: "31", q: "보관된 단답 문항", a: 1392, type: "short", u: "1391", correct: false, exp: "보관된 해설" }] });
+  await saveNote("student-one", { ...notePayload, key: legacyKey, questionId: "31", practiceAnswer: "1392", saveId: randomUUID() });
+  assert.equal((await history("student-one", { mode: "detail", key: legacyKey })).reviewNotes.items[0].correct, true);
+  await db.doc('semester_quiz_review_notes/other-owner').set({ studentUid: 'student-two', semesterId });
+  await db.doc('semester_quiz_review_notes/other-term').set({ studentUid: 'student-one', semesterId: '2026-1' });
+  const cleanupRefs = await require('../../studentQuizReviewNotes').collectQuizReviewNoteRefs(db, semesterId, 'student-one');
+  assert.equal(cleanupRefs.length, 4);
+  assert.ok(cleanupRefs.every(ref => !['other-owner', 'other-term'].includes(ref.id)));
+  console.log("PASS authenticated formative and weighted mock submit/review/notes, frozen paper header, flat legacy original compatibility");
 
   const races = await Promise.allSettled([
     execute("teacher", "saveQuizAssessmentSettings", payload(2, { timeLimit: 900 })),
@@ -137,6 +217,8 @@ const payload = (revision, update = {}) => {
   assert.equal((await state("student-three", { definitionId })).status, "NOT_OPEN");
   await assert.rejects(execute("student-three", "startAssessmentAttempt", { definitionId }), reason("ASSESSMENT_NOT_PUBLISHED"));
   await db.doc(`semester_manifests/${semesterId}`).update({ status: "ARCHIVED" });
+  assert.equal((await history("student-one", { mode: "detail", key: notePayload.key })).reviewNotes.revision, 2);
+  await assert.rejects(saveNote("student-one", { ...notePayload, expectedRevision: 2, saveId: randomUUID() }), reason("QUIZ_REVIEW_SEMESTER_INACTIVE"));
   await assert.rejects(execute("teacher", "saveQuizAssessmentSettings", payload(4, { active: false })), reason("ASSESSMENT_SEMESTER_NOT_ACTIVE"));
   console.log("PASS CAS competing writes, failed update preserves access, pause without questions/classes, student block and archive fence");
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => { await db.terminate(); await deleteApp(app); });

@@ -4,17 +4,17 @@ import {
   loadMyQuizHistoryDetail,
   type MyQuizHistoryPage,
   type MyQuizHistoryRow,
+  type MyQuizHistoryDetail,
 } from "../../../lib/myQuizHistory";
+import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
+import { normalizeMockExamPaperHeader } from "../../../lib/mockExamPaperHeader";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import MockExamPaper from "../../../components/common/MockExamPaper";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import QuizRelearning from "../quiz/QuizRelearning";
 import { formatQuizPracticeAnswer } from "../quiz/quizPracticeData";
-import {
-  formatRecordedScore,
-  type MyAssessmentRecord,
-} from "./assessmentRecords";
+import { formatRecordedScore } from "./assessmentRecords";
 import {
   formatHistoryDate,
   historyCategoryLabel,
@@ -47,11 +47,12 @@ export default function MyQuizHistory({
   const [page, setPage] = useState<MyQuizHistoryPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [detail, setDetail] = useState<{
-    key: string;
-    record: MyAssessmentRecord;
-    row?: MyQuizHistoryRow;
-  } | null>(null);
+  const [detail, setDetail] = useState<
+    | (MyQuizHistoryDetail & {
+        row?: MyQuizHistoryRow;
+      })
+    | null
+  >(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const [index, setIndex] = useState(0);
@@ -60,7 +61,7 @@ export default function MyQuizHistory({
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
   const loadedCategory = useRef("");
-  const detailCache = useRef(new Map<string, MyAssessmentRecord>());
+  const detailCache = useRef(new Map<string, MyQuizHistoryDetail>());
   const heading = useRef<HTMLHeadingElement>(null);
   const activeDetail = useRef("");
   const returnFocusKey = useRef("");
@@ -126,25 +127,26 @@ export default function MyQuizHistory({
     setWrongOnly(false);
     setPracticing(false);
     try {
-      let record = detailCache.current.get(key);
-      if (!record) {
+      let loaded = detailCache.current.get(key);
+      if (!loaded) {
         try {
-          record = (await loadMyQuizHistoryDetail(semesterId, key)).record;
+          loaded = await loadMyQuizHistoryDetail(semesterId, key);
         } catch (caught) {
           // Older result links have no source prefix. Only a missing own result may try legacy.
           const code = (caught as { code?: string })?.code || "";
           if (row || requestedKey.includes(":") || !code.endsWith("not-found"))
             throw caught;
-          record = (
-            await loadMyQuizHistoryDetail(semesterId, `legacy:${requestedKey}`)
-          ).record;
+          loaded = await loadMyQuizHistoryDetail(
+            semesterId,
+            `legacy:${requestedKey}`,
+          );
         }
       }
       if (request !== detailRequest.current) return;
-      detailCache.current.set(key, record);
+      detailCache.current.set(key, loaded);
       if (detailCache.current.size > 3)
         detailCache.current.delete(detailCache.current.keys().next().value!);
-      setDetail({ key, record, row });
+      setDetail({ ...loaded, row });
     } catch (caught) {
       if (request === detailRequest.current)
         setDetailError(
@@ -236,6 +238,9 @@ export default function MyQuizHistory({
     : questions;
   const current =
     visibleQuestions[Math.min(index, Math.max(0, visibleQuestions.length - 1))];
+  const currentNote = detail?.reviewNotes?.items.find(
+    (note) => note.questionId === current?.snapshot.id,
+  );
   const incorrectCount = questions.filter(
     (item) => item.correct === false,
   ).length;
@@ -251,16 +256,18 @@ export default function MyQuizHistory({
         aria-label="평가 결과 상세"
       >
         <header className="my-quiz-history__header">
-          <button
-            type="button"
-            onClick={() => {
-              returnFocusKey.current =
-                detail?.row?.key || detail?.key || requestedAttemptId;
-              onClose();
-            }}
-          >
-            ← 응시 기록
-          </button>
+          {!practicing && (
+            <button
+              type="button"
+              onClick={() => {
+                returnFocusKey.current =
+                  detail?.row?.key || detail?.key || requestedAttemptId;
+                onClose();
+              }}
+            >
+              ← 응시 기록
+            </button>
+          )}
           <h3 ref={heading} tabIndex={-1}>
             {title}
           </h3>
@@ -298,7 +305,59 @@ export default function MyQuizHistory({
               </div>
               {practicing ? (
                 <QuizRelearning
+                  key={detail.key}
                   items={reviewItems}
+                  reviewNotes={detail.reviewNotes}
+                  onReload={async () => {
+                    const latest = await loadMyQuizHistoryDetail(
+                      semesterId,
+                      detail.key,
+                    );
+                    for (const [cacheKey, cached] of detailCache.current) {
+                      if (cached.key === detail.key)
+                        detailCache.current.set(cacheKey, latest);
+                    }
+                    detailCache.current.set(detail.key, latest);
+                    if (detailCache.current.size > 3)
+                      detailCache.current.delete(
+                        detailCache.current.keys().next().value!,
+                      );
+                    setDetail((current) =>
+                      current?.key === detail.key
+                        ? { ...latest, row: current.row }
+                        : current,
+                    );
+                    return (
+                      latest.reviewNotes || {
+                        revision: 0,
+                        items: [],
+                        updatedAt: "",
+                      }
+                    );
+                  }}
+                  onSave={async (draft, expectedRevision, saveId) => {
+                    const response = await saveMyQuizReviewNote({
+                      semesterId,
+                      key: detail.key,
+                      ...draft,
+                      expectedRevision,
+                      saveId,
+                    });
+                    const next = {
+                      ...detail,
+                      reviewNotes: response.reviewNotes,
+                    };
+                    for (const [cacheKey, cached] of detailCache.current) {
+                      if (cached.key === detail.key)
+                        detailCache.current.set(cacheKey, next);
+                    }
+                    setDetail((current) =>
+                      current?.key === detail.key
+                        ? { ...current, reviewNotes: response.reviewNotes }
+                        : current,
+                    );
+                    return response.reviewNotes;
+                  }}
                   onClose={() => setPracticing(false)}
                 />
               ) : (
@@ -309,6 +368,9 @@ export default function MyQuizHistory({
                       answers={paperAnswers}
                       checks={paperChecks}
                       round={detail.row?.examRound || detail.record.examRound}
+                      paperHeader={normalizeMockExamPaperHeader(
+                        detail.record.paperHeader,
+                      )}
                       score={detail.record.score ?? undefined}
                       onQuestionSelect={(questionIndex) => {
                         setWrongOnly(false);
@@ -412,6 +474,23 @@ export default function MyQuizHistory({
                                 : "문제 원문이 보관되어 있지 않습니다."
                             }
                           />
+                          {current.snapshot.passageSet && (
+                            <section aria-label="공통 지문">
+                              <p>{current.snapshot.passageSet.instruction}</p>
+                              {current.snapshot.passageSet.passage && (
+                                <QuizPassage
+                                  value={current.snapshot.passageSet.passage}
+                                />
+                              )}
+                              {current.snapshot.passageSet.image && (
+                                <img
+                                  src={current.snapshot.passageSet.image}
+                                  alt="공통 지문 자료"
+                                  loading="lazy"
+                                />
+                              )}
+                            </section>
+                          )}
                           {current.snapshot.passage && (
                             <QuizPassage value={current.snapshot.passage} />
                           )}
@@ -421,6 +500,14 @@ export default function MyQuizHistory({
                               alt="문제 자료"
                               loading="lazy"
                             />
+                          )}
+                          {current.snapshot.examplePassage && (
+                            <section aria-label="보기">
+                              <h5>〈보기〉</h5>
+                              <QuizPassage
+                                value={current.snapshot.examplePassage}
+                              />
+                            </section>
                           )}
                           {(current.snapshot.type === "choice" ||
                             current.snapshot.type === "ox") &&
@@ -480,6 +567,36 @@ export default function MyQuizHistory({
                               <h4>해설</h4>
                               <p>{current.snapshot.explanation}</p>
                             </div>
+                          )}
+                          {currentNote && (
+                            <section
+                              className="student-quiz-relearning-explanation"
+                              aria-label="저장한 오답노트"
+                            >
+                              <h4>내 오답노트</h4>
+                              {currentNote.reason && (
+                                <p>{currentNote.reason}</p>
+                              )}
+                              {currentNote.note && (
+                                <p style={{ whiteSpace: "pre-wrap" }}>
+                                  {currentNote.note}
+                                </p>
+                              )}
+                              {currentNote.practiceAnswer && (
+                                <p>
+                                  다시 푼 답:{" "}
+                                  {formatQuizPracticeAnswer(
+                                    currentNote.practiceAnswer,
+                                  )}{" "}
+                                  ·{" "}
+                                  {currentNote.correct === null
+                                    ? "미채점"
+                                    : currentNote.correct
+                                      ? "정답"
+                                      : "다시 확인"}
+                                </p>
+                              )}
+                            </section>
                           )}
                           {current.snapshot.reviewLessonId && (
                             <a

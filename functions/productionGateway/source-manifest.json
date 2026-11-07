@@ -51,7 +51,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "0ad9066ac12ed4d5f74d7b0d87a4dee3632230d63d9fa4a9b72714383eeb1877",
+      "sha256": "63991b3cd9ab31c02ed492c16ecc12e48ac19c2c3c6bfccd88bbe9b3ed2180f2",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",

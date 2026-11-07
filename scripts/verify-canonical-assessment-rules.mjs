@@ -32,6 +32,14 @@ try {
   }
   await seed('semester_assessment_attempts/own', { studentUid: 'student-a', semesterId: '2026-2', gradingSnapshot: [{ answer: 'private' }] });
   await assertFails(getDoc(doc(student, 'semester_assessment_attempts/own')));
+  // Review notes contain private reflection and remain callable-only, even for teachers.
+  const notePath = 'semester_quiz_review_notes/synthetic-note';
+  await seed(notePath, { studentUid: 'student-a', semesterId: '2026-2', revision: 1, items: [] });
+  for (const client of [student, teacher, env.unauthenticatedContext().firestore()]) {
+    await assertFails(getDoc(doc(client, notePath)));
+    await assertFails(setDoc(doc(client, 'semester_quiz_review_notes/forged'), { studentUid: 'student-a', semesterId: '2026-2' }));
+    await assertFails(updateDoc(doc(client, notePath), { revision: 2 }));
+  }
   // Source banks contain answers, including unpublished questions. Students
   // receive only their authorized attempt presentation through the callable.
   for (const path of ['quiz_questions/private', 'years/2026/semesters/2/quiz_questions/private']) {
@@ -58,5 +66,5 @@ try {
   await seed('site_settings/student_maintenance', { enabled: true, blockedRoles: ['student'], bypassUids: [], title: '점검', message: '잠시 기다려 주세요.', startedAt: Timestamp.now(), updatedAt: Timestamp.now(), updatedBy: 'teacher-a', revision: 1 });
   await assertFails(getDoc(doc(student, 'semester_assessment_results/own')));
   await assertSucceeds(getDoc(doc(teacher, 'semester_assessment_results/own')));
-  console.log('PASS canonical assessment rules: current own results/answers, query scope, foreign/past/private-key/source-bank isolation, learning-proof forgery denial, server-only writes, session/registration/maintenance (47 assertions; emulator only)');
+  console.log('PASS canonical assessment rules: current own results/answers, query scope, foreign/past/private-key/source-bank isolation, callable-only private review notes, learning-proof forgery denial, server-only writes, session/registration/maintenance (56 assertions; emulator only)');
 } finally { await env.cleanup(); }

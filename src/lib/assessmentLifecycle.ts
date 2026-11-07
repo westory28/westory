@@ -472,6 +472,8 @@ export interface AssessmentRewardResult {
 }
 
 export interface AssessmentSubmissionResult {
+  answers?: Record<string, string>;
+  paperHeader?: { paperTitle?: string; paperHeading?: string };
   earnedPoints?: number;
   maxPoints?: number;
   attemptId: string;

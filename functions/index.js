@@ -60,6 +60,10 @@ exports.getMyQuizHistory = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   require('./studentQuizHistory').createStudentQuizHistoryHandler({ db }),
 );
+exports.saveMyQuizReviewNote = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  require('./studentQuizReviewNotes').createQuizReviewNoteHandler({ db }),
+);
 exports.checkStudentAttendance = onCall(
   { region: REGION },
   require('./studentAttendance').createStudentAttendanceHandler({ db }),
@@ -2869,6 +2873,7 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   ];
 
   const queryResults = await Promise.all([
+    require('./studentQuizReviewNotes').collectQuizReviewNoteRefs(db, `${year}-${semester}`, uid),
     ...uidCollections.map((collectionName) =>
       collectQueryRefsByUid(`${semesterRoot}/${collectionName}`, uid),
     ),

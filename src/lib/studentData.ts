@@ -54,16 +54,14 @@ export const deleteStudentData = async (
   uid: string,
 ): Promise<StudentDataDeleteResult> => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
+  return callStudentDataService<
     { uid: string; year: string; semester: string },
     StudentDataDeleteResult
-  >("deleteStudentData");
-  const result = await callable({
+  >("deleteStudentData", {
     uid,
     year,
     semester,
   });
-  return result.data;
 };
 
 export const resetLessonCorePointProgress = async (

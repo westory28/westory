@@ -28,6 +28,19 @@ export function historyReviewQuestion(
     typeof saved.answer === "string" || typeof saved.answer === "number"
       ? String(saved.answer)
       : "";
+  const set = saved.passageSet as Record<string, unknown> | null | undefined;
+  const passageSet =
+    set &&
+    typeof set.id === "string" &&
+    typeof set.instruction === "string" &&
+    typeof set.passage === "string"
+      ? {
+          id: set.id,
+          instruction: set.instruction,
+          passage: set.passage,
+          ...(typeof set.image === "string" ? { image: set.image } : {}),
+        }
+      : undefined;
   const snapshot: QuizRelearningItem = {
     id: String(detail.id ?? index),
     type: type || "short",
@@ -35,6 +48,11 @@ export function historyReviewQuestion(
     answer,
     explanation: saved.explanation,
     passage: typeof saved.passage === "string" ? saved.passage : undefined,
+    examplePassage:
+      typeof saved.examplePassage === "string"
+        ? saved.examplePassage
+        : undefined,
+    passageSet,
     image: typeof saved.image === "string" ? saved.image : undefined,
     options: strings(saved.options),
     choiceOptionImages: Array.isArray(saved.choiceOptionImages)

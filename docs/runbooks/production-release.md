@@ -1,5 +1,15 @@
 # 운영 배포 절차
 
+## 제출 답안 복원과 오답노트 (2026-11-08)
+
+모의고사·진단·형성평가의 제출 완료 화면은 서버가 확정한 답안을 사용한다. 이미 다른 탭에서 제출한 응시의 재요청도 원래 답안·점수·동결 머리말을 반환한다. 마이페이지는 보관된 공통 지문·보기와 회차 머리말을 복원하며 현재 문제은행으로 과거 원문을 덮어쓰지 않는다.
+
+오답노트는 `semester_quiz_review_notes`에 학기·인증 UID·원본 결과 key별로 분리한다. 학생 본인의 제출한 오답만 작성하며 연습 답안·이유·자유 노트는 명시적으로 저장한다. 원답·점수·응시 횟수·위스를 바꾸지 않는다. 현재 활성 학기만 수정하고 보관 학기는 읽기만 허용한다. 상세조회에 노트 한 문서를 추가하고, 머리말이 빠진 구형 모의고사만 해당 응시 한 문서를 추가 조회한다. 노트 저장용 내부 callable을 추가하며 외부 AI 호출·외부 데이터 전송·다른 학생의 접근 권한은 추가하지 않는다.
+
+배포 대상은 서울 `executeCommand`, `getMyQuizHistory`, `saveMyQuizReviewNote`, `deleteStudentData`와 프론트엔드다. 삭제는 해당 학생·학기 노트만 기존 삭제 목록에 포함한다. `deleteStudentData`의 운영 소스와 기준 소스 차이는 기존 저장소에 추가된 공통 세션·최근 인증 검사이므로 클라이언트의 기존 삭제 어댑터도 `callStudentDataService`로 맞추고 세션 검사를 보존한다. 이번 패치에서 공통 세션 검사나 권한 조건 자체를 변경하지 않는다. 노트 원본은 Firestore 클라이언트에서 직접 읽거나 쓰지 않는다.
+
+기본 빌드·Functions check와 `verify-student-quiz-review-flow.mjs`, `verify-quiz-review-notes-browser.mjs`, `verify-quiz-history-identity.mjs`, Functions의 `verify-student-quiz-review-notes.cjs` 및 `verify-quiz-release-integration.cjs`를 사용한다. 공통 세션·삭제 호환은 `verify-student-profile-commands.mjs`와 `npm run test:score-request-rules`로 확인한다. 실제 학생의 답안·점수·노트나 계정은 운영 검증용으로 변경하지 않는다.
+
 ## 역사교실 면제권 적용 (2026-11-05)
 
 서버는 면제권 적용 시 대상 학생과 과제가 모두 일치하는 제출 결과·진행 중 응시·사용 요청만 조회한다. 학기별 이전 결과와 현재 평가 결과를 함께 검사하고, 면제권 사용·완료 기록·응시 잠금·알림을 같은 트랜잭션에 저장한다.

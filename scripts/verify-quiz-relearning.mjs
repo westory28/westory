@@ -138,6 +138,11 @@ const savedPaper = history.historyReviewQuestion({
     paperBreakBefore: true },
 }, 0);
 assert.equal(savedPaper.snapshot.examRound, "round_2");
+const materialRecord = history.historyReviewQuestion({ id: "set-item", correct: false, u: "고려",
+  questionSnapshot: { type: "choice", question: "공통 자료 문항", answer: "조선", options: ["고려", "조선"],
+    examplePassage: "ㄱ. 보기 원문", passageSet: { id: "set-1", instruction: "다음 자료를 읽으시오.", passage: "공통 지문 원문", image: "/saved-set.png" } } }, 0);
+assert.equal(materialRecord.snapshot.examplePassage, "ㄱ. 보기 원문");
+assert.deepEqual(materialRecord.snapshot.passageSet, { id: "set-1", instruction: "다음 자료를 읽으시오.", passage: "공통 지문 원문", image: "/saved-set.png" });
 assert.equal(savedPaper.snapshot.paperOrder, 2);
 assert.equal(savedPaper.snapshot.points, 5);
 assert.equal(savedPaper.snapshot.paperBreakBefore, true);

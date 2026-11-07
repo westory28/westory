@@ -99,6 +99,7 @@ const summaryRows = Array.from({ length: 23 }, (_, index) => ({
   wrongCount: 2,
 }));
 const stubs = `
+export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};
 import { DEFAULT_POINT_RANK_POLICY, resolvePointRankPolicy } from '${root.replaceAll("\\", "/")}/src/lib/pointRanks.ts';
 const rows=${JSON.stringify(results)};const summaryRows=${JSON.stringify(summaryRows)};window.myHistoryQa={list:[],detail:[]};
 let listFailed=false, detailFailed=false;
@@ -114,7 +115,7 @@ export const loadUserPerformanceScoreRecords=async()=>[];export const formatPerf
 let failed=false;export const loadStudentQuizResults=async()=>{await new Promise(resolve=>setTimeout(resolve,80));if(location.search.includes('error')&&!failed){failed=true;throw Error('Fixture load failure')};return location.search.includes('empty')?[]:rows};
 export const loadStudentProgressSummary=async()=>({lesson:{unavailable:false,completedUnits:0,totalLessons:0,worksheetUnits:0,units:[]},quiz:{totalAttempts:7,latestScore:0,averageScore:50},historyClassroom:{totalAttempts:0,passedCount:0,averagePercent:null}});
 `;
-const entry = `import React from 'react';import './src/components/layout/studentLayout.css';import './src/components/common/portalPage.css';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {AppToastProvider} from './src/components/common/AppToastProvider';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><div className="student-layout"><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></div></AppToastProvider></MemoryRouter>);`;
+const entry = `import React from 'react';import './src/components/layout/studentLayout.css';import './src/components/common/portalPage.css';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><AppDialogProvider><div className="student-layout"><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></div></AppDialogProvider></AppToastProvider></MemoryRouter>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -132,7 +133,7 @@ const built = await build({
         build.onResolve(
           {
             filter:
-              /firebase\/firestore$|lib\/firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$|lib\/myQuizHistory$/,
+              /firebase\/firestore$|lib\/firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$|lib\/myQuizHistory$|lib\/quizReviewNotes$/,
           },
           () => ({ path: "fixture-stubs", namespace: "fixture" }),
         );

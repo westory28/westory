@@ -1,6 +1,7 @@
 import { auth } from "./firebase";
 import { callWithApplicationSession } from "./applicationSession";
 import type { MyAssessmentRecord } from "../pages/student/mypage/assessmentRecords";
+import type { QuizReviewNotes } from "./quizReviewNotes";
 
 export interface MyQuizHistoryRow {
   key: string;
@@ -27,6 +28,7 @@ export interface MyQuizHistoryDetail {
   semesterId: string;
   key: string;
   record: MyAssessmentRecord;
+  reviewNotes?: QuizReviewNotes;
 }
 
 // Private results stay in component memory. The server caches only the compact

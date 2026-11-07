@@ -97,3 +97,27 @@ test('unavailable submitted answer is not fabricated as a recorded blank', () =>
   const result = canonicalDetail('a', source('a').raw, null);
   assert.equal(Object.hasOwn(result.details[0], 'u'), false);
 });
+
+test('paper header is frozen at submission, with a strictly bound immutable attempt fallback', async () => {
+  const header = { subject: '역사', grade: '3', examName: '초시' };
+  for (const storedOnResult of [true, false]) {
+    const f = fixture();
+    f.values.set('semester_assessment_results/paper', source('paper', { category: 'exam_prep', answers: {},
+      ...(storedOnResult ? { paperHeader: header } : {}) }).raw);
+    f.values.set('semester_assessment_attempts/paper', { studentUid: uid, semesterId, attemptId: 'paper', assessmentKind: 'QUIZ',
+      resultRef: 'semester_assessment_results/paper', status: 'SUBMITTED', definitionId: `quiz:${semesterId}:unit-a:formative`, paperHeader: header });
+    assert.deepEqual((await f.request({ mode: 'detail', key: 'canonical:paper' })).record.paperHeader, header);
+    assert.equal(f.reads.filter(path => path.startsWith('semester_quiz_review_notes/')).length, 1);
+    assert.equal(f.reads.filter(path => path === 'semester_assessment_attempts/paper').length, storedOnResult ? 0 : 1);
+    assert.equal(f.queries.length, 0);
+    if (!storedOnResult) {
+      for (const patch of [{ studentUid: 'other' }, { definitionId: 'other' }, { resultRef: 'semester_assessment_results/other' }, { status: 'IN_PROGRESS' }]) {
+        delete f.values.get('semester_assessment_results/paper').paperHeader;
+        const attempt = f.values.get('semester_assessment_attempts/paper');
+        f.values.set('semester_assessment_attempts/paper', { ...attempt, ...patch });
+        assert.equal((await f.request({ mode: 'detail', key: 'canonical:paper' })).record.paperHeader, undefined);
+        f.values.set('semester_assessment_attempts/paper', attempt);
+      }
+    }
+  }
+});

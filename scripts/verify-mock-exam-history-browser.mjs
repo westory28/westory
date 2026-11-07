@@ -32,6 +32,7 @@ const record = {
 const stub = `
 const record=${JSON.stringify(record)};
 window.historyFixtureCalls=[];
+export const saveMyQuizReviewNote=async()=>{throw Error('Read-only saved-paper fixture');};
 export const loadMyQuizHistory=async input=>{window.historyFixtureCalls.push({mode:'list',...input});return {semesterId:input.semesterId,rows:[],totalCount:0,nextCursor:null,version:'fixture',generatedAt:Date.now()};};
 export const loadMyQuizHistoryDetail=async(semesterId,key)=>{window.historyFixtureCalls.push({mode:'detail',semesterId,key});return {semesterId,key,record:location.search.includes('legacy')?{...record,details:record.details.map((item,i)=>i===1?{id:item.id,correct:false,u:'고려'}:item)}:record};};`;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import MyQuizHistory from './src/pages/student/mypage/MyQuizHistory';import './src/components/common/portalPage.css';createRoot(document.getElementById('root')).render(<MyQuizHistory semesterId="2026-2" active requestedAttemptId="saved-paper" onSelect={()=>{}} onClose={()=>{}} onStart={()=>{}}/>);`;
@@ -40,7 +41,7 @@ const built = await build({
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{ name: "saved-records-only", setup(builder) {
-    builder.onResolve({ filter: /lib\/myQuizHistory$/ }, () => ({ path: "history-stub", namespace: "fixture" }));
+    builder.onResolve({ filter: /lib\/(myQuizHistory|quizReviewNotes)$/ }, () => ({ path: "history-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stub, loader: "js" }));
   } }],
 });

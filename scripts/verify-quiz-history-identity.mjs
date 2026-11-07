@@ -156,6 +156,7 @@ for (const unitId of ["unit-a", "exam_prep"]) {
       let submittedInput;
       const result = {
         ...attempt,
+        answers: { ...answers },
         assessmentKind: "QUIZ",
         studentUid: "synthetic-student",
         percent: 0,
@@ -183,6 +184,12 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         quizConfig: { questionCount: 3, questionOrder },
         assessmentDefinitionId: attempt.definitionId,
         timeoutHandledRef: { current: false },
+        startingQuizRef: { current: false },
+        preparationGenerationRef: { current: 0 },
+        isMockExamAttempt: false,
+        MockExamAssetError: class extends Error {},
+        preparePaperAssets: async () => {},
+        DOMException,
         finishSubmittingRef: { current: false },
         canonicalAttemptRef: { current: attempt },
         persistSaveTailRef: { current: Promise.resolve() },
@@ -227,6 +234,9 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         "quizDeadlineMs",
         "timeLeft",
         "startingQuiz",
+        "paperPreparationError",
+        "paperPreparationProgress",
+        "paperResult",
         "canonicalAttempt",
         "resumeNotice",
         "view",
@@ -338,6 +348,20 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         original,
         "Immediate wrong-answer practice and MyPage use the same submitted questions",
       );
+      // Another tab has already submitted these wrong answers. This tab's
+      // newer local draft must not be displayed beside the frozen server checks.
+      result.answers = { ...answers };
+      result.paperHeader = { paperTitle: "보관된 시험 제목", paperHeading: "보관된 머리말" };
+      result.replayedSubmission = true;
+      context.answers = { 30: "보기 A", 10: "가||나||다", 20: "왕 A=>사건 B||왕 B=>사건 A" };
+      await context.runner.finalizeQuizAttempt();
+      assert.notDeepEqual(plain(submittedInput.answers), answers, "Fixture sends a genuinely stale local answer map");
+      assert.deepEqual(plain(context.answers), answers, "Replayed submission restores the server's frozen answers");
+      assert.deepEqual(plain(context.activeSubmission.answers), answers, "Stored local submission uses the same frozen answers");
+      assert.deepEqual(plain(context.canonicalAttempt.answers), answers);
+      assert.deepEqual(plain(context.canonicalAttempt.paperHeader), result.paperHeader);
+      assert.deepEqual(plain(context.reviewItems.map(q => ({id:q.id,question:q.question,answer:q.submittedAnswer}))), original,
+        "Wrong-note practice never combines stale answers with frozen grading checks");
       scenarios += 1;
     }
   }

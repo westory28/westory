@@ -39,6 +39,7 @@ const denseQuestions = Array.from({ length: 16 }, (_, index) => ({
 }));
 const denseFrozen = learning.captureQuestionSnapshots(denseQuestions.map(question => ({ path: `questions/${question.id}`, data: question })), denseQuestions.map(question => String(question.id)));
 const stubs = `
+export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};export const loadMyQuizHistoryDetail=async(semesterId,key)=>({semesterId,key,reviewNotes:{revision:0,items:[],updatedAt:''}});
 const dense=location.search.includes('dense');const snapshots=dense?${JSON.stringify(denseFrozen.questionSnapshots)}:${JSON.stringify(frozen.questionSnapshots)};const presentation=dense?${JSON.stringify(learning.questionPresentation(denseFrozen.questionSnapshots))}:${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
 const paperHeader={paperTitle:'2026학년도 역사 탐구 평가',paperHeading:'3학년 역사과'};
@@ -63,7 +64,7 @@ const built = await build({
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
-    builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
+    builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
   } }],
 });

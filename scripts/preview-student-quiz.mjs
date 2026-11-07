@@ -113,6 +113,7 @@ const frozen = learning.captureQuestionSnapshots(
 );
 const presentation = learning.questionPresentation(frozen.questionSnapshots);
 const stubs = `
+export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};export const loadMyQuizHistoryDetail=async(semesterId,key)=>({semesterId,key,reviewNotes:{revision:0,items:[],updatedAt:''}});
 const questions=${JSON.stringify(questions)};const questionSnapshots=${JSON.stringify(frozen.questionSnapshots)};const questionPresentation=${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
 export const useAuth=()=>({config,userData,currentUser});
@@ -143,7 +144,7 @@ const built = await build({
         build.onResolve(
           {
             filter:
-              /firebase\/firestore$|(?:lib\/|\.\/)firebase$|contexts\/AuthContext$|lib\/semesterScope$|lib\/assessmentConfig$|lib\/assessmentLifecycle$|lib\/studentLessonReadCache$/,
+              /firebase\/firestore$|(?:lib\/|\.\/)firebase$|contexts\/AuthContext$|lib\/semesterScope$|lib\/assessmentConfig$|lib\/assessmentLifecycle$|lib\/studentLessonReadCache$|lib\/quizReviewNotes$|lib\/myQuizHistory$/,
           },
           () => ({ path: "fixture-stubs", namespace: "fixture" }),
         );

@@ -1,6 +1,10 @@
 import { useState } from "react";
 import QuizRelearning from "./QuizRelearning";
 import type { QuizRelearningItem } from "./quizPracticeData";
+import type {
+  QuizReviewNoteDraft,
+  QuizReviewNotes,
+} from "../../../lib/quizReviewNotes";
 
 interface QuizLearningResultProps {
   assessmentTitle: string;
@@ -14,6 +18,12 @@ interface QuizLearningResultProps {
     direction: "up" | "down" | "same";
   } | null;
   reviewItems?: QuizRelearningItem[];
+  onSaveReviewNote?: (
+    draft: QuizReviewNoteDraft,
+    expectedRevision: number,
+    saveId: string,
+  ) => Promise<QuizReviewNotes>;
+  onReloadReviewNotes?: () => Promise<QuizReviewNotes>;
   onReview: () => void;
   onRetry: () => void;
 }
@@ -26,10 +36,13 @@ export default function QuizLearningResult({
   totalCount,
   comparison,
   reviewItems = [],
+  onSaveReviewNote,
+  onReloadReviewNotes,
   onReview,
   onRetry,
 }: QuizLearningResultProps) {
   const [reviewing, setReviewing] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState<QuizReviewNotes>();
   const ringScore = Number.isFinite(score)
     ? Math.min(100, Math.max(0, score))
     : 0;
@@ -45,6 +58,25 @@ export default function QuizLearningResult({
         {reviewing ? (
           <QuizRelearning
             items={reviewItems}
+            reviewNotes={reviewNotes}
+            onSave={
+              onSaveReviewNote
+                ? async (...args) => {
+                    const saved = await onSaveReviewNote(...args);
+                    setReviewNotes(saved);
+                    return saved;
+                  }
+                : undefined
+            }
+            onReload={
+              onReloadReviewNotes
+                ? async () => {
+                    const latest = await onReloadReviewNotes();
+                    setReviewNotes(latest);
+                    return latest;
+                  }
+                : undefined
+            }
             onClose={() => setReviewing(false)}
           />
         ) : (

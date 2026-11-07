@@ -16,6 +16,8 @@ import {
 } from "../../../lib/assessmentTelemetry";
 import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
+import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
+import { loadMyQuizHistoryDetail } from "../../../lib/myQuizHistory";
 import MockExamWorkspace from "./MockExamWorkspace";
 import type {
   MockExamPaperQuestion,
@@ -699,6 +701,9 @@ const QuizRunner: React.FC = () => {
       submitReason: isTimeout ? "TIMEOUT" : "STUDENT",
       analytics: pendingSubmitAnalyticsRef.current,
     });
+    // A different tab may already have submitted. Display the server's frozen
+    // answers alongside its checks, never the stale tab's unsubmitted draft.
+    const submittedAnswers = submitted.answers ?? answerMap;
     setScore(submitted.percent);
     setPaperResult({
       questions: questionList.map(
@@ -709,8 +714,8 @@ const QuizRunner: React.FC = () => {
       ),
       checks: submitted.answerChecks,
     });
-    setAnswers(answerMap);
-    setReviewItems(buildQuizRelearningItems(submitted, answerMap));
+    setAnswers(submittedAnswers);
+    setReviewItems(buildQuizRelearningItems(submitted, submittedAnswers));
     setResultCounts({
       correct: submitted.answerChecks.filter((check) => check.correct === true)
         .length,
@@ -722,7 +727,7 @@ const QuizRunner: React.FC = () => {
         ? normalizeQuizSubmissionDoc(prev.id, {
             ...prev,
             status: isTimeout ? "timed_out" : "submitted",
-            answers: answerMap,
+            answers: submittedAnswers,
             hintUsedCount: hintCount,
             revealedHintIds,
             resultId: submitted.resultRef,
@@ -737,7 +742,8 @@ const QuizRunner: React.FC = () => {
             ...previous,
             status: "SUBMITTED",
             revision: submitted.revision || previous.revision,
-            answers: answerMap,
+            answers: submittedAnswers,
+            paperHeader: submitted.paperHeader || previous.paperHeader,
             resultRef: submitted.resultRef,
           }
         : previous,
@@ -2546,6 +2552,37 @@ const QuizRunner: React.FC = () => {
         totalCount={resultCounts.total}
         comparison={scoreComparison}
         reviewItems={reviewItems}
+        onSaveReviewNote={
+          finalizedResultId
+            ? async (draft, expectedRevision, saveId) => {
+                const saved = await saveMyQuizReviewNote({
+                  semesterId: `${assessmentYear}-${assessmentSemester}`,
+                  key: `canonical:${finalizedResultId}`,
+                  ...draft,
+                  expectedRevision,
+                  saveId,
+                });
+                return saved.reviewNotes;
+              }
+            : undefined
+        }
+        onReloadReviewNotes={
+          finalizedResultId
+            ? async () => {
+                const latest = await loadMyQuizHistoryDetail(
+                  `${assessmentYear}-${assessmentSemester}`,
+                  `canonical:${finalizedResultId}`,
+                );
+                return (
+                  latest.reviewNotes || {
+                    revision: 0,
+                    items: [],
+                    updatedAt: "",
+                  }
+                );
+              }
+            : undefined
+        }
         onReview={() => navigate(resultReviewUrl)}
         onRetry={() => {
           setView("loading");

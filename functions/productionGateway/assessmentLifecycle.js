@@ -1427,7 +1427,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         const historyPlan = await historySync.prepareAttempt({ transaction, attempt, result, timestamp });
         historyPlan.apply();
         return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, attempt.submissionRef, attempt.resultRef, ...historyPlan.refs] }, sourceHash: attempt.sourceHash || null, result: { attemptId: attempt.attemptId, status: "SUBMITTED", resultRef: attempt.resultRef, submissionRef: attempt.submissionRef,
-          score: result.score, total: result.total, percent: result.percent, ...(result.earnedPoints !== undefined ? { earnedPoints: result.earnedPoints, maxPoints: result.maxPoints } : {}), ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, reward, replayedSubmission: true } };
+          score: result.score, total: result.total, percent: result.percent, ...(result.earnedPoints !== undefined ? { earnedPoints: result.earnedPoints, maxPoints: result.maxPoints } : {}), ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(result.paperHeader || attempt.paperHeader ? { paperHeader: result.paperHeader || attempt.paperHeader } : {}), ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, answers: result.answers || attempt.answers || {}, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
@@ -1502,6 +1502,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         startedAtIso: attempt.startedAtIso,
         ...(attempt.assessmentKind === "QUIZ" ? {
           analytics, learningSnapshot: attempt.learningSnapshot || [], answers: effectiveAnswers, ...reviewSnapshots,
+          ...(attempt.paperHeader ? { paperHeader: attempt.paperHeader } : {}),
           sourceId: attempt.sourceId || "", category: attempt.category || "", examRound: attempt.examRound || "",
           attemptNumber: attempt.attemptNumber,
         } : {}),
@@ -1516,7 +1517,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       transaction.set(path, submittedFields, { mergeFields: Object.keys(submittedFields) });
       rewardPlan.apply();
       historyPlan.apply();
-      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...pointResult, ...historyOutcome, answerChecks: checks, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
+      return { target: { kind: "assessment-submission", id: attempt.attemptId, refs: [path, immutableSubmissionPath, immutableResultPath, ...rewardPlan.refs, ...historyPlan.refs] }, sourceHash: attempt.sourceHash, result: { attemptId: attempt.attemptId, status: "SUBMITTED", revision: nextRevision, score: correctCount, total, percent, ...pointResult, ...historyOutcome, answerChecks: checks, answers: effectiveAnswers, ...(attempt.assessmentKind === "QUIZ" ? { analytics, learningSnapshot: attempt.learningSnapshot || [], ...reviewSnapshots, ...(attempt.paperHeader ? { paperHeader: attempt.paperHeader } : {}) } : {}), resultRef: immutableResultPath, submissionRef: immutableSubmissionPath, reward: rewardPlan.result, replayedSubmission: false } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPTS_BY_CLASS) {

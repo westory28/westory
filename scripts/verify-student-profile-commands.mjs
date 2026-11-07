@@ -109,6 +109,7 @@ function fixture(options = {}) {
             updatedRosterRowCount: 0,
           },
         };
+      if (name === "deleteStudentData") return { data: { uid: input.uid, year: input.year, semester: input.semester, deletedRelatedDocCount: 1 } };
       throw new Error(`Unexpected service ${name}`);
     },
   };
@@ -147,7 +148,7 @@ function fixture(options = {}) {
     vm.runInContext(code, context, { filename: name + ".js" });
     return module.exports;
   };
-  return { calls, state, auth, update: load("studentData").updateStudentData };
+  return { calls, state, auth, update: load("studentData").updateStudentData, remove: load("studentData").deleteStudentData };
 }
 
 const canonical = fixture();
@@ -244,6 +245,18 @@ assert.equal(
   concurrent.calls.filter((call) => call.name === "executeCommand").length,
   1,
 );
+const removal = fixture();
+await removal.remove(config, profile.uid);
+const removalCall = removal.calls.find(call => call.name === "deleteStudentData");
+assert.equal(removalCall.input.uid, profile.uid);
+assert.equal(removalCall.input.year, "2026");
+assert.equal(removalCall.input.semester, "2");
+assert.ok(removalCall.input._session, "Legacy deletion must carry the existing server session proof");
+for (const options of [{ switchOwner: true }, { badSession: true }]) {
+  const deniedRemoval = fixture(options);
+  await assert.rejects(() => deniedRemoval.remove(config, profile.uid));
+  assert.equal(deniedRemoval.calls.some(call => call.name === "deleteStudentData"), false);
+}
 console.log(
   "Student profile command adapter: canonical routing, legacy-only fallback, revision/session fences, email guard, acknowledgement recovery and duplicate-flight checks passed.",
 );

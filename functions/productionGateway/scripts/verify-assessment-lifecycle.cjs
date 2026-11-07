@@ -950,6 +950,7 @@ const runMockExamPaper = async () => {
   const submit = { attemptId: started.attemptId, expectedRevision: 1, answers: { 901: "고려", 902: "신라" }, submitReason: "STUDENT" };
   const graded = (await apply("submitAssessmentAttempt", submit, true)).result;
   assert.equal(graded.score, 1); assert.equal(graded.total, 2);
+  assert.deepEqual(graded.paperHeader, started.paperHeader);
   assert.equal(graded.percent, 30); assert.equal(graded.earnedPoints, 30); assert.equal(graded.maxPoints, 100);
   assert.equal(graded.questionSnapshots[0].question, "합성 문항 901");
   assert.equal(graded.questionSnapshots[0].answer, "고려");
@@ -959,9 +960,11 @@ const runMockExamPaper = async () => {
   assert.equal(graded.questionSnapshots[0].passage, question(901, 1, 30).passage, "Submitted review retains the immutable original passage");
   const persisted = paperStore.snapshot(graded.resultRef).data;
   assert.equal(persisted.percent, 30); assert.equal(persisted.earnedPoints, 30);
+  assert.deepEqual(persisted.paperHeader, started.paperHeader);
   const replay = (await apply("submitAssessmentAttempt", submit, true)).result;
   assert.equal(replay.replayedSubmission, true); assert.equal(replay.earnedPoints, 30);
   assert.deepEqual(replay.questionSnapshots, graded.questionSnapshots);
+  assert.deepEqual(replay.paperHeader, started.paperHeader);
   const definitionPath = `${assessment.DEFINITION_COLLECTION}/${config.definitionId}`;
   const beforeBlockedPreparation = paperStore.writeCount;
   paperStore.documents.set(definitionPath, { ...definition, maxAttempts: 1 });
