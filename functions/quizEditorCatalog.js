@@ -10,6 +10,7 @@ const CATALOG_FIELDS = Object.freeze([
   'id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'createdAt', 'updatedAt', 'contentRevision', 'question', 'explanation',
   'passage', 'concepts', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
+  'examplePassage', 'passageSet.id', 'passageSet.instruction', 'passageSet.passage',
 ]);
 
 const fail = (code, message, reason) => {
@@ -57,10 +58,13 @@ const catalogEntry = (document) => {
     ...(value.category === 'exam_prep' && value.examRound ? {
       examRound: value.examRound, paperOrder: value.paperOrder, points: value.points,
       paperBreakBefore: value.paperBreakBefore === true,
+      ...(value.passageSet?.id ? { passageSetId: String(value.passageSet.id), passageSetInstruction: String(value.passageSet.instruction || '') } : {}),
     } : {}),
     // Preserve the editor's complete substring-search contract. No truncation,
     // tokenization or stripping markup that could silently hide search matches.
     searchText: [value.question, value.explanation, value.passage,
+      ...(value.examplePassage ? [value.examplePassage] : []),
+      ...(value.passageSet ? [value.passageSet.passage, value.passageSet.instruction] : []),
       ...(Array.isArray(value.concepts) ? value.concepts : [])].join(' ').toLowerCase(),
   };
 };

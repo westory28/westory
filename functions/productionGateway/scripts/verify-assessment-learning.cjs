@@ -365,6 +365,13 @@ const runQuestionSnapshotCases = () => {
   assert.deepEqual(presentation[1].matchingRightOptions.map(item => item.right), ["고려", "조선"]);
   assert.deepEqual(presentation[2].options, ["가", "나", "다"]);
   assert.deepEqual(captured.questionSnapshots[2].options, ["다", "가", "나"]);
+  const hiddenSource = { id: "private-blank", type: "choice", answer: "정답", passage: "{{blank:비밀Ξ}}",
+    examplePassage: "{{blank:ABCDEFGHIJKLMNO}}", passageSet: { id: "set", instruction: "자료", passage: "{{blank:Ω}} {{blankbox:3.125|(가)}}" } };
+  const hiddenPresentation = learning.questionPresentation([hiddenSource])[0];
+  assert.equal(hiddenPresentation.passage, "{{blank:____}}", "Legacy blank public payload preserves minimum width only");
+  assert.equal(hiddenPresentation.examplePassage, "{{blank:______________}}", "Legacy maximum width stays 14ch");
+  assert.equal(hiddenPresentation.passageSet.passage, "{{blank:____}} {{blankbox:3.125|(가)}}", "New blank labels and width stay public");
+  assert.equal(hiddenSource.passageSet.passage, "{{blank:Ω}} {{blankbox:3.125|(가)}}", "Public redaction never mutates stored snapshots");
   for (const type of ["choice", "ox", "short", "word", "order", "matching"]) {
     const input = doc(type, {type, choiceOptionImages: [null, "option-image"], matchingPairs: [{left: "a", right: "b", rightImage: "matching-image"}], answer: type === "matching" ? "a=>b" : "둘"});
     const bounded = learning.captureQuestionSnapshots([input], [type]);

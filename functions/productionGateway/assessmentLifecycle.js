@@ -8,6 +8,7 @@ const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 const historyExemptions = require("./historyClassroomExemptions");
 const learning = require("./assessmentLearning");
+const mockMaterials = require("./mockExamMaterials");
 const { createHistoryClassroomSync } = require("./historyClassroomSync");
 
 const REGION = "asia-northeast3";
@@ -327,9 +328,12 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     };
   }
   if (commandType === ASSESSMENT_COMMAND_TYPES.START_ASSESSMENT_ATTEMPT) {
-    assertAllowedKeys(payload, ["definitionId"], "startAssessmentAttempt payload");
+    assertAllowedKeys(payload, ["definitionId", "preparedSourceHash"], "startAssessmentAttempt payload");
+    if (payload.preparedSourceHash !== undefined && !/^[a-f0-9]{64}$/.test(payload.preparedSourceHash))
+      fail("invalid-argument", "Prepared paper version is invalid.", "ASSESSMENT_PAYLOAD_INVALID");
     return {
       definitionId: normalizeDefinitionId(payload.definitionId),
+      ...(payload.preparedSourceHash ? { preparedSourceHash: payload.preparedSourceHash } : {}),
     };
   }
   if (commandType === ASSESSMENT_COMMAND_TYPES.SUBMIT_ASSESSMENT_ATTEMPT) {
@@ -367,13 +371,14 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     const question = normalizeJsonDocument(payload.question, [
       "id", "unitId", "subUnitId", "category", "type", "question", "answer",
       "options", "choiceOptionImages", "matchingPairs", "explanation", "image",
-      "passage", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
+      "passage", "examplePassage", "passageSet", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
       "concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
       "examRound", "paperOrder", "points", "paperBreakBefore",
     ], "question");
     if (String(question.id) !== questionId || !question.unitId || !question.category || !question.type || !question.question) {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
     }
+    mockMaterials.normalizeMockExamMaterials(question, fail);
     if (["examRound", "paperOrder", "points", "paperBreakBefore"].some(key => Object.hasOwn(question, key))) {
       if (question.category !== "exam_prep" || question.unitId !== "exam_prep"
         || !/^round_[1-3]$/.test(question.examRound || "")
@@ -597,6 +602,7 @@ const loadDefinitionSource = async (transaction, payload) => {
         || Math.abs(question.points * 100 - Math.round(question.points * 100)) > 1e-7))) {
       fail("failed-precondition", "시험지의 중복 문항 번호와 배점을 확인해 주세요.", "ASSESSMENT_PAPER_QUESTION_INVALID");
     }
+    if (fixedPaper) mockMaterials.validateMockExamSets(documents.map(document => ({ ...document.data })), fail);
     return { itemCount: questions.length, answerKey: questions, quizDocuments: documents, fixedPaper,
       learningSnapshot: documents.filter(document => questions.some(item => item.id === String(document.data?.id ?? document.path.split("/").at(-1)))).map(learning.questionLearningSnapshot),
       assignedStudentUids: [], sourceHash: sha256(canonicalJson(questions)) };
@@ -885,7 +891,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const path = `${semesterRoot(payload.semesterId)}/quiz_questions/${payload.questionId}`;
       const snapshot = await transaction.get(path);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "Quiz question");
-      if (payload.question.examRound) {
+      if (payload.question.examRound || snapshot.data?.passageSet) {
         const existing = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
           { field: "unitId", operator: "==", value: "exam_prep" },
           { field: "category", operator: "==", value: "exam_prep" },
@@ -893,6 +899,13 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         if (existing.some(document => document.path !== path && document.data?.examRound === payload.question.examRound
           && document.data?.paperOrder === payload.question.paperOrder))
           fail("already-exists", "이 회차에 같은 문항 번호가 있습니다.", "ASSESSMENT_PAPER_ORDER_DUPLICATE");
+        // Merge writes preserve optional material fields from older editors.
+        const effectiveQuestion = { ...snapshot.data, ...payload.question };
+        const setKey = question => question?.passageSet?.id ? `${question.examRound}\n${question.passageSet.id}` : null;
+        const affectedSets = new Set([setKey(snapshot.data), setKey(effectiveQuestion)].filter(Boolean));
+        const candidates = existing.filter(document => document.path !== path
+          && affectedSets.has(setKey(document.data))).map(document => ({ ...document.data }));
+        mockMaterials.validateMockExamSets([...candidates, effectiveQuestion], fail);
       }
       const nextRevision = currentRevision + 1;
       const question = {
@@ -914,6 +927,15 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const snapshot = await transaction.get(path);
       if (!snapshot.exists) fail("not-found", "Quiz question was not found.", "ASSESSMENT_QUESTION_NOT_FOUND");
       assertContentRevision(snapshot, payload.expectedRevision, "Quiz question");
+      if (snapshot.data?.passageSet?.id) {
+        const existing = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
+          { field: "unitId", operator: "==", value: "exam_prep" },
+          { field: "category", operator: "==", value: "exam_prep" },
+        ] });
+        mockMaterials.validateMockExamSets(existing.filter(document => document.path !== path
+          && document.data?.examRound === snapshot.data.examRound
+          && document.data?.passageSet?.id === snapshot.data.passageSet.id).map(document => ({ ...document.data })), fail);
+      }
       transaction.delete(path);
       return { target: { kind: "quiz-question-delete", id: payload.questionId, refs: [path] }, sourceHash: null, result: { questionId: payload.questionId, deleted: true } };
     }
@@ -1266,7 +1288,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }
       const active = prior.find((document) => ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(document.data?.status));
       if (active) {
-        return { target: { kind: "assessment-attempt", id: active.data.attemptId, refs: [active.path] }, sourceHash: active.data.sourceHash || null, result: serializeAttempt(active.data, true) };
+        return { target: { kind: "assessment-attempt", id: active.data.attemptId, refs: [active.path] }, sourceHash: active.data.sourceHash || null, result: { ...serializeAttempt(active.data, true), serverNowIso: now().toISOString() } };
       }
       if (prior.length >= Number(definition.maxAttempts || 1)) fail("failed-precondition", "No assessment attempts remain.", "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
       const latestSubmitted = [...prior].reverse().find((document) => document.data?.submittedAtIso);
@@ -1276,6 +1298,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }
       const source = await loadDefinitionSource(transaction, definition);
       if (source.sourceHash !== definition.sourceHash) fail("failed-precondition", "Assessment content changed after publication.", "ASSESSMENT_SOURCE_STALE");
+      if (payload.preparedSourceHash && payload.preparedSourceHash !== source.sourceHash)
+        fail("failed-precondition", "시험지가 변경되었습니다. 자료를 다시 준비해 주세요.", "ASSESSMENT_PREPARED_SOURCE_STALE");
       const attemptNumber = prior.length + 1;
       // Reset restores the allowed attempts, but immutable attempt/result IDs
       // must never be reused. Keep a lifetime ordinal separate from that count.
@@ -1349,7 +1373,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (source.fixedPaper && attempt.questionSnapshotOmittedIds.length)
         fail("failed-precondition", "시험지 자료가 너무 큽니다. 이미지 크기를 줄이거나 저장된 이미지 주소를 사용해 주세요.", "ASSESSMENT_PAPER_TOO_LARGE");
       transaction.create(path, attempt);
-      return { target: { kind: "assessment-attempt", id: attemptId, refs: [path] }, sourceHash: source.sourceHash, result: serializeAttempt(attempt, false) };
+      return { target: { kind: "assessment-attempt", id: attemptId, refs: [path] }, sourceHash: source.sourceHash, result: { ...serializeAttempt(attempt, false), serverNowIso: now().toISOString() } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.SUBMIT_ASSESSMENT_ATTEMPT) {
@@ -1578,11 +1602,16 @@ const normalizeQueryRequest = (data) => {
     assertAllowedKeys(payload, ["semesterId"], "getAssessmentState class query payload");
     return { semesterId: semesterCore.normalizeSemesterId(payload.semesterId) };
   }
-  assertAllowedKeys(payload, ["definitionId", "attemptId"], "getAssessmentState payload");
+  assertAllowedKeys(payload, ["definitionId", "attemptId", "prepareAssets"], "getAssessmentState payload");
+  if (payload.prepareAssets !== undefined && typeof payload.prepareAssets !== "boolean")
+    fail("invalid-argument", "prepareAssets must be boolean.", "ASSESSMENT_QUERY_INVALID");
+  if (payload.prepareAssets && (!payload.definitionId || payload.attemptId))
+    fail("invalid-argument", "Asset preparation requires a definition.", "ASSESSMENT_QUERY_INVALID");
   if (!payload.definitionId && !payload.attemptId) fail("invalid-argument", "definitionId or attemptId is required.", "ASSESSMENT_QUERY_INVALID");
   return {
     definitionId: payload.definitionId ? normalizeDefinitionId(payload.definitionId) : "",
     attemptId: payload.attemptId ? normalizeAttemptId(payload.attemptId) : "",
+    prepareAssets: payload.prepareAssets === true,
   };
 };
 
@@ -1636,11 +1665,13 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
         await assertAssessmentSemesterWritable(transaction, definitionSnapshot.data?.semesterId);
       }
       let ownAttempt = attemptSnapshot;
+      let ownAttempts = [];
       if (!ownAttempt && actor.role === "student") {
         const attempts = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
           { field: "definitionId", operator: "==", value: definitionId },
           { field: "studentUid", operator: "==", value: actor.uid },
         ] })).filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null).sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
+        ownAttempts = attempts;
         ownAttempt = attempts[0] || null;
       }
       const definition = definitionSnapshot.data || {};
@@ -1672,6 +1703,32 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
           && (definition.assessmentKind === "QUIZ" ? assignedClassIds.includes(enrollment.data?.classId) : assignedClassIds.length === 0 || assignedClassIds.includes(enrollment.data?.classId))
           && (assignedStudentUids.length === 0 || assignedStudentUids.includes(actor.uid));
         if (!eligible) status = "PERMISSION";
+      }
+      let preparedAssets;
+      if (query.prepareAssets) {
+        // Asset preparation is read-only and never consumes an attempt or starts
+        // a clock. Repeat the same publication, enrollment and retry gates used
+        // by start; return no question text, choice text, answer or explanation.
+        if (actor.role !== "student" || status !== "READY" || definition.assessmentKind !== "QUIZ" || definition.category !== "exam_prep")
+          fail("permission-denied", "시험 자료를 준비할 수 없습니다. 공개 상태를 확인해 주세요.", "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
+        const active = ownAttempts.find(document => ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(document.data?.status));
+        if (active) {
+          preparedAssets = mockMaterials.buildPreparedAssets({ sourceHash: active.data.sourceHash,
+            quizDocuments: (active.data.questionSnapshots || []).map(data => ({ data })) });
+        } else {
+          if (ownAttempts.length >= Number(definition.maxAttempts || 1))
+            fail("failed-precondition", "No assessment attempts remain.", "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
+          const latestSubmitted = ownAttempts.find(document => document.data?.submittedAtIso);
+          if (latestSubmitted && Number(definition.cooldownMinutes || 0) > 0) {
+            const nextAt = Date.parse(latestSubmitted.data.submittedAtIso) + Number(definition.cooldownMinutes) * 60_000;
+            if (currentTimeMs < nextAt)
+              fail("failed-precondition", "Assessment retry cooldown is active.", "ASSESSMENT_COOLDOWN_ACTIVE", { retryAt: new Date(nextAt).toISOString() });
+          }
+          const source = await loadDefinitionSource(transaction, definition);
+          if (source.sourceHash !== definition.sourceHash)
+            fail("failed-precondition", "Assessment content changed after publication.", "ASSESSMENT_SOURCE_STALE");
+          if (source.fixedPaper) preparedAssets = mockMaterials.buildPreparedAssets(source);
+        }
       }
       if (ownAttempt?.exists && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data?.status)) status = "RECOVERABLE";
       if (ownAttempt?.exists && ownAttempt.data?.status === "SUBMITTED") status = "SUBMITTED";
@@ -1716,6 +1773,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
           provenance: definition.semesterId,
         },
         attempt,
+        ...(preparedAssets ? { preparedAssets } : {}),
         serverNowIso: now().toISOString(),
         writeCount: 0,
       };

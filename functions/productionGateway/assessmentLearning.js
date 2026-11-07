@@ -1,4 +1,5 @@
 // Diagnostic observations never change grading, rewards, or attempt eligibility.
+const { redactLegacyBlankText } = require("./mockExamMaterials");
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const safeText = (value, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const safeKey = value => value && !["__proto__", "constructor", "prototype"].includes(value);
@@ -143,6 +144,12 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
     }
     for (const key of ["explanation", "passage", "image", "hint", "unitId", "subUnitId", "refBig", "refMid", "refSmall"])
       if (typeof source[key] === "string") snapshot[key] = source[key];
+    if (typeof source.examplePassage === "string") snapshot.examplePassage = source.examplePassage;
+    if (source.category === "exam_prep" && object(source.passageSet)) {
+      const set = source.passageSet;
+      snapshot.passageSet = { id: String(set.id || ""), instruction: String(set.instruction || ""),
+        passage: String(set.passage || ""), ...(typeof set.image === "string" ? { image: set.image } : {}) };
+    }
     if (typeof source.hintEnabled === "boolean") snapshot.hintEnabled = source.hintEnabled;
     if (Array.isArray(source.options) && source.options.every(item => typeof item === "string")) snapshot.options = [...source.options];
     if (source.type === "order" && !snapshot.options?.length)
@@ -161,6 +168,10 @@ const captureQuestionSnapshots = (documents, questionIds, baseDocument, limits) 
 
 const questionPresentation = (snapshots) => snapshots.map(snapshot => {
   const { answer, explanation, matchingPairs, ...presentation } = snapshot;
+  for (const key of ["passage", "examplePassage"])
+    if (typeof presentation[key] === "string") presentation[key] = redactLegacyBlankText(presentation[key]);
+  if (presentation.passageSet) presentation.passageSet = { ...presentation.passageSet,
+    passage: redactLegacyBlankText(presentation.passageSet.passage) };
   if (snapshot.type === "order" && presentation.options) presentation.options = [...presentation.options].sort();
   if (snapshot.type === "matching") {
     // Separate sorted lists carry the choices without exposing correct pairings.

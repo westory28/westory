@@ -833,7 +833,10 @@ const runMockExamPaper = async () => {
   const question = (id, paperOrder, points, examRound = "round_1") => ({ id, unitId: "exam_prep", category: "exam_prep", type: "choice",
     question: `합성 문항 ${id}`, answer: "고려", options: ["대한 제국", "발해", "고려", "고구려", "신라"],
     choiceOptionImages: [null, null, "https://example.test/goryeo.png", null, null],
-    explanation: "제출 전에는 공개하지 않는 해설", examRound, paperOrder, points, paperBreakBefore: paperOrder === 2 });
+    explanation: "제출 전에는 공개하지 않는 해설Ω", passage: "공개 자료 {{blank:숨은정답Ξ}}", examRound, paperOrder, points, paperBreakBefore: paperOrder === 2,
+    ...(examRound === "round_1" ? { examplePassage: "ㄱ. 보기 문장\nㄴ. 다른 보기",
+      passageSet: { id: "set-one", instruction: "다음 자료를 읽고 답하시오.", passage: "{{blankbox:3.4|(가)}} 공통 본문",
+        image: "https://example.test/shared.png" } } : {}) });
   const save = q => apply("upsertQuizQuestion", { semesterId, questionId: String(q.id), question: q, expectedRevision: 0, reason: "Synthetic paper test" });
   await save(question(902, 2, 70));
   await save(question(901, 1, 30));
@@ -845,6 +848,25 @@ const runMockExamPaper = async () => {
   await assert.rejects(save({ ...question(904, 3, 10), options: ["고려"] }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
   await assert.rejects(save({ ...question(904, 3, -1) }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
   await assert.rejects(save({ ...question(904, 3, 0.001) }), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+  await assert.rejects(save({ ...question(904, 3, 10), passageSet: { ...question(904, 3, 10).passageSet, passage: "다른 본문" } }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_SET_CONFLICT");
+  await assert.rejects(save(question(904, 4, 10)), error => error?.details?.reason === "ASSESSMENT_PAPER_SET_ORDER_INVALID");
+  await assert.rejects(save({ ...question(904, 3, 10), passageSet: { ...question(904, 3, 10).passageSet, answer: "숨긴 정답" } }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_MATERIAL_INVALID");
+  await assert.rejects(save({ ...question(904, 3, 10), passageSet: { ...question(904, 3, 10).passageSet, image: "javascript:alert(1)" } }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_MATERIAL_INVALID");
+  await save(question(904, 3, 10));
+  await assert.rejects(apply("deleteQuizQuestion", { semesterId, questionId: "902", expectedRevision: 1, reason: "Synthetic set boundary test" }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_SET_ORDER_INVALID");
+  await assert.rejects(apply("upsertQuizQuestion", { semesterId, questionId: "902", expectedRevision: 1, reason: "Synthetic set boundary test",
+    question: { ...question(902, 2, 70, "round_2"), passageSet: null } }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_SET_ORDER_INVALID");
+  const legacyEdit = { ...question(901, 5, 30) };
+  delete legacyEdit.passageSet; delete legacyEdit.examplePassage;
+  await assert.rejects(apply("upsertQuizQuestion", { semesterId, questionId: "901", expectedRevision: 1,
+    reason: "Synthetic old editor merge test", question: legacyEdit }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_SET_ORDER_INVALID");
+  await apply("deleteQuizQuestion", { semesterId, questionId: "904", expectedRevision: 1, reason: "Synthetic set boundary cleanup" });
   await save({ ...question(905, 1, 3.2, "round_3"), type: "word", options: undefined, answer: "조선" });
   await save({ ...question(906, 2, 96.8, "round_3"), type: "short", options: undefined, answer: "고려" });
   paperStore.documents.set("years/2026/semesters/2/quiz_questions/legacy", { id: 900, unitId: "exam_prep", category: "exam_prep", type: "short", question: "이전 문항", answer: "정답" });
@@ -860,13 +882,36 @@ const runMockExamPaper = async () => {
   await assert.rejects(apply("saveQuizAssessmentSettings", { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_4", examRound: "round_4", legacyConfigKey: "exam_prep_exam_prep__round_4" }),
     error => error?.details?.reason === "ASSESSMENT_SOURCE_EMPTY");
   assert.equal(paperStore.writeCount, count, "An empty round never substitutes legacy or other-round questions");
-  const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId }, true)).result;
+  const query = assessment.createAssessmentQueryCore({ store: paperStore, now: () => new Date(nowMs),
+    serverTimestamp: () => ({ __serverTimestamp: nowMs }), assertSession: async request => ({ uid: request.auth.uid }) });
+  const prepare = (auth = student) => query.getAssessmentState({ auth, data: { definitionId: config.definitionId, prepareAssets: true } });
+  const prepared = await prepare();
+  assert.equal(prepared.attempt, null);
+  assert.equal(paperStore.writeCount, count, "Asset preparation does not create an attempt, start a clock or write anything");
+  assert.deepEqual(prepared.preparedAssets.imageUrls.sort(), ["https://example.test/goryeo.png", "https://example.test/shared.png"]);
+  assert.deepEqual(Object.keys(prepared.preparedAssets).sort(), ["fontCharacters", "imageUrls", "sourceHash"]);
+  assert.equal(prepared.preparedAssets.fontCharacters.includes("Ω"), false, "Explanation glyphs are private");
+  assert.equal(prepared.preparedAssets.fontCharacters.includes("Ξ"), false, "Legacy hidden blank glyphs are private");
+  assert.equal(prepared.preparedAssets.fontCharacters, [...new Set(prepared.preparedAssets.fontCharacters)].sort().join(""));
+  await assert.rejects(prepare(admin), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
+  await assert.rejects(prepare({ uid: "unassigned-student" }), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
+  await assert.rejects(apply("startAssessmentAttempt", { definitionId: config.definitionId, preparedSourceHash: "0".repeat(64) }, true),
+    error => error?.details?.reason === "ASSESSMENT_PREPARED_SOURCE_STALE");
+  assert.equal(paperStore.writeCount, count, "Preparation authorization and stale-version rejection leave zero writes");
+  const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId,
+    preparedSourceHash: prepared.preparedAssets.sourceHash }, true)).result;
+  assert.equal(started.serverNowIso, new Date(nowMs).toISOString());
+  assert.equal(Date.parse(started.deadlineAtIso) - Date.parse(started.startedAtIso), definition.durationSeconds * 1000);
   assert.deepEqual(started.questionIds, ["901", "902"]);
   assert.deepEqual(started.questionPresentation.map(q => q.points), [30, 70]);
   assert.equal(started.questionPresentation[1].paperBreakBefore, true);
   assert.ok(started.questionPresentation.every(q => !Object.hasOwn(q, "answer") && !Object.hasOwn(q, "explanation")));
+  assert.deepEqual(started.questionPresentation[0].passageSet, question(901, 1, 30).passageSet);
+  assert.equal(started.questionPresentation[0].examplePassage, question(901, 1, 30).examplePassage);
+  assert.equal(started.questionPresentation[0].passage, "공개 자료 {{blank:_____}}");
   const altered = paperStore.snapshot("years/2026/semesters/2/quiz_questions/901").data;
-  paperStore.documents.set("years/2026/semesters/2/quiz_questions/901", { ...altered, points: 99, answer: "신라", question: "수정된 문제", contentRevision: 2 });
+  paperStore.documents.set("years/2026/semesters/2/quiz_questions/901", { ...altered, points: 99, answer: "신라", question: "수정된 문제", contentRevision: 2,
+    examplePassage: "수정된 보기", passageSet: { ...altered.passageSet, passage: "수정된 공통 지문" } });
   const submit = { attemptId: started.attemptId, expectedRevision: 1, answers: { 901: "고려", 902: "신라" }, submitReason: "STUDENT" };
   const graded = (await apply("submitAssessmentAttempt", submit, true)).result;
   assert.equal(graded.score, 1); assert.equal(graded.total, 2);
@@ -874,11 +919,24 @@ const runMockExamPaper = async () => {
   assert.equal(graded.questionSnapshots[0].question, "합성 문항 901");
   assert.equal(graded.questionSnapshots[0].answer, "고려");
   assert.equal(graded.questionSnapshots[0].points, 30);
+  assert.deepEqual(graded.questionSnapshots[0].passageSet, question(901, 1, 30).passageSet);
+  assert.equal(graded.questionSnapshots[0].examplePassage, question(901, 1, 30).examplePassage);
+  assert.equal(graded.questionSnapshots[0].passage, question(901, 1, 30).passage, "Submitted review retains the immutable original passage");
   const persisted = paperStore.snapshot(graded.resultRef).data;
   assert.equal(persisted.percent, 30); assert.equal(persisted.earnedPoints, 30);
   const replay = (await apply("submitAssessmentAttempt", submit, true)).result;
   assert.equal(replay.replayedSubmission, true); assert.equal(replay.earnedPoints, 30);
   assert.deepEqual(replay.questionSnapshots, graded.questionSnapshots);
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${config.definitionId}`;
+  const beforeBlockedPreparation = paperStore.writeCount;
+  paperStore.documents.set(definitionPath, { ...definition, maxAttempts: 1 });
+  await assert.rejects(prepare(), error => error?.details?.reason === "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
+  paperStore.documents.set(definitionPath, { ...definition, cooldownMinutes: 5 });
+  await assert.rejects(prepare(), error => error?.details?.reason === "ASSESSMENT_COOLDOWN_ACTIVE");
+  paperStore.documents.set(definitionPath, { ...definition, status: "CLOSED" });
+  await assert.rejects(prepare(), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
+  paperStore.documents.set(definitionPath, definition);
+  assert.equal(paperStore.writeCount, beforeBlockedPreparation);
   const third = { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_3", examRound: "round_3", legacyConfigKey: "exam_prep_exam_prep__round_3" };
   await apply("saveQuizAssessmentSettings", third);
   const decimalAttempt = (await apply("startAssessmentAttempt", { definitionId: third.definitionId }, true)).result;

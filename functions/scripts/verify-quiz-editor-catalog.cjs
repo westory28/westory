@@ -50,8 +50,16 @@ const memory = (profile = { role: 'teacher' }, docs = [question(10), question(2)
               const raw = document.data();
               if (raw.unitId !== query.where[2]) continue;
               consumed += 1;
-              yield { id: document.id, data: () => Object.fromEntries(query.select
-                .filter((field) => Object.hasOwn(raw, field)).map((field) => [field, raw[field]])) };
+              yield { id: document.id, data: () => {
+                const selected = {};
+                for (const field of query.select) {
+                  const [root, child] = field.split('.');
+                  if (!child && Object.hasOwn(raw, root)) selected[root] = raw[root];
+                  else if (child && raw[root] && Object.hasOwn(raw[root], child))
+                    (selected[root] ||= {})[child] = raw[root][child];
+                }
+                return selected;
+              } };
             }
           })());
           return stream;
@@ -90,6 +98,19 @@ test('teacher, quiz-read portal staff and verified administrator retain access',
     assert.equal((await memory(profile).handler(request())).entries.length, 2);
   }
   assert.equal((await memory({}).handler(request({}, { token: { email: 'westoria28@gmail.com' } }))).entries.length, 2);
+});
+
+test('mock exam sets expose grouping metadata and searchable text without material image bytes', async () => {
+  const fixture = memory(undefined, [question(1, { category: 'exam_prep', examRound: 'round_1', paperOrder: 1,
+    examplePassage: '보기자료', passageSet: { id: 'set-one', instruction: '함께 읽기', passage: '공통지문', image: 'data:image/png;base64,DO_NOT_READ' } })]);
+  const [entry] = (await fixture.handler(request())).entries;
+  assert.equal(entry.passageSetId, 'set-one');
+  assert.equal(entry.passageSetInstruction, '함께 읽기');
+  assert.match(entry.searchText, /보기자료 공통지문 함께 읽기/);
+  assert.equal(Object.hasOwn(entry, 'passageSet'), false);
+  assert.equal(JSON.stringify(entry).includes('DO_NOT_READ'), false);
+  assert.equal(CATALOG_FIELDS.includes('passageSet'), false);
+  assert.equal(CATALOG_FIELDS.includes('passageSet.image'), false);
 });
 
 test('student, missing profile, disabled portal and unrelated staff permission never reach question query', async () => {
