@@ -67,6 +67,8 @@ resolveRequest({ data: { students: [] } });
 await keywordDetail;
 assert.match(exports.quizClassAnalysisError(denied), /권한/);
 assert.match(exports.quizClassAnalysisError({ code: "functions/unauthenticated" }), /로그인/);
+assert.match(exports.quizClassAnalysisError({ code: "functions/aborted", details: { reason: "QUIZ_ANALYSIS_CHANGED" } }), /조회 중.*갱신/);
+assert.match(exports.quizClassAnalysisError({ code: "functions/aborted", details: { reason: "QUIZ_ANALYSIS_ROSTER_CONFLICT" } }), /소속 학급이 중복/);
 
 const gradeScope = { ...scope, unitId: "exam_prep", category: "exam_prep", examRound: "round_1", classIds: [], grade: "3" };
 const observations = [

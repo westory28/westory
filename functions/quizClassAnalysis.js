@@ -19,6 +19,7 @@ const MAX_STUDENTS = 150;
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_GRADE_CLASSES = 30;
 const MAX_SEARCH_MATCHES = 500;
+const RESULT_QUERY_CONCURRENCY = 8;
 const KEYWORD_BASIS = 'latest_current_revision_keyword_items';
 const BEHAVIOR_CATEGORIES = ['suspected_guessing', 'repeated_choice', 'unflagged', 'insufficient', 'no_attempt'];
 const REGION = 'asia-northeast3';
@@ -550,7 +551,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         selectedDefinitions.length === 1 ? selectedDefinitions[0] : selectedDefinitions]], true);
     }
     let cursor = 0;
-    await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, async () => {
+    await Promise.all(Array.from({ length: Math.min(RESULT_QUERY_CONCURRENCY, jobs.length) }, async () => {
       while (cursor < jobs.length) await jobs[cursor++]();
     }));
     const pending = [...candidates.entries()].filter(([key]) => !rows.has(key)).map(([, candidate]) => candidate);

@@ -97,6 +97,7 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
     semesterId, studentUid: uid, assessmentKind: 'QUIZ', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
     attemptId: `grade_exam_${uid}`, startedAtIso: new Date(now - 60000).toISOString(), submittedAtIso: new Date(now).toISOString(),
     total: 1, percent: 100, answerChecks: [{ id: 91, correct: true }], answers: { 91: '합성 답안' },
+    uid: null, studentId: '', userId: null, email: '', studentEmail: null, unitId: '',
   });
   for (const uid of [student, other]) await db.doc(`semester_assessment_results/compact_${uid}`).set({
     studentUid: uid, semesterId, assessmentKind: 'QUIZ', sourceId: 'unit-a', category: 'diagnostic',
@@ -115,6 +116,9 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   assert.equal(gradeAchievement.grade, '3');
   assert.equal(gradeAchievement.complete, true);
   assert.deepEqual(gradeAchievement.rawRows.map(row => row.raw.studentUid).sort(), [student, other].sort());
+  assert.ok(gradeAchievement.rawRows.every(row => row.raw.uid === null && row.raw.studentId === ''
+    && row.raw.studentEmail === null && !Object.hasOwn(row.raw, 'definitionId')),
+  'Firestore select/getAll projections preserve nullable, empty and missing scope fields without a false change conflict');
   assert.deepEqual(gradeAchievement.configuredClasses.map(row => row.id), ['class_1', 'class_2']);
   assert.ok(gradeAchievement.achievementEvidence.observations.some(row => row.resultId === 'compact_definition_only'));
   assert.ok(gradeAchievement.achievementEvidence.observations.every(row => ['diagnostic', 'formative'].includes(row.source)));

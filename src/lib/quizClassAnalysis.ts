@@ -327,6 +327,13 @@ export function quizClassAnalysisError(error: unknown) {
     return "로그인 세션을 확인하지 못했습니다. 다시 로그인한 뒤 조회해 주세요.";
   if (failure.code?.includes("permission-denied"))
     return "평가 조회 권한을 확인하지 못했습니다. 담당 권한과 현재 학기를 확인해 주세요.";
+  if (failure.details?.reason === "QUIZ_ANALYSIS_ROSTER_CONFLICT")
+    return "학생의 소속 학급이 중복되어 있습니다. 학급 명단을 확인한 뒤 다시 조회해 주세요.";
+  if (
+    failure.details?.reason === "QUIZ_ANALYSIS_CHANGED" ||
+    failure.code?.includes("aborted")
+  )
+    return "조회 중 평가 결과나 문항이 갱신되었습니다. 최신 자료로 다시 조회해 주세요.";
   if (
     failure.code?.includes("failed-precondition") ||
     failure.code?.includes("resource-exhausted")

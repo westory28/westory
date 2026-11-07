@@ -414,8 +414,52 @@ test('scope-only compatibility reads fail closed when a result disappears or cha
   }
 });
 
+test('unchanged projected scope preserves missing, null and empty fields without depending on property order', async () => {
+  const f = memory(gradeExamFixture()), getAll = f.db.getAll;
+  f.data.set('semester_assessment_results/exam_a', { ...f.data.get('semester_assessment_results/exam_a'),
+    uid: null, studentId: '', userId: null, email: '', studentEmail: null, unitId: '' });
+  f.db.getAll = async (...refs) => (await getAll(...refs)).map(doc => !doc.exists ? doc : { ...doc,
+    data: () => Object.fromEntries(Object.entries(doc.data()).reverse()) });
+  const result = await createQuizClassAnalysisService({ db: f.db }).query(gradeExamQuery());
+  assert.equal(result.complete, true);
+  const raw = result.rawRows.find(row => row.id === 'exam_a').raw;
+  assert.equal(raw.uid, null);
+  assert.equal(raw.studentId, '');
+  assert.equal(Object.hasOwn(raw, 'definitionId'), false);
+});
+
+test('a real result invalidation during a grade query rejects the mixed generation without changing result data', async () => {
+  const f = memory(gradeExamFixture()), getAll = f.db.getAll;
+  const before = structuredClone(f.data.get('semester_assessment_results/exam_a'));
+  const invalidation = createQuizAnalysisInvalidation({ db: f.db });
+  let invalidated = false;
+  f.db.getAll = async (...refs) => {
+    const docs = await getAll(...refs);
+    if (!invalidated && refs.some(ref => ref.path === 'semester_assessment_results/exam_a')) {
+      invalidated = true;
+      await invalidation.invalidateResult(SCOPE, before);
+    }
+    return docs;
+  };
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(gradeExamQuery()), error =>
+    error.code === 'aborted' && error.details.reason === 'QUIZ_ANALYSIS_CHANGED' && error.message.includes('평가 자료'));
+  assert.equal(invalidated, true);
+  assert.deepEqual(f.data.get('semester_assessment_results/exam_a'), before);
+});
+
 test('grade result queries account for DNF limits and batch definitions without multiplying legacy alias queries', async context => {
   const f = memory(), students = Array.from({ length: 31 }, (_, index) => ({ uid: `synthetic-${index}`, email: `synthetic-${index}@school.test` }));
+  const collection = f.db.collection;
+  let activeQueries = 0, peakQueries = 0;
+  f.db.collection = path => {
+    const query = collection(path), get = query.get;
+    if (path.endsWith('results')) query.get = async () => {
+      activeQueries++; peakQueries = Math.max(peakQueries, activeQueries);
+      try { await new Promise(resolve => setTimeout(resolve, 2)); return await get(); }
+      finally { activeQueries--; }
+    };
+    return query;
+  };
   for (let index = 0; index < 16; index++) f.data.set(`semester_assessment_definitions/quiz:${SCOPE}:unit-${index}:diagnostic`,
     { semesterId: SCOPE, assessmentKind: 'QUIZ', category: 'diagnostic' });
   await createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), students, true,
@@ -432,6 +476,8 @@ test('grade result queries account for DNF limits and batch definitions without 
     && Array.isArray(value) && value.some(id => id.includes('unit-'))));
   assert.equal(definitions.length, 20);
   assert.ok(definitions.every(query => query.path === 'semester_assessment_results' && query.filters[0][0] === 'studentUid'));
+  assert.equal(peakQueries, 8, 'only eight result queries run concurrently; query count and field projections stay bounded');
+  assert.equal(activeQueries, 0);
   context.diagnostic('31-pupil/16-definition query plan: 66 scoped result queries (was 315 with speculative legacy fallbacks); 1 scoped definition-metadata query; 0 worksheet queries.');
 });
 
