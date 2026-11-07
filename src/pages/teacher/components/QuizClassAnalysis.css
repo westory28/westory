@@ -49,9 +49,13 @@
   font-weight: 700;
   font-size: 14px;
 }
-.qca-filters > .qca-unit {
+.qca-filters > .qca-assessment-select {
   flex: 1 0 256px;
-  width: 256px;
+  width: auto;
+}
+.qca-filters > .qca-report-select {
+  flex: 0 0 224px;
+  width: 224px;
 }
 .qca-filter-actions {
   display: flex;
@@ -494,9 +498,13 @@
     gap: 12px;
   }
   .qca-filters > label,
-  .qca-filters > .qca-unit {
+  .qca-filters > .qca-assessment-select,
+  .qca-filters > .qca-report-select {
     width: auto;
     min-width: 0;
+  }
+  .qca-filters > .qca-assessment-select {
+    grid-column: 1 / -1;
   }
   .qca-filter-actions {
     grid-column: 1 / -1;
@@ -504,16 +512,19 @@
     padding: 4px 4px 8px;
     margin: -4px -4px -8px;
     scrollbar-width: none;
+    justify-content: flex-start;
+  }
+  .qca-filter-actions > :first-child {
+    margin-left: auto;
   }
   .qca-filter-actions .qca-search {
-    flex: 1 1 auto;
-    min-width: 0;
-    justify-content: flex-end;
+    flex: 0 0 auto;
+    min-width: min-content;
     padding-left: 0;
   }
   .qca-search-input {
-    flex: 0 1 280px;
-    min-width: 88px;
+    flex: 0 0 224px;
+    width: 224px;
   }
 }
 @media (max-width: 640px) {

@@ -40,13 +40,14 @@ const difficultyLabel = (value: string | undefined) =>
   ({ easy: "쉬움", medium: "보통", hard: "어려움" })[value || ""] || "미지정";
 const levelLabel = (value: string) =>
   value === "unclassified" ? "미분류" : value;
-const labels = [
+export const QUIZ_ACHIEVEMENT_VIEWS = [
   "전체 결과",
-  "문항 분석",
-  "성취기준",
-  "사전 근거·수준 확인",
+  "문항별 분석",
+  "성취기준별 분석",
+  "학습 근거·수준 확인",
   "S–P표",
 ];
+const labels = QUIZ_ACHIEVEMENT_VIEWS;
 const ratio = (numerator: number, denominator: number) =>
   denominator ? (100 * numerator) / denominator : null;
 const statisticReason = (reason: string | null) =>
@@ -67,6 +68,7 @@ export default function QuizAchievementAnalysis({
   enabled = true,
   refreshVersion = 0,
   onLoadingChange,
+  reportView,
 }: {
   scope: QuizClassScope;
   identityKey: string;
@@ -74,12 +76,16 @@ export default function QuizAchievementAnalysis({
   enabled?: boolean;
   refreshVersion?: number;
   onLoadingChange?: (loading: boolean) => void;
+  reportView?: number;
 }) {
   const [data, setData] = useState<QuizClassAchievement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
-  const [view, setView] = useState(0);
+  const [localView, setView] = useState(0);
+  const view = reportView ?? localView;
+  const inlineReport = reportView !== undefined;
+  const sectionClass = `quiz-achievement-analysis${inlineReport ? " qaa-inline-report" : ""}`;
   const [standardCode, setStandardCode] = useState("");
   const [formKey, setFormKey] = useState("");
   const [questionId, setQuestionId] = useState("");
@@ -234,10 +240,28 @@ export default function QuizAchievementAnalysis({
   }, [questionId, data, attempts, form]);
   const displayedQuestion = savedQuestion || currentQuestion;
   useEffect(() => {
+    setQuestionId("");
+    setProfileId("");
+  }, [view]);
+  useEffect(() => {
     if (questionId) requestAnimationFrame(() => previewRef.current?.focus());
   }, [questionId]);
+  const analysisHelp = (
+    <InfoHelp label="성취 분석 집계 기준">
+      학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
+      분석용 수준입니다. 점수 구간·순위·학습지 채움률로 수준을 정하지 않습니다.
+      목표 A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은 미분류로 남고
+      공식 점수와 성적은 바뀌지 않습니다.
+    </InfoHelp>
+  );
   const toolbar = (
-    <div className="qaa-toolbar">
+    <div className={`qaa-toolbar${inlineReport ? " qaa-report-heading" : ""}`}>
+      {inlineReport && (
+        <div className="qaa-report-title">
+          <h2>{labels[view]}</h2>
+          {analysisHelp}
+        </div>
+      )}
       <label>
         성취기준
         <select
@@ -250,7 +274,7 @@ export default function QuizAchievementAnalysis({
             setConfirmations({});
           }}
         >
-          <option value="">전체 기준</option>
+          <option value="">모든 성취기준</option>
           {(full?.standards || []).map((row) => (
             <option key={row.code} value={row.code}>
               {row.code} ·{" "}
@@ -260,38 +284,37 @@ export default function QuizAchievementAnalysis({
           ))}
         </select>
       </label>
-      <label>
-        분석 보기
-        <select
-          value={view}
-          onChange={(event) => setView(Number(event.target.value))}
-        >
-          {labels.map((label, index) => (
-            <option key={label} value={index}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        className="qca-secondary"
-        disabled={!enabled || loading}
-        onClick={() => setReload((value) => value + 1)}
-      >
-        최신 결과 조회
-      </button>
-      <InfoHelp label="성취 분석 집계 기준">
-        학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
-        분석용 수준입니다. 점수 구간·순위·학습지 채움률로 수준을 정하지
-        않습니다. 목표 A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은
-        미분류로 남고 공식 점수와 성적은 바뀌지 않습니다.
-      </InfoHelp>
+      {!inlineReport && (
+        <>
+          <label>
+            분석 보기
+            <select
+              value={view}
+              onChange={(event) => setView(Number(event.target.value))}
+            >
+              {labels.map((label, index) => (
+                <option key={label} value={index}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="qca-secondary"
+            disabled={!enabled || loading}
+            onClick={() => setReload((value) => value + 1)}
+          >
+            최신 결과 조회
+          </button>
+          {analysisHelp}
+        </>
+      )}
     </div>
   );
   if (!enabled || loading || error || !data || !analysis || !full)
     return (
-      <section className="quiz-achievement-analysis" aria-label="성취기준 분석">
+      <section className={sectionClass} aria-label="성취기준 분석">
         {toolbar}
         {error ? (
           <div role="alert" className="qca-error">
@@ -310,7 +333,7 @@ export default function QuizAchievementAnalysis({
               : "성취기준과 사전 학습 근거를 불러오는 중입니다."}
           </p>
         )}
-        <PendingAchievementView view={view} />
+        <PendingAchievementView view={view} showHeading={!inlineReport} />
       </section>
     );
 
@@ -434,13 +457,14 @@ export default function QuizAchievementAnalysis({
     );
 
   return (
-    <section className="quiz-achievement-analysis" aria-label="성취기준 분석">
+    <section className={sectionClass} aria-label="성취기준 분석">
       {toolbar}
-      {data.achievementEvidence.status === "partial" && (
-        <p className="qca-muted" role="status">
-          일부 사전 근거 제외 · 시각·버전·보관 범위를 확인해 주세요.
-        </p>
-      )}
+      {data.achievementEvidence.status === "partial" &&
+        (!inlineReport || analysis.attempts.length > 0) && (
+          <p className="qca-muted" role="status">
+            일부 사전 근거 제외 · 시각·버전·보관 범위를 확인해 주세요.
+          </p>
+        )}
       <div className="qaa-scope">
         <span>첫 제출 {analysis.attempts.length}명</span>
         {analysis.unclassifiedItemCount > 0 && (
@@ -463,15 +487,17 @@ export default function QuizAchievementAnalysis({
       </div>
       {view === 0 && (
         <>
-          <div className="qca-section-heading">
-            <h3>전체 분포</h3>
-            <InfoHelp label="점수 분포와 수준 분포">
-              점수 분포는 원래 제출 점수이며 A–E 분류에 사용하지 않습니다.
-              평균·표준편차는 표시 학생의 실제 점수로 계산합니다. 전체
-              기준에서는 종합 성취수준을 추정하지 않고 미분류로 표시하며,
-              성취기준을 선택하면 교사가 확인한 해당 기준의 A–E를 사용합니다.
-            </InfoHelp>
-          </div>
+          {!inlineReport && (
+            <div className="qca-section-heading">
+              <h3>전체 분포</h3>
+              <InfoHelp label="점수 분포와 수준 분포">
+                점수 분포는 원래 제출 점수이며 A–E 분류에 사용하지 않습니다.
+                평균·표준편차는 표시 학생의 실제 점수로 계산합니다. 전체
+                기준에서는 종합 성취수준을 추정하지 않고 미분류로 표시하며,
+                성취기준을 선택하면 교사가 확인한 해당 기준의 A–E를 사용합니다.
+              </InfoHelp>
+            </div>
+          )}
           <div className="qaa-metrics">
             <span>
               점수 확인 <strong>{analysis.scoredCount}명</strong>
@@ -483,25 +509,33 @@ export default function QuizAchievementAnalysis({
               표준편차 <strong>{number(analysis.standardDeviation, 1)}</strong>
             </span>
           </div>
-          <Histogram analysis={analysis} />
-          <div
-            className="qaa-level-stack"
-            role="img"
-            aria-label={analysis.levelCohorts
-              .map((row) => `${levelLabel(row.level)} ${row.count}명`)
-              .join(", ")}
-          >
-            {analysis.levelCohorts
-              .filter((row) => row.count)
-              .map((row) => (
-                <span
-                  key={row.level}
-                  className={`qaa-level-${row.level}`}
-                  style={{ width: `${row.percent}%` }}
-                  title={`${levelLabel(row.level)} ${percent(row.percent)}`}
-                />
-              ))}
-          </div>
+          {inlineReport && !analysis.attempts.length ? (
+            <p className="qca-muted" role="status">
+              아직 제출한 학생이 없습니다.
+            </p>
+          ) : (
+            <Histogram analysis={analysis} />
+          )}
+          {(!inlineReport || analysis.attempts.length > 0) && (
+            <div
+              className="qaa-level-stack"
+              role="img"
+              aria-label={analysis.levelCohorts
+                .map((row) => `${levelLabel(row.level)} ${row.count}명`)
+                .join(", ")}
+            >
+              {analysis.levelCohorts
+                .filter((row) => row.count)
+                .map((row) => (
+                  <span
+                    key={row.level}
+                    className={`qaa-level-${row.level}`}
+                    style={{ width: `${row.percent}%` }}
+                    title={`${levelLabel(row.level)} ${percent(row.percent)}`}
+                  />
+                ))}
+            </div>
+          )}
           <Table label="학생 성취수준별 분포">
             <thead>
               <tr>
@@ -524,11 +558,13 @@ export default function QuizAchievementAnalysis({
               ))}
             </tbody>
           </Table>
-          <FormChoice
-            analysis={analysis}
-            formKey={formKey}
-            setFormKey={setFormKey}
-          />
+          {(!inlineReport || analysis.attempts.length > 0) && (
+            <FormChoice
+              analysis={analysis}
+              formKey={formKey}
+              setFormKey={setFormKey}
+            />
+          )}
           {form && (
             <>
               <div className="qaa-metrics">
@@ -1806,7 +1842,13 @@ function AdjacentLevels({
   );
 }
 
-function PendingAchievementView({ view }: { view: number }) {
+function PendingAchievementView({
+  view,
+  showHeading = true,
+}: {
+  view: number;
+  showHeading?: boolean;
+}) {
   const columns = [
     ["학생 수준", "인원", "비율", "평균", "표준편차"],
     ["문항", "출제 난도", "목표 수준", "정답률", "변별도"],
@@ -1816,9 +1858,11 @@ function PendingAchievementView({ view }: { view: number }) {
   ][view];
   return (
     <>
-      <div className="qca-section-heading">
-        <h3>{view === 0 ? "전체 분포" : labels[view]}</h3>
-      </div>
+      {showHeading && (
+        <div className="qca-section-heading">
+          <h3>{view === 0 ? "전체 분포" : labels[view]}</h3>
+        </div>
+      )}
       {view === 0 && (
         <div className="qaa-metrics">
           <span>

@@ -61,10 +61,10 @@ const errors=[],screenshots=[];
 try{
  const page=await browser.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
- await page.goto(origin);await page.getByRole('option',{name:'Ⅳ. 조선의 성립과 발전',exact:true}).waitFor({state:'attached'});
+ await page.goto(origin);await page.locator('optgroup[label="Ⅳ. 조선의 성립과 발전"]').waitFor({state:'attached'});
  assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.map(c=>c.mode)),['catalog']);
- await page.getByRole('combobox',{name:'분석할 대단원',exact:true}).selectOption('big');
- await page.getByRole('combobox',{name:'분석할 중단원',exact:true}).selectOption('unit-a');await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
+
+ await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),1);
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('heading',{name:'학급 결과',exact:true}).waitFor();
  assert.ok((await page.getByRole('region',{name:'학급별 풀이 분류 표',exact:true}).innerText()).includes('집계 미확인'),'old summary omission is not zero or normal');
@@ -88,9 +88,9 @@ try{
        const submit=document.querySelector('.qca-filter-actions button[type=submit]').getBoundingClientRect();
        const search=document.querySelector('.qca-search').getBoundingClientRect();
        const form=document.querySelector('.qca-filters').getBoundingClientRect();
-       return {unitWidths:fields.slice(0,2).map(r=>r.width),gap:fields[1].left-fields[0].right,right:form.right-submit.right,resetGap:reset.left-search.right,submitGap:submit.left-reset.right};
+       return {assessmentWidth:fields[0].width,gap:fields[1].left-fields[0].right,right:form.right-submit.right,resetGap:reset.left-search.right,submitGap:submit.left-reset.right};
      });
-     assert.ok(layout.unitWidths.every(value=>value>=256),'wide unit names have room');
+     assert.ok(layout.assessmentWidth>=256,'assessment names have room');
      assert.ok(layout.gap>=16,'columns are separated');
      assert.ok(Math.abs(layout.right)<=1,'result query is at the far right');
      assert.ok(Math.abs(layout.resetGap-8)<=1,'reset stays next to search');
@@ -120,9 +120,9 @@ try{
  await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
  assert.ok((await page.evaluate(()=>document.activeElement.getAttribute('aria-label'))).includes('문항·학생 상세'),'focus returns');
  await page.getByRole('button',{name:'검색 해제',exact:true}).click();
- await page.evaluate(()=>window.quizClassQa.fail=true);await page.getByRole('button',{name:'최신 결과 조회',exact:true}).click();await page.getByRole('alert').waitFor();
+ await page.evaluate(()=>window.quizClassQa.fail=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('alert').waitFor();
  await page.getByRole('button',{name:'다시 조회',exact:true}).click();await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).waitFor();
- await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'최신 결과 조회',exact:true}).click();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_3');await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
+ await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_3');await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
  await page.getByText('평가와 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).count(),0);
  await page.reload();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
@@ -130,22 +130,32 @@ try{
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('사화');
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).press('Enter');
  await page.getByRole('heading',{name:/전체 단원.*사화/}).waitFor();
- assert.equal(await page.getByRole('combobox',{name:'분석할 대단원',exact:true}).inputValue(),'','search needs no unit selection');
- for(const width of [390,768,1280]){
+ assert.equal(await page.getByRole('combobox',{name:'분석할 평가',exact:true}).inputValue(),'','search needs no unit selection');
+ for(const width of [320,390,768,1280,1440]){
    await page.setViewportSize({width,height:768});
    const input=await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).boundingBox();
    const button=await page.getByRole('button',{name:'전체 단원 검색 실행',exact:true}).boundingBox();
    assert.ok(input.x<button.x,'search input expands before magnifier');
-   if(width<=1023)assert.ok(button.x+button.width<=width,'search action stays visible on small screens');
+   const controls=page.locator('.qca-filter-actions').locator('button,input');
+   const boxes=await controls.evaluateAll(elements=>elements.map(element=>{const box=element.getBoundingClientRect();return {left:box.left,right:box.right,top:box.top,bottom:box.bottom};}));
+   for(let i=1;i<boxes.length;i++)assert.ok(boxes[i].left>=boxes[i-1].right-1,`separate search hit targets ${width}, ${i}`);
+   for(let i=0;i<await controls.count();i++){
+     const control=controls.nth(i);
+     await control.scrollIntoViewIfNeeded();
+     await control.click({trial:true});
+     const box=await control.boundingBox();
+     assert.ok(box.x>=-1&&box.x+box.width<=width+1,`control ${i} reachable through toolbar scrolling at ${width}`);
+   }
+   if(width<=390)assert.ok(await page.locator('.qca-filter-actions').evaluate(element=>element.scrollWidth>element.clientWidth),'small-screen search stays in a scrolling toolbar');
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`search overflow ${width}`);
    await page.screenshot({path:path.join(evidence,`search-${width}.png`),fullPage:true});screenshots.push(`search-${width}.png`);
  }
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('없는검색');
  await page.getByRole('button',{name:'전체 단원 검색 실행',exact:true}).click();
  await page.getByText('검색어와 일치하는 문항이 없습니다.',{exact:true}).waitFor();
- await page.reload();await page.getByRole('combobox',{name:'분석할 대단원',exact:true}).selectOption('big');
+ await page.reload();
  await page.evaluate(()=>window.quizClassQa.behavior=true);
- await page.getByRole('combobox',{name:'분석할 중단원',exact:true}).selectOption('unit-a');
+ await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');
  await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();
  const behaviorTable=page.getByRole('region',{name:'학급별 풀이 분류 표',exact:true});
@@ -189,7 +199,7 @@ try{
  await page.getByRole('button',{name:'학급 비교',exact:true}).click();await page.getByRole('checkbox',{name:'3학년 전체 평균',exact:true}).check();await page.getByRole('button',{name:'선택 완료',exact:true}).click();
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();await behaviorTable.getByRole('rowheader',{name:'3학년 전체',exact:true}).waitFor();
  assert.equal(await behaviorTable.getByRole('row').filter({has:page.getByRole('rowheader',{name:'3학년 전체',exact:true})}).getByRole('button').count(),0,'grade aggregates have no personal drilldown');
- await page.evaluate(()=>window.quizClassQa.behaviorNoAttempt=true);await page.getByRole('button',{name:'최신 결과 조회',exact:true}).click();
+ await page.evaluate(()=>window.quizClassQa.behaviorNoAttempt=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();
  await behaviorTable.getByRole('rowheader',{name:'3학년 1반미응시',exact:true}).waitFor();
  assert.equal(await behaviorTable.getByRole('button').count(),0,'all no-attempt values are zero without personal links');
  // Reset is a local return to the pre-query waiting screen, never an all-class query.
@@ -202,7 +212,7 @@ try{
  await resetButton.click();
  const waiting=page.getByText('평가와 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true});
  await waiting.waitFor();
- for(const name of ['분석할 대단원','분석할 중단원','분석할 평가','분석할 학급'])
+ for(const name of ['분석할 평가','분석할 학급'])
    assert.equal(await page.getByRole('combobox',{name,exact:true}).inputValue(),'');
  assert.equal(await page.locator('.qca-filter-count').count(),0,'class and grade comparisons are cleared');
  assert.equal(await page.getByRole('searchbox').count(),0,'search closes and clears');
@@ -214,8 +224,8 @@ try{
  await page.getByRole('searchbox').press('Escape');await waiting.waitFor();
  assert.equal(await page.locator('.qca-table').count(),0,'closing search cannot restore pre-reset results');
  for(const mode of ['summary','detail']){
-   await page.getByRole('combobox',{name:'분석할 대단원',exact:true}).selectOption('big');
-   await page.getByRole('combobox',{name:'분석할 중단원',exact:true}).selectOption('unit-a');
+
+   await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');
    await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
    if(mode==='detail'){
      await page.getByRole('button',{name:'결과 조회',exact:true}).click();await behaviorTable.waitFor();

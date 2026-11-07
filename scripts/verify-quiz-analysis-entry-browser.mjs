@@ -49,7 +49,8 @@ export const callWithApplicationSession=async(name,input)=>{
   if(qa.hold===data.mode)await new Promise(resolve=>qa.pending.push(resolve));
   if(qa.fail===data.mode){qa.fail='';throw new Error('Synthetic outage');}
   if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes,assessments,treeData:tree,generatedAt:'2026-11-07T09:00:00Z'}};
-  if(data.mode==='achievement'){
+  if(data.mode==='summary')return {data:{...data,classes:data.classIds.map(classId=>({classId,label:classes.find(c=>c.id===classId).label,rosterCount:2,submittedCount:0,unsubmittedCount:2,scoredCount:0,averageScore:null,behaviorCounts:{suspected_guessing:0,repeated_choice:0,unflagged:0,insufficient:0,no_attempt:2},scoreHistogram:[0,20,40,60,80].map((lower,i)=>({label:'',lower,upper:i===4?101:lower+20,count:0})),questions:[],concepts:[],relearning:{repeatedStudentCount:0,wrongToCorrectCount:0,correctToWrongCount:0},generatedAt:'2026-11-07T09:00:00Z',version:'v1',complete:true,smallSample:true})),generatedAt:'2026-11-07T09:00:00Z'}};
+  if(data.mode==='achievement'||data.mode==='detail'){
     const paper=questions.map(q=>({...q,examRound:data.examRound,achievementStandardCodes:[data.examRound==='round_1'?'9역10-01':'9역10-02']}));
     return {data:{semesterId:data.semesterId,complete:true,students:[1,2].map(n=>({uid:'synthetic-'+n,name:'합성 미응시 '+n,number:String(n),classId:data.classIds[0]})),rawRows:attempts(data,paper),questions:paper,treeData:tree,configuredClasses:classes.filter(c=>data.classIds.includes(c.id)),generatedAt:'2026-11-07T09:00:00Z',version:'v1',achievementEvidence:{version:1,status:'ready',observations:[]},profiles:[],canReview:false}};
   }
@@ -83,6 +84,7 @@ try {
   const assessment=()=>page.getByRole("combobox",{name:"분석할 평가",exact:true});
   const classSelect=()=>page.getByRole("combobox",{name:"분석할 학급",exact:true});
   const query=()=>page.getByRole("button",{name:"결과 조회",exact:true});
+  const report=()=>page.getByRole("combobox",{name:"분석 항목",exact:true});
   const pending=()=>page.getByText("학급을 선택하고 결과를 조회해 주세요.",{exact:true});
   const analysis=()=>page.getByRole("region",{name:"성취기준 분석",exact:true});
   const assertNoOverflow=async(width)=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`no page overflow at ${width}`);
@@ -95,10 +97,16 @@ try {
   await page.getByRole("button",{name:"평가 분석",exact:true}).click();
   await pending().waitFor();
   assert.equal(await assessment().inputValue(),"mock-1");
-  assert.equal(await page.getByRole("combobox",{name:"분석할 중단원",exact:true}).inputValue(),"exam_prep");
+  assert.equal(await page.getByRole("combobox",{name:/분석할 (대단원|중단원)/}).count(),0);
+  assert.equal(await page.locator('optgroup[label="모의고사"] option').count(),2);
   assert.deepEqual(await modes(),["catalog"]);
   assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),readsBefore,"analysis reuses server catalog tree without direct Firestore tree reads");
-  assert.equal(await page.getByRole("button",{name:"성취기준 분석",exact:true}).getAttribute("aria-pressed"),"true");
+  assert.equal(await report().inputValue(),"0");
+  assert.equal(await page.getByRole("navigation").count(),1,"only the page-level management tabs remain");
+  assert.equal(await page.getByRole("combobox",{name:"분석 보기",exact:true}).count(),0);
+  assert.equal(await page.getByRole("button",{name:"최신 결과 조회",exact:true}).count(),0);
+  assert.equal(await query().count(),1,"one result query action");
+  assert.equal(await page.getByRole("button",{name:"학급 비교",exact:true}).count(),0,"comparison is absent from achievement reports");
   checks.push("real management navigation preserves mock exam context");
 
   for(const width of [320,390,768,1280,1440]){
@@ -108,20 +116,20 @@ try {
       const buttons=[...element.querySelectorAll("button")];
       return buttons.map(button=>({label:button.getAttribute("aria-label")||button.textContent.trim(),left:button.getBoundingClientRect().left,right:button.getBoundingClientRect().right,height:button.getBoundingClientRect().height}));
     });
-    assert.deepEqual(actions.map(a=>a.label),["학급 비교","전체 단원 검색","조회 전체 초기화","결과 조회"]);
-    assert.ok(Math.abs(actions[2].left-actions[1].right-8)<=1,"reset stays beside search");
-    assert.ok(Math.abs(actions[3].left-actions[2].right-8)<=1,"query stays beside reset");
+    assert.deepEqual(actions.map(a=>a.label),["전체 단원 검색","조회 전체 초기화","결과 조회"]);
+    assert.ok(Math.abs(actions[1].left-actions[0].right-8)<=1,"reset stays beside search");
+    assert.ok(Math.abs(actions[2].left-actions[1].right-8)<=1,"query stays beside reset");
     assert.ok(actions.every(action=>action.height>=44));
     await screenshot(`mock-pending-${width}.png`);
   }
   for(const value of ["0","1","2","3","4"]){
-    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption(value);
+    await report().selectOption(value);
     assert.ok(await analysis().getByRole("table").count()>0,"each pending view shows a table shell");
   }
   assert.deepEqual(await modes(),["catalog"],"changing pending analysis view never reads student records");
   await classSelect().selectOption("class_1");
   assert.deepEqual(await modes(),["catalog"],"class selection does not query automatically");
-  await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption("0");
+  await report().selectOption("0");
   await query().focus();await page.keyboard.press("Enter");
   await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
   assert.deepEqual(await modes(),["catalog","achievement"],"achievement skips summary and detail reads");
@@ -136,7 +144,7 @@ try {
     await screenshot(`mock-empty-${width}.png`);
   }
   for(const value of ["0","1","2","3","4"]){
-    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption(value);
+    await report().selectOption(value);
     assert.equal(await analysis().isVisible(),true);
   }
   assert.deepEqual(await modes(),["catalog","achievement"]);
@@ -158,16 +166,20 @@ try {
 
   await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
   await query().click();await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
-  await page.getByRole("button",{name:"학급별 결과",exact:true}).click();
+  await report().selectOption("summary");
+  assert.equal(await page.getByRole("button",{name:"학급 비교",exact:true}).count(),1);
   assert.equal(await query().isEnabled(),true,"leaving pending achievement mode releases query loading state");
   await page.evaluate(()=>{window.analysisEntryQa.hold="";window.analysisEntryQa.release();});
-  await page.getByRole("button",{name:"성취기준 분석",exact:true}).click();
+  await report().selectOption("0");
+  await pending().waitFor();
+  await query().click();
   await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
   checks.push("leaving a pending analysis does not lock the result query action");
 
   // Failed requests preserve the controls and recover only when requested.
   await page.evaluate(()=>window.analysisEntryQa.fail="achievement");
   await query().click();await analysis().getByRole("alert").waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.calls.at(-1).forceRefresh),true,"repeat query refreshes the current result");
   assert.equal(await assessment().inputValue(),"mock-1");assert.equal(await classSelect().inputValue(),"class_1");
   await analysis().getByRole("button",{name:"다시 조회",exact:true}).click();
   await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
@@ -175,7 +187,7 @@ try {
 
   // Slow requests cannot restore a previous class, identity, or semester.
   for(const change of ["class","identity","semester"]){
-    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption("0");
+    await report().selectOption("0");
     await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
     await query().click();await page.getByRole("button",{name:"조회 중…",exact:true}).waitFor();
     await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
@@ -204,6 +216,25 @@ try {
   await page.getByRole("button",{name:"조회 전체 초기화",exact:true}).click();
   assert.equal(await assessment().inputValue(),"");
   assert.deepEqual(await modes(),["catalog"],"reset is local");
+  await assessment().selectOption("mock-1");await classSelect().selectOption("class_1");
+  await report().selectOption("summary");
+  assert.equal(await page.getByRole("button",{name:"학급 비교",exact:true}).isVisible(),true);
+  await query().click();await page.getByRole("heading",{name:"학급 결과",exact:true}).waitFor();
+  assert.equal(await page.getByRole("button",{name:"최신 결과 조회",exact:true}).count(),0,"summary also has only the top query action");
+  assert.equal(await query().count(),1);
+  await query().click();await page.getByRole("heading",{name:"학급 결과",exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.calls.at(-1).forceRefresh),true,"repeat summary query refreshes the current result");
+  await page.getByRole("button",{name:"문항·학생 상세 3학년 1반",exact:true}).click();
+  const detail=page.getByRole("dialog",{name:"3학년 1반 · 문항·학생 상세",exact:true});
+  await detail.waitFor();
+  assert.equal(await detail.getByRole("navigation",{name:"평가 분석 보기",exact:true}).isVisible(),true);
+  await detail.getByRole("button",{name:"성취기준 분석",exact:true}).click();
+  await detail.getByText("첫 제출 0명",{exact:true}).waitFor();
+  assert.equal(await detail.getByRole("combobox",{name:"분석 보기",exact:true}).isVisible(),true);
+  assert.equal(await detail.getByRole("button",{name:"최신 결과 조회",exact:true}).isVisible(),true);
+  await detail.getByRole("button",{name:"상세 닫기",exact:true}).click();
+  await detail.waitFor({state:"hidden"});
+  checks.push("one grouped assessment selector and report selector; no nested main tabs or duplicate query; detail dialog controls preserved");
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
   checks.push("direct analysis entry and reset use no editor reads or writes");
   assert.deepEqual(errors,[]);
