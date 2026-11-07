@@ -12,7 +12,11 @@ await mkdir(tempDir, { recursive: true });
 
 try {
   await build({
-    entryPoints: ["src/lib/lessonProgressAnswers.ts"],
+    stdin: {
+      contents:
+        'export * from "./src/lib/lessonProgressAnswers.ts"; export * from "./src/lib/lessonWorksheet.ts";',
+      resolveDir: process.cwd(),
+    },
     outfile: outputFile,
     bundle: true,
     platform: "node",
@@ -20,9 +24,11 @@ try {
     logLevel: "silent",
   });
 
-  const { buildLessonAnswerSnapshot } = await import(
-    `${pathToFileURL(outputFile).href}?t=${Date.now()}`
-  );
+  const {
+    buildLessonAnswerSnapshot,
+    getLessonAnswerStatus,
+    normalizeWorksheetBlanks,
+  } = await import(`${pathToFileURL(outputFile).href}?t=${Date.now()}`);
 
   const snapshot = buildLessonAnswerSnapshot({
     existingAnswers: {
@@ -38,7 +44,7 @@ try {
   });
 
   assert.deepEqual(snapshot.answers, {
-    "0": { value: "inline answer", status: "correct" },
+    0: { value: "inline answer", status: "correct" },
     "worksheet-page-1": { value: "new page 1", status: "correct" },
     "worksheet-page-2": { value: "saved page 2", status: "correct" },
   });
@@ -60,6 +66,52 @@ try {
   });
   assert.equal(emptyHiddenPageSnapshot.totalCount, 3);
   assert.equal(emptyHiddenPageSnapshot.filledCount, 0);
+
+  const original = {
+    id: "ocr-blank",
+    page: 1,
+    leftRatio: 0.2,
+    topRatio: 0.3,
+    widthRatio: 0.15,
+    heightRatio: 0.04,
+    answer: "대한 제국",
+    source: "ocr",
+  };
+  const [blank] = normalizeWorksheetBlanks([
+    {
+      ...original,
+      alternativeAnswers: [
+        " 대한제국 ",
+        " 조선 제국 ",
+        "조선제국",
+        "",
+        "  ",
+        "Korean Empire",
+        null,
+      ],
+    },
+  ]);
+  assert.deepEqual(blank.alternativeAnswers, ["조선 제국", "Korean Empire"]);
+  assert.equal(blank.answer, original.answer);
+  assert.equal(blank.widthRatio, original.widthRatio);
+  assert.equal(blank.source, "ocr");
+  assert.deepEqual(
+    normalizeWorksheetBlanks(JSON.parse(JSON.stringify([blank]))),
+    [blank],
+  );
+  const [legacy] = normalizeWorksheetBlanks([original]);
+  assert.equal(legacy.alternativeAnswers, undefined);
+  const accepted = [blank.answer, ...blank.alternativeAnswers];
+  for (const value of ["대한제국", "조 선 제 국", "Korean Empire"])
+    assert.equal(getLessonAnswerStatus(value, accepted), "correct");
+  for (const value of ["고려", "korean empire"])
+    assert.equal(getLessonAnswerStatus(value, accepted), "wrong");
+  assert.equal(getLessonAnswerStatus("조선 제국", legacy.answer), "wrong");
+  assert.equal(getLessonAnswerStatus("", accepted), "");
+  assert.equal(
+    getLessonAnswerStatus("", accepted, { treatEmptyAsWrong: true }),
+    "wrong",
+  );
 
   console.log("lesson progress answer snapshot harness passed");
 } finally {

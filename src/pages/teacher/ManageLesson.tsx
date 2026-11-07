@@ -34,6 +34,7 @@ import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import { normalizeLessonBlankClip } from "../../lib/lessonBlankClip";
 import {
   normalizeWorksheetBlanks,
+  normalizeWorksheetAlternativeAnswers,
   normalizeWorksheetExamHighlights,
   normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
@@ -669,6 +670,8 @@ const ManageLesson: React.FC = () => {
     null,
   );
   const [draftBlankAnswer, setDraftBlankAnswer] = useState("");
+  const [draftBlankAlternativeAnswers, setDraftBlankAlternativeAnswers] =
+    useState("");
   const [draftBlankPrompt, setDraftBlankPrompt] = useState("");
   const [blankEditorMode, setBlankEditorMode] = useState<
     "draft" | "existing" | null
@@ -1768,6 +1771,7 @@ const ManageLesson: React.FC = () => {
     setActiveBlankId(null);
     setDraftBlank(null);
     setDraftBlankAnswer("");
+    setDraftBlankAlternativeAnswers("");
     setDraftBlankPrompt("");
   }, []);
 
@@ -2278,6 +2282,7 @@ const ManageLesson: React.FC = () => {
       setActiveFootnoteAnchorId(null);
       setDraftBlank(null);
       setDraftBlankAnswer("");
+      setDraftBlankAlternativeAnswers("");
       setDraftBlankPrompt("");
     } catch (error) {
       console.error(error);
@@ -2306,6 +2311,7 @@ const ManageLesson: React.FC = () => {
     setBlankEditorMode("draft");
     setDraftBlank(blank);
     setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
+    setDraftBlankAlternativeAnswers("");
     setDraftBlankPrompt("");
     setActiveBlankId(null);
     setActiveExamHighlightId(null);
@@ -2314,17 +2320,30 @@ const ManageLesson: React.FC = () => {
   const handleConfirmDraftBlank = () => {
     const answer = draftBlankAnswer.trim();
     if (!answer) return alert("빈칸 정답을 입력해 주세요.");
+    const alternativeAnswers = normalizeWorksheetAlternativeAnswers(
+      draftBlankAlternativeAnswers.split(/\r?\n/),
+      answer,
+    );
+    if (alternativeAnswers.length > 20)
+      return alert("중복 답안은 최대 20개까지 입력할 수 있습니다.");
+    if (
+      answer.length > 2000 ||
+      alternativeAnswers.some((value) => value.length > 2000)
+    )
+      return alert("각 정답은 2,000자 이내로 입력해 주세요.");
 
     if (draftBlank) {
       const nextBlank = {
         ...draftBlank,
         answer,
+        alternativeAnswers,
         prompt: draftBlankPrompt.trim(),
       };
       setWorksheetBlanks((prev) => [...prev, nextBlank]);
       setBlankEditorMode(null);
       setDraftBlank(null);
       setDraftBlankAnswer("");
+      setDraftBlankAlternativeAnswers("");
       setDraftBlankPrompt("");
       setActiveBlankId(null);
       return;
@@ -2337,6 +2356,7 @@ const ManageLesson: React.FC = () => {
           ? {
               ...blank,
               answer,
+              alternativeAnswers,
               prompt: draftBlankPrompt.trim(),
             }
           : blank,
@@ -2344,6 +2364,7 @@ const ManageLesson: React.FC = () => {
     );
     setBlankEditorMode(null);
     setDraftBlankAnswer("");
+    setDraftBlankAlternativeAnswers("");
     setDraftBlankPrompt("");
     setActiveBlankId(null);
   };
@@ -2360,6 +2381,9 @@ const ManageLesson: React.FC = () => {
     setActiveExamHighlightId(null);
     setDraftBlank(null);
     setDraftBlankAnswer(targetBlank.answer);
+    setDraftBlankAlternativeAnswers(
+      (targetBlank.alternativeAnswers || []).join("\n"),
+    );
     setDraftBlankPrompt(targetBlank.prompt || "");
   };
 
@@ -2380,6 +2404,7 @@ const ManageLesson: React.FC = () => {
       setBlankEditorMode(null);
       setActiveBlankId(null);
       setDraftBlankAnswer("");
+      setDraftBlankAlternativeAnswers("");
       setDraftBlankPrompt("");
     }
   };
@@ -3526,6 +3551,9 @@ const ManageLesson: React.FC = () => {
                         activeFootnoteAnchorId={activeFootnoteAnchorId}
                         draftBlank={draftBlank}
                         draftBlankAnswer={draftBlankAnswer}
+                        draftBlankAlternativeAnswers={
+                          draftBlankAlternativeAnswers
+                        }
                         draftBlankPrompt={draftBlankPrompt}
                         blankEditorMode={blankEditorMode}
                         sortedBlanks={sortedBlanks}
@@ -3565,6 +3593,9 @@ const ManageLesson: React.FC = () => {
                           handleCreateFootnoteAnchorFromSelection
                         }
                         onDraftBlankAnswerChange={setDraftBlankAnswer}
+                        onDraftBlankAlternativeAnswersChange={
+                          setDraftBlankAlternativeAnswers
+                        }
                         onDraftBlankPromptChange={setDraftBlankPrompt}
                         onConfirmDraftBlank={handleConfirmDraftBlank}
                         onCancelDraftBlank={resetBlankEditor}

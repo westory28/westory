@@ -118,6 +118,7 @@ type LessonPdfSectionProps = {
   activeFootnoteAnchorId?: string | null;
   draftBlank: LessonWorksheetBlank | null;
   draftBlankAnswer: string;
+  draftBlankAlternativeAnswers: string;
   draftBlankPrompt: string;
   blankEditorMode: "draft" | "existing" | null;
   sortedBlanks: LessonWorksheetBlank[];
@@ -178,6 +179,7 @@ type LessonPdfSectionProps = {
     },
   ) => void;
   onDraftBlankAnswerChange: (value: string) => void;
+  onDraftBlankAlternativeAnswersChange: (value: string) => void;
   onDraftBlankPromptChange: (value: string) => void;
   onConfirmDraftBlank: () => void;
   onCancelDraftBlank: () => void;
@@ -918,6 +920,7 @@ export function LessonPdfSection({
   activeFootnoteAnchorId,
   draftBlank,
   draftBlankAnswer,
+  draftBlankAlternativeAnswers,
   draftBlankPrompt,
   blankEditorMode,
   sortedBlanks,
@@ -949,6 +952,7 @@ export function LessonPdfSection({
   onCreateFootnoteAnchorFromSelection,
   onCreateExamHighlightFromSelection,
   onDraftBlankAnswerChange,
+  onDraftBlankAlternativeAnswersChange,
   onDraftBlankPromptChange,
   onConfirmDraftBlank,
   onCancelDraftBlank,
@@ -1020,7 +1024,6 @@ export function LessonPdfSection({
     [activeBlankId, sortedBlanks],
   );
   const blankEditorAnswerInputRef = React.useRef<HTMLInputElement>(null);
-  const blankEditorPage = draftBlank?.page ?? activeBlank?.page ?? null;
   const isBlankEditorOpen =
     (blankEditorMode === "draft" && !!draftBlank) ||
     (blankEditorMode === "existing" && !!activeBlank);
@@ -1647,26 +1650,16 @@ export function LessonPdfSection({
             role="dialog"
             aria-modal="true"
             aria-labelledby="lesson-blank-editor-title"
-            className="relative z-10 w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
+            className="relative z-10 max-h-full w-full max-w-sm overflow-y-auto rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-                  {blankEditorMode === "draft" ? "새 빈칸" : "선택한 빈칸"}
-                </div>
                 <h4
                   id="lesson-blank-editor-title"
-                  className="mt-2 text-lg font-bold text-slate-900"
+                  className="text-lg font-bold text-slate-900"
                 >
-                  {blankEditorMode === "draft"
-                    ? "정답을 바로 입력해 추가합니다"
-                    : "정답과 안내 문구를 수정합니다"}
+                  {blankEditorMode === "draft" ? "새 빈칸" : "빈칸 수정"}
                 </h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  {blankEditorPage
-                    ? `p.${blankEditorPage} 빈칸에 바로 반영됩니다.`
-                    : "현재 선택한 빈칸에 바로 반영됩니다."}
-                </p>
               </div>
               <button
                 type="button"
@@ -1680,7 +1673,7 @@ export function LessonPdfSection({
             <div className="mt-4 space-y-4">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  정답
+                  기본 정답
                 </span>
                 <input
                   lang="ko"
@@ -1691,6 +1684,7 @@ export function LessonPdfSection({
                     onDraftBlankAnswerChange(event.target.value)
                   }
                   onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return;
                     if (event.key === "Escape") {
                       event.preventDefault();
                       onCancelDraftBlank();
@@ -1702,6 +1696,27 @@ export function LessonPdfSection({
                   }}
                   className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                   placeholder="정답 입력"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  중복 답안 (한 줄에 하나)
+                </span>
+                <textarea
+                  lang="ko"
+                  rows={3}
+                  value={draftBlankAlternativeAnswers}
+                  onChange={(event) =>
+                    onDraftBlankAlternativeAnswersChange(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return;
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      onCancelDraftBlank();
+                    }
+                  }}
+                  className="w-full resize-y rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                 />
               </label>
               <label className="block">

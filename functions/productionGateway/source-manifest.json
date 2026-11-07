@@ -21,7 +21,8 @@
     "2026-10-27: executeCommand live source from 2026-10-26 matches baseline commandGateway, wisEconomy, wisEconomyQuery, sessionAuthority and productionSource. The older standalone Seoul query lacks reviewed ranking additions already deployed in that newer closure. Only the changed command/status and standalone query endpoints are deployment targets.",
     "2026-10-27: Explicitly export both existing getWisEconomyState regions. Firebase deployment reconciles regions by function name, even with --only; declaring Seoul alone would remove the US compatibility endpoint. The deployment-time removal was detected and the US endpoint was restored before frontend release.",
     "2026-11-02: studentRegistrationPolicyCore.js is newly authored policy code, not a recovered production file; originalSha256 records its initial reviewed source. Login and command closures retain identical policy/session modules.",
-    "2026-11-07: Before mock exam authoring changes, live Seoul executeCommand/getAssessmentState/getQuizEditorCatalog/getCommandStatus/saveAssessmentProgress source archives (2026-11-06 deployment) matched HEAD 8e2c01d7 for index.js, commandGateway.js, assessmentLifecycle.js, assessmentLearning.js, quizEditorCatalog.js and package.json after LF normalization. Only executeCommand, getAssessmentState and getQuizEditorCatalog behavior changes; status/progress endpoints are not deployment targets."
+    "2026-11-07: Before mock exam authoring changes, live Seoul executeCommand/getAssessmentState/getQuizEditorCatalog/getCommandStatus/saveAssessmentProgress source archives (2026-11-06 deployment) matched HEAD 8e2c01d7 for index.js, commandGateway.js, assessmentLifecycle.js, assessmentLearning.js, quizEditorCatalog.js and package.json after LF normalization. Only executeCommand, getAssessmentState and getQuizEditorCatalog behavior changes; status/progress endpoints are not deployment targets.",
+    "2026-11-07: Before worksheet alternative-answer changes, the live Seoul executeCommand archive (updated 2026-11-07T05:56:36.667575464Z) matched baseline d2dbbe13682ec3147552bb45894b4fb16d476121 in all 104 tracked non-test JS/JSON source files after LF normalization. Only executeCommand is a deployment target; lesson save and answer grading use bounded teacher-authored alternatives without changing command names, authority or canonical answers."
   ],
   "files": [
     {
@@ -207,8 +208,10 @@
       "sourceFile": "lessonAnswers.js",
       "file": "lessonAnswers.js",
       "originalSha256": "7ecb718c63e3a3306ab9cdfda1befa35b4bbf268a86914d6f47f99013e96cd8b",
-      "sha256": "41ced99ca8aba72c3765220033c52187f5954d17f8c27b13fe2875a31497c008",
-      "changes": []
+      "sha256": "7cbe3aebe797d67d1cc7b9f4f964e2beec33c53439af9faa29e986a8206235d7",
+      "changes": [
+        "2026-11-07: Preserve each worksheet blank canonical answer and accept bounded teacher-defined alternative answers in lesson saving and authoritative grading."
+      ]
     },
     {
       "sourceFile": "lessonAssetTransport.js",
@@ -235,8 +238,10 @@
       "sourceFile": "lessonManagement.js",
       "file": "lessonManagement.js",
       "originalSha256": "c5b27327f96d75c755478a486765b84705a32de7f5fcf5522d1397e3f348fb33",
-      "sha256": "45b976d6db6f66b0dd61b4cc2c617b251353817a4882ce4f463ff816840ab2fc",
-      "changes": []
+      "sha256": "4707346a0def9f3dbed19665943b20a9fd513224c58f03a560bcd7ec38d15a71",
+      "changes": [
+        "2026-11-07: Preserve each worksheet blank canonical answer and accept bounded teacher-defined alternative answers in lesson saving and authoritative grading."
+      ]
     },
     {
       "sourceFile": "lessonPdfBeta.js",

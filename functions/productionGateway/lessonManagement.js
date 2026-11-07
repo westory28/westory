@@ -1,7 +1,10 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const semesterCore = require("./semesterCore");
-const { buildLessonAnswerKey } = require("./lessonAnswers");
+const {
+  buildLessonAnswerKey,
+  normalizeLessonAlternativeAnswers,
+} = require("./lessonAnswers");
 const { assertLessonHtml } = require("./lessonHtml");
 
 const LESSON_COMMAND_TYPES = Object.freeze({
@@ -141,6 +144,15 @@ const normalizeDocument = (value) => {
     }
   }
   const clone = JSON.parse(JSON.stringify(value));
+  for (const blank of clone.worksheetBlanks || []) {
+    const alternatives = normalizeLessonAlternativeAnswers(
+      blank.answer,
+      blank.alternativeAnswers,
+    );
+    if (alternatives === null) invalid();
+    if (alternatives.length) blank.alternativeAnswers = alternatives;
+    else delete blank.alternativeAnswers;
+  }
   if (clone.contentHtml !== undefined) assertLessonHtml(clone.contentHtml);
   const footnoteIds = new Set();
   for (const note of clone.footnotes || []) {

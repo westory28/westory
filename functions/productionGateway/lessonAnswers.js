@@ -60,6 +60,28 @@ const normalizeLessonAnswerPayload = (_commandType, value) => {
   };
 };
 
+const normalizeAnswer = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
+const normalizeLessonAlternativeAnswers = (answer, alternatives) => {
+  if (alternatives === undefined) return [];
+  if (
+    !Array.isArray(alternatives) ||
+    alternatives.length > 20 ||
+    alternatives.some((value) => typeof value !== "string" || value.length > 2000)
+  )
+    return null;
+  const seen = new Set([normalizeAnswer(answer)]);
+  return alternatives.flatMap((value) => {
+    const trimmed = value.trim();
+    const normalized = normalizeAnswer(trimmed);
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [trimmed];
+  });
+};
+
 // The server grades from the same persisted bracket tokens and worksheet IDs as
 // the renderer. Clients never submit grades, rewards, a UID, or a write path.
 const buildLessonAnswerKey = (lesson) => {
@@ -67,18 +89,26 @@ const buildLessonAnswerKey = (lesson) => {
   let index = 0;
   for (const match of String(lesson.contentHtml || "").matchAll(/\[(.*?)\]/g)) {
     const answer = match[1].trim();
-    if (!answer.startsWith("fn:")) entries.push([String(index++), answer]);
+    if (!answer.startsWith("fn:")) entries.push([String(index++), [answer]]);
   }
   for (const blank of Array.isArray(lesson.worksheetBlanks)
     ? lesson.worksheetBlanks
     : []) {
-    if (!safeKey(blank?.id) || typeof blank.answer !== "string")
+    const alternatives = normalizeLessonAlternativeAnswers(
+      blank?.answer,
+      blank?.alternativeAnswers,
+    );
+    if (
+      !safeKey(blank?.id) ||
+      typeof blank.answer !== "string" ||
+      alternatives === null
+    )
       fail(
         "failed-precondition",
         "수업자료의 빈칸 정보를 확인해 주세요.",
         "LESSON_BLANKS_INVALID",
       );
-    entries.push([blank.id, blank.answer]);
+    entries.push([blank.id, [blank.answer, ...alternatives]]);
   }
   if (
     entries.length > 1000 ||
@@ -91,10 +121,6 @@ const buildLessonAnswerKey = (lesson) => {
     );
   return new Map(entries);
 };
-const normalizeAnswer = (value) =>
-  String(value || "")
-    .trim()
-    .replace(/\s+/g, "");
 const createLessonAnswerCommandAdapter = () => ({
   apply: async ({ transaction, payload, actor, timestamp }) => {
     if (!actor?.actorUid || actor.actorRole !== "student")
@@ -200,14 +226,16 @@ const createLessonAnswerCommandAdapter = () => ({
         "LESSON_ANSWER_CONFLICT",
       );
     const answers = Object.fromEntries(
-      [...answerKey].map(([key, answer]) => {
+      [...answerKey].map(([key, acceptedAnswers]) => {
         const value = payload.answers[key] ?? "";
         return [
           key,
           {
             value,
             status:
-              normalizeAnswer(value) === normalizeAnswer(answer)
+              acceptedAnswers.some(
+                (answer) => normalizeAnswer(value) === normalizeAnswer(answer),
+              )
                 ? "correct"
                 : "wrong",
           },
@@ -247,6 +275,7 @@ const createLessonAnswerCommandAdapter = () => ({
 module.exports = {
   LESSON_ANSWER_COMMAND_TYPES,
   normalizeLessonAnswerPayload,
+  normalizeLessonAlternativeAnswers,
   buildLessonAnswerKey,
   createLessonAnswerCommandAdapter,
 };

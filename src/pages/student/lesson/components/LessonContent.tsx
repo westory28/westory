@@ -22,7 +22,10 @@ import {
   type LessonData,
   type LessonFootnote,
 } from "../../../../lib/lessonData";
-import { buildLessonAnswerSnapshot } from "../../../../lib/lessonProgressAnswers";
+import {
+  buildLessonAnswerSnapshot,
+  getLessonAnswerStatus as getInputStatus,
+} from "../../../../lib/lessonProgressAnswers";
 import { claimPointActivityReward } from "../../../../lib/points";
 import {
   saveLessonAnswers,
@@ -72,20 +75,6 @@ const EMPTY_CORE_POINT_OVERVIEW: CorePointOverviewState = {
   totalCount: 0,
   foundCount: 0,
 };
-const normalizeAnswer = (value: string) =>
-  String(value || "")
-    .trim()
-    .replace(/\s+/g, "");
-const getInputStatus = (
-  value: string,
-  answer: string,
-  options?: { treatEmptyAsWrong?: boolean },
-): AnswerStatus =>
-  !normalizeAnswer(value) && !options?.treatEmptyAsWrong
-    ? ""
-    : normalizeAnswer(value) === normalizeAnswer(answer)
-      ? "correct"
-      : "wrong";
 const applyInputStatus = (input: HTMLInputElement, status: AnswerStatus) => {
   input.classList.toggle("correct", status === "correct");
   input.classList.toggle("wrong", status === "wrong");
@@ -126,6 +115,23 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [lesson, setLesson] = useState<LessonData | null>(
     lessonOverride ? normalizeLessonData(lessonOverride) : null,
   );
+  const worksheetAnswersById = useMemo(
+    () =>
+      new Map(
+        (lesson ? getLessonContentSections(lesson).worksheet.blanks : []).map(
+          (blank) => [
+            blank.id,
+            [blank.answer, ...(blank.alternativeAnswers || [])],
+          ],
+        ),
+      ),
+    [lesson],
+  );
+  const getAcceptedInputAnswers = (input: HTMLInputElement) =>
+    (input.dataset.blankId &&
+      worksheetAnswersById.get(input.dataset.blankId)) ||
+    input.dataset.answer ||
+    "";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -461,7 +467,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       : [];
     const currentWorksheetBlankIds = worksheetBlanks.map((blank) => blank.id);
     const worksheetAnswerById = new Map(
-      worksheetBlanks.map((blank) => [blank.id, blank.answer]),
+      worksheetBlanks.map((blank) => [
+        blank.id,
+        [blank.answer, ...(blank.alternativeAnswers || [])],
+      ]),
     );
     if (!container) {
       const snapshot = buildLessonAnswerSnapshot({
@@ -495,7 +504,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     ) as NodeListOf<HTMLInputElement>;
     const renderedAnswers = Array.from(inputs).map((input, index) => {
       const status: AnswerStatus = finalize
-        ? getInputStatus(input.value, input.dataset.answer || "", {
+        ? getInputStatus(input.value, getAcceptedInputAnswers(input), {
             treatEmptyAsWrong: true,
           })
         : input.classList.contains("correct")
@@ -756,7 +765,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const checkBlurredAnswer = (target: HTMLInputElement) => {
     if (!target.isConnected || !contentRef.current?.contains(target)) return;
     const value = target.value;
-    const status = getInputStatus(value, target.dataset.answer || "");
+    const status = getInputStatus(value, getAcceptedInputAnswers(target));
     applyInputStatus(target, status);
     if (target.dataset.blankId) {
       const blankId = target.dataset.blankId;

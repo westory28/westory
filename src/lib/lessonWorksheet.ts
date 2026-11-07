@@ -27,6 +27,7 @@ export interface LessonWorksheetBlank {
   widthRatio: number;
   heightRatio: number;
   answer: string;
+  alternativeAnswers?: string[];
   prompt?: string;
   source?: "ocr" | "manual";
   inkClip?: LessonBlankClipPoint[];
@@ -309,6 +310,28 @@ export const createBlankFromRegion = (
   };
 };
 
+export const normalizeLessonAnswerText = (value: string) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, "");
+
+export const normalizeWorksheetAlternativeAnswers = (
+  raw: unknown,
+  answer: string,
+): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set([normalizeLessonAnswerText(answer), ""]);
+  return raw
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter((value) => {
+      const key = normalizeLessonAnswerText(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
 export const normalizeWorksheetBlanks = (
   raw: unknown,
 ): LessonWorksheetBlank[] => {
@@ -316,6 +339,17 @@ export const normalizeWorksheetBlanks = (
 
   return raw
     .map((item, index) => {
+      const answer = String(
+        item && typeof item === "object" && "answer" in item
+          ? (item.answer ?? "")
+          : "",
+      ).trim();
+      const alternativeAnswers = normalizeWorksheetAlternativeAnswers(
+        item && typeof item === "object" && "alternativeAnswers" in item
+          ? item.alternativeAnswers
+          : undefined,
+        answer,
+      );
       const inkClip = normalizeLessonBlankClip(
         item && typeof item === "object" && "inkClip" in item
           ? item.inkClip
@@ -364,11 +398,8 @@ export const normalizeWorksheetBlanks = (
               : 0,
           ) || 0,
         ),
-        answer: String(
-          item && typeof item === "object" && "answer" in item
-            ? (item as { answer?: string }).answer
-            : "",
-        ).trim(),
+        answer,
+        ...(alternativeAnswers.length ? { alternativeAnswers } : {}),
         prompt: String(
           item && typeof item === "object" && "prompt" in item
             ? (item as { prompt?: string }).prompt

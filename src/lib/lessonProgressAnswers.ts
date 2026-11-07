@@ -1,4 +1,21 @@
+import { normalizeLessonAnswerText } from "./lessonWorksheet";
+
 export type LessonAnswerStatus = "" | "correct" | "wrong";
+
+export const getLessonAnswerStatus = (
+  value: string,
+  answer: string | readonly string[],
+  options?: { treatEmptyAsWrong?: boolean },
+): LessonAnswerStatus => {
+  const normalized = normalizeLessonAnswerText(value);
+  if (!normalized && !options?.treatEmptyAsWrong) return "";
+  const accepted = typeof answer === "string" ? [answer] : answer;
+  return accepted.some(
+    (candidate) => normalizeLessonAnswerText(candidate) === normalized,
+  )
+    ? "correct"
+    : "wrong";
+};
 
 export interface LessonProgressAnswer {
   value?: string;
