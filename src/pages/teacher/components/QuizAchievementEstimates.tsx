@@ -20,6 +20,13 @@ const difficultyLabel = {
   hard: "어려움",
   unassigned: "미지정",
 };
+const cutBoundaryLabel = {
+  A: "A/B",
+  B: "B/C",
+  C: "C/D",
+  D: "D/E",
+  E: "E/미분류",
+};
 
 export default function QuizAchievementEstimates({
   data,
@@ -60,7 +67,6 @@ export default function QuizAchievementEstimates({
     () => buildEstimatedCutScores(questions),
     [questions],
   );
-  const dCut = cutScores.cuts.find((cut) => cut.level === "D")!;
   const standards = report.standards.filter(
     (row) => !standardCode || row.code === standardCode,
   );
@@ -178,6 +184,11 @@ export default function QuizAchievementEstimates({
       </div>
       <div className="qca-section-heading qaa-estimate-heading">
         <h3>추정 분할점수</h3>
+        <InfoHelp label="추정 분할점수 경계 안내">
+          각 수준의 최소 능력자 모형으로 계산한 참고 경계입니다. E/미분류는
+          시험지 점수의 참고 경계이며, 현재 성취수준의 자료 부족과는 별개입니다.
+          이 경계로 학생의 성취수준을 자동 변경하지 않습니다.
+        </InfoHelp>
         <span className="qca-muted">
           {cutScores.questionCount}문항 ·{" "}
           {cutScores.totalPoints == null
@@ -194,9 +205,7 @@ export default function QuizAchievementEstimates({
             <tr>
               <th>구분</th>
               {cutScores.cuts.map((cut) => (
-                <th key={cut.level}>
-                  {cut.level} {cut.level === "E" ? "범위" : "경계"}
-                </th>
+                <th key={cut.level}>{cutBoundaryLabel[cut.level]}</th>
               ))}
             </tr>
           </thead>
@@ -205,13 +214,7 @@ export default function QuizAchievementEstimates({
               <th>시험지 점수</th>
               {cutScores.cuts.map((cut) => (
                 <td key={cut.level}>
-                  {cut.level === "E"
-                    ? dCut.score == null
-                      ? "—"
-                      : `${dCut.score.toFixed(2)}점 미만`
-                    : cut.score == null
-                      ? "—"
-                      : `${cut.score.toFixed(2)}점`}
+                  {cut.score == null ? "—" : `${cut.score.toFixed(2)}점`}
                 </td>
               ))}
             </tr>
@@ -219,13 +222,7 @@ export default function QuizAchievementEstimates({
               <th>100점 환산</th>
               {cutScores.cuts.map((cut) => (
                 <td key={cut.level}>
-                  {cut.level === "E"
-                    ? dCut.percent == null
-                      ? "—"
-                      : `${dCut.percent.toFixed(1)}점 미만`
-                    : cut.percent == null
-                      ? "—"
-                      : `${cut.percent.toFixed(1)}점`}
+                  {cut.percent == null ? "—" : `${cut.percent.toFixed(1)}점`}
                 </td>
               ))}
             </tr>

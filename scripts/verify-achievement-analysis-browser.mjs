@@ -286,6 +286,8 @@ try {
   const readsBeforeEstimates = await page.evaluate(() => window.qa.calls.length);
   await page.getByRole("combobox", { name: "분석 보기", exact: true }).selectOption("5");
   const cutTable = page.getByRole("table", { name: "성취수준별 추정 분할점수", exact: true });
+  assert.deepEqual(await cutTable.locator("thead th").allTextContents(), ["구분", "A/B", "B/C", "C/D", "D/E", "E/미분류"]);
+  assert.doesNotMatch(await cutTable.innerText(), /미만/, "Each boundary displays its own model estimate");
   assert.ok((await cutTable.innerText()).includes("점"), "Estimated cuts exist with supplied question metadata");
   assert.equal(await page.getByRole("table", { name: "난도별 A–E 예상 성취율", exact: true }).locator("thead th").count(), 8);
   await page.getByText("학생별 추정 수준과 성취수준 준거", { exact: true }).click();

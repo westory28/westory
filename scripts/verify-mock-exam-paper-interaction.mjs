@@ -114,7 +114,11 @@ const fittingQuestions = [
     answer: "사병을 없애 군사권을 장악하였다.",
   },
 ];
-const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import Preview from './src/pages/teacher/components/MockExamPreview';import Draft from './src/pages/teacher/components/MockExamDraftPreview';import Controls from './src/components/common/MockExamAnswerControls';import Workspace from './src/pages/student/quiz/MockExamWorkspace';import './src/pages/teacher/components/QuizWorkspace.css';const questions=${JSON.stringify(questions)};const fittingQuestions=${JSON.stringify(fittingQuestions)};window.paperQa={loads:0,disabledChanges:[]};function App(){const [answers,setAnswers]=useState({});const [index,setIndex]=useState(0);const mode=new URLSearchParams(location.search).get('mode');const previewQuestions=mode==='fit'?fittingQuestions:questions;return mode==='disabled'?<Controls question={questions[0]} index={0} answer="조준" disabled onAnswer={value=>window.paperQa.disabledChanges.push(value)}/>:mode==='student'?<Workspace questions={questions.slice(0,4)} answers={answers} round="round_1" studentLabel="가상 학생" currentIndex={index} onSelect={setIndex} onAnswer={value=>setAnswers(previous=>({...previous,[questions[index].id]:value}))} timeLeft={600}/>:mode==='draft'?<div className="quiz-authoring-surface" style={{maxWidth:720,margin:'auto'}}><Draft question={questions[0]}/></div>:<Preview entries={previewQuestions.map(q=>({id:q.id}))} loadQuestions={async()=>{window.paperQa.loads++;return previewQuestions}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
+const firstFiveQuestions = Array.from({ length: 7 }, (_, index) => ({
+  ...fittingQuestions[index % 2], id: index + 1, paperOrder: index + 1,
+  options: fittingQuestions[1].options, answer: fittingQuestions[1].answer,
+}));
+const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import Preview from './src/pages/teacher/components/MockExamPreview';import Draft from './src/pages/teacher/components/MockExamDraftPreview';import Controls from './src/components/common/MockExamAnswerControls';import Workspace from './src/pages/student/quiz/MockExamWorkspace';import './src/pages/teacher/components/QuizWorkspace.css';const questions=${JSON.stringify(questions)};const fittingQuestions=${JSON.stringify(fittingQuestions)};const firstFiveQuestions=${JSON.stringify(firstFiveQuestions)};window.paperQa={loads:0,disabledChanges:[]};function App(){const [answers,setAnswers]=useState({});const [index,setIndex]=useState(0);const mode=new URLSearchParams(location.search).get('mode');const previewQuestions=mode==='fit'?fittingQuestions:mode?.includes('five')?firstFiveQuestions:questions;const studentQuestions=mode==='student-five'?firstFiveQuestions:questions.slice(0,4);return mode==='disabled'?<Controls question={questions[0]} index={0} answer="조준" disabled onAnswer={value=>window.paperQa.disabledChanges.push(value)}/>:mode?.startsWith('student')?<Workspace questions={studentQuestions} answers={answers} round="round_1" studentLabel="가상 학생" currentIndex={index} onSelect={setIndex} onAnswer={value=>setAnswers(previous=>({...previous,[studentQuestions[index].id]:value}))} timeLeft={600}/>:mode==='draft'?<div className="quiz-authoring-surface" style={{maxWidth:720,margin:'auto'}}><Draft question={questions[0]}/></div>:<Preview entries={previewQuestions.map(q=>({id:q.id}))} loadQuestions={async()=>{window.paperQa.loads++;return previewQuestions}}/>}createRoot(document.getElementById('root')).render(<App/>);`;
 const built = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -715,6 +719,38 @@ try {
     reports.push({ width, height, touch, ...layout });
     await page.close();
   }
+  for (const width of [390, 768, 1280]) {
+    for (const mode of ["five", "student-five"]) {
+      const page = await browser.newPage({ viewport: { width, height: 1000 } });
+      await page.goto(`${origin}/?mode=${mode}`);
+      if (mode === "five") await page.getByRole("button", { name: "미리보기", exact: true }).click();
+      await page.locator(".mock-exam-sheet").first().waitFor();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => [...document.querySelectorAll('.mock-exam-paper img')].every(image => image.complete && image.naturalWidth > 0));
+      await page.waitForFunction(() => document.querySelector('.mock-exam-sheet')?.querySelectorAll('.mock-exam-question').length >= 5);
+      const firstFive = await page.evaluate(() => {
+        const sheet = document.querySelector('.mock-exam-sheet');
+        const footer = sheet.querySelector('footer').getBoundingClientRect();
+        return {
+          count: sheet.querySelectorAll('.mock-exam-question').length,
+          fontSize: parseFloat(getComputedStyle(sheet).fontSize),
+          density: document.querySelector('.mock-exam-paper').dataset.density,
+          height: sheet.offsetHeight,
+          order: [...document.querySelectorAll('.mock-exam-sheet .mock-exam-question .mock-exam-number')].map(node => node.textContent.trim()),
+          overlaps: [...sheet.querySelectorAll('.mock-exam-question')].some(node => node.getBoundingClientRect().bottom > footer.top - 1),
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+      assert(firstFive.count >= 5, 'At least the first five mixed image/text questions fit on A4 page one');
+      assert(firstFive.fontSize >= 12 && firstFive.fontSize < 14, 'Readable smaller type; never force microscopic text');
+      assert.equal(firstFive.height, 1123, 'The first page remains A4 height');
+      assert.deepEqual(firstFive.order, ['1.', '2.', '3.', '4.', '5.', '6.', '7.']);
+      assert(!firstFive.overlaps && !firstFive.overflow);
+      await page.screenshot({ path: path.join(evidence, `first-five-${mode}-${width}.png`), fullPage: true });
+      reports.push({ width, mode, firstFive });
+      await page.close();
+    }
+  }
   await fs.writeFile(
     path.join(evidence, "report.json"),
     JSON.stringify(reports, null, 2),
@@ -725,7 +761,7 @@ try {
       evidence,
       widths: reports.map((r) => r.width),
       checks:
-        "teacher/draft/student shared controls, click/tap/Space toggle, native Arrow navigation, stationary dialog/question/scroll on select/deselect/change, disabled controls, no clear button or pre-submit student explanation, short/order/matching erasure, compact choices, normal/reduced-motion pencil drawing, footer ordering, no storage/network writes, two-question fitting, exact two-line copyright",
+        "teacher/draft/student shared controls, click/tap/Space toggle, native Arrow navigation, stationary dialog/question/scroll on select/deselect/change, disabled controls, no clear button or pre-submit student explanation, short/order/matching erasure, compact choices, normal/reduced-motion pencil drawing, footer ordering, no storage/network writes, two-question fitting, first-five A4 placement in both portals at 390/768/1280px with readable type and no footer overlap, exact two-line copyright",
     }),
   );
 } finally {

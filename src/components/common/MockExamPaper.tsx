@@ -430,7 +430,7 @@ function PencilMark({ correct }: { correct: boolean | null }) {
 type PaperPage = { columns: number[][]; height: number };
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
-const QUESTION_GAP = 16;
+const QUESTION_GAPS = [12, 10, 8];
 const FOOTER_GAP = 16;
 
 export default function MockExamPaper({
@@ -466,6 +466,12 @@ export default function MockExamPaper({
   const firstFooter = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(PAGE_WIDTH);
   const [heights, setHeights] = useState<number[]>([]);
+  const [density, setDensity] = useState(0);
+  const [measuredDensity, setMeasuredDensity] = useState(-1);
+  const questionGap = QUESTION_GAPS[density];
+  const paperIdentity = questions
+    .map((question) => String(question.id))
+    .join("|");
   const [instructionsHeight, setInstructionsHeight] = useState(120);
   const [pageLayout, setPageLayout] = useState({
     firstTop: 194,
@@ -540,6 +546,11 @@ export default function MockExamPaper({
     () => new Map(checks.map((check) => [String(check.id), check.correct])),
     [checks],
   );
+
+  useLayoutEffect(() => {
+    setDensity(0);
+    setMeasuredDensity(-1);
+  }, [paperIdentity]);
 
   useLayoutEffect(() => {
     const element = container.current;
@@ -618,6 +629,14 @@ export default function MockExamPaper({
       setHeights((previous) =>
         previous.join() === next.join() ? previous : next,
       );
+      if (
+        document.fonts.status === "loaded" &&
+        Array.from(element.querySelectorAll("img")).every(
+          (image) => image.complete,
+        )
+      ) {
+        setMeasuredDensity(density);
+      }
     };
     update();
     const observer = new ResizeObserver(update);
@@ -629,7 +648,7 @@ export default function MockExamPaper({
       observer.disconnect();
       element.removeEventListener("load", update, true);
     };
-  }, [questions, answers]);
+  }, [questions, answers, density]);
   useEffect(() => {
     if (
       !animateGrading ||
@@ -667,10 +686,10 @@ export default function MockExamPaper({
           { length: last - index + 1 },
           (_, i) => heights[index + i] || 260,
         ).reduce((sum, value) => sum + value, 0) +
-        QUESTION_GAP * (last - index);
+        questionGap * (last - index);
       if (
         page.columns[column].length > 0 &&
-        used + QUESTION_GAP + height > room
+        used + questionGap + height > room
       ) {
         if (column === 0) column = 1;
         else {
@@ -680,7 +699,7 @@ export default function MockExamPaper({
         used = 0;
       }
       page = output[output.length - 1];
-      if (page.columns[column].length > 0) used += QUESTION_GAP;
+      if (page.columns[column].length > 0) used += questionGap;
       for (let i = index; i <= last; i++) page.columns[column].push(i);
       used += height;
       page.height = Math.max(
@@ -692,12 +711,29 @@ export default function MockExamPaper({
       index = last + 1;
     }
     return output;
-  }, [questions, heights, instructionsHeight, pageLayout]);
+  }, [questions, heights, instructionsHeight, pageLayout, questionGap]);
+  useLayoutEffect(() => {
+    // Compact only when the actual first five questions need it. Measurement
+    // uses the same typography/images as the paper; never crop content or
+    // shrink text below 12px to force an unusually long passage onto A4.
+    if (
+      questions.length < 5 ||
+      measuredDensity !== density ||
+      heights.length !== questions.length ||
+      density >= QUESTION_GAPS.length - 1
+    )
+      return;
+    if (pages[0].columns.flat().length < 5) {
+      setMeasuredDensity(-1);
+      setDensity((previous) => previous + 1);
+    }
+  }, [pages, questions.length, heights.length, measuredDensity, density]);
   const scale = Math.max(0.1, width / PAGE_WIDTH);
   return (
     <div
       ref={container}
       className="mock-exam-paper"
+      data-density={density}
       aria-label={`${title} 시험지`}
     >
       <div ref={measurements} className="mock-exam-measure" aria-hidden="true">

@@ -1,9 +1,24 @@
 .mock-exam-paper {
+  --mock-exam-body-size: 12.5px;
+  --mock-exam-body-leading: 1.5;
+  --mock-exam-question-gap: 12px;
+  --mock-exam-material-height: 220px;
   position: relative;
   width: 100%;
   max-width: 794px;
   margin: 0 auto;
   color: #111;
+}
+.mock-exam-paper[data-density="1"] {
+  --mock-exam-body-size: 12px;
+  --mock-exam-question-gap: 10px;
+  --mock-exam-material-height: 200px;
+}
+.mock-exam-paper[data-density="2"] {
+  --mock-exam-body-size: 12px;
+  --mock-exam-body-leading: 1.42;
+  --mock-exam-question-gap: 8px;
+  --mock-exam-material-height: 180px;
 }
 .mock-exam-sheet-space {
   position: relative;
@@ -19,8 +34,8 @@
   box-shadow: 0 1px 8px #0002;
   transform-origin: top left;
   font-family: "Noto Serif KR", serif;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--mock-exam-body-size);
+  line-height: var(--mock-exam-body-leading);
   letter-spacing: -0.02em;
 }
 .mock-exam-title-box {
@@ -125,10 +140,10 @@
 }
 .mock-exam-instructions {
   border: 1px solid #111;
-  padding: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  margin-bottom: 12px;
+  padding: 6px 7px;
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 10px;
   word-break: keep-all;
 }
 .mock-exam-instructions h3,
@@ -185,7 +200,7 @@
 }
 .mock-exam-question {
   position: relative;
-  margin: 0 0 16px;
+  margin: 0 0 var(--mock-exam-question-gap, 12px);
   text-align: left;
   break-inside: avoid;
   outline-offset: 4px;
@@ -211,7 +226,7 @@
   white-space: normal;
 }
 .mock-exam-stem {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   white-space: pre-wrap;
 }
 .mock-exam-number {
@@ -222,8 +237,8 @@
   white-space: nowrap;
 }
 .mock-exam-question-ink .mock-exam-passage {
-  margin: 8px 0 12px;
-  padding: 8px;
+  margin: 6px 0 8px;
+  padding: 6px;
   border: 1px solid #111;
   border-radius: 0;
   font-family: inherit;
@@ -234,7 +249,7 @@
   background: #fff;
 }
 .mock-exam-set-passage {
-  margin: 0 0 16px;
+  margin: 0 0 var(--mock-exam-question-gap, 12px);
 }
 .mock-exam-set-instruction {
   margin: 0 0 8px;
@@ -242,8 +257,8 @@
 }
 .mock-exam-example {
   min-width: 0;
-  margin: 8px 0 12px;
-  padding: 0 8px 8px;
+  margin: 6px 0 8px;
+  padding: 0 6px 6px;
   border: 1px solid #111;
 }
 .mock-exam-example legend {
@@ -263,9 +278,9 @@
 .mock-exam-image {
   display: block;
   max-width: 100%;
-  max-height: 250px;
+  max-height: var(--mock-exam-material-height, 220px);
   object-fit: contain;
-  margin: 8px auto 12px;
+  margin: 6px auto 8px;
 }
 .mock-exam-image-wrap {
   display: block;
@@ -284,7 +299,7 @@
 }
 .mock-exam-options {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   padding: 0;
   display: grid;
   gap: 2px 12px;
@@ -411,7 +426,7 @@
 .mock-exam-preview-question {
   padding-block: 12px;
   font:
-    400 20px/1.8 "Noto Serif KR",
+    400 18px/1.65 "Noto Serif KR",
     serif;
   letter-spacing: -0.02em;
   word-break: keep-all;
@@ -457,9 +472,10 @@
   visibility: hidden;
   pointer-events: none;
   z-index: -1;
-  font:
-    400 14px/1.65 "Noto Serif KR",
-    serif;
+  font-family: "Noto Serif KR", serif;
+  font-size: var(--mock-exam-body-size);
+  line-height: var(--mock-exam-body-leading);
+  font-weight: 400;
   letter-spacing: -0.02em;
 }
 .mock-exam-sr-only {

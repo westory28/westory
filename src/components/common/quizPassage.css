@@ -2,6 +2,10 @@
   overflow-x: auto;
 }
 
+.quiz-passage-underline {
+  border-bottom: 1px solid #0f172a;
+}
+
 .quiz-passage-blank-box,
 .quiz-passage-label-box,
 .quiz-visual-content [data-quiz-mark="blankBox"],
