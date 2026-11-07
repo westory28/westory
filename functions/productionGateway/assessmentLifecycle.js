@@ -8,6 +8,8 @@ const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 const historyExemptions = require("./historyClassroomExemptions");
 const learning = require("./assessmentLearning");
+const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require("../historyAchievementMetadata");
+const achievementProfiles = require("../achievementProfiles");
 const mockMaterials = require("./mockExamMaterials");
 const { createHistoryClassroomSync } = require("./historyClassroomSync");
 
@@ -21,6 +23,7 @@ const RESULT_COLLECTION = "semester_assessment_results";
 const LEGACY_ISSUE_COLLECTION = "assessment_legacy_issues";
 
 const ASSESSMENT_COMMAND_TYPES = Object.freeze({
+  SAVE_ACHIEVEMENT_PROFILE: achievementProfiles.COMMAND_TYPE,
   ...historyExemptions.COMMAND_TYPES,
   LOCK_HISTORY_CLASSROOM_ATTEMPT: "lockHistoryClassroomAttempt",
   CREATE_ASSESSMENT_DEFINITION: "createAssessmentDefinition",
@@ -218,6 +221,7 @@ const normalizeIso = (value, label, allowEmpty = true) => {
 };
 
 const normalizeAssessmentPayload = (commandType, rawPayload) => {
+  if (commandType === achievementProfiles.COMMAND_TYPE) return achievementProfiles.normalizeProfilePayload(rawPayload);
   if (commandType === ASSESSMENT_COMMAND_TYPES.SAVE_QUIZ_ASSESSMENT_SETTINGS) {
     const { expectedRevision, expectedSourceHash, reason, ...definitionInput } = rawPayload || {};
     const definition = normalizeAssessmentPayload(ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION, definitionInput);
@@ -374,6 +378,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       "passage", "examplePassage", "passageSet", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
       "concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
       "examRound", "paperOrder", "points", "paperBreakBefore",
+      ...ACHIEVEMENT_FIELDS,
     ], "question");
     if (String(question.id) !== questionId || !question.unitId || !question.category || !question.type || !question.question) {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
@@ -403,7 +408,8 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     return {
       semesterId: normalizeSemesterId(payload.semesterId),
       questionId,
-      question: { ...question, ...(["concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId"].some(key => Object.hasOwn(question, key)) ? learning.normalizeQuestionLearning(question) : {}) },
+      question: { ...question, ...(["concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId"].some(key => Object.hasOwn(question, key)) ? learning.normalizeQuestionLearning(question) : {}),
+        ...normalizeAchievementMetadata(question, { strict: true }) },
       expectedRevision: nonNegativeInteger(payload.expectedRevision, "expectedRevision"),
       reason: text(payload.reason, "reason", 300),
     };
@@ -861,6 +867,8 @@ const assertContentRevision = (snapshot, expectedRevision, label) => {
 const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = null,
   historySync = createHistoryClassroomSync({ now }) } = {}) => ({
   apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, concreteTimestamp, actor }) => {
+    if (commandType === achievementProfiles.COMMAND_TYPE)
+      return achievementProfiles.applyProfile({ transaction, payload, actor, timestamp });
     if (Object.values(historyExemptions.COMMAND_TYPES).includes(commandType))
       return historyExemptions.apply({ transaction, commandId, commandType, payload, actor, timestamp,
         helpers: { assertActiveEnrollment, assertTeacherActor, assertStudentActor, assertAssessmentSemesterWritable, now, historySync } });
@@ -1443,6 +1451,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         studentUid: actor.actorUid,
         answers: effectiveAnswers,
         ...(attempt.assessmentKind === "QUIZ" ? { analytics } : {}),
+        startedAtIso: attempt.startedAtIso,
         submitReason: payload.submitReason,
         attemptRevision: nextRevision,
         sourceHash: attempt.sourceHash,
@@ -1467,6 +1476,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         ...pointResult,
         ...historyOutcome,
         answerChecks: checks,
+        startedAtIso: attempt.startedAtIso,
         ...(attempt.assessmentKind === "QUIZ" ? {
           analytics, learningSnapshot: attempt.learningSnapshot || [], answers: effectiveAnswers, ...reviewSnapshots,
           sourceId: attempt.sourceId || "", category: attempt.category || "", examRound: attempt.examRound || "",

@@ -1,6 +1,10 @@
 import { callWithApplicationSession } from "./applicationSession";
 import type { QuizAnalysisStudent, QuizBehaviorCategory } from "./quizAnalysis";
 import type {
+  AchievementEvidence,
+  AchievementReviewedProfile,
+} from "./achievementAnalysis";
+import type {
   Question,
   TreeUnit,
 } from "../pages/teacher/components/QuizBankTab";
@@ -117,6 +121,14 @@ export interface QuizClassDetail {
   version: string;
 }
 
+export interface QuizClassAchievement extends QuizClassDetail {
+  achievementEvidence: AchievementEvidence;
+  profiles?: AchievementReviewedProfile[];
+  canReview?: boolean;
+  rubricVersion?: string;
+  historicalQuestionSnapshots?: Record<string, unknown>;
+}
+
 export interface QuizClassScope {
   semesterId: string;
   unitId: string;
@@ -173,6 +185,47 @@ export const getQuizClassDetail = (
     { ...detailScope, mode: "detail", forceRefresh },
     identityKey,
   );
+};
+
+export const getQuizClassAchievement = (
+  scope: QuizClassScope,
+  identityKey: string,
+  forceRefresh = false,
+) => {
+  const {
+    comparisonGrade: _comparisonGrade,
+    keyword: _keyword,
+    ...analysisScope
+  } = scope;
+  return read<QuizClassAchievement>(
+    { ...analysisScope, mode: "achievement", forceRefresh },
+    identityKey,
+  ).then((result) => ({
+    ...result,
+    rawRows: result.rawRows.map((row) => {
+      const refs = row.raw.questionSnapshotRefs;
+      if (!Array.isArray(refs)) return row;
+      const dictionary = result.historicalQuestionSnapshots;
+      if (
+        !dictionary ||
+        refs.some(
+          (ref) =>
+            typeof ref !== "string" ||
+            !Object.prototype.hasOwnProperty.call(dictionary, ref),
+        )
+      )
+        throw new Error(
+          "응시 당시 문항 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.",
+        );
+      return {
+        ...row,
+        raw: {
+          ...row.raw,
+          questionSnapshots: refs.map((ref) => dictionary[ref]),
+        },
+      };
+    }),
+  }));
 };
 
 export function quizClassAnalysisError(error: unknown) {

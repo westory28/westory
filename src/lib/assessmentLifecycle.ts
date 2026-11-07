@@ -245,6 +245,7 @@ export const executeAssessmentManagementCommand = async <T>(
     "updateAssessmentDefinition",
     "saveQuizAssessmentSettings",
     "upsertQuizQuestion",
+    "saveAchievementProfile",
     "transitionAssessmentDefinition",
   ].includes(commandType);
   if (!routineClassroomCommand) await ensureSensitiveOperation();

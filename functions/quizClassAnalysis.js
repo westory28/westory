@@ -6,6 +6,9 @@ const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
+const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
+const { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots } = require('./quizAchievementEvidence');
+const achievementRubrics = require('./shared/historyAchievementRubrics.json');
 
 const SCHEMA = 4;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -58,7 +61,7 @@ const dataOf = snap => snap?.exists ? snap.data() : {};
 function normalizeQuery(data) {
   const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'forceRefresh', 'keyword', 'comparisonGrade', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
-    || !validScope(data.semesterId) || !['catalog', 'summary', 'detail'].includes(data.mode)
+    || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
     || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
@@ -73,13 +76,15 @@ function normalizeQuery(data) {
     fail('invalid-argument', '비교할 학년을 확인해 주세요.', 'QUIZ_ANALYSIS_GRADE_INVALID');
   }
   if (query.mode === 'catalog') return query;
-  if (!Array.isArray(data.classIds) || data.classIds.length < 1 || data.classIds.length > (query.mode === 'detail' ? 1 : 4)
+  if (!Array.isArray(data.classIds) || data.classIds.length < 1 || data.classIds.length > (['detail', 'achievement'].includes(query.mode) ? 1 : 4)
     || !data.classIds.every(validId) || new Set(data.classIds).size !== data.classIds.length
     || (!keyword && (!validId(data.unitId) || !['diagnostic', 'formative', 'exam_prep'].includes(data.category)
       || (data.category === 'exam_prep' && !/^round_[1-9]\d*$/.test(data.examRound || 'round_1'))
       || (data.category !== 'exam_prep' && data.examRound)))) {
     fail('invalid-argument', '평가와 학급을 선택해 주세요. 비교는 최대 4개 학급까지 가능합니다.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
+  if (query.mode === 'achievement' && (keyword || data.comparisonGrade || data.category !== 'exam_prep'))
+    fail('invalid-argument', '성취 분석은 모의고사와 한 학급을 선택해 주세요.', 'QUIZ_ACHIEVEMENT_SCOPE_INVALID');
   return { ...query, unitId: keyword ? '' : data.unitId, category: keyword ? '' : data.category,
     examRound: keyword ? '' : roundOf(data.category, data.examRound), classIds: data.classIds,
     ...(keyword ? { keyword } : {}), ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}) };
@@ -115,10 +120,11 @@ async function readBounded(query, maximum, label, budget) {
 
 const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail', 'assessmentKind',
   'semesterId', 'unitId', 'sourceId', 'category', 'examRound', 'definitionId', 'answerChecks', 'details', 'answers',
-  'learningSnapshot', 'questionSnapshots', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
-  'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId'];
+  'learningSnapshot', 'questionSnapshots', 'questionSnapshotOmittedIds', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
+  'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
-  'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore'];
+  'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
+  'familyId', 'cognitiveProcess', ...ACHIEVEMENT_FIELDS];
 const SEARCH_FIELDS = [...QUESTION_FIELDS, 'passage', 'explanation', 'matchingPairs'];
 const searchText = value => text(value).normalize('NFC').toLocaleLowerCase('ko')
   .replace(/<[^>]*>/g, ' ').replace(/&(?:nbsp|amp|lt|gt|quot|apos);/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -405,7 +411,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       sourceRevision: String(doc.data().contentRevision || doc.data().revision || 'legacy'),
     }));
   };
-  const loadResults = async (query, students, detail = false, budget) => {
+  const loadResults = async (query, students, detail = false, budget, allAssessments = false) => {
     const rows = new Map(), uids = students.map(student => student.uid), emails = students.map(student => student.email).filter(Boolean);
     const uidSet = new Set(uids);
     const fields = detail ? RESULT_FIELDS : RESULT_FIELDS.filter(field => field !== 'questionSnapshots');
@@ -424,7 +430,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
             if (owner && !uidSet.has(owner)) continue;
             if ((data.semesterId && data.semesterId !== query.semesterId) || (source.source === 'canonical'
               && (data.assessmentKind !== 'QUIZ' || data.semesterId !== query.semesterId))
-              || (!query.keyword && (text(data.sourceId || data.unitId || parts[2]) !== query.unitId
+              || (!query.keyword && !allAssessments && (text(data.sourceId || data.unitId || parts[2]) !== query.unitId
                 || categoryOf(data.category || parts[3]) !== query.category
                 || roundOf(data.category || parts[3], data.examRound || parts[4]) !== query.examRound))) continue;
             const raw = json(data);
@@ -444,6 +450,118 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   };
   const query = async input => {
     const budget = { documents: 0, bytes: 0 };
+    if (input.mode === 'achievement') {
+      // Explicitly requested evidence is read afresh. This route never creates
+      // a catalog/cache record and never changes grading or worksheet progress.
+      const classDocs = await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId), 300, '학급', budget);
+      const targetDoc = classDocs.find(doc => doc.data().status === 'ACTIVE'
+        && (doc.id === input.classIds[0] || classAlias(doc.data()) === input.classIds[0]));
+      if (!targetDoc) fail('invalid-argument', '현재 학기의 학급을 다시 선택해 주세요.', 'QUIZ_ANALYSIS_CLASS_INVALID');
+      const targetClass = { ...targetDoc.data(), id: targetDoc.id,
+        grade: text(targetDoc.data().grade), classNumber: text(targetDoc.data().classNumber),
+        label: `${targetDoc.data().grade}학년 ${targetDoc.data().classNumber}반` };
+      const state = await revision(input.semesterId, targetClass.id);
+      const students = await loadRoster(input.semesterId, targetClass, budget);
+      const [allRows, questionDocs, treeData, lessonDocs, profileDocs] = await Promise.all([
+        loadResults(input, students, true, budget, true),
+        readBounded(db.collection(`${root(input.semesterId)}/quiz_questions`).where('unitId', '==', input.unitId)
+          .select(...QUESTION_FIELDS, 'answer'), MAX_QUESTIONS, '성취 분석 문항', budget),
+        loadTree(input.semesterId),
+        readBounded(db.collection(`${root(input.semesterId)}/lessons`).select('unitId', 'subUnitId', 'contentRevision', 'contentHtml', 'worksheetBlanks', ...ACHIEVEMENT_FIELDS), 1000, '학습지', budget),
+        readBounded(db.collection('semester_achievement_profiles').where('classId', '==', targetClass.id), 5000, '분석 성취수준', budget),
+      ]);
+      const allQuestions = questionDocs.map(doc => ({ ...json(doc.data()), id: doc.data().id ?? doc.id, docId: doc.id,
+        sourceRevision: String(doc.data().contentRevision ?? doc.data().revision ?? 'legacy') }));
+      const bank = allQuestions.filter(question => question.unitId === input.unitId && categoryOf(question.category) === 'exam_prep');
+      const fixedPaper = bank.some(question => question.examRound);
+      const questions = bank.filter(question => !fixedPaper || question.examRound === input.examRound);
+      if (!questions.length) fail('not-found', '선택한 모의고사를 찾을 수 없습니다.', 'QUIZ_ANALYSIS_ASSESSMENT_NOT_FOUND');
+      const rawRows = allRows.filter(row => {
+        const raw = row.raw, parts = text(raw.definitionId).split(':');
+        return text(raw.sourceId || raw.unitId || parts[2]) === input.unitId
+          && categoryOf(raw.category || parts[3]) === 'exam_prep'
+          && roundOf(raw.category || parts[3], raw.examRound || parts[4]) === input.examRound;
+      });
+      for (const row of rawRows.filter(row => row.source === 'canonical')) {
+        const metadata = new Map((row.raw.learningSnapshot || []).map(item => [text(item.id), item]));
+        for (const item of row.raw.answerChecks || []) {
+          const itemId = text(item.id), historical = historicalQuestionEvidence(row.raw, itemId);
+          if (historical?.revisionBasis !== 'frozen-snapshot') continue;
+          const source = historical.metadata;
+          metadata.set(itemId, { ...(metadata.get(itemId) || {}), id: itemId,
+            sourceRevision: historical.sourceRevision, revisionBasis: historical.revisionBasis, metadataLimited: true,
+            unitId: text(source.unitId), subUnitId: text(source.subUnitId), refBig: text(source.refBig),
+            refMid: text(source.refMid), refSmall: text(source.refSmall), familyId: text(source.familyId),
+            ...normalizeAchievementMetadata(source) });
+        }
+        row.raw.learningSnapshot = [...metadata.values()];
+      }
+      const missingAnswers = rawRows.filter(row => row.source === 'canonical'
+        && (!row.raw.answers || typeof row.raw.answers !== 'object' || Array.isArray(row.raw.answers)));
+      for (let offset = 0; offset < missingAnswers.length; offset += 100) {
+        const entries = missingAnswers.slice(offset, offset + 100).map(row => ({ row,
+          id: text(row.raw.submissionRef).match(/^semester_assessment_submissions\/([^/]+)$/)?.[1] || text(row.raw.attemptId || row.id) }))
+          .filter(entry => validId(entry.id));
+        if (!entries.length) continue;
+        const documents = await db.getAll(...entries.map(entry => db.doc(`semester_assessment_submissions/${entry.id}`)));
+        entries.forEach(({ row, id }, index) => {
+          const submission = dataOf(documents[index]);
+          if (submission.studentUid !== row.raw.studentUid || submission.semesterId !== input.semesterId
+            || (submission.attemptId && submission.attemptId !== (row.raw.attemptId || row.id))
+            || (submission.submissionId && submission.submissionId !== id)
+            || (submission.definitionId && submission.definitionId !== row.raw.definitionId)
+            || !submission.answers || typeof submission.answers !== 'object' || Array.isArray(submission.answers)) return;
+          row.raw.answers = json(submission.answers);
+        });
+      }
+      const missingStarts = rawRows.filter(row => row.source === 'canonical' && (!row.raw.startedAtIso || !iso(row.raw.startedAtIso)));
+      const attempts = [];
+      for (let offset = 0; offset < missingStarts.length; offset += 100) {
+        const entries = missingStarts.slice(offset, offset + 100).map(row => text(row.raw.attemptId || row.id)).filter(validId);
+        if (!entries.length) continue;
+        const docs = await db.getAll(...entries.map(id => db.doc(`semester_assessment_attempts/${id}`)));
+        attempts.push(...docs.filter(doc => doc.exists).map(doc => ({ id: doc.id, raw: json(doc.data()) })));
+      }
+      const progressRows = [];
+      // A bounded pool avoids one serial round trip per pupil.
+      let cursor = 0;
+      await Promise.all(Array.from({ length: Math.min(4, students.length) }, async () => {
+        while (cursor < students.length) {
+          const student = students[cursor++];
+          const docs = await readBounded(db.collection(`${root(input.semesterId)}/lesson_progress/${student.uid}/units`), 1000, '학습지 기록', budget);
+          progressRows.push(...docs.map(doc => ({ id: doc.id, studentUid: student.uid, raw: json(doc.data()) })));
+        }
+      }));
+      const achievementEvidence = buildQuizAchievementEvidence({ semesterId: input.semesterId, students,
+        questions: allQuestions, priorRows: allRows, examRows: rawRows, attempts,
+        lessons: lessonDocs.map(doc => json(doc.data())), progressRows });
+      const studentIds = new Set(students.map(student => student.uid));
+      const observationByRef = new Map(achievementEvidence.observations.filter(item => item.recordSource === 'canonical')
+        .map(item => [`${item.studentUid}:${item.resultId}:${item.questionId}`, item]));
+      const profiles = profileDocs.filter(doc => {
+        const p = doc.data(); return p.semesterId === input.semesterId && p.classId === targetClass.id
+          && p.unitId === input.unitId && p.examRound === input.examRound && studentIds.has(p.studentUid);
+      }).map(doc => {
+        const profile = json(doc.data());
+        const cutoff = achievementEvidence.examCutoffs.find(item => item.studentUid === profile.studentUid && item.attemptId === profile.examAttemptId);
+        const stale = profile.level !== null && (profile.rubricVersion !== achievementRubrics.version || !cutoff || cutoff.startedAt !== profile.asOf
+          || !Array.isArray(profile.evidence) || !profile.evidence.length || profile.evidence.some(ref => {
+            const observed = observationByRef.get(`${profile.studentUid}:${ref.resultId}:${ref.questionId}`);
+            return !observed || observed.sourceRevision !== ref.sourceRevision || observed.observedAt !== ref.observedAt
+              || observed.correct !== ref.correct || observed.hintViewed !== ref.hintViewed
+              || (ref.mappingBasis === 'snapshot' && !observed.achievementStandardCodes.includes(profile.standardCode));
+          }));
+        return { id: doc.id, ...profile, stale };
+      });
+      const packed = packHistoricalQuestionSnapshots(rawRows);
+      const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
+        configuredClasses: [{ id: targetClass.id, label: targetClass.label }], generatedAt: new Date(now()).toISOString(),
+        version: state.version, complete: true, achievementEvidence, profiles, rubricVersion: achievementRubrics.version };
+      if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
+      if ((await revision(input.semesterId, targetClass.id)).version !== state.version)
+        fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+      return result;
+    }
     const requestRevision = input.keyword || input.comparisonGrade ? await revision(input.semesterId, '') : null;
     const catalog = await loadCatalog({ ...input, forceRefresh: input.mode === 'catalog' && input.forceRefresh });
     if (input.mode === 'catalog') return catalog;
@@ -576,7 +694,8 @@ const createQuizClassAnalysisHandler = ({ db, assertSession = assertScoreWorkflo
     || scope.readOnly === true || !Number.isSafeInteger(scope.revision) || scope.revision < 1 || active.revision !== scope.revision) {
     fail('failed-precondition', '현재 운영 학기에서 평가 분석을 다시 열어 주세요.', 'QUIZ_ANALYSIS_SEMESTER_NOT_ACTIVE');
   }
-  return service.query(query);
+  const result = await service.query(query);
+  return query.mode === 'achievement' ? { ...result, canReview: admin || profile.role === 'teacher' } : result;
 };
 
 function createQuizAnalysisInvalidation({ db }) {

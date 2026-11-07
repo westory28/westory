@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const projectId = 'demo-westory-session-quiz-analysis';
 if (!/^(127\.0\.0\.1|localhost):\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || '')
   || (process.env.GCLOUD_PROJECT && process.env.GCLOUD_PROJECT !== projectId)) throw new Error('Dedicated local demo Firestore only.');
@@ -137,6 +137,57 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   assert.equal(repeated.classes[0].behaviorCounts.suspected_guessing, 0);
   assert.equal(repeated.classes[0].behaviorCounts.repeated_choice, 1);
   assert.equal(repeated.gradeComparison.averageScore, 50);
+  const achievementMeta = { curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'],
+    achievementMappingSource: 'manual', targetAchievementLevel: 'C', intendedDifficulty: 'medium' };
+  const examStart = new Date(now + 60000).toISOString(), examSubmit = new Date(now + 120000).toISOString();
+  const examId = 'achievement-exam', definition = `quiz:${semesterId}:exam_prep:exam_prep:round_1`;
+  const exam = { semesterId, studentUid: student, assessmentKind: 'QUIZ', classId: 'class_1', attemptId: examId,
+    sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', definitionId: definition,
+    startedAtIso: examStart, submittedAtIso: examSubmit, score: 1, percent: 100, total: 1,
+    resultRef: `semester_assessment_results/${examId}`, answerChecks: [{ id: '901', correct: true }], answers: { 901: '정답' },
+    learningSnapshot: [{ id: '901', sourceRevision: '1', ...achievementMeta }] };
+  const achievementBatch = db.batch();
+  achievementBatch.set(db.doc('years/2026/semesters/2/quiz_questions/901'), { id: 901, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    contentRevision: 1, type: 'choice', question: '합성 성취 분석 문항', answer: '정답', options: ['정답', '오답'], ...achievementMeta });
+  achievementBatch.set(db.doc(`semester_assessment_results/${examId}`), exam);
+  achievementBatch.set(db.doc(`semester_assessment_attempts/${examId}`), exam);
+  achievementBatch.update(db.doc(resultPath), { learningSnapshot: [{ id: '1', sourceRevision: '1', unitId: 'unit-a', ...achievementMeta }] });
+  achievementBatch.set(db.doc('years/2026/semesters/2/lessons/achievement'), { unitId: 'unit-a', contentRevision: 1, contentHtml: '[정답]' });
+  achievementBatch.set(db.doc(`years/2026/semesters/2/lesson_progress/${student}/units/unit-a`), {
+    studentUid: student, semesterId, contentRevision: 1, updatedAt: Timestamp.fromMillis(now), answers: { 0: { value: 'PRIVATE_BLANK', status: 'wrong' } } });
+  await achievementBatch.commit();
+  const achievementQuery = { mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', classIds: ['class_1'] };
+  const evidence = await deployed.getQuizClassAnalysis.run(request(teacher, achievementQuery));
+  assert.equal(evidence.canReview, true); assert.equal(evidence.achievementEvidence.examCutoffs[0].startedAt, examStart);
+  assert.ok(evidence.achievementEvidence.observations.some(row => row.source === 'worksheet' && row.filled && row.correct === false));
+  assert.ok(!JSON.stringify(evidence).includes('PRIVATE_BLANK'));
+  await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, achievementQuery)), e => e.code === 'permission-denied');
+  const reviewPayload = { semesterId, classId: 'class_1', unitId: 'exam_prep', examRound: 'round_1', studentUid: student,
+    standardCode: '9역07-01', level: 'C', expectedRevision: 0, examAttemptId: examId, mappingConfirmed: true,
+    expectedRubricVersion: evidence.rubricVersion,
+    evidenceRefs: [{ resultId: `attempt_${student}`, questionId: '1' }] };
+  const saveProfile = (uid, payload, commandId = randomUUID()) => deployed.executeCommand.run({ auth: request(uid, {}).auth,
+    data: { commandId, commandType: 'saveAchievementProfile', payload, _session: proof } });
+  const priorResult = (await db.doc(resultPath).get()).data();
+  const outcomes = await Promise.allSettled([saveProfile(teacher, reviewPayload), saveProfile(teacher, { ...reviewPayload, level: 'B' })]);
+  assert.equal(outcomes.filter(outcome => outcome.status === 'fulfilled').length, 1);
+  assert.equal(outcomes.filter(outcome => outcome.status === 'rejected' && outcome.reason.code === 'aborted').length, 1);
+  assert.deepEqual((await db.doc(resultPath).get()).data(), priorResult, 'profile review cannot change assessment scores');
+  const reviewed = await deployed.getQuizClassAnalysis.run(request(teacher, achievementQuery));
+  assert.equal(reviewed.profiles[0].revision, 1); assert.equal(reviewed.profiles[0].asOf, examStart);
+  assert.equal(reviewed.profiles[0].stale, false);
+  await assert.rejects(saveProfile(teacher, { ...reviewPayload, expectedRevision: 1, expectedRubricVersion: 'older-rubric' }),
+    e => e.details?.reason === 'ACHIEVEMENT_PROFILE_RUBRIC_CHANGED');
+  await db.doc(`semester_achievement_profiles/${reviewed.profiles[0].id}`).update({ rubricVersion: 'older-rubric' });
+  assert.equal((await deployed.getQuizClassAnalysis.run(request(teacher, achievementQuery))).profiles[0].stale, true);
+  await assert.rejects(saveProfile(student, { ...reviewPayload, expectedRevision: 1 }), e => e.code === 'permission-denied');
+  const replayId = randomUUID();
+  await saveProfile(teacher, { ...reviewPayload, level: null, expectedRevision: 1 }, replayId);
+  assert.equal((await saveProfile(teacher, { ...reviewPayload, level: null, expectedRevision: 1 }, replayId)).replayed, true);
+  const confirmedStatus = await deployed.getCommandStatus.run({ auth: request(teacher, {}).auth,
+    data: { commandId: replayId, commandType: 'saveAchievementProfile', _session: proof } });
+  assert.equal(confirmedStatus.result.level, null); assert.equal(confirmedStatus.result.revision, 2);
+  console.log('PASS achievement callable + Firestore: scoped private evidence, immutable exam cutoff, concurrent teacher-review CAS, forbidden student writes, replay and unchanged scores');
   await db.doc(`application_sessions/${teacher}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, scope)), e => e.code === 'unauthenticated');
   await db.doc(`application_sessions/${student}/sessions/${authTime}`).update({ status: 'revoked' });

@@ -700,6 +700,10 @@
 .quiz-composer-layout input:is([type="checkbox"], [type="radio"]) {
   width: auto;
 }
+.quiz-composer-layout input.sr-only {
+  width: 1px;
+  max-width: 1px;
+}
 .quiz-composer-layout .quiz-composer-section-heading {
   flex-wrap: wrap;
 }
@@ -1078,4 +1082,26 @@
   .quiz-diagnostic-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+/* Achievement mapping follows the unit row without an additional card. */
+.quiz-achievement-fields {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+.quiz-achievement-fields .quiz-authoring-button {
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.quiz-composer-body .quiz-achievement-fields select,
+.quiz-achievement-fields .quiz-compose-field {
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: 14px;
+}
+.quiz-achievement-fields label {
+  white-space: nowrap;
 }

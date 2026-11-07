@@ -28,6 +28,12 @@ import QuizLearningMetadataFields, {
   validateQuizLearningMetadata,
   type QuizLearningMetadata,
 } from "./QuizLearningMetadataFields";
+import QuizAchievementFields from "./QuizAchievementFields";
+import {
+  HISTORY_ACHIEVEMENT_CURRICULUM_VERSION,
+  inferHistoryAchievementStandards,
+  resolveQuestionAchievement,
+} from "../../../lib/historyAchievement";
 import { useQuizDialog } from "./useQuizDialog";
 
 import QuizClassAnalysis from "./QuizClassAnalysis";
@@ -458,7 +464,17 @@ const QuizBankTab: React.FC<{
     if (!canEdit) return;
     const normalizedType = normalizeQuestionType(question.type);
     setEditingQuestion(question);
-    setEditMetadata(question);
+    const achievement = resolveQuestionAchievement(question, treeData);
+    setEditMetadata({
+      ...question,
+      ...(achievement.source === "unit-inferred"
+        ? {
+            curriculumVersion: HISTORY_ACHIEVEMENT_CURRICULUM_VERSION,
+            achievementStandardCodes: achievement.codes,
+            achievementMappingSource: "unit" as const,
+          }
+        : {}),
+    });
     setEditCategory(question.category || "diagnostic");
     setEditType(normalizedType);
     setEditQuestionText(question.question || "");
@@ -1062,6 +1078,20 @@ const QuizBankTab: React.FC<{
                     <option value="exam_prep">모의고사</option>
                   </select>
                 </div>
+
+                <QuizAchievementFields
+                  value={editMetadata}
+                  onChange={(value) =>
+                    setEditMetadata((current) => ({ ...current, ...value }))
+                  }
+                  inferred={inferHistoryAchievementStandards(treeData, [
+                    editingQuestion.unitId,
+                    editingQuestion.subUnitId,
+                    editingQuestion.refBig,
+                    editingQuestion.refMid,
+                    editingQuestion.refSmall,
+                  ])}
+                />
 
                 <QuizTextField
                   lang="ko"

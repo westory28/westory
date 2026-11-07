@@ -11879,6 +11879,11 @@ const authorizeCommandGatewayActor = async ({
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (commandType === assessmentLifecycle.ASSESSMENT_COMMAND_TYPES.SAVE_ACHIEVEMENT_PROFILE) {
+    if (profile.role !== "teacher")
+      throw new HttpsError("permission-denied", "교사가 분석 성취수준을 확인해야 합니다.", { reason: "ACHIEVEMENT_PROFILE_TEACHER_REQUIRED" });
+    return { actorUid, actorEmail, actorRole: "teacher", actorCapability: "achievement-profile:confirm" };
+  }
   if (commandType === wisLegacyMigration.COMMAND_TYPE) {
     throw new HttpsError("permission-denied", "최고 관리자만 위스 자료를 이전할 수 있습니다.", { reason: "WIS_MIGRATION_ADMIN_REQUIRED" });
   }

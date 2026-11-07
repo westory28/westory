@@ -535,6 +535,11 @@ const runLifecycleCases = async () => {
       ...compatibleQuestion,
       concepts: ["보존할 개념"],
       cognitiveProcess: "사료 해석",
+      curriculumVersion: "2018-162",
+      achievementStandardCodes: ["9역07-01"],
+      achievementMappingSource: "manual",
+      targetAchievementLevel: "C",
+      intendedDifficulty: "medium",
     },
     expectedRevision: 0,
     reason: "synthetic metadata create",
@@ -551,6 +556,10 @@ const runLifecycleCases = async () => {
     ["보존할 개념"],
     "An older editor must not erase existing learning metadata",
   );
+  const preservedAchievement = store.documents.get("years/2026/semesters/2/quiz_questions/meta");
+  assert.deepEqual(preservedAchievement.achievementStandardCodes, ["9역07-01"]);
+  assert.equal(preservedAchievement.targetAchievementLevel, "C");
+  assert.equal(learning.questionLearningSnapshot({ path: "quiz_questions/meta", data: preservedAchievement }).intendedDifficulty, "medium");
   await execute(admin, "createAssessmentDefinition", {
     definitionId,
     semesterId,
@@ -662,6 +671,8 @@ const runLifecycleCases = async () => {
     `semester_assessment_results/${first.attemptId}`,
   );
   assert.equal(submitted.percent, 0);
+  assert.equal(result.startedAtIso, first.startedAtIso);
+  assert.equal(store.documents.get(`semester_assessment_submissions/${first.attemptId}`).startedAtIso, first.startedAtIso);
   assert.deepEqual(result.questionSnapshots, originalQuestionSnapshots);
   assert.deepEqual(submitted.questionSnapshots, originalQuestionSnapshots);
   assert.equal(submitted.questionSnapshots[0].answer, "정답");

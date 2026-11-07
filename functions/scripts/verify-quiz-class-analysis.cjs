@@ -68,6 +68,44 @@ test('query validates class bounds, scope and detail restriction', () => {
   }
 });
 
+test('achievement mode is explicit, one-class and mock-exam only', () => {
+  const request = { ...q, mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' };
+  assert.equal(normalizeQuery(request).mode, 'achievement');
+  for (const patch of [{ category: 'formative', examRound: '' }, { classIds: ['class_a', 'class_b'] },
+    { keyword: '사림' }, { comparisonGrade: '3' }])
+    assert.throws(() => normalizeQuery({ ...request, ...patch }), e => e.code === 'invalid-argument');
+});
+
+test('achievement route reads only selected pupils, preserves result cutoff and never writes cache or scores', async () => {
+  const f = memory();
+  const metadata = { curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'],
+    achievementMappingSource: 'manual', targetAchievementLevel: 'C', intendedDifficulty: 'medium' };
+  f.data.set(`${ROOT}/quiz_questions/91`, { id: 91, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    question: '합성 모의 문항', contentRevision: 1, ...metadata });
+  f.data.set('semester_assessment_results/exam', { assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a',
+    sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', attemptId: 'exam',
+    definitionId: 'quiz:2026-2:exam_prep:exam_prep:round_1', submittedAtIso: '2026-11-01T02:00:00.000Z',
+    answerChecks: [{ id: 91, correct: true }], percent: 100 });
+  f.data.set('semester_assessment_attempts/exam', { ...f.data.get('semester_assessment_results/exam'),
+    startedAtIso: '2026-11-01T01:00:00.000Z', resultRef: 'semester_assessment_results/exam' });
+  f.data.set(`${ROOT}/lessons/lesson`, { unitId: 'unit-a', contentRevision: 2, contentHtml: '[정답]' });
+  f.data.set(`${ROOT}/lesson_progress/a/units/unit-a`, { studentUid: 'a', semesterId: SCOPE, contentRevision: 2,
+    updatedAt: '2026-10-26T01:00:00.000Z', answers: { 0: { value: 'PRIVATE_WORKSHEET_ANSWER', status: 'wrong' } } });
+  f.data.set(`${ROOT}/lesson_progress/b/units/unit-a`, { answers: { 0: { value: 'FOREIGN_STUDENT_ANSWER' } } });
+  const query = { ...q, mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' };
+  const handler = createQuizClassAnalysisHandler({ db: f.db, assertSession: async () => ({ uid: 'teacher', email: 't@school.test' }) });
+  const result = await handler({ auth: { uid: 'teacher' }, data: query });
+  assert.equal(result.canReview, true); assert.equal(result.students.length, 1);
+  assert.equal(result.rawRows.length, 1); assert.equal(result.achievementEvidence.examCutoffs[0].source, 'attempt');
+  assert.equal(result.achievementEvidence.observations.filter(row => row.source === 'worksheet').length, 1);
+  assert.equal(JSON.stringify(result).includes('PRIVATE_WORKSHEET_ANSWER'), false);
+  assert.equal(JSON.stringify(result).includes('FOREIGN_STUDENT_ANSWER'), false);
+  assert.equal(f.queries.some(query => query.path.includes('/lesson_progress/b/')), false);
+  assert.deepEqual(f.writes, []);
+  f.data.set('users/teacher', { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['quiz_read'] });
+  assert.equal((await handler({ auth: { uid: 'teacher' }, data: query })).canReview, false);
+});
+
 test('catalog has real current classes, no student names or answers and no result reads', async () => {
   const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
   const result = await service.query({ semesterId: SCOPE, mode: 'catalog' });

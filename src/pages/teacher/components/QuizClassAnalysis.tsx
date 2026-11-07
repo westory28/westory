@@ -23,6 +23,7 @@ import {
 import type { QuizQuestionDraft } from "./QuizEditor";
 import type { Question, TreeUnit } from "./QuizBankTab";
 import QuizAnalysisView, { QuizBehaviorHelp } from "./QuizAnalysisView";
+import QuizAchievementAnalysis from "./QuizAchievementAnalysis";
 import { adaptQuizAnalysisRecords } from "./useQuizAnalysisData";
 import "./QuizClassAnalysis.css";
 import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
@@ -104,6 +105,9 @@ export default function QuizClassAnalysis({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState<DetailState | null>(null);
+  const [detailMode, setDetailMode] = useState<"responses" | "achievement">(
+    "responses",
+  );
   const [detailLoading, setDetailLoading] = useState("");
   const [detailError, setDetailError] = useState("");
   const [failedDetailId, setFailedDetailId] = useState("");
@@ -336,6 +340,7 @@ export default function QuizClassAnalysis({
     if (!detail && document.activeElement instanceof HTMLElement)
       detailTrigger.current = document.activeElement;
     setComparisonOpen(false);
+    if (!detail) setDetailMode("responses");
     setDetailLoading(row.classId);
     setDetailError("");
     setFailedDetailId("");
@@ -1198,47 +1203,81 @@ export default function QuizClassAnalysis({
                 {detailError}
               </div>
             )}
-            <QuizAnalysisView
-              key={`${identityKey}:${detail.scope.unitId}:${detail.scope.category}:${detail.scope.examRound}:${detail.scope.keyword || ""}:${detail.classId}:${detail.data.version}:${detail.behaviorFilter || "all"}`}
-              initialBehaviorFilter={detail.behaviorFilter}
-              questions={editedQuestions}
-              tree={detail.data.treeData}
-              students={detail.data.students}
-              records={detailRecords.records}
-              snapshots={detailRecords.snapshots}
-              configuredClasses={detail.data.configuredClasses}
-              semesterId={semesterId}
-              loading={!!detailLoading}
-              errors={[]}
-              legacyLimited={false}
-              canEdit={canEdit}
-              onEdit={(question) => {
-                closeDetail();
-                onEdit(question);
-              }}
-              onDerive={
-                onDerive
-                  ? (question) => {
-                      closeDetail();
-                      onDerive(question);
-                    }
-                  : undefined
-              }
-              onReload={() => {
-                const row = summary?.classes.find(
-                  (entry) => entry.classId === detail.classId,
-                );
-                if (row) void loadDetail(row, true);
-              }}
-              lockedScope={{
-                unitId: detail.scope.unitId,
-                category: detail.scope.category,
-                examRound: detail.scope.examRound,
-                classId: detail.classId,
-                keyword: detail.scope.keyword,
-                questionIds: detail.data.search?.questionIds,
-              }}
-            />
+            {detail.scope.category === "exam_prep" && !detail.scope.keyword && (
+              <nav
+                className="ws-page-tabs qaa-detail-tabs"
+                aria-label="평가 분석 보기"
+              >
+                <button
+                  type="button"
+                  className={detailMode === "responses" ? "is-active" : ""}
+                  aria-pressed={detailMode === "responses"}
+                  onClick={() => setDetailMode("responses")}
+                >
+                  문항·학생
+                </button>
+                <button
+                  type="button"
+                  className={detailMode === "achievement" ? "is-active" : ""}
+                  aria-pressed={detailMode === "achievement"}
+                  onClick={() => setDetailMode("achievement")}
+                >
+                  성취기준 분석
+                </button>
+              </nav>
+            )}
+            {detailMode === "achievement" &&
+            detail.scope.category === "exam_prep" &&
+            !detail.scope.keyword ? (
+              <QuizAchievementAnalysis
+                key={`${identityKey}:${detail.scope.unitId}:${detail.scope.examRound}:${detail.classId}`}
+                scope={detail.scope}
+                identityKey={identityKey}
+                canEdit={canEdit}
+              />
+            ) : (
+              <QuizAnalysisView
+                key={`${identityKey}:${detail.scope.unitId}:${detail.scope.category}:${detail.scope.examRound}:${detail.scope.keyword || ""}:${detail.classId}:${detail.data.version}:${detail.behaviorFilter || "all"}`}
+                initialBehaviorFilter={detail.behaviorFilter}
+                questions={editedQuestions}
+                tree={detail.data.treeData}
+                students={detail.data.students}
+                records={detailRecords.records}
+                snapshots={detailRecords.snapshots}
+                configuredClasses={detail.data.configuredClasses}
+                semesterId={semesterId}
+                loading={!!detailLoading}
+                errors={[]}
+                legacyLimited={false}
+                canEdit={canEdit}
+                onEdit={(question) => {
+                  closeDetail();
+                  onEdit(question);
+                }}
+                onDerive={
+                  onDerive
+                    ? (question) => {
+                        closeDetail();
+                        onDerive(question);
+                      }
+                    : undefined
+                }
+                onReload={() => {
+                  const row = summary?.classes.find(
+                    (entry) => entry.classId === detail.classId,
+                  );
+                  if (row) void loadDetail(row, true);
+                }}
+                lockedScope={{
+                  unitId: detail.scope.unitId,
+                  category: detail.scope.category,
+                  examRound: detail.scope.examRound,
+                  classId: detail.classId,
+                  keyword: detail.scope.keyword,
+                  questionIds: detail.data.search?.questionIds,
+                }}
+              />
+            )}
           </div>
         </dialog>
       )}

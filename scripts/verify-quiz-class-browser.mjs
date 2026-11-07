@@ -15,6 +15,8 @@ export const config={year:'2026',semester:'2'}, currentUser={uid:'teacher-fixtur
 export const useAuth=()=>({config,currentUser,authGeneration:1});
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
 export const db={};
+export const useAppToast=()=>({showToast:()=>{}});
+export const executeLearningCommand=()=>{throw new Error('Unexpected write in read-only class fixture');};
 const forbidden=()=>{throw new Error('Unexpected direct Firestore access');};
 export const collection=forbidden,doc=forbidden,getDoc=forbidden,getDocs=forbidden,limit=forbidden,onSnapshot=forbidden,orderBy=forbidden,query=forbidden,where=forbidden;
 const tree=[{id:'big',title:'Ⅳ. 조선의 성립과 발전',children:[{id:'unit-a',title:'사림 세력과 정치 변화',children:[{id:'leaf',title:'훈구와 사림'}]}]}];
@@ -47,7 +49,7 @@ export const callWithApplicationSession=async(name,data)=>{
 };`;
 const entry=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import View from ${imp('src/pages/teacher/components/QuizClassAnalysis.tsx')};import ${imp('src/assets/index.css')};import ${imp('src/components/common/portalPage.css')};
 function App(){const[questions,setQuestions]=useState([]);return <main className="ws-page"><h1>평가 분석</h1><View canEdit={false} onEdit={()=>{}} onDetailData={q=>setQuestions(q)} editedQuestions={questions} refreshVersion={0}/></main>;}createRoot(document.getElementById('root')).render(<App/>);`;
-const bundle=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'browser',loader:{'.svg':'dataurl'},outfile:path.join(evidence,'fixture.js'),define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-boundaries',setup(p){p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession)$/},()=>({path:'service',namespace:'fixture'}));p.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
+const bundle=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'browser',loader:{'.svg':'dataurl','.woff':'dataurl','.woff2':'dataurl'},outfile:path.join(evidence,'fixture.js'),define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-boundaries',setup(p){p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession|learningCommands|AppToastProvider)$/},()=>({path:'service',namespace:'fixture'}));p.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=bundle.outputFiles.find(f=>f.path.endsWith('.css')).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,'');
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';

@@ -1,5 +1,6 @@
 // Diagnostic observations never change grading, rewards, or attempt eligibility.
 const { redactLegacyBlankText } = require("./mockExamMaterials");
+const { normalizeAchievementMetadata } = require("../historyAchievementMetadata");
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const safeText = (value, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const safeKey = value => value && !["__proto__", "constructor", "prototype"].includes(value);
@@ -19,6 +20,7 @@ const normalizeQuestionLearning = value => {
     derivedFromQuestionId: safeText(value?.derivedFromQuestionId),
     misconceptionTags,
     reviewLessonId: safeText(value?.reviewLessonId),
+    ...normalizeAchievementMetadata(value),
   };
 };
 
@@ -38,7 +40,8 @@ const questionLearningSnapshot = document => {
   const reduced = { ...snapshot, misconceptionTags: {}, metadataLimited: true };
   if (Buffer.byteLength(JSON.stringify(reduced), "utf8") <= 2048) return reduced;
   const minimal = { id: snapshot.id, sourceRevision: snapshot.sourceRevision,
-    unitId: snapshot.unitId, subUnitId: snapshot.subUnitId, concepts: [], metadataLimited: true };
+    unitId: snapshot.unitId, subUnitId: snapshot.subUnitId, concepts: [], metadataLimited: true,
+    ...normalizeAchievementMetadata(value) };
   if (Buffer.byteLength(JSON.stringify(minimal), "utf8") <= 2048) return minimal;
   return { id: snapshot.id, concepts: [], metadataLimited: true };
 };

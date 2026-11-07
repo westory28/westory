@@ -1,6 +1,11 @@
 import React from "react";
+import {
+  normalizeHistoryAchievementMetadata,
+  validateHistoryAchievementMetadata,
+  type HistoryAchievementMetadata,
+} from "../../../lib/historyAchievement";
 
-export interface QuizLearningMetadata {
+export interface QuizLearningMetadata extends HistoryAchievementMetadata {
   concepts?: string[];
   cognitiveProcess?: string;
   familyId?: string;
@@ -139,6 +144,7 @@ export const normalizeQuizLearningMetadata = (
   value: QuizLearningMetadata,
   options: string[],
 ) => ({
+  ...normalizeHistoryAchievementMetadata(value),
   concepts: Array.from(
     new Set(
       (value.concepts || []).map((concept) => concept.trim()).filter(Boolean),
@@ -159,6 +165,8 @@ export const validateQuizLearningMetadata = (
   value: QuizLearningMetadata,
   options: string[],
 ) => {
+  const achievementError = validateHistoryAchievementMetadata(value);
+  if (achievementError) return achievementError;
   const normalized = normalizeQuizLearningMetadata(value, options);
   if (
     normalized.concepts.length > 8 ||

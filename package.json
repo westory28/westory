@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews",
+    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
@@ -45,7 +45,8 @@
     "verify:history-atlas": "node scripts/verify-history-atlas.mjs && node scripts/verify-student-map-resources.mjs && node scripts/verify-history-atlas-navigation.mjs && node scripts/verify-history-globe.mjs && node scripts/verify-history-atlas-regions.mjs && node scripts/verify-history-atlas-profiles.mjs && node scripts/verify-history-atlas-stories.mjs && node scripts/verify-history-atlas-curation.mjs && node scripts/verify-history-atlas-east-asia.mjs && node scripts/verify-history-atlas-korea-restoration.mjs && node scripts/verify-history-atlas-restoration.mjs && node scripts/verify-history-atlas-countries.mjs && node scripts/verify-history-atlas-terrain.mjs && node scripts/verify-history-atlas-country-profiles.mjs && node scripts/verify-history-atlas-korea-foreign-context.mjs && node scripts/verify-history-atlas-worksheets.mjs",
     "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs",
     "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
-    "verify:avatar-previews": "node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json --check && node scripts/render-avatar-item-previews.mjs --check"
+    "verify:avatar-previews": "node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json --check && node scripts/render-avatar-item-previews.mjs --check",
+    "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs"
   },
   "dependencies": {
     "@fontsource/noto-serif-kr": "^5.3.1",

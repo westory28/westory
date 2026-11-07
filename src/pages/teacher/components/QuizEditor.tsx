@@ -39,6 +39,11 @@ import QuizLearningMetadataFields, {
   validateQuizLearningMetadata,
   type QuizLearningMetadata,
 } from "./QuizLearningMetadataFields";
+import QuizAchievementFields from "./QuizAchievementFields";
+import {
+  HISTORY_ACHIEVEMENT_CURRICULUM_VERSION,
+  inferHistoryAchievementStandards,
+} from "../../../lib/historyAchievement";
 import { useQuizDialog } from "./useQuizDialog";
 import { hasQuizDerivationContentChange } from "./quizDerivation";
 import {
@@ -490,6 +495,68 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     () => new Set(normalSubUnits.map((unit) => unit.id)),
     [normalSubUnits],
   );
+  const achievementInference = useMemo(
+    () =>
+      inferHistoryAchievementStandards(
+        treeData,
+        type === "special"
+          ? [epSource.big, epSource.mid, epSource.small]
+          : [node.id, formSubUnit],
+      ),
+    [
+      treeData,
+      type,
+      epSource.big,
+      epSource.mid,
+      epSource.small,
+      node.id,
+      formSubUnit,
+    ],
+  );
+  const achievementUnitKey = [
+    node.id,
+    formSubUnit,
+    epSource.big,
+    epSource.mid,
+    epSource.small,
+  ].join(":");
+  const achievementPreviousUnit = useRef("");
+  useEffect(() => {
+    if (!isComposerOpen) {
+      achievementPreviousUnit.current = "";
+      return;
+    }
+    const previous = achievementPreviousUnit.current;
+    achievementPreviousUnit.current = achievementUnitKey;
+    setMetadata((current) => {
+      if (current.achievementMappingSource === "manual") return current;
+      if (
+        current.curriculumVersion &&
+        current.curriculumVersion !== HISTORY_ACHIEVEMENT_CURRICULUM_VERSION
+      )
+        return current;
+      // Preserve the saved mapping on opening; only a changed unit remaps it.
+      if (
+        current.achievementStandardCodes?.length &&
+        (!previous || previous === achievementUnitKey)
+      )
+        return current;
+      const codes = achievementInference.codes;
+      const changed =
+        (current.achievementStandardCodes || []).join("|") !== codes.join("|");
+      if (!changed && current.achievementMappingSource === "unit")
+        return current;
+      return {
+        ...current,
+        curriculumVersion: HISTORY_ACHIEVEMENT_CURRICULUM_VERSION,
+        achievementStandardCodes: codes,
+        achievementMappingSource: "unit",
+        ...(changed
+          ? { targetAchievementLevel: "", intendedDifficulty: "" }
+          : {}),
+      };
+    });
+  }, [achievementInference, achievementUnitKey, isComposerOpen]);
   const findNodeTitle = (targetId?: string | null) => {
     if (!targetId) return "";
     for (const big of treeData) {
@@ -2643,6 +2710,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           </label>
                         </div>
                       )}
+
+                      <QuizAchievementFields
+                        value={metadata}
+                        inferred={achievementInference}
+                        onChange={(value) =>
+                          setMetadata((current) => ({ ...current, ...value }))
+                        }
+                      />
 
                       <label className="quiz-composer-field">
                         <span>발문</span>

@@ -12,6 +12,7 @@
     "updateAssessmentDefinition",
     "saveQuizAssessmentSettings",
     "upsertQuizQuestion",
+    "saveAchievementProfile",
     "upsertHistoryClassroomSource",
     "saveHistoryClassroomAssignment",
     "deleteHistoryClassroomSource",
