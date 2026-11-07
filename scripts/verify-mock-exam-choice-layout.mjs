@@ -37,10 +37,10 @@ const {
 );
 const repeated = (text) => Array(5).fill(text);
 const boundaries = [
-  ["가나", 5],
+  ["가나", 3],
   ["가나다", 3],
-  ["가나다라", 3],
-  ["가나다라 마바사", 3],
+  ["가나다라", 2],
+  ["가나다라 마바사", 2],
   ["가나다라 마바사아", 2],
   ["가나다라마바 사아자차카타 파", 2],
   ["가나다라마바 사아자차카타 파하", 1],
@@ -97,8 +97,8 @@ const examples = [
 const cases = [
   { options: ["(가)", "(나)", "(다)", "(라)", "(마)"], columns: 5 },
   { options: ["( 가 )", "( 나 )", "( 다 )", "( 라 )", "( 마 )"], columns: 5 },
-  { options: ["가야", "고려", "발해", "신라", "조선"], columns: 5 },
-  { options: examples, columns: 3 },
+  { options: ["가야", "고려", "발해", "신라", "조선"], columns: 3 },
+  { options: examples, columns: 2 },
   {
     options: [
       "태종이 사병을 혁파하였다",
@@ -126,7 +126,7 @@ const cases = [
   { options: ["이성계", "정몽주", "정도전", "이방원", "이성계"], columns: 3 },
   ...[4, 5, 7, 8, 11].map((length, index) => ({
     options: repeated("가".repeat(length)),
-    columns: [3, 2, 1, 1, 1][index],
+    columns: [2, 2, 1, 1, 1][index],
   })),
 ];
 cases.forEach((test) =>

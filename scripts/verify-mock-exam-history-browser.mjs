@@ -77,6 +77,7 @@ try {
     await page.getByRole("button", { name: "2번 문제 확대, 답안 입력됨", exact: true }).click();
     const detail = page.getByRole("article", { name: "2번 문항 상세", exact: true });
     await detail.waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "2번 문항 상세");
     assert.equal(await detail.evaluate(element => document.activeElement === element), true, "Opening a saved question transfers keyboard focus");
     assert.ok((await detail.textContent()).includes("2번 저장 당시 해설"));
     assert.ok((await detail.textContent()).includes("고려"));

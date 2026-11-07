@@ -1,5 +1,6 @@
 import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import InfoHelp from "../../../components/common/InfoHelp";
+import { isQuizPassageBlankLabel } from "../../../lib/quizPassageMarkup";
 import {
   createQuizVisualFragment,
   formatQuizVisualDocument,
@@ -18,6 +19,7 @@ import {
   type QuizVisualMark,
 } from "./quizVisualDocument";
 import "./QuizVisualEditor.css";
+import "../../../components/common/quizPassage.css";
 
 interface Props {
   value: string;
@@ -122,6 +124,13 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
   const captureInput = () => {
     const root = editorRef.current;
     if (!root || composing.current) return;
+    root
+      .querySelectorAll<HTMLElement>('[data-quiz-mark="box"]')
+      .forEach((box) => {
+        if (isQuizPassageBlankLabel(box.textContent || ""))
+          box.dataset.quizLabelBox = "true";
+        else delete box.dataset.quizLabelBox;
+      });
     const selection = getQuizVisualSelection(root) || selectionRef.current;
     commit(readQuizVisualDom(root), selection, false);
   };
@@ -174,7 +183,7 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
     );
     const selectedText = quizVisualText(selected).trim();
     const existing = selected[0]?.runs.find((run) => run.mark === "blankBox");
-    const isLabel = /^\([가-힣ㄱ-ㅎA-Za-z0-9]{1,3}\)$/u.test(selectedText);
+    const isLabel = isQuizPassageBlankLabel(selectedText);
     setBlankSettings({
       label: existing?.text || (isLabel ? selectedText : "(가)"),
       reference: existing || isLabel ? "" : selectedText.replace(/\n/g, " "),

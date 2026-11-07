@@ -39,8 +39,11 @@ export function getMockExamChoiceColumns(
 
   // Whole-word limits avoid squeezing an unbroken term into a narrow column.
   // Longer phrases may wrap at spaces while retaining 3+2 or 2+2+1 choice rows.
-  if (widest <= 2.5 && longestWord <= 2.5) return 5;
-  if (widest <= 8 && longestWord <= 4) return 3;
+  // Leave a readable space after the circled number even in narrow previews.
+  // Parenthesized location markers fit five columns; two Korean letters do not.
+  if (labels.every((label) => /^\([\p{L}\p{N}]\)$/u.test(label))) return 5;
+  if (widest <= 1.5 && longestWord <= 1.5) return 5;
+  if (widest <= 8 && longestWord <= 3.5) return 3;
   if (widest <= 14 && longestWord <= 6) return 2;
   return 1;
 }

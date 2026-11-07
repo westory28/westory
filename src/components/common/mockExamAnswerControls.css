@@ -1,0 +1,84 @@
+.mock-exam-answer-controls {
+  border: 0;
+  padding: 0;
+  margin: 16px 0 0;
+  min-width: 0;
+}
+.mock-exam-answer-controls [role="radiogroup"] {
+  display: grid;
+  gap: 8px;
+}
+.mock-exam-answer-controls [role="radiogroup"] label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.mock-exam-answer-controls [role="radiogroup"] .is-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+.mock-exam-answer-controls input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.mock-exam-answer-controls img {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+}
+.mock-exam-short-label {
+  display: grid;
+  gap: 8px;
+}
+.mock-exam-short-label input,
+.mock-exam-matching-input select {
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  padding: 12px;
+  font: inherit;
+  min-width: 0;
+  width: 100%;
+}
+.mock-exam-order > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.mock-exam-matching-input label {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.mock-exam-matching-input p {
+  margin: 8px 0;
+}
+.mock-exam-answer-controls .mock-exam-clear-answer {
+  margin-top: 16px;
+}
+
+.mock-exam-answer-controls button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mock-exam-answer-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.mock-exam-answer-controls :is(button, input, select):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}

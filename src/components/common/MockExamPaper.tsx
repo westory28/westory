@@ -155,7 +155,7 @@ export function MockExamQuestionContent({
               className={answer === option ? "is-selected" : ""}
             >
               <span className="mock-exam-option-number">
-                {examChoiceNumber(optionIndex)}
+                {examChoiceNumber(optionIndex)}{" "}
               </span>
               <span className="mock-exam-option-text">
                 {formatMockExamChoiceLabel(option)}
@@ -276,8 +276,8 @@ function PencilMark({ correct }: { correct: boolean | null }) {
 type PaperPage = { columns: number[][]; height: number };
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
-const COLUMN_ROOM = 930;
-const FIRST_COLUMN_ROOM = 842;
+const COLUMN_ROOM = 906;
+const FIRST_COLUMN_ROOM = 778;
 
 export default function MockExamPaper({
   questions,
@@ -287,6 +287,7 @@ export default function MockExamPaper({
   score,
   checks = [],
   onQuestionSelect,
+  selectedQuestionId,
   animateGrading = false,
   disabled = false,
 }: {
@@ -297,6 +298,7 @@ export default function MockExamPaper({
   score?: number | null;
   checks?: MockExamPaperCheck[];
   onQuestionSelect?: (index: number) => void;
+  selectedQuestionId?: string | number | null;
   animateGrading?: boolean;
   disabled?: boolean;
 }) {
@@ -304,6 +306,16 @@ export default function MockExamPaper({
   const measurements = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(PAGE_WIDTH);
   const [heights, setHeights] = useState<number[]>([]);
+  const [lastSelectedId, setLastSelectedId] = useState<string | number | null>(
+    null,
+  );
+  const selection =
+    selectedQuestionId === undefined ? lastSelectedId : selectedQuestionId;
+  const selectQuestion = (index: number) => {
+    if (disabled || !onQuestionSelect) return;
+    setLastSelectedId(questions[index].id);
+    onQuestionSelect(index);
+  };
   const [revealed, setRevealed] = useState(
     animateGrading ? 0 : questions.length,
   );
@@ -319,7 +331,10 @@ export default function MockExamPaper({
   useLayoutEffect(() => {
     const element = container.current;
     if (!element) return;
-    const update = () => setWidth(Math.min(PAGE_WIDTH, element.clientWidth));
+    const update = () => {
+      if (element.clientWidth > 0)
+        setWidth(Math.min(PAGE_WIDTH, element.clientWidth));
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
@@ -330,7 +345,7 @@ export default function MockExamPaper({
     if (!element) return;
     let active = true;
     const update = () => {
-      if (!active) return;
+      if (!active || element.offsetWidth === 0) return;
       const next = Array.from(element.children).map(
         (node) => Math.ceil((node as HTMLElement).offsetHeight) + 24,
       );
@@ -461,6 +476,29 @@ export default function MockExamPaper({
                       <small>/100</small>
                     </strong>
                   )}
+                  <table
+                    className="mock-exam-approval"
+                    aria-label="시험지 결재란"
+                  >
+                    <thead>
+                      <tr>
+                        {["노비", "상민", "양반", "왕"].map((role) => (
+                          <th key={role} scope="col">
+                            {role}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {["노비", "상민", "양반", "왕"].map((role) => (
+                          <td key={role} aria-label={`${role} 결재 공란`}>
+                            {"\u00a0"}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
                 <header className="mock-exam-title-box">
                   <h2>{title}</h2>
@@ -491,16 +529,22 @@ export default function MockExamPaper({
                     return (
                       <article
                         key={question.id}
-                        className={`mock-exam-question ${onQuestionSelect ? "is-interactive" : ""}`}
+                        className={`mock-exam-question ${onQuestionSelect ? "is-interactive" : ""} ${selection != null && String(selection) === String(question.id) ? "is-current" : ""}`}
                         role={onQuestionSelect ? "button" : undefined}
                         tabIndex={onQuestionSelect && !disabled ? 0 : undefined}
                         aria-disabled={disabled || undefined}
+                        aria-pressed={
+                          onQuestionSelect
+                            ? selection != null &&
+                              String(selection) === String(question.id)
+                            : undefined
+                        }
                         aria-label={
                           onQuestionSelect
                             ? `${index + 1}번 문제 확대${answers[String(question.id)] ? ", 답안 입력됨" : ""}`
                             : undefined
                         }
-                        onClick={() => !disabled && onQuestionSelect?.(index)}
+                        onClick={() => selectQuestion(index)}
                         onKeyDown={(event) => {
                           if (event.target !== event.currentTarget) return;
                           if (
@@ -509,7 +553,7 @@ export default function MockExamPaper({
                             (event.key === "Enter" || event.key === " ")
                           ) {
                             event.preventDefault();
-                            onQuestionSelect(index);
+                            selectQuestion(index);
                           }
                         }}
                       >
@@ -542,7 +586,12 @@ export default function MockExamPaper({
               ))}
             </div>
             <footer className="mock-exam-page-number">
-              3학년 역사　{pages.length} - {pageIndex + 1}
+              <div>
+                3학년 역사　{pages.length} - {pageIndex + 1}
+              </div>
+              <div className="mock-exam-copyright">
+                이 시험지의 저작권은 위스토리에 있습니다.
+              </div>
             </footer>
           </section>
         </div>

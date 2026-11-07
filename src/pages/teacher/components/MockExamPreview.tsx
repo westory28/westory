@@ -6,7 +6,10 @@ import {
   type QuizQuestionCatalogEntry,
 } from "./quizQuestionPaging";
 import { useQuizDialog } from "./useQuizDialog";
-import MockExamPaper from "../../../components/common/MockExamPaper";
+import MockExamPaper, {
+  MockExamQuestionContent,
+} from "../../../components/common/MockExamPaper";
+import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
 
 interface Props {
   disabled?: boolean;
@@ -26,6 +29,16 @@ export default function MockExamPreview({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [previewRound, setPreviewRound] = useState("round_1");
+  const [practiceAnswers, setPracticeAnswers] = useState<
+    Record<string, string>
+  >({});
+  const [questionIndex, setQuestionIndex] = useState<number | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<
+    string | number | null
+  >(null);
+  const body = useRef<HTMLDivElement>(null);
+  const backButton = useRef<HTMLButtonElement>(null);
+  const paperScroll = useRef(0);
   const locked = useRef(false);
   const active = useRef(true);
   useEffect(() => {
@@ -34,8 +47,39 @@ export default function MockExamPreview({
       active.current = false;
     };
   }, []);
-  const close = () => setQuestions([]);
-  useQuizDialog(questions.length > 0, dialog, close);
+  const close = () => {
+    setQuestions([]);
+    setPracticeAnswers({});
+    setQuestionIndex(null);
+    setSelectedQuestionId(null);
+  };
+  const returnToPaper = () => {
+    setQuestionIndex(null);
+    requestAnimationFrame(() => {
+      if (body.current) body.current.scrollTop = paperScroll.current;
+      const selected = dialog.current?.querySelector<HTMLElement>(
+        '.mock-exam-question[aria-pressed="true"]',
+      );
+      selected?.focus({ preventScroll: true });
+      if (selected && body.current) {
+        const questionBounds = selected.getBoundingClientRect();
+        const viewportBounds = body.current.getBoundingClientRect();
+        if (
+          questionBounds.top < viewportBounds.top ||
+          questionBounds.bottom > viewportBounds.bottom
+        )
+          selected.scrollIntoView({ block: "nearest" });
+      }
+    });
+  };
+  useQuizDialog(questions.length > 0, dialog, () =>
+    questionIndex == null ? close() : returnToPaper(),
+  );
+  useEffect(() => {
+    if (questionIndex == null) return;
+    if (body.current) body.current.scrollTop = 0;
+    backButton.current?.focus();
+  }, [questionIndex]);
 
   const preview = async () => {
     if (disabled || locked.current) return;
@@ -76,6 +120,8 @@ export default function MockExamPreview({
     .sort(
       (a, b) => Number(a.paperOrder || a.id) - Number(b.paperOrder || b.id),
     );
+  const currentQuestion =
+    questionIndex == null ? null : previewQuestions[questionIndex];
 
   return (
     <>
@@ -114,45 +160,106 @@ export default function MockExamPreview({
                 닫기
               </button>
             </div>
-            <div className="quiz-composer-body">
-              <label className="mb-3 flex min-h-11 items-center gap-2 text-sm font-bold">
-                회차
-                <select
-                  className="min-h-11 rounded border border-gray-300 px-3"
-                  value={previewRound}
-                  onChange={(event) => setPreviewRound(event.target.value)}
+            <div ref={body} className="quiz-composer-body">
+              <div hidden={questionIndex != null}>
+                <label className="mb-3 flex min-h-11 items-center gap-2 text-sm font-bold">
+                  회차
+                  <select
+                    className="min-h-11 rounded border border-gray-300 px-3"
+                    value={previewRound}
+                    onChange={(event) => {
+                      setPreviewRound(event.target.value);
+                      setSelectedQuestionId(null);
+                    }}
+                  >
+                    {[
+                      ...new Set(
+                        questions.map((q) => q.examRound || "round_1"),
+                      ),
+                    ]
+                      .sort()
+                      .map((round) => (
+                        <option key={round} value={round}>
+                          {formatMockExamRoundShortLabel(round)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <MockExamPaper
+                  questions={previewQuestions}
+                  round={previewRound}
+                  answers={practiceAnswers}
+                  selectedQuestionId={selectedQuestionId}
+                  onQuestionSelect={(index) => {
+                    paperScroll.current = body.current?.scrollTop || 0;
+                    setSelectedQuestionId(previewQuestions[index].id);
+                    setQuestionIndex(index);
+                  }}
+                />
+                <details className="py-3">
+                  <summary className="min-h-11 cursor-pointer text-sm font-bold">
+                    정답·해설 확인
+                  </summary>
+                  {previewQuestions.map((q, index) => (
+                    <section
+                      key={q.id}
+                      className="border-b border-gray-200 py-3"
+                    >
+                      <h4 className="font-bold">
+                        {q.paperOrder || index + 1}번 · {q.points ?? 1}점
+                      </h4>
+                      <p className="mt-2 text-sm text-blue-700">
+                        정답: {q.answer}
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm">
+                        {q.explanation}
+                      </p>
+                    </section>
+                  ))}
+                </details>
+              </div>
+              {currentQuestion && questionIndex != null && (
+                <section
+                  className="mock-exam-preview-question"
+                  aria-label={`${questionIndex + 1}번 문제 풀이 미리보기`}
                 >
-                  {[...new Set(questions.map((q) => q.examRound || "round_1"))]
-                    .sort()
-                    .map((round) => (
-                      <option key={round} value={round}>
-                        {formatMockExamRoundShortLabel(round)}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <MockExamPaper
-                questions={previewQuestions}
-                round={previewRound}
-              />
-              <details className="py-3">
-                <summary className="min-h-11 cursor-pointer text-sm font-bold">
-                  정답·해설 확인
-                </summary>
-                {previewQuestions.map((q, index) => (
-                  <section key={q.id} className="border-b border-gray-200 py-3">
-                    <h4 className="font-bold">
-                      {q.paperOrder || index + 1}번 · {q.points ?? 1}점
-                    </h4>
+                  <button
+                    ref={backButton}
+                    type="button"
+                    className="quiz-authoring-button mock-exam-preview-back"
+                    onClick={returnToPaper}
+                  >
+                    시험지로 돌아가기
+                  </button>
+                  <MockExamQuestionContent
+                    question={currentQuestion}
+                    index={questionIndex}
+                    hideAnswers
+                  />
+                  <MockExamAnswerControls
+                    question={currentQuestion}
+                    index={questionIndex}
+                    answer={practiceAnswers[String(currentQuestion.id)] || ""}
+                    onAnswer={(value) =>
+                      setPracticeAnswers((previous) => ({
+                        ...previous,
+                        [String(currentQuestion.id)]: value,
+                      }))
+                    }
+                  />
+                  <details className="py-3">
+                    <summary className="min-h-11 cursor-pointer text-sm font-bold">
+                      정답·해설 확인
+                    </summary>
                     <p className="mt-2 text-sm text-blue-700">
-                      정답: {q.answer}
+                      정답: {currentQuestion.answer}
                     </p>
                     <p className="mt-2 whitespace-pre-wrap text-sm">
-                      {q.explanation}
+                      {currentQuestion.explanation}
                     </p>
-                  </section>
-                ))}
-              </details>
+                  </details>
+                </section>
+              )}
             </div>
             <div className="quiz-composer-footer">
               <span role="status">
@@ -163,6 +270,36 @@ export default function MockExamPreview({
                 )}
                 점
               </span>
+              {questionIndex != null && (
+                <div className="quiz-composer-footer-actions">
+                  <button
+                    type="button"
+                    className="quiz-authoring-button"
+                    disabled={questionIndex === 0}
+                    onClick={() => {
+                      setQuestionIndex(questionIndex - 1);
+                      setSelectedQuestionId(
+                        previewQuestions[questionIndex - 1].id,
+                      );
+                    }}
+                  >
+                    이전 문제
+                  </button>
+                  <button
+                    type="button"
+                    className="quiz-authoring-button"
+                    disabled={questionIndex >= previewQuestions.length - 1}
+                    onClick={() => {
+                      setQuestionIndex(questionIndex + 1);
+                      setSelectedQuestionId(
+                        previewQuestions[questionIndex + 1].id,
+                      );
+                    }}
+                  >
+                    다음 문제
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

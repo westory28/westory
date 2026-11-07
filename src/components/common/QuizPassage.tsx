@@ -1,8 +1,10 @@
 import React from "react";
 import {
+  isQuizPassageBlankLabel,
   parseQuizPassageMarkup,
   type QuizPassageSegment,
 } from "../../lib/quizPassageMarkup";
+import "./quizPassage.css";
 
 interface QuizPassageProps {
   value: string | null | undefined;
@@ -44,18 +46,19 @@ const renderMarkedSegment = (segment: QuizPassageSegment, key: React.Key) => {
         aria-label={`빈칸 ${segment.text}`}
         className="quiz-passage-blank-box"
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          verticalAlign: "baseline",
-          boxSizing: "content-box",
-          minWidth: `min(${Math.min(30, Math.max(1, segment.widthEm || 3))}em, calc(100% - .6em - 2px))`,
-          maxWidth: "calc(100% - .6em - 2px)",
-          padding: "0 .3em",
-          border: "1px solid currentColor",
-          lineHeight: "1.35",
-          whiteSpace: "nowrap",
+          width: `${Math.min(30, Math.max(1, segment.widthEm || 3))}em`,
         }}
+      >
+        {segment.text}
+      </span>
+    );
+  }
+
+  if (segment.type === "box" && isQuizPassageBlankLabel(segment.text)) {
+    return (
+      <span
+        key={key}
+        className="quiz-passage-label-box font-bold text-slate-950"
       >
         {segment.text}
       </span>
@@ -121,7 +124,7 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
 
   return (
     <div
-      className={`whitespace-pre-wrap break-keep rounded-xl border font-medium text-slate-900 ${paddingClasses[size]} ${sizeClasses[size]} ${surfaceClass} ${className}`}
+      className={`quiz-passage whitespace-pre-wrap break-keep rounded-xl border font-medium text-slate-900 ${paddingClasses[size]} ${sizeClasses[size]} ${surfaceClass} ${className}`}
     >
       {segments.map((segment, index) => {
         if (

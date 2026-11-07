@@ -119,7 +119,7 @@ const bundle = await build({
 const js = bundle.outputFiles.find((f) => f.path.endsWith(".js")).text;
 const css = bundle.outputFiles
   .find((f) => f.path.endsWith(".css"))
-  .text.replace(/@import\s+(?:url\()?['"]?https?:[^;]+;/g, "");
+  .text.replace(/@import\s+(?:url\([^)]*\)|"[^"]*"|'[^']*')[^;]*;/g, "");
 let tailwind;
 for (const candidate of [
   process.env.PORTAL_DESIGN_TAILWIND_PATH,
@@ -337,6 +337,149 @@ try {
     await compose
       .getByLabel(`${index + 1}번 보기`, { exact: true })
       .fill(authoredOptions[index]);
+  const choiceField = (index) =>
+    compose.getByLabel(`${index + 1}번 보기`, { exact: true });
+  assert.match(await live.locator(".mock-exam-options li").first().textContent(), /^\s*①\s+가/);
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await choiceField(1).focus();
+    await page.keyboard.press("ArrowDown");
+    assert(
+      await choiceField(2).evaluate((el) => el === document.activeElement),
+    );
+    await page.keyboard.press("ArrowUp");
+    assert(
+      await choiceField(1).evaluate((el) => el === document.activeElement),
+    );
+    await choiceField(0).press("ArrowUp");
+    assert(
+      await choiceField(0).evaluate((el) => el === document.activeElement),
+      "first choice does not leave its list",
+    );
+    await choiceField(4).press("ArrowDown");
+    assert(
+      await choiceField(4).evaluate((el) => el === document.activeElement),
+      "last choice does not leave its list",
+    );
+    await choiceField(1).focus();
+    for (const flags of [
+      { isComposing: true },
+      { keyCode: 229 },
+      { shiftKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+    ]) {
+      const result = await choiceField(1).evaluate((el, flags) => {
+        const event = new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+          ...flags,
+        });
+        el.dispatchEvent(event);
+        return {
+          stayed: document.activeElement === el,
+          prevented: event.defaultPrevented,
+        };
+      }, flags);
+      assert.deepEqual(
+        result,
+        { stayed: true, prevented: false },
+        `IME and modified arrows keep native editing: ${JSON.stringify(flags)}`,
+      );
+    }
+    for (const property of ["readOnly", "disabled"]) {
+      const result = await choiceField(1).evaluate((el, property) => {
+        el[property] = true;
+        const before = document.activeElement;
+        const event = new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        });
+        el.dispatchEvent(event);
+        el[property] = false;
+        return {
+          stayed: document.activeElement === before,
+          prevented: event.defaultPrevented,
+        };
+      }, property);
+      assert.deepEqual(
+        result,
+        { stayed: true, prevented: false },
+        `${property} choice does not move focus`,
+      );
+    }
+    for (const property of ["readOnly", "disabled"]) {
+      await choiceField(1).focus();
+      await choiceField(2).evaluate((el, property) => {
+        el[property] = true;
+      }, property);
+      await page.keyboard.press("ArrowDown");
+      assert(
+        await choiceField(1).evaluate((el) => el === document.activeElement),
+        `does not focus a ${property} destination`,
+      );
+      await choiceField(2).evaluate((el, property) => {
+        el[property] = false;
+      }, property);
+    }
+    for (let index = 0; index < 5; index++)
+      assert.equal(
+        await choiceField(index).inputValue(),
+        authoredOptions[index],
+      );
+    assert.equal(
+      await compose.locator('.quiz-choice-answer[aria-pressed="true"]').count(),
+      0,
+      "navigation does not select a correct answer",
+    );
+    await choiceField(1).focus();
+    await page.keyboard.press("ArrowDown");
+    await page.screenshot({
+      path: path.join(evidence, `teacher-choice-arrow-${width}.png`),
+    });
+  }
+  await compose.getByRole("button", { name: "보기 추가", exact: true }).click();
+  await choiceField(5).fill("추가한 합성 보기");
+  await compose
+    .getByRole("button", { name: "3번 보기 삭제", exact: true })
+    .click();
+  assert.equal(await choiceField(2).inputValue(), authoredOptions[3]);
+  await choiceField(3).press("ArrowDown");
+  assert(await choiceField(4).evaluate((el) => el === document.activeElement));
+  assert.equal(await choiceField(4).inputValue(), "추가한 합성 보기");
+  await page.keyboard.press("ArrowUp");
+  assert(await choiceField(3).evaluate((el) => el === document.activeElement));
+  assert.equal(await choiceField(3).inputValue(), authoredOptions[4]);
+  for (let index = 0; index < 5; index++)
+    await choiceField(index).fill(authoredOptions[index]);
+  await choiceField(1).fill("첫째 줄\n둘째 줄");
+  await choiceField(1).evaluate((el) => el.setSelectionRange(2, 2));
+  await choiceField(1).press("ArrowDown");
+  assert(
+    await choiceField(2).evaluate((el) => el === document.activeElement),
+    "a plain arrow moves to the adjacent choice even when its text wraps or contains newlines",
+  );
+  assert.equal(await choiceField(1).inputValue(), "첫째 줄\n둘째 줄");
+  await choiceField(1).fill(authoredOptions[1]);
+  await choiceField(1).press("Alt+ArrowDown");
+  assert(
+    await choiceField(2).evaluate((el) => el === document.activeElement),
+    "existing Alt+arrow form navigation remains available",
+  );
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
+    0,
+  );
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.reads.length),
+    readsBeforeDraft,
+  );
+  checks.push(
+    "Plain up/down arrows move only among adjacent choice fields at 390/768/1440px, preserve values and correct-answer selection, keep endpoints/IME/modifiers/read-only/disabled fields safe, and follow current rows after add/delete. Existing Alt+arrow navigation remains available; no reads or writes occur.",
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
   await compose
     .getByRole("button", { name: "1번 보기 정답 선택", exact: true })
     .click();

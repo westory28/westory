@@ -296,6 +296,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
   );
+  const choiceOptionRows = useRef<Array<HTMLDivElement | null>>([]);
   const [choiceOptionImages, setChoiceOptionImages] = useState<
     ChoiceOptionImage[]
   >(createDefaultChoiceOptionImages(type === "special" ? "exam_prep" : ""));
@@ -1201,6 +1202,37 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (nextIndex < 0 || nextIndex >= fields.length) return;
     e.preventDefault();
     fields[nextIndex].focus();
+  };
+
+  const handleChoiceVerticalFocus = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+    index: number,
+  ) => {
+    if (
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      !canEdit ||
+      savingQuestion ||
+      event.currentTarget.readOnly ||
+      event.currentTarget.matches(":disabled")
+    )
+      return;
+    if (event.altKey) {
+      handleVerticalFocus(event);
+      return;
+    }
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const nextIndex = index + (event.key === "ArrowDown" ? 1 : -1);
+    if (nextIndex < 0 || nextIndex >= choiceOptions.length) return;
+    const nextField =
+      choiceOptionRows.current[nextIndex]?.querySelector("textarea");
+    if (!nextField || nextField.readOnly || nextField.matches(":disabled"))
+      return;
+    event.preventDefault();
+    nextField.focus();
   };
 
   const openCreateComposer = () => {
@@ -2788,6 +2820,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             return (
                               <div
                                 key={`choice-option-${index}`}
+                                ref={(element) => {
+                                  choiceOptionRows.current[index] = element;
+                                }}
                                 className="quiz-choice-row"
                               >
                                 <button
@@ -2815,7 +2850,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                         ),
                                       )
                                     }
-                                    onKeyDown={handleVerticalFocus}
+                                    onKeyDown={(event) =>
+                                      handleChoiceVerticalFocus(event, index)
+                                    }
                                     aria-label={`${index + 1}번 보기`}
                                     className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
                                   />

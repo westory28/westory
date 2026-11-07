@@ -1,4 +1,7 @@
-import { parseQuizPassageMarkup } from "../../../lib/quizPassageMarkup";
+import {
+  isQuizPassageBlankLabel,
+  parseQuizPassageMarkup,
+} from "../../../lib/quizPassageMarkup";
 
 export type QuizVisualMark =
   | "text"
@@ -132,6 +135,8 @@ export const quizVisualClipboard = (lines: QuizVisualDocument) => {
       else {
         const span = document.createElement("span");
         span.dataset.quizMark = run.mark;
+        if (run.mark === "box" && isQuizPassageBlankLabel(run.text))
+          span.dataset.quizLabelBox = "true";
         span.textContent = run.text.replace(/\u200b/g, "");
         if (run.mark === "underline") span.style.textDecoration = "underline";
         else if (run.mark === "blank")
@@ -142,7 +147,10 @@ export const quizVisualClipboard = (lines: QuizVisualDocument) => {
           span.style.padding = "0 .3em";
           if (run.mark === "blankBox") {
             span.dataset.quizWidth = String(normalizeBlankWidth(run.widthEm));
-            span.style.minWidth = `min(${normalizeBlankWidth(run.widthEm)}em, calc(100% - .6em - 2px))`;
+            span.style.width = `${normalizeBlankWidth(run.widthEm)}em`;
+            span.style.boxSizing = "content-box";
+            span.style.lineHeight = "1.2";
+            span.style.whiteSpace = "nowrap";
             span.style.textAlign = "center";
           }
         }
@@ -432,9 +440,11 @@ export const createQuizVisualFragment = (
         span.dataset.quizMark = run.mark;
         if (run.mark === "blank")
           span.title = "학생에게는 빈칸으로 표시됩니다.";
+        if (run.mark === "box" && isQuizPassageBlankLabel(run.text))
+          span.dataset.quizLabelBox = "true";
         if (run.mark === "blankBox") {
           span.dataset.quizWidth = String(normalizeBlankWidth(run.widthEm));
-          span.style.minWidth = `min(${normalizeBlankWidth(run.widthEm)}em, calc(100% - .6em - 2px))`;
+          span.style.width = `${normalizeBlankWidth(run.widthEm)}em`;
         }
         span.textContent = run.text || "\u200b";
         row.appendChild(span);

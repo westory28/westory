@@ -6,6 +6,9 @@ export interface QuizPassageSegment {
   widthEm?: number;
 }
 
+export const isQuizPassageBlankLabel = (value: string) =>
+  /^\([가-힣ㄱ-ㅎA-Za-z0-9]{1,3}\)$/u.test(value.trim());
+
 const BULLET_TOKEN = "{{bullet}}";
 const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box|blank|blankbox):([\s\S]*?)\}\}/g;
 const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;

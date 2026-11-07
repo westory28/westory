@@ -293,9 +293,15 @@ if (process.argv.includes("--browser")) {
       checkBrowser(
         await page
           .locator('[contenteditable="true"]')
-          .evaluate((root) => root.scrollWidth <= root.clientWidth + 1),
+          .evaluate((root) => {
+            const blank = root.querySelector('[data-quiz-mark="blankBox"]');
+            const style = getComputedStyle(blank);
+            return Math.abs(blank.getBoundingClientRect().width - (30.6 * parseFloat(style.fontSize) + 2)) < 1
+              && getComputedStyle(root).overflowX === "auto"
+              && document.documentElement.scrollWidth <= innerWidth + 1;
+          }),
         true,
-        `${viewport}: largest blank fits editor width`,
+        `${viewport}: largest blank keeps its authored width with local overflow only`,
       );
       await page.screenshot({
         path: path.join(artifactDir, `editor-${viewport}.png`),

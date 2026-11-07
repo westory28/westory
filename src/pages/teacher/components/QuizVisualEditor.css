@@ -73,7 +73,7 @@
 }
 .quiz-visual-content {
   min-height: 160px;
-  overflow: visible;
+  overflow-x: auto;
   padding: 16px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 0 0 8px 8px;
@@ -118,16 +118,6 @@
   border-bottom: 2px solid var(--ws-text, #1f2937);
   background: var(--ws-accent-soft, #fffbeb);
   padding: 0 8px;
-}
-.quiz-visual-content [data-quiz-mark="blankBox"] {
-  display: inline-block;
-  box-sizing: content-box;
-  max-width: calc(100% - 0.6em - 2px);
-  border: 1px solid currentColor;
-  padding: 0 0.3em;
-  text-align: center;
-  vertical-align: baseline;
-  white-space: pre-wrap;
 }
 .quiz-visual-blank-settings {
   display: flex;
