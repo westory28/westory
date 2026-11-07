@@ -198,8 +198,16 @@
   display: grid;
   gap: 2px 12px;
 }
-.mock-exam-options--three {
+.mock-exam-options--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  column-gap: 2px;
+}
+.mock-exam-options--3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 4px;
+}
+.mock-exam-options--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .mock-exam-options li {
   display: flex;
@@ -207,8 +215,18 @@
   gap: 4px;
   min-width: 0;
 }
+.mock-exam-options--5 li {
+  gap: 2px;
+}
+.mock-exam-options--3 li {
+  gap: 1px;
+}
 .mock-exam-option-number {
   flex: none;
+}
+.mock-exam-option-text {
+  min-width: 0;
+  white-space: pre-line;
 }
 .mock-exam-options li.is-selected .mock-exam-option-number {
   color: #1d4ed8;

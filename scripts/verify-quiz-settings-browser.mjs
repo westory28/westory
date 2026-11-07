@@ -71,7 +71,7 @@ export const saveQuizAssessmentSettings=async(scope,nodeId,category,round,title,
   const status=qa.statusOverride||(payload.active?'PUBLISHED':'PAUSED');
   const result={status,revision:expectedRevision+1};
   qa.settings[key]=structuredClone(payload);
-  qa.definitions[qa.definitionId(scope,nodeId,category,round)]={...result,questionCount:payload.questionCount,durationSeconds:payload.timeLimit,maxAttempts:payload.allowRetake?99:1,cooldownMinutes:payload.cooldown,presentationSettings:structuredClone(payload)};
+  qa.definitions[qa.definitionId(scope,nodeId,category,round)]={...result,questionCount:payload.questionCount,durationSeconds:payload.timeLimit,maxAttempts:payload.allowRetake?20:1,cooldownMinutes:payload.cooldown,presentationSettings:structuredClone(payload)};
   qa.commits.push(structuredClone(result));
   return result;
 };
@@ -595,13 +595,10 @@ try {
   assert.equal(
     await mock
       .getByRole("checkbox", { name: "재응시 허용", exact: true })
-      .count(),
-    0,
+      .isChecked(),
+    false,
   );
-  assert.match(
-    await mock.locator(".quiz-settings-body").textContent(),
-    /기본 회차 · 1회만 응시 가능/,
-  );
+  assert.equal(await number(mock, "재응시 대기 시간 (분)").isDisabled(), true);
   await saveButton(mock).click();
   await closeAfterSave(mock, "모든 학생에게 비공개");
   const mockPayload = await mock.evaluate(
@@ -614,6 +611,67 @@ try {
   checks.push(
     "New mock exams retain 10 questions/40 minutes, no hints and one attempt for the base round.",
   );
+
+  for (const width of [390, 768, 1280]) {
+    const page = await open("category=exam_prep", width);
+    const retake = page.getByRole("checkbox", { name: "재응시 허용", exact: true });
+    const roundButton = (name) => page.getByRole("button", { name, exact: true });
+    await retake.check();
+    await number(page, "재응시 대기 시간 (분)").fill("7");
+    await capture(page, `mock-retake-${width}`);
+    assert.ok(await page.locator(".quiz-settings-body").evaluate(body => body.scrollWidth <= body.clientWidth + 1));
+    await saveButton(page).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.deepEqual(await page.evaluate(() => {
+      const qa = window.quizSettingsQa, saved = qa.saves.at(-1);
+      const definition = qa.definitions[qa.definitionId(saved.scope, saved.nodeId, saved.category, saved.round)];
+      return [saved.round, saved.payload.allowRetake, saved.payload.cooldown, definition.maxAttempts];
+    }), ["round_1", true, 7, 20]);
+    await reopen(page);
+    await retake.and(page.locator("input:checked")).waitFor();
+    assert.equal(await retake.isChecked(), true);
+    assert.equal(await number(page, "재응시 대기 시간 (분)").inputValue(), "7");
+    await roundButton("중학교 3학년 복시 (2회 모의고사)").click();
+    await ready(page);
+    await retake.and(page.locator("input:not(:checked)")).waitFor();
+    assert.equal(await retake.isChecked(), false);
+    await roundButton("중학교 3학년 초시 (1회 모의고사)").click();
+    await ready(page);
+    await retake.and(page.locator("input:checked")).waitFor();
+    assert.equal(await retake.isChecked(), true);
+    assert.equal(await number(page, "재응시 대기 시간 (분)").inputValue(), "7");
+    await roundButton("회차 추가").click();
+    await ready(page);
+    await retake.and(page.locator("input:checked")).waitFor();
+    assert.equal(await retake.isChecked(), true);
+    await number(page, "재응시 대기 시간 (분)").fill("");
+    await retake.uncheck();
+    assert.equal(await number(page, "재응시 대기 시간 (분)").isDisabled(), true);
+    await saveButton(page).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    assert.deepEqual(await page.evaluate(() => {
+      const qa = window.quizSettingsQa, saved = qa.saves.at(-1);
+      const definition = qa.definitions[qa.definitionId(saved.scope, saved.nodeId, saved.category, saved.round)];
+      return [saved.round, saved.payload.allowRetake, saved.payload.cooldown, definition.maxAttempts];
+    }), ["round_4", false, 0, 1]);
+    await reopen(page);
+    await roundButton("중학교 3학년 추가 모의고사 (4회 모의고사)").click();
+    await ready(page);
+    await retake.and(page.locator("input:not(:checked)")).waitFor();
+    assert.equal(await retake.isChecked(), false);
+    assert.equal(await number(page, "재응시 대기 시간 (분)").isDisabled(), true);
+    await page.close();
+  }
+  const storedMock = await open("category=exam_prep&stored");
+  assert.equal(await storedMock.getByRole("checkbox", { name: "재응시 허용", exact: true }).isChecked(), true);
+  assert.equal(await number(storedMock, "재응시 대기 시간 (분)").inputValue(), "17");
+  await storedMock.close();
+  const readonlyMock = await open("category=exam_prep&canonical&readonly", 390);
+  assert.equal(await readonlyMock.getByRole("checkbox", { name: "재응시 허용", exact: true }).isDisabled(), true);
+  assert.equal(await number(readonlyMock, "재응시 대기 시간 (분)").isDisabled(), true);
+  assert.equal(await readonlyMock.evaluate(() => window.quizSettingsQa.saves.length), 0);
+  await readonlyMock.close();
+  checks.push("Mock retake toggles save both directions per round, preserve legacy/canonical settings on reopen and round changes, and remain read-only at 390/768/1280px.");
 
   for (const width of [320, 390, 768, 1280, 1366]) {
     const page = await open("ten-classes", width);

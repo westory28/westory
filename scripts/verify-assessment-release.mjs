@@ -29,6 +29,7 @@ vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
     if (name === "./semesterCore") return semesterCore;
     if (name === "./historyClassroomExemptions") return exemptionModule.exports;
     if (name === "./assessmentLearning") return require("../functions/productionGateway/assessmentLearning.js");
+    if (name === "./mockExamMaterials") return require("../functions/productionGateway/mockExamMaterials.js");
     if (name === "./historyClassroomSync") return require("../functions/productionGateway/historyClassroomSync.js");
     if (name === "./archiveEnrollment") return { SEMESTER_CLASS_COLLECTION: "semester_classes" };
     if (["./cutoverAuthorization", "./sessionAuthority", "./studentMaintenance"].includes(name)) return {};
@@ -245,6 +246,24 @@ console.log("PASS targeted mock-exam refresh preserves all active rounds, legacy
   assert.notEqual(changed.items.find(item => item.payload.examRound === "round_2").sourceHash, second.sourceHash);
 }
 console.log("PASS fixed mock papers isolate rounds, reject empty rounds, normalize counts and share exact server hashes");
+{
+  const { api, docs } = harness();
+  docs.set(`${root}/quiz_questions/retake-mock`, { id: "retake-mock", unitId: "exam_prep", category: "exam_prep",
+    type: "word", question: "합성 재응시 설정 검증", answer: "조선", contentRevision: 1,
+    examRound: "round_1", paperOrder: 1, points: 100 });
+  const save = allowRetake => api.saveQuizAssessmentSettings(config, "exam_prep", "exam_prep", "round_1", "초시",
+    "exam_prep_exam_prep__round_1", { ...settings, allowRetake, cooldown: allowRetake ? 7 : 0 });
+  for (const allowRetake of [false, true, false]) {
+    await save(allowRetake);
+    const saved = docs.get("semester_assessment_definitions/quiz:2026-2:exam_prep:exam_prep:round_1");
+    assert.equal(saved.maxAttempts, allowRetake ? 20 : 1);
+    assert.equal(saved.presentationSettings.allowRetake, allowRetake);
+    assert.equal(saved.cooldownMinutes, allowRetake ? 7 : 0);
+    assert.equal(saved.status, "PUBLISHED");
+    assert.equal(docs.get(`${root}/assessment_config/settings`).exam_prep_exam_prep__round_1.allowRetake, allowRetake);
+  }
+  console.log("PASS mock retake settings use the real server definition maxAttempts 1/20 and preserve publication");
+}
 {
   const { api, docs, calls } = harness();
   const plan = await api.planCurrentAssessmentRelease(config);

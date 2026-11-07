@@ -12,6 +12,10 @@ import QuizPassage from "./QuizPassage";
 import QuizQuestionText from "./QuizQuestionText";
 import { getMockExamRoundNumber } from "../../lib/mockExamRounds";
 import {
+  formatMockExamChoiceLabel,
+  getMockExamChoiceColumns,
+} from "../../lib/mockExamChoiceLayout";
+import {
   getMockExamSetRun,
   type MockExamPassageSet,
 } from "../../lib/mockExamMaterials";
@@ -105,11 +109,10 @@ export function MockExamQuestionContent({
   setQuestionRange?: [number, number];
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
-  const imageOptions = question.choiceOptionImages?.some(Boolean);
-  const shortOptions =
-    !imageOptions &&
-    options.length === 5 &&
-    options.every((option) => option.length <= 12);
+  const choiceColumns = getMockExamChoiceColumns(
+    options,
+    question.choiceOptionImages,
+  );
   return (
     <div className="mock-exam-question-ink">
       {showPassageSet && question.passageSet && (
@@ -145,9 +148,7 @@ export function MockExamQuestionContent({
         </fieldset>
       )}
       {!hideAnswers && options.length > 0 && (
-        <ol
-          className={`mock-exam-options ${shortOptions ? "mock-exam-options--three" : ""}`}
-        >
+        <ol className={`mock-exam-options mock-exam-options--${choiceColumns}`}>
           {options.map((option, optionIndex) => (
             <li
               key={optionIndex}
@@ -156,8 +157,8 @@ export function MockExamQuestionContent({
               <span className="mock-exam-option-number">
                 {examChoiceNumber(optionIndex)}
               </span>
-              <span>
-                {option}
+              <span className="mock-exam-option-text">
+                {formatMockExamChoiceLabel(option)}
                 {question.choiceOptionImages?.[optionIndex] && (
                   <MockExamImage
                     src={question.choiceOptionImages[optionIndex]!}

@@ -219,13 +219,28 @@ try {
     return route.abort();
   });
   const page = await context.newPage();
+  let confirmClose = true;
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("dialog", async (dialog) => {
     alerts.push(dialog.message());
-    await dialog.dismiss();
+    if (dialog.type() === "confirm" && confirmClose) await dialog.accept();
+    else await dialog.dismiss();
   });
   await page.goto(origin);
   await page.getByRole("button", { name: "문제 등록", exact: true }).waitFor();
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const toolbar = await page.locator(".quiz-list-toolbar--mock").evaluate(el => {
+      const box = node => { const r = node.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+      return { outer: box(el), controls: [...el.querySelectorAll("select,input,button")].map(box), overflow: document.documentElement.scrollWidth > innerWidth };
+    });
+    assert.equal(toolbar.controls.length, 3);
+    assert(toolbar.controls.every(control => Math.abs(control.top - toolbar.controls[0].top) < 1 && Math.abs(control.bottom - toolbar.controls[0].bottom) < 1), "round, search and refresh stay on one row");
+    assert(toolbar.controls.every(control => control.left >= toolbar.outer.left && control.right <= toolbar.outer.right));
+    assert.equal(toolbar.overflow, false);
+    await page.screenshot({ path: path.join(evidence, `teacher-question-toolbar-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   const compose = page.getByRole("dialog", {
     name: "새 문제 등록",
@@ -235,6 +250,27 @@ try {
   await compose
     .getByLabel("발문", { exact: true })
     .fill("직접 등록한 자료를 보고 옳은 설명을 고르시오.");
+  confirmClose = false;
+  for (const requestClose of [
+    () => compose.getByRole("button", { name: "문제 편집 닫기", exact: true }).click(),
+    () => page.locator(".quiz-composer-viewport").click({ position: { x: 1, y: 1 } }),
+    () => page.keyboard.press("Escape"),
+    () => compose.getByRole("button", { name: "취소", exact: true }).click(),
+  ]) {
+    const prompts = alerts.length;
+    await requestClose();
+    assert.equal(alerts.length, prompts + 1, "every dismiss action asks before discarding");
+    assert(alerts.at(-1).includes("편집창을 닫을까요"));
+    assert(await compose.isVisible());
+    assert.equal(await compose.getByLabel("발문", { exact: true }).inputValue(), "직접 등록한 자료를 보고 옳은 설명을 고르시오.");
+  }
+  confirmClose = true;
+  await compose.getByRole("button", { name: "문제 편집 닫기", exact: true }).click();
+  await compose.waitFor({ state: "hidden" });
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+  assert.equal(await compose.getByLabel("발문", { exact: true }).inputValue(), "");
+  await compose.getByLabel("발문", { exact: true }).fill("직접 등록한 자료를 보고 옳은 설명을 고르시오.");
   const live = compose.getByRole("complementary", { name: "학생 화면 미리보기" });
   await live.locator('.mock-exam-stem').filter({hasText:"직접 등록한 자료를 보고 옳은 설명을 고르시오."}).waitFor();
   await compose.getByRole("button", { name: "〈보기〉 추가", exact: true }).click();

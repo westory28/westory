@@ -1143,6 +1143,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const closeComposer = () => {
     if (optimizingImage || savingQuestion) return;
+    if (
+      !window.confirm(
+        "문제 편집창을 닫을까요?\n저장하지 않은 내용은 사라집니다.",
+      )
+    )
+      return;
     setIsComposerOpen(false);
     resetForm();
   };
@@ -1887,17 +1893,27 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             )}
           </div>
         </div>
-        {canEdit && (
-          <button
-            type="button"
-            onClick={openCreateComposer}
-            disabled={loading || catalogScope !== questionScope}
-            className="quiz-authoring-primary"
-          >
-            <i className="fas fa-plus"></i>
-            <span>문제 등록</span>
-          </button>
-        )}
+        <div className="quiz-registration-actions">
+          {type === "special" && (
+            <MockExamPreview
+              key={`${questionScope}:${examRoundFilter}`}
+              disabled={loading || catalogScope !== questionScope}
+              entries={previewEntries}
+              loadQuestions={(entries) => pager.page(entries)}
+            />
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={openCreateComposer}
+              disabled={loading || catalogScope !== questionScope}
+              className="quiz-authoring-primary"
+            >
+              <i className="fas fa-plus"></i>
+              <span>문제 등록</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {type !== "special" && (
@@ -1924,12 +1940,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         </div>
       )}
 
-      {type === "special" && (
-        <div className="quiz-editor-toolbar flex-wrap px-4 py-3">
-          <label className="flex items-center gap-2 text-sm font-bold">
-            회차
+      <div
+        className={`quiz-editor-toolbar border-b border-gray-200 px-4 py-3${type === "special" ? " quiz-list-toolbar--mock" : ""}`}
+      >
+        {type === "special" && (
+          <label className="quiz-list-round flex min-w-0 items-center gap-2 text-sm font-bold">
+            <span className="quiz-list-filter-label">회차</span>
             <select
-              className="min-h-11 rounded border border-gray-300 px-3 font-normal"
+              className="min-h-11 min-w-0 w-full rounded border border-gray-300 px-2 font-normal"
               value={examRoundFilter}
               onChange={(event) => setExamRoundFilter(event.target.value)}
             >
@@ -1942,34 +1960,33 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               <option value="unassigned">기존 공통 문제은행</option>
             </select>
           </label>
-          <MockExamPreview
-            key={`${questionScope}:${examRoundFilter}`}
-            disabled={loading || catalogScope !== questionScope}
-            entries={previewEntries}
-            loadQuestions={(entries) => pager.page(entries)}
-          />
-        </div>
-      )}
-
-      <div className="quiz-editor-toolbar border-b border-gray-200 px-4 py-3">
+        )}
         <label className="flex min-w-0 flex-1 items-center gap-2 text-sm font-bold text-gray-700">
-          검색
+          <span className="quiz-list-filter-label">검색</span>
           <input
             type="search"
             value={questionSearch}
             onChange={(event) => setQuestionSearch(event.target.value)}
-            placeholder="문제·자료·해설·개념"
+            placeholder={
+              type === "special" ? "문제 검색" : "문제·자료·해설·개념"
+            }
             className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 font-normal"
           />
         </label>
-        <span className="text-sm text-gray-500">
-          {filteredQuestions.length}문항
-        </span>
+        {type !== "special" && (
+          <span className="text-sm text-gray-500">
+            {filteredQuestions.length}문항
+          </span>
+        )}
         <button
           type="button"
           onClick={fetchQuestions}
           disabled={loading || savingQuestion}
-          className="quiz-question-list-refresh"
+          className={
+            type === "special"
+              ? "quiz-authoring-button"
+              : "quiz-question-list-refresh"
+          }
           aria-label="문항 목록 새로고침"
         >
           새로고침

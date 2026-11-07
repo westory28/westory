@@ -236,8 +236,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         ? ""
         : "제한 시간은 1~360분으로 입력해 주세요. 초 단위까지 설정할 수 있습니다.",
     cooldown:
-      (!settings.allowRetake && !isRetakableMockExam) ||
-      validInteger(settings.cooldown, 0, 43200)
+      !settings.allowRetake || validInteger(settings.cooldown, 0, 43200)
         ? ""
         : "대기 시간은 0~43200 사이의 정수로 입력해 주세요.",
     hintLimit:
@@ -407,12 +406,20 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             }
           : {}),
       };
+    const hasRetakeSetting =
+      typeof raw === "object" &&
+      raw !== null &&
+      "allowRetake" in raw &&
+      typeof raw.allowRetake === "boolean";
     const entry = normalizeAssessmentConfigEntry(raw, defaultClassIds);
     const next: QuizSettingsFormState = {
       questionCount: entry.questionCount,
       questionOrder: entry.questionOrder,
       timeLimitMinutes: entry.timeLimit / 60,
-      allowRetake: isMockExam ? isRetakableMockExam : entry.allowRetake,
+      allowRetake:
+        isMockExam && !hasRetakeSetting
+          ? isRetakableMockExam
+          : entry.allowRetake,
       cooldown: entry.cooldown,
       hintLimit: isMockExam ? 0 : entry.hintLimit,
       // Paused assessments may retain old targets. They must be selected again
@@ -475,7 +482,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       randomOrder: settings.questionOrder === "random",
       questionOrder: settings.questionOrder,
       timeLimit: Number(settings.timeLimitMinutes) * 60,
-      allowRetake: isMockExam ? isRetakableMockExam : settings.allowRetake,
+      allowRetake: settings.allowRetake,
       cooldown: settings.allowRetake ? Number(settings.cooldown) : 0,
       hintLimit: isMockExam ? 0 : Number(settings.hintLimit),
       visibleTargetGrade: "3",
@@ -726,9 +733,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     <div className="quiz-settings-section-heading">
                       <h3>모의고사 회차</h3>
                       <InfoHelp label="모의고사 회차 도움말">
-                        회차마다 공개 대상과 응시 조건을 따로 저장합니다. 기본
-                        1~3회는 한 번만 응시할 수 있고, 추가 회차는 재응시를
-                        허용합니다. 모의고사에는 힌트가 없습니다.
+                        회차마다 공개 대상·재응시 여부·대기 시간을 따로
+                        저장합니다. 모의고사에는 힌트가 없습니다.
                       </InfoHelp>
                     </div>
                     <div className="quiz-settings-rounds">
@@ -988,40 +994,28 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         )}
                       </div>
                     )}
-                    <div
-                      className={`quiz-settings-option${!isMockExam ? " quiz-settings-option--toggle" : ""}`}
-                    >
-                      {!isMockExam && (
-                        <label className="quiz-settings-switch">
-                          <input
-                            type="checkbox"
-                            checked={settings.allowRetake}
-                            disabled={!canEdit || busy}
-                            onChange={(event) =>
-                              updateSettings({
-                                allowRetake: event.target.checked,
-                              })
-                            }
-                          />
-                          <span>재응시 허용</span>
-                        </label>
+                    <div className="quiz-settings-option quiz-settings-option--toggle">
+                      <label className="quiz-settings-switch">
+                        <input
+                          type="checkbox"
+                          checked={settings.allowRetake}
+                          disabled={!canEdit || busy}
+                          onChange={(event) =>
+                            updateSettings({
+                              allowRetake: event.target.checked,
+                            })
+                          }
+                        />
+                        <span>재응시 허용</span>
+                      </label>
+                      {renderNumberField(
+                        "cooldown",
+                        "재응시 대기 시간 (분)",
+                        0,
+                        43200,
+                        !settings.allowRetake,
+                        "분",
                       )}
-                      {isMockExam && (
-                        <p className="quiz-settings-summary">
-                          {isRetakableMockExam
-                            ? "추가 회차 · 재응시 허용"
-                            : "기본 회차 · 1회만 응시 가능"}
-                        </p>
-                      )}
-                      {(!isMockExam || isRetakableMockExam) &&
-                        renderNumberField(
-                          "cooldown",
-                          "재응시 대기 시간 (분)",
-                          0,
-                          43200,
-                          !settings.allowRetake,
-                          !isMockExam ? "분" : undefined,
-                        )}
                     </div>
                   </section>
                 </div>
