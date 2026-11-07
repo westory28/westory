@@ -64,7 +64,7 @@
 }
 .quiz-visual-content:focus {
   outline: 2px solid var(--ws-ring, #3b82f6);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 .quiz-visual-content [data-quiz-line] {
   min-height: 1.8em;
