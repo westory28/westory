@@ -245,23 +245,55 @@ try {
   await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, "local edits and live preview must not read or write the server");
-  for (const width of [390, 768, 1280, 1366]) {
-    await page.setViewportSize({ width, height: width === 1366 ? 768 : 900 });
-    const layout = await compose.evaluate((el) => {
+  await compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true }).fill("긴 자료에서도 작성 영역과 미리보기는 서로 독립적으로 이동합니다.\n".repeat(60));
+  for (const {width, height} of [{width:390,height:568},{width:390,height:900},{width:768,height:900},{width:1280,height:900},{width:1366,height:768},{width:1870,height:888}]) {
+    await page.setViewportSize({ width, height });
+    const layout = await compose.evaluate(async (el) => {
       const form = el.querySelector('.quiz-composer-body'), preview = el.querySelector('.mock-exam-draft-preview');
-      const box = node => { const r = node.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, width:r.width }; };
+      const header = el.querySelector('.quiz-composer-header'), footer = el.querySelector('.quiz-composer-footer'), outer = el.parentElement;
+      const box = node => { const r = node.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom, width:r.width, height:r.height }; };
+      form.scrollTop = form.scrollHeight;
+      preview.scrollTop = 0;
+      const formEnd = form.scrollTop, headerBefore = box(header), footerBefore = box(footer);
+      preview.scrollTop = preview.scrollHeight;
+      const previewEnd = preview.scrollTop, formAfterPreview = form.scrollTop;
+      form.scrollTop = 0;
+      const previewAfterForm = preview.scrollTop;
+      preview.scrollTop = 0;
+      await new Promise(resolve => requestAnimationFrame(resolve));
       return { window:innerWidth, document:document.documentElement.scrollWidth, dialog:box(el), form:box(form), preview:box(preview), innerScroll:getComputedStyle(form).overflowY,
+        previewScroll:getComputedStyle(preview).overflowY, formEnd, formAfterPreview, previewEnd, previewAfterForm,
+        headerBefore, headerAfter:box(header), footerBefore, footerAfter:box(footer),
+        outerScroll:outer.scrollTop, outerOverflow:outer.scrollHeight-outer.clientHeight,
+        outerStyle:getComputedStyle(outer).overflowY, dialogOverflow:el.scrollHeight-el.clientHeight,
         overflow:Array.from(el.querySelectorAll('select,textarea,[contenteditable="true"]')).filter(node => node.scrollWidth > node.clientWidth+2).length };
     });
     assert(layout.document <= width+1, JSON.stringify(layout));
     assert(layout.dialog.right <= width+1, JSON.stringify(layout));
-    assert.equal(layout.innerScroll, 'visible', 'only the outer viewport may scroll');
+    assert(layout.dialog.top >= 0 && layout.dialog.bottom <= height, JSON.stringify(layout));
+    assert.equal(layout.innerScroll, 'auto', 'the form owns its scroll');
+    assert.equal(layout.previewScroll, 'auto', 'the preview owns its scroll');
+    assert(layout.formEnd > 0 && layout.previewEnd > 0, 'long form and preview both scroll');
+    assert.equal(layout.formEnd, layout.formAfterPreview, 'preview scrolling does not move the form');
+    assert.equal(layout.previewEnd, layout.previewAfterForm, 'form scrolling does not move the preview');
+    assert.deepEqual(layout.headerBefore, layout.headerAfter, 'header stays fixed');
+    assert.deepEqual(layout.footerBefore, layout.footerAfter, 'save actions stay fixed');
+    assert.equal(layout.outerScroll, 0);
+    assert(layout.outerOverflow <= 1, JSON.stringify(layout));
+    assert(layout.form.bottom <= layout.footerBefore.top && layout.preview.bottom <= layout.footerBefore.top, JSON.stringify(layout));
+    assert(layout.form.top >= layout.headerBefore.bottom && layout.preview.top >= layout.headerBefore.bottom, JSON.stringify(layout));
     assert.equal(layout.overflow, 0, JSON.stringify(layout));
     if(width >= 1024){ assert(layout.preview.left >= layout.form.right, JSON.stringify(layout)); assert(layout.dialog.width > 1100); }
-    await compose.getByLabel('발문', {exact:true}).scrollIntoViewIfNeeded();
-    await page.screenshot({path:path.join(evidence, `teacher-live-composer-${width}.png`)});
+    else assert(layout.preview.top >= layout.form.bottom, JSON.stringify(layout));
+    await page.screenshot({path:path.join(evidence, `teacher-live-composer-${width}-${height}.png`)});
+    layouts.push({scenario:'independent-composer-scroll',width,height,...layout});
   }
   await page.setViewportSize({width:1280,height:900});
+  await live.focus();
+  await live.press('End');
+  await page.waitForFunction(() => document.querySelector('.mock-exam-draft-preview').scrollTop > 0);
+  assert.equal(await compose.locator('.quiz-composer-body').evaluate(el => el.scrollTop), 0, 'keyboard preview scrolling leaves the form in place');
+  await compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true }).fill("");
   await compose
     .getByRole("spinbutton", { name: "배점", exact: true })
     .fill("3.5");
@@ -382,7 +414,7 @@ try {
   checks.push(
     "Direct registration: distinct-five-choice/decimal validation blocks writes, image and selected answer stay paired through sorting, learning metadata persists, failed save retains input and retries the same ID.",
   );
-  checks.push("Draft preview updates locally without server reads/writes; 보기 and set passage are saved only on final registration; wide 390/768/1280/1366 editor uses one outer vertical scroll.");
+  checks.push("Draft preview updates locally without server reads/writes; 보기 and set passage are saved only on final registration; 390/768/1280/1366/1870 editor fits the viewport with independent form/preview scrolling and fixed header/footer; preview keyboard scrolling is supported.");
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   await compose.getByLabel("발문", { exact: true }).fill("공통 지문에 연결한 두 번째 문항입니다.");
   for(let index=0;index<5;index++) await compose.getByLabel(`${index+1}번 보기`,{exact:true}).fill(authoredOptions[index]);
