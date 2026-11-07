@@ -38,6 +38,12 @@ import {
   executeAssessmentManagementCommand,
 } from "../../../lib/assessmentLifecycle";
 import { useQuizDialog } from "./useQuizDialog";
+import { MockExamPaperHeader } from "../../../components/common/MockExamPaper";
+import {
+  getMockExamPaperTitle,
+  MOCK_EXAM_PAPER_TITLE_LIMIT,
+  MOCK_EXAM_PAPER_HEADING_LIMIT,
+} from "../../../lib/mockExamPaperHeader";
 import "./QuizWorkspace.css";
 
 interface QuizSettingsModalProps {
@@ -56,6 +62,8 @@ interface QuizSettingsFormState {
   cooldown: number | "";
   hintLimit: number | "";
   visibleClassIds: string[];
+  paperTitle: string;
+  paperHeading: string;
 }
 const CATEGORY_LABELS: Record<string, string> = {
   diagnostic: "진단평가",
@@ -78,6 +86,8 @@ const createDefaultFormState = (): QuizSettingsFormState => ({
   cooldown: 5,
   hintLimit: 3,
   visibleClassIds: [],
+  paperTitle: "",
+  paperHeading: "",
 });
 const createEmptyVisibilityGroup = (): AssessmentVisibilityGroup => ({
   gradeValue: "3",
@@ -143,6 +153,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     Record<string, unknown>
   >({});
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [paperPreviewOpen, setPaperPreviewOpen] = useState(false);
   const [hasStoredSettings, setHasStoredSettings] = useState(false);
   const [definitionState, setDefinitionState] = useState<{
     id: string;
@@ -224,6 +235,14 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   );
   const hintsEnabled = !isMockExam && settings.hintLimit !== 0;
   const fieldErrors = {
+    paperTitle:
+      settings.paperTitle.length <= MOCK_EXAM_PAPER_TITLE_LIMIT
+        ? ""
+        : `시험지 제목은 ${MOCK_EXAM_PAPER_TITLE_LIMIT}자 이내로 입력해 주세요.`,
+    paperHeading:
+      settings.paperHeading.length <= MOCK_EXAM_PAPER_HEADING_LIMIT
+        ? ""
+        : `머리말은 ${MOCK_EXAM_PAPER_HEADING_LIMIT}자 이내로 입력해 주세요.`,
     questionCount: validInteger(settings.questionCount, 1, 200)
       ? ""
       : "문항 수는 1~200 사이의 정수로 입력해 주세요.",
@@ -256,6 +275,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     setLoadError("");
     setPendingNavigation(null);
     setSelectedExamRound(DEFAULT_MOCK_EXAM_ROUND);
+    setPaperPreviewOpen(false);
     setMockExamRounds(MOCK_EXAM_ROUNDS);
     const loadSettings = async () => {
       try {
@@ -425,6 +445,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       // Paused assessments may retain old targets. They must be selected again
       // before this form can publish them, including when only timing is edited.
       visibleClassIds: entry.active ? entry.visibleClassIds : [],
+      paperTitle: entry.paperTitle || "",
+      paperHeading: entry.paperHeading || "",
     };
     setSettings(next);
     setSavedFingerprint(formFingerprint(next));
@@ -488,6 +510,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       visibleTargetGrade: "3",
       visibleClassIds: normalizedSelectedClassIds,
       visibilityVersion: 2,
+      ...(isMockExam
+        ? {
+            paperTitle: settings.paperTitle.trim(),
+            paperHeading: settings.paperHeading.trim(),
+          }
+        : {}),
     };
     try {
       const saved = await saveQuizAssessmentSettings(
@@ -773,6 +801,63 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                         회차 추가
                       </button>
                     </div>
+                  </section>
+                )}
+                {isMockExam && (
+                  <section className="quiz-settings-section">
+                    <div className="quiz-settings-section-heading">
+                      <h3>시험지 상단 문구</h3>
+                      <InfoHelp label="시험지 상단 문구 도움말">
+                        회차별로 저장합니다. 제목을 비우면 기본 제목을 사용하고,
+                        머리말을 비우면 표시하지 않습니다.
+                      </InfoHelp>
+                      <button
+                        type="button"
+                        className="quiz-authoring-button"
+                        aria-expanded={paperPreviewOpen}
+                        onClick={() => setPaperPreviewOpen((value) => !value)}
+                      >
+                        {paperPreviewOpen ? "미리보기 닫기" : "미리보기"}
+                      </button>
+                    </div>
+                    <div className="quiz-settings-paper-fields">
+                      <label>
+                        시험지 제목
+                        <input
+                          type="text"
+                          value={settings.paperTitle}
+                          placeholder={getMockExamPaperTitle(selectedExamRound)}
+                          maxLength={MOCK_EXAM_PAPER_TITLE_LIMIT}
+                          disabled={!canEdit || busy}
+                          onChange={(event) =>
+                            updateSettings({ paperTitle: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        머리말
+                        <input
+                          type="text"
+                          value={settings.paperHeading}
+                          maxLength={MOCK_EXAM_PAPER_HEADING_LIMIT}
+                          disabled={!canEdit || busy}
+                          onChange={(event) =>
+                            updateSettings({ paperHeading: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    {paperPreviewOpen && (
+                      <div
+                        className="quiz-settings-paper-preview"
+                        aria-label="시험지 상단 미리보기"
+                      >
+                        <MockExamPaperHeader
+                          round={selectedExamRound}
+                          settings={settings}
+                        />
+                      </div>
+                    )}
                   </section>
                 )}
                 <section className="quiz-settings-section">

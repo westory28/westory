@@ -36,6 +36,43 @@ interface Snapshot {
   end: number;
 }
 
+function UtilityIcon({
+  action,
+}: {
+  action: "copy" | "cut" | "paste" | "undo" | "redo";
+}) {
+  return (
+    <svg
+      className="quiz-visual-tool-icon quiz-visual-utility-icon"
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+    >
+      {action === "copy" && (
+        <>
+          <rect x="7" y="7" width="10" height="10" rx="1" />
+          <path d="M13 4V3H3v10h1" />
+        </>
+      )}
+      {action === "cut" && (
+        <>
+          <circle cx="5" cy="5" r="2.5" />
+          <circle cx="5" cy="15" r="2.5" />
+          <path d="m7 7 10 10M7 13 17 3" />
+        </>
+      )}
+      {action === "paste" && (
+        <>
+          <path d="M6 4H3v13h14V4h-3" />
+          <rect x="6" y="2" width="8" height="4" rx="1" />
+          <path d="M7 10h6M7 13h6" />
+        </>
+      )}
+      {action === "undo" && <path d="M7 3 3 7l4 4M3 7h8a6 6 0 0 1 0 12" />}
+      {action === "redo" && <path d="m13 3 4 4-4 4m4-4H9a6 6 0 0 0 0 12" />}
+    </svg>
+  );
+}
+
 const QuizVisualPassageEditor: React.FC<Props> = ({
   value,
   onChange,
@@ -418,123 +455,135 @@ const QuizVisualPassageEditor: React.FC<Props> = ({
           role="toolbar"
           aria-label={`${label} 서식`}
         >
-          {(
-            [
-              ["underline", "밑줄"],
-              ["box", "네모"],
-              ...(allowBlank ? [["blank", "답안 빈칸"]] : []),
-              ["bullet", "글머리표"],
-              ["text", "서식 지우기"],
-            ] as [QuizVisualMark | "bullet", string][]
-          ).map(([mark, title]) => (
-            <button
-              key={mark}
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => apply(mark)}
-              aria-label={`${label} ${title}`}
-              title={
-                mark === "bullet"
-                  ? "선택한 줄의 글머리표 전환"
-                  : "선택한 글자에 적용"
-              }
-              className={
-                mark === "underline" ? "quiz-visual-underline-button" : ""
-              }
-            >
-              {mark === "bullet" && (
-                <svg
-                  className="quiz-visual-tool-icon"
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                >
-                  <circle cx="3" cy="5" r="1.25" fill="currentColor" />
-                  <circle cx="3" cy="10" r="1.25" fill="currentColor" />
-                  <circle cx="3" cy="15" r="1.25" fill="currentColor" />
-                  <path d="M7 5h10M7 10h10M7 15h10" />
-                </svg>
-              )}
-              {mark === "text" && (
-                <svg
-                  className="quiz-visual-tool-icon"
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                >
-                  <path d="m7 15-4-4a1.5 1.5 0 0 1 0-2l6-6a1.5 1.5 0 0 1 2 0l6 6a1.5 1.5 0 0 1 0 2l-4 4H7Zm-2-8 8 8M7 17h11" />
-                </svg>
-              )}
-              <span
+          <div className="quiz-visual-format-tools">
+            {(
+              [
+                ["underline", "밑줄"],
+                ["box", "네모"],
+                ...(allowBlank ? [["blank", "답안 빈칸"]] : []),
+                ["bullet", "글머리표"],
+                ["text", "서식 지우기"],
+              ] as [QuizVisualMark | "bullet", string][]
+            ).map(([mark, title]) => (
+              <button
+                key={mark}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => apply(mark)}
+                aria-label={`${label} ${title}`}
+                title={
+                  mark === "bullet"
+                    ? "선택한 줄의 글머리표 전환"
+                    : "선택한 글자에 적용"
+                }
                 className={
-                  mark === "box"
-                    ? "quiz-visual-box-sample"
-                    : mark === "blank"
-                      ? "quiz-visual-blank-sample"
-                      : undefined
+                  mark === "underline" ? "quiz-visual-underline-button" : ""
                 }
               >
-                {title}
+                {mark === "bullet" && (
+                  <svg
+                    className="quiz-visual-tool-icon"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                  >
+                    <circle cx="3" cy="5" r="1.25" fill="currentColor" />
+                    <circle cx="3" cy="10" r="1.25" fill="currentColor" />
+                    <circle cx="3" cy="15" r="1.25" fill="currentColor" />
+                    <path d="M7 5h10M7 10h10M7 15h10" />
+                  </svg>
+                )}
+                {mark === "text" && (
+                  <svg
+                    className="quiz-visual-tool-icon"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15-4-4a1.5 1.5 0 0 1 0-2l6-6a1.5 1.5 0 0 1 2 0l6 6a1.5 1.5 0 0 1 0 2l-4 4H7Zm-2-8 8 8M7 17h11" />
+                  </svg>
+                )}
+                <span
+                  className={
+                    mark === "box"
+                      ? "quiz-visual-box-sample"
+                      : mark === "blank"
+                        ? "quiz-visual-blank-sample"
+                        : undefined
+                  }
+                >
+                  {title}
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-label={`${label} 빈칸 네모`}
+              aria-expanded={!!blankSettings}
+              aria-controls={blankSettingsId}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={openBlankSettings}
+            >
+              <span className="quiz-visual-box-sample" aria-hidden="true">
+                (가)
               </span>
+              빈칸 네모
             </button>
-          ))}
-          <button
-            type="button"
-            aria-label={`${label} 빈칸 네모`}
-            aria-expanded={!!blankSettings}
-            aria-controls={blankSettingsId}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={openBlankSettings}
-          >
-            <span className="quiz-visual-box-sample" aria-hidden="true">
-              (가)
-            </span>
-            빈칸 네모
-          </button>
-          <button
-            type="button"
-            aria-label={`${label} 복사`}
-            disabled={!selectionLength || clipboardBusy}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void copyToClipboard()}
-          >
-            복사
-          </button>
-          <button
-            type="button"
-            aria-label={`${label} 잘라내기`}
-            disabled={!selectionLength || clipboardBusy}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void copyToClipboard(true)}
-          >
-            잘라내기
-          </button>
-          <button
-            type="button"
-            aria-label={`${label} 붙여넣기`}
-            disabled={clipboardBusy}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void pasteFromClipboard()}
-          >
-            붙여넣기
-          </button>
-          <span className="quiz-visual-toolbar-spacer" />
-          <button
-            type="button"
-            aria-label={`${label} 실행 취소`}
-            disabled={historyState.index === 0}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => moveHistory(-1)}
-          >
-            실행 취소
-          </button>
-          <button
-            type="button"
-            aria-label={`${label} 다시 실행`}
-            disabled={historyState.index >= historyState.length - 1}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => moveHistory(1)}
-          >
-            다시 실행
-          </button>
+            <button
+              type="button"
+              aria-label={`${label} 복사`}
+              title="복사"
+              disabled={!selectionLength || clipboardBusy}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void copyToClipboard()}
+            >
+              <UtilityIcon action="copy" />
+              <span className="quiz-visual-utility-label">복사</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`${label} 잘라내기`}
+              title="잘라내기"
+              disabled={!selectionLength || clipboardBusy}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void copyToClipboard(true)}
+            >
+              <UtilityIcon action="cut" />
+              <span className="quiz-visual-utility-label">잘라내기</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`${label} 붙여넣기`}
+              title="붙여넣기"
+              disabled={clipboardBusy}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void pasteFromClipboard()}
+            >
+              <UtilityIcon action="paste" />
+              <span className="quiz-visual-utility-label">붙여넣기</span>
+            </button>
+            <span className="quiz-visual-toolbar-spacer" />
+            <button
+              type="button"
+              aria-label={`${label} 실행 취소`}
+              title="실행 취소"
+              disabled={historyState.index === 0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => moveHistory(-1)}
+            >
+              <UtilityIcon action="undo" />
+              <span className="quiz-visual-utility-label">실행 취소</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`${label} 다시 실행`}
+              title="다시 실행"
+              disabled={historyState.index >= historyState.length - 1}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => moveHistory(1)}
+            >
+              <UtilityIcon action="redo" />
+              <span className="quiz-visual-utility-label">다시 실행</span>
+            </button>
+          </div>
           {tools}
         </div>
         {blankSettings && (

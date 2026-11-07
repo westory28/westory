@@ -1177,3 +1177,46 @@
 .quiz-achievement-fields label {
   white-space: nowrap;
 }
+.quiz-settings-paper-fields {
+  display: grid;
+  gap: 12px;
+}
+.quiz-settings-paper-fields label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.quiz-settings-paper-fields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 400;
+}
+.quiz-settings-paper-preview {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  background: #fff;
+  color: #111;
+  font-family: "Noto Serif KR", serif;
+}
+.quiz-settings-paper-preview .mock-exam-cover-line {
+  height: auto;
+  min-height: 76px;
+}
+.quiz-settings-paper-preview .mock-exam-title-box {
+  margin-bottom: 0;
+}
+.quiz-settings-paper-preview .mock-exam-approval {
+  max-width: 48%;
+  min-width: 128px;
+}
+.quiz-settings-paper-preview .mock-exam-stamp {
+  max-width: 100%;
+  height: auto;
+}

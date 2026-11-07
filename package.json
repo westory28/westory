@@ -46,7 +46,7 @@
     "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs",
     "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
     "verify:avatar-previews": "node scripts/build-avatar-2d-assets.mjs --spec scripts/avatar-2d-art-registry.json --check && node scripts/render-avatar-item-previews.mjs --check",
-    "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs"
+    "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs && node scripts/verify-achievement-estimates.mjs"
   },
   "dependencies": {
     "@fontsource/noto-serif-kr": "^5.3.1",

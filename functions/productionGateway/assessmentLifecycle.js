@@ -155,6 +155,8 @@ const normalizePresentationSettings = (value) => {
     "visibleTargetGrade",
     "visibleClassIds",
     "visibilityVersion",
+    "paperTitle",
+    "paperHeading",
   ], "presentationSettings", 20_000);
   if (
     typeof normalized.active !== "boolean"
@@ -170,6 +172,14 @@ const normalizePresentationSettings = (value) => {
     text(item, "visibleClassId", 180));
   if (new Set(visibleClassIds).size !== visibleClassIds.length) {
     fail("invalid-argument", "presentationSettings has duplicate class ids.", "ASSESSMENT_PAYLOAD_INVALID");
+  }
+  for (const [key, maximum] of [["paperTitle", 60], ["paperHeading", 80]]) {
+    if (normalized[key] === undefined) continue;
+    if (typeof normalized[key] !== "string" || normalized[key].length > maximum
+      || /[\u0000-\u001f\u007f]/u.test(normalized[key])) {
+      fail("invalid-argument", "시험지 상단 문구의 길이와 줄바꿈을 확인해 주세요.", "ASSESSMENT_PAPER_HEADER_INVALID");
+    }
+    normalized[key] = normalized[key].trim();
   }
   return {
     ...normalized,
@@ -376,12 +386,17 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       "id", "unitId", "subUnitId", "category", "type", "question", "answer",
       "options", "choiceOptionImages", "matchingPairs", "explanation", "image",
       "passage", "examplePassage", "passageSet", "hintEnabled", "hint", "refBig", "refMid", "refSmall",
-      "concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
+      "concepts", "cognitiveProcess", "cognitiveProcesses", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId",
       "examRound", "paperOrder", "points", "paperBreakBefore",
       ...ACHIEVEMENT_FIELDS,
     ], "question");
     if (String(question.id) !== questionId || !question.unitId || !question.category || !question.type || !question.question) {
       fail("invalid-argument", "question identity is invalid.", "ASSESSMENT_QUESTION_INVALID");
+    }
+    if (Object.hasOwn(question, "cognitiveProcesses") && (!Array.isArray(question.cognitiveProcesses)
+      || question.cognitiveProcesses.length > 8
+      || question.cognitiveProcesses.some(value => typeof value !== "string" || !value.trim() || value.trim().length > 60))) {
+      fail("invalid-argument", "사고 과정은 최대 8개, 각 60자 이내로 선택해 주세요.", "ASSESSMENT_COGNITIVE_PROCESSES_INVALID");
     }
     mockMaterials.normalizeMockExamMaterials(question, fail);
     if (question.category === "exam_prep") {
@@ -412,7 +427,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     return {
       semesterId: normalizeSemesterId(payload.semesterId),
       questionId,
-      question: { ...question, ...(["concepts", "cognitiveProcess", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId"].some(key => Object.hasOwn(question, key)) ? learning.normalizeQuestionLearning(question) : {}),
+      question: { ...question, ...(["concepts", "cognitiveProcess", "cognitiveProcesses", "familyId", "derivedFromQuestionId", "misconceptionTags", "reviewLessonId"].some(key => Object.hasOwn(question, key)) ? learning.normalizeQuestionLearning(question) : {}),
         ...normalizeAchievementMetadata(question, { strict: true }) },
       expectedRevision: nonNegativeInteger(payload.expectedRevision, "expectedRevision"),
       reason: text(payload.reason, "reason", 300),
@@ -1363,6 +1378,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         ...(source.fixedPaper ? { paperVersion: 1 } : {}),
         ...(definition.assessmentKind === "QUIZ" ? {
           sourceId: definition.sourceId || "", category: definition.category || "", examRound: definition.examRound || "",
+          ...(definition.category === "exam_prep" ? { paperHeader: {
+            paperTitle: definition.presentationSettings?.paperTitle || "",
+            paperHeading: definition.presentationSettings?.paperHeading || "",
+          } } : {}),
           learningSnapshot: (source.learningSnapshot || []).filter(item => selectedIds.includes(item.id)),
           questionDocumentIds: Object.fromEntries((source.quizDocuments || [])
             .filter(document => selectedIds.includes(String(document.data?.id ?? document.path.split("/").at(-1))))
@@ -1550,6 +1569,7 @@ const serializeAttempt = (attempt, resumed) => ({
   revision: attempt.revision,
   answers: attempt.answers || {},
   ...(attempt.assessmentKind === "QUIZ" ? { analytics: attempt.analytics || null, learningSnapshot: attempt.learningSnapshot || [],
+    ...(attempt.paperHeader ? { paperHeader: attempt.paperHeader } : {}),
     ...(Array.isArray(attempt.questionSnapshots) ? { questionPresentation: learning.questionPresentation(attempt.questionSnapshots, attempt.category || String(attempt.definitionId || "").split(":")[3]), questionSnapshotOmittedIds: attempt.questionSnapshotOmittedIds || [] } : {}) } : {}),
   currentItemId: attempt.currentItemId || "",
   questionIds: attempt.questionIds || [],

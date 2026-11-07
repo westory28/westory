@@ -876,11 +876,20 @@ const runMockExamPaper = async () => {
   const base = definitionPayload("QUIZ");
   const config = { ...base, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1", definitionId: "quiz:2026-2:exam_prep:exam_prep:round_1",
     questionCount: 20, maxAttempts: 20, legacyConfigKey: "exam_prep_exam_prep__round_1", expectedRevision: 0, reason: "Synthetic paper test",
-    presentationSettings: { ...base.presentationSettings, questionCount: 20 } };
+    presentationSettings: { ...base.presentationSettings, questionCount: 20,
+      paperTitle: "3학년 역사과 초시", paperHeading: "2026학년도 역사 평가" } };
+  for (const invalid of [{ paperTitle: "가".repeat(61) }, { paperHeading: "가".repeat(81) },
+    { paperTitle: "제목\n추가 줄" }, { paperHeading: { html: "invalid" } }]) {
+    assert.throws(() => assessment.normalizeAssessmentPayload("saveQuizAssessmentSettings", {
+      ...config, presentationSettings: { ...config.presentationSettings, ...invalid },
+    }), error => error?.details?.reason === "ASSESSMENT_PAPER_HEADER_INVALID");
+  }
   await apply("saveQuizAssessmentSettings", config);
   const definition = paperStore.snapshot(`${assessment.DEFINITION_COLLECTION}/${config.definitionId}`).data;
   assert.equal(definition.questionCount, 2);
   assert.equal(definition.presentationSettings.randomOrder, false);
+  assert.equal(definition.presentationSettings.paperTitle, "3학년 역사과 초시");
+  assert.equal(definition.presentationSettings.paperHeading, "2026학년도 역사 평가");
   const count = paperStore.writeCount;
   await assert.rejects(apply("saveQuizAssessmentSettings", { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_4", examRound: "round_4", legacyConfigKey: "exam_prep_exam_prep__round_4" }),
     error => error?.details?.reason === "ASSESSMENT_SOURCE_EMPTY");
@@ -904,6 +913,13 @@ const runMockExamPaper = async () => {
   const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId,
     preparedSourceHash: prepared.preparedAssets.sourceHash }, true)).result;
   assert.equal(started.serverNowIso, new Date(nowMs).toISOString());
+  assert.deepEqual(started.paperHeader, { paperTitle: "3학년 역사과 초시", paperHeading: "2026학년도 역사 평가" });
+  const changedHeader = { ...definition, presentationSettings: { ...definition.presentationSettings,
+    paperTitle: "바뀐 다음 시험 제목", paperHeading: "새 머리말" } };
+  paperStore.documents.set(`${assessment.DEFINITION_COLLECTION}/${config.definitionId}`, changedHeader);
+  const resumedHeader = await query.getAssessmentState({ auth: student, data: { definitionId: config.definitionId } });
+  assert.deepEqual(resumedHeader.attempt.paperHeader, started.paperHeader, "An existing attempt preserves its own paper header after settings changes");
+  paperStore.documents.set(`${assessment.DEFINITION_COLLECTION}/${config.definitionId}`, definition);
   assert.equal(Date.parse(started.deadlineAtIso) - Date.parse(started.startedAtIso), definition.durationSeconds * 1000);
   assert.deepEqual(started.questionIds, ["901", "902"]);
   assert.deepEqual(started.questionPresentation.map(q => q.points), [30, 70]);

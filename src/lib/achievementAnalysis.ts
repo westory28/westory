@@ -59,6 +59,7 @@ export interface AchievementQuestion extends AchievementMetadata {
   type?: string;
   options?: string[];
   answer?: string | number;
+  points?: number;
 }
 export interface AchievementStudent {
   uid: string;

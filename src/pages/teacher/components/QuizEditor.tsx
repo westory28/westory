@@ -1,10 +1,18 @@
 import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { db } from "../../../lib/firebase";
 import { getHistoryDictionaryCallable as getHttpsCallable } from "../../../lib/historyDictionarySession";
 import {
   collection,
   documentId,
+  doc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -15,7 +23,11 @@ import {
   getAssessmentSemesterId,
   refreshPublishedQuizDefinitions,
 } from "../../../lib/assessmentRelease";
-import { executeAssessmentManagementCommand } from "../../../lib/assessmentLifecycle";
+import {
+  buildAssessmentDefinitionId,
+  executeAssessmentManagementCommand,
+} from "../../../lib/assessmentLifecycle";
+import { normalizeMockExamPaperHeader } from "../../../lib/mockExamPaperHeader";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
@@ -341,6 +353,52 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
   const optimizingImage = optimizingImageCount > 0;
+  const composerBaseline = useRef("");
+  const composerInteracted = useRef(false);
+  const normalizedMetadata = normalizeQuizLearningMetadata(
+    metadata,
+    choiceOptions,
+  );
+  const orderedProcesses = [...normalizedMetadata.cognitiveProcesses].sort();
+  const composerSnapshot = JSON.stringify({
+    formType,
+    formText,
+    formExp,
+    formImage,
+    formPassage,
+    formExample,
+    exampleEnabled,
+    formPassageSet,
+    passageSetLinked,
+    formSubUnit,
+    epSource,
+    formExamRound,
+    formPaperOrder,
+    formPoints,
+    choiceOptions,
+    choiceOptionImages,
+    choiceAnswerIndex,
+    oxAnswer,
+    wordAnswer,
+    orderItems,
+    matchingPairs,
+    hintEnabled,
+    hintText,
+    metadata: {
+      ...normalizedMetadata,
+      cognitiveProcesses: orderedProcesses,
+      cognitiveProcess: orderedProcesses[0] || "",
+    },
+  });
+  // Opening can infer unit standards. Settle those defaults before the first
+  // user event, then compare actual values so reverting an edit is clean again.
+  useLayoutEffect(() => {
+    if (isComposerOpen && !composerInteracted.current)
+      composerBaseline.current = composerSnapshot;
+  }, [isComposerOpen, composerSnapshot]);
+  const rememberComposerInteraction = () => {
+    composerInteracted.current = true;
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionImageRequest = useRef(0);
@@ -927,6 +985,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const resetForm = () => {
+    composerInteracted.current = false;
     questionImageRequest.current += 1;
     sharedImageRequest.current += 1;
     setFormError("");
@@ -1245,6 +1304,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const closeComposer = () => {
     if (optimizingImage || savingQuestion) return;
     if (
+      composerSnapshot !== composerBaseline.current &&
       !window.confirm(
         "문제 편집창을 닫을까요?\n저장하지 않은 내용은 사라집니다.",
       )
@@ -1255,6 +1315,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const startEdit = (question: Question) => {
+    composerInteracted.current = false;
     questionImageRequest.current += 1;
     sharedImageRequest.current += 1;
     setMetadata(question);
@@ -2006,6 +2067,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               disabled={loading || catalogScope !== questionScope}
               entries={previewEntries}
               loadQuestions={(entries) => pager.page(entries)}
+              loadPaperHeader={async (round) => {
+                const snapshot = await getDoc(
+                  doc(
+                    db,
+                    "semester_assessment_definitions",
+                    buildAssessmentDefinitionId(
+                      `${questionYear}-${questionSemester}`,
+                      "QUIZ",
+                      node.id,
+                      "exam_prep",
+                      round,
+                    ),
+                  ),
+                );
+                return normalizeMockExamPaperHeader(
+                  snapshot.exists()
+                    ? snapshot.data().presentationSettings
+                    : undefined,
+                );
+              }}
             />
           )}
           {canEdit && (
@@ -2560,6 +2641,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             >
               <div
                 ref={composerDialogRef}
+                onPointerDownCapture={rememberComposerInteraction}
+                onKeyDownCapture={rememberComposerInteraction}
+                onInputCapture={rememberComposerInteraction}
+                onChangeCapture={rememberComposerInteraction}
+                onPasteCapture={rememberComposerInteraction}
+                onClickCapture={rememberComposerInteraction}
                 role="dialog"
                 aria-modal="true"
                 aria-label={

@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 
 // Execute the real pure module. No Firebase connection or student records.
+const cognitiveModule = ts.transpileModule(readFileSync("src/lib/cognitiveProcesses.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
+}).outputText;
 const source = ts.transpileModule(
-  readFileSync("src/lib/assessmentLearning.ts", "utf8"),
+  readFileSync("src/lib/assessmentLearning.ts", "utf8").replace('"./cognitiveProcesses"',
+    JSON.stringify(`data:text/javascript;base64,${Buffer.from(cognitiveModule).toString("base64")}`)),
   {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
@@ -113,6 +117,20 @@ assert.deepEqual(untagged.concepts, []);
 assert.deepEqual(untagged.cognitiveProcesses, []);
 assert.equal(untagged.missingConceptQuestionCount, 1);
 assert.equal(untagged.missingCognitiveProcessQuestionCount, 1);
+
+// One question contributes once to each selected process; legacy tags survive,
+// but explicitly cleared new arrays must never resurrect the legacy scalar.
+const multipleProcesses = run([attempt("multi", 100, [[1, true], [2, false], [3, true]])], {
+  questions: [
+    { ...questions[0], cognitiveProcesses: ["사료 해석", "인과 관계", "사료 해석"] },
+    { ...questions[1], cognitiveProcess: "기존 사고 과정" },
+    { ...questions[2], cognitiveProcess: "삭제된 값", cognitiveProcesses: [] },
+  ],
+});
+assert.deepEqual(multipleProcesses.cognitiveProcesses.map(group => group.label).sort(),
+  ["기존 사고 과정", "사료 해석", "인과 관계"].sort());
+assert(multipleProcesses.cognitiveProcesses.every(group => group.distinctQuestions === 1));
+assert.equal(multipleProcesses.missingCognitiveProcessQuestionCount, 1);
 
 // Snapshot metadata (including no tag) beats metadata edited after the assessment.
 const snapshot = run([
@@ -308,4 +326,4 @@ assert.equal(
   1,
   "Malformed optional observations are not facts",
 );
-console.log("Assessment learning evidence: 18 regression scenarios passed.");
+console.log("Assessment learning evidence: 19 regression scenarios passed.");

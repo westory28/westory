@@ -11,7 +11,11 @@ import "@fontsource/noto-serif-kr/700.css";
 import "@fontsource/noto-serif-kr/900.css";
 import QuizPassage from "./QuizPassage";
 import QuizQuestionText from "./QuizQuestionText";
-import { getMockExamRoundNumber } from "../../lib/mockExamRounds";
+import {
+  getMockExamPaperTitle,
+  normalizeMockExamPaperHeader,
+  type MockExamPaperHeaderSettings,
+} from "../../lib/mockExamPaperHeader";
 import {
   formatMockExamChoiceLabel,
   getMockExamChoiceColumns,
@@ -127,6 +131,77 @@ function ApprovalStamp({ role }: { role: string }) {
         d="M5 16L42 12M14 37L51 32M8 45L24 42M30 6L33 50"
       />
     </svg>
+  );
+}
+
+export function MockExamPaperHeader({
+  round,
+  settings,
+  studentLabel = "3학년　　반　　번　 이름:",
+  score,
+}: {
+  round?: unknown;
+  settings?: MockExamPaperHeaderSettings;
+  studentLabel?: string;
+  score?: number | null;
+}) {
+  const title = getMockExamPaperTitle(round, settings);
+  const heading = normalizeMockExamPaperHeader(settings).paperHeading;
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    const element = titleRef.current;
+    if (!element) return;
+    const fit = () => {
+      if (!element.clientWidth) return;
+      element.style.fontSize = "24px";
+      const ratio = Math.min(1, element.clientWidth / element.scrollWidth);
+      element.style.fontSize = `${24 * ratio}px`;
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    if (element.parentElement) observer.observe(element.parentElement);
+    void document.fonts.ready.then(fit);
+    return () => observer.disconnect();
+  }, [title]);
+  return (
+    <>
+      <div className="mock-exam-cover-line">
+        {heading && <p className="mock-exam-paper-heading">{heading}</p>}
+        {score != null && (
+          <strong
+            className="mock-exam-score"
+            aria-label={`점수 ${score}점, 100점 만점`}
+          >
+            {score}
+            <small>/100</small>
+          </strong>
+        )}
+        <table className="mock-exam-approval" aria-label="시험지 결재란">
+          <thead>
+            <tr>
+              {["노비", "상민", "양반", "왕"].map((role) => (
+                <th key={role} scope="col">
+                  {role}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {["노비", "상민", "양반", "왕"].map((role) => (
+                <td key={role}>
+                  <ApprovalStamp role={role} />
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <header className="mock-exam-title-box">
+        <h2 ref={titleRef}>{title}</h2>
+        <p className="mock-exam-student">{studentLabel}</p>
+      </header>
+    </>
   );
 }
 
@@ -363,6 +438,7 @@ export default function MockExamPaper({
   answers = {},
   round = "round_1",
   studentLabel = "3학년　　반　　번　 이름:",
+  paperHeader,
   score,
   checks = [],
   onQuestionSelect,
@@ -374,6 +450,7 @@ export default function MockExamPaper({
   answers?: Record<string, string>;
   round?: unknown;
   studentLabel?: string;
+  paperHeader?: MockExamPaperHeaderSettings;
   score?: number | null;
   checks?: MockExamPaperCheck[];
   onQuestionSelect?: (index: number) => void;
@@ -408,10 +485,7 @@ export default function MockExamPaper({
   const [revealed, setRevealed] = useState(
     animateGrading ? 0 : questions.length,
   );
-  const roundNumber = getMockExamRoundNumber(round);
-  const roundName =
-    ["초시", "복시", "전시"][roundNumber - 1] || `${roundNumber}회`;
-  const title = `중학교 3학년 역사과 ${roundName}`;
+  const title = getMockExamPaperTitle(round, paperHeader);
   const totalPoints = Number(
     questions
       .reduce(
@@ -665,48 +739,12 @@ export default function MockExamPaper({
             }}
           >
             {pageIndex === 0 ? (
-              <>
-                <div className="mock-exam-cover-line">
-                  {score != null && revealed >= questions.length && (
-                    <strong
-                      className="mock-exam-score"
-                      aria-label={`점수 ${score}점, 100점 만점`}
-                    >
-                      {score}
-                      <small>/100</small>
-                    </strong>
-                  )}
-                  <table
-                    className="mock-exam-approval"
-                    aria-label="시험지 결재란"
-                  >
-                    <thead>
-                      <tr>
-                        {["노비", "상민", "양반", "왕"].map((role) => (
-                          <th key={role} scope="col">
-                            {role}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        {["노비", "상민", "양반", "왕"].map((role) => (
-                          <td key={role}>
-                            <ApprovalStamp role={role} />
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <header className="mock-exam-title-box">
-                  <h2>
-                    {title}(역사과 {roundNumber}회 모의고사)
-                  </h2>
-                  <p className="mock-exam-student">{studentLabel}</p>
-                </header>
-              </>
+              <MockExamPaperHeader
+                round={round}
+                settings={paperHeader}
+                studentLabel={studentLabel}
+                score={revealed >= questions.length ? score : null}
+              />
             ) : (
               <header className="mock-exam-running-title">{title}</header>
             )}

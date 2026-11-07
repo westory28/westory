@@ -41,7 +41,8 @@ const denseFrozen = learning.captureQuestionSnapshots(denseQuestions.map(questio
 const stubs = `
 const dense=location.search.includes('dense');const snapshots=dense?${JSON.stringify(denseFrozen.questionSnapshots)}:${JSON.stringify(frozen.questionSnapshots)};const presentation=dense?${JSON.stringify(learning.questionPresentation(denseFrozen.questionSnapshots))}:${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
-const definitionId='quiz:2026-2:exam_prep:exam_prep:round_2';const settings={active:true,timeLimit:600,questionCount:snapshots.length,hintLimit:0,allowRetake:true};
+const paperHeader={paperTitle:'2026학년도 역사 탐구 평가',paperHeading:'3학년 역사과'};
+const definitionId='quiz:2026-2:exam_prep:exam_prep:round_2';const settings={...paperHeader,active:true,timeLimit:600,questionCount:snapshots.length,hintLimit:0,allowRetake:true};
 let attempt=JSON.parse(sessionStorage.getItem('mock-runner-attempt')||'null');let failSubmit=location.search.includes('submit-error');let failSave=location.search.includes('save-error');
 export const qa=window.mockRunnerQa={starts:[],prepares:[],reads:[],saves:[],submits:[],get attempt(){return attempt},snapshotAnswerLeak:presentation.some(q=>q.answer||q.explanation)};
 const persist=()=>sessionStorage.setItem('mock-runner-attempt',JSON.stringify(attempt));
@@ -52,7 +53,7 @@ export const buildAssessmentDefinitionId=()=>definitionId;
 export const isAssessmentRevisionConflict=error=>error?.code==='aborted';
 export const loadQuizScoreComparison=async()=>null;
 export const getAssessmentState=async(input={})=>{qa.reads.push(input);if(input.prepareAssets)qa.prepares.push(input);return {status:attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
-export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
+export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
@@ -214,6 +215,8 @@ try {
   for (const [width,height] of [[320,568],[360,800],[390,844],[768,1024],[820,1180],[1280,1024],[1440,1024]]) {
     const touch=width<=820;
     const page = await open(width, height, touch, "?submit-error");
+    assert.equal(await page.locator('.mock-exam-title-box h2').innerText(), '2026학년도 역사 탐구 평가');
+    assert.equal(await page.locator('.mock-exam-paper-heading').innerText(), '3학년 역사과');
     assert.equal(await page.evaluate(() => window.mockRunnerQa.snapshotAnswerLeak), false);
     assert.equal(await page.getByText("저장 당시 해설:", { exact: false }).count(), 0, "No answer explanation is rendered before submission");
     assert.equal(await page.getByRole("button", { name: /힌트/ }).count(), 0);
@@ -301,6 +304,7 @@ try {
     await page.getByRole("button", { name: "다시 제출", exact: true }).click();
     await page.getByRole("button", { name: "저장된 답안·해설", exact: true }).waitFor();
     await page.locator(".mock-exam-score").waitFor();
+    assert.equal(await page.locator('.mock-exam-title-box h2').innerText(), '2026학년도 역사 탐구 평가', 'Result paper preserves the started-attempt header');
     assert.ok((await page.locator(".mock-exam-score").textContent()).startsWith("30"), "The paper uses weighted server percent, not correct-count ratio");
     const submitted = await page.evaluate(() => window.mockRunnerQa.submits);
     assert.equal(submitted.length, 2);

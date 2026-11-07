@@ -12,6 +12,10 @@ import { readSiteSettingDoc } from "./siteSettings";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import type { SystemConfig, UserData } from "../types";
 import {
+  normalizeMockExamPaperHeader,
+  type MockExamPaperHeaderSettings,
+} from "./mockExamPaperHeader";
+import {
   DEFAULT_MOCK_EXAM_ROUND,
   isMockExamCategory,
   normalizeMockExamRound,
@@ -22,7 +26,7 @@ type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
 export type AssessmentQuestionOrder = "random" | "created" | "unit";
 
-export interface AssessmentConfigEntry {
+export interface AssessmentConfigEntry extends MockExamPaperHeaderSettings {
   active: boolean;
   questionCount: number;
   randomOrder: boolean;
@@ -632,6 +636,9 @@ export const normalizeAssessmentConfigEntry = (
   );
 
   return {
+    ...(source.paperTitle !== undefined || source.paperHeading !== undefined
+      ? normalizeMockExamPaperHeader(source)
+      : {}),
     active: source.active === true,
     questionCount: Math.max(1, Number(source.questionCount) || 10),
     randomOrder: questionOrder === "random",

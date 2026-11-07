@@ -1,5 +1,4 @@
 const { normalizeAchievementMetadata } = require('./historyAchievementMetadata');
-const { buildLessonAnswerKey } = require('./productionGateway/lessonAnswers');
 const { createHash } = require('node:crypto');
 
 const text = value => String(value ?? '').trim();
@@ -78,8 +77,8 @@ function historicalQuestionEvidence(raw, itemId) {
 }
 
 // Evidence is descriptive only. No grades, rewards or student records are written.
-function buildQuizAchievementEvidence({ semesterId, students, questions, priorRows,
-  examRows, attempts = [], lessons = [], progressRows = [] }) {
+function buildQuizAchievementEvidence({ semesterId, students, priorRows,
+  examRows, attempts = [] }) {
   const observations = [], examCutoffs = [], exclusions = {};
   const exclude = reason => { exclusions[reason] = (exclusions[reason] || 0) + 1; };
   const studentIds = new Set(students.map(student => student.uid));
@@ -154,38 +153,6 @@ function buildQuizAchievementEvidence({ semesterId, students, questions, priorRo
         recordSource: row.source, metadataSource: snapshot ? 'snapshot' : 'current',
         revisionBasis: historical?.revisionBasis || 'version',
         quality: limited ? 'limited' : 'complete' });
-    }
-  }
-  const lessonByUnit = new Map();
-  for (const lesson of lessons) {
-    const unitId = text(lesson.unitId);
-    if (!unitId) continue;
-    lessonByUnit.set(unitId, lessonByUnit.has(unitId) ? null : lesson);
-  }
-  for (const row of progressRows) {
-    if (!studentIds.has(row.studentUid)) continue;
-    const progress = row.raw, unitId = text(progress.unitId || row.id), lesson = lessonByUnit.get(unitId);
-    if (!lesson) { exclude('unavailableLesson'); continue; }
-    if ((progress.studentUid && progress.studentUid !== row.studentUid)
-      || (progress.semesterId && progress.semesterId !== semesterId)) { exclude('wrongWorksheetOwner'); continue; }
-    const observedAt = iso(progress.updatedAt);
-    if (!observedAt) { exclude('missingWorksheetTime'); continue; }
-    if (!Object.hasOwn(progress, 'contentRevision')
-      || !Number.isSafeInteger(progress.contentRevision) || progress.contentRevision < 0
-      || progress.contentRevision !== (lesson.contentRevision ?? 0)) { exclude('worksheetRevisionMismatch'); continue; }
-    let keys;
-    try { keys = [...buildLessonAnswerKey(lesson).keys()]; }
-    catch { exclude('invalidLessonBlanks'); continue; }
-    const achievement = normalizeAchievementMetadata(lesson);
-    for (const itemId of keys) {
-      const answer = progress.answers?.[itemId], filled = Boolean(text(answer?.value));
-      observations.push({ id: `worksheet:${row.studentUid}:${unitId}:${itemId}`,
-        studentUid: row.studentUid, semesterId, source: 'worksheet', itemId: `${unitId}:${itemId}`,
-        sourceRevision: String(progress.contentRevision), observedAt,
-        ...achievement, achievementStandardCodes: achievement.achievementStandardCodes || [],
-        correct: !filled ? false : answer?.status === 'correct' ? true : answer?.status === 'wrong' ? false : null,
-        filled, hintViewed: null, unitId, subUnitId: text(lesson.subUnitId),
-        familyId: `worksheet:${unitId}:${itemId}`, metadataSource: 'lesson', quality: 'limited' });
     }
   }
   return { version: 1, status: Object.keys(exclusions).length || observations.some(item => item.quality === 'limited')

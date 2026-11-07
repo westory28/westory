@@ -55,6 +55,7 @@ const common = {
   hintEnabled: true,
   hint: "기존 모의고사 힌트는 노출하지 않습니다",
   explanation: "자료의 근거를 확인한다.",
+  cognitiveProcess: "기존 사고 과정",
   refBig: "big-1",
   refMid: "mid-1",
   refSmall: "lesson-1",
@@ -248,6 +249,58 @@ try {
     name: "새 문제 등록",
     exact: true,
   });
+  for (const close of [
+    () => compose.getByRole("button", { name: "문제 편집 닫기", exact: true }).click(),
+    () => page.keyboard.press("Escape"),
+    () => compose.getByRole("button", { name: "취소", exact: true }).click(),
+    () => page.locator(".quiz-composer-viewport").click({ position: { x: 1, y: 1 } }),
+  ]) {
+    const before = alerts.length;
+    await close();
+    await compose.waitFor({ state: "hidden" });
+    assert.equal(alerts.length, before, "untouched new question closes without confirmation, including inferred defaults");
+    await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+  }
+  await compose.getByLabel("발문", { exact: true }).fill("되돌릴 내용");
+  await compose.getByLabel("발문", { exact: true }).fill("");
+  const revertedPrompts = alerts.length;
+  await compose.getByRole("button", { name: "취소", exact: true }).click();
+  await compose.waitFor({ state: "hidden" });
+  assert.equal(alerts.length, revertedPrompts, "reverted new draft closes without confirmation");
+  const edit = page.getByRole("dialog", { name: "문제 수정", exact: true });
+  const editFirst = () => page.getByRole("button", { name: /^\d+번 문제 수정$/ }).first().click();
+  for (const close of [
+    () => edit.getByRole("button", { name: "문제 편집 닫기", exact: true }).click(),
+    () => page.keyboard.press("Escape"),
+    () => edit.getByRole("button", { name: "취소", exact: true }).click(),
+  ]) {
+    await editFirst();
+    const before = alerts.length;
+    await close();
+    await edit.waitFor({ state: "hidden" });
+    assert.equal(alerts.length, before, "existing question opens and closes clean despite normalized legacy defaults");
+  }
+  await editFirst();
+  const originalText = await edit.getByLabel("발문", { exact: true }).inputValue();
+  await edit.getByRole("button", { name: "사고 과정 선택", exact: true }).click();
+  assert(await edit.getByRole("checkbox", { name: "기존 사고 과정", exact: true }).isChecked());
+  await edit.getByRole("checkbox", { name: "기존 사고 과정", exact: true }).uncheck();
+  await edit.getByRole("checkbox", { name: "기존 사고 과정", exact: true }).check();
+  await page.keyboard.press("Escape");
+  await edit.getByLabel("발문", { exact: true }).fill(originalText + " 수정");
+  confirmClose = false;
+  const changedPrompts = alerts.length;
+  await edit.getByRole("button", { name: "취소", exact: true }).click();
+  assert.equal(alerts.length, changedPrompts + 1);
+  assert(await edit.isVisible());
+  await edit.getByLabel("발문", { exact: true }).fill(originalText);
+  const restoredPrompts = alerts.length;
+  await page.keyboard.press("Escape");
+  await edit.waitFor({ state: "hidden" });
+  assert.equal(alerts.length, restoredPrompts, "restoring text and legacy selection makes the edit clean again");
+  confirmClose = true;
+  checks.push("New and existing questions dismiss cleanly on X/Escape/cancel/backdrop; automatic unit metadata is clean, changed drafts require confirmation, reverted text and legacy process selections become clean again.");
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   assert.equal(await compose.getByRole("checkbox", { name: "힌트 제공", exact: true }).count(), 0);
   assert.equal(await page.getByText("기존 모의고사 힌트는 노출하지 않습니다", { exact: true }).count(), 0);
   const readsBeforeDraft = await page.evaluate(() => window.assessmentTeacherFixture.reads.length);
@@ -289,7 +342,7 @@ try {
   assert.equal(await passageEditor.locator('[data-quiz-mark="box"]').textContent(), "서식 예시");
   await passageToolbar.getByRole("button", { name: "읽기 자료 글상자 서식 지우기", exact: true }).click();
   assert.equal(await passageEditor.locator('[data-quiz-mark="box"]').count(), 0);
-  for (const width of [320, 390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await passageToolbar.scrollIntoViewIfNeeded();
     const tools = await passageToolbar.evaluate(el => {
@@ -297,9 +350,10 @@ try {
       return {
         outer: { left: outer.left, right: outer.right },
         document: document.documentElement.scrollWidth,
-        controls: Array.from(el.children).filter(child => child.tagName === "BUTTON").map(button => {
+        rowOverflow: el.querySelector('.quiz-visual-format-tools').scrollWidth - el.querySelector('.quiz-visual-format-tools').clientWidth,
+        controls: Array.from(el.querySelectorAll('.quiz-visual-format-tools > button')).map(button => {
           const box = button.getBoundingClientRect(), style = getComputedStyle(button);
-          return { name: button.getAttribute("aria-label"), width: box.width, height: box.height, left: box.left, right: box.right, border: parseFloat(style.borderTopWidth), borderStyle: style.borderTopStyle, background: style.backgroundColor };
+          return { name: button.getAttribute("aria-label"), width: box.width, height: box.height, top: box.top, left: box.left, right: box.right, fontSize:parseFloat(style.fontSize), border: parseFloat(style.borderTopWidth), borderStyle: style.borderTopStyle, background: style.backgroundColor };
         }),
         boxSample: getComputedStyle(el.querySelector('[aria-label="읽기 자료 글상자 네모"] span')).borderTopStyle,
         underline: getComputedStyle(el.querySelector('[aria-label="읽기 자료 글상자 밑줄"]')).textDecorationLine,
@@ -307,14 +361,18 @@ try {
     });
     assert(tools.document <= width + 1, JSON.stringify(tools));
     assert.equal(tools.controls.length, 10);
-    assert(tools.controls.every(button => button.width >= 44 && button.height >= 44 && button.left >= tools.outer.left && button.right <= tools.outer.right && button.border >= 1 && button.borderStyle === "solid" && button.background !== "rgba(0, 0, 0, 0)"), JSON.stringify(tools));
+    assert(tools.controls.every(button => button.width >= (width >= 1024 ? 28 : 44) && button.height >= (width >= 1024 ? 30 : 44) && button.left >= tools.outer.left && button.right <= tools.outer.right && button.border >= 1 && button.borderStyle === "solid" && button.background !== "rgba(0, 0, 0, 0)"), JSON.stringify(tools));
+    if (width >= 1024) {
+      assert(tools.controls.every(button => Math.abs(button.top-tools.controls[0].top)<1 && button.fontSize===12 && button.height<=32), JSON.stringify(tools));
+      assert(tools.rowOverflow<=1, 'Desktop two-panel editor exposes all formatting controls on one row: '+JSON.stringify(tools));
+    }
     assert.equal(tools.boxSample, "solid");
     assert(tools.underline.includes("underline"));
     await page.screenshot({ path: path.join(evidence, `teacher-passage-toolbar-${width}.png`) });
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await passageEditor.fill("");
-  checks.push("Passage formatting tools use individual bordered buttons and visible format samples at 320/390/768/1280px; mouse formatting preserves selection and undo/clear still work.");
+  checks.push("Passage formatting tools use individual bordered buttons and visible format samples: 30px/12px single row with all controls visible in 1280/1440/1920px desktop split panels, 44px targets at 320/390/768px; mouse formatting preserves selection and undo/clear still work.");
   await compose.getByRole("button", { name: "〈보기〉 추가", exact: true }).click();
   await compose.getByRole("textbox", { name: "보기", exact: true }).fill("ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
   await live.locator('.mock-exam-example').filter({hasText:"ㄱ. 합성 첫 번째 설명"}).waitFor();
@@ -536,9 +594,12 @@ try {
   await compose
     .getByRole("textbox", { name: /핵심 개념/ })
     .fill("왕권 강화, 중앙 집권");
-  await compose
-    .getByRole("combobox", { name: "사고 과정", exact: true })
-    .selectOption("사료 해석");
+  await compose.getByRole("button", { name: "사고 과정 선택", exact: true }).click();
+  await compose.getByRole("checkbox", { name: "사료 해석", exact: true }).check();
+  await compose.getByRole("checkbox", { name: "인과 관계", exact: true }).check();
+  assert.equal(await compose.getByRole("button", { name: "사고 과정 선택", exact: true }).getAttribute("aria-expanded"), "true");
+  await page.keyboard.press("Escape");
+  assert(await compose.isVisible(), "Escape closes only the process choices");
   await compose
     .getByRole("combobox", { name: "다시 볼 수업자료", exact: true })
     .selectOption("lesson-1");
@@ -548,7 +609,7 @@ try {
     .fill("정치 기구와 통치 제도의 혼동");
   for (const control of [
     compose.getByRole("textbox", { name: /핵심 개념/ }),
-    compose.getByRole("combobox", { name: "사고 과정", exact: true }),
+    compose.getByRole("button", { name: "사고 과정 선택", exact: true }),
     compose.getByRole("combobox", { name: "다시 볼 수업자료", exact: true }),
     compose.getByRole("textbox", { name: "3. 가", exact: true }),
     compose.getByLabel("발문", { exact: true }),
@@ -657,6 +718,7 @@ try {
   assert.equal(state.saved.choiceOptionImages.filter(Boolean).length, 1);
   assert.deepEqual(state.saved.concepts, ["왕권 강화", "중앙 집권"]);
   assert.equal(state.saved.cognitiveProcess, "사료 해석");
+  assert.deepEqual(state.saved.cognitiveProcesses, ["사료 해석", "인과 관계"]);
   assert.equal(state.saved.reviewLessonId, "lesson-1");
   assert.equal(
     state.saved.misconceptionTags["가"],
@@ -698,6 +760,36 @@ try {
   const writesBeforePreview = await page.evaluate(
     () => window.assessmentTeacherFixture.writes.length,
   );
+  await editFirst();
+  await edit.getByRole("button", { name: "사고 과정 선택", exact: true }).click();
+  assert(await edit.getByRole("checkbox", { name: "사료 해석", exact: true }).isChecked());
+  assert(await edit.getByRole("checkbox", { name: "인과 관계", exact: true }).isChecked());
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await edit.getByRole("group", { name: "사고 과정 항목", exact: true }).scrollIntoViewIfNeeded();
+    const processLayout = await edit.locator(".quiz-cognitive-select").evaluate(node => ({
+      right: node.getBoundingClientRect().right, left: node.getBoundingClientRect().left,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+      targets: [...node.querySelectorAll("label:has(input)")].map(label => label.getBoundingClientRect().height),
+    }));
+    assert(processLayout.left >= 0 && processLayout.right <= width && !processLayout.overflow);
+    assert(processLayout.targets.every(height => height >= 44));
+    await page.screenshot({ path: path.join(evidence, `teacher-process-multiple-${width}.png`) });
+  }
+  await page.keyboard.press("Escape");
+  const roundtripPrompts = alerts.length;
+  await edit.getByRole("button", { name: "취소", exact: true }).click();
+  await edit.waitFor({ state: "hidden" });
+  assert.equal(alerts.length, roundtripPrompts);
+  await page.getByRole("button", { name: /^\d+번 문항으로 파생 문항 만들기$/ }).first().click();
+  const derived = page.getByRole("dialog", { name: "파생 문항 만들기", exact: true });
+  await derived.getByRole("button", { name: "사고 과정 선택", exact: true }).click();
+  assert(await derived.getByRole("checkbox", { name: "사료 해석", exact: true }).isChecked());
+  assert(await derived.getByRole("checkbox", { name: "인과 관계", exact: true }).isChecked());
+  await page.keyboard.press("Escape");
+  await derived.getByRole("button", { name: "취소", exact: true }).click();
+  await derived.waitFor({ state: "hidden" });
+  checks.push("Multiple cognitive processes persist and reopen in edit/derivation; legacy scalar tags remain selectable, checkbox targets stay 44px and panels fit 320/390/768/1280 without reads/writes.");
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     const view = await openPaper(page, "round_2", 24);
@@ -794,9 +886,19 @@ try {
     "Read-only teacher can inspect the full paper without a write operation.",
   );
   await page.goto(origin + "/?normal");
+  await editFirst();
+  const normalEditPrompts = alerts.length;
+  await edit.getByRole("button", { name: "문제 편집 닫기", exact: true }).click();
+  await edit.waitFor({ state: "hidden" });
+  assert.equal(alerts.length, normalEditPrompts, "untouched diagnostic question closes cleanly");
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   const normal = page.getByRole("dialog", { name: "새 문제 등록", exact: true });
   await normal.waitFor();
+  const normalNewPrompts = alerts.length;
+  await page.keyboard.press("Escape");
+  await normal.waitFor({ state: "hidden" });
+  assert.equal(alerts.length, normalNewPrompts, "new diagnostic question closes cleanly");
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   await normal.getByRole("checkbox", { name: "힌트 제공", exact: true }).check();
   await normal.getByRole("textbox", { name: "힌트", exact: true }).fill("진단·형성평가의 힌트는 유지합니다");
   assert.equal(await normal.getByRole("textbox", { name: "힌트", exact: true }).inputValue(), "진단·형성평가의 힌트는 유지합니다");

@@ -421,6 +421,7 @@ export type AssessmentQuestionPresentation = Omit<
 };
 
 export interface AssessmentAttemptState {
+  paperHeader?: { paperTitle?: string; paperHeading?: string };
   serverNowIso?: string;
   attemptId: string;
   definitionId: string;

@@ -1,0 +1,70 @@
+.quiz-cognitive-select {
+  min-width: 0;
+  font-size: 14px;
+  color: var(--ws-text, #374151);
+}
+.quiz-cognitive-select > label {
+  display: block;
+  font-weight: 700;
+}
+.quiz-cognitive-select > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--ws-border, #d1d5db);
+  border-radius: 4px;
+  background: var(--ws-surface, #fff);
+  text-align: left;
+  font: inherit;
+}
+.quiz-cognitive-select > button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quiz-cognitive-select > button svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.quiz-cognitive-options {
+  display: grid;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--ws-border, #d1d5db);
+  border-radius: 4px;
+  background: var(--ws-surface, #fff);
+}
+.quiz-cognitive-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px;
+  cursor: pointer;
+}
+.quiz-cognitive-options label:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.quiz-cognitive-options input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--ws-primary, #2563eb);
+}
+.quiz-cognitive-select :is(button, input):focus {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
+}

@@ -10,13 +10,17 @@ const finiteInteger = (value, max) => Number.isFinite(value) && value >= 0 && va
 const normalizeQuestionLearning = value => {
   const concepts = Array.isArray(value?.concepts)
     ? [...new Set(value.concepts.map(item => safeText(item, 60)).filter(Boolean))].slice(0, 8) : [];
+  const cognitiveSource = Array.isArray(value?.cognitiveProcesses) ? value.cognitiveProcesses
+    : value?.cognitiveProcesses === undefined ? [value?.cognitiveProcess] : [];
+  const cognitiveProcesses = [...new Set(cognitiveSource.map(item => safeText(item, 60)).filter(Boolean))].slice(0, 8);
   const misconceptionTags = object(value?.misconceptionTags)
     ? Object.fromEntries(Object.entries(value.misconceptionTags).slice(0, 10)
       .filter(([key, tag]) => safeKey(key) && key.length <= 500 && typeof tag === "string" && tag.trim())
       .map(([key, tag]) => [key, safeText(tag, 120)])) : {};
   return {
     concepts,
-    cognitiveProcess: safeText(value?.cognitiveProcess, 60),
+    cognitiveProcess: cognitiveProcesses[0] || "",
+    cognitiveProcesses,
     familyId: safeText(value?.familyId),
     derivedFromQuestionId: safeText(value?.derivedFromQuestionId),
     misconceptionTags,

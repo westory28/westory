@@ -51,7 +51,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "a61d74a2aa78c99f7b3941199548dfbe4794c47e61c0199e1b85ad4dcdd1343b",
+      "sha256": "0ad9066ac12ed4d5f74d7b0d87a4dee3632230d63d9fa4a9b72714383eeb1877",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -71,7 +71,8 @@
         "2026-11-03: Rotate diagnostic and formative questions by student answers within each definition, filling each attempt to its configured count with distinct questions and carrying answered repeats into the next cycle.",
         "2026-11-06: Freeze authored mock-exam round/order/points and complete paper snapshots; retain legacy selection and item-count results, add authoritative weighted percent and point totals.",
         "2026-11-07: Validate public example/shared-set materials, preserve contiguous set order on saves/deletes, expose authorized read-only asset manifests before start, reject changed prepared source hashes, and return the server clock without extending deadlines.",
-        "2026-11-07: Validate achievement metadata, freeze assessment start time, and route the analysis-only teacher review command."
+        "2026-11-07: Validate achievement metadata, freeze assessment start time, and route the analysis-only teacher review command.",
+        "2026-11-08: Validate and persist per-round plain-text mock paper title/header; freeze them on new attempts and expose immutable presentation on scoped reads. Validate up to eight cognitive-process tags without changing permissions or grading."
       ]
     },
     {
@@ -497,7 +498,7 @@
       "sourceFile": "assessmentLearning.js",
       "file": "assessmentLearning.js",
       "originalSha256": "eda2e5e2924fad5353422a00a0eb42a280e0f5af1c95853481699bdc48b553a5",
-      "sha256": "888a2bbc88a90fc35a7409f4cd2d609152dee8355a422819ffd120278bc5bafe",
+      "sha256": "de4ea455f9f3d3b4471e9baa86ff05a56cd054aa01cc77d9308705f60a519edb",
       "changes": [
         "New diagnostic-only validation, metadata snapshot and recheck ranking module; no production ancestor.",
         "Remove confidence collection and ranking; preserve behavior-only observation bounds and unknown initial response times on resume.",
@@ -505,7 +506,8 @@
         "2026-10-16: atomic quiz settings/publication, student-scoped attempt reads and revision-checked answer-free presentation recovery.",
         "2026-11-06: Freeze authored mock-exam round/order/points and complete paper snapshots; retain legacy selection and item-count results, add authoritative weighted percent and point totals.",
         "2026-11-07: Freeze example and shared-set presentation in existing attempt/result question snapshots while retaining answer/explanation redaction before submission.",
-        "2026-11-07: Preserve reviewed history achievement metadata in immutable learning snapshots."
+        "2026-11-07: Preserve reviewed history achievement metadata in immutable learning snapshots.",
+        "2026-11-08: Preserve bounded multiple cognitive-process tags in question learning metadata and snapshots while retaining the first tag in the legacy scalar field."
       ]
     },
     {

@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { getQuestionCognitiveProcesses } from "../../../lib/cognitiveProcesses";
+import "./QuizLearningMetadataFields.css";
 import {
   normalizeHistoryAchievementMetadata,
   validateHistoryAchievementMetadata,
@@ -8,6 +10,7 @@ import {
 export interface QuizLearningMetadata extends HistoryAchievementMetadata {
   concepts?: string[];
   cognitiveProcess?: string;
+  cognitiveProcesses?: string[];
   familyId?: string;
   derivedFromQuestionId?: string;
   misconceptionTags?: Record<string, string>;
@@ -28,6 +31,92 @@ interface Props {
   onChange: (value: QuizLearningMetadata) => void;
   options: string[];
   units: { id: string; title: string }[];
+}
+
+function CognitiveProcessSelect({
+  value,
+  onChange,
+}: Pick<Props, "value" | "onChange">) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const selected = getQuestionCognitiveProcesses(value);
+  const legacyOptions = useRef(new Set<string>());
+  selected
+    .filter((item) => !COGNITIVE_PROCESS_OPTIONS.includes(item))
+    .forEach((item) => legacyOptions.current.add(item));
+  const choices = [...COGNITIVE_PROCESS_OPTIONS, ...legacyOptions.current];
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+  return (
+    <div
+      ref={root}
+      className="quiz-cognitive-select"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(false);
+          trigger.current?.focus();
+        }
+      }}
+    >
+      <label htmlFor={id}>사고 과정</label>
+      <button
+        ref={trigger}
+        id={id}
+        type="button"
+        aria-label="사고 과정 선택"
+        aria-expanded={open}
+        aria-controls={`${id}-options`}
+        title={selected.join(", ") || "미지정"}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected.join(", ") || "미지정"}</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d={open ? "m5 12 5-5 5 5" : "m5 8 5 5 5-5"} />
+        </svg>
+      </button>
+      {open && (
+        <div
+          id={`${id}-options`}
+          className="quiz-cognitive-options"
+          role="group"
+          aria-label="사고 과정 항목"
+        >
+          {choices.map((item) => (
+            <label key={item}>
+              <input
+                type="checkbox"
+                checked={selected.includes(item)}
+                onChange={(event) => {
+                  const next = event.target.checked
+                    ? [...selected, item]
+                    : selected.filter((current) => current !== item);
+                  onChange({
+                    ...value,
+                    cognitiveProcess: next[0] || "",
+                    cognitiveProcesses: next,
+                  });
+                }}
+              />
+              <span>{item}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const QuizLearningMetadataFields: React.FC<Props> = ({
@@ -56,25 +145,7 @@ const QuizLearningMetadataFields: React.FC<Props> = ({
           className="mt-1 min-h-11 w-full rounded border border-gray-300 p-2 font-normal"
         />
       </label>
-      <label className="text-sm font-bold text-gray-700">
-        사고 과정
-        <select
-          value={value.cognitiveProcess || ""}
-          onChange={(event) =>
-            onChange({ ...value, cognitiveProcess: event.target.value })
-          }
-          className="mt-1 min-h-11 w-full rounded border border-gray-300 p-2 font-normal"
-        >
-          <option value="">미지정</option>
-          {value.cognitiveProcess &&
-            !COGNITIVE_PROCESS_OPTIONS.includes(value.cognitiveProcess) && (
-              <option>{value.cognitiveProcess}</option>
-            )}
-          {COGNITIVE_PROCESS_OPTIONS.map((label) => (
-            <option key={label}>{label}</option>
-          ))}
-        </select>
-      </label>
+      <CognitiveProcessSelect value={value} onChange={onChange} />
     </div>
     <label className="block text-sm font-bold text-gray-700">
       다시 볼 수업자료
@@ -150,7 +221,8 @@ export const normalizeQuizLearningMetadata = (
       (value.concepts || []).map((concept) => concept.trim()).filter(Boolean),
     ),
   ),
-  cognitiveProcess: (value.cognitiveProcess || "").trim(),
+  cognitiveProcess: getQuestionCognitiveProcesses(value)[0] || "",
+  cognitiveProcesses: getQuestionCognitiveProcesses(value),
   familyId: value.familyId || "",
   derivedFromQuestionId: value.derivedFromQuestionId || "",
   reviewLessonId: value.reviewLessonId || "",
@@ -173,8 +245,11 @@ export const validateQuizLearningMetadata = (
     normalized.concepts.some((concept) => concept.length > 60)
   )
     return "핵심 개념은 최대 8개, 각 60자 이내로 입력해 주세요.";
-  if (normalized.cognitiveProcess.length > 60)
-    return "사고 과정은 60자 이내로 입력해 주세요.";
+  if (
+    normalized.cognitiveProcesses.length > 8 ||
+    normalized.cognitiveProcesses.some((item) => item.length > 60)
+  )
+    return "사고 과정은 최대 8개, 각 60자 이내로 선택해 주세요.";
   const tags = Object.entries(normalized.misconceptionTags);
   if (
     tags.length > 10 ||

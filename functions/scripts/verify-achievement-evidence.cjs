@@ -68,17 +68,19 @@ test('compact evidence keeps the original shape when a dictionary is not smaller
   assert.equal(packAchievementEvidence(unsupported), unsupported);
 });
 
-test('a 316-pupil grade with 27,899 worksheet observations fits the unchanged 8 MiB response bound losslessly', (context) => {
+test('a 316-pupil grade with 27,899 diagnostic/formative observations fits the unchanged 8 MiB response bound losslessly', (context) => {
   const students = Array.from({ length: 316 }, (_, index) => ({ uid: `synthetic-student-${String(index).padStart(11, '0')}`,
     classId: `class-${Math.floor(index / 32)}`, name: `합성 학생 ${index + 1}`, number: String(index % 32 + 1) }));
-  const lessons = [88, 1].map((count, index) => ({ unitId: `synthetic-lesson-unit-${index}`, contentRevision: 9,
-    contentHtml: Array.from({ length: count }, (_, item) => `[합성 정답 ${item}]`).join(' '), ...metadata }));
-  const progressRows = students.flatMap((student, index) => lessons.slice(0, index < 91 ? 2 : 1).map((lesson, lessonIndex) => ({
-    id: lesson.unitId, studentUid: student.uid, raw: { studentUid: student.uid, semesterId: scope, contentRevision: 9,
-      updatedAt: new Date(Date.UTC(2026, 10, 1, 0, index)).toISOString(),
-      answers: Object.fromEntries(Array.from({ length: lessonIndex ? 1 : 88 }, (_, item) => [String(item),
-        { value: item % 3 ? '합성 입력' : '', status: item % 2 ? 'correct' : 'wrong' }])) } })));
-  const evidence = buildQuizAchievementEvidence({ semesterId: scope, students, questions: [], priorRows: [], examRows: [], lessons, progressRows });
+  const priorRows = students.map((student, index) => {
+    const count = index < 91 ? 89 : 88;
+    return { id: `synthetic-prior-result-${index}`, source: 'canonical', raw: { ...priorRaw,
+      studentUid: student.uid, category: index % 2 ? 'diagnostic' : 'formative',
+      attemptId: `synthetic-prior-result-${index}`, submittedAtIso: new Date(Date.UTC(2026, 10, 1, 0, index)).toISOString(),
+      answerChecks: Array.from({ length: count }, (_, item) => ({ id: String(item), correct: item % 2 === 0 })),
+      learningSnapshot: Array.from({ length: count }, (_, item) => ({ id: String(item), sourceRevision: '9', unitId: 'synthetic-unit', ...metadata })),
+    } };
+  });
+  const evidence = buildQuizAchievementEvidence({ semesterId: scope, students, priorRows, examRows: [] });
   assert.equal(evidence.observations.length, 27899);
   const originalBytes = Buffer.byteLength(JSON.stringify(evidence));
   assert.ok(originalBytes > 8 * 1024 * 1024, 'the regression fixture exceeds the old response limit');
@@ -111,16 +113,16 @@ test('historical result joins only its own complete attempt; missing version is 
   delete input.priorRows[0].raw.learningSnapshot[0].sourceRevision;
   assert.equal(buildQuizAchievementEvidence(input).observations.length, 0);
 });
-test('worksheet preserves blank/incorrect distinction, rejects changed content, and never claims independent mastery', () => {
+test('worksheet material and progress cannot become achievement evidence', () => {
   const input = evidenceInput();
   input.lessons = [{ unitId: 'u', contentRevision: 2, contentHtml: '[가] [나] [다]' }];
   input.progressRows = [{ id: 'u', studentUid: 'a', raw: { unitId: 'u', contentRevision: 2,
     updatedAt: '2026-11-01T02:00:00.000Z', completed: true,
     answers: { 0: { value: '', status: 'wrong' }, 1: { value: 'wrong', status: 'wrong' }, 2: { value: 'correct', status: 'correct' } } } }];
-  const rows = buildQuizAchievementEvidence(input).observations.filter(row => row.source === 'worksheet');
-  assert.deepEqual(rows.map(row => [row.filled, row.correct, row.hintViewed]), [[false, false, null], [true, false, null], [true, true, null]]);
+  const expected = buildQuizAchievementEvidence(evidenceInput());
+  assert.deepEqual(buildQuizAchievementEvidence(input), expected);
   input.progressRows[0].raw.contentRevision = 1;
-  assert.equal(buildQuizAchievementEvidence(input).exclusions.worksheetRevisionMismatch, 1);
+  assert.deepEqual(buildQuizAchievementEvidence(input), expected);
 });
 test('canonical duplicate legacy evidence and other pupils are excluded', () => {
   const input = evidenceInput();

@@ -31,6 +31,7 @@ import {
   type QuizClassScope,
 } from "../../../lib/quizClassAnalysis";
 import "./QuizAchievementAnalysis.css";
+import QuizAchievementEstimates from "./QuizAchievementEstimates";
 
 const percent = (value: number | null | undefined) =>
   value == null ? "—" : `${value.toFixed(1)}%`;
@@ -46,6 +47,7 @@ export const QUIZ_ACHIEVEMENT_VIEWS = [
   "성취기준별 분석",
   "학습 근거·수준 확인",
   "S–P표",
+  "성취수준·분할점수",
 ];
 const labels = QUIZ_ACHIEVEMENT_VIEWS;
 const ratio = (numerator: number, denominator: number) =>
@@ -240,6 +242,13 @@ export default function QuizAchievementAnalysis({
   const form =
     analysis?.forms.find((value) => value.key === formKey) ||
     (analysis?.forms.length === 1 ? analysis.forms[0] : null);
+  const availableStandardCodes = [
+    ...new Set([
+      ...(full?.standards.map((row) => row.code) || []),
+      ...(data?.questions.flatMap((question) => resolveCodes(question).codes) ||
+        []),
+    ]),
+  ].sort();
   const selectedItem =
     form?.items.find((item) => item.id === choiceQuestionId) || form?.items[0];
   const currentQuestion = data?.questions.find(
@@ -275,9 +284,9 @@ export default function QuizAchievementAnalysis({
   const analysisHelp = (
     <InfoHelp label="성취 분석 집계 기준">
       학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
-      분석용 수준입니다. 점수 구간·순위·학습지 채움률로 수준을 정하지 않습니다.
-      목표 A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은 미분류로 남고
-      공식 점수와 성적은 바뀌지 않습니다.
+      분석용 수준입니다. 점수 구간·순위로 교사 확인 수준을 바꾸지 않습니다. 목표
+      A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은 미분류로 남고 공식
+      점수와 성적은 바뀌지 않습니다.
     </InfoHelp>
   );
   const toolbar = (
@@ -301,11 +310,10 @@ export default function QuizAchievementAnalysis({
           }}
         >
           <option value="">모든 성취기준</option>
-          {(full?.standards || []).map((row) => (
-            <option key={row.code} value={row.code}>
-              {row.code} ·{" "}
-              {getHistoryAchievementStandard(row.code)?.description ||
-                "성취기준"}
+          {availableStandardCodes.map((code) => (
+            <option key={code} value={code}>
+              {code} ·{" "}
+              {getHistoryAchievementStandard(code)?.description || "성취기준"}
             </option>
           ))}
         </select>
@@ -503,24 +511,30 @@ export default function QuizAchievementAnalysis({
         )}
       <div className="qaa-scope">
         {data.grade && <span>{data.grade}학년 전체</span>}
-        <span>첫 제출 {analysis.attempts.length}명</span>
+        <span>
+          {view === 5
+            ? "진단·형성평가 근거"
+            : `첫 제출 ${analysis.attempts.length}명`}
+        </span>
         {analysis.unclassifiedItemCount > 0 && (
           <span>미연결 응답 {analysis.unclassifiedItemCount}건</span>
         )}
         {analysis.missingCutoffCount > 0 && (
           <span>시작 시각 미확인 {analysis.missingCutoffCount}명</span>
         )}
-        <InfoHelp label="제외된 분석 근거">
-          사전 근거는 해당 학생의 모의고사 시작 전 기록만 포함합니다. 미래 기록{" "}
-          {analysis.futureEvidenceCount}건, 응시 순서 미확인{" "}
-          {analysis.excludedChronologyCount}명. 서버에서 시각·소유·버전 확인 후
-          제외한 근거{" "}
-          {Object.values(data.achievementEvidence.exclusions || {}).reduce(
-            (sum, count) => sum + count,
-            0,
-          )}
-          건.
-        </InfoHelp>
+        {view !== 5 && (
+          <InfoHelp label="제외된 분석 근거">
+            사전 근거는 해당 학생의 모의고사 시작 전 기록만 포함합니다. 미래
+            기록 {analysis.futureEvidenceCount}건, 응시 순서 미확인{" "}
+            {analysis.excludedChronologyCount}명. 서버에서 시각·소유·버전 확인
+            후 제외한 근거{" "}
+            {Object.values(data.achievementEvidence.exclusions || {}).reduce(
+              (sum, count) => sum + count,
+              0,
+            )}
+            건.
+          </InfoHelp>
+        )}
       </div>
       {view === 0 && (
         <>
@@ -766,8 +780,6 @@ export default function QuizAchievementAnalysis({
                 <th>학생</th>
                 <th>진단평가</th>
                 <th>형성평가</th>
-                <th>학습지 채움</th>
-                <th>입력 중 정답</th>
               </tr>
             </thead>
             <tbody>
@@ -812,12 +824,6 @@ export default function QuizAchievementAnalysis({
                       {row.formative.correct}/{row.formative.total}
                     </small>
                   </td>
-                  <td>
-                    {row.worksheet.filled}/{row.worksheet.recorded}
-                  </td>
-                  <td>
-                    {row.worksheet.correct}/{row.worksheet.gradedFilled}
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -834,11 +840,10 @@ export default function QuizAchievementAnalysis({
             <InfoHelp label="예상 성취율 계산">
               예상치는 각 학생의 시험 시작 전 동일 기준·문항 목표수준·난도에서
               서로 다른 문항계열 3개 이상에 대한 최초 정답률입니다. 같은
-              문항계열, 힌트·지원 여부 미확인, 수정 답안, 학습지 채움은
-              예상치에서 제외합니다. 3개는 자료 표시 기준이며 성취수준
-              분할점수가 아닙니다. 예상과 실제 비교는 예상치를 계산할 수 있는
-              동일 학생·응답에 한정하며 차이가 학습 효과나 문항 적합성을
-              확정하지 않습니다.
+              문항계열, 힌트·지원 여부 미확인, 수정 답안은 예상치에서
+              제외합니다. 3개는 자료 표시 기준이며 성취수준 분할점수가 아닙니다.
+              예상과 실제 비교는 예상치를 계산할 수 있는 동일 학생·응답에
+              한정하며 차이가 학습 효과나 문항 적합성을 확정하지 않습니다.
             </InfoHelp>
           </div>
           <Table label="목표 수준과 난도별 예상 실제 성취율">
@@ -895,10 +900,10 @@ export default function QuizAchievementAnalysis({
           <div className="qca-section-heading qaa-evidence-heading">
             <h3>사전 학습 근거와 학생 수준</h3>
             <InfoHelp label="교사 수준 확인">
-              시험 시작 전 진단·형성평가와 학습지 상태를 검토한 뒤 성취기준별
-              분석용 A–E를 확인합니다. 완료율은 참여 근거이고 오답·미입력·지원
-              여부 미확인은 구별합니다. 정답률을 자동으로 A–E에 대응하지
-              않습니다. 저장은 공식 점수에 영향을 주지 않습니다.
+              시험 시작 전 진단·형성평가를 검토한 뒤 성취기준별 분석용 A–E를
+              확인합니다. 오답·미입력·지원 여부 미확인은 구별합니다. 정답률을
+              자동으로 A–E에 대응하지 않습니다. 저장은 공식 점수에 영향을 주지
+              않습니다.
             </InfoHelp>
             {standardCode && (
               <AchievementRubric
@@ -925,8 +930,6 @@ export default function QuizAchievementAnalysis({
                     <th>학생</th>
                     <th>진단 정답 / 응답</th>
                     <th>형성 정답 / 응답</th>
-                    <th>학습지 채움</th>
-                    <th>학습지 입력 중 정답</th>
                     <th>분석용 수준</th>
                     <th>근거 확인</th>
                     <th>저장</th>
@@ -971,16 +974,6 @@ export default function QuizAchievementAnalysis({
                         <td>
                           {stats
                             ? `${stats.formative.correct}/${stats.formative.total}`
-                            : "—"}
-                        </td>
-                        <td>
-                          {stats
-                            ? `${stats.worksheet.filled}/${stats.worksheet.recorded}`
-                            : "—"}
-                        </td>
-                        <td>
-                          {stats
-                            ? `${stats.worksheet.correct}/${stats.worksheet.gradedFilled}`
                             : "—"}
                         </td>
                         <td>
@@ -1059,6 +1052,13 @@ export default function QuizAchievementAnalysis({
             </>
           )}
         </>
+      )}
+      {view === 5 && (
+        <QuizAchievementEstimates
+          data={data}
+          semesterId={scope.semesterId}
+          standardCode={standardCode}
+        />
       )}
       {view === 4 && (
         <>
@@ -1161,6 +1161,7 @@ function EvidenceDetails({
           .filter(
             (row) =>
               row.studentUid === uid &&
+              ["diagnostic", "formative"].includes(row.source) &&
               resolveCodes(row).codes.includes(code) &&
               achievementTimestamp(row.observedAt) != null &&
               achievementTimestamp(row.observedAt)! < attempt.startedAt!,
@@ -1177,10 +1178,9 @@ function EvidenceDetails({
         <InfoHelp label="근거 보관 범위">
           모의고사 시작 전 기록입니다. 같은 문항의 반복 응답은 각각 확인할 수
           있으나 요약에는 마지막 상태, 예상에는 독립 문항계열 최초 응답을
-          사용합니다. 학습지의 정답은 입력값 검사를 뜻하고 독립 수행으로
-          단정하지 않습니다. 제한된 자료는 당시 고정 문항으로 복원했거나 지원
-          여부를 확인할 수 없는 근거입니다. 수준 저장에는 연결된 서버 평가
-          근거를 최대 60개 기록합니다.
+          사용합니다. 진단·형성평가만 조회합니다. 제한된 자료는 당시 고정
+          문항으로 복원했거나 지원 여부를 확인할 수 없는 근거입니다. 수준
+          저장에는 연결된 서버 평가 근거를 최대 60개 기록합니다.
         </InfoHelp>
       </div>
       {rows.length ? (
@@ -1188,7 +1188,7 @@ function EvidenceDetails({
           <thead>
             <tr>
               <th>유형</th>
-              <th>문항·빈칸</th>
+              <th>문항</th>
               <th>정오</th>
               <th>입력</th>
               <th>지원 사용</th>

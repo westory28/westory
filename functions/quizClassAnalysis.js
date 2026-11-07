@@ -131,9 +131,11 @@ const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'stu
   'semesterId', 'unitId', 'sourceId', 'category', 'examRound', 'definitionId', 'answerChecks', 'details', 'answers',
   'learningSnapshot', 'questionSnapshots', 'questionSnapshotOmittedIds', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
   'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash'];
+const RESULT_SCOPE_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail',
+  'assessmentKind', 'semesterId', 'sourceId', 'unitId', 'category', 'examRound', 'definitionId'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
-  'familyId', 'cognitiveProcess', ...ACHIEVEMENT_FIELDS];
+  'familyId', 'cognitiveProcess', 'cognitiveProcesses', ...ACHIEVEMENT_FIELDS];
 const SEARCH_FIELDS = [...QUESTION_FIELDS, 'passage', 'explanation', 'matchingPairs'];
 const searchText = value => text(value).normalize('NFC').toLocaleLowerCase('ko')
   .replace(/<[^>]*>/g, ' ').replace(/&(?:nbsp|amp|lt|gt|quot|apos);/gi, ' ').replace(/\s+/g, ' ').trim();
@@ -457,39 +459,120 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       sourceRevision: String(doc.data().contentRevision || doc.data().revision || 'legacy'),
     }));
   };
-  const loadResults = async (query, students, detail = false, budget, allAssessments = false) => {
-    const rows = new Map(), uids = students.map(student => student.uid), emails = students.map(student => student.email).filter(Boolean);
-    const uidSet = new Set(uids);
+  const loadResults = async (query, students, detail = false, budget, includePrior = false) => {
+    const rows = new Map(), candidates = new Map(), jobs = [];
+    const uids = [...new Set(students.map(student => student.uid))];
+    const emails = [...new Set(students.map(student => student.email).filter(Boolean))];
+    const uidSet = new Set(uids), emailSet = new Set(emails);
     const fields = detail ? RESULT_FIELDS : RESULT_FIELDS.filter(field => field !== 'questionSnapshots');
     const sources = [{ source: 'canonical', path: 'semester_assessment_results', fields: ['studentUid'], ids: uids },
       { source: 'legacy', path: `${root(query.semesterId)}/quiz_results`, fields: ['uid', 'studentUid', 'studentId', 'userId'], ids: uids },
       { source: 'legacy', path: `${root(query.semesterId)}/quiz_results`, fields: ['email', 'studentEmail'], ids: emails }];
-    for (const source of sources) {
-      for (const field of source.fields) {
-        for (let offset = 0; offset < source.ids.length; offset += 30) {
-          // Single-field queries deliberately avoid new composite-index rollout
-          // dependencies. All reads are restricted to pupils in this class.
-          const docs = await readBounded(db.collection(source.path).where(field, 'in', source.ids.slice(offset, offset + 30)).select(...fields), MAX_RESULTS, '학급 평가 기록', budget);
+    const matches = (data, source) => {
+      const owner = text(data.studentUid || data.uid || data.studentId || data.userId);
+      if (owner ? !uidSet.has(owner) : !emailSet.has(text(data.email || data.studentEmail))) return false;
+      if ((data.semesterId && data.semesterId !== query.semesterId) || (source === 'canonical'
+        && (data.assessmentKind !== 'QUIZ' || data.semesterId !== query.semesterId))) return false;
+      const parts = text(data.definitionId).split(':'), category = categoryOf(data.category || parts[3]);
+      return query.keyword || (includePrior && ['diagnostic', 'formative'].includes(category))
+        || (text(data.sourceId || data.unitId || parts[2]) === query.unitId && category === query.category
+          && roundOf(data.category || parts[3], data.examRound || parts[4]) === query.examRound);
+    };
+    const add = (doc, source) => {
+      const data = doc.data(), raw = json(data);
+      raw.behaviorAnswersAvailable = source === 'canonical' && !!data.answers
+        && typeof data.answers === 'object' && !Array.isArray(data.answers);
+      if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
+        correct: typeof item.correct === 'boolean' ? item.correct : null, sourceRevision: item.sourceRevision || '' }));
+      rows.set(`${source}:${doc.id}`, { id: doc.id, source, raw });
+      if (rows.size > MAX_RESULTS) fail('resource-exhausted', '학급 평가 기록이 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_LIMIT');
+    };
+    const schedule = (source, filters, metadataOnly) => {
+      // Firestore's 30-disjunction bound includes both the pupil and category/definition lists.
+      const alternatives = filters.reduce((count, [, operator, value]) => count * (operator === 'in' ? value.length : 1), 1);
+      const batchSize = Math.max(1, Math.floor(30 / alternatives));
+      for (const field of source.fields) for (let offset = 0; offset < source.ids.length; offset += batchSize) {
+        const ids = source.ids.slice(offset, offset + batchSize);
+        jobs.push(async () => {
+          let request = db.collection(source.path).where(field, 'in', ids);
+          if (source.source === 'canonical') request = request.where('semesterId', '==', query.semesterId).where('assessmentKind', '==', 'QUIZ');
+          for (const filter of filters) request = request.where(...filter);
+          const docs = await readBounded(request.select(...(metadataOnly ? RESULT_SCOPE_FIELDS : fields)), MAX_RESULTS, '학급 평가 기록', budget);
           for (const doc of docs) {
-            const data = doc.data(); const parts = text(data.definitionId).split(':');
-            const owner = text(data.studentUid || data.uid || data.studentId || data.userId);
-            if (owner && !uidSet.has(owner)) continue;
-            if ((data.semesterId && data.semesterId !== query.semesterId) || (source.source === 'canonical'
-              && (data.assessmentKind !== 'QUIZ' || data.semesterId !== query.semesterId))
-              || (!query.keyword && !allAssessments && (text(data.sourceId || data.unitId || parts[2]) !== query.unitId
-                || categoryOf(data.category || parts[3]) !== query.category
-                || roundOf(data.category || parts[3], data.examRound || parts[4]) !== query.examRound))) continue;
-            const raw = json(data);
-            // Behavior uses only answers stored on the result. A later detail-only
-            // submission join must not change the summary's observation category.
-            raw.behaviorAnswersAvailable = source.source === 'canonical' && !!data.answers
-              && typeof data.answers === 'object' && !Array.isArray(data.answers);
-            if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
-              correct: typeof item.correct === 'boolean' ? item.correct : null, sourceRevision: item.sourceRevision || '' }));
-            rows.set(`${source.source}:${doc.id}`, { id: doc.id, source: source.source, raw });
+            if (!matches(doc.data(), source.source)) continue;
+            const key = `${source.source}:${doc.id}`;
+            if (!metadataOnly) add(doc, source.source);
+            else candidates.set(key, { source: source.source, path: `${source.path}/${doc.id}`,
+              scope: json(doc.data()) });
           }
-          if (rows.size > MAX_RESULTS) fail('resource-exhausted', '학급 평가 기록이 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_LIMIT');
+          if (candidates.size > MAX_RESULTS) fail('resource-exhausted', '학급 평가 기록이 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_LIMIT');
+        });
+      }
+    };
+    let priorDefinitions = [];
+    if (includePrior && uids.length) {
+      // Earlier immutable quiz results can lack category/sourceId. Their exact
+      // diagnostic/formative definitions provide a bounded compatibility lookup.
+      const definitions = await readBounded(db.collection('semester_assessment_definitions')
+        .where('semesterId', '==', query.semesterId).where('assessmentKind', '==', 'QUIZ')
+        .where('category', 'in', ['diagnostic', 'formative']).select('category'), 1000, '진단·형성평가 정의', budget);
+      priorDefinitions = definitions.map(doc => doc.id);
+    }
+    const selectedDefinitions = query.keyword ? [] : [...new Set([definitionId(query),
+      ...(query.category === 'exam_prep' ? [definitionId({ ...query, category: `exam_prep__${query.examRound}`, examRound: '' }),
+        ...(query.examRound === 'round_1' ? [definitionId({ ...query, examRound: '' })] : [])] : [])])];
+    for (const source of sources) {
+      if (!source.ids.length) continue;
+      if (query.keyword) { schedule(source, [], false); continue; }
+      if (includePrior) {
+        schedule(source, [['category', 'in', ['diagnostic', 'formative']]], source.source === 'legacy');
+        // Project only identifiers here: modern records already loaded above
+        // never cause a second body/answer/snapshot read.
+        if (source.source === 'canonical' && priorDefinitions.length) {
+          // Choose the definition/pupil split with the fewest bounded queries.
+          let size = 1, minimum = Infinity;
+          for (let count = 1; count <= Math.min(30, priorDefinitions.length); count++) {
+            const calls = Math.ceil(priorDefinitions.length / count) * Math.ceil(uids.length / Math.floor(30 / count));
+            if (calls <= minimum) { minimum = calls; size = count; }
+          }
+          for (let offset = 0; offset < priorDefinitions.length; offset += size)
+            schedule(source, [['definitionId', 'in', priorDefinitions.slice(offset, offset + size)]], true);
         }
+      }
+      // Legacy plain exam_prep records may have no examRound (round 1). Read
+      // only small scope fields first; other rounds' bodies are never fetched.
+      const categories = query.category === 'exam_prep' ? ['exam_prep', `exam_prep__${query.examRound}`] : [query.category];
+      // Legacy QuizRunner always stored unitId/category. Only canonical results
+      // predate sourceId/category and need the definition-id compatibility path.
+      schedule(source, [[source.source === 'canonical' ? 'sourceId' : 'unitId', '==', query.unitId],
+        ['category', categories.length === 1 ? '==' : 'in', categories.length === 1 ? categories[0] : categories]], true);
+      if (source.source === 'canonical') schedule(source, [['definitionId', selectedDefinitions.length === 1 ? '==' : 'in',
+        selectedDefinitions.length === 1 ? selectedDefinitions[0] : selectedDefinitions]], true);
+    }
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, async () => {
+      while (cursor < jobs.length) await jobs[cursor++]();
+    }));
+    const pending = [...candidates.entries()].filter(([key]) => !rows.has(key)).map(([, candidate]) => candidate);
+    let bodyBytes = 0;
+    for (let offset = 0; offset < pending.length; offset += 100) {
+      const batch = pending.slice(offset, offset + 100);
+      const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: fields });
+      for (let i = 0; i < docs.length; i++) {
+        const doc = docs[i], candidate = batch[i];
+        if (!doc.exists || !matches(doc.data(), candidate.source)
+          || RESULT_SCOPE_FIELDS.some(field => Object.hasOwn(doc.data(), field) !== Object.hasOwn(candidate.scope, field)
+            || JSON.stringify(json(doc.data()[field])) !== JSON.stringify(candidate.scope[field])))
+          fail('aborted', '조회 중 평가 기록이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+        const bytes = Buffer.byteLength(JSON.stringify(doc.data()));
+        bodyBytes += bytes;
+        if (budget) {
+          budget.documents++; budget.bytes += bytes;
+          if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
+            fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+        }
+        if (bodyBytes > MAX_BYTES * 4) fail('resource-exhausted', '평가 기록의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
+        add(doc, candidate.source);
       }
     }
     return [...rows.values()];
@@ -509,12 +592,11 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
       const profileQuery = db.collection('semester_achievement_profiles').where('classId',
         selectedClasses.length === 1 ? '==' : 'in', selectedClasses.length === 1 ? selectedClasses[0].id : selectedClasses.map(entry => entry.id));
-      const [allRows, questionDocs, treeData, lessonDocs, profileDocs] = await Promise.all([
+      const [allRows, questionDocs, treeData, profileDocs] = await Promise.all([
         loadResults(input, students, true, budget, true),
         readBounded(db.collection(`${root(input.semesterId)}/quiz_questions`).where('unitId', '==', input.unitId)
           .select(...QUESTION_FIELDS, 'answer'), MAX_QUESTIONS, '성취 분석 문항', budget),
         loadTree(input.semesterId),
-        readBounded(db.collection(`${root(input.semesterId)}/lessons`).select('unitId', 'subUnitId', 'contentRevision', 'contentHtml', 'worksheetBlanks', ...ACHIEVEMENT_FIELDS), 1000, '학습지', budget),
         readBounded(profileQuery, 5000, '분석 성취수준', budget),
       ]);
       const allQuestions = questionDocs.map(doc => ({ ...json(doc.data()), id: doc.data().id ?? doc.id, docId: doc.id,
@@ -569,19 +651,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         const docs = await db.getAll(...entries.map(id => db.doc(`semester_assessment_attempts/${id}`)));
         attempts.push(...docs.filter(doc => doc.exists).map(doc => ({ id: doc.id, raw: json(doc.data()) })));
       }
-      const progressRows = [];
-      // A bounded pool avoids one serial round trip per pupil.
-      let cursor = 0;
-      await Promise.all(Array.from({ length: Math.min(4, students.length) }, async () => {
-        while (cursor < students.length) {
-          const student = students[cursor++];
-          const docs = await readBounded(db.collection(`${root(input.semesterId)}/lesson_progress/${student.uid}/units`), 1000, '학습지 기록', budget);
-          progressRows.push(...docs.map(doc => ({ id: doc.id, studentUid: student.uid, raw: json(doc.data()) })));
-        }
-      }));
       const achievementEvidence = buildQuizAchievementEvidence({ semesterId: input.semesterId, students,
-        questions: allQuestions, priorRows: allRows, examRows: rawRows, attempts,
-        lessons: lessonDocs.map(doc => json(doc.data())), progressRows });
+        priorRows: allRows, examRows: rawRows, attempts });
       const studentClasses = new Map(students.map(student => [student.uid, student.classId]));
       const observationByRef = new Map(achievementEvidence.observations.filter(item => item.recordSource === 'canonical')
         .map(item => [`${item.studentUid}:${item.resultId}:${item.questionId}`, item]));

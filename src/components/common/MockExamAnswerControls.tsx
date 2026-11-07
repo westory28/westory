@@ -6,6 +6,10 @@ import {
   type MockExamPaperQuestion,
 } from "./MockExamPaper";
 import { SHORT_ANSWER_MAX_LENGTH } from "../../lib/assessmentAnswerLimits";
+import {
+  formatMockExamChoiceLabel,
+  getMockExamChoiceColumns,
+} from "../../lib/mockExamChoiceLayout";
 import "./mockExamAnswerControls.css";
 
 export default function MockExamAnswerControls({
@@ -15,6 +19,7 @@ export default function MockExamAnswerControls({
   onAnswer,
   disabled = false,
   orderOptions = question.options || [],
+  choiceLayout = "list",
 }: {
   question: MockExamPaperQuestion;
   index: number;
@@ -22,7 +27,13 @@ export default function MockExamAnswerControls({
   onAnswer: (value: string) => void;
   disabled?: boolean;
   orderOptions?: string[];
+  choiceLayout?: "list" | "paper";
 }) {
+  const options = question.type === "ox" ? ["O", "X"] : question.options || [];
+  const paperColumns = getMockExamChoiceColumns(
+    options,
+    question.choiceOptionImages,
+  );
   const order = answer.split("||").filter(Boolean);
   const pairs =
     question.matchingLeftOptions ||
@@ -37,48 +48,63 @@ export default function MockExamAnswerControls({
       .map((part) => part.split("=>")),
   );
   return (
-    <fieldset disabled={disabled} className="mock-exam-answer-controls">
+    <fieldset
+      disabled={disabled}
+      className={`mock-exam-answer-controls${choiceLayout === "paper" ? " mock-exam-answer-controls--paper" : ""}`}
+    >
       <legend className="mock-exam-sr-only">{index + 1}번 답안</legend>
       {["choice", "ox"].includes(question.type) && (
-        <div role="radiogroup" aria-label="답안 선택">
-          {(question.type === "ox" ? ["O", "X"] : question.options || []).map(
-            (option, index) => (
-              <label
-                key={index}
-                className={answer === option ? "is-selected" : ""}
+        <div
+          role="radiogroup"
+          aria-label="답안 선택"
+          className={
+            choiceLayout === "paper"
+              ? `mock-exam-options mock-exam-options--${paperColumns}`
+              : undefined
+          }
+        >
+          {options.map((option, index) => (
+            <label
+              key={index}
+              className={answer === option ? "is-selected" : ""}
+            >
+              <input
+                type="radio"
+                name={`exam-answer-${question.id}`}
+                value={option}
+                checked={answer === option}
+                onChange={() => onAnswer(option)}
+                onClick={() => {
+                  if (!disabled && answer === option) onAnswer("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== " ") return;
+                  event.preventDefault();
+                  if (!disabled && !event.repeat)
+                    onAnswer(answer === option ? "" : option);
+                }}
+              />
+              <span className="mock-exam-option-number">
+                {examChoiceNumber(index)}{" "}
+                {answer === option && <MockExamAnswerCheck />}
+              </span>
+              <span
+                className={
+                  choiceLayout === "paper" ? "mock-exam-option-text" : undefined
+                }
               >
-                <input
-                  type="radio"
-                  name={`exam-answer-${question.id}`}
-                  value={option}
-                  checked={answer === option}
-                  onChange={() => onAnswer(option)}
-                  onClick={() => {
-                    if (!disabled && answer === option) onAnswer("");
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== " ") return;
-                    event.preventDefault();
-                    if (!disabled && !event.repeat)
-                      onAnswer(answer === option ? "" : option);
-                  }}
-                />
-                <span className="mock-exam-option-number">
-                  {examChoiceNumber(index)}{" "}
-                  {answer === option && <MockExamAnswerCheck />}
-                </span>
-                <span>
-                  {option}
-                  {question.choiceOptionImages?.[index] && (
-                    <MockExamImage
-                      src={question.choiceOptionImages[index]!}
-                      alt={`${index + 1}번 보기 자료`}
-                    />
-                  )}
-                </span>
-              </label>
-            ),
-          )}
+                {choiceLayout === "paper"
+                  ? formatMockExamChoiceLabel(option)
+                  : option}
+                {question.choiceOptionImages?.[index] && (
+                  <MockExamImage
+                    src={question.choiceOptionImages[index]!}
+                    alt={`${index + 1}번 보기 자료`}
+                  />
+                )}
+              </span>
+            </label>
+          ))}
         </div>
       )}
       {["short", "word"].includes(question.type) && (

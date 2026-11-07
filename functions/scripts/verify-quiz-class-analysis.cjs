@@ -34,7 +34,7 @@ const fixture = () => ({
 
 function memory(initial = fixture()) {
   const data = new Map(Object.entries(initial));
-  const reads = [], queries = [], writes = [];
+  const reads = [], queries = [], writes = [], bodyReads = [];
   const snapshot = path => ({ id: path.split('/').at(-1), ref: ref(path), exists: data.has(path), data: () => data.get(path) });
   const ref = path => ({ path, get: async () => { reads.push(path); return snapshot(path); },
     set: async (value, options) => { writes.push(path); data.set(path, options?.merge ? { ...data.get(path), ...value } : value); } });
@@ -44,20 +44,29 @@ function memory(initial = fixture()) {
       select(...fields) { projection = fields; return cursor; }, orderBy() { return cursor; },
       limit(value) { limit = value; return cursor; }, startAfter(value) { after = value.id; return cursor; },
       async get() {
-        queries.push({ path, filters: structuredClone(filters), projection, limit });
+        const queryLog = { path, filters: structuredClone(filters), projection, limit };
+        queries.push(queryLog);
         let entries = [...data.entries()].filter(([key]) => key.startsWith(`${path}/`) && key.slice(path.length + 1).split('/').length === 1)
           .filter(([, value]) => filters.every(([field, op, wanted]) => op === '==' ? value[field] === wanted : wanted.includes(value[field])))
           .sort((a, b) => a[0].localeCompare(b[0]));
         if (after) entries = entries.filter(([key]) => key.split('/').at(-1) > after);
         const docs = entries.slice(0, limit).map(([key, value]) => ({ ...snapshot(key), data: () => projection
           ? Object.fromEntries(projection.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]])) : value }));
+        queryLog.returnedPaths = entries.slice(0, limit).map(([key]) => key);
         return { docs, size: docs.length, empty: !docs.length };
       } };
     return cursor;
   };
-  const db = { doc: ref, collection, getAll: async (...refs) => Promise.all(refs.map(r => r.get())),
+  const db = { doc: ref, collection, getAll: async (...refs) => {
+      const options = refs.at(-1)?.fieldMask ? refs.pop() : undefined;
+      return Promise.all(refs.map(async r => {
+        const doc = await r.get(); bodyReads.push({ path: r.path, projection: options?.fieldMask });
+        return options && doc.exists ? { ...doc, data: () => Object.fromEntries(options.fieldMask
+          .filter(field => Object.hasOwn(doc.data(), field)).map(field => [field, doc.data()[field]])) } : doc;
+      }));
+    },
     runTransaction: async callback => callback({ getAll: async (...refs) => Promise.all(refs.map(r => r.get())), set: (r, value) => { writes.push(r.path); data.set(r.path, value); } }) };
-  return { db, data, reads, queries, writes };
+  return { db, data, reads, queries, writes, bodyReads };
 }
 
 test('query validates class bounds, scope and detail restriction', () => {
@@ -213,7 +222,7 @@ test('whole-grade achievement shares reference reads, preserves pupil class and 
   assert.deepEqual(result.rawRows.map(row => row.raw.studentUid).sort(), ['a', 'b']);
   assert.deepEqual(result.profiles.map(row => row.id), ['right_class']);
   assert.equal(f.queries.filter(query => query.path === `${ROOT}/quiz_questions`).length, 1);
-  assert.equal(f.queries.filter(query => query.path === `${ROOT}/lessons`).length, 1);
+  assert.equal(f.queries.some(query => /\/(lessons|lesson_progress)(\/|$)/.test(query.path)), false);
   assert.equal(f.reads.filter(path => path === `${ROOT}/curriculum/tree`).length, 1);
   assert.equal(f.queries.some(query => /lesson_progress\/(foreign|inactive)\//.test(query.path)), false);
   assert.deepEqual(f.writes, []);
@@ -226,10 +235,11 @@ test('whole-grade achievement shares reference reads, preserves pupil class and 
 
 test('achievement service negotiates lossless compact evidence and preserves old-client responses', async () => {
   const f = memory(gradeExamFixture());
-  f.data.set(`${ROOT}/lessons/compact-fixture`, { unitId: 'compact-fixture', contentRevision: 1,
-    contentHtml: Array.from({ length: 24 }, (_, index) => `[합성 정답 ${index}]`).join(' ') });
-  for (const uid of ['a', 'b', 'c']) f.data.set(`${ROOT}/lesson_progress/${uid}/units/compact-fixture`, {
-    studentUid: uid, semesterId: SCOPE, contentRevision: 1, updatedAt: '2026-10-30T01:00:00Z', answers: {},
+  for (const uid of ['a', 'b', 'c']) f.data.set(`semester_assessment_results/compact_${uid}`, {
+    studentUid: uid, semesterId: SCOPE, assessmentKind: 'QUIZ', sourceId: 'unit-a', category: 'diagnostic',
+    submittedAtIso: '2026-10-30T01:00:00Z',
+    answerChecks: Array.from({ length: 24 }, (_, index) => ({ id: String(index), correct: index % 2 === 0 })),
+    learningSnapshot: Array.from({ length: 24 }, (_, index) => ({ id: String(index), sourceRevision: '1', unitId: 'unit-a' })),
   });
   const service = createQuizClassAnalysisService({ db: f.db, now: () => Date.UTC(2026, 10, 7) });
   const plain = await service.query(gradeExamQuery());
@@ -329,13 +339,100 @@ test('achievement route reads only selected pupils, preserves result cutoff and 
   const result = await handler({ auth: { uid: 'teacher' }, data: query });
   assert.equal(result.canReview, true); assert.equal(result.students.length, 1);
   assert.equal(result.rawRows.length, 1); assert.equal(result.achievementEvidence.examCutoffs[0].source, 'attempt');
-  assert.equal(result.achievementEvidence.observations.filter(row => row.source === 'worksheet').length, 1);
+  assert.equal(result.achievementEvidence.observations.filter(row => row.source === 'worksheet').length, 0);
   assert.equal(JSON.stringify(result).includes('PRIVATE_WORKSHEET_ANSWER'), false);
   assert.equal(JSON.stringify(result).includes('FOREIGN_STUDENT_ANSWER'), false);
-  assert.equal(f.queries.some(query => query.path.includes('/lesson_progress/b/')), false);
+  assert.equal(f.queries.some(query => /\/(lessons|lesson_progress)(\/|$)/.test(query.path)), false);
   assert.deepEqual(f.writes, []);
   f.data.set('users/teacher', { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['quiz_read'] });
   assert.equal((await handler({ auth: { uid: 'teacher' }, data: query })).canReview, false);
+});
+
+test('achievement bounds prior evidence in Firestore and never reads unselected exam bodies or worksheets', async context => {
+  const initial = gradeExamFixture();
+  const priorDefinition = `quiz:${SCOPE}:unit-a:diagnostic`;
+  initial[`semester_assessment_definitions/${priorDefinition}`] = { semesterId: SCOPE, assessmentKind: 'QUIZ', category: 'diagnostic' };
+  initial['semester_assessment_results/old_prior'] = { ...initial['semester_assessment_results/r1'],
+    category: '', sourceId: '', definitionId: priorDefinition, attemptId: 'old_prior' };
+  initial[`${ROOT}/quiz_results/old_prior_email`] = { email: 'a@school.test', unitId: 'unit-a', category: 'diagnostic',
+    timestamp: '2026-10-24T01:00:00Z', details: [{ id: 1, correct: true, sourceRevision: '2' }],
+    learningSnapshot: [{ id: 1, unitId: 'unit-a', sourceRevision: '2' }] };
+  initial[`${ROOT}/quiz_results/legacy_exam_first`] = { uid: 'a', email: 'a@school.test', unitId: 'exam_prep', category: 'exam_prep',
+    score: 80, details: [{ id: 91, correct: true }], timestamp: '2026-10-30T01:00:00Z' };
+  initial['semester_assessment_results/old_exam_first'] = { ...initial['semester_assessment_results/exam_a'],
+    sourceId: '', category: '', examRound: '', definitionId: `quiz:${SCOPE}:exam_prep:exam_prep`, attemptId: 'old_exam_first' };
+  for (let round = 2; round <= 6; round++) {
+    initial[`semester_assessment_results/other_round_${round}`] = { ...initial['semester_assessment_results/exam_a'],
+      examRound: `round_${round}`, definitionId: `quiz:${SCOPE}:exam_prep:exam_prep:round_${round}`, answers: { 91: 'UNSELECTED_BODY' } };
+    initial[`${ROOT}/quiz_results/other_round_${round}`] = { uid: 'a', unitId: 'exam_prep', category: 'exam_prep',
+      examRound: `round_${round}`, details: [{ id: 91, answer: 'UNSELECTED_BODY' }] };
+  }
+  initial['semester_assessment_results/wrong_semester'] = { ...initial['semester_assessment_results/r1'], semesterId: '2026-1' };
+  initial['semester_assessment_results/wrong_kind'] = { ...initial['semester_assessment_results/r1'], assessmentKind: 'HISTORY_CLASSROOM' };
+  initial[`${ROOT}/quiz_results/wrong_owner_email`] = { ...initial[`${ROOT}/quiz_results/old_prior_email`], uid: 'foreign' };
+  initial[`${ROOT}/lessons/private`] = { contentHtml: '[PRIVATE_LESSON]' };
+  initial[`${ROOT}/lesson_progress/a/units/private`] = { answers: { 0: { value: 'PRIVATE_WORKSHEET' } } };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  const result = await service.query(gradeExamQuery());
+  const bodyQueries = f.queries.filter(query => query.path.endsWith('results') && query.projection.includes('answerChecks'));
+  assert.ok(bodyQueries.length > 0);
+  assert.ok(bodyQueries.every(query => query.filters.some(([field, op, values]) => field === 'category'
+    && op === 'in' && JSON.stringify(values) === JSON.stringify(['diagnostic', 'formative']))));
+  const canonicalQueries = f.queries.filter(query => query.path === 'semester_assessment_results');
+  assert.ok(canonicalQueries.every(query => query.filters.some(([field, , value]) => field === 'semesterId' && value === SCOPE)
+    && query.filters.some(([field, , value]) => field === 'assessmentKind' && value === 'QUIZ')));
+  assert.ok(f.queries.filter(query => query.path.endsWith('results')).every(query =>
+    query.filters[0][1] === 'in' && query.filters[0][2].every(value => ['a', 'b', 'c', 'a@school.test', 'b@school.test'].includes(value))));
+  const resultBodyPaths = [...bodyQueries.flatMap(query => query.returnedPaths),
+    ...f.bodyReads.filter(read => read.path.includes('results/')).map(read => read.path)];
+  assert.equal(resultBodyPaths.some(path => /other_round|wrong_semester|wrong_kind|foreign|inactive|wrong_owner/.test(path)), false);
+  assert.equal(f.bodyReads.filter(read => read.path === `${ROOT}/quiz_results/legacy_exam_first`).length, 1,
+    'matching UID and email queries fetch a selected legacy body once');
+  assert.ok(result.rawRows.some(row => row.id === 'old_exam_first'));
+  assert.ok(result.rawRows.some(row => row.id === 'legacy_exam_first'));
+  assert.ok(result.achievementEvidence.observations.some(row => row.resultId === 'old_prior'));
+  assert.ok(result.achievementEvidence.observations.some(row => row.resultId === 'old_prior_email'));
+  assert.ok(result.achievementEvidence.observations.every(row => ['diagnostic', 'formative'].includes(row.source)));
+  assert.equal(f.queries.some(query => /\/(lessons|lesson_progress)(\/|$)/.test(query.path)), false);
+  assert.equal(JSON.stringify(result).includes('UNSELECTED_BODY'), false);
+  assert.equal(JSON.stringify(result).includes('PRIVATE_WORKSHEET'), false);
+  assert.deepEqual(f.writes, []);
+  context.diagnostic(`Read shape: ${bodyQueries.length} bounded prior queries; ${resultBodyPaths.length} selected result-body reads; 0 unselected round bodies; 0 lesson/progress queries.`);
+});
+
+test('scope-only compatibility reads fail closed when a result disappears or changes before its body read', async () => {
+  for (const changed of ['missing', 'round']) {
+    const f = memory(gradeExamFixture()), getAll = f.db.getAll;
+    f.db.getAll = async (...refs) => {
+      if (refs.some(ref => ref.path === 'semester_assessment_results/exam_a')) {
+        if (changed === 'missing') f.data.delete('semester_assessment_results/exam_a');
+        else f.data.set('semester_assessment_results/exam_a', { ...f.data.get('semester_assessment_results/exam_a'), examRound: 'round_2' });
+      }
+      return getAll(...refs);
+    };
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(gradeExamQuery()), error => error.code === 'aborted');
+  }
+});
+
+test('grade result queries account for DNF limits and batch definitions without multiplying legacy alias queries', async context => {
+  const f = memory(), students = Array.from({ length: 31 }, (_, index) => ({ uid: `synthetic-${index}`, email: `synthetic-${index}@school.test` }));
+  for (let index = 0; index < 16; index++) f.data.set(`semester_assessment_definitions/quiz:${SCOPE}:unit-${index}:diagnostic`,
+    { semesterId: SCOPE, assessmentKind: 'QUIZ', category: 'diagnostic' });
+  await createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), students, true,
+    { documents: 0, bytes: 0 }, true);
+  const requests = f.queries.filter(query => query.path.endsWith('results'));
+  assert.ok(requests.some(query => query.filters[0][2].length === 15));
+  assert.ok(requests.some(query => query.filters[0][2].length === 10));
+  assert.ok(requests.every(query => query.filters.reduce((count, [, operator, value]) =>
+    count * (operator === 'in' ? value.length : 1), 1) <= 30));
+  assert.equal(requests.length, 66, '31 pupils and 16 definitions need 66 bounded result queries, not 315 alias/definition combinations');
+  assert.ok(requests.filter(query => query.path.endsWith('/quiz_results')).every(query =>
+    !query.filters.some(([field]) => field === 'definitionId' || field === 'sourceId')));
+  const definitions = requests.filter(query => query.filters.some(([field, , value]) => field === 'definitionId'
+    && Array.isArray(value) && value.some(id => id.includes('unit-'))));
+  assert.equal(definitions.length, 20);
+  assert.ok(definitions.every(query => query.path === 'semester_assessment_results' && query.filters[0][0] === 'studentUid'));
+  context.diagnostic('31-pupil/16-definition query plan: 66 scoped result queries (was 315 with speculative legacy fallbacks); 1 scoped definition-metadata query; 0 worksheet queries.');
 });
 
 test('catalog has real current classes, no student names or answers and no result reads', async () => {
@@ -454,7 +551,7 @@ test('class summary uses recent score, deduplicates legacy and carries repeated 
   assert.equal(JSON.stringify(result).includes('PRIVATE_LARGE_IMAGE'), false);
   const resultQueries = f.queries.filter(query => /results$/.test(query.path));
   assert.ok(resultQueries.length > 0);
-  assert.ok(resultQueries.every(query => query.filters.length === 1 && query.filters[0][1] === 'in'
+  assert.ok(resultQueries.every(query => query.filters.length > 1 && query.filters[0][1] === 'in'
     && query.filters[0][2].every(id => ['a', 'a@school.test'].includes(id))));
   const count = f.queries.length;
   await service.query(q);
@@ -727,8 +824,10 @@ test('behavior inputs use result projections without extra summary reads and key
   initial['semester_assessment_submissions/r1'] = { attemptId: 'r1', studentUid: 'a', semesterId: SCOPE, answers: { 1: '상세 보완 답안' } };
   const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
   const summary = await service.query(q);
-  assert.ok(f.queries.filter(query => query.path.endsWith('results')).every(query => query.projection.includes('analytics')
-    && query.projection.includes('answers') && !query.projection.includes('questionSnapshots')));
+  assert.ok(f.queries.filter(query => query.path.endsWith('results')).every(query => !query.projection.includes('analytics')
+    && !query.projection.includes('answers') && !query.projection.includes('questionSnapshots')));
+  assert.ok(f.bodyReads.filter(read => read.path.startsWith('semester_assessment_results/')).every(read => read.projection.includes('analytics')
+    && read.projection.includes('answers') && !read.projection.includes('questionSnapshots')));
   assert.equal(f.reads.some(path => path.startsWith('semester_assessment_submissions/')), false);
   assert.equal(JSON.stringify(summary).includes('원본 답안'), false);
   assert.equal(JSON.stringify(summary).includes('firstResponseMs'), false);

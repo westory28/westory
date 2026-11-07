@@ -3,6 +3,47 @@
   color: var(--ws-text, #1f2937);
   font-size: 14px;
 }
+.qaa-estimates .qaa-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.qaa-estimates .qaa-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+.qaa-estimates .qaa-table th:first-child {
+  max-width: 320px;
+  white-space: normal;
+  text-align: left;
+}
+.qaa-estimates .qaa-table small {
+  display: block;
+  margin-left: 0;
+  white-space: normal;
+}
+.qaa-estimate-heading,
+.qaa-estimate-details {
+  margin-top: 24px;
+}
+.qaa-estimate-details > summary {
+  min-height: 44px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+.qaa-estimate-standard {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.qaa-estimate-standard select {
+  max-width: 100%;
+  flex: 1 1 240px;
+  min-width: 0;
+}
 .quiz-achievement-analysis.qaa-inline-report {
   margin-top: 24px;
   padding-top: 24px;

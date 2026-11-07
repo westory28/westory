@@ -243,17 +243,33 @@ const runNormalizerCases = () => {
   assert.equal(normalized.concepts.length, 8);
   assert.equal(normalized.concepts[0], "개념");
   assert.equal(normalized.cognitiveProcess.length, 60);
+  assert.deepEqual(normalized.cognitiveProcesses, [normalized.cognitiveProcess]);
+  const multi = learning.normalizeQuestionLearning({ cognitiveProcess: "old", cognitiveProcesses: [" 사료 해석 ", "인과 관계", "사료 해석"] });
+  assert.deepEqual(multi.cognitiveProcesses, ["사료 해석", "인과 관계"]);
+  assert.equal(multi.cognitiveProcess, "사료 해석");
+  assert.deepEqual(learning.normalizeQuestionLearning({ cognitiveProcess: "old", cognitiveProcesses: [] }).cognitiveProcesses, []);
+  assert.equal(learning.normalizeQuestionLearning({ cognitiveProcess: "old", cognitiveProcesses: [] }).cognitiveProcess, "");
+  const processPayload = cognitiveProcesses => assessment.normalizeAssessmentPayload("upsertQuizQuestion", {
+    semesterId: "2026-2", questionId: "1", expectedRevision: 0, reason: "합성 검사",
+    question: { id: 1, unitId: "unit", category: "diagnostic", type: "choice", question: "합성 발문", answer: "가",
+      cognitiveProcess: "기존 값", cognitiveProcesses },
+  });
+  assert.deepEqual(processPayload(["사료 해석", "인과 관계"]).question.cognitiveProcesses, ["사료 해석", "인과 관계"]);
+  assert.deepEqual(processPayload([]).question.cognitiveProcesses, []);
+  for (const invalid of ["사료 해석", null, [12], [" "], ["a".repeat(61)], Array(9).fill("사료 해석")])
+    assert.throws(() => processPayload(invalid), error => error.details?.reason === "ASSESSMENT_COGNITIVE_PROCESSES_INVALID" || error.message.includes("사고 과정"));
   assert.equal(normalized.familyId.length, 160);
   assert.equal(normalized.derivedFromQuestionId.length, 160);
   assert.equal(normalized.reviewLessonId.length, 160);
   assert.deepEqual(normalized.misconceptionTags, { 선지: "혼동 가능성" });
   const snap = learning.questionLearningSnapshot({
     path: "quiz_questions/q1",
-    data: { id: 1, contentRevision: 4, refSmall: "small", concepts: ["개념"] },
+    data: { id: 1, contentRevision: 4, refSmall: "small", concepts: ["개념"], cognitiveProcesses: ["사료 해석", "인과 관계"] },
   });
   assert.equal(snap.id, "1");
   assert.equal(snap.sourceRevision, "4");
   assert.equal(snap.refSmall, "small");
+  assert.deepEqual(snap.cognitiveProcesses, ["사료 해석", "인과 관계"]);
   const maximumMetadata = learning.questionLearningSnapshot({
     path: "quiz_questions/q1",
     data: {

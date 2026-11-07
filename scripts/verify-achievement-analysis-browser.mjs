@@ -251,7 +251,7 @@ try {
     .selectOption(code);
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    for (let view = 0; view < 5; view++) {
+    for (let view = 0; view < 6; view++) {
       await page
         .getByRole("combobox", { name: "분석 보기", exact: true })
         .selectOption(String(view));
@@ -283,6 +283,18 @@ try {
     }
   }
   await page.setViewportSize({ width: 1280, height: 900 });
+  const readsBeforeEstimates = await page.evaluate(() => window.qa.calls.length);
+  await page.getByRole("combobox", { name: "분석 보기", exact: true }).selectOption("5");
+  const cutTable = page.getByRole("table", { name: "성취수준별 추정 분할점수", exact: true });
+  assert.ok((await cutTable.innerText()).includes("점"), "Estimated cuts exist with supplied question metadata");
+  assert.equal(await page.getByRole("table", { name: "난도별 A–E 예상 성취율", exact: true }).locator("thead th").count(), 8);
+  await page.getByText("학생별 추정 수준과 성취수준 준거", { exact: true }).click();
+  const inferred = page.getByRole("table", { name: "학생별 현재 성취수준 추정", exact: true });
+  await inferred.locator("tbody tr").first().waitFor();
+  assert.equal(await inferred.locator("tbody tr").count(), students.length);
+  assert.ok((await inferred.locator("tbody tr").first().innerText()).includes("추정"));
+  assert.equal(await page.evaluate(() => window.qa.calls.length), readsBeforeEstimates, "Viewing estimates must never fetch more student records");
+  assert.equal(await page.evaluate(() => window.qa.saves.length), 0, "Estimates must never save student levels or scores");
   await page
     .getByRole("combobox", { name: "분석 보기", exact: true })
     .selectOption("1");
@@ -359,7 +371,7 @@ try {
     JSON.stringify(
       {
         widths: [390, 768, 1280],
-        views: 5,
+        views: 6,
         screenshots: shots,
         errors,
         checks: [
@@ -372,6 +384,7 @@ try {
           "evidence details",
           "profile save",
           "whole-grade review saves the actual student class",
+          "current level and weighted cut estimates with zero extra reads or writes",
         ],
       },
       null,

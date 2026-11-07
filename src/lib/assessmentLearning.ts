@@ -1,4 +1,5 @@
 /** Descriptive learning evidence, never a mastery or ability estimate. */
+import { getQuestionCognitiveProcesses } from "./cognitiveProcesses";
 export interface AssessmentLearningQuestion {
   id: string | number;
   sourceRevision?: string;
@@ -10,6 +11,7 @@ export interface AssessmentLearningQuestion {
   refSmall?: string | null;
   concepts?: string[];
   cognitiveProcess?: string;
+  cognitiveProcesses?: string[];
   familyId?: string;
   derivedFromQuestionId?: string;
   misconceptionTags?: Record<string, string>;
@@ -222,8 +224,7 @@ const groupKeys = (
 ): string[] => {
   if (dimension === "concept") return uniqueText(question.concepts);
   if (dimension === "cognitiveProcess") {
-    const process = text(question.cognitiveProcess);
-    return process ? [process] : [];
+    return getQuestionCognitiveProcesses(question);
   }
   const unit = getAssessmentLearningUnitId(question);
   return unit ? [unit] : [];
@@ -420,7 +421,7 @@ export const buildAssessmentLearningSummary = (input: {
       (row) => !uniqueText(row.latest.metadata.concepts).length,
     ).length,
     missingCognitiveProcessQuestionCount: evidence.filter(
-      (row) => !text(row.latest.metadata.cognitiveProcess),
+      (row) => !getQuestionCognitiveProcesses(row.latest.metadata).length,
     ).length,
     currentMetadataQuestionCount: evidence.filter(
       (row) => !row.latest.fromSnapshot && metadataById.has(row.id),

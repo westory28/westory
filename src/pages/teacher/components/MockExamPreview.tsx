@@ -11,6 +11,7 @@ import MockExamPaper, {
 } from "../../../components/common/MockExamPaper";
 import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
 import "./MockExamPreview.css";
+import type { MockExamPaperHeaderSettings } from "../../../lib/mockExamPaperHeader";
 
 interface Props {
   disabled?: boolean;
@@ -18,18 +19,27 @@ interface Props {
   loadQuestions: (
     entries: QuizQuestionCatalogEntry[],
   ) => Promise<QuizQuestionDraft[]>;
+  loadPaperHeader?: (round: string) => Promise<MockExamPaperHeaderSettings>;
 }
 
 export default function MockExamPreview({
   disabled = false,
   entries,
   loadQuestions,
+  loadPaperHeader,
 }: Props) {
   const dialog = useRef<HTMLDivElement>(null);
   const [questions, setQuestions] = useState<QuizQuestionDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [previewRound, setPreviewRound] = useState("round_1");
+  const [paperHeaders, setPaperHeaders] = useState<
+    Record<string, MockExamPaperHeaderSettings>
+  >({});
+  const [headerError, setHeaderError] = useState("");
+  const [headerRetry, setHeaderRetry] = useState(0);
+  const headerLoader = useRef(loadPaperHeader);
+  headerLoader.current = loadPaperHeader;
   const [practiceAnswers, setPracticeAnswers] = useState<
     Record<string, string>
   >({});
@@ -53,7 +63,34 @@ export default function MockExamPreview({
     setPracticeAnswers({});
     setQuestionIndex(null);
     setSelectedQuestionId(null);
+    setPaperHeaders({});
+    setHeaderError("");
   };
+  useEffect(() => {
+    if (
+      !questions.length ||
+      !headerLoader.current ||
+      paperHeaders[previewRound]
+    )
+      return;
+    let active = true;
+    setHeaderError("");
+    void headerLoader
+      .current(previewRound)
+      .then((settings) => {
+        if (active)
+          setPaperHeaders((previous) => ({
+            ...previous,
+            [previewRound]: settings,
+          }));
+      })
+      .catch(() => {
+        if (active) setHeaderError("시험지 상단 문구를 불러오지 못했습니다.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [questions.length, previewRound, headerRetry]);
   const returnToPaper = () => {
     setQuestionIndex(null);
     requestAnimationFrame(() => {
@@ -180,40 +217,56 @@ export default function MockExamPreview({
               </button>
             </div>
             <div ref={body} className="quiz-composer-body">
-              <div hidden={questionIndex != null}>
-                <MockExamPaper
-                  questions={previewQuestions}
-                  round={previewRound}
-                  answers={practiceAnswers}
-                  selectedQuestionId={selectedQuestionId}
-                  onQuestionSelect={(index) => {
-                    paperScroll.current = body.current?.scrollTop || 0;
-                    setSelectedQuestionId(previewQuestions[index].id);
-                    setQuestionIndex(index);
-                  }}
-                />
-                <details className="py-3">
-                  <summary className="min-h-11 cursor-pointer text-sm font-bold">
-                    정답·해설 확인
-                  </summary>
-                  {previewQuestions.map((q, index) => (
-                    <section
-                      key={q.id}
-                      className="border-b border-gray-200 py-3"
+              {loadPaperHeader && !paperHeaders[previewRound] ? (
+                <div role={headerError ? "alert" : "status"}>
+                  {headerError || "시험지 상단 문구를 불러오는 중입니다."}
+                  {headerError && (
+                    <button
+                      type="button"
+                      className="quiz-authoring-button"
+                      onClick={() => setHeaderRetry((value) => value + 1)}
                     >
-                      <h4 className="font-bold">
-                        {q.paperOrder || index + 1}번 · {q.points ?? 1}점
-                      </h4>
-                      <p className="mt-2 text-sm text-blue-700">
-                        정답: {q.answer}
-                      </p>
-                      <p className="mt-2 whitespace-pre-wrap text-sm">
-                        {q.explanation}
-                      </p>
-                    </section>
-                  ))}
-                </details>
-              </div>
+                      다시 불러오기
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div hidden={questionIndex != null}>
+                  <MockExamPaper
+                    questions={previewQuestions}
+                    round={previewRound}
+                    paperHeader={paperHeaders[previewRound]}
+                    answers={practiceAnswers}
+                    selectedQuestionId={selectedQuestionId}
+                    onQuestionSelect={(index) => {
+                      paperScroll.current = body.current?.scrollTop || 0;
+                      setSelectedQuestionId(previewQuestions[index].id);
+                      setQuestionIndex(index);
+                    }}
+                  />
+                  <details className="py-3">
+                    <summary className="min-h-11 cursor-pointer text-sm font-bold">
+                      정답·해설 확인
+                    </summary>
+                    {previewQuestions.map((q, index) => (
+                      <section
+                        key={q.id}
+                        className="border-b border-gray-200 py-3"
+                      >
+                        <h4 className="font-bold">
+                          {q.paperOrder || index + 1}번 · {q.points ?? 1}점
+                        </h4>
+                        <p className="mt-2 text-sm text-blue-700">
+                          정답: {q.answer}
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm">
+                          {q.explanation}
+                        </p>
+                      </section>
+                    ))}
+                  </details>
+                </div>
+              )}
               {currentQuestion && questionIndex != null && (
                 <section
                   className="mock-exam-preview-question"

@@ -7,6 +7,7 @@ import MockExamPaper, {
 import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import { formatMockExamRoundLabel } from "../../../lib/mockExamRounds";
+import type { MockExamPaperHeaderSettings } from "../../../lib/mockExamPaperHeader";
 import "./mockExamWorkspace.css";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   answers: Record<string, string>;
   round: unknown;
   studentLabel: string;
+  paperHeader?: MockExamPaperHeaderSettings;
   currentIndex: number;
   onSelect: (index: number) => void;
   onAnswer?: (value: string) => void;
@@ -209,6 +211,7 @@ export default function MockExamWorkspace(props: Props) {
             answers={answers}
             round={round}
             studentLabel={studentLabel}
+            paperHeader={props.paperHeader}
             score={score}
             checks={checks}
             onQuestionSelect={openQuestion}

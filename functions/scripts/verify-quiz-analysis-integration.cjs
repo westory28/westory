@@ -98,18 +98,27 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
     attemptId: `grade_exam_${uid}`, startedAtIso: new Date(now - 60000).toISOString(), submittedAtIso: new Date(now).toISOString(),
     total: 1, percent: 100, answerChecks: [{ id: 91, correct: true }], answers: { 91: '합성 답안' },
   });
-  const compactUnit = 'synthetic-compact-transport';
-  await db.doc(`years/2026/semesters/2/lessons/${compactUnit}`).set({ unitId: compactUnit, contentRevision: 1,
-    contentHtml: Array.from({ length: 24 }, (_, index) => `[합성 정답 ${index}]`).join(' ') });
-  for (const uid of [student, other]) await db.doc(`years/2026/semesters/2/lesson_progress/${uid}/units/${compactUnit}`).set({
-    studentUid: uid, semesterId, contentRevision: 1, updatedAt: new Date(now - 120000).toISOString(), answers: {},
+  for (const uid of [student, other]) await db.doc(`semester_assessment_results/compact_${uid}`).set({
+    studentUid: uid, semesterId, assessmentKind: 'QUIZ', sourceId: 'unit-a', category: 'diagnostic',
+    submittedAtIso: new Date(now - 120000).toISOString(),
+    answerChecks: Array.from({ length: 24 }, (_, index) => ({ id: String(index), correct: index % 2 === 0 })),
+    learningSnapshot: Array.from({ length: 24 }, (_, index) => ({ id: String(index), sourceRevision: '1', unitId: 'unit-a' })),
   });
+  await db.doc('semester_assessment_results/compact_definition_only').set({ semesterId, studentUid: student,
+    assessmentKind: 'QUIZ', definitionId: 'quiz:2026-2:unit-a:formative',
+    submittedAtIso: new Date(now - 120000).toISOString(), answerChecks: [{ id: '1', correct: true }],
+    learningSnapshot: [{ id: '1', sourceRevision: '1', unitId: 'unit-a' }] });
+  await db.doc('years/2026/semesters/2/quiz_results/compact_other_round').set({ uid: student,
+    unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_2', details: [{ answer: 'UNSELECTED_ROUND_BODY' }] });
   const gradeAchievement = await deployed.getQuizClassAnalysis.run(request(teacher, { ...gradeScope, mode: 'achievement',
     unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' }));
   assert.equal(gradeAchievement.grade, '3');
   assert.equal(gradeAchievement.complete, true);
   assert.deepEqual(gradeAchievement.rawRows.map(row => row.raw.studentUid).sort(), [student, other].sort());
   assert.deepEqual(gradeAchievement.configuredClasses.map(row => row.id), ['class_1', 'class_2']);
+  assert.ok(gradeAchievement.achievementEvidence.observations.some(row => row.resultId === 'compact_definition_only'));
+  assert.ok(gradeAchievement.achievementEvidence.observations.every(row => ['diagnostic', 'formative'].includes(row.source)));
+  assert.equal(JSON.stringify(gradeAchievement).includes('UNSELECTED_ROUND_BODY'), false);
   const compactQuery = { ...gradeScope, mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', compactEvidence: true };
   const compactGrade = await deployed.getQuizClassAnalysis.run(request(teacher, compactQuery));
   const { observationTable, ...evidenceMetadata } = compactGrade.achievementEvidence;
@@ -119,8 +128,9 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
     index === -1 ? [] : [[keys[position], values[index]]]))) };
   assert.deepEqual(restoredEvidence, gradeAchievement.achievementEvidence);
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, compactQuery)), error => error.code === 'permission-denied');
-  await db.doc(`years/2026/semesters/2/lessons/${compactUnit}`).delete();
-  for (const uid of [student, other]) await db.doc(`years/2026/semesters/2/lesson_progress/${uid}/units/${compactUnit}`).delete();
+  for (const uid of [student, other]) await db.doc(`semester_assessment_results/compact_${uid}`).delete();
+  await db.doc('semester_assessment_results/compact_definition_only').delete();
+  await db.doc('years/2026/semesters/2/quiz_results/compact_other_round').delete();
   // Remove only the synthetic extra exam records before the unchanged history assertions.
   for (const uid of [student, other]) await db.doc(`semester_assessment_results/grade_exam_${uid}`).delete();
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, scope)), e => e.code === 'permission-denied');
@@ -222,7 +232,8 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   const achievementQuery = { mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', classIds: ['class_1'] };
   const evidence = await deployed.getQuizClassAnalysis.run(request(teacher, achievementQuery));
   assert.equal(evidence.canReview, true); assert.equal(evidence.achievementEvidence.examCutoffs[0].startedAt, examStart);
-  assert.ok(evidence.achievementEvidence.observations.some(row => row.source === 'worksheet' && row.filled && row.correct === false));
+  assert.ok(evidence.achievementEvidence.observations.every(row => ['diagnostic', 'formative'].includes(row.source)));
+  assert.ok(evidence.achievementEvidence.observations.some(row => row.source === 'formative'));
   assert.ok(!JSON.stringify(evidence).includes('PRIVATE_BLANK'));
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, achievementQuery)), e => e.code === 'permission-denied');
   const reviewPayload = { semesterId, classId: 'class_1', unitId: 'exam_prep', examRound: 'round_1', studentUid: student,

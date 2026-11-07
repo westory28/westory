@@ -38,6 +38,7 @@ export default React.memo(function MockExamDraftPreview({
           index={index}
           answer={answer}
           onAnswer={setAnswer}
+          choiceLayout="paper"
         />
       </div>
     </aside>

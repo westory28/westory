@@ -111,7 +111,7 @@ const bundle = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(evidence, "fixture.js"),
-  loader: { ".svg": "dataurl", ".webp": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl", ".woff": "dataurl", ".woff2": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -611,6 +611,40 @@ try {
   checks.push(
     "New mock exams retain 10 questions/40 minutes, no hints and one attempt for the base round.",
   );
+
+  for (const width of [390, 768, 1280]) {
+    const page = await open("category=exam_prep", width);
+    const title = page.getByRole("textbox", { name: "시험지 제목", exact: true });
+    const heading = page.getByRole("textbox", { name: "머리말", exact: true });
+    const before = await page.evaluate(() => window.quizSettingsQa.reads.length);
+    await title.fill("2026학년도 3학년 역사과 초시");
+    await heading.fill("역사 탐구 역량 평가");
+    await page.getByRole("button", { name: "미리보기", exact: true }).click();
+    const preview = page.locator(".quiz-settings-paper-preview");
+    assert.equal(await preview.locator("h2").innerText(), "2026학년도 3학년 역사과 초시");
+    assert.equal(await preview.locator(".mock-exam-paper-heading").innerText(), "역사 탐구 역량 평가");
+    assert.equal(await page.evaluate(() => window.quizSettingsQa.reads.length), before, "Header draft preview makes no server reads");
+    assert.equal(await preview.locator(".mock-exam-student").innerText(), "3학년　　반　　번　 이름:");
+    await capture(page, `mock-header-${width}`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+    await saveButton(page).click();
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+    const saved = await page.evaluate(() => window.quizSettingsQa.saves.at(-1));
+    assert.equal(saved.round, "round_1");
+    assert.equal(saved.payload.paperTitle, "2026학년도 3학년 역사과 초시");
+    assert.equal(saved.payload.paperHeading, "역사 탐구 역량 평가");
+    await reopen(page);
+    assert.equal(await title.inputValue(), saved.payload.paperTitle);
+    await page.getByRole("button", { name: "중학교 3학년 복시 (2회 모의고사)", exact: true }).click();
+    await title.waitFor();
+    await page.waitForFunction(() => document.querySelector('input[placeholder*="복시"]')?.value === "");
+    assert.equal(await title.inputValue(), "", "Another round does not inherit the saved header");
+    await page.getByRole("button", { name: "미리보기", exact: true }).click();
+    assert.equal(await preview.locator("h2").innerText(), "중학교 3학년 역사과 복시(역사과 2회 모의고사)");
+    assert.equal(await preview.locator(".mock-exam-paper-heading").count(), 0);
+    await page.close();
+  }
+  checks.push("Round-specific paper title/heading: draft preview without reads, save/reopen, default fallback, and preserved student blanks at 390/768/1280px.");
 
   for (const width of [390, 768, 1280]) {
     const page = await open("category=exam_prep", width);

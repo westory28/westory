@@ -108,6 +108,7 @@ interface Question {
   category?: string;
   concepts?: string[];
   cognitiveProcess?: string;
+  cognitiveProcesses?: string[];
   familyId?: string;
   reviewLessonId?: string;
   misconceptionTags?: Record<string, string>;
@@ -126,6 +127,7 @@ interface QuizConfig {
   cooldown?: number;
   questionCount?: number;
   hintLimit?: number;
+  paperHeader?: { paperTitle?: string; paperHeading?: string };
 }
 
 const ORDER_DELIMITER = "||";
@@ -1099,6 +1101,14 @@ const QuizRunner: React.FC = () => {
           definition.itemCount,
         ),
         hintLimit: Number(settings?.hintLimit) || 0,
+        paperHeader: {
+          paperTitle:
+            typeof settings?.paperTitle === "string" ? settings.paperTitle : "",
+          paperHeading:
+            typeof settings?.paperHeading === "string"
+              ? settings.paperHeading
+              : "",
+        },
       };
       setQuizConfig(nextQuizConfig);
 
@@ -1759,6 +1769,11 @@ const QuizRunner: React.FC = () => {
       return (
         <MockExamWorkspace
           questions={selectedQuestions}
+          paperHeader={
+            canonicalAttempt
+              ? canonicalAttempt.paperHeader || {}
+              : quizConfig?.paperHeader
+          }
           answers={answers}
           round={examRound}
           studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
@@ -2462,6 +2477,7 @@ const QuizRunner: React.FC = () => {
         <MockExamWorkspace
           key={finalizedResultId}
           questions={paperResult.questions}
+          paperHeader={canonicalAttempt?.paperHeader || {}}
           answers={answers}
           round={examRound}
           studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
