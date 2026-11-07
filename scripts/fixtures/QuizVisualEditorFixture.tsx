@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import QuizVisualPassageEditor from "../../src/pages/teacher/components/QuizVisualPassageEditor";
+import QuizTextField from "../../src/pages/teacher/components/QuizTextField";
 import QuizPassage from "../../src/components/common/QuizPassage";
 import {
   createQuizVisualFragment,
@@ -7,6 +8,8 @@ import {
   parseQuizVisualDocument,
   readQuizVisualDom,
   serializeQuizVisualDocument,
+  quizVisualClipboard,
+  setQuizVisualSelection,
 } from "../../src/pages/teacher/components/quizVisualDocument";
 
 const sample =
@@ -27,6 +30,7 @@ const runDomChecks = () => {
     "{{bullet}}\n다음 줄",
     "{{blank:}} {{box:}}",
     "{{box:(가)}}{{box:(나)}}와 {{blank:가}}{{blank:나}}",
+    "{{blankbox:3.5|(가)}}의 정책",
     "<img src=x onerror=alert(1)> 안전한 문자열",
   ]) {
     const host = document.createElement("div");
@@ -97,12 +101,52 @@ const runDomChecks = () => {
     ),
     "{{blank:가}}{{blank:나}}",
   );
+  const clipboard = quizVisualClipboard(
+    parseQuizVisualDocument(
+      "{{bullet}}{{u:밑줄}}과 {{blankbox:3.5|(가)}}\n다음 줄",
+    ),
+  );
+  check("Normal clipboard text", clipboard.text, "• 밑줄과 (가)\n다음 줄");
+  check(
+    "Clipboard preserves visible formats",
+    serializeQuizVisualDocument(importQuizVisualHtml(clipboard.html)),
+    "{{bullet}}{{u:밑줄}}과 {{blankbox:3.5|(가)}}\n다음 줄",
+  );
+  check(
+    "Clipboard contains no storage delimiters",
+    /\{\{|\}\}|<<|>>/.test(clipboard.html),
+    false,
+  );
   return results.length;
 };
 export default function QuizVisualEditorFixture() {
   const [value, setValue] = useState(sample);
   const [saved, setSaved] = useState("");
   const [revision, setRevision] = useState(0);
+  const [imageName, setImageName] = useState("");
+  const [plain, setPlain] = useState("");
+  useEffect(() => {
+    Object.assign(window, {
+      quizVisualFixture: {
+        value,
+        reset: (next: string) => {
+          setValue(next);
+          setRevision((v) => v + 1);
+        },
+        select: (start: number, end = start) => {
+          const root = document.querySelector<HTMLElement>(
+            '[contenteditable="true"]',
+          );
+          if (!root) return;
+          root.focus();
+          setQuizVisualSelection(root, start, end);
+          root.dispatchEvent(
+            new KeyboardEvent("keyup", { key: "ArrowRight", bubbles: true }),
+          );
+        },
+      },
+    });
+  }, [value, revision]);
   const checks = useMemo(() => {
     try {
       return `PASS ${runDomChecks()} DOM / paste safety checks`;
@@ -120,6 +164,19 @@ export default function QuizVisualEditorFixture() {
         onChange={setValue}
         label="검증 지문"
         allowBlank
+        onImagePaste={(file) => setImageName(`${file.name}:${file.type}`)}
+      />
+      <output aria-label="붙여넣은 이미지">{imageName}</output>
+      <QuizTextField
+        aria-label="높이 자동 조절"
+        grow
+        value={plain}
+        onChange={(event) => setPlain(event.target.value)}
+      />
+      <QuizTextField
+        aria-label="기존 높이 제한"
+        value={plain}
+        onChange={(event) => setPlain(event.target.value)}
       />
       <div className="flex gap-2">
         <button

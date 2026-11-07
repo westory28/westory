@@ -4,6 +4,7 @@ import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { getIdTokenResult } from "firebase/auth";
 import type { AssessmentTelemetrySnapshot } from "./assessmentTelemetry";
 import type { AssessmentLearningQuestion } from "./assessmentLearning";
+import type { MockExamPassageSet } from "./mockExamMaterials";
 
 export type AssessmentKind = "QUIZ" | "HISTORY_CLASSROOM";
 
@@ -52,6 +53,11 @@ export interface AssessmentStateResponse {
   attempt: AssessmentAttemptState | null;
   serverNowIso: string;
   writeCount: 0;
+  preparedAssets?: {
+    sourceHash: string;
+    imageUrls: string[];
+    fontCharacters: string;
+  };
 }
 
 interface CommandResponse<T> {
@@ -253,6 +259,7 @@ const pendingStateReads = new WeakMap<
 export const getAssessmentState = async (input: {
   definitionId?: string;
   attemptId?: string;
+  prepareAssets?: boolean;
 }) => {
   const owner = auth.currentUser;
   const assertOwner = await captureAssessmentOwner();
@@ -282,7 +289,10 @@ export const getAssessmentState = async (input: {
   }
 };
 
-export const startAssessmentAttempt = (input: { definitionId: string }) =>
+export const startAssessmentAttempt = (input: {
+  definitionId: string;
+  preparedSourceHash?: string;
+}) =>
   executeStudentAssessmentCommand<AssessmentAttemptState>(
     "startAssessmentAttempt",
     input,
@@ -382,6 +392,8 @@ export interface AssessmentQuestionSnapshot {
   answer: string;
   explanation?: string;
   passage?: string;
+  examplePassage?: string | null;
+  passageSet?: MockExamPassageSet | null;
   image?: string;
   options?: string[];
   choiceOptionImages?: Array<string | null>;
@@ -408,6 +420,7 @@ export type AssessmentQuestionPresentation = Omit<
 };
 
 export interface AssessmentAttemptState {
+  serverNowIso?: string;
   attemptId: string;
   definitionId: string;
   semesterId: string;

@@ -96,6 +96,56 @@
   background: var(--ws-accent-soft, #fffbeb);
   padding: 0 8px;
 }
+.quiz-visual-content [data-quiz-mark="blankBox"] {
+  display: inline-block;
+  box-sizing: content-box;
+  max-width: calc(100% - 0.6em - 2px);
+  border: 1px solid currentColor;
+  padding: 0 0.3em;
+  text-align: center;
+  vertical-align: baseline;
+  white-space: pre-wrap;
+}
+.quiz-visual-blank-settings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-bottom: 0;
+  background: var(--ws-surface-subtle, #f8fafc);
+  font-size: 14px;
+}
+.quiz-visual-blank-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 160px;
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+}
+.quiz-visual-blank-settings input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 4px;
+  background: var(--ws-surface, #fff);
+}
+.quiz-visual-blank-settings button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+  font-weight: 700;
+}
+.quiz-visual-blank-settings :is(input, button):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
 .quiz-visual-status {
   padding-top: 4px;
   font-size: 14px;
@@ -119,4 +169,9 @@
   white-space: pre-wrap;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+.quiz-text-field.quiz-text-field--grow {
+  max-height: none;
+  overflow-y: hidden;
+  resize: none;
 }

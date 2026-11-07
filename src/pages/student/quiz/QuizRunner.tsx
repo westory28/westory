@@ -22,6 +22,13 @@ import type {
   MockExamPaperCheck,
 } from "../../../components/common/MockExamPaper";
 import {
+  collectMockExamAssets,
+  createMockExamAssetLoader,
+  MockExamAssetError,
+  type MockExamAssetManifest,
+  type MockExamAssetProgress,
+} from "../../../lib/mockExamAssets";
+import {
   buildQuizRelearningItems,
   type QuizRelearningItem,
 } from "./quizPracticeData";
@@ -84,6 +91,13 @@ interface Question {
   explanation?: string;
   image?: string;
   passage?: string;
+  examplePassage?: string;
+  passageSet?: {
+    id: string;
+    instruction: string;
+    passage: string;
+    image?: string | null;
+  };
   hintEnabled?: boolean;
   hint?: string;
   unitId?: string;
@@ -200,6 +214,15 @@ const QuizRunner: React.FC = () => {
     {},
   );
   const [startingQuiz, setStartingQuiz] = useState(false);
+  const startingQuizRef = useRef(false);
+  const [paperPreparationError, setPaperPreparationError] = useState("");
+  const [paperPreparationProgress, setPaperPreparationProgress] =
+    useState<MockExamAssetProgress | null>(null);
+  const paperAssetLoaderRef = useRef<ReturnType<
+    typeof createMockExamAssetLoader
+  > | null>(null);
+  const paperPreparationControllerRef = useRef<AbortController | null>(null);
+  const preparationGenerationRef = useRef(0);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [quizDeadlineMs, setQuizDeadlineMs] = useState<number | null>(null);
 
@@ -267,6 +290,46 @@ const QuizRunner: React.FC = () => {
           examRound,
         )
       : "";
+
+  useEffect(() => {
+    return () => {
+      preparationGenerationRef.current += 1;
+      startingQuizRef.current = false;
+      paperPreparationControllerRef.current?.abort();
+      paperPreparationControllerRef.current = null;
+      paperAssetLoaderRef.current?.dispose();
+      paperAssetLoaderRef.current = null;
+    };
+  }, [assessmentDefinitionId, fallbackStudentUid]);
+
+  const preparePaperAssets = async (manifest: MockExamAssetManifest) => {
+    const controller = new AbortController();
+    paperPreparationControllerRef.current?.abort();
+    paperPreparationControllerRef.current = controller;
+    const loader =
+      paperAssetLoaderRef.current ||
+      (paperAssetLoaderRef.current = createMockExamAssetLoader());
+    const studentCharacters = `${buildGradeClassLabel(userData)} ${normalizeStudentText(userData?.name)}`;
+    try {
+      await loader.prepare(
+        {
+          ...manifest,
+          fontCharacters: `${manifest.fontCharacters || ""}${studentCharacters}`,
+        },
+        {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            if (!controller.signal.aborted)
+              setPaperPreparationProgress(progress);
+          },
+        },
+      );
+    } finally {
+      if (paperPreparationControllerRef.current === controller) {
+        paperPreparationControllerRef.current = null;
+      }
+    }
+  };
 
   // Observation must never interrupt an answer, its save, or server grading.
   const observe = (
@@ -967,6 +1030,9 @@ const QuizRunner: React.FC = () => {
       setBlockReason(null);
       setResumeNotice("");
       setStartingQuiz(false);
+      startingQuizRef.current = false;
+      setPaperPreparationError("");
+      setPaperPreparationProgress(null);
       setFinishSubmitting(false);
       setSubmitError("");
       setSubmitConflict(false);
@@ -1112,38 +1178,108 @@ const QuizRunner: React.FC = () => {
       !unitId ||
       !category ||
       !fallbackStudentUid ||
-      !quizConfig?.questionCount
+      !quizConfig?.questionCount ||
+      startingQuizRef.current
     ) {
       return;
     }
 
-    if (activeSubmission?.status === "in_progress") {
-      emitSessionActivity();
-      setTimeLeft(
-        quizDeadlineMs
-          ? Math.max(
-              0,
-              Math.ceil(
-                (quizDeadlineMs - (Date.now() + serverTimeOffsetMs)) / 1000,
-              ),
-            )
-          : 0,
-      );
-      timeoutHandledRef.current = false;
-      setView("quiz");
-      return;
-    }
-
+    startingQuizRef.current = true;
     setStartingQuiz(true);
+    setPaperPreparationError("");
+    const generation = preparationGenerationRef.current;
+    const assertCurrent = () => {
+      if (preparationGenerationRef.current !== generation) {
+        throw new DOMException("응시 준비가 취소되었습니다.", "AbortError");
+      }
+    };
     try {
+      if (activeSubmission?.status === "in_progress") {
+        if (
+          isMockExamAttempt &&
+          quizDeadlineMs &&
+          quizDeadlineMs <= Date.now() + serverTimeOffsetMs
+        ) {
+          // An unavailable image must never prevent finishing an expired
+          // attempt with the answers already saved on the server.
+          timeoutHandledRef.current = true;
+          await finishQuiz(true);
+          return;
+        }
+        if (isMockExamAttempt) {
+          await preparePaperAssets(collectMockExamAssets(selectedQuestions));
+          assertCurrent();
+        }
+        emitSessionActivity();
+        setTimeLeft(
+          quizDeadlineMs
+            ? Math.max(
+                0,
+                Math.ceil(
+                  (quizDeadlineMs - (Date.now() + serverTimeOffsetMs)) / 1000,
+                ),
+              )
+            : 0,
+        );
+        timeoutHandledRef.current = false;
+        setView("quiz");
+        return;
+      }
+
       await resolveStudentIdentity();
-      const attempt = await startAssessmentAttempt({
-        definitionId: assessmentDefinitionId,
-      });
-      const startedState = await getAssessmentState({
-        attemptId: attempt.attemptId,
-      });
-      const committedAttempt = startedState.attempt || attempt;
+      assertCurrent();
+      const startPreparedAttempt = async () => {
+        let preparedSourceHash: string | undefined;
+        if (isMockExamAttempt) {
+          const prepared = await getAssessmentState({
+            definitionId: assessmentDefinitionId,
+            prepareAssets: true,
+          });
+          assertCurrent();
+          if (
+            !["READY", "RECOVERABLE", "SUBMITTED"].includes(prepared.status)
+          ) {
+            throw new Error(
+              "현재 이 평가를 시작할 수 없습니다. 평가 목록에서 다시 확인해 주세요.",
+            );
+          }
+          if (prepared.preparedAssets) {
+            await preparePaperAssets(prepared.preparedAssets);
+            preparedSourceHash = prepared.preparedAssets.sourceHash;
+          } else {
+            // A historical random paper has no fixed selection to preload.
+            // Its authorized snapshot is still prepared before it is shown.
+            await preparePaperAssets({ imageUrls: [] });
+          }
+          assertCurrent();
+        }
+        return startAssessmentAttempt({
+          definitionId: assessmentDefinitionId,
+          ...(preparedSourceHash ? { preparedSourceHash } : {}),
+        });
+      };
+      let attempt: AssessmentAttemptState;
+      try {
+        attempt = await startPreparedAttempt();
+      } catch (error) {
+        const failure = error as {
+          details?: { reason?: string };
+          customData?: { details?: { reason?: string } };
+        };
+        const reason =
+          failure?.details?.reason || failure?.customData?.details?.reason;
+        if (reason !== "ASSESSMENT_PREPARED_SOURCE_STALE") throw error;
+        // A teacher saved a new paper during preparation. Recheck once,
+        // without creating an attempt for the outdated asset manifest.
+        attempt = await startPreparedAttempt();
+      }
+      assertCurrent();
+      const startedState =
+        !attempt.serverNowIso || !attempt.questionPresentation?.length
+          ? await getAssessmentState({ attemptId: attempt.attemptId })
+          : null;
+      assertCurrent();
+      const committedAttempt = startedState?.attempt || attempt;
       const committedQuestions = questionsForAttempt(committedAttempt);
       if (committedQuestions.length !== attempt.questionIds.length) {
         throw new Error(
@@ -1162,7 +1298,7 @@ const QuizRunner: React.FC = () => {
       restoreSubmissionState(
         committedSubmission,
         committedQuestions,
-        startedState.serverNowIso,
+        startedState?.serverNowIso || attempt.serverNowIso!,
       );
       // Question numbers follow the frozen server attempt in both the runner
       // and result history. Only order/matching answer choices are shuffled.
@@ -1172,8 +1308,23 @@ const QuizRunner: React.FC = () => {
           ? "서버에 저장된 진행 상태를 이어서 풀 수 있습니다."
           : "응시가 시작되었습니다. 답안은 서버에 자동 저장됩니다.",
       );
+      if (isMockExamAttempt) {
+        // Also covers an already-running attempt resumed by the server and
+        // old snapshots. Deadline/remaining time remain server-authoritative.
+        await preparePaperAssets(collectMockExamAssets(committedQuestions));
+        assertCurrent();
+      }
       setView("quiz");
     } catch (error) {
+      if (
+        preparationGenerationRef.current !== generation ||
+        (error instanceof Error && error.name === "AbortError")
+      )
+        return;
+      if (error instanceof MockExamAssetError) {
+        setPaperPreparationError(error.message);
+        return;
+      }
       console.error("Failed to start quiz attempt", {
         definitionId: assessmentDefinitionId,
         currentUserUid: currentUser?.uid || "",
@@ -1191,7 +1342,11 @@ const QuizRunner: React.FC = () => {
         message: "응시 상태 저장에 실패했습니다. 다시 시도해 주세요.",
       });
     } finally {
-      setStartingQuiz(false);
+      if (preparationGenerationRef.current === generation) {
+        startingQuizRef.current = false;
+        setStartingQuiz(false);
+        setPaperPreparationProgress(null);
+      }
     }
   };
 
@@ -1446,9 +1601,11 @@ const QuizRunner: React.FC = () => {
         : "응시 전 확인";
     const introActionLabel = startingQuiz
       ? "준비 중..."
-      : activeSubmission?.status === "in_progress"
-        ? "이어하기"
-        : "평가 시작하기";
+      : paperPreparationError
+        ? "자료 다시 불러오기"
+        : activeSubmission?.status === "in_progress"
+          ? "이어하기"
+          : "평가 시작하기";
 
     return (
       <div className="student-quiz-intro mx-auto flex min-h-0 w-full max-w-5xl flex-1 animate-fadeIn items-center px-4 py-2 lg:py-3">
@@ -1540,6 +1697,20 @@ const QuizRunner: React.FC = () => {
               </div>
 
               <div className="space-y-3">
+                {startingQuiz && paperPreparationProgress && (
+                  <div
+                    role="status"
+                    className="text-sm font-bold text-blue-700"
+                  >
+                    시험지 준비 중 · {paperPreparationProgress.loaded}/
+                    {paperPreparationProgress.total}
+                  </div>
+                )}
+                {paperPreparationError && (
+                  <p role="alert" className="text-sm font-bold text-red-600">
+                    {paperPreparationError}
+                  </p>
+                )}
                 {!blockReason ? (
                   <button
                     type="button"

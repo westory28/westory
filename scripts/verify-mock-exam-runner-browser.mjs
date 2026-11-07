@@ -19,10 +19,11 @@ await fs.mkdir(evidence, { recursive: true });
 const tailwindPath = process.env.ASSESSMENT_QA_TAILWIND || process.env.PORTAL_DESIGN_TAILWIND_PATH || path.join(os.tmpdir(), "westory-qa-tailwind.js");
 const tailwind = await fs.readFile(tailwindPath, "utf8");
 const common = { unitId: "exam_prep", category: "exam_prep", examRound: "round_2", concepts: ["조선의 성립"], explanation: "저장 당시 해설: 조선은 한양을 도읍으로 삼았다." };
+const passageSet = { id: 'fixture-set', instruction: '다음 자료를 읽고 물음에 답하시오.', passage: '1392년 새로운 나라가 세워졌고, 1394년 도읍을 옮겼다.', image: '/qa-set-material.svg' };
 const questions = [
-  { ...common, id: 1, type: "choice", question: "저장 당시 1번 원문: 자료에 해당하는 나라로 옳은 것은?", passage: "한양으로 도읍을 옮기고 새로운 통치 체제를 마련하였다.", options: ["가야", "고려", "발해", "신라", "조선"], answer: "조선", paperOrder: 1, points: 30 },
-  { ...common, id: 2, type: "short", question: "저장 당시 2번 원문: 조선의 건국자를 쓰시오.", answer: "이성계", paperOrder: 2, points: 40 },
-  { ...common, id: 3, type: "choice", question: "저장 당시 3번 원문: 조선의 수도를 고르시오.", options: ["경주", "개경", "한양", "평양", "부여"], answer: "한양", paperOrder: 3, points: 30 },
+  { ...common, id: 1, type: "choice", question: "저장 당시 1번 원문: 자료에 해당하는 나라로 옳은 것은?", passage: "한양으로 도읍을 옮기고 새로운 통치 체제를 마련하였다.", image: "/qa-material.svg", options: ["가야", "고려", "발해", "신라", "조선"], answer: "조선", paperOrder: 1, points: 30 },
+  { ...common, id: 2, type: "short", question: "저장 당시 2번 원문: 조선의 건국자를 쓰시오.", passageSet, answer: "이성계", paperOrder: 2, points: 40 },
+  { ...common, id: 3, type: "choice", question: "저장 당시 3번 원문: 조선의 수도를 고르시오.", passageSet, examplePassage: 'ㄱ. 도읍을 옮김\nㄴ. 국가의 기틀을 마련함', options: ["경주", "개경", "한양", "평양", "부여"], answer: "한양", paperOrder: 3, points: 30 },
 ];
 const frozen = learning.captureQuestionSnapshots(questions.map(question => ({ path: `questions/${question.id}`, data: question })), questions.map(question => String(question.id)));
 const presentation = learning.questionPresentation(frozen.questionSnapshots);
@@ -42,7 +43,7 @@ const dense=location.search.includes('dense');const snapshots=dense?${JSON.strin
 const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
 const definitionId='quiz:2026-2:exam_prep:exam_prep:round_2';const settings={active:true,timeLimit:600,questionCount:snapshots.length,hintLimit:0,allowRetake:true};
 let attempt=JSON.parse(sessionStorage.getItem('mock-runner-attempt')||'null');let failSubmit=location.search.includes('submit-error');let failSave=location.search.includes('save-error');
-export const qa=window.mockRunnerQa={starts:[],saves:[],submits:[],get attempt(){return attempt},snapshotAnswerLeak:presentation.some(q=>q.answer||q.explanation)};
+export const qa=window.mockRunnerQa={starts:[],prepares:[],reads:[],saves:[],submits:[],get attempt(){return attempt},snapshotAnswerLeak:presentation.some(q=>q.answer||q.explanation)};
 const persist=()=>sessionStorage.setItem('mock-runner-attempt',JSON.stringify(attempt));
 export const useAuth=()=>({config,userData,currentUser});
 export const getYearSemester=()=>config;
@@ -50,8 +51,8 @@ export const readStudentCurriculumTree=async()=>[];
 export const buildAssessmentDefinitionId=()=>definitionId;
 export const isAssessmentRevisionConflict=error=>error?.code==='aborted';
 export const loadQuizScoreComparison=async()=>null;
-export const getAssessmentState=async()=>({status:'READY',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString()});
-export const startAssessmentAttempt=async input=>{qa.starts.push(input);attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
+export const getAssessmentState=async(input={})=>{qa.reads.push(input);if(input.prepareAssets)qa.prepares.push(input);return {status:attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
+export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
@@ -72,6 +73,12 @@ const css = (globalCss + built.outputFiles.find(file => file.path.endsWith(".css
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}#root{min-height:100dvh}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((request, response) => {
   const pathname = new URL(request.url, "http://localhost").pathname;
+  if(['/qa-material.svg','/qa-set-material.svg'].includes(pathname)) {
+    response.setHeader('Content-Type','image/svg+xml');
+    response.setHeader('Cache-Control','public, max-age=3600');
+    response.end('<svg xmlns="http://www.w3.org/2000/svg" width="480" height="180"><rect x="2" y="2" width="476" height="176" fill="white" stroke="black"/><path d="M40 150L160 50L280 150L400 70" fill="none" stroke="black" stroke-width="4"/></svg>');
+    return;
+  }
   response.setHeader("Content-Type", ["/fixture.js", "/tailwind.js"].includes(pathname) ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8");
   response.end(pathname === "/fixture.js" ? js : pathname === "/tailwind.js" ? tailwind : html);
 });
@@ -98,6 +105,71 @@ const openQuestion = async (page, index) => {
   return dialog;
 };
 try {
+  const preparedPage = await browser.newPage({viewport:{width:1280,height:1024}});
+  let releaseImage;const imageGate=new Promise(resolve=>{releaseImage=resolve;});
+  let imageRequested;const requestStarted=new Promise(resolve=>{imageRequested=resolve;});
+  await preparedPage.route('**/*',async route=>{
+    if(!route.request().url().startsWith(origin)&&!route.request().url().startsWith('data:'))return route.abort();
+    if(route.request().url().endsWith('/qa-material.svg')){imageRequested();await imageGate;}
+    return route.continue();
+  });
+  await preparedPage.goto(origin);
+  await preparedPage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
+  await requestStarted;
+  assert.equal(await preparedPage.evaluate(()=>window.mockRunnerQa.starts.length),0,'Slow asset preparation does not start the exam timer');
+  assert.equal(await preparedPage.locator('.mock-exam-paper').count(),0,'No partial question paper is exposed while assets are pending');
+  releaseImage();
+  await preparedPage.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+  assert.equal(await preparedPage.evaluate(()=>window.mockRunnerQa.starts[0].preparedSourceHash),'fixture-paper-1');
+  assert.equal(await preparedPage.evaluate(()=>window.mockRunnerQa.reads.length),2,'Start response avoids a redundant state request');
+  assert.equal(await preparedPage.locator('.mock-exam-paper img').evaluateAll(images=>images.every(image=>image.complete&&image.naturalWidth>0)),true);
+  const stableLayout=await preparedPage.locator('.mock-exam-sheet-space').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height));
+  await preparedPage.waitForTimeout(250);
+  assert.deepEqual(await preparedPage.locator('.mock-exam-sheet-space').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().height)),stableLayout,'Prepared paper does not repaginate after showing');
+  await preparedPage.screenshot({path:path.join(evidence,'prepared-assets-1280.png'),fullPage:true});
+  await preparedPage.close();
+
+  const brokenPage=await browser.newPage({viewport:{width:390,height:844}});let failImage=true;
+  await brokenPage.route('**/*',route=>{
+    if(!route.request().url().startsWith(origin)&&!route.request().url().startsWith('data:'))return route.abort();
+    if(route.request().url().endsWith('/qa-material.svg')&&failImage){failImage=false;return route.fulfill({status:503,body:'unavailable'});}
+    return route.continue();
+  });
+  await brokenPage.goto(origin);
+  await brokenPage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
+  await brokenPage.getByRole('alert').filter({hasText:'시험지 그림을 모두 불러오지 못했습니다.'}).waitFor();
+  assert.equal(await brokenPage.evaluate(()=>window.mockRunnerQa.starts.length),0,'Broken images never consume an attempt');
+  await brokenPage.screenshot({path:path.join(evidence,'asset-error-390.png'),fullPage:true});
+  await brokenPage.getByRole('button',{name:'자료 다시 불러오기',exact:true}).click();
+  await brokenPage.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+  assert.equal(await brokenPage.evaluate(()=>window.mockRunnerQa.starts.length),1,'Explicit retry starts once after every image is ready');
+  await brokenPage.close();
+
+  const stalePage=await open(768,1024,false,'?stale-assets');
+  assert.equal(await stalePage.evaluate(()=>window.mockRunnerQa.prepares.length),2);
+  assert.equal(await stalePage.evaluate(()=>window.mockRunnerQa.starts.at(-1).preparedSourceHash),'fixture-paper-2');
+  assert.equal(await stalePage.evaluate(()=>window.mockRunnerQa.attempt.attemptNumber),1,'Source changes are re-prepared before creating the attempt');
+  await stalePage.close();
+
+  const retakePage=await open(1280);
+  await retakePage.evaluate(()=>{const saved=window.mockRunnerQa.attempt;saved.status='SUBMITTED';saved.submittedAtIso=new Date(Date.now()-60000).toISOString();sessionStorage.setItem('mock-runner-attempt',JSON.stringify(saved));});
+  await retakePage.reload();
+  await retakePage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
+  await retakePage.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+  assert.equal(await retakePage.evaluate(()=>window.mockRunnerQa.attempt.attemptNumber),2,'A permitted retake prepares the next paper after SUBMITTED state');
+  await retakePage.close();
+
+  const expiredPage=await open(1280);
+  await expiredPage.evaluate(()=>{const saved=window.mockRunnerQa.attempt;saved.startedAtIso=new Date(Date.now()-610000).toISOString();saved.lastSavedAtIso=saved.startedAtIso;saved.deadlineAtIso=new Date(Date.now()-10000).toISOString();sessionStorage.setItem('mock-runner-attempt',JSON.stringify(saved));});
+  await expiredPage.route('**/qa-material.svg',route=>route.abort());
+  expiredPage.on('dialog',dialog=>dialog.dismiss());
+  await expiredPage.reload();
+  await expiredPage.getByRole('button',{name:'이어하기',exact:true}).click();
+  await expiredPage.getByRole('button',{name:'저장된 답안·해설',exact:true}).waitFor();
+  assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.submits[0].submitReason),'TIMEOUT','Image failure cannot block submission of an already-expired attempt');
+  assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.prepares.length),0);
+  await expiredPage.close();
+
   for (const width of [390, 768, 1280]) {
     const page = await open(width, 1024, false, "?submit-error");
     assert.equal(await page.evaluate(() => window.mockRunnerQa.snapshotAnswerLeak), false);
@@ -186,7 +258,7 @@ try {
   await densePage.screenshot({ path: path.join(evidence, 'dense-long-question.png'), fullPage: true });
   await densePage.close();
   assert.deepEqual(pageErrors, []);
-  console.log(`Mock exam runner browser passed: 390/768/1280, touch rotation, keyboard zoom/focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
+  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, 390/768/1280, touch rotation, keyboard zoom/focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

@@ -1,10 +1,16 @@
 import { parseQuizPassageMarkup } from "../../../lib/quizPassageMarkup";
 
-export type QuizVisualMark = "text" | "underline" | "box" | "blank";
+export type QuizVisualMark =
+  | "text"
+  | "underline"
+  | "box"
+  | "blank"
+  | "blankBox";
 export interface QuizVisualRun {
   text: string;
   mark: QuizVisualMark;
   group?: number;
+  widthEm?: number;
 }
 export interface QuizVisualLine {
   bullet: boolean;
@@ -18,7 +24,8 @@ const appendRun = (line: QuizVisualLine, run: QuizVisualRun) => {
   const last = line.runs[line.runs.length - 1];
   if (
     last?.mark === run.mark &&
-    ((run.mark !== "box" && run.mark !== "blank") ||
+    last.widthEm === run.widthEm &&
+    ((run.mark !== "box" && run.mark !== "blank" && run.mark !== "blankBox") ||
       (run.group != null && last.group === run.group))
   )
     last.text += run.text;
@@ -39,9 +46,12 @@ export const parseQuizVisualDocument = (value: string): QuizVisualDocument =>
           } else
             appendRun(line, {
               mark: part.type,
-              ...(part.type === "box" || part.type === "blank"
+              ...(part.type === "box" ||
+              part.type === "blank" ||
+              part.type === "blankBox"
                 ? { group: ++nextMarkGroup }
                 : {}),
+              ...(part.type === "blankBox" ? { widthEm: part.widthEm } : {}),
               text: part.text || (part.type !== "text" ? "\u200b" : ""),
             });
         });
@@ -59,6 +69,8 @@ export const serializeQuizVisualDocument = (
         line.runs
           .map((run) => {
             const text = run.text.replace(/\u200b/g, "");
+            if (run.mark === "blankBox")
+              return `{{blankbox:${normalizeBlankWidth(run.widthEm)}|${text.replace(/[{}\r\n|]/g, "").slice(0, 20) || "(가)"}}}`;
             return run.mark === "text"
               ? text
               : `{{${run.mark === "underline" ? "u" : run.mark}:${text}}}`;
@@ -69,6 +81,88 @@ export const serializeQuizVisualDocument = (
 
 export const quizVisualText = (lines: QuizVisualDocument) =>
   lines.map((line) => line.runs.map((run) => run.text).join("")).join("\n");
+
+export const normalizeBlankWidth = (width: number | undefined) =>
+  Math.round(
+    Math.max(1, Math.min(30, Number.isFinite(width) ? width! : 2)) * 1000,
+  ) / 1000;
+
+/** A clipboard selection contains visible text and supported marks, never source tokens. */
+export const sliceQuizVisualDocument = (
+  lines: QuizVisualDocument,
+  start: number,
+  end: number,
+): QuizVisualDocument => {
+  const output: QuizVisualDocument = [];
+  let offset = 0;
+  lines.forEach((line) => {
+    const length = quizVisualText([line]).length;
+    if (end > offset && start <= offset + length) {
+      const next: QuizVisualLine = {
+        bullet: line.bullet && start <= offset,
+        runs: [],
+      };
+      let cursor = offset;
+      line.runs.forEach((run) => {
+        const from = Math.max(0, start - cursor);
+        const to = Math.min(run.text.length, end - cursor);
+        if (to > from)
+          appendRun(next, { ...run, text: run.text.slice(from, to) });
+        cursor += run.text.length;
+      });
+      output.push(next);
+    }
+    offset += length + 1;
+  });
+  return output.length ? output : [emptyLine()];
+};
+
+export const quizVisualClipboard = (lines: QuizVisualDocument) => {
+  const root = document.createElement("div");
+  lines.forEach((line) => {
+    const row = document.createElement("div");
+    if (line.bullet) {
+      row.dataset.quizBullet = "true";
+      row.dataset.quizClipboardBullet = "true";
+      row.appendChild(document.createTextNode("• "));
+    }
+    line.runs.forEach((run) => {
+      if (run.mark === "text")
+        row.appendChild(document.createTextNode(run.text));
+      else {
+        const span = document.createElement("span");
+        span.dataset.quizMark = run.mark;
+        span.textContent = run.text.replace(/\u200b/g, "");
+        if (run.mark === "underline") span.style.textDecoration = "underline";
+        else if (run.mark === "blank")
+          span.style.borderBottom = "1px solid currentColor";
+        else {
+          span.style.border = "1px solid currentColor";
+          span.style.display = "inline-block";
+          span.style.padding = "0 .3em";
+          if (run.mark === "blankBox") {
+            span.dataset.quizWidth = String(normalizeBlankWidth(run.widthEm));
+            span.style.minWidth = `min(${normalizeBlankWidth(run.widthEm)}em, calc(100% - .6em - 2px))`;
+            span.style.textAlign = "center";
+          }
+        }
+        row.appendChild(span);
+      }
+    });
+    if (!row.childNodes.length) row.appendChild(document.createElement("br"));
+    root.appendChild(row);
+  });
+  return {
+    text: lines
+      .map(
+        (line) =>
+          (line.bullet ? "• " : "") +
+          quizVisualText([line]).replace(/\u200b/g, ""),
+      )
+      .join("\n"),
+    html: root.innerHTML,
+  };
+};
 
 export const replaceQuizVisualSelection = (
   lines: QuizVisualDocument,
@@ -155,6 +249,9 @@ export const formatQuizVisualDocument = (
       for (let i = 0; i < run.text.length; i += 1) {
         appendRun(next, {
           text: run.text[i],
+          ...(mark !== "bullet" && offset >= start && offset < end
+            ? {}
+            : { widthEm: run.widthEm }),
           group:
             mark !== "bullet" && offset >= start && offset < end
               ? formatGroup
@@ -209,7 +306,7 @@ const ignoredTags = new Set([
   "TEMPLATE",
 ]);
 const allowedMark = (value: string | undefined): value is QuizVisualMark =>
-  ["text", "underline", "box", "blank"].includes(value || "");
+  ["text", "underline", "box", "blank", "blankBox"].includes(value || "");
 
 /** Reads only text and the four supported marks. No input element or attribute is cloned. */
 export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
@@ -217,6 +314,7 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
     node: Node,
     inherited: QuizVisualMark = "text",
     inheritedGroup?: number,
+    inheritedWidth?: number,
   ): QuizVisualDocument => {
     if (node.nodeType === 3)
       return (node.textContent || "")
@@ -224,7 +322,16 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
         .split("\n")
         .map((text) => ({
           bullet: false,
-          runs: text ? [{ text, mark: inherited, group: inheritedGroup }] : [],
+          runs: text
+            ? [
+                {
+                  text,
+                  mark: inherited,
+                  group: inheritedGroup,
+                  widthEm: inheritedWidth,
+                },
+              ]
+            : [],
         }));
     if (node.nodeType !== 1 && node.nodeType !== 11) return [emptyLine()];
     const element = node.nodeType === 1 ? (node as HTMLElement) : null;
@@ -232,6 +339,7 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
     if (element?.tagName === "BR") return [emptyLine(), emptyLine()];
     let mark = inherited;
     let group = inheritedGroup;
+    let widthEm = inheritedWidth;
     if (element) {
       const requested = element.dataset?.quizMark;
       if (allowedMark(requested)) mark = requested;
@@ -249,12 +357,14 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
       )
         mark = "box";
       if (
-        (mark === "box" || mark === "blank") &&
+        (mark === "box" || mark === "blank" || mark === "blankBox") &&
         (mark !== inherited ||
           allowedMark(requested) ||
           /\bborder(?:-[a-z]+)?\s*:/i.test(element.getAttribute("style") || ""))
       )
         group = ++nextMarkGroup;
+      if (mark === "blankBox")
+        widthEm = normalizeBlankWidth(Number(element.dataset.quizWidth));
     }
     const children = Array.from(node.childNodes);
     const placeholder =
@@ -275,7 +385,7 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
         )
           return;
         const block = !!childElement && blockTags.has(childElement.tagName);
-        const content = read(child, mark, group);
+        const content = read(child, mark, group, widthEm);
         if (!content.length) return;
         if (hasContent && (block || previousBlock)) output.push(emptyLine());
         content.forEach((line, index) => {
@@ -289,6 +399,11 @@ export const readQuizVisualDom = (root: Node): QuizVisualDocument => {
       });
     if (element?.tagName === "LI" || element?.dataset?.quizBullet === "true")
       output[0].bullet = true;
+    if (
+      element?.dataset?.quizClipboardBullet === "true" &&
+      output[0].runs[0]?.text.startsWith("• ")
+    )
+      output[0].runs[0].text = output[0].runs[0].text.slice(2);
     return output;
   };
   return read(root);
@@ -317,6 +432,10 @@ export const createQuizVisualFragment = (
         span.dataset.quizMark = run.mark;
         if (run.mark === "blank")
           span.title = "학생에게는 빈칸으로 표시됩니다.";
+        if (run.mark === "blankBox") {
+          span.dataset.quizWidth = String(normalizeBlankWidth(run.widthEm));
+          span.style.minWidth = `min(${normalizeBlankWidth(run.widthEm)}em, calc(100% - .6em - 2px))`;
+        }
         span.textContent = run.text || "\u200b";
         row.appendChild(span);
       }

@@ -59,6 +59,15 @@ import {
   mockExamQuestionSizeError,
 } from "./mockExamAuthoring";
 import MockExamPreview from "./MockExamPreview";
+import MockExamDraftPreview from "./MockExamDraftPreview";
+import MockExamMaterialFields, {
+  createMockExamSetId,
+  type MockExamSetChoice,
+} from "./MockExamMaterialFields";
+import {
+  validateMockExamMaterials,
+  type MockExamPassageSet,
+} from "../../../lib/mockExamMaterials";
 
 interface TreeUnit {
   id: string;
@@ -95,6 +104,8 @@ export interface QuizQuestionDraft extends QuizLearningMetadata {
   explanation?: string;
   image?: string | null;
   passage?: string | null;
+  examplePassage?: string;
+  passageSet?: MockExamPassageSet | null;
   hintEnabled?: boolean;
   hint?: string;
   refBig?: string;
@@ -267,6 +278,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [formExp, setFormExp] = useState("");
   const [formImage, setFormImage] = useState<string | null>(null);
   const [formPassage, setFormPassage] = useState("");
+  const [formExample, setFormExample] = useState("");
+  const [exampleEnabled, setExampleEnabled] = useState(false);
+  const [formPassageSet, setFormPassageSet] =
+    useState<MockExamPassageSet | null>(null);
+  const [passageSetLinked, setPassageSetLinked] = useState(false);
   const [formSubUnit, setFormSubUnit] = useState("");
   const [examRoundFilter, setExamRoundFilter] = useState("");
   const [formExamRound, setFormExamRound] = useState("round_1");
@@ -319,6 +335,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const optimizingImage = optimizingImageCount > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const questionImageRequest = useRef(0);
+  const sharedImageRequest = useRef(0);
+  useEffect(
+    () => () => {
+      questionImageRequest.current += 1;
+      sharedImageRequest.current += 1;
+    },
+    [],
+  );
   const savingQuestionRef = useRef(false);
   const defaultExamPrepFocusKeyRef = useRef("");
   const composerDialogRef = useRef<HTMLDivElement>(null);
@@ -832,6 +857,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const resetForm = () => {
+    questionImageRequest.current += 1;
+    sharedImageRequest.current += 1;
     setFormError("");
     setMetadata({});
     setDerivationSource(null);
@@ -843,6 +870,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormExp("");
     setFormImage(null);
     setFormPassage("");
+    setFormExample("");
+    setExampleEnabled(false);
+    setFormPassageSet(null);
+    setPassageSetLinked(false);
     const nextRound = MOCK_EXAM_ROUNDS.includes(examRoundFilter)
       ? examRoundFilter
       : "round_1";
@@ -879,14 +910,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
+  const handleImagePaste = async (file: File) => {
+    const ticket = ++questionImageRequest.current;
+    const isCurrent = () =>
+      questionImageRequest.current === ticket && currentPager.current === pager;
     setOptimizingImageCount((prev) => prev + 1);
     try {
-      setFormImage(await optimizeQuizImageFile(file, questionImageOptions));
+      const image = await optimizeQuizImageFile(file, questionImageOptions);
+      if (isCurrent())
+        setFormImage((current) => (isCurrent() ? image : current));
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Quiz image optimization failed", error);
       alert(
         error instanceof Error
@@ -895,8 +929,83 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       );
     } finally {
       setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-      input.value = "";
     }
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = "";
+    if (file) await handleImagePaste(file);
+  };
+
+  const handleSetImage = async (file: File) => {
+    const setId = formPassageSet?.id;
+    if (!setId || passageSetLinked) return;
+    const ticket = ++sharedImageRequest.current;
+    const isCurrent = () =>
+      sharedImageRequest.current === ticket && currentPager.current === pager;
+    setOptimizingImageCount((prev) => prev + 1);
+    try {
+      const image = await optimizeQuizImageFile(file, questionImageOptions);
+      if (isCurrent())
+        setFormPassageSet((current) =>
+          isCurrent() && current?.id === setId
+            ? { ...current, image }
+            : current,
+        );
+    } catch (error) {
+      if (!isCurrent()) return;
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "공통 자료 이미지를 준비하지 못했습니다.",
+      );
+    } finally {
+      setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+    }
+  };
+
+  const loadExistingSets = async (): Promise<MockExamSetChoice[]> => {
+    const matching = catalog.filter(
+      (entry) => entry.examRound === formExamRound && entry.passageSetId,
+    );
+    const numbers = new Map<string, number[]>();
+    const representatives = new Map<string, QuizQuestionCatalogEntry>();
+    for (const entry of matching) {
+      const id = entry.passageSetId!;
+      numbers.set(id, [
+        ...(numbers.get(id) || []),
+        Number(entry.paperOrder || 1),
+      ]);
+      if (!representatives.has(id)) representatives.set(id, entry);
+    }
+    const entries = [...representatives.values()];
+    const sets = new Map<string, MockExamSetChoice>();
+    for (
+      let offset = 0;
+      offset < entries.length;
+      offset += QUIZ_QUESTION_PAGE_SIZE
+    ) {
+      const loaded = await pager.page(
+        entries.slice(offset, offset + QUIZ_QUESTION_PAGE_SIZE),
+      );
+      if (currentPager.current !== pager)
+        throw new Error("조회 범위가 변경되었습니다.");
+      for (const question of loaded) {
+        if (!question.passageSet) continue;
+        const entry = {
+          passageSet: question.passageSet,
+          numbers: numbers.get(question.passageSet.id) || [],
+        };
+        sets.set(question.passageSet.id, entry);
+      }
+    }
+    return [...sets.values()]
+      .map((entry) => ({
+        ...entry,
+        numbers: entry.numbers.sort((a, b) => a - b),
+      }))
+      .sort((a, b) => a.numbers[0] - b.numbers[0]);
   };
 
   const handleChoiceOptionImageSelect = (
@@ -1039,6 +1148,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const startEdit = (question: Question) => {
+    questionImageRequest.current += 1;
+    sharedImageRequest.current += 1;
     setMetadata(question);
     setDerivationSource(null);
     setEditingQuestionId(question.id);
@@ -1058,6 +1169,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormPoints(question.points || 4);
     setFormExp(question.explanation || "");
     setFormImage(question.image || null);
+    setFormExample(question.examplePassage || "");
+    setExampleEnabled(Boolean(question.examplePassage));
+    setFormPassageSet(question.passageSet ? { ...question.passageSet } : null);
+    setPassageSetLinked(Boolean(question.passageSet));
     setFormPassage(
       supportsQuestionPassage(question.type) ? question.passage || "" : "",
     );
@@ -1336,6 +1451,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     const payload = buildQuestionPayload();
     if (!payload) return;
     if (type === "special") {
+      const materialError = validateMockExamMaterials({
+        id: editingQuestionId || "draft",
+        examplePassage: exampleEnabled ? formExample : "",
+        passageSet: formPassageSet,
+      });
+      if (materialError) {
+        setFormError(materialError);
+        return;
+      }
       const placementError = validateMockExamPlacement({
         examRound: formExamRound,
         paperOrder: formPaperOrder,
@@ -1378,6 +1502,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         question: formText,
         passage: formPassage,
         image: formImage,
+        examplePassage: exampleEnabled ? formExample : "",
+        passageSet: formPassageSet,
         ...payload,
       })
     ) {
@@ -1423,6 +1549,20 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               examRound: formExamRound,
               paperOrder: formPaperOrder,
               points: formPoints,
+              examplePassage: exampleEnabled ? formExample.trim() : "",
+              passageSet: formPassageSet
+                ? passageSetLinked
+                  ? { ...formPassageSet }
+                  : {
+                      ...formPassageSet,
+                      instruction: formPassageSet.instruction.trim(),
+                      passage: formPassageSet.passage.trim(),
+                      image: await optimizeQuizImageDataUrl(
+                        formPassageSet.image,
+                        questionImageOptions,
+                      ),
+                    }
+                : null,
             }
           : {}),
         type: formType,
@@ -1560,6 +1700,35 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     formType === "choice" && (!!formImage || !!previewPassageText);
   const hasPreviewChoiceOptionImages =
     formType === "choice" && previewChoiceItems.some((item) => item.image);
+  const draftPreviewQuestion = useMemo(
+    () => ({
+      id: editingQuestionId || "draft",
+      type: formType,
+      question: formText,
+      paperOrder: formPaperOrder,
+      points: formPoints,
+      passage: formPassage,
+      image: formImage,
+      examplePassage: exampleEnabled ? formExample : "",
+      passageSet: formPassageSet,
+      options: previewChoiceItems.map((item) => item.text),
+      choiceOptionImages: previewChoiceItems.map((item) => item.image),
+    }),
+    [
+      editingQuestionId,
+      formType,
+      formText,
+      formPaperOrder,
+      formPoints,
+      formPassage,
+      formImage,
+      exampleEnabled,
+      formExample,
+      formPassageSet,
+      choiceOptions,
+      choiceOptionImages,
+    ],
+  );
 
   return (
     <div className="quiz-authoring-surface quiz-registration-workspace flex h-full min-h-0 flex-col">
@@ -2144,7 +2313,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               aria-label="문제 등록 팝업 닫기"
             />
             <div
-              className="absolute inset-0 flex items-center justify-center p-4"
+              className={
+                type === "special"
+                  ? "quiz-composer-viewport"
+                  : "absolute inset-0 flex items-center justify-center p-4"
+              }
               onClick={(event) => {
                 if (event.target === event.currentTarget) closeComposer();
               }}
@@ -2161,7 +2334,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       : "새 문제 등록"
                 }
                 tabIndex={-1}
-                className="quiz-authoring-surface quiz-composer-dialog"
+                className={`quiz-authoring-surface quiz-composer-dialog${type === "special" ? " quiz-composer-dialog--wide" : ""}`}
               >
                 <div className="quiz-composer-header">
                   <div>
@@ -2174,7 +2347,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </h3>
                     <div className="quiz-composer-context">
                       <span>{categoryLabel}</span>
-                      <span>{node.title}</span>
+                      {type !== "special" && <span>{node.title}</span>}
                     </div>
                   </div>
                   <button
@@ -2187,1001 +2360,1070 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   </button>
                 </div>
 
-                <div className="quiz-composer-body">
-                  {type === "special" && (
-                    <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <legend className="mb-2 text-sm font-bold">
-                        문항 정보
-                      </legend>
-                      <label className="quiz-composer-field">
-                        <span>회차</span>
-                        <select
-                          className="quiz-compose-field min-h-11 rounded border p-2"
-                          value={formExamRound}
-                          onChange={(event) => {
-                            const round = event.target.value;
-                            setFormExamRound(round);
-                            setFormPaperOrder(
-                              Math.max(
-                                0,
-                                ...catalog
-                                  .filter(
-                                    (q) =>
-                                      q.examRound === round &&
-                                      q.id !== editingQuestionId,
-                                  )
-                                  .map((q) => Number(q.paperOrder || 0)),
-                              ) + 1,
-                            );
-                          }}
-                        >
-                          {MOCK_EXAM_ROUNDS.map((round) => (
-                            <option key={round} value={round}>
-                              {formatMockExamRoundShortLabel(round)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="quiz-composer-field">
-                        <span>문항 번호</span>
-                        <input
-                          className="quiz-compose-field min-h-11 rounded border p-2"
-                          type="number"
-                          min={1}
-                          max={200}
-                          step={1}
-                          value={formPaperOrder || ""}
-                          onChange={(event) =>
-                            setFormPaperOrder(Number(event.target.value))
-                          }
-                        />
-                      </label>
-                      <label className="quiz-composer-field">
-                        <span>배점</span>
-                        <input
-                          className="quiz-compose-field min-h-11 rounded border p-2"
-                          type="number"
-                          min={0.01}
-                          max={100}
-                          step={0.01}
-                          value={formPoints || ""}
-                          onChange={(event) =>
-                            setFormPoints(Number(event.target.value))
-                          }
-                        />
-                      </label>
-                    </fieldset>
-                  )}
-                  <section
-                    className="quiz-composer-section"
-                    aria-label="문항과 자료"
-                  >
-                    <div className="quiz-composer-fields">
-                      <label className="quiz-composer-field">
-                        <span>문항 유형</span>
-                        <select
-                          value={formType}
-                          aria-label="문항 유형"
-                          onChange={(e) =>
-                            handleTypeChange(e.target.value as QuestionType)
-                          }
-                          onKeyDown={handleVerticalFocus}
-                          className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
-                        >
-                          <option value="choice">객관식</option>
-                          {type !== "special" && (
-                            <option value="ox">O/X</option>
-                          )}
-                          <option value="word">단답형</option>
-                          {type !== "special" && (
-                            <>
-                              <option value="order">순서 나열형</option>
-                              <option value="matching">단어 연결하기</option>
-                            </>
-                          )}
-                          {type === "special" &&
-                            !["choice", "word"].includes(formType) && (
-                              <option value={formType} disabled>
-                                기존 문항 · 유형 변경 필요
-                              </option>
-                            )}
-                        </select>
-                      </label>
-                      {type === "normal" && (
+                <div
+                  className={
+                    type === "special"
+                      ? "quiz-composer-layout"
+                      : "quiz-composer-layout--legacy"
+                  }
+                >
+                  <div className="quiz-composer-body">
+                    {type === "special" && (
+                      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <legend className="mb-2 text-sm font-bold">
+                          문항 정보
+                        </legend>
                         <label className="quiz-composer-field">
-                          <span>소단원</span>
+                          <span>회차</span>
                           <select
-                            value={formSubUnit}
-                            aria-label="소단원"
-                            onChange={(e) => setFormSubUnit(e.target.value)}
+                            className="quiz-compose-field min-h-11 rounded border p-2"
+                            value={formExamRound}
+                            onChange={(event) => {
+                              const round = event.target.value;
+                              setFormExamRound(round);
+                              sharedImageRequest.current += 1;
+                              setFormPassageSet((current) =>
+                                current
+                                  ? { ...current, id: createMockExamSetId() }
+                                  : null,
+                              );
+                              setPassageSetLinked(false);
+                              setFormPaperOrder(
+                                Math.max(
+                                  0,
+                                  ...catalog
+                                    .filter(
+                                      (q) =>
+                                        q.examRound === round &&
+                                        q.id !== editingQuestionId,
+                                    )
+                                    .map((q) => Number(q.paperOrder || 0)),
+                                ) + 1,
+                              );
+                            }}
+                          >
+                            {MOCK_EXAM_ROUNDS.map((round) => (
+                              <option key={round} value={round}>
+                                {formatMockExamRoundShortLabel(round)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="quiz-composer-field">
+                          <span>문항 번호</span>
+                          <input
+                            className="quiz-compose-field min-h-11 rounded border p-2"
+                            type="number"
+                            min={1}
+                            max={200}
+                            step={1}
+                            value={formPaperOrder || ""}
+                            onChange={(event) =>
+                              setFormPaperOrder(Number(event.target.value))
+                            }
+                          />
+                        </label>
+                        <label className="quiz-composer-field">
+                          <span>배점</span>
+                          <input
+                            className="quiz-compose-field min-h-11 rounded border p-2"
+                            type="number"
+                            min={0.01}
+                            max={100}
+                            step={0.01}
+                            value={formPoints || ""}
+                            onChange={(event) =>
+                              setFormPoints(Number(event.target.value))
+                            }
+                          />
+                        </label>
+                      </fieldset>
+                    )}
+                    <section
+                      className="quiz-composer-section"
+                      aria-label="문항과 자료"
+                    >
+                      <div className="quiz-composer-fields">
+                        <label className="quiz-composer-field">
+                          <span>문항 유형</span>
+                          <select
+                            value={formType}
+                            aria-label="문항 유형"
+                            onChange={(e) =>
+                              handleTypeChange(e.target.value as QuestionType)
+                            }
                             onKeyDown={handleVerticalFocus}
                             className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
                           >
-                            <option value="">소단원 전체</option>
-                            {normalSubUnits.map((sub) => (
-                              <option key={sub.id} value={sub.id}>
-                                {sub.title}
-                              </option>
-                            ))}
+                            <option value="choice">객관식</option>
+                            {type !== "special" && (
+                              <option value="ox">O/X</option>
+                            )}
+                            <option value="word">단답형</option>
+                            {type !== "special" && (
+                              <>
+                                <option value="order">순서 나열형</option>
+                                <option value="matching">단어 연결하기</option>
+                              </>
+                            )}
+                            {type === "special" &&
+                              !["choice", "word"].includes(formType) && (
+                                <option value={formType} disabled>
+                                  기존 문항 · 유형 변경 필요
+                                </option>
+                              )}
                           </select>
                         </label>
+                        {type === "normal" && (
+                          <label className="quiz-composer-field">
+                            <span>소단원</span>
+                            <select
+                              value={formSubUnit}
+                              aria-label="소단원"
+                              onChange={(e) => setFormSubUnit(e.target.value)}
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                            >
+                              <option value="">소단원 전체</option>
+                              {normalSubUnits.map((sub) => (
+                                <option key={sub.id} value={sub.id}>
+                                  {sub.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                      </div>
+
+                      {type === "special" && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <label className="quiz-composer-field">
+                            <span>대단원</span>
+                            <select
+                              value={epSource.big}
+                              onChange={(e) =>
+                                setEpSource({
+                                  big: e.target.value,
+                                  mid: "",
+                                  small: "",
+                                })
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                            >
+                              <option value="">대단원 선택</option>
+                              {allBigUnits.map((big) => (
+                                <option key={big.id} value={big.id}>
+                                  {big.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="quiz-composer-field">
+                            <span>중단원</span>
+                            <select
+                              value={epSource.mid}
+                              onChange={(e) =>
+                                setEpSource((prev) => ({
+                                  ...prev,
+                                  mid: e.target.value,
+                                  small: "",
+                                }))
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                            >
+                              <option value="">중단원 선택</option>
+                              {sourceMidUnits.map((mid) => (
+                                <option key={mid.id} value={mid.id}>
+                                  {mid.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="quiz-composer-field">
+                            <span>소단원</span>
+                            <select
+                              value={epSource.small}
+                              onChange={(e) =>
+                                setEpSource((prev) => ({
+                                  ...prev,
+                                  small: e.target.value,
+                                }))
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                            >
+                              <option value="">소단원 선택</option>
+                              {sourceSmallUnits.map((small) => (
+                                <option key={small.id} value={small.id}>
+                                  {small.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
                       )}
-                    </div>
 
-                    {type === "special" && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <label className="quiz-composer-field">
-                          <span>대단원</span>
-                          <select
-                            value={epSource.big}
-                            onChange={(e) =>
-                              setEpSource({
-                                big: e.target.value,
-                                mid: "",
-                                small: "",
-                              })
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                          >
-                            <option value="">대단원 선택</option>
-                            {allBigUnits.map((big) => (
-                              <option key={big.id} value={big.id}>
-                                {big.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="quiz-composer-field">
-                          <span>중단원</span>
-                          <select
-                            value={epSource.mid}
-                            onChange={(e) =>
-                              setEpSource((prev) => ({
-                                ...prev,
-                                mid: e.target.value,
-                                small: "",
-                              }))
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                          >
-                            <option value="">중단원 선택</option>
-                            {sourceMidUnits.map((mid) => (
-                              <option key={mid.id} value={mid.id}>
-                                {mid.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="quiz-composer-field">
-                          <span>소단원</span>
-                          <select
-                            value={epSource.small}
-                            onChange={(e) =>
-                              setEpSource((prev) => ({
-                                ...prev,
-                                small: e.target.value,
-                              }))
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
-                          >
-                            <option value="">소단원 선택</option>
-                            {sourceSmallUnits.map((small) => (
-                              <option key={small.id} value={small.id}>
-                                {small.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    )}
-
-                    <label className="quiz-composer-field">
-                      <span>발문</span>
-                      <QuizTextField
-                        lang="ko"
-                        inputMode="text"
-                        aria-label="발문"
-                        value={formText}
-                        onChange={(e) => setFormText(e.target.value)}
-                        onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field w-full border p-2 rounded text-sm"
-                      />
-                    </label>
-
-                    {supportsQuestionPassage(formType) && (
-                      <QuizVisualPassageEditor
-                        label={
-                          formType === "word"
-                            ? "단답형 본문 글상자"
-                            : "읽기 자료 글상자"
-                        }
-                        value={formPassage}
-                        onChange={setFormPassage}
-                        allowBlank={formType === "word"}
-                      />
-                    )}
-
-                    <label className="quiz-attachment-button">
-                      이미지 첨부
-                      <input
-                        type="file"
-                        className="sr-only"
-                        accept="image/*"
-                        aria-label="문항 이미지 첨부"
-                        ref={fileInputRef}
-                        onChange={handleImageSelect}
-                      />
-                    </label>
-                    {optimizingImage && (
-                      <p className="text-xs font-bold text-blue-600">
-                        이미지 용량을 줄이는 중...
-                      </p>
-                    )}
-                    {formImage && (
-                      <div className="relative border rounded p-2 bg-gray-50">
-                        <img
-                          src={formImage}
-                          alt="문항 첨부 이미지"
-                          className="max-h-44 mx-auto rounded"
+                      <label className="quiz-composer-field">
+                        <span>발문</span>
+                        <QuizTextField
+                          grow={type === "special"}
+                          lang="ko"
+                          inputMode="text"
+                          aria-label="발문"
+                          value={formText}
+                          onChange={(e) => setFormText(e.target.value)}
+                          onKeyDown={handleVerticalFocus}
+                          className="quiz-compose-field w-full border p-2 rounded text-sm"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setFormImage(null)}
-                          className="quiz-authoring-button absolute top-2 right-2"
-                        >
-                          제거
-                        </button>
-                      </div>
-                    )}
-                  </section>
+                      </label>
 
-                  <section
-                    className="quiz-composer-section"
-                    aria-label="보기와 정답"
-                  >
-                    {formType === "choice" && (
-                      <div className="quiz-answer-editor">
-                        <div className="quiz-composer-section-heading">
-                          <h4>보기와 정답</h4>
+                      {supportsQuestionPassage(formType) && (
+                        <QuizVisualPassageEditor
+                          label={
+                            formType === "word"
+                              ? "단답형 본문 글상자"
+                              : "읽기 자료 글상자"
+                          }
+                          value={formPassage}
+                          onChange={setFormPassage}
+                          allowBlank={formType === "word"}
+                          onImagePaste={handleImagePaste}
+                        />
+                      )}
+
+                      {type === "special" && (
+                        <MockExamMaterialFields
+                          round={formExamRound}
+                          exampleEnabled={exampleEnabled}
+                          example={formExample}
+                          onExampleEnabledChange={setExampleEnabled}
+                          onExampleChange={setFormExample}
+                          passageSet={formPassageSet}
+                          linked={passageSetLinked}
+                          onSetChange={(value, linked) => {
+                            if (
+                              formPassageSet?.id !== value?.id ||
+                              (formPassageSet?.image && !value?.image)
+                            )
+                              sharedImageRequest.current += 1;
+                            setFormPassageSet(value);
+                            setPassageSetLinked(linked);
+                          }}
+                          loadSets={loadExistingSets}
+                          onSetImage={handleSetImage}
+                          disabled={savingQuestion || optimizingImage}
+                        />
+                      )}
+
+                      <label className="quiz-attachment-button">
+                        이미지 첨부
+                        <input
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          aria-label="문항 이미지 첨부"
+                          ref={fileInputRef}
+                          onChange={handleImageSelect}
+                        />
+                      </label>
+                      {optimizingImage && (
+                        <p className="text-xs font-bold text-blue-600">
+                          이미지 용량을 줄이는 중...
+                        </p>
+                      )}
+                      {formImage && (
+                        <div className="relative border rounded p-2 bg-gray-50">
+                          <img
+                            src={formImage}
+                            alt="문항 첨부 이미지"
+                            className="max-h-44 mx-auto rounded"
+                          />
                           <button
                             type="button"
-                            onClick={addChoiceOption}
-                            className="quiz-authoring-button"
+                            disabled={savingQuestion || optimizingImage}
+                            onClick={() => {
+                              questionImageRequest.current += 1;
+                              setFormImage(null);
+                            }}
+                            className="quiz-authoring-button absolute top-2 right-2"
                           >
-                            보기 추가
+                            제거
                           </button>
                         </div>
-                        {choiceOptions.map((option, index) => {
-                          const optionImage = choiceOptionImages[index];
-                          return (
-                            <div
-                              key={`choice-option-${index}`}
-                              className="quiz-choice-row"
+                      )}
+                    </section>
+
+                    <section
+                      className="quiz-composer-section"
+                      aria-label="보기와 정답"
+                    >
+                      {formType === "choice" && (
+                        <div className="quiz-answer-editor">
+                          <div className="quiz-composer-section-heading">
+                            <h4>보기와 정답</h4>
+                            <button
+                              type="button"
+                              onClick={addChoiceOption}
+                              className="quiz-authoring-button"
                             >
-                              <button
-                                type="button"
-                                onClick={() => setChoiceAnswerIndex(index)}
-                                aria-label={`${index + 1}번 보기 정답 선택`}
-                                aria-pressed={choiceAnswerIndex === index}
-                                className="quiz-choice-answer"
+                              보기 추가
+                            </button>
+                          </div>
+                          {choiceOptions.map((option, index) => {
+                            const optionImage = choiceOptionImages[index];
+                            return (
+                              <div
+                                key={`choice-option-${index}`}
+                                className="quiz-choice-row"
                               >
-                                {index + 1}
-                                {choiceAnswerIndex === index && (
-                                  <span>정답</span>
-                                )}
-                              </button>
-                              <div className="quiz-choice-content">
-                                <QuizTextField
-                                  lang="ko"
-                                  inputMode="text"
-                                  value={option}
-                                  onChange={(e) =>
-                                    setChoiceOptions((prev) =>
-                                      prev.map((opt, i) =>
-                                        i === index ? e.target.value : opt,
-                                      ),
-                                    )
-                                  }
-                                  onKeyDown={handleVerticalFocus}
-                                  aria-label={`${index + 1}번 보기`}
-                                  className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
-                                />
-                                {optionImage && (
-                                  <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
-                                    <img
-                                      src={optionImage}
-                                      alt={`${index + 1}번 보기 이미지`}
-                                      className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setChoiceOptionImages((prev) =>
-                                          normalizeChoiceOptionImages(
-                                            prev,
-                                            choiceOptions.length,
-                                          ).map((image, imageIndex) =>
-                                            imageIndex === index ? null : image,
-                                          ),
-                                        )
-                                      }
-                                      className="quiz-authoring-button"
-                                    >
-                                      이미지 제거
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="quiz-choice-actions">
-                                <label
-                                  className="quiz-attachment-button"
-                                  title={`${index + 1}번 보기 이미지 첨부`}
-                                >
-                                  이미지
-                                  <input
-                                    type="file"
-                                    className="sr-only"
-                                    accept="image/*"
-                                    aria-label={`${index + 1}번 보기 이미지 첨부`}
-                                    onChange={(e) =>
-                                      handleChoiceOptionImageSelect(index, e)
-                                    }
-                                  />
-                                </label>
                                 <button
                                   type="button"
-                                  onClick={() => removeChoiceOption(index)}
-                                  aria-label={`${index + 1}번 보기 삭제`}
-                                  disabled={choiceOptions.length <= 2}
+                                  onClick={() => setChoiceAnswerIndex(index)}
+                                  aria-label={`${index + 1}번 보기 정답 선택`}
+                                  aria-pressed={choiceAnswerIndex === index}
+                                  className="quiz-choice-answer"
+                                >
+                                  {index + 1}
+                                  {choiceAnswerIndex === index && (
+                                    <span>정답</span>
+                                  )}
+                                </button>
+                                <div className="quiz-choice-content">
+                                  <QuizTextField
+                                    grow={type === "special"}
+                                    lang="ko"
+                                    inputMode="text"
+                                    value={option}
+                                    onChange={(e) =>
+                                      setChoiceOptions((prev) =>
+                                        prev.map((opt, i) =>
+                                          i === index ? e.target.value : opt,
+                                        ),
+                                      )
+                                    }
+                                    onKeyDown={handleVerticalFocus}
+                                    aria-label={`${index + 1}번 보기`}
+                                    className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                                  />
+                                  {optionImage && (
+                                    <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                                      <img
+                                        src={optionImage}
+                                        alt={`${index + 1}번 보기 이미지`}
+                                        className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setChoiceOptionImages((prev) =>
+                                            normalizeChoiceOptionImages(
+                                              prev,
+                                              choiceOptions.length,
+                                            ).map((image, imageIndex) =>
+                                              imageIndex === index
+                                                ? null
+                                                : image,
+                                            ),
+                                          )
+                                        }
+                                        className="quiz-authoring-button"
+                                      >
+                                        이미지 제거
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="quiz-choice-actions">
+                                  <label
+                                    className="quiz-attachment-button"
+                                    title={`${index + 1}번 보기 이미지 첨부`}
+                                  >
+                                    이미지
+                                    <input
+                                      type="file"
+                                      className="sr-only"
+                                      accept="image/*"
+                                      aria-label={`${index + 1}번 보기 이미지 첨부`}
+                                      onChange={(e) =>
+                                        handleChoiceOptionImageSelect(index, e)
+                                      }
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeChoiceOption(index)}
+                                    aria-label={`${index + 1}번 보기 삭제`}
+                                    disabled={choiceOptions.length <= 2}
+                                    className="quiz-authoring-button quiz-authoring-danger"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {formType === "ox" && (
+                        <div>
+                          <h4 className="quiz-composer-label">정답</h4>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["O", "X"] as const).map((value) => (
+                              <button
+                                key={value}
+                                type="button"
+                                aria-pressed={oxAnswer === value}
+                                aria-label={`${value} 정답 선택`}
+                                onClick={() => setOxAnswer(value)}
+                                onKeyDown={handleVerticalFocus}
+                                className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
+                              >
+                                {value}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {formType === "word" && (
+                        <label className="quiz-composer-field">
+                          <span>정답</span>
+                          <QuizTextField
+                            grow={type === "special"}
+                            lang="ko"
+                            inputMode="text"
+                            value={wordAnswer}
+                            onChange={(e) => setWordAnswer(e.target.value)}
+                            onKeyDown={handleVerticalFocus}
+                            aria-label="단답형 정답"
+                            className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                          />
+                        </label>
+                      )}
+
+                      {formType === "order" && (
+                        <div className="quiz-answer-editor">
+                          <div className="quiz-composer-section-heading">
+                            <h4>순서 항목 (위에서 아래 순서가 정답)</h4>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOrderItems((prev) => [...prev, ""])
+                              }
+                              className="quiz-authoring-button"
+                            >
+                              항목 추가
+                            </button>
+                          </div>
+                          {orderItems.map((item, index) => (
+                            <div
+                              key={`order-item-${index}`}
+                              className="quiz-order-row"
+                            >
+                              <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                                {index + 1}
+                              </span>
+                              <QuizTextField
+                                grow={type === "special"}
+                                lang="ko"
+                                inputMode="text"
+                                value={item}
+                                aria-label={`${index + 1}번 순서 항목`}
+                                onChange={(e) =>
+                                  setOrderItems((prev) =>
+                                    prev.map((v, i) =>
+                                      i === index ? e.target.value : v,
+                                    ),
+                                  )
+                                }
+                                onKeyDown={handleVerticalFocus}
+                                className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
+                              />
+                              <div className="quiz-order-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => moveOrderItem(index, "up")}
+                                  aria-label={`${index + 1}번 항목 위로 이동`}
+                                  title="위로 이동"
+                                  disabled={index === 0}
+                                  className="quiz-authoring-button"
+                                >
+                                  <span aria-hidden="true">↑</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => moveOrderItem(index, "down")}
+                                  aria-label={`${index + 1}번 항목 아래로 이동`}
+                                  title="아래로 이동"
+                                  disabled={index === orderItems.length - 1}
+                                  className="quiz-authoring-button"
+                                >
+                                  <span aria-hidden="true">↓</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeOrderItem(index)}
+                                  disabled={orderItems.length <= 2}
+                                  aria-label={`${index + 1}번 항목 삭제`}
+                                  title={
+                                    orderItems.length <= 2
+                                      ? "순서 항목은 최소 2개 필요합니다."
+                                      : "항목 삭제"
+                                  }
                                   className="quiz-authoring-button quiz-authoring-danger"
                                 >
                                   삭제
                                 </button>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {formType === "ox" && (
-                      <div>
-                        <h4 className="quiz-composer-label">정답</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(["O", "X"] as const).map((value) => (
-                            <button
-                              key={value}
-                              type="button"
-                              aria-pressed={oxAnswer === value}
-                              aria-label={`${value} 정답 선택`}
-                              onClick={() => setOxAnswer(value)}
-                              onKeyDown={handleVerticalFocus}
-                              className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
-                            >
-                              {value}
-                            </button>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {formType === "word" && (
-                      <label className="quiz-composer-field">
-                        <span>정답</span>
-                        <QuizTextField
-                          lang="ko"
-                          inputMode="text"
-                          value={wordAnswer}
-                          onChange={(e) => setWordAnswer(e.target.value)}
-                          onKeyDown={handleVerticalFocus}
-                          aria-label="단답형 정답"
-                          className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
-                        />
-                      </label>
-                    )}
-
-                    {formType === "order" && (
-                      <div className="quiz-answer-editor">
-                        <div className="quiz-composer-section-heading">
-                          <h4>순서 항목 (위에서 아래 순서가 정답)</h4>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOrderItems((prev) => [...prev, ""])
-                            }
-                            className="quiz-authoring-button"
-                          >
-                            항목 추가
-                          </button>
-                        </div>
-                        {orderItems.map((item, index) => (
-                          <div
-                            key={`order-item-${index}`}
-                            className="quiz-order-row"
-                          >
-                            <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
-                              {index + 1}
-                            </span>
-                            <QuizTextField
-                              lang="ko"
-                              inputMode="text"
-                              value={item}
-                              aria-label={`${index + 1}번 순서 항목`}
-                              onChange={(e) =>
-                                setOrderItems((prev) =>
-                                  prev.map((v, i) =>
-                                    i === index ? e.target.value : v,
-                                  ),
-                                )
-                              }
-                              onKeyDown={handleVerticalFocus}
-                              className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
-                            />
-                            <div className="quiz-order-actions">
-                              <button
-                                type="button"
-                                onClick={() => moveOrderItem(index, "up")}
-                                aria-label={`${index + 1}번 항목 위로 이동`}
-                                title="위로 이동"
-                                disabled={index === 0}
-                                className="quiz-authoring-button"
-                              >
-                                <span aria-hidden="true">↑</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => moveOrderItem(index, "down")}
-                                aria-label={`${index + 1}번 항목 아래로 이동`}
-                                title="아래로 이동"
-                                disabled={index === orderItems.length - 1}
-                                className="quiz-authoring-button"
-                              >
-                                <span aria-hidden="true">↓</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeOrderItem(index)}
-                                disabled={orderItems.length <= 2}
-                                aria-label={`${index + 1}번 항목 삭제`}
-                                title={
-                                  orderItems.length <= 2
-                                    ? "순서 항목은 최소 2개 필요합니다."
-                                    : "항목 삭제"
-                                }
-                                className="quiz-authoring-button quiz-authoring-danger"
-                              >
-                                삭제
-                              </button>
-                            </div>
+                      {formType === "matching" && (
+                        <div className="quiz-answer-editor">
+                          <div className="quiz-composer-section-heading">
+                            <h4>단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</h4>
+                            <button
+                              type="button"
+                              onClick={addMatchingPair}
+                              className="quiz-authoring-button"
+                            >
+                              쌍 추가
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {formType === "matching" && (
-                      <div className="quiz-answer-editor">
-                        <div className="quiz-composer-section-heading">
-                          <h4>단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</h4>
-                          <button
-                            type="button"
-                            onClick={addMatchingPair}
-                            className="quiz-authoring-button"
-                          >
-                            쌍 추가
-                          </button>
-                        </div>
-                        {matchingPairs.map((pair, index) => (
-                          <div
-                            key={`matching-pair-${index}`}
-                            className="quiz-matching-row"
-                          >
-                            <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
-                              {index + 1}
-                            </span>
-                            <QuizTextField
-                              lang="ko"
-                              inputMode="text"
-                              value={pair.left}
-                              aria-label={`${index + 1}번 왼쪽 단서`}
-                              onChange={(e) =>
-                                setMatchingPairs((prev) =>
-                                  prev.map((item, pairIndex) =>
-                                    pairIndex === index
-                                      ? { ...item, left: e.target.value }
-                                      : item,
-                                  ),
-                                )
-                              }
-                              onKeyDown={handleVerticalFocus}
-                              placeholder="왼쪽 단서"
-                              className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
-                            />
-                            <div className="min-w-0 space-y-2">
+                          {matchingPairs.map((pair, index) => (
+                            <div
+                              key={`matching-pair-${index}`}
+                              className="quiz-matching-row"
+                            >
+                              <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
+                                {index + 1}
+                              </span>
                               <QuizTextField
+                                grow={type === "special"}
                                 lang="ko"
                                 inputMode="text"
-                                value={pair.right}
-                                aria-label={`${index + 1}번 오른쪽 정답`}
+                                value={pair.left}
+                                aria-label={`${index + 1}번 왼쪽 단서`}
                                 onChange={(e) =>
                                   setMatchingPairs((prev) =>
                                     prev.map((item, pairIndex) =>
                                       pairIndex === index
-                                        ? { ...item, right: e.target.value }
+                                        ? { ...item, left: e.target.value }
                                         : item,
                                     ),
                                   )
                                 }
                                 onKeyDown={handleVerticalFocus}
-                                placeholder="오른쪽 단어"
-                                className="quiz-compose-field w-full rounded border p-2 text-sm"
+                                placeholder="왼쪽 단서"
+                                className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
                               />
-                              <label className="quiz-attachment-button">
-                                오른쪽 이미지
-                                <input
-                                  type="file"
-                                  className="sr-only"
-                                  accept="image/*"
-                                  aria-label={`${index + 1}번 오른쪽 이미지 첨부`}
+                              <div className="min-w-0 space-y-2">
+                                <QuizTextField
+                                  grow={type === "special"}
+                                  lang="ko"
+                                  inputMode="text"
+                                  value={pair.right}
+                                  aria-label={`${index + 1}번 오른쪽 정답`}
                                   onChange={(e) =>
-                                    handleMatchingImageSelect(index, e)
+                                    setMatchingPairs((prev) =>
+                                      prev.map((item, pairIndex) =>
+                                        pairIndex === index
+                                          ? { ...item, right: e.target.value }
+                                          : item,
+                                      ),
+                                    )
                                   }
+                                  onKeyDown={handleVerticalFocus}
+                                  placeholder="오른쪽 단어"
+                                  className="quiz-compose-field w-full rounded border p-2 text-sm"
                                 />
-                              </label>
-                              {pair.rightImage && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <img
-                                    src={pair.rightImage}
-                                    alt="오른쪽 보기 이미지"
-                                    className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setMatchingPairs((prev) =>
-                                        prev.map((item, pairIndex) =>
-                                          pairIndex === index
-                                            ? { ...item, rightImage: null }
-                                            : item,
-                                        ),
-                                      )
+                                <label className="quiz-attachment-button">
+                                  오른쪽 이미지
+                                  <input
+                                    type="file"
+                                    className="sr-only"
+                                    accept="image/*"
+                                    aria-label={`${index + 1}번 오른쪽 이미지 첨부`}
+                                    onChange={(e) =>
+                                      handleMatchingImageSelect(index, e)
                                     }
-                                    aria-label={`${index + 1}번 오른쪽 이미지 제거`}
-                                    className="quiz-authoring-button quiz-authoring-danger"
-                                  >
-                                    이미지 제거
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeMatchingPair(index)}
-                              disabled={matchingPairs.length <= 2}
-                              aria-label={`${index + 1}번 연결 쌍 삭제`}
-                              className="quiz-authoring-button quiz-authoring-danger"
-                            >
-                              삭제
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-
-                  <section
-                    className="quiz-composer-section"
-                    aria-label="해설과 힌트"
-                  >
-                    <label className="quiz-composer-field">
-                      <span>해설</span>
-                      <textarea
-                        lang="ko"
-                        inputMode="text"
-                        aria-label="해설"
-                        value={formExp}
-                        onChange={(e) => setFormExp(e.target.value)}
-                        onKeyDown={handleVerticalFocus}
-                        className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none"
-                      />
-                    </label>
-
-                    <div className="quiz-hint-field">
-                      <label className="inline-flex min-h-11 items-center gap-2 text-sm font-bold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={hintEnabled}
-                          onChange={(e) => setHintEnabled(e.target.checked)}
-                        />
-                        힌트 제공
-                      </label>
-                      {hintEnabled && (
-                        <textarea
-                          lang="ko"
-                          inputMode="text"
-                          aria-label="힌트"
-                          value={hintText}
-                          onChange={(e) => setHintText(e.target.value)}
-                          onKeyDown={handleVerticalFocus}
-                          className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                        />
-                      )}
-                    </div>
-                  </section>
-
-                  {previewOpen && (
-                    <div
-                      ref={previewRef}
-                      tabIndex={-1}
-                      role="region"
-                      aria-label="학생 화면 미리보기"
-                      className="quiz-composer-section quiz-composer-preview"
-                    >
-                      <div className="quiz-composer-label">
-                        학생 화면 미리보기
-                      </div>
-                      <div className="bg-white rounded-lg border border-blue-100 p-4">
-                        <h4 className="font-bold text-gray-800 mb-4">
-                          <QuizQuestionText value={formText} />
-                        </h4>
-                        {formType === "choice" ? (
-                          <div
-                            className={
-                              hasPreviewChoiceSupportPanel
-                                ? "grid min-h-0 gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
-                                : "space-y-2"
-                            }
-                          >
-                            {hasPreviewChoiceSupportPanel && (
-                              <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                                {formImage && (
-                                  <div
-                                    className={`flex min-h-0 items-center justify-center ${
-                                      previewPassageText ? "shrink-0" : "flex-1"
-                                    }`}
-                                  >
+                                  />
+                                </label>
+                                {pair.rightImage && (
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <img
-                                      src={formImage}
-                                      alt="문항 첨부 이미지 미리보기"
-                                      className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
-                                        previewPassageText
-                                          ? "max-h-[min(30vh,280px)]"
-                                          : "max-h-[min(48vh,460px)]"
-                                      }`}
+                                      src={pair.rightImage}
+                                      alt="오른쪽 보기 이미지"
+                                      className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMatchingPairs((prev) =>
+                                          prev.map((item, pairIndex) =>
+                                            pairIndex === index
+                                              ? { ...item, rightImage: null }
+                                              : item,
+                                          ),
+                                        )
+                                      }
+                                      aria-label={`${index + 1}번 오른쪽 이미지 제거`}
+                                      className="quiz-authoring-button quiz-authoring-danger"
+                                    >
+                                      이미지 제거
+                                    </button>
                                   </div>
                                 )}
-                                {previewPassageText && (
-                                  <QuizPassage
-                                    value={previewPassageText}
-                                    surface="white"
-                                    className="shrink-0 text-left"
-                                  />
-                                )}
                               </div>
-                            )}
+                              <button
+                                type="button"
+                                onClick={() => removeMatchingPair(index)}
+                                disabled={matchingPairs.length <= 2}
+                                aria-label={`${index + 1}번 연결 쌍 삭제`}
+                                className="quiz-authoring-button quiz-authoring-danger"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+
+                    <section
+                      className="quiz-composer-section"
+                      aria-label="해설과 힌트"
+                    >
+                      <label className="quiz-composer-field">
+                        <span>해설</span>
+                        <QuizTextField
+                          grow={type === "special"}
+                          lang="ko"
+                          inputMode="text"
+                          aria-label="해설"
+                          value={formExp}
+                          onChange={(e) => setFormExp(e.target.value)}
+                          onKeyDown={handleVerticalFocus}
+                          className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none"
+                        />
+                      </label>
+
+                      <div className="quiz-hint-field">
+                        <label className="inline-flex min-h-11 items-center gap-2 text-sm font-bold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={hintEnabled}
+                            onChange={(e) => setHintEnabled(e.target.checked)}
+                          />
+                          힌트 제공
+                        </label>
+                        {hintEnabled && (
+                          <QuizTextField
+                            grow={type === "special"}
+                            lang="ko"
+                            inputMode="text"
+                            aria-label="힌트"
+                            value={hintText}
+                            onChange={(e) => setHintText(e.target.value)}
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                          />
+                        )}
+                      </div>
+                    </section>
+
+                    {type !== "special" && previewOpen && (
+                      <div
+                        ref={previewRef}
+                        tabIndex={-1}
+                        role="region"
+                        aria-label="학생 화면 미리보기"
+                        className="quiz-composer-section quiz-composer-preview"
+                      >
+                        <div className="quiz-composer-label">
+                          학생 화면 미리보기
+                        </div>
+                        <div className="bg-white rounded-lg border border-blue-100 p-4">
+                          <h4 className="font-bold text-gray-800 mb-4">
+                            <QuizQuestionText value={formText} />
+                          </h4>
+                          {formType === "choice" ? (
                             <div
                               className={
-                                hasPreviewChoiceOptionImages
-                                  ? "grid min-h-[16rem] grid-cols-3 auto-rows-fr gap-2"
+                                hasPreviewChoiceSupportPanel
+                                  ? "grid min-h-0 gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
                                   : "space-y-2"
                               }
                             >
-                              {previewChoiceItems.map((item, index) => {
-                                const visibleOptionText =
-                                  item.image &&
-                                  isGeneratedImageChoiceLabel(item.text, index)
-                                    ? ""
-                                    : item.text;
-                                const selected =
-                                  previewChoiceAnswer === item.text;
-                                return (
-                                  <button
-                                    key={`preview-choice-${index}`}
-                                    type="button"
-                                    onClick={() =>
-                                      setPreviewChoiceAnswer(item.text)
-                                    }
-                                    className={
-                                      hasPreviewChoiceOptionImages
-                                        ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
-                                            selected
-                                              ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
-                                              : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                                          }`
-                                        : `flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${
-                                            selected
-                                              ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                                              : "border-gray-200 hover:border-blue-300"
-                                          }`
-                                    }
-                                  >
-                                    {hasPreviewChoiceOptionImages ? (
-                                      <>
-                                        <div
-                                          className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
-                                            item.image
-                                              ? "border-gray-100 bg-white"
-                                              : "border-dashed border-gray-200 bg-gray-50 px-2"
-                                          }`}
-                                        >
+                              {hasPreviewChoiceSupportPanel && (
+                                <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                                  {formImage && (
+                                    <div
+                                      className={`flex min-h-0 items-center justify-center ${
+                                        previewPassageText
+                                          ? "shrink-0"
+                                          : "flex-1"
+                                      }`}
+                                    >
+                                      <img
+                                        src={formImage}
+                                        alt="문항 첨부 이미지 미리보기"
+                                        className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
+                                          previewPassageText
+                                            ? "max-h-[min(30vh,280px)]"
+                                            : "max-h-[min(48vh,460px)]"
+                                        }`}
+                                      />
+                                    </div>
+                                  )}
+                                  {previewPassageText && (
+                                    <QuizPassage
+                                      value={previewPassageText}
+                                      surface="white"
+                                      className="shrink-0 text-left"
+                                    />
+                                  )}
+                                </div>
+                              )}
+                              <div
+                                className={
+                                  hasPreviewChoiceOptionImages
+                                    ? "grid min-h-[16rem] grid-cols-3 auto-rows-fr gap-2"
+                                    : "space-y-2"
+                                }
+                              >
+                                {previewChoiceItems.map((item, index) => {
+                                  const visibleOptionText =
+                                    item.image &&
+                                    isGeneratedImageChoiceLabel(
+                                      item.text,
+                                      index,
+                                    )
+                                      ? ""
+                                      : item.text;
+                                  const selected =
+                                    previewChoiceAnswer === item.text;
+                                  return (
+                                    <button
+                                      key={`preview-choice-${index}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setPreviewChoiceAnswer(item.text)
+                                      }
+                                      className={
+                                        hasPreviewChoiceOptionImages
+                                          ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
+                                              selected
+                                                ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+                                                : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                                            }`
+                                          : `flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${
+                                              selected
+                                                ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                                                : "border-gray-200 hover:border-blue-300"
+                                            }`
+                                      }
+                                    >
+                                      {hasPreviewChoiceOptionImages ? (
+                                        <>
+                                          <div
+                                            className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                                              item.image
+                                                ? "border-gray-100 bg-white"
+                                                : "border-dashed border-gray-200 bg-gray-50 px-2"
+                                            }`}
+                                          >
+                                            <span
+                                              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                                selected
+                                                  ? "bg-blue-600 text-white"
+                                                  : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                              }`}
+                                            >
+                                              {index + 1}
+                                            </span>
+                                            {item.image ? (
+                                              <img
+                                                src={item.image}
+                                                alt={`${index + 1}번 보기`}
+                                                className="max-h-full max-w-full object-contain"
+                                              />
+                                            ) : (
+                                              <span className="break-keep text-center text-sm font-bold text-gray-700">
+                                                {visibleOptionText}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {visibleOptionText && item.image && (
+                                            <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                              {visibleOptionText}
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
                                           <span
-                                            className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
                                               selected
                                                 ? "bg-blue-600 text-white"
-                                                : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                                : "bg-gray-200 text-gray-500"
                                             }`}
                                           >
                                             {index + 1}
                                           </span>
-                                          {item.image ? (
+                                          {item.image && (
                                             <img
                                               src={item.image}
-                                              alt={`${index + 1}번 보기`}
-                                              className="max-h-full max-w-full object-contain"
+                                              alt={`${index + 1}번 보기 이미지 미리보기`}
+                                              className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
                                             />
-                                          ) : (
-                                            <span className="break-keep text-center text-sm font-bold text-gray-700">
-                                              {visibleOptionText}
-                                            </span>
                                           )}
-                                        </div>
-                                        {visibleOptionText && item.image && (
-                                          <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                          <span className="min-w-0 break-words">
                                             {visibleOptionText}
-                                          </div>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <>
-                                        <span
-                                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
-                                            selected
-                                              ? "bg-blue-600 text-white"
-                                              : "bg-gray-200 text-gray-500"
-                                          }`}
-                                        >
-                                          {index + 1}
-                                        </span>
-                                        {item.image && (
-                                          <img
-                                            src={item.image}
-                                            alt={`${index + 1}번 보기 이미지 미리보기`}
-                                            className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
-                                          />
-                                        )}
-                                        <span className="min-w-0 break-words">
-                                          {visibleOptionText}
-                                        </span>
-                                      </>
-                                    )}
-                                  </button>
-                                );
-                              })}
+                                          </span>
+                                        </>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          (formImage ||
-                            (formType === "word" && previewPassageText)) && (
-                            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                              {formImage && (
-                                <img
-                                  src={formImage}
-                                  alt="문항 첨부 이미지 미리보기"
-                                  className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
-                                />
-                              )}
-                              {formType === "word" && previewPassageText && (
-                                <QuizPassage
-                                  value={previewPassageText}
-                                  surface="white"
-                                  className="text-left"
-                                />
-                              )}
-                            </div>
-                          )
-                        )}
-                        {formType === "ox" && (
-                          <div className="grid grid-cols-2 gap-2">
-                            {(["O", "X"] as const).map((opt) => (
-                              <button
-                                key={`preview-ox-${opt}`}
-                                type="button"
-                                onClick={() => setPreviewOxAnswer(opt)}
-                                className={`border-2 rounded-lg py-3 font-bold transition ${previewOxAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {formType === "word" && (
-                          <QuizTextField
-                            lang="ko"
-                            inputMode="text"
-                            value={previewWordAnswer}
-                            onChange={(e) =>
-                              setPreviewWordAnswer(e.target.value)
-                            }
-                            placeholder="정답 입력 칸 미리보기"
-                            className="w-full border-b-2 border-gray-300 p-2 text-center text-sm focus:border-blue-500 outline-none"
-                          />
-                        )}
-                        {formType === "order" && (
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap gap-2">
-                              {previewOrderPool.map((item) => (
+                          ) : (
+                            (formImage ||
+                              (formType === "word" && previewPassageText)) && (
+                              <div className="mb-4 flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                                {formImage && (
+                                  <img
+                                    src={formImage}
+                                    alt="문항 첨부 이미지 미리보기"
+                                    className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
+                                  />
+                                )}
+                                {formType === "word" && previewPassageText && (
+                                  <QuizPassage
+                                    value={previewPassageText}
+                                    surface="white"
+                                    className="text-left"
+                                  />
+                                )}
+                              </div>
+                            )
+                          )}
+                          {formType === "ox" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {(["O", "X"] as const).map((opt) => (
                                 <button
-                                  key={`preview-order-pool-${item}`}
+                                  key={`preview-ox-${opt}`}
                                   type="button"
-                                  onClick={() =>
-                                    !previewOrderAnswer.includes(item) &&
-                                    setPreviewOrderAnswer((prev) => [
-                                      ...prev,
-                                      item,
-                                    ])
-                                  }
-                                  className={`px-3 py-2 rounded border-2 text-sm transition ${previewOrderAnswer.includes(item) ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                                  onClick={() => setPreviewOxAnswer(opt)}
+                                  className={`border-2 rounded-lg py-3 font-bold transition ${previewOxAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
                                 >
-                                  {item}
+                                  {opt}
                                 </button>
                               ))}
                             </div>
-                            <div className="min-h-[96px] rounded border border-dashed border-blue-300 bg-white p-3">
-                              <div className="flex flex-col items-start gap-1">
-                                {previewOrderAnswer.map((item, index, list) => (
-                                  <React.Fragment
-                                    key={`preview-order-selected-${index}-${item}`}
+                          )}
+                          {formType === "word" && (
+                            <QuizTextField
+                              lang="ko"
+                              inputMode="text"
+                              value={previewWordAnswer}
+                              onChange={(e) =>
+                                setPreviewWordAnswer(e.target.value)
+                              }
+                              placeholder="정답 입력 칸 미리보기"
+                              className="w-full border-b-2 border-gray-300 p-2 text-center text-sm focus:border-blue-500 outline-none"
+                            />
+                          )}
+                          {formType === "order" && (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                {previewOrderPool.map((item) => (
+                                  <button
+                                    key={`preview-order-pool-${item}`}
+                                    type="button"
+                                    onClick={() =>
+                                      !previewOrderAnswer.includes(item) &&
+                                      setPreviewOrderAnswer((prev) => [
+                                        ...prev,
+                                        item,
+                                      ])
+                                    }
+                                    className={`px-3 py-2 rounded border-2 text-sm transition ${previewOrderAnswer.includes(item) ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
                                   >
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setPreviewOrderAnswer((prev) =>
-                                          prev.filter((_, i) => i !== index),
-                                        )
-                                      }
-                                      className="inline-flex max-w-full items-start gap-2 rounded bg-blue-100 px-3 py-2 text-left text-xs font-bold text-blue-700"
-                                    >
-                                      <span className="shrink-0">
-                                        {index + 1}.
-                                      </span>
-                                      <span className="min-w-0 break-words">
-                                        {item}
-                                      </span>
-                                    </button>
-                                    {index < list.length - 1 && (
-                                      <span
-                                        aria-hidden="true"
-                                        className="ml-5 text-sm font-bold leading-none text-blue-500"
-                                      >
-                                        ↓
-                                      </span>
-                                    )}
-                                  </React.Fragment>
+                                    {item}
+                                  </button>
                                 ))}
                               </div>
+                              <div className="min-h-[96px] rounded border border-dashed border-blue-300 bg-white p-3">
+                                <div className="flex flex-col items-start gap-1">
+                                  {previewOrderAnswer.map(
+                                    (item, index, list) => (
+                                      <React.Fragment
+                                        key={`preview-order-selected-${index}-${item}`}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setPreviewOrderAnswer((prev) =>
+                                              prev.filter(
+                                                (_, i) => i !== index,
+                                              ),
+                                            )
+                                          }
+                                          className="inline-flex max-w-full items-start gap-2 rounded bg-blue-100 px-3 py-2 text-left text-xs font-bold text-blue-700"
+                                        >
+                                          <span className="shrink-0">
+                                            {index + 1}.
+                                          </span>
+                                          <span className="min-w-0 break-words">
+                                            {item}
+                                          </span>
+                                        </button>
+                                        {index < list.length - 1 && (
+                                          <span
+                                            aria-hidden="true"
+                                            className="ml-5 text-sm font-bold leading-none text-blue-500"
+                                          >
+                                            ↓
+                                          </span>
+                                        )}
+                                      </React.Fragment>
+                                    ),
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {formType === "matching" && (
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <div className="space-y-2">
-                              {trimMatchingPairs(matchingPairs).map(
-                                (pair, index) => (
-                                  <button
-                                    key={`preview-matching-left-${pair.left}-${index}`}
-                                    type="button"
-                                    onClick={() =>
-                                      setPreviewMatchingActiveLeft(pair.left)
-                                    }
-                                    className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
-                                  >
-                                    {pair.left}
-                                    {previewMatchingAnswer[pair.left] && (
-                                      <span className="ml-2 text-xs text-blue-600">
-                                        → {previewMatchingAnswer[pair.left]}
-                                      </span>
-                                    )}
-                                  </button>
-                                ),
-                              )}
+                          )}
+                          {formType === "matching" && (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-2">
+                                {trimMatchingPairs(matchingPairs).map(
+                                  (pair, index) => (
+                                    <button
+                                      key={`preview-matching-left-${pair.left}-${index}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setPreviewMatchingActiveLeft(pair.left)
+                                      }
+                                      className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                    >
+                                      {pair.left}
+                                      {previewMatchingAnswer[pair.left] && (
+                                        <span className="ml-2 text-xs text-blue-600">
+                                          → {previewMatchingAnswer[pair.left]}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                              <div className="space-y-2">
+                                {previewMatchingOptions.map((pair, index) => {
+                                  const used = Object.values(
+                                    previewMatchingAnswer,
+                                  ).includes(pair.right);
+                                  return (
+                                    <button
+                                      key={`preview-matching-right-${pair.right}-${index}`}
+                                      type="button"
+                                      onClick={() =>
+                                        previewMatchingActiveLeft &&
+                                        setPreviewMatchingAnswer((prev) => ({
+                                          ...prev,
+                                          [previewMatchingActiveLeft]:
+                                            pair.right,
+                                        }))
+                                      }
+                                      className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                                    >
+                                      {pair.rightImage && (
+                                        <img
+                                          src={pair.rightImage}
+                                          alt=""
+                                          className="h-12 w-12 rounded border border-gray-100 object-contain"
+                                        />
+                                      )}
+                                      <span>{pair.right}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <div className="space-y-2">
-                              {previewMatchingOptions.map((pair, index) => {
-                                const used = Object.values(
-                                  previewMatchingAnswer,
-                                ).includes(pair.right);
-                                return (
-                                  <button
-                                    key={`preview-matching-right-${pair.right}-${index}`}
-                                    type="button"
-                                    onClick={() =>
-                                      previewMatchingActiveLeft &&
-                                      setPreviewMatchingAnswer((prev) => ({
-                                        ...prev,
-                                        [previewMatchingActiveLeft]: pair.right,
-                                      }))
-                                    }
-                                    className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
-                                  >
-                                    {pair.rightImage && (
-                                      <img
-                                        src={pair.rightImage}
-                                        alt=""
-                                        className="h-12 w-12 rounded border border-gray-100 object-contain"
-                                      />
-                                    )}
-                                    <span>{pair.right}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  <div className="quiz-composer-section quiz-composer-metadata">
-                    <QuizLearningMetadataFields
-                      value={metadata}
-                      onChange={setMetadata}
-                      options={
-                        formType === "choice"
-                          ? getChoiceOptionItems(
-                              choiceOptions,
-                              choiceOptionImages,
-                            ).map((item) => item.text)
-                          : []
-                      }
-                      units={treeData.flatMap((big) =>
-                        (big.children || []).flatMap((mid) =>
-                          (mid.children || []).map((small) => ({
-                            id: small.id,
-                            title: `${mid.title} · ${small.title}`,
-                          })),
-                        ),
-                      )}
-                    />
-                  </div>
-                  {derivationSource && (
-                    <label className="flex min-h-11 items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={answerReviewed}
-                        onChange={(event) =>
-                          setAnswerReviewed(event.target.checked)
+                    <div className="quiz-composer-section quiz-composer-metadata">
+                      <QuizLearningMetadataFields
+                        value={metadata}
+                        onChange={setMetadata}
+                        options={
+                          formType === "choice"
+                            ? getChoiceOptionItems(
+                                choiceOptions,
+                                choiceOptionImages,
+                              ).map((item) => item.text)
+                            : []
                         }
+                        units={treeData.flatMap((big) =>
+                          (big.children || []).flatMap((mid) =>
+                            (mid.children || []).map((small) => ({
+                              id: small.id,
+                              title: `${mid.title} · ${small.title}`,
+                            })),
+                          ),
+                        )}
                       />
-                      <span>
-                        원본에서 바꾼 발문·자료·보기와 정답·해설의 일치를
-                        확인했습니다.
-                      </span>
-                    </label>
-                  )}
-                  {formError && (
-                    <p
-                      ref={formErrorRef}
-                      tabIndex={-1}
-                      role="alert"
-                      className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
-                    >
-                      {formError}
-                    </p>
+                    </div>
+                    {derivationSource && (
+                      <label className="flex min-h-11 items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={answerReviewed}
+                          onChange={(event) =>
+                            setAnswerReviewed(event.target.checked)
+                          }
+                        />
+                        <span>
+                          원본에서 바꾼 발문·자료·보기와 정답·해설의 일치를
+                          확인했습니다.
+                        </span>
+                      </label>
+                    )}
+                    {formError && (
+                      <p
+                        ref={formErrorRef}
+                        tabIndex={-1}
+                        role="alert"
+                        className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700"
+                      >
+                        {formError}
+                      </p>
+                    )}
+                  </div>
+                  {type === "special" && (
+                    <MockExamDraftPreview question={draftPreviewQuestion} />
                   )}
                 </div>
                 <div className="quiz-composer-footer">
-                  <button
-                    type="button"
-                    onClick={openPreview}
-                    aria-expanded={previewOpen}
-                    className="quiz-authoring-button"
-                  >
-                    {previewOpen ? "미리보기 닫기" : "미리보기"}
-                  </button>
+                  {type !== "special" && (
+                    <button
+                      type="button"
+                      onClick={openPreview}
+                      aria-expanded={previewOpen}
+                      className="quiz-authoring-button"
+                    >
+                      {previewOpen ? "미리보기 닫기" : "미리보기"}
+                    </button>
+                  )}
                   <div className="quiz-composer-footer-actions">
                     <button
                       type="button"

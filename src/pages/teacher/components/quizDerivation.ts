@@ -1,7 +1,11 @@
+import type { MockExamPassageSet } from "../../../lib/mockExamMaterials";
+
 interface DerivationContent {
   type: string;
   question: string;
   passage?: string | null;
+  examplePassage?: string | null;
+  passageSet?: MockExamPassageSet | null;
   image?: string | null;
   options?: string[];
   choiceOptionImages?: (string | null)[];
@@ -47,6 +51,14 @@ const normalizeContent = (question: DerivationContent) => {
         ? (question.passage || "").trim()
         : "",
     image: question.image || null,
+    examplePassage: (question.examplePassage || "").trim(),
+    passageSet: question.passageSet
+      ? {
+          instruction: question.passageSet.instruction.trim(),
+          passage: question.passageSet.passage.trim(),
+          image: question.passageSet.image || null,
+        }
+      : null,
     options: type === "choice" || type === "order" ? options : [],
     matchingPairs,
   };

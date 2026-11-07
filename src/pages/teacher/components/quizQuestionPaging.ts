@@ -9,6 +9,8 @@ export interface QuizQuestionCatalogEntry {
   examRound?: string;
   paperOrder?: number;
   points?: number;
+  passageSetId?: string;
+  passageSetInstruction?: string;
   type?: string;
   refBig?: string;
   refMid?: string;
@@ -38,6 +40,8 @@ export const quizQuestionCatalogEntry = (
     question?: string;
     explanation?: string;
     passage?: string | null;
+    examplePassage?: string | null;
+    passageSet?: { id: string; instruction: string; passage: string } | null;
     concepts?: string[];
   },
   documentId = String(question.id),
@@ -49,6 +53,12 @@ export const quizQuestionCatalogEntry = (
   examRound: question.examRound,
   paperOrder: question.paperOrder,
   points: question.points,
+  ...(question.passageSet?.id
+    ? {
+        passageSetId: question.passageSet.id,
+        passageSetInstruction: question.passageSet.instruction,
+      }
+    : {}),
   subUnitId: question.subUnitId,
   refBig: question.refBig,
   refMid: question.refMid,
@@ -61,6 +71,10 @@ export const quizQuestionCatalogEntry = (
     question.question,
     question.explanation,
     question.passage,
+    ...(question.examplePassage ? [question.examplePassage] : []),
+    ...(question.passageSet
+      ? [question.passageSet.passage, question.passageSet.instruction]
+      : []),
     ...(question.concepts || []),
   ]
     .join(" ")

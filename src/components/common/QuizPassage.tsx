@@ -37,6 +37,30 @@ const isBulletSegment = (segment: QuizPassageSegment | undefined) =>
   segment?.type === "bullet";
 
 const renderMarkedSegment = (segment: QuizPassageSegment, key: React.Key) => {
+  if (segment.type === "blankBox") {
+    return (
+      <span
+        key={key}
+        aria-label={`빈칸 ${segment.text}`}
+        className="quiz-passage-blank-box"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          verticalAlign: "baseline",
+          boxSizing: "content-box",
+          minWidth: `min(${Math.min(30, Math.max(1, segment.widthEm || 3))}em, calc(100% - .6em - 2px))`,
+          maxWidth: "calc(100% - .6em - 2px)",
+          padding: "0 .3em",
+          border: "1px solid currentColor",
+          lineHeight: "1.35",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {segment.text}
+      </span>
+    );
+  }
   if (segment.type === "blank") {
     const blankWidth = `${Math.min(Math.max(segment.text.length, 4), 14)}ch`;
 

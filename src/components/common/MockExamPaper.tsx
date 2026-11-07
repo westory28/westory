@@ -11,6 +11,10 @@ import "@fontsource/noto-serif-kr/900.css";
 import QuizPassage from "./QuizPassage";
 import QuizQuestionText from "./QuizQuestionText";
 import { getMockExamRoundNumber } from "../../lib/mockExamRounds";
+import {
+  getMockExamSetRun,
+  type MockExamPassageSet,
+} from "../../lib/mockExamMaterials";
 import "./mockExamPaper.css";
 
 export interface MockExamPaperQuestion {
@@ -21,6 +25,9 @@ export interface MockExamPaperQuestion {
   choiceOptionImages?: Array<string | null>;
   image?: string | null;
   passage?: string | null;
+  examplePassage?: string | null;
+  passageSet?: MockExamPassageSet | null;
+  examRound?: string;
   answer?: string | number;
   explanation?: string;
   points?: number;
@@ -87,11 +94,15 @@ export function MockExamQuestionContent({
   index,
   answer = "",
   hideAnswers = false,
+  showPassageSet = true,
+  setQuestionRange,
 }: {
   question: MockExamPaperQuestion;
   index: number;
   answer?: string;
   hideAnswers?: boolean;
+  showPassageSet?: boolean;
+  setQuestionRange?: [number, number];
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
   const imageOptions = question.choiceOptionImages?.some(Boolean);
@@ -105,6 +116,12 @@ export function MockExamQuestionContent({
     options.every((option) => option.length <= 12);
   return (
     <div className="mock-exam-question-ink">
+      {showPassageSet && question.passageSet && (
+        <MockExamSetPassage
+          value={question.passageSet}
+          questionRange={setQuestionRange}
+        />
+      )}
       <p className="mock-exam-stem">
         <strong className="mock-exam-number">{index + 1}.</strong>{" "}
         <QuizQuestionText value={question.question} />
@@ -121,6 +138,15 @@ export function MockExamQuestionContent({
           src={question.image}
           alt={`${index + 1}번 자료`}
         />
+      )}
+      {question.examplePassage?.trim() && (
+        <fieldset className="mock-exam-example">
+          <legend>&lt;보기&gt;</legend>
+          <QuizPassage
+            value={question.examplePassage}
+            className="mock-exam-passage"
+          />
+        </fieldset>
       )}
       {!hideAnswers && options.length > 0 && (
         <ol
@@ -187,6 +213,41 @@ export function MockExamQuestionContent({
         </p>
       )}
     </div>
+  );
+}
+
+export function MockExamSetPassage({
+  value,
+  questionRange,
+}: {
+  value: MockExamPassageSet;
+  questionRange?: [number, number];
+}) {
+  return (
+    <section className="mock-exam-set-passage" aria-label="공통 지문">
+      <p className="mock-exam-set-instruction">
+        {questionRange && (
+          <strong>
+            [{questionRange[0]}
+            {questionRange[0] !== questionRange[1]
+              ? `~${questionRange[1]}`
+              : ""}
+            ]{" "}
+          </strong>
+        )}
+        {value.instruction || "다음 자료를 읽고 물음에 답하시오."}
+      </p>
+      {value.passage && (
+        <QuizPassage value={value.passage} className="mock-exam-passage" />
+      )}
+      {value.image && (
+        <MockExamImage
+          src={value.image}
+          alt="공통 지문 자료"
+          className="mock-exam-image"
+        />
+      )}
+    </section>
   );
 }
 
@@ -315,10 +376,15 @@ export default function MockExamPaper({
     const output: PaperPage[] = [{ columns: [[], []], height: PAGE_HEIGHT }];
     let column = 0,
       used = 0;
-    questions.forEach((_, index) => {
+    for (let index = 0; index < questions.length; ) {
+      const run = getMockExamSetRun(questions, index);
+      const last = run?.end ?? index;
       let page = output[output.length - 1];
       const room = output.length === 1 ? FIRST_COLUMN_ROOM : COLUMN_ROOM;
-      const height = heights[index] || 260;
+      const height = Array.from(
+        { length: last - index + 1 },
+        (_, i) => heights[index + i] || 260,
+      ).reduce((sum, value) => sum + value, 0);
       if (used > 0 && used + height > room) {
         if (column === 0) column = 1;
         else {
@@ -328,7 +394,7 @@ export default function MockExamPaper({
         used = 0;
       }
       page = output[output.length - 1];
-      page.columns[column].push(index);
+      for (let i = index; i <= last; i++) page.columns[column].push(i);
       used += height;
       page.height = Math.max(
         page.height,
@@ -337,7 +403,8 @@ export default function MockExamPaper({
             ? PAGE_HEIGHT - FIRST_COLUMN_ROOM
             : PAGE_HEIGHT - COLUMN_ROOM),
       );
-    });
+      index = last + 1;
+    }
     return output;
   }, [questions, heights]);
   const scale = Math.max(0.1, width / PAGE_WIDTH);
@@ -354,6 +421,17 @@ export default function MockExamPaper({
               question={question}
               index={index}
               answer={answers[String(question.id)]}
+              showPassageSet={
+                getMockExamSetRun(questions, index)?.start === index
+              }
+              setQuestionRange={
+                question.passageSet
+                  ? [
+                      index + 1,
+                      (getMockExamSetRun(questions, index)?.end ?? index) + 1,
+                    ]
+                  : undefined
+              }
             />
           </div>
         ))}
@@ -442,6 +520,18 @@ export default function MockExamPaper({
                           question={question}
                           index={index}
                           answer={answers[String(question.id)]}
+                          showPassageSet={
+                            getMockExamSetRun(questions, index)?.start === index
+                          }
+                          setQuestionRange={
+                            question.passageSet
+                              ? [
+                                  index + 1,
+                                  (getMockExamSetRun(questions, index)?.end ??
+                                    index) + 1,
+                                ]
+                              : undefined
+                          }
                         />
                         {index < revealed && (
                           <PencilMark

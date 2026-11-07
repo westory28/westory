@@ -27,7 +27,7 @@ const fixture = await fs.readFile(
 let service = fixture.match(/const service = `([\s\S]*?)`;/)[1];
 service = service.replace(
   "category:q.category,type:q.type,refBig:",
-  "category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,refBig:",
+  "category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,passageSetId:q.passageSet?.id,passageSetInstruction:q.passageSet?.instruction,refBig:",
 );
 service = service.replace(
   "if(command==='upsertQuizQuestion'){const q=",
@@ -80,7 +80,7 @@ const seed = [
   })),
 ];
 service += `\nquestions.push(...${JSON.stringify(seed)});`;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import QuizEditor from './src/pages/teacher/components/QuizEditor.tsx';import {tree} from 'fixture:service';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';createRoot(document.getElementById('root')).render(<QuizEditor node={{id:'exam_prep',title:'모의고사'}} type="special" treeData={tree} canEdit={!new URLSearchParams(location.search).has('readonly')} onOpenSettings={()=>{}}/>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import QuizEditor from './src/pages/teacher/components/QuizEditor.tsx';import {tree} from 'fixture:service';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';const params=new URLSearchParams(location.search);const normal=params.has('normal');createRoot(document.getElementById('root')).render(<QuizEditor node={normal?tree[0].children[0]:{id:'exam_prep',title:'모의고사'}} type={normal?'normal':'special'} treeData={tree} canEdit={!params.has('readonly')} onOpenSettings={()=>{}}/>);`;
 const bundle = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -231,9 +231,37 @@ try {
     name: "새 문제 등록",
     exact: true,
   });
+  const readsBeforeDraft = await page.evaluate(() => window.assessmentTeacherFixture.reads.length);
   await compose
     .getByLabel("발문", { exact: true })
     .fill("직접 등록한 자료를 보고 옳은 설명을 고르시오.");
+  const live = compose.getByRole("complementary", { name: "학생 화면 미리보기" });
+  await live.locator('.mock-exam-stem').filter({hasText:"직접 등록한 자료를 보고 옳은 설명을 고르시오."}).waitFor();
+  await compose.getByRole("button", { name: "〈보기〉 추가", exact: true }).click();
+  await compose.getByRole("textbox", { name: "보기", exact: true }).fill("ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
+  await live.locator('.mock-exam-example').filter({hasText:"ㄱ. 합성 첫 번째 설명"}).waitFor();
+  await compose.getByRole("button", { name: "새 세트 지문", exact: true }).click();
+  await compose.getByRole("textbox", { name: "공통 지문", exact: true }).fill("세트 자료는 두 문항에서 함께 사용합니다.");
+  await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, "local edits and live preview must not read or write the server");
+  for (const width of [390, 768, 1280, 1366]) {
+    await page.setViewportSize({ width, height: width === 1366 ? 768 : 900 });
+    const layout = await compose.evaluate((el) => {
+      const form = el.querySelector('.quiz-composer-body'), preview = el.querySelector('.mock-exam-draft-preview');
+      const box = node => { const r = node.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, width:r.width }; };
+      return { window:innerWidth, document:document.documentElement.scrollWidth, dialog:box(el), form:box(form), preview:box(preview), innerScroll:getComputedStyle(form).overflowY,
+        overflow:Array.from(el.querySelectorAll('select,textarea,[contenteditable="true"]')).filter(node => node.scrollWidth > node.clientWidth+2).length };
+    });
+    assert(layout.document <= width+1, JSON.stringify(layout));
+    assert(layout.dialog.right <= width+1, JSON.stringify(layout));
+    assert.equal(layout.innerScroll, 'visible', 'only the outer viewport may scroll');
+    assert.equal(layout.overflow, 0, JSON.stringify(layout));
+    if(width >= 1024){ assert(layout.preview.left >= layout.form.right, JSON.stringify(layout)); assert(layout.dialog.width > 1100); }
+    await compose.getByLabel('발문', {exact:true}).scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(evidence, `teacher-live-composer-${width}.png`)});
+  }
+  await page.setViewportSize({width:1280,height:900});
   await compose
     .getByRole("spinbutton", { name: "배점", exact: true })
     .fill("3.5");
@@ -325,6 +353,8 @@ try {
     writes: window.assessmentTeacherFixture.writes,
   }));
   assert.equal(state.saved.paperOrder, 1);
+  assert.equal(state.saved.examplePassage, "ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
+  assert.equal(state.saved.passageSet.passage, "세트 자료는 두 문항에서 함께 사용합니다.");
   assert.equal(state.saved.points, 3.5);
   assert.equal(state.saved.answer, "긴 선지입니다");
   assert.deepEqual(state.saved.options, [
@@ -352,6 +382,24 @@ try {
   checks.push(
     "Direct registration: distinct-five-choice/decimal validation blocks writes, image and selected answer stay paired through sorting, learning metadata persists, failed save retains input and retries the same ID.",
   );
+  checks.push("Draft preview updates locally without server reads/writes; 보기 and set passage are saved only on final registration; wide 390/768/1280/1366 editor uses one outer vertical scroll.");
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+  await compose.getByLabel("발문", { exact: true }).fill("공통 지문에 연결한 두 번째 문항입니다.");
+  for(let index=0;index<5;index++) await compose.getByLabel(`${index+1}번 보기`,{exact:true}).fill(authoredOptions[index]);
+  await compose.getByRole("button",{name:"1번 보기 정답 선택",exact:true}).click();
+  await compose.getByRole("button",{name:"기존 세트 연결",exact:true}).click();
+  await compose.getByRole("combobox",{name:"연결할 세트 지문",exact:true}).selectOption(state.saved.passageSet.id);
+  assert.equal(await compose.getByRole("textbox",{name:"공통 지문",exact:true}).count(),0,"linked common passage is read-only until separated");
+  await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
+  assert.equal(await page.evaluate(()=>window.assessmentTeacherFixture.writes.length),2);
+  await compose.getByRole("button",{name:"등록",exact:true}).click();
+  await compose.waitFor({state:"hidden"});
+  const paired=await openPaper(page,"round_1",2);
+  assert.equal(await paired.locator('.mock-exam-sheet .mock-exam-set-passage').count(),1,"shared passage is printed once for consecutive set questions");
+  await paired.locator('.mock-exam-sheet').getByText('[1~2]',{exact:false}).waitFor();
+  await page.keyboard.press('Escape');
+  await paired.waitFor({state:'hidden'});
+  checks.push("Connect an existing set using cached representative material, persist the second question, and print shared material exactly once with [1~2] range.");
   await page
     .getByRole("searchbox", { name: "검색", exact: true })
     .fill("직접 등록한");
@@ -456,6 +504,56 @@ try {
   checks.push(
     "Read-only teacher can inspect the full paper without a write operation.",
   );
+  await page.goto(origin + "/?normal");
+  await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+  const normal = page.getByRole("dialog", { name: "새 문제 등록", exact: true });
+  await normal.waitFor();
+  assert.equal(await normal.locator(".mock-exam-draft-preview").count(), 0);
+  assert.equal(await normal.locator(".quiz-composer-preview").count(), 0);
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const layout = await normal.evaluate((element) => {
+      const body = element.querySelector(".quiz-composer-body");
+      const footer = element.querySelector(".quiz-composer-footer");
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      };
+      body.scrollTop = 0;
+      const footerBefore = box(footer);
+      body.scrollTop = body.scrollHeight;
+      return {
+        scenario: "normal-composer",
+        width: innerWidth,
+        height: innerHeight,
+        documentWidth: document.documentElement.scrollWidth,
+        dialog: box(element),
+        body: box(body),
+        bodyOverflow: getComputedStyle(body).overflowY,
+        bodyScrollTop: body.scrollTop,
+        bodyClientHeight: body.clientHeight,
+        bodyScrollHeight: body.scrollHeight,
+        wrapperDisplay: getComputedStyle(element.querySelector(".quiz-composer-layout--legacy")).display,
+        viewportOverflow: getComputedStyle(element.parentElement).overflowY,
+        footerBefore,
+        footerAfter: box(footer),
+      };
+    });
+    assert(layout.documentWidth <= width + 1, JSON.stringify(layout));
+    assert(layout.dialog.left >= 0 && layout.dialog.top >= 0 && layout.dialog.right <= width + 1 && layout.dialog.bottom <= layout.height + 1, JSON.stringify(layout));
+    assert.equal(layout.wrapperDisplay, "contents", "normal form remains a direct flex participant");
+    assert.equal(layout.viewportOverflow, "visible", "normal modal does not gain the mock exam outer scroll viewport");
+    assert.equal(layout.bodyOverflow, "auto");
+    assert(layout.bodyScrollHeight > layout.bodyClientHeight && layout.bodyScrollTop > 0, JSON.stringify(layout));
+    assert(layout.body.bottom <= layout.footerAfter.top + 1, JSON.stringify(layout));
+    assert(layout.footerAfter.top >= layout.dialog.top && layout.footerAfter.bottom <= layout.height + 1, JSON.stringify(layout));
+    assert.deepEqual(layout.footerBefore, layout.footerAfter, "normal footer stays visible while only the body scrolls");
+    await normal.locator(".quiz-composer-body").evaluate((body) => { body.scrollTop = 0; });
+    await page.screenshot({ path: path.join(evidence, `teacher-normal-composer-${width}.png`) });
+    layouts.push(layout);
+  }
+  assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
+  checks.push("Normal diagnostic question dialog stays within 390/768/1280 viewports; only its body scrolls, the footer remains visible, and no mock exam live preview appears.");
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   await fs.writeFile(

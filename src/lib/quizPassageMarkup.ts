@@ -1,12 +1,13 @@
 export type QuizPassageMarkType = "underline" | "box" | "blank" | "bullet";
 
 export interface QuizPassageSegment {
-  type: "text" | QuizPassageMarkType;
+  type: "text" | "blankBox" | QuizPassageMarkType;
   text: string;
+  widthEm?: number;
 }
 
 const BULLET_TOKEN = "{{bullet}}";
-const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box|blank):([\s\S]*?)\}\}/g;
+const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box|blank|blankbox):([\s\S]*?)\}\}/g;
 const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;
 const LEGACY_BULLET_PREFIX = "{{bullet:";
 const HORIZONTAL_SPACE_PATTERN = /[ \t]/;
@@ -63,7 +64,18 @@ const parseInlineMarkup = (value: string): QuizPassageSegment[] => {
     if (offset > lastIndex) {
       segments.push({ type: "text", text: value.slice(lastIndex, offset) });
     }
-    segments.push({ type: getSegmentType(tokenName), text });
+    if (tokenName === "blankbox") {
+      const match = /^(\d+(?:\.\d{1,3})?)\|([^{}\r\n]{1,20})$/.exec(text);
+      const widthEm = Number(match?.[1]);
+      if (match && widthEm >= 1 && widthEm <= 30) {
+        segments.push({ type: "blankBox", text: match[2], widthEm });
+      } else {
+        // Malformed private markup must never become visible developer syntax.
+        segments.push({ type: "blankBox", text: "(가)", widthEm: 3 });
+      }
+    } else {
+      segments.push({ type: getSegmentType(tokenName), text });
+    }
     lastIndex = offset + match.length;
     return match;
   });
@@ -104,7 +116,11 @@ export const parseQuizPassageMarkup = (
 export const stripQuizPassageMarkup = (value: string | null | undefined) =>
   normalizeBulletMarkup(String(value || ""))
     .replace(INLINE_MARK_TOKEN_PATTERN, (_match, tokenName, text) =>
-      tokenName === "blank" ? "____" : text,
+      tokenName === "blank"
+        ? "____"
+        : tokenName === "blankbox"
+          ? text.split("|").slice(1).join("|") || "(가)"
+          : text,
     )
     .split(BULLET_TOKEN)
     .join("");
