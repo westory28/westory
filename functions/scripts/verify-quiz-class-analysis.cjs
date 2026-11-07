@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('../quizClassAnalysisCore.cjs');
 const { normalizeQuery, createQuizClassAnalysisService, createQuizClassAnalysisHandler,
-  createQuizAnalysisInvalidation, summarizeClass, adaptRecords, readBounded, hash } = require('../quizClassAnalysis');
+  createQuizAnalysisInvalidation, createQuizAnalysisTriggers, summarizeClass, adaptRecords, readBounded, hash } = require('../quizClassAnalysis');
 
 const SCOPE = '2026-2';
 const ROOT = 'years/2026/semesters/2';
@@ -114,6 +114,76 @@ test('catalog has real current classes, no student names or answers and no resul
   assert.equal(JSON.stringify(result).includes('PRIVATE_LARGE_IMAGE'), false);
   assert.equal(JSON.stringify(result).includes('학생 A'), false);
   assert.equal(f.queries.some(query => /users|results|enrollments/.test(query.path)), false);
+  assert.deepEqual(f.queries.find(query => query.path === 'semester_classes').projection,
+    ['status', 'grade', 'classNumber']);
+  assert.deepEqual(f.queries.find(query => query.path === 'semester_assessment_definitions').projection,
+    ['assessmentKind', 'sourceId', 'category', 'examRound']);
+});
+
+test('roster and result invalidation retain the catalog but still refresh class statistics', async () => {
+  const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
+  const triggers = createQuizAnalysisTriggers({ db: f.db });
+  const snapshot = value => ({ exists: !!value, data: () => value });
+  const before = await service.query(q);
+  const catalogQueries = () => f.queries.filter(query => query.path === 'semester_classes'
+    || query.path === 'semester_assessment_definitions').length;
+  const initialCatalogQueries = catalogQueries();
+  const oldEnrollment = f.data.get('semester_enrollments/en_a');
+  const newEnrollment = { ...oldEnrollment, enrollmentStatus: 'INACTIVE' };
+  f.data.set('semester_enrollments/en_a', newEnrollment);
+  await triggers.invalidateQuizClassEnrollment.run({ params: { enrollmentId: 'en_a' },
+    data: { before: snapshot(oldEnrollment), after: snapshot(newEnrollment) } });
+  const after = await service.query(q);
+  assert.equal(before.classes[0].rosterCount, 1);
+  assert.equal(after.classes[0].rosterCount, 0, 'summary must still invalidate on enrollment changes');
+  assert.equal(catalogQueries(), initialCatalogQueries, 'enrollment changes must not rescan picker data');
+  const oldProfile = f.data.get('users/a'), newProfile = { ...oldProfile, name: '변경된 합성 이름' };
+  f.data.set('users/a', newProfile);
+  await triggers.invalidateQuizClassProfile.run({ params: { uid: 'a' },
+    data: { before: snapshot(oldProfile), after: snapshot(newProfile) } });
+  // A result without a resolvable class advances contentGeneration, not catalogGeneration.
+  await createQuizAnalysisInvalidation({ db: f.db }).invalidateResult(SCOPE, {});
+  const queries = f.queries.length;
+  await service.query({ semesterId: SCOPE, mode: 'catalog' });
+  assert.equal(f.queries.length, queries, 'profile and result updates reuse the authorized catalog');
+});
+
+test('catalog source triggers invalidate units, categories, rounds, definitions and class metadata', async () => {
+  const snapshot = value => ({ exists: !!value, data: () => value });
+  const cases = [
+    { path: `${ROOT}/quiz_questions/1`, trigger: 'invalidateQuizClassQuestion', params: { year: '2026', semester: '2', questionId: '1' },
+      update: value => ({ ...value, category: 'diagnostic' }), check: result => assert.equal(result.assessments[0].category, 'diagnostic') },
+    { path: `${ROOT}/quiz_questions/1`, trigger: 'invalidateQuizClassQuestion', params: { year: '2026', semester: '2', questionId: '1' },
+      update: value => ({ ...value, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_2' }),
+      check: result => assert.deepEqual(result.assessments.map(item => [item.unitId, item.examRound]), [['exam_prep', 'round_2']]) },
+    { path: 'semester_assessment_definitions/defined-formative', trigger: 'invalidateQuizClassDefinition', params: { definitionId: 'defined-formative' },
+      update: () => ({ semesterId: SCOPE, assessmentKind: 'QUIZ', sourceId: 'unit-a', category: 'formative' }),
+      check: result => assert.equal(result.assessments[0].id, 'defined-formative') },
+    { path: 'semester_classes/class_a', trigger: 'invalidateQuizClassMetadata', params: { classId: 'class_a' },
+      update: value => ({ ...value, grade: '2', classNumber: '9' }),
+      check: result => assert.equal(result.classes.find(item => item.id === 'class_a').label, '2학년 9반') },
+    { path: 'semester_classes/class_a', trigger: 'invalidateQuizClassMetadata', params: { classId: 'class_a' },
+      update: value => ({ ...value, status: 'INACTIVE' }),
+      check: result => assert.deepEqual(result.classes.map(item => item.id), ['class_b']) },
+    { path: `${ROOT}/curriculum/tree`, trigger: 'invalidateQuizClassCurriculum', params: { year: '2026', semester: '2', documentId: 'tree' },
+      update: () => ({ tree: [{ id: 'big', title: '조선', children: [{ id: 'unit-a', title: '붕당 정치' }] }] }),
+      check: result => assert.equal(result.assessments[0].unitTitle, '조선 · 붕당 정치') },
+    { path: `${ROOT}/quiz_questions/1`, trigger: 'invalidateQuizClassQuestion', params: { year: '2026', semester: '2', questionId: '1' },
+      update: () => null, check: result => assert.deepEqual(result.assessments, []) },
+  ];
+  for (const scenario of cases) {
+    const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
+    const catalogQuery = { semesterId: SCOPE, mode: 'catalog' };
+    await service.query(catalogQuery);
+    const queryCount = f.queries.length;
+    const before = f.data.get(scenario.path), after = scenario.update(before);
+    if (after) f.data.set(scenario.path, after); else f.data.delete(scenario.path);
+    await createQuizAnalysisTriggers({ db: f.db })[scenario.trigger].run({ params: scenario.params,
+      data: { before: snapshot(before), after: snapshot(after) } });
+    const result = await service.query(catalogQuery);
+    assert.ok(f.queries.length > queryCount, `${scenario.trigger} must rebuild the picker catalog`);
+    scenario.check(result);
+  }
 });
 
 test('mock paper catalogs and question analysis separate authored rounds from legacy pools', async () => {

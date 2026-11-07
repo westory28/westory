@@ -113,10 +113,12 @@ const normalizeQuestionType = (type: string): QuestionType =>
   type === "short" ? "word" : (type as QuestionType) || "choice";
 const QuizBankTab: React.FC<{
   canEdit: boolean;
+  initialUnitId?: string;
+  initialCategory?: string;
   onDeriveQuestion?: (question: QuizQuestionDraft) => void;
   focusedQuestionIds?: string[];
   onClearFocus?: () => void;
-}> = ({ canEdit, onDeriveQuestion }) => {
+}> = ({ canEdit, onDeriveQuestion, initialUnitId, initialCategory }) => {
   const { config, currentUser, authGeneration } = useAuth();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
@@ -1005,6 +1007,8 @@ const QuizBankTab: React.FC<{
   return (
     <div className="quiz-authoring-surface">
       <QuizClassAnalysis
+        initialUnitId={initialUnitId}
+        initialCategory={initialCategory}
         key={`${currentUser?.uid || ""}:${authGeneration}:${getAssessmentSemesterId(config)}`}
         editedQuestions={questions}
         onDetailData={receiveDetailData}

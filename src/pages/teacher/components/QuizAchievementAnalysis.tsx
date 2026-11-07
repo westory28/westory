@@ -64,10 +64,16 @@ export default function QuizAchievementAnalysis({
   scope,
   identityKey,
   canEdit,
+  enabled = true,
+  refreshVersion = 0,
+  onLoadingChange,
 }: {
   scope: QuizClassScope;
   identityKey: string;
   canEdit: boolean;
+  enabled?: boolean;
+  refreshVersion?: number;
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const [data, setData] = useState<QuizClassAchievement | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,7 +108,21 @@ export default function QuizAchievementAnalysis({
     setLoading(true);
     setError("");
     setData(null);
-    void getQuizClassAchievement(scope, identityKey, reload > 0)
+    setQuestionId("");
+    setProfileId("");
+    setDraftLevels({});
+    setConfirmations({});
+    if (!enabled) {
+      setLoading(false);
+      onLoadingChange?.(false);
+      return;
+    }
+    onLoadingChange?.(true);
+    void getQuizClassAchievement(
+      scope,
+      identityKey,
+      reload > 0 || refreshVersion > 1,
+    )
       .then((result) => {
         if (
           result.semesterId !== scope.semesterId ||
@@ -117,12 +137,16 @@ export default function QuizAchievementAnalysis({
         if (active) setError(quizClassAnalysisError(failure));
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          onLoadingChange?.(false);
+        }
       });
     return () => {
       active = false;
+      onLoadingChange?.(false);
     };
-  }, [requestKey, reload]);
+  }, [requestKey, reload, enabled, refreshVersion, onLoadingChange]);
   const resolveCodes = useMemo(
     () => (metadata: AchievementMetadata) => {
       if (
@@ -212,20 +236,82 @@ export default function QuizAchievementAnalysis({
   useEffect(() => {
     if (questionId) requestAnimationFrame(() => previewRef.current?.focus());
   }, [questionId]);
-  if (loading)
+  const toolbar = (
+    <div className="qaa-toolbar">
+      <label>
+        성취기준
+        <select
+          value={standardCode}
+          disabled={!enabled || loading || !data}
+          onChange={(event) => {
+            setStandardCode(event.target.value);
+            setProfileId("");
+            setDraftLevels({});
+            setConfirmations({});
+          }}
+        >
+          <option value="">전체 기준</option>
+          {(full?.standards || []).map((row) => (
+            <option key={row.code} value={row.code}>
+              {row.code} ·{" "}
+              {getHistoryAchievementStandard(row.code)?.description ||
+                "성취기준"}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        분석 보기
+        <select
+          value={view}
+          onChange={(event) => setView(Number(event.target.value))}
+        >
+          {labels.map((label, index) => (
+            <option key={label} value={index}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="qca-secondary"
+        disabled={!enabled || loading}
+        onClick={() => setReload((value) => value + 1)}
+      >
+        최신 결과 조회
+      </button>
+      <InfoHelp label="성취 분석 집계 기준">
+        학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
+        분석용 수준입니다. 점수 구간·순위·학습지 채움률로 수준을 정하지
+        않습니다. 목표 A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은
+        미분류로 남고 공식 점수와 성적은 바뀌지 않습니다.
+      </InfoHelp>
+    </div>
+  );
+  if (!enabled || loading || error || !data || !analysis || !full)
     return (
-      <p role="status" className="qca-empty">
-        성취기준과 사전 학습 근거를 불러오는 중입니다.
-      </p>
-    );
-  if (error || !data || !analysis || !full)
-    return (
-      <div role="alert" className="qca-error">
-        {error || "분석 자료를 확인하지 못했습니다."}{" "}
-        <button type="button" onClick={() => setReload((value) => value + 1)}>
-          다시 조회
-        </button>
-      </div>
+      <section className="quiz-achievement-analysis" aria-label="성취기준 분석">
+        {toolbar}
+        {error ? (
+          <div role="alert" className="qca-error">
+            {error}
+            <button
+              type="button"
+              onClick={() => setReload((value) => value + 1)}
+            >
+              다시 조회
+            </button>
+          </div>
+        ) : (
+          <p role="status" className="qca-muted">
+            {!enabled
+              ? "학급을 선택하고 결과를 조회해 주세요."
+              : "성취기준과 사전 학습 근거를 불러오는 중입니다."}
+          </p>
+        )}
+        <PendingAchievementView view={view} />
+      </section>
     );
 
   const inspect = (id: string) => {
@@ -349,55 +435,7 @@ export default function QuizAchievementAnalysis({
 
   return (
     <section className="quiz-achievement-analysis" aria-label="성취기준 분석">
-      <div className="qaa-toolbar">
-        <label>
-          성취기준
-          <select
-            value={standardCode}
-            onChange={(event) => {
-              setStandardCode(event.target.value);
-              setProfileId("");
-              setDraftLevels({});
-              setConfirmations({});
-            }}
-          >
-            <option value="">전체 기준</option>
-            {full.standards.map((row) => (
-              <option key={row.code} value={row.code}>
-                {row.code} ·{" "}
-                {getHistoryAchievementStandard(row.code)?.description ||
-                  "성취기준"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          분석 보기
-          <select
-            value={view}
-            onChange={(event) => setView(Number(event.target.value))}
-          >
-            {labels.map((label, index) => (
-              <option key={label} value={index}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="qca-secondary"
-          onClick={() => setReload((value) => value + 1)}
-        >
-          최신 결과 조회
-        </button>
-        <InfoHelp label="성취 분석 집계 기준">
-          학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
-          분석용 수준입니다. 점수 구간·순위·학습지 채움률로 수준을 정하지
-          않습니다. 목표 A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은
-          미분류로 남고 공식 점수와 성적은 바뀌지 않습니다.
-        </InfoHelp>
-      </div>
+      {toolbar}
       {data.achievementEvidence.status === "partial" && (
         <p className="qca-muted" role="status">
           일부 사전 근거 제외 · 시각·버전·보관 범위를 확인해 주세요.
@@ -1762,6 +1800,57 @@ function AdjacentLevels({
                   </tr>,
                 ];
           })}
+        </tbody>
+      </Table>
+    </>
+  );
+}
+
+function PendingAchievementView({ view }: { view: number }) {
+  const columns = [
+    ["학생 수준", "인원", "비율", "평균", "표준편차"],
+    ["문항", "출제 난도", "목표 수준", "정답률", "변별도"],
+    ["성취기준", "문항 수", "응답 학생", "정답률"],
+    ["학생", "사전 학습 근거", "확인 수준"],
+    ["학생", "문항별 정오", "정답 수"],
+  ][view];
+  return (
+    <>
+      <div className="qca-section-heading">
+        <h3>{view === 0 ? "전체 분포" : labels[view]}</h3>
+      </div>
+      {view === 0 && (
+        <div className="qaa-metrics">
+          <span>
+            점수 확인 <strong>—</strong>
+          </span>
+          <span>
+            평균 <strong>—</strong>
+          </span>
+          <span>
+            표준편차 <strong>—</strong>
+          </span>
+        </div>
+      )}
+      <Table label={view === 0 ? "학생 성취수준별 분포" : labels[view]}>
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column}>{column}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(view === 0 ? [...ACHIEVEMENT_LEVELS, "미분류"] : ["조회 전"]).map(
+            (label) => (
+              <tr key={label}>
+                <th>{label}</th>
+                {columns.slice(1).map((column) => (
+                  <td key={column}>—</td>
+                ))}
+              </tr>
+            ),
+          )}
         </tbody>
       </Table>
     </>

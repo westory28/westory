@@ -72,7 +72,11 @@ export default function QuizClassAnalysis({
   onDetailData,
   editedQuestions,
   refreshVersion,
+  initialUnitId = "",
+  initialCategory = "",
 }: {
+  initialUnitId?: string;
+  initialCategory?: string;
   canEdit: boolean;
   onEdit: (question: Question) => void;
   onDerive?: (question: QuizQuestionDraft) => void;
@@ -95,6 +99,17 @@ export default function QuizClassAnalysis({
   const [unitId, setUnitId] = useState("");
   const [assessmentId, setAssessmentId] = useState("");
   const [classId, setClassId] = useState("");
+  const [analysisMode, setAnalysisMode] = useState<"summary" | "achievement">(
+    initialCategory === "exam_prep" ? "achievement" : "summary",
+  );
+  const [achievementScope, setAchievementScope] =
+    useState<QuizClassScope | null>(null);
+  const [achievementVersion, setAchievementVersion] = useState(0);
+  const [achievementLoading, setAchievementLoading] = useState(false);
+  const initialSelection = useRef({
+    unitId: initialUnitId,
+    category: initialCategory,
+  });
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [comparisonGrade, setComparisonGrade] = useState("");
   const [comparisonOpen, setComparisonOpen] = useState(false);
@@ -139,6 +154,7 @@ export default function QuizClassAnalysis({
     setUnitId("");
     setAssessmentId("");
     setClassId("");
+    setAchievementScope(null);
     setCompareIds([]);
     setComparisonGrade("");
     setComparisonOpen(false);
@@ -164,6 +180,24 @@ export default function QuizClassAnalysis({
         if (data.semesterId !== semesterId)
           throw new Error("Semester mismatch");
         setCatalog(data);
+        const selected = data.assessments.find(
+          (entry) =>
+            entry.unitId === initialSelection.current.unitId &&
+            (!initialSelection.current.category ||
+              entry.category === initialSelection.current.category),
+        );
+        if (selected) {
+          setUnitId(selected.unitId);
+          setAssessmentId(selected.id);
+          setBigUnitId(
+            data.treeData.find((big) =>
+              big.children?.some((mid) => mid.id === selected.unitId),
+            )?.id || "__other",
+          );
+          setAnalysisMode(
+            selected.category === "exam_prep" ? "achievement" : "summary",
+          );
+        }
       })
       .catch((failure) => {
         if (active && identityRef.current === identityKey)
@@ -178,7 +212,7 @@ export default function QuizClassAnalysis({
       ++requestId.current;
       ++detailRequestId.current;
     };
-  }, [identityKey, semesterId, catalogVersion, currentUser]);
+  }, [identityKey, semesterId, catalogVersion]);
 
   const unitGroups = useMemo(() => {
     if (!catalog) return [];
@@ -212,6 +246,11 @@ export default function QuizClassAnalysis({
   const assessments =
     catalog?.assessments.filter((entry) => entry.unitId === unitId) || [];
   const assessment = assessments.find((entry) => entry.id === assessmentId);
+  const isMockExam =
+    assessment?.category === "exam_prep" ||
+    (catalogLoading && initialCategory === "exam_prep");
+  const showAchievement =
+    isMockExam && analysisMode === "achievement" && !searchOpen;
   const selectedClass = catalog?.classes.find((entry) => entry.id === classId);
   const grades = [
     ...new Set(
@@ -226,13 +265,15 @@ export default function QuizClassAnalysis({
     !!classId &&
     (searchOpen ? !!queryKeyword : !!assessment) &&
     !catalogLoading &&
-    !loading;
+    !(showAchievement ? achievementLoading : loading);
 
   const clearResult = (clearSaved = true) => {
     ++requestId.current;
     ++detailRequestId.current;
     if (clearSaved) savedAssessment.current = null;
     setSummary(null);
+    setAchievementScope(null);
+    setAchievementLoading(false);
     setLoadedScope(null);
     setDetail(null);
     setLoading(false);
@@ -240,6 +281,20 @@ export default function QuizClassAnalysis({
     setError("");
     setDetailError("");
     setFailedDetailId("");
+  };
+  const queryResults = () => {
+    if (!canQuery) return;
+    if (showAchievement && assessment) {
+      setAchievementLoading(true);
+      setAchievementScope({
+        semesterId,
+        unitId: assessment.unitId,
+        category: assessment.category,
+        examRound: assessment.examRound,
+        classIds: [classId],
+      });
+      setAchievementVersion((value) => value + 1);
+    } else void loadSummary();
   };
   const closeSearch = () => {
     clearResult(false);
@@ -450,6 +505,7 @@ export default function QuizClassAnalysis({
     if (reloadVersion.current === refreshVersion) return;
     reloadVersion.current = refreshVersion;
     savedAssessment.current = null;
+    if (achievementScope) setAchievementVersion((value) => value + 1);
     if (summary) void loadSummary(true, true);
   }, [refreshVersion]);
   const detailRecords = useMemo(
@@ -488,7 +544,7 @@ export default function QuizClassAnalysis({
           className="ws-filter-bar qca-filters"
           onSubmit={(event) => {
             event.preventDefault();
-            if (canQuery) void loadSummary();
+            queryResults();
           }}
         >
           <label className="qca-unit">
@@ -526,6 +582,13 @@ export default function QuizClassAnalysis({
                     (entry) => entry.unitId === event.target.value,
                   )?.id || "",
                 );
+                setAnalysisMode(
+                  catalog?.assessments.find(
+                    (entry) => entry.unitId === event.target.value,
+                  )?.category === "exam_prep"
+                    ? "achievement"
+                    : "summary",
+                );
               }}
             >
               <option value="">중단원 선택</option>
@@ -545,6 +608,12 @@ export default function QuizClassAnalysis({
               onChange={(event) => {
                 clearResult();
                 setAssessmentId(event.target.value);
+                setAnalysisMode(
+                  assessments.find((entry) => entry.id === event.target.value)
+                    ?.category === "exam_prep"
+                    ? "achievement"
+                    : "summary",
+                );
               }}
             >
               <option value="">평가 선택</option>
@@ -584,9 +653,6 @@ export default function QuizClassAnalysis({
             </select>
           </label>
           <div className="qca-filter-actions">
-            <button type="submit" className="qca-primary" disabled={!canQuery}>
-              {loading ? "조회 중…" : "결과 조회"}
-            </button>
             <button
               ref={comparisonButton}
               type="button"
@@ -596,7 +662,7 @@ export default function QuizClassAnalysis({
               aria-expanded={comparisonOpen}
               aria-controls={comparisonOpen ? comparisonId : undefined}
               onClick={() => setComparisonOpen(!comparisonOpen)}
-              disabled={!classId || catalogLoading}
+              disabled={!classId || catalogLoading || showAchievement}
             >
               <svg
                 width="20"
@@ -704,6 +770,11 @@ export default function QuizClassAnalysis({
               >
                 <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
               </svg>
+            </button>
+            <button type="submit" className="qca-primary" disabled={!canQuery}>
+              {(showAchievement ? achievementLoading : loading)
+                ? "조회 중…"
+                : "결과 조회"}
             </button>
           </div>
         </form>
@@ -824,12 +895,57 @@ export default function QuizClassAnalysis({
         <p className="qca-empty">등록된 평가가 없습니다.</p>
       ) : !catalog.classes.length ? (
         <p className="qca-empty">조회할 학급이 없습니다.</p>
-      ) : !summary && !error && !loading ? (
+      ) : !showAchievement && !summary && !error && !loading ? (
         <p className="qca-empty">
           평가와 학급을 선택한 뒤 결과를 조회해 주세요.
         </p>
       ) : null}
-      {error && (
+      {isMockExam && !searchOpen && (
+        <nav
+          className="ws-page-tabs qaa-detail-tabs"
+          aria-label="모의고사 분석 보기"
+        >
+          {(
+            [
+              ["achievement", "성취기준 분석"],
+              ["summary", "학급별 결과"],
+            ] as const
+          ).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              className={analysisMode === mode ? "is-active" : ""}
+              aria-pressed={analysisMode === mode}
+              onClick={() => {
+                setComparisonOpen(false);
+                setAnalysisMode(mode);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+      {showAchievement && (
+        <QuizAchievementAnalysis
+          key={`${identityKey}:${unitId}:${assessmentId}:${classId}`}
+          scope={
+            achievementScope || {
+              semesterId,
+              unitId,
+              category: "exam_prep",
+              examRound: assessment?.examRound || "",
+              classIds: [],
+            }
+          }
+          enabled={!!achievementScope}
+          refreshVersion={achievementVersion}
+          onLoadingChange={setAchievementLoading}
+          identityKey={identityKey}
+          canEdit={canEdit}
+        />
+      )}
+      {error && !showAchievement && (
         <div role="alert" className="qca-error">
           {error}
           <button
@@ -841,12 +957,12 @@ export default function QuizClassAnalysis({
           </button>
         </div>
       )}
-      {loading && (
+      {loading && !showAchievement && (
         <p className="qca-empty" role="status">
           선택한 학급의 결과를 불러오는 중입니다.
         </p>
       )}
-      {summary && (
+      {summary && !showAchievement && (
         <>
           <div className="qca-result-heading">
             <h2>{resultTitle}</h2>

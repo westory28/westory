@@ -56,7 +56,7 @@
 .qca-filter-actions {
   display: flex;
   align-items: center;
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   gap: 8px;
 }
 .qca-filters select,
@@ -107,9 +107,6 @@
 .qca-icon-button.is-active {
   border-color: var(--ws-primary, #2563eb);
   background: var(--ws-primary-soft, #eff6ff);
-}
-.qca-reset {
-  margin-left: auto;
 }
 .qca-filter-count {
   position: absolute;

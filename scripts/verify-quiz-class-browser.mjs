@@ -85,12 +85,16 @@ try{
      const layout=await page.evaluate(()=>{
        const fields=[...document.querySelectorAll('.qca-filters > label')].map(e=>e.getBoundingClientRect());
        const reset=document.querySelector('.qca-reset').getBoundingClientRect();
+       const submit=document.querySelector('.qca-filter-actions button[type=submit]').getBoundingClientRect();
+       const search=document.querySelector('.qca-search').getBoundingClientRect();
        const form=document.querySelector('.qca-filters').getBoundingClientRect();
-       return {unitWidths:fields.slice(0,2).map(r=>r.width),gap:fields[1].left-fields[0].right,right:form.right-reset.right};
+       return {unitWidths:fields.slice(0,2).map(r=>r.width),gap:fields[1].left-fields[0].right,right:form.right-submit.right,resetGap:reset.left-search.right,submitGap:submit.left-reset.right};
      });
      assert.ok(layout.unitWidths.every(value=>value>=256),'wide unit names have room');
      assert.ok(layout.gap>=16,'columns are separated');
-     assert.ok(Math.abs(layout.right)<=1,'reset is at the far right');
+     assert.ok(Math.abs(layout.right)<=1,'result query is at the far right');
+     assert.ok(Math.abs(layout.resetGap-8)<=1,'reset stays next to search');
+     assert.ok(Math.abs(layout.submitGap-8)<=1,'query stays next to reset');
    }
  }
  await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();await page.getByRole('heading',{name:'3학년 1반 · 문항·학생 상세',exact:true}).waitFor();

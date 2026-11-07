@@ -134,6 +134,9 @@ const questionSearchText = question => searchText([question.question, question.p
 
 const versionOf = (snapshots, kind) => {
   const state = dataOf(snapshots[0]);
+  // The picker catalog has no student roster, answers or result statistics.
+  // Its source triggers advance catalogGeneration independently of those data.
+  if (kind === 'catalog') return hash(JSON.stringify({ catalog: state.catalogGeneration || '' }));
   return hash(JSON.stringify(kind === 'content' ? { content: state.contentGeneration || '' }
     : { catalog: state.catalogGeneration || '', roster: state.rosterGeneration || '',
       content: state.contentGeneration || '', results: dataOf(snapshots[1]).generation || '' }));
@@ -313,8 +316,10 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   };
   const loadCatalog = async query => cached(query.semesterId, `catalog:${query.semesterId}`, '', query.forceRefresh, async () => {
     const [classes, definitions, questionDocs, treeData] = await Promise.all([
-      readBounded(db.collection('semester_classes').where('semesterId', '==', query.semesterId), 300, '학급'),
-      readBounded(db.collection('semester_assessment_definitions').where('semesterId', '==', query.semesterId), 1000, '평가'),
+      readBounded(db.collection('semester_classes').where('semesterId', '==', query.semesterId)
+        .select('status', 'grade', 'classNumber'), 300, '학급'),
+      readBounded(db.collection('semester_assessment_definitions').where('semesterId', '==', query.semesterId)
+        .select('assessmentKind', 'sourceId', 'category', 'examRound'), 1000, '평가'),
       readBounded(db.collection(`${root(query.semesterId)}/quiz_questions`).select('unitId', 'category', 'examRound'), MAX_QUESTIONS, '문항 목록'),
       loadTree(query.semesterId),
     ]);
@@ -360,7 +365,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const data = doc.data(); return { id: doc.id, label: `${data.grade}학년 ${data.classNumber}반`, grade: text(data.grade), classNumber: text(data.classNumber) };
     }).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })),
     assessments: [...assessments.values()].filter(item => item.questionCount > 0), treeData, generatedAt: new Date(now()).toISOString() };
-  });
+  }, 'catalog');
   const loadRoster = async (scope, targetClass, budget) => {
     const enrollmentDocs = await readBounded(db.collection('semester_enrollments').where('classId', '==', targetClass.id), MAX_STUDENTS * 4, '학급 명단', budget);
     const active = enrollmentDocs.filter(doc => {

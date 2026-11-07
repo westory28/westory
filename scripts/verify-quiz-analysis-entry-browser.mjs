@@ -1,0 +1,215 @@
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs/promises";
+import http from "node:http";
+import { build } from "esbuild";
+
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright"));
+const root = process.cwd();
+const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "westory-analysis-entry-"));
+const imp = (file) => JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
+const service = `
+import { useSyncExternalStore } from 'react';
+const listeners = new Set();
+export const qa = window.analysisEntryQa = {
+  calls: [], directReads: [], writes: [], pending: [], hold: '', fail: '',
+  auth: { config: {year:'2026',semester:'2'}, currentUser:{uid:'teacher-fixture',email:'fixture@example.invalid'}, userData:{role:'teacher'},authGeneration:1 },
+};
+qa.changeIdentity = (uid, semester) => {
+  qa.auth = {...qa.auth, currentUser:{uid,email:'fixture@example.invalid'},config:{year:'2026',semester},authGeneration:qa.auth.authGeneration+1};
+  listeners.forEach(listener=>listener());
+};
+qa.release = () => { const pending=qa.pending.splice(0); pending.forEach(resolve=>resolve()); };
+export const useAuth = () => useSyncExternalStore(listener=>{listeners.add(listener);return()=>listeners.delete(listener)},()=>qa.auth);
+export const db = {};
+const tree=[{id:'big',title:'조선의 성립과 발전',children:[{id:'unit-a',title:'조선의 통치 체제'}]}];
+export const doc=(_db,...parts)=>parts.join('/');
+export const getDoc=async path=>{
+  if(!path.endsWith('/curriculum/tree'))throw new Error('Unexpected direct read '+path);
+  qa.directReads.push(path);return {exists:()=>true,data:()=>({tree})};
+};
+const forbidden=(...args)=>{qa.writes.push(args);throw new Error('Unexpected write or unscoped read');};
+export const collection=forbidden,getDocs=forbidden,limit=forbidden,onSnapshot=forbidden,orderBy=forbidden,query=forbidden,where=forbidden;
+export const getHttpsCallable=()=>forbidden;
+export const executeLearningCommand=forbidden,executeAssessmentManagementCommand=forbidden,refreshPublishedQuizDefinitions=forbidden;
+export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
+export const useAppToast=()=>({showToast:()=>{}});
+export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>true;
+const classes=[1,2].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)}));
+const assessments=[{id:'normal',unitId:'unit-a',unitTitle:'조선의 통치 체제',category:'formative',examRound:'',title:'형성평가',questionCount:1},...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
+const questions=[1,2].map(n=>({id:n,docId:String(n),unitId:'exam_prep',category:'exam_prep',examRound:'round_1',type:'choice',question:n+'번 합성 문항',options:['정답','오답'],answer:'정답',paperOrder:n,points:50,sourceRevision:'1',contentRevision:1,curriculumVersion:'2018-162',achievementStandardCodes:['9역12-01'],targetAchievementLevel:'C',intendedDifficulty:'medium'}));
+const attempts=(scope,paper)=>!qa.withAttempt?[]:[{id:'fixture-result',source:'canonical',raw:{studentUid:'synthetic-1',semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt',submittedAtIso:'2026-11-07T09:00:00Z',startedAtIso:'2026-11-07T08:40:00Z',percent:100,total:2,answerChecks:paper.map(q=>({id:q.id,correct:true})),answers:{1:'정답',2:'정답'},learningSnapshot:paper,questionSnapshots:paper}}];
+export const callWithApplicationSession=async(name,input)=>{
+  if(name!=='getQuizClassAnalysis')throw new Error('Unexpected callable '+name);
+  const data=structuredClone(input);
+  qa.calls.push({...data,identity:qa.auth.currentUser.uid});
+  if(qa.hold===data.mode)await new Promise(resolve=>qa.pending.push(resolve));
+  if(qa.fail===data.mode){qa.fail='';throw new Error('Synthetic outage');}
+  if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes,assessments,treeData:tree,generatedAt:'2026-11-07T09:00:00Z'}};
+  if(data.mode==='achievement'){
+    const paper=questions.map(q=>({...q,examRound:data.examRound,achievementStandardCodes:[data.examRound==='round_1'?'9역10-01':'9역10-02']}));
+    return {data:{semesterId:data.semesterId,complete:true,students:[1,2].map(n=>({uid:'synthetic-'+n,name:'합성 미응시 '+n,number:String(n),classId:data.classIds[0]})),rawRows:attempts(data,paper),questions:paper,treeData:tree,configuredClasses:classes.filter(c=>data.classIds.includes(c.id)),generatedAt:'2026-11-07T09:00:00Z',version:'v1',achievementEvidence:{version:1,status:'ready',observations:[]},profiles:[],canReview:false}};
+  }
+  throw new Error('Unnecessary '+data.mode+' request on achievement entry');
+};
+`;
+const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';import View from ${imp("src/pages/teacher/ManageQuiz.tsx")};import ${imp("src/assets/index.css")};import ${imp("src/components/common/portalPage.css")};
+const initial=new URLSearchParams(location.search).get('entry')||'/teacher/quiz?tab=manage';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[initial]}><View/></MemoryRouter>);`;
+const bundle = await build({
+  stdin: {contents:entry,resolveDir:root,loader:"tsx"}, bundle:true,write:false,format:"esm",platform:"browser",outfile:path.join(evidence,"fixture.js"),
+  loader:{".svg":"dataurl",".webp":"dataurl",".woff":"dataurl",".woff2":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},
+  plugins:[{name:"isolated-boundaries",setup(p){
+    p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession|assessmentLifecycle|learningCommands|AppToastProvider|permissions)$/},()=>({path:"service",namespace:"fixture"}));
+    p.onResolve({filter:/(?:^|\/)(QuizEditor|QuizSettingsModal|QuizVisualPassageEditor)$/},()=>({path:"unused-editor",namespace:"fixture"}));
+    p.onLoad({filter:/.*/,namespace:"fixture"},({path:module})=>({contents:module==="service"?service:"export default function Editor(){return null}",loader:"tsx",resolveDir:root}));
+  }}],
+});
+const js = bundle.outputFiles.find(f=>f.path.endsWith(".js")).text;
+const css = bundle.outputFiles.find(f=>f.path.endsWith(".css")).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,"");
+const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+const server=http.createServer((req,res)=>{const route=new URL(req.url,"http://localhost").pathname;res.setHeader("Content-Type",route.endsWith(".js")?"text/javascript":route.endsWith(".css")?"text/css":"text/html");res.end(route.endsWith(".js")?js:route.endsWith(".css")?css:html);});
+await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+const origin=`http://127.0.0.1:${server.address().port}`;
+const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||"msedge",headless:true});
+const errors=[],screenshots=[],checks=[];
+try {
+  const page=await browser.newPage({viewport:{width:1440,height:900}});
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("**/*",route=>route.request().url().startsWith(origin)?route.continue():route.abort());
+  const modes=()=>page.evaluate(()=>window.analysisEntryQa.calls.map(call=>call.mode));
+  const assessment=()=>page.getByRole("combobox",{name:"분석할 평가",exact:true});
+  const classSelect=()=>page.getByRole("combobox",{name:"분석할 학급",exact:true});
+  const query=()=>page.getByRole("button",{name:"결과 조회",exact:true});
+  const pending=()=>page.getByText("학급을 선택하고 결과를 조회해 주세요.",{exact:true});
+  const analysis=()=>page.getByRole("region",{name:"성취기준 분석",exact:true});
+  const assertNoOverflow=async(width)=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`no page overflow at ${width}`);
+  const screenshot=async(name)=>{await page.screenshot({path:path.join(evidence,name),fullPage:true});screenshots.push(name);};
+
+  // Exercise the real ManageQuiz -> QuizBankTab -> QuizClassAnalysis route.
+  await page.goto(origin);
+  await page.getByRole("button",{name:"모의고사",exact:true}).click();
+  const readsBefore=await page.evaluate(()=>window.analysisEntryQa.directReads.length);
+  await page.getByRole("button",{name:"평가 분석",exact:true}).click();
+  await pending().waitFor();
+  assert.equal(await assessment().inputValue(),"mock-1");
+  assert.equal(await page.getByRole("combobox",{name:"분석할 중단원",exact:true}).inputValue(),"exam_prep");
+  assert.deepEqual(await modes(),["catalog"]);
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),readsBefore,"analysis reuses server catalog tree without direct Firestore tree reads");
+  assert.equal(await page.getByRole("button",{name:"성취기준 분석",exact:true}).getAttribute("aria-pressed"),"true");
+  checks.push("real management navigation preserves mock exam context");
+
+  for(const width of [320,390,768,1280,1440]){
+    await page.setViewportSize({width,height:900});
+    await assertNoOverflow(width);
+    const actions=await page.locator(".qca-filter-actions").evaluate(element=>{
+      const buttons=[...element.querySelectorAll("button")];
+      return buttons.map(button=>({label:button.getAttribute("aria-label")||button.textContent.trim(),left:button.getBoundingClientRect().left,right:button.getBoundingClientRect().right,height:button.getBoundingClientRect().height}));
+    });
+    assert.deepEqual(actions.map(a=>a.label),["학급 비교","전체 단원 검색","조회 전체 초기화","결과 조회"]);
+    assert.ok(Math.abs(actions[2].left-actions[1].right-8)<=1,"reset stays beside search");
+    assert.ok(Math.abs(actions[3].left-actions[2].right-8)<=1,"query stays beside reset");
+    assert.ok(actions.every(action=>action.height>=44));
+    await screenshot(`mock-pending-${width}.png`);
+  }
+  for(const value of ["0","1","2","3","4"]){
+    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption(value);
+    assert.ok(await analysis().getByRole("table").count()>0,"each pending view shows a table shell");
+  }
+  assert.deepEqual(await modes(),["catalog"],"changing pending analysis view never reads student records");
+  await classSelect().selectOption("class_1");
+  assert.deepEqual(await modes(),["catalog"],"class selection does not query automatically");
+  await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption("0");
+  await query().focus();await page.keyboard.press("Enter");
+  await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
+  assert.deepEqual(await modes(),["catalog","achievement"],"achievement skips summary and detail reads");
+  const last=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
+  assert.deepEqual(last.classIds,["class_1"]);assert.equal(last.category,"exam_prep");assert.equal(last.examRound,"round_1");
+  assert.ok(!Object.hasOwn(last,"comparisonGrade"));
+  assert.equal(await analysis().getByRole("region",{name:"학생 성취수준별 분포",exact:true}).getByRole("row").count(),7);
+  assert.equal(await analysis().getByText("평균 —",{exact:true}).isVisible(),true);
+  checks.push("one scoped achievement request; zero attempts remain visible without fabricated average");
+  for(const width of [320,390,768,1280,1440]){
+    await page.setViewportSize({width,height:900});await assertNoOverflow(width);
+    await screenshot(`mock-empty-${width}.png`);
+  }
+  for(const value of ["0","1","2","3","4"]){
+    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption(value);
+    assert.equal(await analysis().isVisible(),true);
+  }
+  assert.deepEqual(await modes(),["catalog","achievement"]);
+
+  // Assessment-specific criterion filters must never carry into another round.
+  await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
+  await query().click();await analysis().getByText("첫 제출 1명",{exact:true}).waitFor();
+  await analysis().getByRole("combobox",{name:"성취기준",exact:true}).selectOption("9역10-01");
+  await assessment().selectOption("mock-2");await pending().waitFor();
+  assert.equal(await analysis().getByRole("combobox",{name:"성취기준",exact:true}).inputValue(),"");
+  await query().click();await analysis().getByText("첫 제출 1명",{exact:true}).waitFor();
+  assert.equal(await analysis().getByRole("combobox",{name:"성취기준",exact:true}).inputValue(),"");
+  assert.equal(await analysis().getByRole("option",{name:/9역10-02/}).count(),1);
+  assert.equal(await analysis().getByRole("option",{name:/9역10-01/}).count(),0);
+  await page.evaluate(()=>window.analysisEntryQa.withAttempt=false);
+  await assessment().selectOption("mock-1");await query().click();
+  await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
+  checks.push("round change resets criterion filters and uses the new round metadata");
+
+  await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
+  await query().click();await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
+  await page.getByRole("button",{name:"학급별 결과",exact:true}).click();
+  assert.equal(await query().isEnabled(),true,"leaving pending achievement mode releases query loading state");
+  await page.evaluate(()=>{window.analysisEntryQa.hold="";window.analysisEntryQa.release();});
+  await page.getByRole("button",{name:"성취기준 분석",exact:true}).click();
+  await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
+  checks.push("leaving a pending analysis does not lock the result query action");
+
+  // Failed requests preserve the controls and recover only when requested.
+  await page.evaluate(()=>window.analysisEntryQa.fail="achievement");
+  await query().click();await analysis().getByRole("alert").waitFor();
+  assert.equal(await assessment().inputValue(),"mock-1");assert.equal(await classSelect().inputValue(),"class_1");
+  await analysis().getByRole("button",{name:"다시 조회",exact:true}).click();
+  await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
+  checks.push("failure and explicit retry preserve selected assessment and class");
+
+  // Slow requests cannot restore a previous class, identity, or semester.
+  for(const change of ["class","identity","semester"]){
+    await analysis().getByRole("combobox",{name:"분석 보기",exact:true}).selectOption("0");
+    await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
+    await query().click();await page.getByRole("button",{name:"조회 중…",exact:true}).waitFor();
+    await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
+    if(change==="class")await classSelect().selectOption("class_2");
+    if(change==="identity")await page.evaluate(()=>window.analysisEntryQa.changeIdentity("teacher-next","2"));
+    if(change==="semester")await page.evaluate(()=>window.analysisEntryQa.changeIdentity("teacher-next","1"));
+    await pending().waitFor();
+    await page.evaluate(()=>{window.analysisEntryQa.hold="";window.analysisEntryQa.release();});
+    await page.waitForTimeout(100);
+    assert.equal(await analysis().getByText("첫 제출 0명",{exact:true}).count(),0,`late ${change} response discarded`);
+    assert.equal(await pending().isVisible(),true);
+    if(change!=="class")await classSelect().selectOption("class_1");
+    await query().click();await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
+    const latest=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
+    assert.equal(latest.semesterId,change==="semester"?"2026-1":"2026-2");
+    if(change!=="class")assert.equal(latest.identity,"teacher-next");
+  }
+  checks.push("pending responses discarded on class, identity and semester changes");
+
+  // Direct analysis entry must not load the editor's curriculum or submissions.
+  await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=exam_prep&category=exam_prep")}`);
+  await pending().waitFor();
+  assert.deepEqual(await modes(),["catalog"]);
+  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.directReads),[]);
+  assert.equal(await assessment().inputValue(),"mock-1");
+  await page.getByRole("button",{name:"조회 전체 초기화",exact:true}).click();
+  assert.equal(await assessment().inputValue(),"");
+  assert.deepEqual(await modes(),["catalog"],"reset is local");
+  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
+  checks.push("direct analysis entry and reset use no editor reads or writes");
+  assert.deepEqual(errors,[]);
+  console.log(`PASS ${checks.join("; ")}; 320/390/768/1280/1440px layouts`);
+} finally {
+  await browser.close();server.close();
+  await fs.writeFile(path.join(evidence,"result.json"),JSON.stringify({checks,errors,screenshots},null,2));
+  console.log(evidence);
+}

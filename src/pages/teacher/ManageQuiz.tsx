@@ -58,18 +58,21 @@ const ManageQuiz: React.FC = () => {
   }, [requestedTab, searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (!isManageTab || !canRead) return;
+    let active = true;
     const loadTree = async () => {
       try {
         const semesterTree = await getDoc(
           doc(db, getSemesterDocPath(config, "curriculum", "tree")),
         );
+        if (!active) return;
         if (semesterTree.exists()) {
           setTreeData(semesterTree.data().tree || []);
           return;
         }
 
         const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
-        if (legacyTree.exists()) {
+        if (active && legacyTree.exists()) {
           setTreeData(legacyTree.data().tree || []);
         }
       } catch (error) {
@@ -77,7 +80,10 @@ const ManageQuiz: React.FC = () => {
       }
     };
     void loadTree();
-  }, [config?.year, config?.semester]);
+    return () => {
+      active = false;
+    };
+  }, [config?.year, config?.semester, isManageTab, canRead]);
 
   if (!canRead) return null;
 
@@ -160,7 +166,13 @@ const ManageQuiz: React.FC = () => {
                 className={activeTab === tab.id ? "is-active" : ""}
                 onClick={() => {
                   setSourceQuestion(null);
-                  setSearchParams({ tab: tab.id });
+                  const nextParams = new URLSearchParams({ tab: tab.id });
+                  if (selectedNode) {
+                    nextParams.set("unitId", selectedNode.id);
+                    if (selectedNodeType === "special")
+                      nextParams.set("category", "exam_prep");
+                  }
+                  setSearchParams(nextParams);
                 }}
               >
                 <i className={`fas ${tab.icon}`} aria-hidden="true" />
@@ -200,6 +212,8 @@ const ManageQuiz: React.FC = () => {
         {activeTab === "analysis" && (
           <div>
             <QuizBankTab
+              initialUnitId={searchParams.get("unitId") || ""}
+              initialCategory={searchParams.get("category") || ""}
               canEdit={canWrite}
               onDeriveQuestion={openDerivedQuestion}
             />
