@@ -1228,6 +1228,11 @@ const ScopedScoreConfirmationView: React.FC<
     detailVisitRequired ||
     signatureBlockedByPendingRequest ||
     signatureActionPending;
+  const signatureReviewDisabled =
+    signatureButtonDisabled ||
+    !signatureConsent ||
+    !signatureDrawn ||
+    signatureDetailScope !== currentDetailScope;
   const signatureBlockedReasons = [
     signatureBlockedByPendingObjection
       ? `이의 제기 처리 대기 중인 ${resolvedCopy.scoreLabel} 점수가 있습니다${
@@ -3741,10 +3746,8 @@ const ScopedScoreConfirmationView: React.FC<
                 <button
                   type="button"
                   onClick={moveToSignatureReview}
-                  disabled={
-                    signatureActionPending || signatureBlockedByPendingRequest
-                  }
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+                  disabled={signatureReviewDisabled}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
                 >
                   확인 내용 검토
                 </button>
@@ -3752,10 +3755,8 @@ const ScopedScoreConfirmationView: React.FC<
                 <button
                   type="button"
                   onClick={() => void submitSignatureConfirmation()}
-                  disabled={
-                    signatureActionPending || signatureBlockedByPendingRequest
-                  }
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+                  disabled={signatureReviewDisabled || !signatureImageDraft}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
                 >
                   {confirming ? "제출 중..." : "제출하기"}
                 </button>

@@ -4,6 +4,19 @@
   align-items: center;
 }
 
+.performance-score-navigation.ws-page-tabs > .performance-score-tab > button {
+  min-height: 56px;
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.performance-score-navigation.ws-page-tabs
+  > .performance-score-tab
+  > button:is(:hover, [aria-current="page"]) {
+  color: var(--ws-primary, #2563eb);
+}
+
 .performance-score-workspace h2 {
   overflow-wrap: anywhere;
 }

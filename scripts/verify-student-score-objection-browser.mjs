@@ -237,19 +237,7 @@ try {
       name: "점수 확인 및 서명하기",
       exact: true,
     });
-  const openSignatureReview = async (page, ordinals = [1]) => {
-    for (const ordinal of ordinals) await selectAssessment(page, ordinal);
-    assert.equal(await signAction(page).isEnabled(), true);
-    await signAction(page).click();
-    const signing = page.locator("section").filter({
-      has: page.getByRole("heading", {
-        name: "수행평가 점수 확인 및 서명",
-        exact: true,
-      }),
-    });
-    await signing
-      .getByRole("button", { name: "동의합니다", exact: true })
-      .click();
+  const drawSignature = async (page, signing) => {
     const canvas = signing.getByLabel("점수 확인 서명 그리기 칸", {
       exact: true,
     });
@@ -269,12 +257,35 @@ try {
         { steps: 3 },
       );
     await page.mouse.up();
+  };
+  const openSignatureReview = async (page, ordinals = [1]) => {
+    for (const ordinal of ordinals) await selectAssessment(page, ordinal);
+    assert.equal(await signAction(page).isEnabled(), true);
+    await signAction(page).click();
+    const signing = page.locator("section").filter({
+      has: page.getByRole("heading", {
+        name: "수행평가 점수 확인 및 서명",
+        exact: true,
+      }),
+    });
+    const reviewAction = signing.getByRole("button", {
+      name: "확인 내용 검토",
+      exact: true,
+    });
+    assert.equal(await reviewAction.isDisabled(), true, "Consent and signature are required before review");
+    await signing
+      .getByRole("button", { name: "동의합니다", exact: true })
+      .click();
+    assert.equal(await reviewAction.isDisabled(), true, "Consent alone must not enable review");
+    await drawSignature(page, signing);
+    assert.equal(await reviewAction.isEnabled(), true);
     await signing
       .getByRole("button", { name: "확인 내용 검토", exact: true })
       .click();
     await signing
       .getByRole("button", { name: "제출하기", exact: true })
       .waitFor();
+    assert.equal(await signing.getByRole("button", { name: "제출하기", exact: true }).isEnabled(), true);
     return signing;
   };
   const assessmentChoice = (page, ordinal) =>
@@ -292,10 +303,22 @@ try {
   };
   const firstTitle = "하여가와 단심가 다시 쓰기(논술형)";
   const secondTitle = "조선 시대 신분 질서와 변화의 모습을 설명하기";
-  for (const width of [390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await createPage(width, `?layout&registered-pair${width === 768 ? "&legacy-order" : ""}`);
     await assessmentChoice(page, 1).waitFor();
     assert.deepEqual(await page.locator(".performance-score-tab > button").allTextContents(), ["1차 수행평가", "2차 수행평가"]);
+    const tabStyles = await page.locator(".performance-score-tab > button").evaluateAll(buttons => buttons.map(button => {
+      const style = getComputedStyle(button);
+      return { fontSize: style.fontSize, fontWeight: style.fontWeight, color: style.color, height: button.getBoundingClientRect().height };
+    }));
+    for (const style of tabStyles) {
+      assert.equal(style.fontSize, "18px");
+      assert.equal(style.fontWeight, "800");
+      assert.equal(style.color, "rgb(30, 58, 138)");
+      assert.ok(style.height >= 56);
+    }
+    await page.screenshot({ path: `${out}/assessment-choices-${width}.png`, fullPage: true });
+    report.screenshots.push(`assessment-choices-${width}.png`);
     const firstHeading = page.getByRole("heading", {
       name: firstTitle,
       exact: true,
@@ -362,10 +385,34 @@ try {
       await page.evaluate(() => window.studentScoreQa.confirmations.size),
       0,
     );
+    const signing = await openSignatureReview(page, [1, 2]);
+    await signing.getByRole("button", { name: "서명 수정", exact: true }).click();
+    const reviewAction = signing.getByRole("button", { name: "확인 내용 검토", exact: true });
+    assert.equal(await reviewAction.isDisabled(), true, "Editing requires a new signature");
+    await drawSignature(page, signing);
+    assert.equal(await reviewAction.isEnabled(), true);
+    await signing.getByRole("button", { name: "지우기", exact: true }).click();
+    assert.equal(await reviewAction.isDisabled(), true, "Clearing a signature disables review");
+    await drawSignature(page, signing);
+    await signing.getByRole("button", { name: "동의 완료", exact: true }).click();
+    assert.equal(await reviewAction.isDisabled(), true, "Revoking consent disables review");
+    assert.equal(await signing.getByLabel("점수 확인 서명 그리기 칸", { exact: true }).count(), 0);
+    await reviewAction.hover();
+    await page.waitForTimeout(200);
+    assert.equal(await reviewAction.evaluate(button => getComputedStyle(button).backgroundColor), "rgb(203, 213, 225)");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+    await page.screenshot({ path: `${out}/signature-incomplete-${width}.png`, fullPage: true });
+    report.screenshots.push(`signature-incomplete-${width}.png`);
+    await signing.getByRole("button", { name: "동의합니다", exact: true }).click();
+    assert.equal(await reviewAction.isDisabled(), true, "Re-consent must not reuse the cleared signature");
+    await drawSignature(page, signing);
+    await reviewAction.click();
+    assert.equal(await signing.getByRole("button", { name: "제출하기", exact: true }).isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.studentScoreQa.confirmations.size), 0);
     await page.close();
   }
   report.checks.push(
-    "390/768/1280: initial selection, full-title help via keyboard, hover or touch, and repeat visits to just one tab do not unlock signing. Both entered assessments, including a registered zero, require explicit visits again on re-entry. Navigation produces zero writes.",
+    "320/390/768/1280/1440: prominent assessment choices, keyboard/help navigation and explicit visits to both registered assessments. Consent plus a drawn signature enables review/submission; edit, clear and revoked consent disable it again, including after re-consent. Disabled actions remain gray on hover. No signature writes or document overflow.",
   );
   for (const width of [390, 768, 1280]) {
     const page = await createPage(width, "?layout&blank-pair&noconsent");
@@ -1306,6 +1353,22 @@ try {
     0,
   );
   report.checks.push("Load failure and excluded roster block request UI.");
+  const writtenSigningPage = await createPage(390, "?written");
+  await signAction(writtenSigningPage).click();
+  const writtenSigning = writtenSigningPage.locator("section").filter({
+    has: writtenSigningPage.getByRole("heading", { name: "정기시험 점수 확인 및 서명", exact: true }),
+  });
+  const writtenReviewAction = writtenSigning.getByRole("button", { name: "확인 내용 검토", exact: true });
+  assert.equal(await writtenReviewAction.isDisabled(), true);
+  await writtenSigning.getByRole("button", { name: "동의합니다", exact: true }).click();
+  assert.equal(await writtenReviewAction.isDisabled(), true);
+  await drawSignature(writtenSigningPage, writtenSigning);
+  assert.equal(await writtenReviewAction.isEnabled(), true);
+  await writtenReviewAction.click();
+  assert.equal(await writtenSigning.getByRole("button", { name: "제출하기", exact: true }).isEnabled(), true);
+  assert.equal(await writtenSigningPage.evaluate(() => window.studentScoreQa.confirmations.size), 0);
+  await writtenSigningPage.close();
+  report.checks.push("Shared written-exam signature view requires consent plus a drawn signature before review/submission; no signature writes.");
   assert.deepEqual(report.pageErrors, []);
   await fs.writeFile(
     out + "/student-objection-report.json",
