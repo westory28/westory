@@ -321,8 +321,8 @@ const planAssessmentRelease = async (
   quizTarget?: { sourceId: string; category: string; examRounds?: string[] },
 ): Promise<AssessmentReleasePlan> => {
   const resolved = getYearSemester(config);
-  const [gradeClasses, history] = await Promise.all([
-    getGrade3ClassIdsFromSchoolConfig(),
+  const [settings, history] = await Promise.all([
+    readAssessmentConfigMap(resolved),
     quizTarget
       ? Promise.resolve(null)
       : getDocs(
@@ -332,7 +332,7 @@ const planAssessmentRelease = async (
           ),
         ),
   ]);
-  const settings = await readAssessmentConfigMap(resolved, gradeClasses);
+  let legacyGradeClasses: Promise<string[]> | undefined;
   const payloads: Data[] = [];
   for (const [key, entry] of Object.entries(settings)) {
     if (!entry.active) continue;
@@ -366,6 +366,9 @@ const planAssessmentRelease = async (
           ([, value]) => value !== undefined,
         ),
       ),
+      visibleClassIds: entry.hasExplicitClassVisibility
+        ? entry.visibleClassIds
+        : await (legacyGradeClasses ??= getGrade3ClassIdsFromSchoolConfig()),
       visibilityVersion: 2,
     };
     payloads.push(

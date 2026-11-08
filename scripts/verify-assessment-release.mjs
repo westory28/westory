@@ -60,6 +60,7 @@ function harness() {
   const browserReads = [];
   const browserQueries = [];
   const browserDocumentReads = [];
+  const schoolClassReads = [];
   const operations = new Map();
   let afterCommand;
   let afterRead;
@@ -100,7 +101,13 @@ function harness() {
         operations.delete(key);
         return value;
       } };
-      if (name === "./assessmentConfig") return { getGrade3ClassIdsFromSchoolConfig: async () => ["3-1"], readAssessmentConfigMap: async () => clone(docs.get(`${root}/assessment_config/settings`)) };
+      if (name === "./assessmentConfig") return {
+        getGrade3ClassIdsFromSchoolConfig: async () => { schoolClassReads.push("school_config-or-roster"); return ["3-1"]; },
+        readAssessmentConfigMap: async () => Object.fromEntries(Object.entries(clone(docs.get(`${root}/assessment_config/settings`)) || {}).map(([key, entry]) => [key, {
+          ...entry, visibleClassIds: Array.isArray(entry.visibleClassIds) ? entry.visibleClassIds : [],
+          hasExplicitClassVisibility: Array.isArray(entry.visibleClassIds) || Number(entry.visibilityVersion || 0) >= 2,
+        }])),
+      };
       if (name === "./assessmentLifecycle") return {
         buildAssessmentDefinitionId: (...args) => [args[1].toLowerCase(), args[0], ...args.slice(2)].filter(Boolean).join(":"),
         executeAssessmentManagementCommand: async (commandType, raw) => {
@@ -114,7 +121,7 @@ function harness() {
       throw new Error(name);
     },
   });
-  return { api: module.exports, docs, calls, browserReads, browserQueries, browserDocumentReads, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
+  return { api: module.exports, docs, calls, browserReads, browserQueries, browserDocumentReads, schoolClassReads, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
     command: (commandType, raw) => adapter.apply({ transaction, commandId: "direct-test", commandType,
       payload: serverModule.exports.normalizeAssessmentPayload(commandType, raw), timestamp: "2026-10-08T00:00:00.000Z",
       actor: { actorUid: "teacher-a", actorRole: "teacher" } }) };
@@ -209,6 +216,44 @@ for (const explicitFirstRound of [false, true]) {
   assert.equal(browserReads.some(path => path.includes("history_classrooms") || path.includes("unit_2")), false);
 }
 console.log("PASS targeted mock-exam refresh preserves all active rounds, legacy first-round fallback and explicit-round precedence");
+{
+  const legacySettings = { ...settings, visibleTargetGrade: "2" };
+  delete legacySettings.visibleClassIds;
+  delete legacySettings.visibilityVersion;
+  for (const scenario of ["explicit", "explicit-empty", "version-only", "inactive-legacy", "unrelated-legacy"]) {
+    const { api, docs, schoolClassReads } = harness();
+    const map = docs.get(`${root}/assessment_config/settings`);
+    if (scenario === "explicit-empty") map.unit_1_diagnostic = { ...settings, visibleClassIds: [] };
+    if (scenario === "version-only") { map.unit_1_diagnostic = { ...legacySettings, visibilityVersion: 2 }; }
+    if (scenario === "inactive-legacy") map.unit_1_diagnostic = { ...legacySettings, active: false };
+    if (scenario === "unrelated-legacy") map.unit_2_diagnostic = { ...legacySettings };
+    if (["explicit-empty", "version-only"].includes(scenario))
+      await assert.rejects(api.refreshPublishedQuizDefinitions(config, "unit_1", "diagnostic"), /공개할 학급을 선택/);
+    else await api.refreshPublishedQuizDefinitions(config, "unit_1", "diagnostic");
+    assert.equal(schoolClassReads.length, 0, `${scenario} must not read school settings or student roster fallbacks`);
+  }
+  const { api, docs, calls, schoolClassReads } = harness();
+  for (const round of [1, 2]) docs.set(`${root}/quiz_questions/lazy-${round}`, {
+    id: `lazy-${round}`, unitId: "exam_prep", category: "exam_prep", examRound: `round_${round}`, paperOrder: 1, points: 4,
+    type: "word", question: "학급 범위 합성 검증", answer: "명", contentRevision: 1,
+  });
+  docs.set(`${root}/assessment_config/settings`, {
+    exam_prep_exam_prep: { ...legacySettings },
+    exam_prep_exam_prep__round_1: { ...settings },
+    exam_prep_exam_prep__round_2: { ...legacySettings },
+  });
+  await api.refreshPublishedQuizDefinitions(config, "exam_prep", "exam_prep", ["round_1"]);
+  assert.equal(schoolClassReads.length, 0, "A shadowed first-round key and an unrelated legacy round never request default classes");
+  docs.get(`${root}/assessment_config/settings`).exam_prep_exam_prep__round_1 = { ...legacySettings };
+  await api.refreshPublishedQuizDefinitions(config, "exam_prep", "exam_prep", ["round_1", "round_2"]);
+  assert.equal(schoolClassReads.length, 1, "Multiple active legacy targets share one lazy class lookup per plan");
+  for (const call of calls.slice(-2)) {
+    assert.deepEqual(call.payload.assignedClassIds, ["3-1"]);
+    assert.deepEqual(call.payload.presentationSettings.visibleClassIds, ["3-1"]);
+    assert.equal(call.payload.presentationSettings.visibleTargetGrade, "2", "Preserve existing grade-token normalization; legacy classes still use the historical grade-three default");
+  }
+  console.log("PASS explicit active/empty, inactive or out-of-scope legacy targets skip school/roster reads; active relevant legacy targets lazily share one grade-three fallback");
+}
 {
   const { api, docs, calls } = harness();
   const paper = (id, examRound, paperOrder, points) => ({
