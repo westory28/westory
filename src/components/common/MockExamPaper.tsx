@@ -30,6 +30,7 @@ import {
   type MockExamPassageSet,
 } from "../../lib/mockExamMaterials";
 import "./mockExamPaper.css";
+import MockExamPencilScore, { PencilStrokes } from "./MockExamPencilScore";
 
 export interface MockExamPaperQuestion {
   id: string | number;
@@ -172,15 +173,7 @@ export function MockExamPaperHeader({
     <>
       <div className="mock-exam-cover-line">
         {heading && <p className="mock-exam-paper-heading">{heading}</p>}
-        {score != null && (
-          <strong
-            className="mock-exam-score"
-            aria-label={`점수 ${score}점, 100점 만점`}
-          >
-            {score}
-            <small>/100</small>
-          </strong>
-        )}
+        {score != null && <MockExamPencilScore score={score} />}
         <table className="mock-exam-approval" aria-label="시험지 결재란">
           <thead>
             <tr>
@@ -428,14 +421,21 @@ export function MockExamSetPassage({
 function PencilMark({
   correct,
   animate = false,
+  variant = 0,
 }: {
   correct: boolean | null;
   animate?: boolean;
+  variant?: number;
 }) {
   const maskId = useId();
   if (correct == null) return null;
   const stroke = correct
-    ? "M59 12C41 2 17 8 10 29C1 53 20 72 43 70C64 69 76 48 70 29C67 17 57 9 47 8"
+    ? [
+        "M58 9C46 5 29 12 19 20C11 26 7 37 8 47C7 58 13 66 24 68C37 72 52 64 62 57C73 48 75 38 70 27C67 16 57 9 46 11L38 14",
+        "M63 15C49 5 29 7 16 16C7 24 6 37 10 48C12 59 23 66 36 67C51 69 65 62 70 50C75 38 70 24 59 17C52 12 42 10 34 12",
+        "M51 7C36 8 20 17 13 28C6 38 7 53 16 62C24 71 37 70 50 65C64 60 72 49 71 36C72 24 64 12 54 9C47 6 39 10 35 12",
+        "M61 13C46 6 31 10 20 17C10 23 5 35 9 47C11 59 20 66 34 68C47 71 65 63 71 53C77 41 69 26 60 20C53 15 45 14 40 15",
+      ][variant % 4]
     : "M63 9C54 24 43 38 34 49L17 70";
   return (
     <span
@@ -443,7 +443,22 @@ function PencilMark({
       role="img"
       aria-label={correct ? "정답" : "오답"}
     >
-      <svg viewBox="0 0 80 80" aria-hidden="true">
+      <svg
+        viewBox="0 0 80 80"
+        aria-hidden="true"
+        style={
+          correct
+            ? {
+                transform: [
+                  "rotate(-13deg) scale(1.18, 0.85)",
+                  "rotate(9deg) scale(1.22, 0.81)",
+                  "rotate(-18deg) scale(1.1, 0.91)",
+                  "rotate(5deg) scale(1.16, 0.84)",
+                ][variant % 4],
+              }
+            : undefined
+        }
+      >
         <defs>
           <mask
             id={maskId}
@@ -461,18 +476,7 @@ function PencilMark({
           </mask>
         </defs>
         <g mask={`url(#${maskId})`}>
-          <path className="mock-exam-pencil-core" d={stroke} />
-          <path
-            className="mock-exam-pencil-grain"
-            d={stroke}
-            transform="translate(0.8 -0.7)"
-          />
-          <path
-            className="mock-exam-pencil-grain is-light"
-            d={stroke}
-            transform="translate(-0.9 0.8)"
-          />
-          <path className="mock-exam-pencil-fiber" d={stroke} />
+          <PencilStrokes d={stroke} />
         </g>
       </svg>
     </span>
@@ -990,6 +994,7 @@ export default function MockExamPaper({
                               index < gradingIndex ||
                               (index === gradingIndex && gradingDrawing)) && (
                               <PencilMark
+                                variant={index}
                                 correct={
                                   checkMap.get(String(question.id)) ?? null
                                 }

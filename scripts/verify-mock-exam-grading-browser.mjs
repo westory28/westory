@@ -49,11 +49,13 @@ const entry = `
 import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
 import Workspace from './src/pages/student/quiz/MockExamWorkspace';
 import Paper from './src/components/common/MockExamPaper';
+import PencilScore from './src/components/common/MockExamPencilScore';
 const questions=${JSON.stringify(questions)};const params=new URLSearchParams(location.search);
 const zero=params.has('zero');const checks=questions.map((question,index)=>({id:question.id,correct:zero?false:index%2===0}));
 const answers=Object.fromEntries(questions.map(question=>[question.id,'성균관']));
 window.gradingFixture={submits:0,selects:[],checks};
 function App(){const [result,setResult]=useState(false);const [index,setIndex]=useState(0);
+if(params.has('scores'))return <div style={{padding:32,display:'grid',gap:28}}>{[0,100,95.00,73.50,12.34,56.78,90.01].map(value=><div key={value} style={{display:'flex',alignItems:'center',gap:24}}><span style={{width:70}}>{value}점</span><PencilScore score={value}/></div>)}</div>;
 if(params.has('history'))return <><div style={{height:120}}>과거 기록 검증</div><Paper questions={questions} answers={answers} score={73.5} checks={checks}/></>;
 return <Workspace questions={questions} answers={answers} round="round_1" studentLabel="3학년 1반 1번 가상 학생" currentIndex={index} onSelect={next=>{window.gradingFixture.selects.push(next);setIndex(next)}} onSubmit={()=>{window.gradingFixture.submits++;setResult(true)}} timeLeft={600} score={result?(zero?0:73.5):undefined} checks={result?checks:[]} />;
 }createRoot(document.getElementById('root')).render(<App/>);`;
@@ -403,6 +405,33 @@ try {
     "Historical paper does not take over scrolling",
   );
   await history.close();
+  const scores = await browser.newPage({
+    viewport: { width: 390, height: 800 },
+  });
+  await scores.goto(origin + "?scores");
+  assert.deepEqual(
+    await scores.locator(".mock-exam-score").allTextContents(),
+    [
+      "0/100",
+      "100/100",
+      "95/100",
+      "73.5/100",
+      "12.34/100",
+      "56.78/100",
+      "90.01/100",
+    ],
+    "Integer scores omit decimals while fractional scores retain meaningful digits",
+  );
+  assert.equal(
+    await scores
+      .getByRole("img", { name: "점수 100점, 100점 만점", exact: true })
+      .count(),
+    1,
+  );
+  await scores.screenshot({
+    path: path.join(evidence, "pencil-score-numerals.png"),
+  });
+  await scores.close();
   assert.deepEqual(errors, [], "No browser exceptions");
   await fs.writeFile(
     path.join(evidence, "report.json"),

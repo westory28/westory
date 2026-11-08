@@ -131,17 +131,25 @@
   opacity: 0.65;
 }
 .mock-exam-score {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
   color: #b91c1c;
-  font:
-    italic 700 44px/1 "Noto Serif KR",
-    serif;
-  transform: rotate(-8deg);
-  border-bottom: 2px solid currentColor;
-  padding: 0 8px;
+  transform: rotate(-5deg);
+  line-height: 1;
 }
-.mock-exam-score small {
-  font-size: 20px;
-  padding-left: 4px;
+.mock-exam-score-pencil {
+  display: block;
+  height: 62px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.mock-exam-score-underline {
+  stroke-width: 1.8;
 }
 .mock-exam-instructions {
   border: 1px solid #111;
