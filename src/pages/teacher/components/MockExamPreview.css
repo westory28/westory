@@ -22,10 +22,25 @@
   padding: 8px;
   font: inherit;
 }
-.quiz-composer-header.mock-exam-preview-toolbar > button {
+.mock-exam-preview-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+.mock-exam-preview-actions > button {
   min-height: 44px;
   padding: 8px 12px;
   font-size: 14px;
+}
+.quiz-authoring-button.mock-exam-preview-grade {
+  background: var(--ws-danger-text, #b91c1c);
+  border-color: var(--ws-danger-text, #b91c1c);
+  color: #fff;
+}
+.quiz-authoring-button.mock-exam-preview-grade:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
 }
 .mock-exam-preview-round select:focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);
@@ -44,6 +59,32 @@
 .mock-exam-preview-footer .quiz-composer-footer-actions {
   flex-wrap: nowrap;
   gap: 8px;
+}
+@media (max-width: 480px) {
+  .quiz-composer-header.mock-exam-preview-toolbar {
+    padding-inline: 8px;
+  }
+  .mock-exam-preview-round {
+    gap: 4px;
+    font-size: 12px;
+  }
+  .mock-exam-preview-round select {
+    padding-inline: 4px;
+  }
+  .mock-exam-preview-round-prefix {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .mock-exam-preview-actions {
+    gap: 4px;
+  }
+  .mock-exam-preview-actions > button {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
 }
 @media (max-width: 389px) {
   .quiz-composer-footer.mock-exam-preview-footer {

@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { formatMockExamRoundShortLabel } from "../../../lib/mockExamRounds";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import {
@@ -8,6 +14,7 @@ import {
 import { useQuizDialog } from "./useQuizDialog";
 import MockExamPaper, {
   MockExamQuestionContent,
+  type MockExamPaperCheck,
 } from "../../../components/common/MockExamPaper";
 import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
 import "./MockExamPreview.css";
@@ -29,6 +36,7 @@ export default function MockExamPreview({
   loadPaperHeader,
 }: Props) {
   const dialog = useRef<HTMLDivElement>(null);
+  const previewButton = useRef<HTMLButtonElement>(null);
   const [questions, setQuestions] = useState<QuizQuestionDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -44,6 +52,12 @@ export default function MockExamPreview({
     Record<string, string>
   >({});
   const [questionIndex, setQuestionIndex] = useState<number | null>(null);
+  const [previewResult, setPreviewResult] = useState<{
+    checks: MockExamPaperCheck[];
+    score: number;
+  } | null>(null);
+  const [isGrading, setIsGrading] = useState(false);
+  const [gradingRun, setGradingRun] = useState(0);
   const [selectedQuestionId, setSelectedQuestionId] = useState<
     string | number | null
   >(null);
@@ -61,6 +75,8 @@ export default function MockExamPreview({
   const close = () => {
     setQuestions([]);
     setPracticeAnswers({});
+    setPreviewResult(null);
+    setIsGrading(false);
     setQuestionIndex(null);
     setSelectedQuestionId(null);
     setPaperHeaders({});
@@ -114,6 +130,12 @@ export default function MockExamPreview({
     questionIndex == null ? close() : returnToPaper(),
   );
   useEffect(() => {
+    if (!questions.length) return;
+    // Safari does not focus a clicked button. Restore the trigger explicitly
+    // after useQuizDialog releases its scroll lock and previous focus.
+    return () => previewButton.current?.focus({ preventScroll: true });
+  }, [questions.length]);
+  useEffect(() => {
     if (questionIndex == null) return;
     if (body.current) body.current.scrollTop = 0;
     backButton.current?.focus();
@@ -153,17 +175,63 @@ export default function MockExamPreview({
       if (active.current) setBusy(false);
     }
   };
-  const previewQuestions = questions
-    .filter((q) => (q.examRound || "round_1") === previewRound)
-    .sort(
-      (a, b) => Number(a.paperOrder || a.id) - Number(b.paperOrder || b.id),
+  const previewQuestions = useMemo(
+    () =>
+      questions
+        .filter((q) => (q.examRound || "round_1") === previewRound)
+        .sort(
+          (a, b) => Number(a.paperOrder || a.id) - Number(b.paperOrder || b.id),
+        ),
+    [questions, previewRound],
+  );
+  const headerReady = !loadPaperHeader || !!paperHeaders[previewRound];
+  const gradePreview = () => {
+    if (isGrading || !headerReady || !previewQuestions.length) return;
+    // Match assessmentLifecycle's whitespace comparison and weighted percentage.
+    // This is a local teacher rehearsal; it never submits a student attempt.
+    const normalize = (value: unknown) =>
+      String(value ?? "")
+        .replace(/\s+/g, "")
+        .trim();
+    const checks = previewQuestions.map((question) => ({
+      id: question.id,
+      correct:
+        !!normalize(question.answer) &&
+        normalize(practiceAnswers[String(question.id)]) ===
+          normalize(question.answer),
+    }));
+    const points = previewQuestions.map((question) =>
+      Number.isFinite(question.points) ? question.points! : 1,
     );
+    const roundedPoints = (value: number) => Math.round(value * 10000) / 10000;
+    const total = roundedPoints(points.reduce((sum, value) => sum + value, 0));
+    const earned = roundedPoints(
+      points.reduce(
+        (sum, value, index) => sum + (checks[index].correct ? value : 0),
+        0,
+      ),
+    );
+    setPreviewResult({
+      checks,
+      score: total > 0 ? Math.round((earned / total) * 10000) / 100 : 0,
+    });
+    setQuestionIndex(null);
+    setSelectedQuestionId(null);
+    setIsGrading(true);
+    setGradingRun((previous) => previous + 1);
+    paperScroll.current = 0;
+  };
+  const showFinalScore = useCallback(() => {
+    setIsGrading(false);
+    body.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, []);
   const currentQuestion =
     questionIndex == null ? null : previewQuestions[questionIndex];
 
   return (
     <>
       <button
+        ref={previewButton}
         type="button"
         className="quiz-authoring-button"
         disabled={disabled || busy || !entries.length}
@@ -188,11 +256,18 @@ export default function MockExamPreview({
           >
             <div className="quiz-composer-header mock-exam-preview-toolbar">
               <label className="mock-exam-preview-round">
-                모의고사 회차
+                <span>
+                  <span className="mock-exam-preview-round-prefix">
+                    모의고사{" "}
+                  </span>
+                  회차
+                </span>
                 <select
                   value={previewRound}
+                  disabled={isGrading}
                   onChange={(event) => {
                     setPreviewRound(event.target.value);
+                    setPreviewResult(null);
                     setSelectedQuestionId(null);
                     setQuestionIndex(null);
                     paperScroll.current = 0;
@@ -208,13 +283,26 @@ export default function MockExamPreview({
                     ))}
                 </select>
               </label>
-              <button
-                type="button"
-                className="quiz-authoring-button"
-                onClick={close}
-              >
-                닫기
-              </button>
+              <div className="mock-exam-preview-actions">
+                <button
+                  type="button"
+                  className="quiz-authoring-button mock-exam-preview-grade"
+                  disabled={
+                    isGrading || !headerReady || !previewQuestions.length
+                  }
+                  aria-busy={isGrading || undefined}
+                  onClick={gradePreview}
+                >
+                  채점
+                </button>
+                <button
+                  type="button"
+                  className="quiz-authoring-button"
+                  onClick={close}
+                >
+                  닫기
+                </button>
+              </div>
             </div>
             <div ref={body} className="quiz-composer-body">
               {loadPaperHeader && !paperHeaders[previewRound] ? (
@@ -233,10 +321,15 @@ export default function MockExamPreview({
               ) : (
                 <div hidden={questionIndex != null}>
                   <MockExamPaper
+                    key={`${previewRound}:${gradingRun}`}
                     questions={previewQuestions}
                     round={previewRound}
                     paperHeader={paperHeaders[previewRound]}
                     answers={practiceAnswers}
+                    checks={previewResult?.checks}
+                    score={previewResult?.score}
+                    animateGrading={!!previewResult}
+                    onGradingComplete={showFinalScore}
                     selectedQuestionId={selectedQuestionId}
                     onQuestionSelect={(index) => {
                       paperScroll.current = body.current?.scrollTop || 0;
@@ -282,12 +375,13 @@ export default function MockExamPreview({
                     index={questionIndex}
                     choiceLayout="paper"
                     answer={practiceAnswers[String(currentQuestion.id)] || ""}
-                    onAnswer={(value) =>
+                    onAnswer={(value) => {
+                      setPreviewResult(null);
                       setPracticeAnswers((previous) => ({
                         ...previous,
                         [String(currentQuestion.id)]: value,
-                      }))
-                    }
+                      }));
+                    }}
                   />
                   <details className="py-3">
                     <summary className="min-h-11 cursor-pointer text-sm font-bold">
