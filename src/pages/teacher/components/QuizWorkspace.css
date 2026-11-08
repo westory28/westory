@@ -837,6 +837,15 @@
   padding-top: 4px;
   border-top: 1px solid var(--ws-border, #e5e7eb);
 }
+.mock-exam-shared-tools {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+}
+.mock-exam-shared-tools > :is(button, label) {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .quiz-composer-body .mock-exam-insert-tools > :is(button, label) {
   min-height: 32px;
   padding: 4px 8px;
@@ -866,11 +875,6 @@
   max-height: 240px;
   max-width: 100%;
   object-fit: contain;
-}
-.mock-exam-shared-image-row {
-  display: grid;
-  justify-items: start;
-  gap: 8px;
 }
 @media (max-width: 1023px) {
   .quiz-composer-layout {

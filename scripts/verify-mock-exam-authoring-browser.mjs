@@ -392,6 +392,49 @@ try {
   await compose.getByRole("button", { name: "새 세트 지문", exact: true }).click();
   await compose.getByRole("textbox", { name: "공통 지문", exact: true }).fill("세트 자료는 두 문항에서 함께 사용합니다.");
   await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
+  const sharedEditor = compose.getByRole("region", { name: "세트 공통 지문", exact: true });
+  const sharedPng = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400; canvas.height = 100;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#eff6ff"; ctx.fillRect(0, 0, 400, 100);
+    ctx.fillStyle = "#172554"; ctx.font = "24px sans-serif";
+    ctx.fillText("공통 자료 이미지 검증", 24, 58);
+    return canvas.toDataURL("image/png").split(",")[1];
+  });
+  await sharedEditor.getByLabel("공통 자료 이미지 첨부", { exact: true }).setInputFiles({
+    name: "shared.png", mimeType: "image/png", buffer: Buffer.from(sharedPng, "base64"),
+  });
+  await sharedEditor.getByRole("img", { name: "공통 지문 첨부 이미지", exact: true }).waitFor();
+  for (const width of [390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await sharedEditor.scrollIntoViewIfNeeded();
+    const sharedLayout = await compose.evaluate(el => {
+      const shared = el.querySelector('.mock-exam-shared-editor');
+      const info = el.querySelector('.quiz-composer-body > fieldset');
+      const stem = el.querySelector('[aria-label="발문"]');
+      const individual = el.querySelector('[aria-label="읽기 자료 글상자"][contenteditable]');
+      const frame = shared.querySelector('.quiz-visual-frame');
+      const tools = shared.querySelector('[aria-label="공통 지문 이미지 도구"]');
+      const upload = tools.querySelector('label'), remove = tools.querySelector('button');
+      const top = node => node.getBoundingClientRect().top;
+      return {
+        first: el.querySelector('.quiz-composer-body').firstElementChild === shared,
+        order: shared.getBoundingClientRect().bottom <= top(info) && top(info) < top(stem) && top(stem) < top(individual),
+        attachmentInside: frame.contains(shared.querySelector('.quiz-visual-attachment img')) && frame.contains(tools),
+        controlsOneRow: Math.abs(top(upload) - top(remove)) < 1,
+        documentWidth: document.documentElement.scrollWidth,
+      };
+    });
+    assert(sharedLayout.first && sharedLayout.order, JSON.stringify(sharedLayout));
+    assert(sharedLayout.attachmentInside && sharedLayout.controlsOneRow, JSON.stringify(sharedLayout));
+    assert(sharedLayout.documentWidth <= width + 1, JSON.stringify(sharedLayout));
+    await page.screenshot({ path: path.join(evidence, `teacher-shared-material-${width}.png`) });
+  }
+  await sharedEditor.getByRole("button", { name: "공통 이미지 제거", exact: true }).click();
+  assert.equal(await sharedEditor.getByRole("img").count(), 0);
+  assert.equal(await sharedEditor.getByRole("textbox", { name: "공통 지문", exact: true }).innerText(), "세트 자료는 두 문항에서 함께 사용합니다.");
+  checks.push("Set authoring places common material before individual question fields; shared image upload/removal stay in one toolbar row and the image stays inside the passage frame at 390/768/1280/1440px, without extra reads or writes.");
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, "local edits and live preview must not read or write the server");
   await compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true }).fill("긴 자료에서도 작성 영역과 미리보기는 서로 독립적으로 이동합니다.\n".repeat(60));
@@ -754,6 +797,7 @@ try {
   await compose.getByRole("button",{name:"기존 세트 연결",exact:true}).click();
   await compose.getByRole("combobox",{name:"연결할 세트 지문",exact:true}).selectOption(state.saved.passageSet.id);
   assert.equal(await compose.getByRole("textbox",{name:"공통 지문",exact:true}).count(),0,"linked common passage is read-only until separated");
+  assert(await compose.evaluate(el => el.querySelector('.quiz-composer-body').firstElementChild?.matches('.mock-exam-shared-editor')), "Linked set material also remains above the question fields");
   await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
   assert.equal(await page.evaluate(()=>window.assessmentTeacherFixture.writes.length),2);
   await compose.getByRole("button",{name:"등록",exact:true}).click();

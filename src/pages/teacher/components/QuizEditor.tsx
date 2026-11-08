@@ -96,6 +96,7 @@ import MockExamPreview from "./MockExamPreview";
 import MockExamDraftPreview from "./MockExamDraftPreview";
 import MockExamMaterialFields, {
   createMockExamSetId,
+  MockExamSharedMaterialFields,
   type MockExamSetChoice,
 } from "./MockExamMaterialFields";
 import {
@@ -1127,6 +1128,32 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       );
     } finally {
       setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+    }
+  };
+
+  const handlePassageSetChange = (
+    value: MockExamPassageSet | null,
+    linked: boolean,
+  ) => {
+    if (
+      formPassageSet?.id !== value?.id ||
+      (formPassageSet?.image && !value?.image)
+    )
+      sharedImageRequest.current += 1;
+    setFormPassageSet(value);
+    setPassageSetLinked(linked);
+    if (!formPassageSet && value) {
+      requestAnimationFrame(() => {
+        const section = composerDialogRef.current?.querySelector<HTMLElement>(
+          ".mock-exam-shared-editor",
+        );
+        if (!section) return;
+        section.scrollIntoView({ block: "start" });
+        const field = section.querySelector<HTMLElement>(
+          '[contenteditable="true"][aria-label="공통 지문"]',
+        );
+        (field || section).focus({ preventScroll: true });
+      });
     }
   };
 
@@ -2794,6 +2821,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 >
                   <div className="quiz-composer-body">
                     {type === "special" && (
+                      <MockExamSharedMaterialFields
+                        passageSet={formPassageSet}
+                        linked={passageSetLinked}
+                        onSetChange={handlePassageSetChange}
+                        onSetImage={handleSetImage}
+                        disabled={savingQuestion || optimizingImage}
+                      />
+                    )}
+                    {type === "special" && (
                       <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <legend className="mb-2 text-sm font-bold">
                           문항 정보
@@ -3017,18 +3053,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           onExampleEnabledChange={setExampleEnabled}
                           onExampleChange={setFormExample}
                           passageSet={formPassageSet}
-                          linked={passageSetLinked}
-                          onSetChange={(value, linked) => {
-                            if (
-                              formPassageSet?.id !== value?.id ||
-                              (formPassageSet?.image && !value?.image)
-                            )
-                              sharedImageRequest.current += 1;
-                            setFormPassageSet(value);
-                            setPassageSetLinked(linked);
-                          }}
+                          onSetChange={handlePassageSetChange}
                           loadSets={loadExistingSets}
-                          onSetImage={handleSetImage}
                           attachmentAction={questionImageAttachment}
                           renderEditor={renderQuestionPassage}
                           disabled={savingQuestion || optimizingImage}

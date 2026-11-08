@@ -20,10 +20,8 @@ interface Props {
   onExampleEnabledChange: (enabled: boolean) => void;
   onExampleChange: (value: string) => void;
   passageSet: MockExamPassageSet | null;
-  linked: boolean;
   onSetChange: (value: MockExamPassageSet | null, linked: boolean) => void;
   loadSets: () => Promise<MockExamSetChoice[]>;
-  onSetImage: (file: File) => Promise<void>;
   attachmentAction?: React.ReactNode;
   renderEditor: (tools: React.ReactNode) => React.ReactNode;
   disabled?: boolean;
@@ -36,10 +34,8 @@ export default function MockExamMaterialFields({
   onExampleEnabledChange,
   onExampleChange,
   passageSet,
-  linked,
   onSetChange,
   loadSets,
-  onSetImage,
   attachmentAction,
   renderEditor,
   disabled = false,
@@ -59,9 +55,6 @@ export default function MockExamMaterialFields({
       request.current += 1;
     };
   }, [round]);
-  const update = (patch: Partial<MockExamPassageSet>) => {
-    if (passageSet && !linked) onSetChange({ ...passageSet, ...patch }, false);
-  };
   const loadExisting = async () => {
     if (busy) return;
     const ticket = ++request.current;
@@ -181,109 +174,6 @@ export default function MockExamMaterialFields({
           )}
         </div>
       )}
-      {passageSet && (
-        <section
-          className="mock-exam-shared-editor"
-          aria-label="세트 공통 지문"
-        >
-          <div className="quiz-composer-section-heading">
-            <h4>세트 공통 지문{!linked && <QuizRequiredMark />}</h4>
-            <div className="mock-exam-material-actions">
-              {linked && (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  className="quiz-authoring-button"
-                  onClick={() =>
-                    onSetChange(
-                      { ...passageSet, id: createMockExamSetId() },
-                      false,
-                    )
-                  }
-                >
-                  별도 세트로 만들기
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={disabled}
-                className="quiz-authoring-button"
-                onClick={() => onSetChange(null, false)}
-              >
-                세트 연결 해제
-              </button>
-            </div>
-          </div>
-          {linked ? (
-            <>
-              <p className="mock-exam-shared-instruction">
-                {passageSet.instruction}
-              </p>
-              {passageSet.passage && <QuizPassage value={passageSet.passage} />}
-              {passageSet.image && (
-                <img
-                  src={passageSet.image}
-                  alt="연결된 공통 지문 자료"
-                  className="mock-exam-shared-image"
-                />
-              )}
-            </>
-          ) : (
-            <>
-              <label className="quiz-composer-field">
-                <span>공통 발문</span>
-                <QuizTextField
-                  grow
-                  value={passageSet.instruction}
-                  aria-label="공통 발문"
-                  maxLength={300}
-                  onChange={(event) =>
-                    update({ instruction: event.target.value })
-                  }
-                />
-              </label>
-              <QuizVisualPassageEditor
-                label="공통 지문"
-                value={passageSet.passage}
-                onChange={(passage) => update({ passage })}
-                onImagePaste={onSetImage}
-              />
-              <label className="quiz-attachment-button">
-                공통 자료 이미지 첨부
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  aria-label="공통 자료 이미지 첨부"
-                  disabled={disabled}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (file) void onSetImage(file);
-                  }}
-                />
-              </label>
-              {passageSet.image && (
-                <div className="mock-exam-shared-image-row">
-                  <img
-                    src={passageSet.image}
-                    alt="공통 지문 첨부 이미지"
-                    className="mock-exam-shared-image"
-                  />
-                  <button
-                    type="button"
-                    className="quiz-authoring-button"
-                    disabled={disabled}
-                    onClick={() => update({ image: null })}
-                  >
-                    공통 이미지 제거
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-      )}
       {exampleEnabled && (
         <QuizVisualPassageEditor
           label="보기"
@@ -292,5 +182,130 @@ export default function MockExamMaterialFields({
         />
       )}
     </div>
+  );
+}
+
+export function MockExamSharedMaterialFields({
+  passageSet,
+  linked,
+  onSetChange,
+  onSetImage,
+  disabled = false,
+}: Pick<Props, "passageSet" | "onSetChange" | "disabled"> & {
+  linked: boolean;
+  onSetImage: (file: File) => Promise<void>;
+}) {
+  if (!passageSet) return null;
+  const update = (patch: Partial<MockExamPassageSet>) => {
+    if (!linked) onSetChange({ ...passageSet, ...patch }, false);
+  };
+  return (
+    <section
+      className="mock-exam-shared-editor"
+      aria-label="세트 공통 지문"
+      tabIndex={-1}
+    >
+      <div className="quiz-composer-section-heading">
+        <h4>세트 공통 지문{!linked && <QuizRequiredMark />}</h4>
+        <div className="mock-exam-material-actions">
+          {linked && (
+            <button
+              type="button"
+              disabled={disabled}
+              className="quiz-authoring-button"
+              onClick={() =>
+                onSetChange({ ...passageSet, id: createMockExamSetId() }, false)
+              }
+            >
+              별도 세트로 만들기
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={disabled}
+            className="quiz-authoring-button"
+            onClick={() => onSetChange(null, false)}
+          >
+            세트 연결 해제
+          </button>
+        </div>
+      </div>
+      {linked ? (
+        <>
+          <p className="mock-exam-shared-instruction">
+            {passageSet.instruction}
+          </p>
+          {passageSet.passage && <QuizPassage value={passageSet.passage} />}
+          {passageSet.image && (
+            <img
+              src={passageSet.image}
+              alt="연결된 공통 지문 자료"
+              className="mock-exam-shared-image"
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <label className="quiz-composer-field">
+            <span>공통 발문</span>
+            <QuizTextField
+              grow
+              value={passageSet.instruction}
+              aria-label="공통 발문"
+              maxLength={300}
+              onChange={(event) => update({ instruction: event.target.value })}
+            />
+          </label>
+          <QuizVisualPassageEditor
+            label="공통 지문"
+            value={passageSet.passage}
+            onChange={(passage) => update({ passage })}
+            onImagePaste={onSetImage}
+            tools={
+              <div
+                className="mock-exam-insert-tools mock-exam-shared-tools"
+                role="group"
+                aria-label="공통 지문 이미지 도구"
+              >
+                <label className="quiz-attachment-button">
+                  공통 자료 이미지 첨부
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    aria-label="공통 자료 이미지 첨부"
+                    disabled={disabled}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void onSetImage(file);
+                    }}
+                  />
+                </label>
+                {passageSet.image && (
+                  <button
+                    type="button"
+                    className="quiz-authoring-button"
+                    disabled={disabled}
+                    onClick={() => update({ image: null })}
+                  >
+                    공통 이미지 제거
+                  </button>
+                )}
+              </div>
+            }
+            attachment={
+              passageSet.image && (
+                <img
+                  src={passageSet.image}
+                  alt="공통 지문 첨부 이미지"
+                  className="mock-exam-shared-image"
+                />
+              )
+            }
+          />
+        </>
+      )}
+    </section>
   );
 }
