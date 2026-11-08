@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import MockExamPaper, {
   MockExamQuestionContent,
   type MockExamPaperCheck,
@@ -61,10 +61,16 @@ export default function MockExamWorkspace(props: Props) {
   );
   const zoomPanel = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLDivElement>(null);
+  const paperScroll = useRef<HTMLDivElement>(null);
   const zoomScroll = useRef<HTMLDivElement>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
   const question = questions[currentIndex];
   const result = typeof score === "number";
+  const showFinalScore = useCallback(() => {
+    paperScroll.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    // Include the toolbar in the target so sticky headers cannot cover the score.
+    workspace.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, []);
   const rotated =
     touch &&
     viewport.width > viewport.height &&
@@ -205,7 +211,7 @@ export default function MockExamWorkspace(props: Props) {
             {fullPage ? "전체 화면 닫기" : "전체 화면"}
           </button>
         </header>
-        <div className="mock-exam-workspace-scroll">
+        <div ref={paperScroll} className="mock-exam-workspace-scroll">
           <MockExamPaper
             questions={questions}
             answers={answers}
@@ -217,6 +223,7 @@ export default function MockExamWorkspace(props: Props) {
             onQuestionSelect={openQuestion}
             selectedQuestionId={hasSelectedQuestion ? question?.id : null}
             animateGrading={result}
+            onGradingComplete={showFinalScore}
             disabled={submitting}
           />
         </div>

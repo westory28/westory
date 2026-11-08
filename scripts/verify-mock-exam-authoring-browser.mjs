@@ -249,6 +249,19 @@ try {
     name: "새 문제 등록",
     exact: true,
   });
+  for (const name of ["발문", "문항 유형", "회차", "문항 번호", "배점"]) {
+    const field = compose.getByLabel(name, { exact: true });
+    assert.equal(await field.getAttribute("aria-required"), "true", `${name} exposes requiredness`);
+    const marker = await field.evaluate(element => {
+      const mark = element.closest("label").querySelector('span[aria-hidden="true"]');
+      return { text: mark?.textContent, color: mark && getComputedStyle(mark).color };
+    });
+    assert.equal(marker.text?.trim(), "*");
+    assert.equal(marker.color, "rgb(185, 28, 28)", `${name} has a red required star`);
+  }
+  assert.equal(await compose.getByRole("textbox", { name: "해설", exact: true }).getAttribute("aria-required"), null);
+  assert.equal(await compose.locator(".quiz-composer-section-heading h4").filter({ hasText: "보기와 정답" }).getByText("*", { exact: true }).count(), 1);
+  checks.push("Required question fields show red stars and aria-required, while optional explanation stays optional; choice requirements are marked as a group.");
   for (const close of [
     () => compose.getByRole("button", { name: "문제 편집 닫기", exact: true }).click(),
     () => page.keyboard.press("Escape"),

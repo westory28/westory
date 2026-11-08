@@ -253,6 +253,7 @@ export function MockExamQuestionContent({
   hideAnswers = false,
   showPassageSet = true,
   setQuestionRange,
+  gradingMark,
 }: {
   question: MockExamPaperQuestion;
   index: number;
@@ -260,6 +261,7 @@ export function MockExamQuestionContent({
   hideAnswers?: boolean;
   showPassageSet?: boolean;
   setQuestionRange?: [number, number];
+  gradingMark?: React.ReactNode;
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
   const choiceColumns = getMockExamChoiceColumns(
@@ -275,6 +277,7 @@ export function MockExamQuestionContent({
         />
       )}
       <p className="mock-exam-stem">
+        {gradingMark}
         <strong className="mock-exam-number">{index + 1}.</strong>{" "}
         <QuizQuestionText value={question.question} />
         {Number.isFinite(question.points) && (
@@ -402,26 +405,55 @@ export function MockExamSetPassage({
   );
 }
 
-function PencilMark({ correct }: { correct: boolean | null }) {
+function PencilMark({
+  correct,
+  animate = false,
+}: {
+  correct: boolean | null;
+  animate?: boolean;
+}) {
+  const maskId = useId();
   if (correct == null) return null;
+  const stroke = correct
+    ? "M59 12C41 2 17 8 10 29C1 53 20 72 43 70C64 69 76 48 70 29C67 17 57 9 47 8"
+    : "M63 9C54 24 43 38 34 49L17 70";
   return (
     <span
-      className={`mock-exam-pencil ${correct ? "is-correct" : "is-incorrect"}`}
+      className={`mock-exam-pencil ${correct ? "is-correct" : "is-incorrect"} ${animate ? "is-drawing" : ""}`}
       role="img"
       aria-label={correct ? "정답" : "오답"}
     >
       <svg viewBox="0 0 80 80" aria-hidden="true">
-        {correct ? (
-          <>
-            <path d="M60 12C37-1 8 13 9 39C8 66 38 77 59 62C83 44 72 14 50 9" />
-            <path d="M57 10C31 0 6 19 12 46C18 72 53 76 68 49C77 30 64 12 47 10" />
-          </>
-        ) : (
-          <>
-            <path d="M63 9L17 69" />
-            <path d="M66 10L19 72" />
-          </>
-        )}
+        <defs>
+          <mask
+            id={maskId}
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width="80"
+            height="80"
+          >
+            <path
+              className="mock-exam-pencil-reveal"
+              d={stroke}
+              pathLength="100"
+            />
+          </mask>
+        </defs>
+        <g mask={`url(#${maskId})`}>
+          <path className="mock-exam-pencil-core" d={stroke} />
+          <path
+            className="mock-exam-pencil-grain"
+            d={stroke}
+            transform="translate(0.8 -0.7)"
+          />
+          <path
+            className="mock-exam-pencil-grain is-light"
+            d={stroke}
+            transform="translate(-0.9 0.8)"
+          />
+          <path className="mock-exam-pencil-fiber" d={stroke} />
+        </g>
       </svg>
     </span>
   );
@@ -444,6 +476,7 @@ export default function MockExamPaper({
   onQuestionSelect,
   selectedQuestionId,
   animateGrading = false,
+  onGradingComplete,
   disabled = false,
 }: {
   questions: MockExamPaperQuestion[];
@@ -456,6 +489,7 @@ export default function MockExamPaper({
   onQuestionSelect?: (index: number) => void;
   selectedQuestionId?: string | number | null;
   animateGrading?: boolean;
+  onGradingComplete?: () => void;
   disabled?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -484,13 +518,23 @@ export default function MockExamPaper({
   const selection =
     selectedQuestionId === undefined ? lastSelectedId : selectedQuestionId;
   const selectQuestion = (index: number) => {
-    if (disabled || !onQuestionSelect) return;
+    if (disabled || !gradingComplete || !onQuestionSelect) return;
     setLastSelectedId(questions[index].id);
     onQuestionSelect(index);
   };
-  const [revealed, setRevealed] = useState(
-    animateGrading ? 0 : questions.length,
-  );
+  const gradingKey = animateGrading
+    ? JSON.stringify([
+        paperIdentity,
+        score,
+        checks.map((check) => [check.id, check.correct]),
+      ])
+    : "";
+  const [grading, setGrading] = useState({ key: "", index: 0, drawing: false });
+  const gradingIndex = grading.key === gradingKey ? grading.index : 0;
+  const gradingComplete = !animateGrading || gradingIndex >= questions.length;
+  const gradingDrawing = grading.key === gradingKey && grading.drawing;
+  const layoutReady =
+    measuredDensity === density && heights.length === questions.length;
   const title = getMockExamPaperTitle(round, paperHeader);
   const totalPoints = Number(
     questions
@@ -643,31 +687,49 @@ export default function MockExamPaper({
     Array.from(element.children).forEach((node) => observer.observe(node));
     void document.fonts.ready.then(update);
     element.addEventListener("load", update, true);
+    element.addEventListener("error", update, true);
     return () => {
       active = false;
       observer.disconnect();
       element.removeEventListener("load", update, true);
+      element.removeEventListener("error", update, true);
     };
   }, [questions, answers, density]);
   useEffect(() => {
-    if (
-      !animateGrading ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setRevealed(questions.length);
+    setGrading({ key: gradingKey, index: 0, drawing: false });
+  }, [gradingKey]);
+  useEffect(() => {
+    if (!gradingKey || grading.key !== gradingKey || !layoutReady) return;
+    if (grading.index >= questions.length) {
+      if (onGradingComplete) onGradingComplete();
+      else
+        firstSheet.current?.scrollIntoView({
+          block: "start",
+          behavior: "instant",
+        });
       return;
     }
-    setRevealed(0);
-    const interval = window.setInterval(
-      () =>
-        setRevealed((previous) => {
-          if (previous + 1 >= questions.length) window.clearInterval(interval);
-          return Math.min(previous + 1, questions.length);
-        }),
-      180,
+    // Scroll the actual paper (including nested/fullscreen scroll containers),
+    // then draw one server-supplied result. No grading or persistence occurs here.
+    if (!grading.drawing) {
+      container.current
+        ?.querySelector<HTMLElement>(
+          `[data-question-index="${grading.index}"] .mock-exam-stem`,
+        )
+        ?.scrollIntoView({ block: "center", behavior: "instant" });
+    }
+    const timer = window.setTimeout(
+      () => {
+        setGrading((previous) =>
+          grading.drawing
+            ? { ...previous, index: previous.index + 1, drawing: false }
+            : { ...previous, drawing: true },
+        );
+      },
+      grading.drawing ? 900 : 160,
     );
-    return () => window.clearInterval(interval);
-  }, [animateGrading, questions.length]);
+    return () => window.clearTimeout(timer);
+  }, [grading, gradingKey, layoutReady, questions.length, onGradingComplete]);
 
   const pages = useMemo(() => {
     const output: PaperPage[] = [{ columns: [[], []], height: PAGE_HEIGHT }];
@@ -734,6 +796,13 @@ export default function MockExamPaper({
       ref={container}
       className="mock-exam-paper"
       data-density={density}
+      data-grading-state={
+        animateGrading ? (gradingComplete ? "complete" : "grading") : undefined
+      }
+      data-grading-question={
+        animateGrading && !gradingComplete ? gradingIndex + 1 : undefined
+      }
+      aria-busy={(animateGrading && !gradingComplete) || undefined}
       aria-label={`${title} 시험지`}
     >
       <div ref={measurements} className="mock-exam-measure" aria-hidden="true">
@@ -779,7 +848,7 @@ export default function MockExamPaper({
                 round={round}
                 settings={paperHeader}
                 studentLabel={studentLabel}
-                score={revealed >= questions.length ? score : null}
+                score={gradingComplete ? score : null}
               />
             ) : (
               <header className="mock-exam-running-title">{title}</header>
@@ -843,10 +912,17 @@ export default function MockExamPaper({
                     return (
                       <article
                         key={question.id}
+                        data-question-index={index}
                         className={`mock-exam-question ${onQuestionSelect ? "is-interactive" : ""} ${selection != null && String(selection) === String(question.id) ? "is-current" : ""}`}
                         role={onQuestionSelect ? "button" : undefined}
-                        tabIndex={onQuestionSelect && !disabled ? 0 : undefined}
-                        aria-disabled={disabled || undefined}
+                        tabIndex={
+                          onQuestionSelect && !disabled && gradingComplete
+                            ? 0
+                            : undefined
+                        }
+                        aria-disabled={
+                          disabled || !gradingComplete || undefined
+                        }
                         aria-pressed={
                           onQuestionSelect
                             ? selection != null &&
@@ -864,6 +940,7 @@ export default function MockExamPaper({
                           if (
                             onQuestionSelect &&
                             !disabled &&
+                            gradingComplete &&
                             (event.key === "Enter" || event.key === " ")
                           ) {
                             event.preventDefault();
@@ -874,6 +951,22 @@ export default function MockExamPaper({
                         <MockExamQuestionContent
                           question={question}
                           index={index}
+                          gradingMark={
+                            (gradingComplete ||
+                              index < gradingIndex ||
+                              (index === gradingIndex && gradingDrawing)) && (
+                              <PencilMark
+                                correct={
+                                  checkMap.get(String(question.id)) ?? null
+                                }
+                                animate={
+                                  animateGrading &&
+                                  index === gradingIndex &&
+                                  gradingDrawing
+                                }
+                              />
+                            )
+                          }
                           answer={answers[String(question.id)]}
                           showPassageSet={
                             getMockExamSetRun(questions, index)?.start === index
@@ -888,11 +981,6 @@ export default function MockExamPaper({
                               : undefined
                           }
                         />
-                        {index < revealed && (
-                          <PencilMark
-                            correct={checkMap.get(String(question.id)) ?? null}
-                          />
-                        )}
                       </article>
                     );
                   })}
@@ -919,9 +1007,9 @@ export default function MockExamPaper({
       ))}
       {animateGrading && (
         <span className="mock-exam-sr-only" role="status">
-          {revealed < questions.length
-            ? "채점 결과를 표시하고 있습니다."
-            : "채점 결과 표시가 완료되었습니다."}
+          {gradingComplete
+            ? `채점 완료. ${score ?? ""}점입니다.`
+            : `${gradingIndex + 1}번 문항 채점 중`}
         </span>
       )}
     </div>

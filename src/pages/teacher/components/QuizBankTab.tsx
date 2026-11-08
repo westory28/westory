@@ -7,6 +7,7 @@ import MatchingConnectionLines from "../../../components/common/MatchingConnecti
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
+import QuizRequiredMark from "./QuizRequiredMark";
 import { getYearSemester } from "../../../lib/semesterScope";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import {
@@ -1092,20 +1093,28 @@ const QuizBankTab: React.FC<{
               </div>
 
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <select
-                    value={editType}
-                    onChange={(e) =>
-                      handleEditTypeChange(e.target.value as QuestionType)
-                    }
-                    className="border p-2 rounded text-sm bg-gray-50"
-                  >
-                    <option value="choice">객관식</option>
-                    <option value="ox">O/X</option>
-                    <option value="word">단답형</option>
-                    <option value="order">순서 나열형</option>
-                    <option value="matching">단어 연결하기</option>
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 items-end gap-3">
+                  <label className="quiz-composer-field">
+                    <span>
+                      문항 유형
+                      <QuizRequiredMark />
+                    </span>
+                    <select
+                      aria-label="문항 유형"
+                      aria-required="true"
+                      value={editType}
+                      onChange={(e) =>
+                        handleEditTypeChange(e.target.value as QuestionType)
+                      }
+                      className="border p-2 rounded text-sm bg-gray-50"
+                    >
+                      <option value="choice">객관식</option>
+                      <option value="ox">O/X</option>
+                      <option value="word">단답형</option>
+                      <option value="order">순서 나열형</option>
+                      <option value="matching">단어 연결하기</option>
+                    </select>
+                  </label>
                   <select
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value)}
@@ -1133,14 +1142,22 @@ const QuizBankTab: React.FC<{
                   ])}
                 />
 
-                <QuizTextField
-                  lang="ko"
-                  inputMode="text"
-                  value={editQuestionText}
-                  onChange={(e) => setEditQuestionText(e.target.value)}
-                  placeholder="문제 내용"
-                  className="w-full border p-2 rounded text-sm"
-                />
+                <label className="quiz-composer-field">
+                  <span>
+                    발문
+                    <QuizRequiredMark />
+                  </span>
+                  <QuizTextField
+                    lang="ko"
+                    inputMode="text"
+                    aria-label="발문"
+                    aria-required="true"
+                    value={editQuestionText}
+                    onChange={(e) => setEditQuestionText(e.target.value)}
+                    placeholder="문제 내용"
+                    className="w-full border p-2 rounded text-sm"
+                  />
+                </label>
 
                 {supportsQuestionPassage(editType) && (
                   <QuizVisualPassageEditor
@@ -1191,7 +1208,8 @@ const QuizBankTab: React.FC<{
                   <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-bold text-gray-600">
-                        객관식 보기
+                        보기와 정답
+                        <QuizRequiredMark />
                       </p>
                       <button
                         type="button"
@@ -1289,29 +1307,43 @@ const QuizBankTab: React.FC<{
                 )}
 
                 {editType === "ox" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["O", "X"] as const).map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setEditOxAnswer(value)}
-                        className={`py-3 rounded-lg border-2 font-bold transition ${editOxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
-                      >
-                        {value}
-                      </button>
-                    ))}
+                  <div>
+                    <p className="quiz-composer-label">
+                      정답
+                      <QuizRequiredMark />
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["O", "X"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setEditOxAnswer(value)}
+                          className={`py-3 rounded-lg border-2 font-bold transition ${editOxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 {editType === "word" && (
-                  <QuizTextField
-                    lang="ko"
-                    inputMode="text"
-                    value={editWordAnswer}
-                    onChange={(e) => setEditWordAnswer(e.target.value)}
-                    placeholder="단답형 정답 입력"
-                    className="w-full border rounded p-2 text-sm bg-white"
-                  />
+                  <label className="quiz-composer-field">
+                    <span>
+                      정답
+                      <QuizRequiredMark />
+                    </span>
+                    <QuizTextField
+                      lang="ko"
+                      inputMode="text"
+                      aria-label="단답형 정답"
+                      aria-required="true"
+                      value={editWordAnswer}
+                      onChange={(e) => setEditWordAnswer(e.target.value)}
+                      placeholder="단답형 정답 입력"
+                      className="w-full border rounded p-2 text-sm bg-white"
+                    />
+                  </label>
                 )}
 
                 {editType === "order" && (
@@ -1319,6 +1351,7 @@ const QuizBankTab: React.FC<{
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-bold text-gray-600">
                         순서 항목 (위에서 아래 순서가 정답)
+                        <QuizRequiredMark />
                       </p>
                       <button
                         type="button"
@@ -1393,6 +1426,7 @@ const QuizBankTab: React.FC<{
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-bold text-gray-600">
                         단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)
+                        <QuizRequiredMark />
                       </p>
                       <button
                         type="button"
@@ -1511,14 +1545,22 @@ const QuizBankTab: React.FC<{
                       힌트 제공
                     </label>
                     {editHintEnabled && (
-                      <textarea
-                        lang="ko"
-                        inputMode="text"
-                        placeholder="학생에게 보여줄 힌트를 입력하세요"
-                        value={editHintText}
-                        onChange={(e) => setEditHintText(e.target.value)}
-                        className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                      />
+                      <label className="quiz-composer-field">
+                        <span>
+                          힌트
+                          <QuizRequiredMark />
+                        </span>
+                        <textarea
+                          lang="ko"
+                          inputMode="text"
+                          aria-label="힌트"
+                          aria-required="true"
+                          placeholder="학생에게 보여줄 힌트를 입력하세요"
+                          value={editHintText}
+                          onChange={(e) => setEditHintText(e.target.value)}
+                          className="mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                        />
+                      </label>
                     )}
                   </div>
                 )}

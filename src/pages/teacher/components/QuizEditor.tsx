@@ -46,6 +46,7 @@ import {
 } from "../../../lib/quizImageCompression";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
+import QuizRequiredMark from "./QuizRequiredMark";
 import QuizLearningMetadataFields, {
   normalizeQuizLearningMetadata,
   validateQuizLearningMetadata,
@@ -1927,10 +1928,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const questionTypeField = (
     <label className="quiz-composer-field">
-      <span>문항 유형</span>
+      <span>
+        문항 유형
+        <QuizRequiredMark />
+      </span>
       <select
         value={formType}
         aria-label="문항 유형"
+        aria-required="true"
         onChange={(e) => handleTypeChange(e.target.value as QuestionType)}
         onKeyDown={handleVerticalFocus}
         className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
@@ -2719,8 +2724,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           문항 정보
                         </legend>
                         <label className="quiz-composer-field">
-                          <span>회차</span>
+                          <span>
+                            회차
+                            <QuizRequiredMark />
+                          </span>
                           <select
+                            aria-required="true"
+                            aria-label="회차"
                             className="quiz-compose-field min-h-11 rounded border p-2"
                             value={formExamRound}
                             onChange={(event) => {
@@ -2755,8 +2765,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           </select>
                         </label>
                         <label className="quiz-composer-field">
-                          <span>문항 번호</span>
+                          <span>
+                            문항 번호
+                            <QuizRequiredMark />
+                          </span>
                           <input
+                            aria-required="true"
+                            aria-label="문항 번호"
                             className="quiz-compose-field min-h-11 rounded border p-2"
                             type="number"
                             min={1}
@@ -2769,8 +2784,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           />
                         </label>
                         <label className="quiz-composer-field">
-                          <span>배점</span>
+                          <span>
+                            배점
+                            <QuizRequiredMark />
+                          </span>
                           <input
+                            aria-required="true"
+                            aria-label="배점"
                             className="quiz-compose-field min-h-11 rounded border p-2"
                             type="number"
                             min={0.01}
@@ -2893,12 +2913,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       />
 
                       <label className="quiz-composer-field">
-                        <span>발문</span>
+                        <span>
+                          발문
+                          <QuizRequiredMark />
+                        </span>
                         <QuizTextField
                           grow={type === "special"}
                           lang="ko"
                           inputMode="text"
                           aria-label="발문"
+                          aria-required="true"
                           value={formText}
                           onChange={(e) => setFormText(e.target.value)}
                           onKeyDown={handleVerticalFocus}
@@ -2947,7 +2971,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       {formType === "choice" && (
                         <div className="quiz-answer-editor">
                           <div className="quiz-composer-section-heading">
-                            <h4>보기와 정답</h4>
+                            <h4>
+                              보기와 정답
+                              <QuizRequiredMark />
+                            </h4>
                             <button
                               type="button"
                               onClick={addChoiceOption}
@@ -3059,7 +3086,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
                       {formType === "ox" && (
                         <div>
-                          <h4 className="quiz-composer-label">정답</h4>
+                          <h4 className="quiz-composer-label">
+                            정답
+                            <QuizRequiredMark />
+                          </h4>
                           <div className="grid grid-cols-2 gap-2">
                             {(["O", "X"] as const).map((value) => (
                               <button
@@ -3080,7 +3110,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
                       {formType === "word" && (
                         <label className="quiz-composer-field">
-                          <span>정답</span>
+                          <span>
+                            정답
+                            <QuizRequiredMark />
+                          </span>
                           <QuizTextField
                             grow={type === "special"}
                             lang="ko"
@@ -3089,6 +3122,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             onChange={(e) => setWordAnswer(e.target.value)}
                             onKeyDown={handleVerticalFocus}
                             aria-label="단답형 정답"
+                            aria-required="true"
                             className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
                           />
                         </label>
@@ -3097,7 +3131,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       {formType === "order" && (
                         <div className="quiz-answer-editor">
                           <div className="quiz-composer-section-heading">
-                            <h4>순서 항목 (위에서 아래 순서가 정답)</h4>
+                            <h4>
+                              순서 항목 (위에서 아래 순서가 정답)
+                              <QuizRequiredMark />
+                            </h4>
                             <button
                               type="button"
                               onClick={() =>
@@ -3176,7 +3213,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       {formType === "matching" && (
                         <div className="quiz-answer-editor">
                           <div className="quiz-composer-section-heading">
-                            <h4>단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</h4>
+                            <h4>
+                              단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)
+                              <QuizRequiredMark />
+                            </h4>
                             <button
                               type="button"
                               onClick={addMatchingPair}
@@ -3314,15 +3354,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             힌트 제공
                           </label>
                           {hintEnabled && (
-                            <QuizTextField
-                              lang="ko"
-                              inputMode="text"
-                              aria-label="힌트"
-                              value={hintText}
-                              onChange={(e) => setHintText(e.target.value)}
-                              onKeyDown={handleVerticalFocus}
-                              className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                            />
+                            <label className="quiz-composer-field">
+                              <span>
+                                힌트
+                                <QuizRequiredMark />
+                              </span>
+                              <QuizTextField
+                                lang="ko"
+                                inputMode="text"
+                                aria-label="힌트"
+                                aria-required="true"
+                                value={hintText}
+                                onChange={(e) => setHintText(e.target.value)}
+                                onKeyDown={handleVerticalFocus}
+                                className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                              />
+                            </label>
                           )}
                         </div>
                       )}
@@ -3686,6 +3733,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           type="checkbox"
                           className="mt-1"
                           checked={answerReviewed}
+                          aria-required="true"
                           onChange={(event) =>
                             setAnswerReviewed(event.target.checked)
                           }
@@ -3693,6 +3741,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <span>
                           원본에서 바꾼 발문·자료·보기와 정답·해설의 일치를
                           확인했습니다.
+                          <QuizRequiredMark />
                         </span>
                       </label>
                     )}

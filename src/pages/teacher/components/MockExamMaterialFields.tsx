@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
+import QuizRequiredMark from "./QuizRequiredMark";
 import QuizPassage from "../../../components/common/QuizPassage";
 import type { MockExamPassageSet } from "../../../lib/mockExamMaterials";
 
@@ -186,7 +187,7 @@ export default function MockExamMaterialFields({
           aria-label="세트 공통 지문"
         >
           <div className="quiz-composer-section-heading">
-            <h4>세트 공통 지문</h4>
+            <h4>세트 공통 지문{!linked && <QuizRequiredMark />}</h4>
             <div className="mock-exam-material-actions">
               {linked && (
                 <button
