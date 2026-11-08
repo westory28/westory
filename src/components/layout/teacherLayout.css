@@ -637,3 +637,12 @@
     transition: none;
   }
 }
+/* Also override legacy standalone HTML/CSS after a new portal bundle loads.
+   Keep this in the hashed app stylesheet, not only the cached public file. */
+html:has(:is(.teacher-layout, .student-layout)) #westory-top-glass,
+html:has(:is(.teacher-layout, .student-layout)) :is(dialog:modal, :fullscreen:not(html))::after {
+  display: none !important;
+  content: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

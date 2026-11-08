@@ -201,6 +201,46 @@ const payload = (revision, update = {}) => {
   assert.ok(cleanupRefs.every(ref => !['other-owner', 'other-term'].includes(ref.id)));
   console.log("PASS authenticated formative and weighted mock submit/review/notes, frozen paper header, flat legacy original compatibility");
 
+  // All rounds may be published together, but this user's own submitted
+  // predecessor is still required on every server entry point.
+  for (const round of [2, 3]) {
+    const examRound = `round_${round}`;
+    await db.doc(`${root}/quiz_questions/${30 + round}`).set({ id: 30 + round, unitId: "exam_prep", category: "exam_prep", examRound,
+      type: "short", question: `합성 ${round}회`, answer: "조선", explanation: "합성 해설", paperOrder: 1, points: 100, contentRevision: 1 });
+    await execute("teacher", "saveQuizAssessmentSettings", { ...payload(0),
+      definitionId: `quiz:${semesterId}:exam_prep:exam_prep:${examRound}`, sourceId: "exam_prep", category: "exam_prep", examRound,
+      legacyConfigKey: `exam_prep_exam_prep__${examRound}`, presentationSettings: { ...settings, questionCount: 1 }, questionCount: 1 });
+  }
+  const secondRoundId = `quiz:${semesterId}:exam_prep:exam_prep:round_2`;
+  const thirdRoundId = `quiz:${semesterId}:exam_prep:exam_prep:round_3`;
+  const initialProgress = await state("student-three", { semesterId, mockExamOverview: true });
+  assert.deepEqual(initialProgress.rounds.map(round => round.prerequisiteMet), [true, false, false]);
+  assert.deepEqual(initialProgress.rounds.map(round => round.completed), [false, false, false]);
+  for (const defId of [secondRoundId, thirdRoundId]) {
+    assert.equal((await state("student-three", { definitionId: defId })).status, "PREREQUISITE_REQUIRED");
+    await assert.rejects(execute("student-three", "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
+    await assert.rejects(state("student-three", { definitionId: defId, prepareAssets: true }), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
+  }
+  const ownProgress = await state("student-one", { semesterId, mockExamOverview: true });
+  assert.deepEqual(ownProgress.rounds.map(round => round.prerequisiteMet), [true, true, false]);
+  const roundTwo = (await execute("student-one", "startAssessmentAttempt", { definitionId: secondRoundId })).result;
+  assert.equal((await state("student-one", { semesterId, mockExamOverview: true })).rounds[2].prerequisiteMet, false);
+  await execute("student-one", "submitAssessmentAttempt", { attemptId: roundTwo.attemptId, expectedRevision: 1, answers: { 32: "조선" }, submitReason: "STUDENT" });
+  assert.equal((await state("student-one", { definitionId: thirdRoundId })).status, "READY");
+  assert.equal((await state("student-three", { definitionId: thirdRoundId })).requiredRound, "round_1");
+  // A pre-policy draft retains its saved data while resume/save/submit are blocked.
+  const staleId = `attempt_${"d".repeat(64)}`;
+  const staleDraft = { ...(await get(`semester_assessment_attempts/${roundTwo.attemptId}`)),
+    attemptId: staleId, studentUid: "student-three", status: "IN_PROGRESS", submittedAtIso: "", resultRef: "", submissionRef: "" };
+  await db.doc(`semester_assessment_attempts/${staleId}`).set(staleDraft);
+  assert.equal((await state("student-three", { attemptId: staleId })).attempt, null);
+  await assert.rejects(production.saveAssessmentProgress.run(request("student-three", { attemptId: staleId,
+    expectedRevision: staleDraft.revision, answers: { 32: "조선" }, saveId: "blocked-legacy-draft" })), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
+  await assert.rejects(execute("student-three", "submitAssessmentAttempt", { attemptId: staleId,
+    expectedRevision: staleDraft.revision, answers: { 32: "조선" }, submitReason: "STUDENT" }), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
+  assert.deepEqual(await get(`semester_assessment_attempts/${staleId}`), staleDraft);
+  console.log("PASS mock round overview scoped to self, sequential start/assets/recovery/save/submit gates, no draft mutation");
+
   const races = await Promise.allSettled([
     execute("teacher", "saveQuizAssessmentSettings", payload(2, { timeLimit: 900 })),
     execute("teacher", "saveQuizAssessmentSettings", payload(2, { timeLimit: 1200 })),

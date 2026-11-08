@@ -1,0 +1,112 @@
+.student-mock-picker {
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  padding-bottom: 16px;
+}
+
+.student-mock-picker__toggle {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary, #2563eb);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.student-mock-picker__toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-mock-picker__toggle svg {
+  flex-shrink: 0;
+}
+.student-mock-picker__toggle svg.is-open {
+  transform: rotate(180deg);
+}
+.student-mock-picker__toggle:focus-visible,
+.student-mock-picker__round:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.student-mock-picker__body {
+  padding-top: 12px;
+}
+.student-mock-picker__rounds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.student-mock-picker__round {
+  display: flex;
+  min-height: 64px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  border-width: 1px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.student-mock-picker__round small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.student-mock-picker__status,
+.student-mock-picker__error {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.student-mock-picker__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #b91c1c;
+}
+.student-mock-picker__error button {
+  min-height: 44px;
+  flex-shrink: 0;
+  text-decoration: underline;
+}
+.student-quiz-unit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+.student-quiz-unit__actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.student-quiz-unit__actions button {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .student-quiz-unit {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .student-quiz-unit__actions {
+    flex-shrink: 0;
+    width: 280px;
+  }
+}

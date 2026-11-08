@@ -442,6 +442,23 @@ async function scenario(browser, width, iosHome) {
         await close.click();
       await stableTopEdge(page, portal + " dashboard");
       await logoIsClear(page);
+      // A Home Screen document can retain an older public stylesheet while the
+      // new hashed portal stylesheet loads. Exercise that exact mixed state.
+      await page.addStyleTag({
+        content: `
+        #westory-top-glass, :is(dialog:modal, :fullscreen:not(html))::after {
+          position:fixed; inset:0 0 auto; z-index:2147483647; height:120px;
+          display:block; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        }
+        :is(dialog:modal, :fullscreen:not(html))::after { content:""; }
+      `,
+      });
+      await page.evaluate(() => {
+        const legacyGlass = document.createElement("div");
+        legacyGlass.id = "westory-top-glass";
+        document.body.append(legacyGlass);
+      });
+      await stableTopEdge(page, portal + " cached legacy stylesheet");
       if (width < 1024) await exerciseClosures(page, portal);
       if (slug === "teacher") {
         await selectRoute(

@@ -58,7 +58,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge", headless: true });
 const errors = [];
 try {
-  for (const width of [390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 1024 } });
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/*", route => route.request().url().startsWith(origin) || route.request().url().startsWith("data:") ? route.continue() : route.abort());
@@ -82,6 +82,17 @@ try {
     assert.equal(await detail.evaluate(element => document.activeElement === element), true, "Opening a saved question transfers keyboard focus");
     assert.ok((await detail.textContent()).includes("2번 저장 당시 해설"));
     assert.ok((await detail.textContent()).includes("고려"));
+    assert.equal(await detail.locator('.my-quiz-history__question-body').count(), 1);
+    assert.equal(await detail.locator('.student-quiz-relearning-correct-answer dt').textContent(), '정답');
+    assert(await detail.getByRole('region', {name:'해설',exact:true}).isVisible());
+    const reviewLayout = await detail.evaluate(element => {
+      const question = element.querySelector('.my-quiz-history__question-body').getBoundingClientRect();
+      const answers = element.querySelector('.student-quiz-relearning-answers').getBoundingClientRect();
+      const explanation = element.querySelector('.student-quiz-relearning-explanation').getBoundingClientRect();
+      return {ordered:question.bottom<=answers.top&&answers.bottom<=explanation.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.equal(reviewLayout.ordered,true); assert.equal(reviewLayout.overflow,false);
+    await detail.screenshot({path:path.join(evidence, `detail-${width}.png`)});
     assert.deepEqual(await page.evaluate(() => window.historyFixtureCalls.filter(call => call.mode === "detail").map(call => call.key)), ["canonical:saved-paper"]);
     await page.goto(`${origin}/?legacy`);
     await page.getByRole("combobox", { name: "확인할 문항", exact: true }).waitFor();
@@ -91,7 +102,7 @@ try {
     await page.close();
   }
   assert.deepEqual(errors, []);
-  console.log(`Mock exam history browser passed: 390/768/1280, automatic pagination with saved score/answers, click focus, missing-snapshot fallback. Evidence: ${evidence}`);
+  console.log(`Mock exam history browser passed: 320/390/768/1280, automatic pagination with saved score/answers, question/answer/explanation sections, click focus, missing-snapshot fallback. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

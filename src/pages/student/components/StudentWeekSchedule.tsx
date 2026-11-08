@@ -196,6 +196,9 @@ const StudentWeekSchedule: React.FC<Props> = ({
   }, [selectedDate, weekStart, weekEvents]);
   const sameMonth = weekStart.slice(0, 7) === days[6].slice(0, 7);
   const weekLabel = `${readableDate(weekStart)} – ${sameMonth ? `${Number(days[6].slice(8, 10))}일` : readableDate(days[6])}`;
+  const monthDay = (date: string) =>
+    `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+  const compactWeekLabel = `${monthDay(weekStart)}–${sameMonth ? Number(days[6].slice(8, 10)) : monthDay(days[6])}`;
   const weekDescription = `${weekStart.slice(0, 4)}년 ${readableDate(weekStart)}부터 ${days[6].slice(0, 4)}년 ${readableDate(days[6])}까지`;
 
   return (
@@ -214,8 +217,12 @@ const StudentWeekSchedule: React.FC<Props> = ({
           className="student-week-schedule__range"
           aria-live="polite"
           aria-label={weekDescription}
+          title={weekDescription}
         >
-          {weekLabel}
+          <span className="student-week-schedule__range-full">{weekLabel}</span>
+          <span className="student-week-schedule__range-short">
+            {compactWeekLabel}
+          </span>
         </span>
         <button
           type="button"
@@ -282,8 +289,16 @@ const StudentWeekSchedule: React.FC<Props> = ({
               <span
                 className="student-week-attendance is-complete"
                 title={attendanceDescription || "오늘 출석 완료"}
+                role="img"
+                aria-label="출석 완료"
               >
-                출석 완료
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m8 12 3 3 5-6" />
+                </svg>
+                <span className="student-week-attendance__label">
+                  출석 완료
+                </span>
               </span>
             ) : (
               <button
@@ -292,8 +307,14 @@ const StudentWeekSchedule: React.FC<Props> = ({
                 disabled={attendanceLoading}
                 onClick={onAttendanceCheck}
                 title={attendanceDescription || "출석 체크"}
+                aria-label={attendanceLoading ? "출석 처리 중" : "출석 체크"}
               >
-                {attendanceLoading ? "처리 중…" : "출석 체크"}
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 5H5v15h14V5h-4M9 3h6v4H9zM8 13l3 3 5-6" />
+                </svg>
+                <span className="student-week-attendance__label">
+                  {attendanceLoading ? "처리 중…" : "출석 체크"}
+                </span>
               </button>
             )}
           </div>

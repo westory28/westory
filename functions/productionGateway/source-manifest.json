@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-08: Mock-round gating source audit: live executeCommand generation 1794068315420737 matches c2766e0e in all tracked runtime dependencies after LF normalization. Live getAssessmentState 1794065100745184 differs only in unrelated submitted-answer/header return logic within assessmentLifecycle; its query closure matches baseline. Live saveAssessmentProgress 1793944738229753 has older authoring dependencies, but saveAssessmentProgress and normalizeSaveRequest match baseline. Live getCommandStatus 1794054629682179 uses the identical commandGateway baseline. Deploy only Seoul executeCommand/getCommandStatus/getAssessmentState/saveAssessmentProgress.",
     "2026-11-07: Before disabling mock-exam hints, live Seoul executeCommand/getCommandStatus archives matched baseline 79c2d446 in all tracked runtime files except the separately released quizClassAnalysis cache optimization. Live getAssessmentState 00008 has older achievement metadata and worksheet alternative-answer dependencies; its query, serializeAttempt and questionPresentation bodies match the baseline. Only mock hint filtering and new-question normalization change in this patch; preserved attempts and submitted scores are not rewritten.",
     "Full deployed closure dependencies are retained to preserve existing canonical command adapters.",
     "Only explicitly reviewed canonical command/status, assessment and isolated query exports are attached to the root Functions entry; unrelated nested exports remain excluded.",
@@ -51,7 +52,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "63991b3cd9ab31c02ed492c16ecc12e48ac19c2c3c6bfccd88bbe9b3ed2180f2",
+      "sha256": "e541736c940dcaed82438dba588733ed9bb7e3610864ce343a28f081b82ada9d",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -72,19 +73,21 @@
         "2026-11-06: Freeze authored mock-exam round/order/points and complete paper snapshots; retain legacy selection and item-count results, add authoritative weighted percent and point totals.",
         "2026-11-07: Validate public example/shared-set materials, preserve contiguous set order on saves/deletes, expose authorized read-only asset manifests before start, reject changed prepared source hashes, and return the server clock without extending deadlines.",
         "2026-11-07: Validate achievement metadata, freeze assessment start time, and route the analysis-only teacher review command.",
-        "2026-11-08: Validate and persist per-round plain-text mock paper title/header; freeze them on new attempts and expose immutable presentation on scoped reads. Validate up to eight cognitive-process tags without changing permissions or grading."
+        "2026-11-08: Validate and persist per-round plain-text mock paper title/header; freeze them on new attempts and expose immutable presentation on scoped reads. Validate up to eight cognitive-process tags without changing permissions or grading.",
+        "2026-11-08: Enforce student-owned prior mock-round submissions at start, assets, recovery, save, submit and start-receipt replay/status; preserve submitted review and normal assessments."
       ]
     },
     {
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "5273e7ece75c9b6c666c71782da9afdc91fb98f3d06668578122e04f454c0667",
+      "sha256": "8024df49f1bbb4565311fc7403a6a1bc7fe1713013611b361ee941fa926d0320",
       "changes": [
         "2026-11-07: Omit only hint/hintEnabled from historical mock QUIZ start receipt presentations on execute replay and status reads; preserve stored receipts, answers, choices and all other command results.",
         "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default.",
         "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default.",
-        "2026-10-27: Add nam5-local Wis-only command/status callables using the identical session, permissions and durable receipt namespace."
+        "2026-10-27: Add nam5-local Wis-only command/status callables using the identical session, permissions and durable receipt namespace.",
+        "2026-11-08: Enforce student-owned prior mock-round submissions at start, assets, recovery, save, submit and start-receipt replay/status; preserve submitted review and normal assessments."
       ]
     },
     {
@@ -537,6 +540,15 @@
       "sha256": "d50c691359fd0953d4038cd71e60efb75ce8df900c877e577d476a9e5a5ac454",
       "changes": [
         "2026-11-07: Newly authored public presentation validator and asset manifest builder; originalSha256 records its first reviewed authored source, not a captured production file."
+      ]
+    },
+    {
+      "sourceFile": null,
+      "file": "mockExamProgress.js",
+      "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "16cba19de7a439e83ecb189d58ccca72f1ff60ffc68c7246eb40dad6833a116b",
+      "changes": [
+        "2026-11-08: New read-only helper for three-round completion overview and prerequisites; each query uses exact student/semester/round, limit 1 and identity-only field masks; scoped explicit legacy formats retained."
       ]
     }
   ],

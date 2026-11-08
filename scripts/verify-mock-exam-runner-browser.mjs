@@ -53,7 +53,7 @@ export const readStudentCurriculumTree=async()=>[];
 export const buildAssessmentDefinitionId=()=>definitionId;
 export const isAssessmentRevisionConflict=error=>error?.code==='aborted';
 export const loadQuizScoreComparison=async()=>null;
-export const getAssessmentState=async(input={})=>{qa.reads.push(input);if(input.prepareAssets)qa.prepares.push(input);return {status:attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
+export const getAssessmentState=async(input={})=>{qa.reads.push(input);if(input.prepareAssets)qa.prepares.push(input);return {status:location.search.includes('prerequisite')?'PREREQUISITE_REQUIRED':attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',requiredRound:'round_1',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
 export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
@@ -192,7 +192,21 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
 try {
-  if(process.argv.includes('--viewport-only')) {
+  if(process.argv.includes('--prerequisite-only')) {
+    for(const width of [320,390,768,1280]) {
+      const page=await browser.newPage({viewport:{width,height:900}});
+      page.on('pageerror',error=>pageErrors.push(error.message));
+      await page.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
+      await page.goto(origin+'?prerequisite');
+      await page.getByText('초시 (1회)를 제출한 뒤 응시할 수 있습니다.',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0);
+      assert.equal(await page.locator('.mock-exam-question').count(),0);
+      const requests=await page.evaluate(()=>({starts:window.mockRunnerQa.starts.length,prepares:window.mockRunnerQa.prepares.length}));
+      assert.deepEqual(requests,{starts:0,prepares:0});
+      await page.screenshot({path:path.join(evidence,'prerequisite-'+width+'.png')});
+      await page.close();
+    }
+  } else if(process.argv.includes('--viewport-only')) {
     for(const [width,height,touch] of [[320,568,true],[390,844,true],[768,1024,true],[844,390,true],[1024,768,true],[1280,900,false]]) {
       const page=await open(width,height,touch);
       const fit=width<=height || (touch && Math.min(width,height)<=600)?'page':'width';
@@ -456,7 +470,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
-  console.log(process.argv.includes('--viewport-only')
+  console.log(process.argv.includes('--prerequisite-only')
+    ? `Mock exam prerequisite browser passed: direct round-2 link blocked before asset preparation or attempt start at 320/390/768/1280. Evidence: ${evidence}`
+    : process.argv.includes('--viewport-only')
     ? `Mock exam viewport browser passed: 320x568/390x844/768x1024/844x390 full-page fit, 1024x768/1280x900 full width, fullscreen variants, 64px portal header and orientation change. Evidence: ${evidence}`
     : `Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, touch 320x568/360x800/390x844/768x1024/820x1180 and desktop 1280/1440, portrait/mobile full-page fit, landscape 100% width with vertical scroll and no forced rotation at 844x390/1024x768/1280x900, full screen, orientation changes, click/tap/Space toggle with native Arrow navigation, stationary answer/dialog/scroll layout, no clear button or pre-submit explanation, pencil drawing under normal and reduced motion, keyboard focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
 } finally {

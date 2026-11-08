@@ -11,10 +11,12 @@ const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.ho
 const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "westory-review-notes-"));
 const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
 import Review from './src/pages/student/quiz/QuizRelearning';import './src/pages/student/quiz/QuizLearning.css';
-const item={id:'q1',type:'choice',question:'다음 합성 자료의 내용으로 옳지 않은 것은?',options:['정치','경제'],answer:'정치',submittedAnswer:'경제',concepts:['자료 해석'],passage:'{{box:(가)}} {{u:정책}}의 자료',examplePassage:'ㄱ. 합성 보기',passageSet:{id:'set1',instruction:'공통 자료를 읽으시오.',passage:'공통 지문',image:null}};
+const item={id:'q1',type:'choice',question:'다음 합성 자료의 내용으로 옳지 않은 것은?',options:['정치','경제'],answer:'정치',submittedAnswer:'경제',concepts:['자료 해석'],passage:'{{box:(가)}} {{u:정책}}의 자료',examplePassage:'ㄱ. 합성 보기',passageSet:{id:'set1',instruction:'공통 자료를 읽으시오.',passage:'공통 지문',image:null},explanation:'자료의 정책과 관련된 근거를 확인합니다.',reviewLessonId:'fixture-lesson'};
 const variant=new URLSearchParams(location.search).get('type');
 if(variant==='order')Object.assign(item,{type:'order',options:['가','나'],answer:'가||나'});
 if(variant==='matching')Object.assign(item,{type:'matching',matchingPairs:[{left:'인물1',right:'가'},{left:'인물2',right:'나'}],answer:'인물1=>가||인물2=>나'});
+if(variant==='short')Object.assign(item,{type:'short',question:'토지에서 조세를 거둘 수 있는 권리를 세 글자로 쓰시오.',options:[],answer:'수조권',submittedAnswer:'',concepts:['경제 개념'],passage:'',examplePassage:'',passageSet:null,explanation:'수조권은 토지 소유권과 구별된다.'});
+if(variant==='columns')Object.assign(item,{options:['(가) 김시민\t(나) 이순신','(가) 이순신\t(나) 권율'],answer:'(가) 김시민\t(나) 이순신',submittedAnswer:'(가) 이순신\t(나) 권율'});
 const qa=window.reviewQa={saved:{revision:1,updatedAt:'2026-11-08',items:[{questionId:'q1',practiceAnswer:'',reason:'',note:'기존 노트',correct:null,updatedAt:'2026-11-08'}]},requests:[],loads:0,failNext:false,conflictNext:false,hold:false};
 async function save(draft,expectedRevision,saveId){qa.requests.push({draft:structuredClone(draft),expectedRevision,saveId});if(qa.hold)await new Promise(resolve=>qa.release=resolve);if(qa.failNext){qa.failNext=false;throw Error('합성 통신 실패')}if(qa.conflictNext){qa.conflictNext=false;qa.saved={...qa.saved,revision:qa.saved.revision+1,items:[{...qa.saved.items[0],note:'다른 화면의 노트'}]};throw {details:{reason:'QUIZ_REVIEW_REVISION_CONFLICT'}}}qa.saved={revision:qa.saved.revision+1,updatedAt:'2026-11-08',items:[{...draft,correct:draft.practiceAnswer?draft.practiceAnswer==='정치':null,updatedAt:'2026-11-08'}]};return structuredClone(qa.saved)}
 function App(){const[open,setOpen]=useState(true);return open?<Review items={[item]} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
@@ -113,6 +115,30 @@ try {
     await reopen(); await page.getByRole("button", { name: "해설 가리고 다시 풀기", exact: true }).click();
     if (type === "order") await page.getByText("선택한 순서: 가", { exact: true }).waitFor();
     else assert.equal(await page.getByRole("combobox", { name: "인물1에 연결할 답", exact: true }).inputValue(), "가");
+  }
+  for (const type of ['short', 'columns']) {
+    await page.goto(origin + '/?type=' + type);
+    await page.getByRole('article', {name:'복습할 문제',exact:true}).waitFor();
+    for (const width of [320,390,768,1280]) {
+      await page.setViewportSize({width,height:900});
+      const layout = await page.evaluate(() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+        const question = rect('.student-quiz-relearning-question');
+        const answers = rect('.student-quiz-relearning-answers');
+        const explanation = rect('.student-quiz-relearning-explanation');
+        return {overflow:document.documentElement.scrollWidth>innerWidth, ordered:question.bottom<=answers.top && answers.bottom<=explanation.top,
+          originalAnswerLabel:document.querySelector('.student-quiz-relearning-correct-answer dt').textContent};
+      });
+      assert.equal(layout.overflow,false);assert.equal(layout.ordered,true);assert.equal(layout.originalAnswerLabel,'정답');
+      if(type==='columns')assert.equal(await page.locator('.student-quiz-review-options .quiz-choice-column-cells').count(),2);
+      else assert.equal(await page.locator('.student-quiz-relearning-answers dd').first().textContent(),'미응답');
+      await page.screenshot({path:path.join(evidence,`review-${type}-${width}.png`),fullPage:true});
+    }
+    await page.getByRole('button',{name:'해설 가리고 다시 풀기',exact:true}).click();
+    assert.equal(await page.locator('.student-quiz-relearning-answers').count(),0,'Practice hides submitted and correct answers');
+    assert.equal(await page.locator('.student-quiz-relearning-explanation').count(),0,'Practice hides explanation');
+    await page.getByRole('button',{name:'해설 다시 보기',exact:true}).click();
+    assert(await page.getByRole('region',{name:'해설과 관련 자료',exact:true}).isVisible());
   }
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
   console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, 320/390/768/1280, no Firebase" }));

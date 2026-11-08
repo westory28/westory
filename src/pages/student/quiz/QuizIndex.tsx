@@ -1,6 +1,12 @@
 import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  getMockExamOverview,
+  type MockExamOverview,
+} from "../../../lib/assessmentLifecycle";
+import { getYearSemester } from "../../../lib/semesterScope";
+import "./quizIndex.css";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { readStudentCurriculumTree } from "../../../lib/studentLessonReadCache";
@@ -15,6 +21,7 @@ import {
   formatMockExamRoundLabel,
   formatMockExamRoundShortLabel,
   getMockExamRoundsFromAssessmentConfig,
+  getMockExamRoundNumber,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
 
@@ -28,7 +35,7 @@ const getAllExpandedIndexes = (items: TreeItem[]) =>
   new Set(items.map((_, index) => index));
 
 const QuizIndex: React.FC = () => {
-  const { userData, config, menuConfig } = useAuth();
+  const { userData, currentUser, config, menuConfig } = useAuth();
   const navigate = useNavigate();
 
   const [tree, setTree] = useState<TreeItem[]>([]);
@@ -39,6 +46,17 @@ const QuizIndex: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const [mockExamExpanded, setMockExamExpanded] = useState(false);
+  const [mockOverview, setMockOverview] = useState<{
+    scope: string;
+    data: MockExamOverview;
+  } | null>(null);
+  const [mockOverviewError, setMockOverviewError] = useState("");
+  const [mockOverviewLoading, setMockOverviewLoading] = useState(false);
+  const [mockReloadKey, setMockReloadKey] = useState(0);
+  const { year, semester } = getYearSemester(config);
+  const semesterId = `${year}-${semester}`;
+  const mockScope = `${currentUser?.uid || ""}:${semesterId}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +134,49 @@ const QuizIndex: React.FC = () => {
       })),
     [assessmentConfig, mockExamRounds, userData],
   );
+  const hasOpenMockExam = mockExamRoundStates.some(({ visible }) => visible);
+  const currentMockOverview =
+    mockOverview?.scope === mockScope ? mockOverview.data : null;
+
+  useEffect(() => {
+    if (
+      !mockExamExpanded ||
+      !hasOpenMockExam ||
+      !currentUser?.uid ||
+      currentMockOverview
+    )
+      return;
+    let cancelled = false;
+    setMockOverviewLoading(true);
+    setMockOverviewError("");
+    void getMockExamOverview({ semesterId }).then(
+      (data) => {
+        if (!cancelled) {
+          setMockOverview({ scope: mockScope, data });
+          setMockOverviewLoading(false);
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setMockOverviewError(
+            "응시 상태를 불러오지 못했습니다. 다시 확인해 주세요.",
+          );
+          setMockOverviewLoading(false);
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    mockExamExpanded,
+    hasOpenMockExam,
+    currentUser?.uid,
+    mockScope,
+    semesterId,
+    currentMockOverview,
+    mockReloadKey,
+  ]);
 
   if (loading) {
     return (
@@ -152,43 +213,107 @@ const QuizIndex: React.FC = () => {
         </button>
       </header>
 
-      <section className="mb-6">
-        <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
-          <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
+      <section className="student-mock-picker mb-6">
+        <h2>
+          <button
+            type="button"
+            className="student-mock-picker__toggle"
+            aria-expanded={mockExamExpanded}
+            aria-controls="student-mock-rounds"
+            onClick={() => setMockExamExpanded((open) => !open)}
+          >
+            <span>
+              <i className="fas fa-flag-checkered" aria-hidden="true"></i>{" "}
+              모의고사
+            </span>
+            <svg
+              className={mockExamExpanded ? "is-open" : ""}
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
         </h2>
-        <div className="ws-flat-section">
-          <div className="flex flex-wrap gap-3">
-            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-              {mockExamRoundStates.map(({ round, visible }) => (
+        {mockExamExpanded && (
+          <div id="student-mock-rounds" className="student-mock-picker__body">
+            {mockOverviewLoading && (
+              <p role="status" className="student-mock-picker__status">
+                응시 상태 확인 중…
+              </p>
+            )}
+            {mockOverviewError && (
+              <div role="alert" className="student-mock-picker__error">
+                <span>{mockOverviewError}</span>
                 <button
-                  key={round}
                   type="button"
-                  onClick={() =>
-                    visible &&
-                    startQuiz(
-                      "exam_prep",
-                      "exam_prep",
-                      formatMockExamRoundLabel(round),
-                      round,
-                    )
-                  }
-                  disabled={!visible}
-                  className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-bold transition ${
-                    visible
-                      ? "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
-                      : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"
-                  }`}
-                  aria-label={`${formatMockExamRoundLabel(round)} ${
-                    visible ? "시작" : "잠김"
-                  }`}
+                  onClick={() => setMockReloadKey((key) => key + 1)}
                 >
-                  {!visible && <i className="fas fa-lock text-xs"></i>}
-                  {formatMockExamRoundShortLabel(round)}
+                  다시 확인
                 </button>
-              ))}
+              </div>
+            )}
+            <div className="student-mock-picker__rounds">
+              {mockExamRoundStates.map(({ round, visible }) => {
+                const state = currentMockOverview?.rounds.find(
+                  (item) => item.examRound === round,
+                );
+                const available = visible && state?.prerequisiteMet === true;
+                const status = !visible
+                  ? "준비 중"
+                  : state?.prerequisiteMet === false
+                    ? `${getMockExamRoundNumber(state.requiredRound)}회 제출 후`
+                    : state?.completed
+                      ? "응시 완료"
+                      : available
+                        ? "응시 가능"
+                        : mockOverviewError
+                          ? "확인 필요"
+                          : currentMockOverview
+                            ? "준비 중"
+                            : "확인 중";
+                return (
+                  <button
+                    key={round}
+                    type="button"
+                    onClick={() =>
+                      available &&
+                      startQuiz(
+                        "exam_prep",
+                        "exam_prep",
+                        formatMockExamRoundLabel(round),
+                        round,
+                      )
+                    }
+                    disabled={!available}
+                    className={`student-mock-picker__round ${
+                      available
+                        ? "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                        : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-500"
+                    }`}
+                    aria-label={`${formatMockExamRoundShortLabel(round)} · ${status}`}
+                  >
+                    <span>
+                      {!available && (
+                        <i
+                          className="fas fa-lock text-xs"
+                          aria-hidden="true"
+                        ></i>
+                      )}{" "}
+                      {formatMockExamRoundShortLabel(round)}
+                    </span>
+                    <small>{status}</small>
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section>
@@ -237,13 +362,13 @@ const QuizIndex: React.FC = () => {
                     return (
                       <div
                         key={mIdx}
-                        className="flex flex-col justify-between gap-3 border-b border-gray-200 p-4 last:border-0 md:flex-row md:items-center"
+                        className="student-quiz-unit border-b border-gray-200 last:border-0"
                       >
                         <div className="flex items-center font-semibold text-gray-700">
                           <i className="fas fa-folder mr-3 text-amber-400"></i>
                           {mid.title}
                         </div>
-                        <div className="flex gap-2 self-end md:self-auto">
+                        <div className="student-quiz-unit__actions">
                           <button
                             onClick={() =>
                               diagActive &&
@@ -251,7 +376,7 @@ const QuizIndex: React.FC = () => {
                             }
                             disabled={!diagActive}
                             className={`
-                              flex min-h-11 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
+                              flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
                               ${
                                 diagActive
                                   ? "border-blue-100 bg-blue-50 text-blue-600 hover:border-blue-600 hover:bg-blue-600 hover:text-white"
@@ -264,7 +389,7 @@ const QuizIndex: React.FC = () => {
                             ) : (
                               <i className="fas fa-lock"></i>
                             )}
-                            {diagActive ? "진단평가" : "진단"}
+                            진단평가
                           </button>
 
                           <button
@@ -274,7 +399,7 @@ const QuizIndex: React.FC = () => {
                             }
                             disabled={!formActive}
                             className={`
-                              flex min-h-11 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
+                              flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-bold transition-all
                               ${
                                 formActive
                                   ? "border-emerald-100 bg-emerald-50 text-emerald-600 hover:border-emerald-600 hover:bg-emerald-600 hover:text-white"
@@ -287,7 +412,7 @@ const QuizIndex: React.FC = () => {
                             ) : (
                               <i className="fas fa-lock"></i>
                             )}
-                            {formActive ? "형성평가" : "형성"}
+                            형성평가
                           </button>
                         </div>
                       </div>

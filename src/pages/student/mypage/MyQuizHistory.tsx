@@ -480,109 +480,114 @@ export default function MyQuizHistory({
                                 : "오답"
                               : "채점 기록 없음"}
                           </h4>
-                          <QuizQuestionText
-                            value={
-                              current.saved.questionAvailable
-                                ? current.snapshot.question
-                                : "문제 원문이 보관되어 있지 않습니다."
-                            }
-                          />
-                          {current.snapshot.passageSet && (
-                            <section aria-label="공통 지문">
-                              <p>{current.snapshot.passageSet.instruction}</p>
-                              {current.snapshot.passageSet.passage && (
-                                <QuizPassage
-                                  value={current.snapshot.passageSet.passage}
-                                />
-                              )}
-                              {current.snapshot.passageSet.image && (
-                                <img
-                                  src={current.snapshot.passageSet.image}
-                                  alt="공통 지문 자료"
-                                  loading="lazy"
-                                />
-                              )}
-                            </section>
-                          )}
-                          {current.snapshot.passage && (
-                            <QuizPassage value={current.snapshot.passage} />
-                          )}
-                          {current.snapshot.image && (
-                            <img
-                              src={current.snapshot.image}
-                              alt="문제 자료"
-                              loading="lazy"
+                          <div className="my-quiz-history__question-body">
+                            <QuizQuestionText
+                              value={
+                                current.saved.questionAvailable
+                                  ? current.snapshot.question
+                                  : "문제 원문이 보관되어 있지 않습니다."
+                              }
                             />
-                          )}
-                          {current.snapshot.examplePassage && (
-                            <section aria-label="보기">
-                              <h5>〈보기〉</h5>
-                              <QuizPassage
-                                value={current.snapshot.examplePassage}
-                              />
-                            </section>
-                          )}
-                          {(current.snapshot.type === "choice" ||
-                            current.snapshot.type === "ox") &&
-                          current.snapshot.options?.length ? (
-                            <>
-                              {choiceColumnCount > 1 && (
-                                <div className="my-quiz-history__column-header">
-                                  <QuizChoiceColumnHeaders
-                                    count={choiceColumnCount}
+                            {current.snapshot.passageSet && (
+                              <section aria-label="공통 지문">
+                                <p>{current.snapshot.passageSet.instruction}</p>
+                                {current.snapshot.passageSet.passage && (
+                                  <QuizPassage
+                                    value={current.snapshot.passageSet.passage}
                                   />
-                                </div>
-                              )}
-                              <ol
-                                className={`my-quiz-history__options ${choiceColumnCount > 1 ? "my-quiz-history__options--columns" : ""}`}
-                              >
-                                {current.snapshot.options.map(
-                                  (option, optionIndex) => (
-                                    <li key={optionIndex}>
-                                      {choiceColumnCount > 1 && (
-                                        <span className="my-quiz-history__column-number">
-                                          {optionIndex + 1}.
-                                        </span>
-                                      )}
-                                      <div className="my-quiz-history__option-content">
-                                        {current.snapshot.choiceOptionImages?.[
-                                          optionIndex
-                                        ] && (
-                                          <img
-                                            src={
-                                              current.snapshot
-                                                .choiceOptionImages[
-                                                optionIndex
-                                              ]!
-                                            }
-                                            alt={`보기 ${optionIndex + 1} 자료`}
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        {choiceColumnCount > 1 ? (
-                                          <QuizChoiceColumnCells
-                                            value={option}
-                                          />
-                                        ) : (
-                                          <span>{option}</span>
-                                        )}
-                                        {current.snapshot.answer === option && (
-                                          <strong>정답</strong>
-                                        )}
-                                        {current.snapshot.submittedAnswer ===
-                                          option && (
-                                          <span className="my-quiz-history__answer-marker">
-                                            내 답
+                                )}
+                                {current.snapshot.passageSet.image && (
+                                  <img
+                                    src={current.snapshot.passageSet.image}
+                                    alt="공통 지문 자료"
+                                    loading="lazy"
+                                  />
+                                )}
+                              </section>
+                            )}
+                            {current.snapshot.passage && (
+                              <QuizPassage value={current.snapshot.passage} />
+                            )}
+                            {current.snapshot.image && (
+                              <img
+                                src={current.snapshot.image}
+                                alt="문제 자료"
+                                loading="lazy"
+                              />
+                            )}
+                            {current.snapshot.examplePassage && (
+                              <section aria-label="보기">
+                                <h5>〈보기〉</h5>
+                                <QuizPassage
+                                  value={current.snapshot.examplePassage}
+                                />
+                              </section>
+                            )}
+                            {(current.snapshot.type === "choice" ||
+                              current.snapshot.type === "ox") &&
+                            current.snapshot.options?.length ? (
+                              <>
+                                {choiceColumnCount > 1 && (
+                                  <div className="my-quiz-history__column-header">
+                                    <QuizChoiceColumnHeaders
+                                      count={choiceColumnCount}
+                                    />
+                                  </div>
+                                )}
+                                <ol
+                                  className={`my-quiz-history__options ${choiceColumnCount > 1 ? "my-quiz-history__options--columns" : ""}`}
+                                >
+                                  {current.snapshot.options.map(
+                                    (option, optionIndex) => (
+                                      <li key={optionIndex}>
+                                        {choiceColumnCount > 1 && (
+                                          <span className="my-quiz-history__column-number">
+                                            {optionIndex + 1}.
                                           </span>
                                         )}
-                                      </div>
-                                    </li>
-                                  ),
-                                )}
-                              </ol>
-                            </>
-                          ) : null}
-                          <dl className="student-quiz-relearning-answers">
+                                        <div className="my-quiz-history__option-content">
+                                          {current.snapshot
+                                            .choiceOptionImages?.[
+                                            optionIndex
+                                          ] && (
+                                            <img
+                                              src={
+                                                current.snapshot
+                                                  .choiceOptionImages[
+                                                  optionIndex
+                                                ]!
+                                              }
+                                              alt={`보기 ${optionIndex + 1} 자료`}
+                                              loading="lazy"
+                                            />
+                                          )}
+                                          {choiceColumnCount > 1 ? (
+                                            <QuizChoiceColumnCells
+                                              value={option}
+                                            />
+                                          ) : (
+                                            <span>{option}</span>
+                                          )}
+                                          {current.snapshot.answer ===
+                                            option && <strong>정답</strong>}
+                                          {current.snapshot.submittedAnswer ===
+                                            option && (
+                                            <span className="my-quiz-history__answer-marker">
+                                              내 답
+                                            </span>
+                                          )}
+                                        </div>
+                                      </li>
+                                    ),
+                                  )}
+                                </ol>
+                              </>
+                            ) : null}
+                          </div>
+                          <dl
+                            className="student-quiz-relearning-answers"
+                            aria-label="제출 답안과 정답"
+                          >
                             <div>
                               <dt>내 답</dt>
                               <dd>
@@ -593,7 +598,7 @@ export default function MyQuizHistory({
                                   : "답안 미보관"}
                               </dd>
                             </div>
-                            <div>
+                            <div className="student-quiz-relearning-correct-answer">
                               <dt>정답</dt>
                               <dd>
                                 {current.saved.answerAvailable
@@ -605,14 +610,17 @@ export default function MyQuizHistory({
                             </div>
                           </dl>
                           {current.snapshot.explanation && (
-                            <div className="student-quiz-relearning-explanation">
+                            <section
+                              className="student-quiz-relearning-explanation"
+                              aria-label="해설"
+                            >
                               <h4>해설</h4>
                               <p>{current.snapshot.explanation}</p>
-                            </div>
+                            </section>
                           )}
                           {currentNote && (
                             <section
-                              className="student-quiz-relearning-explanation"
+                              className="student-quiz-saved-note"
                               aria-label="저장한 오답노트"
                             >
                               <h4>내 오답노트</h4>

@@ -151,8 +151,12 @@ try {
       ),
   );
 }
-const browser = await playwright.chromium.launch({
-  channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+const browserEngine = process.env.WEEK_SCHEDULE_BROWSER_ENGINE || "chromium";
+assert(["chromium", "webkit"].includes(browserEngine));
+const browser = await playwright[browserEngine].launch({
+  ...(browserEngine === "chromium"
+    ? { channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge" }
+    : {}),
   headless: true,
 });
 const results = [];
@@ -495,8 +499,107 @@ async function verifyTeacherNavigation(page, width) {
     trustedTouchPointerEvents: pointerEvents.length,
   });
 }
+async function verifyStudentToolbar(page, width) {
+  await page.goto(origin + "/?week=2026-11-29");
+  const section = page.locator(".student-week-schedule");
+  await section.scrollIntoViewIfNeeded();
+  assert(
+    await section
+      .getByRole("img", { name: "출석 완료", exact: true })
+      .isVisible(),
+  );
+  const geometry = async () =>
+    section.evaluate((element) => {
+      const bar = element.querySelector(".student-week-schedule__toolbar");
+      const targets = [
+        ...bar.querySelectorAll(
+          ".student-week-schedule__range, button, a, .student-week-attendance.is-complete",
+        ),
+      ];
+      const boxes = targets.map((el) => el.getBoundingClientRect());
+      const bounds = bar.getBoundingClientRect();
+      const dates = [
+        ...element.querySelector(".student-week-strip").children,
+      ].map((el) => el.getBoundingClientRect());
+      return {
+        oneRow: boxes.every(
+          (box) =>
+            Math.abs(
+              box.top + box.height / 2 - boxes[0].top - boxes[0].height / 2,
+            ) < 1,
+        ),
+        inside: boxes.every(
+          (box) => box.left >= bounds.left - 1 && box.right <= bounds.right + 1,
+        ),
+        targets: boxes
+          .slice(1)
+          .map((box) => ({ width: box.width, height: box.height })),
+        datesOneRow: dates.every(
+          (box) =>
+            Math.abs(
+              box.top + box.height / 2 - dates[0].top - dates[0].height / 2,
+            ) < 1,
+        ),
+        dateButtonsInside: dates.every(
+          (box) => box.left >= bounds.left - 1 && box.right <= bounds.right + 1,
+        ),
+      };
+    });
+  const initial = await geometry();
+  assert(
+    initial.datesOneRow && initial.dateButtonsInside,
+    JSON.stringify({ width, initial }),
+  );
+  if (width < 768) {
+    assert(
+      initial.oneRow && initial.inside,
+      JSON.stringify({ width, initial }),
+    );
+    assert(
+      initial.targets.every((box) => box.width >= 44 && box.height >= 44),
+      JSON.stringify({ width, initial }),
+    );
+  }
+  await section.getByRole("button", { name: "일정 검색", exact: true }).click();
+  const search = section.getByRole("searchbox");
+  assert(await search.isVisible());
+  if (width < 768) assert((await geometry()).oneRow);
+  await search.fill("원서");
+  await search.press("Escape");
+  assert(
+    await section
+      .getByRole("button", { name: "일정 검색", exact: true })
+      .evaluate((el) => el === document.activeElement),
+  );
+  await section.getByRole("button", { name: "다음 주", exact: true }).click();
+  assert.equal(
+    await page
+      .locator('output[data-clicked="student"]')
+      .getAttribute("data-week"),
+    "2026-12-06",
+  );
+  await section.getByRole("button", { name: "이번 주", exact: true }).click();
+  assert.equal(
+    await page
+      .locator('output[data-clicked="student"]')
+      .getAttribute("data-selected"),
+    "2026-10-20",
+  );
+  if ([320, 390, 768, 1280, 1440].includes(width))
+    await section.screenshot({
+      path: path.join(evidence, `${width}-student-toolbar.png`),
+    });
+  results.push({
+    width,
+    studentToolbar: true,
+    initial,
+    searchAndKeyboard: true,
+  });
+}
 try {
-  for (const width of [320, 360, 375, 390, 430, 667, 768, 1120, 1280, 1366, 1440]) {
+  for (const width of [
+    320, 360, 375, 390, 430, 667, 768, 1120, 1280, 1366, 1440,
+  ]) {
     const page = await browser.newPage({
       viewport: { width, height: 900 },
       hasTouch: true,
@@ -504,6 +607,12 @@ try {
     await page.clock.setFixedTime(new Date("2026-10-20T12:00:00+09:00"));
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    if (process.argv.includes("--student-toolbar")) {
+      await verifyStudentToolbar(page, width);
+      assert.deepEqual(errors, []);
+      await page.close();
+      continue;
+    }
     for (const [week, expected, expectedCompact] of [
       ["2026-10-18", "10월 19–22일", "10/19–22"],
       ["2026-10-25", "10월 30일–11월 2일", "10/30–11/2"],
@@ -600,6 +709,7 @@ try {
       });
     }
     await verifyTeacherNavigation(page, width);
+    await verifyStudentToolbar(page, width);
     await page.clock.install({ time: new Date("2026-10-19T03:00:00Z") });
     await page.goto(`${origin}/?scenario=markers`);
     await page.evaluate(() => document.fonts.ready);
@@ -1035,7 +1145,9 @@ try {
     JSON.stringify(results, null, 2),
   );
   console.log(
-    `Week schedule browser checks passed: ${results.length} desktop/mobile range, priority-marker and native touch navigation cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
+    process.argv.includes("--student-toolbar")
+      ? `Student week toolbar checks passed (${browserEngine}): ${results.length} responsive widths, search, keyboard, week controls and attendance accessibility. Evidence: ${evidence}`
+      : `Week schedule browser checks passed: ${results.length} desktop/mobile range, priority-marker and native touch navigation cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
   );
 } finally {
   await browser.close();

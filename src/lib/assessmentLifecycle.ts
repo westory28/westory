@@ -46,6 +46,7 @@ export interface AssessmentStateResponse {
     | "SUBMITTED"
     | "INVALID_LINK"
     | "PERMISSION"
+    | "PREREQUISITE_REQUIRED"
     | "NOT_OPEN"
     | "CLOSED"
     | "ARCHIVED";
@@ -53,12 +54,45 @@ export interface AssessmentStateResponse {
   attempt: AssessmentAttemptState | null;
   serverNowIso: string;
   writeCount: 0;
+  requiredRound?: string;
   preparedAssets?: {
     sourceHash: string;
     imageUrls: string[];
     fontCharacters: string;
   };
 }
+
+export interface MockExamOverview {
+  semesterId: string;
+  rounds: {
+    examRound: string;
+    completed: boolean;
+    prerequisiteMet: boolean;
+    requiredRound: string;
+  }[];
+  writeCount: 0;
+}
+
+// Read only when the student opens the round picker, never the full history.
+export const getMockExamOverview = async (input: { semesterId: string }) => {
+  const assertOwner = await captureAssessmentOwner();
+  const callable = await getHttpsCallable<
+    { semesterId: string; mockExamOverview: true },
+    MockExamOverview
+  >("getAssessmentState");
+  await assertOwner();
+  const response = await callable({ ...input, mockExamOverview: true });
+  await assertOwner();
+  if (
+    response.data?.semesterId !== input.semesterId ||
+    !Array.isArray(response.data?.rounds)
+  ) {
+    throw new Error(
+      "모의고사 응시 상태를 확인하지 못했습니다. 다시 확인해 주세요.",
+    );
+  }
+  return response.data;
+};
 
 interface CommandResponse<T> {
   commandId: string;

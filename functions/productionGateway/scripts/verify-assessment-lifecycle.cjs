@@ -10,6 +10,7 @@ class MemoryStore {
   constructor(seed = {}) {
     this.documents = new Map(Object.entries(seed).map(([path, data]) => [path, clone(data)]));
     this.writeCount = 0;
+    this.queryLog = [];
     this.queue = Promise.resolve();
   }
 
@@ -23,11 +24,13 @@ class MemoryStore {
   }
 
   async query(collectionPath, filter = null) {
+    this.queryLog.push({ collectionPath, filter: clone(filter) });
     const prefix = `${collectionPath}/`;
     return [...this.documents.entries()]
       .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
       .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
-      .map(([path, data]) => ({ exists: true, path, data: clone(data) }));
+      .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
+      .slice(0, filter?.limit || Infinity);
   }
 
   async runTransaction(callback) {
@@ -44,11 +47,13 @@ class MemoryStore {
       return { exists, path, data: exists ? clone(staged.get(path)) : null };
     };
     const query = async (collectionPath, filter = null) => {
+      this.queryLog.push({ collectionPath, filter: clone(filter) });
       const prefix = `${collectionPath}/`;
       return [...staged.entries()]
         .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
         .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
-        .map(([path, data]) => ({ exists: true, path, data: clone(data) }));
+        .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
+        .slice(0, filter?.limit || Infinity);
     };
     const transaction = {
       get: async (path) => read(path),
@@ -896,10 +901,43 @@ const runMockExamPaper = async () => {
   assert.equal(paperStore.writeCount, count, "An empty round never substitutes legacy or other-round questions");
   const query = assessment.createAssessmentQueryCore({ store: paperStore, now: () => new Date(nowMs),
     serverTimestamp: () => ({ __serverTimestamp: nowMs }), assertSession: async request => ({ uid: request.auth.uid }) });
+  const second = { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_2", examRound: "round_2", legacyConfigKey: "exam_prep_exam_prep__round_2" };
+  const third = { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_3", examRound: "round_3", legacyConfigKey: "exam_prep_exam_prep__round_3" };
+  await apply("saveQuizAssessmentSettings", second);
+  await apply("saveQuizAssessmentSettings", third);
+  const overview = (auth = student, extra = {}) => query.getAssessmentState({ auth, data: { semesterId, mockExamOverview: true, ...extra } });
+  const emptyOverview = await overview();
+  assert.deepEqual(emptyOverview.rounds, [
+    { examRound: "round_1", completed: false, prerequisiteMet: true, requiredRound: "" },
+    { examRound: "round_2", completed: false, prerequisiteMet: false, requiredRound: "round_1" },
+    { examRound: "round_3", completed: false, prerequisiteMet: false, requiredRound: "round_1" },
+  ]);
+  assert.equal(emptyOverview.writeCount, 0);
+  await assert.rejects(overview(admin), error => error?.details?.reason === "ASSESSMENT_STUDENT_REQUIRED");
+  await assert.rejects(overview({ uid: "unassigned-student" }), error => error?.details?.reason === "ASSESSMENT_ENROLLMENT_REQUIRED");
+  await assert.rejects(overview(student, { studentUid: "another-student" }), error => error?.details?.reason === "ASSESSMENT_PAYLOAD_INVALID");
+  await assert.rejects(overview(student, { semesterId: "2025-2" }), error => error?.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+  for (const definitionId of [second.definitionId, third.definitionId]) {
+    const blocked = await query.getAssessmentState({ auth: student, data: { definitionId } });
+    assert.equal(blocked.status, "PREREQUISITE_REQUIRED"); assert.equal(blocked.requiredRound, "round_1");
+    assert.equal(blocked.attempt, null);
+    for (const action of [
+      () => apply("startAssessmentAttempt", { definitionId }, true),
+      () => query.getAssessmentState({ auth: student, data: { definitionId, prepareAssets: true } }),
+    ]) await assert.rejects(action(), error => error?.details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED");
+  }
+  // Other students, other semesters and ordinary unit results never unlock a round.
+  for (const [key, raw] of Object.entries({
+    otherStudent: { semesterId, studentUid: "another-student", definitionId: config.definitionId },
+    otherSemester: { semesterId: "2025-2", studentUid: student.uid, definitionId: config.definitionId },
+    formative: { semesterId, studentUid: student.uid, definitionId: "quiz:2026-2:exam_prep:formative" },
+  })) paperStore.documents.set(`${assessment.RESULT_COLLECTION}/${key}`, raw);
+  assert.equal((await overview()).rounds[1].prerequisiteMet, false);
+  const newCount = paperStore.writeCount;
   const prepare = (auth = student) => query.getAssessmentState({ auth, data: { definitionId: config.definitionId, prepareAssets: true } });
   const prepared = await prepare();
   assert.equal(prepared.attempt, null);
-  assert.equal(paperStore.writeCount, count, "Asset preparation does not create an attempt, start a clock or write anything");
+  assert.equal(paperStore.writeCount, newCount, "Asset preparation does not create an attempt, start a clock or write anything");
   assert.deepEqual(prepared.preparedAssets.imageUrls.sort(), ["https://example.test/goryeo.png", "https://example.test/shared.png"]);
   assert.deepEqual(Object.keys(prepared.preparedAssets).sort(), ["fontCharacters", "imageUrls", "sourceHash"]);
   assert.equal(prepared.preparedAssets.fontCharacters.includes("Ω"), false, "Explanation glyphs are private");
@@ -909,7 +947,7 @@ const runMockExamPaper = async () => {
   await assert.rejects(prepare({ uid: "unassigned-student" }), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
   await assert.rejects(apply("startAssessmentAttempt", { definitionId: config.definitionId, preparedSourceHash: "0".repeat(64) }, true),
     error => error?.details?.reason === "ASSESSMENT_PREPARED_SOURCE_STALE");
-  assert.equal(paperStore.writeCount, count, "Preparation authorization and stale-version rejection leave zero writes");
+  assert.equal(paperStore.writeCount, newCount, "Preparation authorization and stale-version rejection leave zero writes");
   const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId,
     preparedSourceHash: prepared.preparedAssets.sourceHash }, true)).result;
   assert.equal(started.serverNowIso, new Date(nowMs).toISOString());
@@ -931,6 +969,23 @@ const runMockExamPaper = async () => {
   assert.ok(started.questionPresentation.every(item => !Object.hasOwn(item, "hint") && !Object.hasOwn(item, "hintEnabled")));
   const attemptPath = `${assessment.ATTEMPT_COLLECTION}/${started.attemptId}`;
   const originalAttempt = paperStore.snapshot(attemptPath).data;
+  assert.equal((await overview()).rounds[1].prerequisiteMet, false, "Starting the first round is not submitting it");
+  // An upper-round draft made before the policy is preserved, but cannot be
+  // resumed, read as a live paper, saved or submitted until prerequisites pass.
+  const bypassId = `attempt_${"b".repeat(64)}`;
+  const bypassPath = `${assessment.ATTEMPT_COLLECTION}/${bypassId}`;
+  const bypassDraft = { ...originalAttempt, attemptId: bypassId, definitionId: second.definitionId, examRound: "round_2" };
+  paperStore.documents.set(bypassPath, bypassDraft);
+  const blockedDraft = await query.getAssessmentState({ auth: student, data: { attemptId: bypassId } });
+  assert.equal(blockedDraft.status, "PREREQUISITE_REQUIRED"); assert.equal(blockedDraft.attempt, null);
+  await assert.rejects(query.saveAssessmentProgress({ auth: student, data: { attemptId: bypassId, expectedRevision: 1, answers: {}, saveId: "blocked-progress" } }),
+    error => error?.details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED");
+  await assert.rejects(apply("submitAssessmentAttempt", { attemptId: bypassId, expectedRevision: 1, answers: {}, submitReason: "STUDENT" }, true),
+    error => error?.details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED");
+  await assert.rejects(apply("startAssessmentAttempt", { definitionId: second.definitionId }, true),
+    error => error?.details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED");
+  assert.deepEqual(paperStore.snapshot(bypassPath).data, bypassDraft, "A blocked draft is never erased or rewritten");
+  paperStore.documents.delete(bypassPath);
   const legacyAttempt = { ...originalAttempt, questionSnapshots: originalAttempt.questionSnapshots.map(item => {
     const { examRound: _examRound, ...legacy } = item;
     return { ...legacy, hintEnabled: true, hint: "기존 응시 스냅샷 힌트" };
@@ -975,12 +1030,41 @@ const runMockExamPaper = async () => {
   await assert.rejects(prepare(), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
   paperStore.documents.set(definitionPath, definition);
   assert.equal(paperStore.writeCount, beforeBlockedPreparation);
-  const third = { ...config, definitionId: "quiz:2026-2:exam_prep:exam_prep:round_3", examRound: "round_3", legacyConfigKey: "exam_prep_exam_prep__round_3" };
-  await apply("saveQuizAssessmentSettings", third);
+  const firstOverview = await overview();
+  assert.equal(firstOverview.rounds[0].completed, true);
+  assert.equal(firstOverview.rounds[1].prerequisiteMet, true);
+  assert.equal(firstOverview.rounds[2].requiredRound, "round_2");
+  await assert.rejects(apply("startAssessmentAttempt", { definitionId: third.definitionId }, true),
+    error => error?.details?.requiredRound === "round_2");
+  const secondAttempt = (await apply("startAssessmentAttempt", { definitionId: second.definitionId }, true)).result;
+  await apply("submitAssessmentAttempt", { attemptId: secondAttempt.attemptId, expectedRevision: 1,
+    answers: { 903: "고려" }, submitReason: "STUDENT" }, true);
   const decimalAttempt = (await apply("startAssessmentAttempt", { definitionId: third.definitionId }, true)).result;
   const decimal = (await apply("submitAssessmentAttempt", { attemptId: decimalAttempt.attemptId, expectedRevision: 1,
     answers: { 905: "조선", 906: "오답" }, submitReason: "STUDENT" }, true)).result;
   assert.equal(decimal.percent, 3.2); assert.equal(decimal.earnedPoints, 3.2); assert.equal(decimal.maxPoints, 100);
+  assert.ok((await overview()).rounds.every(round => round.completed && round.prerequisiteMet));
+  const resultReads = paperStore.queryLog.filter(row => /(^semester_assessment_results$|\/quiz_results$)/.test(row.collectionPath));
+  assert.ok(resultReads.length > 0);
+  for (const { collectionPath, filter } of resultReads) {
+    assert.equal(filter.limit, 1, "Completion reads retrieve at most one matching result");
+    assert.ok(filter.fieldMask.length && !filter.fieldMask.some(field => /answer|question|score/i.test(field)));
+    assert.ok(filter.filters.some(clause => ["uid", "studentUid"].includes(clause.field) && clause.value === student.uid));
+    assert.ok(collectionPath === "semester_assessment_results"
+      ? filter.filters.some(clause => clause.field === "semesterId" && clause.value === semesterId)
+      : collectionPath.startsWith("years/2026/semesters/2/"));
+  }
+  // Submitted result/replay remains available even if earlier evidence is
+  // administratively removed later. This never enables a new upper-round start.
+  paperStore.documents.delete(graded.resultRef);
+  assert.equal((await query.getAssessmentState({ auth: student, data: { attemptId: decimalAttempt.attemptId } })).status, "SUBMITTED");
+  assert.equal((await apply("submitAssessmentAttempt", { attemptId: decimalAttempt.attemptId, expectedRevision: 1,
+    answers: {}, submitReason: "STUDENT" }, true)).result.replayedSubmission, true);
+  // Both explicit legacy formats are accepted without reading untagged history.
+  for (const legacy of [{ category: "exam_prep", examRound: "round_1" }, { category: "exam_prep__round_1" }]) {
+    paperStore.documents.set("years/2026/semesters/2/quiz_results/round-one-legacy", { uid: student.uid, unitId: "exam_prep", ...legacy });
+    assert.equal((await overview()).rounds[0].completed, true);
+  }
 };
 
 const runLegacyReceiptHints = async () => {
@@ -1018,6 +1102,14 @@ const runLegacyReceiptHints = async () => {
       target: { refs: ["years/2026/semesters/2/quiz_questions/fixture"] }, result,
     };
     store.documents.set(receiptPath, clone(receipt));
+    if (fixture.name === "legacy-mock-definition") {
+      const denied = error => error?.details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED";
+      await assert.rejects(execute(student, type, payload, id), denied);
+      await assert.rejects(core.getStatus({ auth: student, data: { commandId: id, commandType: type } }), denied);
+      store.documents.set(`${assessment.RESULT_COLLECTION}/receipt-prerequisite`, {
+        studentUid: student.uid, semesterId, definitionId: `quiz:${semesterId}:exam_prep:exam_prep:round_1`,
+      });
+    }
     const expected = clone(result);
     for (const index of fixture.remove) {
       delete expected.questionPresentation[index].hint;
@@ -1033,6 +1125,7 @@ const runLegacyReceiptHints = async () => {
     assert.deepEqual(store.documents.get(receiptPath), receipt, `${fixture.name}: receipt remains immutable`);
     assert.equal(store.writeCount, writesBefore, `${fixture.name}: no business or receipt writes`);
     store.documents.delete(receiptPath);
+    store.documents.delete(`${assessment.RESULT_COLLECTION}/receipt-prerequisite`);
   }
 };
 

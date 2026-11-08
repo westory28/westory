@@ -577,6 +577,64 @@
   word-break: keep-all;
 }
 
+.student-quiz-result-content.is-reviewing {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.student-quiz-relearning-question {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface);
+}
+
+.student-quiz-relearning-question-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+
+.student-quiz-review-options {
+  min-width: 0;
+  border-top: 1px solid var(--ws-border);
+  padding-top: 12px;
+}
+
+.student-quiz-review-options ol {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.student-quiz-review-options li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.student-quiz-review-options-header {
+  padding-left: 32px;
+  margin-bottom: 8px;
+}
+
+.student-quiz-review-options li > span {
+  color: var(--ws-text-muted);
+}
+
+.student-quiz-review-options img {
+  display: block;
+  margin-top: 8px;
+}
+
 .student-quiz-relearning h2 {
   font-size: 20px;
   font-weight: 700;
@@ -599,7 +657,6 @@
   padding-inline: 16px;
 }
 
-.student-quiz-relearning-stage,
 .student-quiz-relearning-concepts,
 .student-quiz-relearning-answers dt,
 .student-quiz-relearning-reflection legend span {
@@ -615,8 +672,62 @@
 
 .student-quiz-relearning-answers {
   display: grid;
-  gap: 16px;
+  gap: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--ws-surface);
+}
+
+.student-quiz-relearning-answers > div {
+  min-width: 0;
+  padding: 12px 16px;
+}
+
+.student-quiz-relearning-answers > div + div {
+  border-left: 1px solid var(--ws-border);
+}
+
+.student-quiz-relearning-answers .student-quiz-relearning-correct-answer {
+  background: var(--ws-primary-soft);
+}
+
+.student-quiz-relearning-answers .student-quiz-relearning-correct-answer dt {
+  color: var(--ws-primary-text, var(--ws-primary));
+  font-weight: 700;
+}
+
+.student-quiz-relearning-answers dd {
+  margin: 4px 0 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.student-quiz-relearning-explanation {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--ws-border);
+  border-bottom: 1px solid var(--ws-border);
+}
+
+.student-quiz-relearning-explanation > :is(h3, h4, p) {
+  margin: 0;
+}
+
+.student-quiz-relearning-explanation > a {
+  justify-self: start;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.student-quiz-relearning-checked-explanation {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ws-border);
 }
 
 .student-quiz-relearning-answers dd,
@@ -627,12 +738,13 @@
 
 .student-quiz-relearning-reflection {
   border: 0;
-  border-top: 1px solid var(--ws-border);
-  padding-top: 16px;
+  padding: 0;
+  min-width: 0;
 }
 
 .student-quiz-relearning-reflection legend {
-  padding-top: 16px;
+  padding: 0;
+  margin-bottom: 8px;
   font-weight: 700;
 }
 
@@ -727,6 +839,20 @@
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+.student-quiz-review-note {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border);
+}
+.student-quiz-saved-note {
+  display: grid;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border);
+}
+.student-quiz-saved-note > :is(h4, p) {
+  margin: 0;
 }
 .student-quiz-review-note > label {
   font-weight: 700;

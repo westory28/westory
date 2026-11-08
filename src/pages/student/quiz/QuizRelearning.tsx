@@ -356,53 +356,95 @@ export default function QuizRelearning({
           결과로
         </button>
       </div>
-      <p className="student-quiz-relearning-stage">
-        {reviewing ? "1. 해설과 근거 확인" : "2. 해설 없이 다시 풀기"}
-      </p>
-      {item.concepts.length > 0 && (
-        <p className="student-quiz-relearning-concepts">
-          {item.concepts.join(" · ")}
-        </p>
-      )}
-      <h3>
-        <QuizQuestionText value={item.question} />
-      </h3>
-      {item.passageSet && (
-        <section
-          className="student-quiz-relearning-shared"
-          aria-label="공통 자료"
-        >
-          {item.passageSet.instruction && <p>{item.passageSet.instruction}</p>}
-          {item.passageSet.passage && (
-            <QuizPassage value={item.passageSet.passage} surface="white" />
+      <article
+        className="student-quiz-relearning-question"
+        aria-label="복습할 문제"
+      >
+        <div className="student-quiz-relearning-question-label">
+          <strong>{reviewing ? "문제" : "다시 풀기"}</strong>
+          {item.concepts.length > 0 && (
+            <span className="student-quiz-relearning-concepts">
+              {item.concepts.join(" · ")}
+            </span>
           )}
-          {item.passageSet.image && (
-            <img
-              className="student-quiz-relearning-image"
-              src={item.passageSet.image}
-              alt="공통 자료 이미지"
-            />
-          )}
-        </section>
-      )}
-      {item.image && (
-        <img
-          className="student-quiz-relearning-image"
-          src={item.image}
-          alt="문항 자료"
-        />
-      )}
-      {item.passage && <QuizPassage value={item.passage} surface="white" />}
-      {item.examplePassage && (
-        <fieldset className="student-quiz-relearning-example">
-          <legend>보기</legend>
-          <QuizPassage value={item.examplePassage} surface="white" />
-        </fieldset>
-      )}
+        </div>
+        <h3>
+          <QuizQuestionText value={item.question} />
+        </h3>
+        {item.passageSet && (
+          <section
+            className="student-quiz-relearning-shared"
+            aria-label="공통 자료"
+          >
+            {item.passageSet.instruction && (
+              <p>{item.passageSet.instruction}</p>
+            )}
+            {item.passageSet.passage && (
+              <QuizPassage value={item.passageSet.passage} surface="white" />
+            )}
+            {item.passageSet.image && (
+              <img
+                className="student-quiz-relearning-image"
+                src={item.passageSet.image}
+                alt="공통 자료 이미지"
+              />
+            )}
+          </section>
+        )}
+        {item.image && (
+          <img
+            className="student-quiz-relearning-image"
+            src={item.image}
+            alt="문항 자료"
+          />
+        )}
+        {item.passage && <QuizPassage value={item.passage} surface="white" />}
+        {item.examplePassage && (
+          <fieldset className="student-quiz-relearning-example">
+            <legend>보기</legend>
+            <QuizPassage value={item.examplePassage} surface="white" />
+          </fieldset>
+        )}
+        {reviewing && (item.type === "choice" || item.type === "ox") && (
+          <div className="student-quiz-review-options" aria-label="문제의 보기">
+            {choiceColumnCount > 1 && (
+              <div className="student-quiz-review-options-header">
+                <QuizChoiceColumnHeaders count={choiceColumnCount} />
+              </div>
+            )}
+            <ol>
+              {(item.type === "ox" ? ["O", "X"] : item.options || []).map(
+                (option, optionIndex) => (
+                  <li key={`${option}-${optionIndex}`}>
+                    <span aria-hidden="true">{optionIndex + 1}.</span>
+                    <div>
+                      {choiceColumnCount > 1 ? (
+                        <QuizChoiceColumnCells value={option} />
+                      ) : (
+                        <span>{option}</span>
+                      )}
+                      {item.choiceOptionImages?.[optionIndex] && (
+                        <img
+                          className="student-quiz-relearning-image"
+                          src={item.choiceOptionImages[optionIndex]!}
+                          alt={`${optionIndex + 1}번 보기 이미지`}
+                        />
+                      )}
+                    </div>
+                  </li>
+                ),
+              )}
+            </ol>
+          </div>
+        )}
+      </article>
 
       {reviewing ? (
         <>
-          <dl className="student-quiz-relearning-answers">
+          <dl
+            className="student-quiz-relearning-answers"
+            aria-label="제출 답안과 정답"
+          >
             <div>
               <dt>제출한 답</dt>
               <dd>
@@ -411,26 +453,29 @@ export default function QuizRelearning({
                   : formatQuizPracticeAnswer(item.submittedAnswer) || "미응답"}
               </dd>
             </div>
-            <div>
+            <div className="student-quiz-relearning-correct-answer">
               <dt>정답</dt>
               <dd>{formatQuizPracticeAnswer(item.answer)}</dd>
             </div>
           </dl>
-          {item.explanation && (
-            <div className="student-quiz-relearning-explanation">
-              <strong>해설</strong>
-              <p>{item.explanation}</p>
-            </div>
-          )}
-          {item.reviewLessonId && (
-            <a
-              className="student-quiz-secondary-action"
-              href={`#/student/lesson/note?id=${encodeURIComponent(item.reviewLessonId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
+          {(item.explanation || item.reviewLessonId) && (
+            <section
+              className="student-quiz-relearning-explanation"
+              aria-label="해설과 관련 자료"
             >
-              관련 수업자료 열기 <span className="sr-only">(새 탭)</span>
-            </a>
+              <h3>해설</h3>
+              {item.explanation && <p>{item.explanation}</p>}
+              {item.reviewLessonId && (
+                <a
+                  className="student-quiz-secondary-action"
+                  href={`#/student/lesson/note?id=${encodeURIComponent(item.reviewLessonId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  관련 수업자료 열기 <span className="sr-only">(새 탭)</span>
+                </a>
+              )}
+            </section>
           )}
           <fieldset className="student-quiz-relearning-reflection">
             <legend>
@@ -621,7 +666,12 @@ export default function QuizRelearning({
               {!results[item.id] && (
                 <p>정답: {formatQuizPracticeAnswer(item.answer)}</p>
               )}
-              {item.explanation && <p>{item.explanation}</p>}
+              {item.explanation && (
+                <div className="student-quiz-relearning-checked-explanation">
+                  <strong>해설</strong>
+                  <p>{item.explanation}</p>
+                </div>
+              )}
             </div>
           )}
           <div className="student-quiz-relearning-actions">

@@ -1,5 +1,13 @@
 # 운영 배포 절차
 
+## 학생 모의고사 순차 응시와 화면 정렬 (2026-11-08)
+
+학생 모의고사는 1회 제출 후 2회, 1·2회 제출 후 3회에 응시한다. `getAssessmentState`의 `mockExamOverview` 읽기는 모의고사 회차 선택을 펼칠 때만 실행한다. 현재 학기·인증 UID·정확한 회차의 서버 결과를 최대 1건씩 읽으며 원문·답안·전체 기록은 가져오지 않는다. canonical 결과가 없을 때만 해당 학기의 회차가 명시된 기존 결과를 제한 조회한다. 조회 오류에서는 다음 회차를 열지 않는다. 공개 여부·응시 횟수·재응시 대기·학생 배정 조건은 계속 적용한다.
+
+서버는 시작, 자료 사전 준비, 진행 복구, 자동 저장, 제출 및 시작 명령 영수증 재전송에도 선행 회차를 확인한다. 기존 제출 결과 확인과 제출 영수증 재전송은 보존한다. 신규 전체 학생 조회·외부 AI·새 개인정보 저장은 없다. 이 변경의 배포 대상은 서울 `executeCommand`, `getCommandStatus`, `getAssessmentState`, `saveAssessmentProgress` 및 프론트엔드다. 운영 원본을 비교하고 Functions check·lifecycle/receipt 검사 후 대상 함수만 배포한다.
+
+학생 일정과 블러는 공통 교사 기준과 비교하고, 오답노트는 문제·답안 비교·해설로 구분한다. `verify-week-schedule-browser.mjs`, `verify-mobile-top-glass.mjs`, `verify-student-quiz-entry-browser.mjs`, `verify-quiz-review-notes-browser.mjs`, `verify-mock-exam-history-browser.mjs`, `verify-student-quiz-review-flow.mjs` 및 기본 빌드를 사용한다. 합성 계정으로 좁은 화면·모바일 브라우저 엔진·제출과 노트 재조회를 검증하고, 실물 iPhone 홈 화면 앱 검증과 구분한다.
+
 ## 제출 답안 복원과 오답노트 (2026-11-08)
 
 모의고사·진단·형성평가의 제출 완료 화면은 서버가 확정한 답안을 사용한다. 이미 다른 탭에서 제출한 응시의 재요청도 원래 답안·점수·동결 머리말을 반환한다. 마이페이지는 보관된 공통 지문·보기와 회차 머리말을 복원하며 현재 문제은행으로 과거 원문을 덮어쓰지 않는다.

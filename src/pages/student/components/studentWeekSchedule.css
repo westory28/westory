@@ -90,12 +90,26 @@
 }
 
 .student-week-schedule__today {
+  min-width: 44px;
   min-height: 44px;
-  padding: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border-blue, #dbeafe);
   border-radius: var(--radius-md, 8px);
+  background: var(--ws-surface, #fff);
   color: var(--ws-primary, #2563eb);
   font-size: var(--ws-type-body, 1rem);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.student-week-schedule__range-short,
+.student-week-attendance > svg {
+  display: none;
+}
+
+.student-week-schedule :is(button, a):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
 }
 
 .student-week-strip__previous,
@@ -575,23 +589,7 @@
   }
 
   .student-week-strip {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
     padding-inline: 0;
-  }
-
-  .student-week-strip__previous {
-    grid-column: 1 / 3;
-    grid-row: 1;
-  }
-
-  .student-week-strip__next {
-    grid-column: 6 / 8;
-    grid-row: 1;
-    justify-self: end;
-  }
-
-  .student-week-strip__day {
-    grid-row: 2;
   }
 
   .student-week-strip__day strong {
@@ -606,6 +604,67 @@
 }
 
 @media (max-width: 767px) {
+  .student-week-schedule__toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(44px, 1fr) repeat(3, 44px);
+    gap: 4px;
+    margin-block: 0 4px;
+  }
+
+  .student-week-schedule__range,
+  .student-week-schedule__today {
+    padding-inline: 4px;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+  }
+
+  .student-week-schedule__today {
+    justify-self: start;
+  }
+
+  .student-week-schedule__range-full,
+  .student-week-attendance__label {
+    display: none;
+  }
+
+  .student-week-schedule__range-short {
+    display: inline;
+  }
+
+  .student-week-schedule__filters,
+  .student-week-schedule__actions,
+  .student-week-search {
+    display: contents;
+  }
+
+  .student-week-search__input-wrap {
+    display: none;
+  }
+
+  .student-week-search.is-open .student-week-search__input-wrap {
+    display: block;
+    grid-area: 2 / 1 / 3 / -1;
+    width: 100%;
+  }
+
+  .student-week-search input {
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .student-week-attendance,
+  .student-week-attendance.is-complete {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .student-week-attendance > svg {
+    display: block;
+  }
+
   .student-week-event {
     gap: 4px;
   }
@@ -658,6 +717,22 @@
 }
 
 @media (max-width: 359px) {
+  .student-week-schedule__toolbar {
+    column-gap: 2px;
+  }
+
+  .student-week-schedule__range,
+  .student-week-schedule__today {
+    padding-inline: 2px;
+    font-size: 0.75rem;
+  }
+
+  .student-week-strip__day strong {
+    width: 24px;
+    height: 24px;
+    font-size: var(--ws-type-body, 1rem);
+  }
+
   .student-week-event__metadata {
     flex-shrink: 1;
     max-width: 55%;

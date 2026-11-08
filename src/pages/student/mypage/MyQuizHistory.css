@@ -152,12 +152,20 @@
   font-size: 24px;
 }
 .my-quiz-history__question {
+  display: grid;
+  gap: 16px;
   padding: 24px;
   border: 1px solid var(--ws-border);
   border-radius: 8px;
   background: var(--ws-surface);
 }
-.my-quiz-history__question > img,
+.my-quiz-history__question-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.my-quiz-history__question-body > img,
+.my-quiz-history__question-body section img,
 .my-quiz-history__options img {
   max-width: 100%;
   max-height: 320px;

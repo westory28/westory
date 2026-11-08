@@ -11,6 +11,7 @@ const learning = require("./assessmentLearning");
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require("../historyAchievementMetadata");
 const achievementProfiles = require("../achievementProfiles");
 const mockMaterials = require("./mockExamMaterials");
+const mockProgress = require("./mockExamProgress");
 const { createHistoryClassroomSync } = require("./historyClassroomSync");
 
 const REGION = "asia-northeast3";
@@ -51,6 +52,12 @@ const STUDENT_COMMAND_TYPES = new Set([
 
 const fail = (code, message, reason, details = {}) => {
   throw new HttpsError(code, message, { reason, ...details });
+};
+
+const assertMockExamPrerequisite = async (transaction, assessment, studentUid) => {
+  const requiredRound = await mockProgress.requiredRound(transaction, assessment, studentUid);
+  if (requiredRound) fail("failed-precondition", `${Number(requiredRound.slice(6))}회 모의고사를 먼저 제출해 주세요.`,
+    "ASSESSMENT_PREREQUISITE_REQUIRED", { requiredRound });
 };
 
 const sha256 = (value) =>
@@ -1292,6 +1299,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         fail("permission-denied", "This assessment has no assigned class.", "ASSESSMENT_CLASS_NOT_ASSIGNED");
       }
       const enrollment = await assertActiveEnrollment(transaction, definition.semesterId, actor.actorUid, definition.assignedClassIds || []);
+      await assertMockExamPrerequisite(transaction, definition, actor.actorUid);
       if (
         Array.isArray(definition.assignedStudentUids)
         && definition.assignedStudentUids.length > 0
@@ -1430,6 +1438,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
           score: result.score, total: result.total, percent: result.percent, ...(result.earnedPoints !== undefined ? { earnedPoints: result.earnedPoints, maxPoints: result.maxPoints } : {}), ...(attempt.assessmentKind === "QUIZ" ? { analytics: result.analytics || null, learningSnapshot: result.learningSnapshot || [], ...(result.paperHeader || attempt.paperHeader ? { paperHeader: result.paperHeader || attempt.paperHeader } : {}), ...(Array.isArray(result.questionSnapshots) ? { questionSnapshots: result.questionSnapshots, questionSnapshotOmittedIds: result.questionSnapshotOmittedIds || [] } : {}) } : {}), ...(typeof result.passed === "boolean" ? { passed: result.passed, passThresholdPercent: result.passThresholdPercent } : {}), answerChecks: result.answerChecks, answers: result.answers || attempt.answers || {}, reward, replayedSubmission: true } };
       }
       if (!Array.isArray(attempt.gradingSnapshot) || !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(attempt.status)) fail("failed-precondition", "Assessment attempt cannot be submitted.", "ASSESSMENT_ATTEMPT_NOT_SUBMITTABLE");
+      await assertMockExamPrerequisite(transaction, attempt, actor.actorUid);
       if (Number(attempt.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment attempt revision changed.", "ASSESSMENT_ATTEMPT_REVISION_CONFLICT", { currentRevision: Number(attempt.revision || 0) });
       const nowDate = now();
       if (payload.submitReason !== "TIMEOUT" && nowDate.getTime() > Date.parse(attempt.deadlineAtIso)) {
@@ -1633,6 +1642,10 @@ const normalizeSaveRequest = (data, projectId) => {
 const normalizeQueryRequest = (data) => {
   const payload = { ...(data || {}) };
   delete payload._session;
+  if (payload.mockExamOverview === true) {
+    assertAllowedKeys(payload, ["semesterId", "mockExamOverview"], "getAssessmentState mock overview payload");
+    return { semesterId: normalizeSemesterId(payload.semesterId), mockExamOverview: true };
+  }
   if ("semesterId" in payload) {
     assertAllowedKeys(payload, ["semesterId"], "getAssessmentState class query payload");
     return { semesterId: semesterCore.normalizeSemesterId(payload.semesterId) };
@@ -1667,6 +1680,13 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
   const getAssessmentState = async (request) => {
     const actor = await actorFor(request);
     const query = normalizeQueryRequest(request.data || {});
+    if (query.mockExamOverview) {
+      if (actor.role !== "student") fail("permission-denied", "A student account is required.", "ASSESSMENT_STUDENT_REQUIRED");
+      return store.runTransaction(async transaction => {
+        await assertActiveEnrollment(transaction, query.semesterId, actor.uid, []);
+        return { semesterId: query.semesterId, rounds: await mockProgress.overview(transaction, query.semesterId, actor.uid), writeCount: 0 };
+      });
+    }
     if (query.semesterId) {
       if (!actor.canReadQuizManagement) fail("permission-denied", "Assessment management permission is required.", "ASSESSMENT_MANAGE_REQUIRED");
       return store.runTransaction(async (transaction) => {
@@ -1740,7 +1760,13 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
         if (!eligible) status = "PERMISSION";
       }
       let preparedAssets;
+      const requiredRound = actor.role === "student" && ownAttempt?.data?.status !== "SUBMITTED"
+        && (status === "READY" || ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt?.data?.status))
+        ? await mockProgress.requiredRound(transaction, definition, actor.uid) : "";
+      if (requiredRound) status = "PREREQUISITE_REQUIRED";
       if (query.prepareAssets) {
+        if (requiredRound) fail("failed-precondition", `${Number(requiredRound.slice(6))}회 모의고사를 먼저 제출해 주세요.`,
+          "ASSESSMENT_PREREQUISITE_REQUIRED", { requiredRound });
         // Asset preparation is read-only and never consumes an attempt or starts
         // a clock. Repeat the same publication, enrollment and retry gates used
         // by start; return no question text, choice text, answer or explanation.
@@ -1765,9 +1791,9 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
           if (source.fixedPaper) preparedAssets = mockMaterials.buildPreparedAssets(source);
         }
       }
-      if (ownAttempt?.exists && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data?.status)) status = "RECOVERABLE";
+      if (!requiredRound && ownAttempt?.exists && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data?.status)) status = "RECOVERABLE";
       if (ownAttempt?.exists && ownAttempt.data?.status === "SUBMITTED") status = "SUBMITTED";
-      const attempt = ownAttempt?.exists ? serializeAttempt(ownAttempt.data, true) : null;
+      const attempt = ownAttempt?.exists && !requiredRound ? serializeAttempt(ownAttempt.data, true) : null;
       if (attempt && ownAttempt.data.assessmentKind === "QUIZ" && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data.status)) {
         const frozenIds = new Set((attempt.questionPresentation || []).map(item => item.id));
         const missingIds = attempt.questionIds.filter(id => !frozenIds.has(id));
@@ -1790,6 +1816,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       }
       return {
         status,
+        ...(requiredRound ? { requiredRound } : {}),
         definition: {
           definitionId: definition.definitionId,
           semesterId: definition.semesterId,
@@ -1836,6 +1863,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
       const attempt = snapshot.data || {};
       if (attempt.studentUid !== actor.uid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
       await assertAssessmentSemesterWritable(transaction, attempt.semesterId);
+      if (attempt.status !== "SUBMITTED") await assertMockExamPrerequisite(transaction, attempt, actor.uid);
       const saveHash = sha256(canonicalJson({ answers: payload.answers, currentItemId: payload.currentItemId,
         ...(payload.analytics !== undefined ? { analytics: payload.analytics } : {}) }));
       if (attempt.lastSaveId === payload.saveId) {
@@ -1970,6 +1998,7 @@ const createAssessmentReadinessAdapter = () => ({
 });
 
 module.exports = {
+  assertMockExamPrerequisite,
   ASSESSMENT_COMMAND_TYPES,
   ASSESSMENT_POLICY_VERSION,
   ASSESSMENT_SCHEMA_VERSION,

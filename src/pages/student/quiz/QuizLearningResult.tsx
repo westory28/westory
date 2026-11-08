@@ -54,7 +54,9 @@ export default function QuizLearningResult({
 
   return (
     <div className="student-quiz-learning-result">
-      <section className="student-quiz-result-content">
+      <section
+        className={`student-quiz-result-content${reviewing ? " is-reviewing" : ""}`}
+      >
         {reviewing ? (
           <QuizRelearning
             items={reviewItems}

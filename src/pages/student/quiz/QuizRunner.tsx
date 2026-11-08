@@ -50,6 +50,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
 import {
   formatMockExamRoundLabel,
+  formatMockExamRoundShortLabel,
   getMockExamResultCategory,
   isAdditionalMockExamRound,
   isMockExamCategory,
@@ -1077,15 +1078,17 @@ const QuizRunner: React.FC = () => {
         normalizeStudentText(assessmentState.definition.title),
       );
       const stateBlockReason =
-        assessmentState.status === "PERMISSION"
-          ? "현재 학기·학급 배정으로는 이 평가에 응시할 수 없습니다."
-          : assessmentState.status === "NOT_OPEN"
-            ? "아직 응시할 수 있도록 공개되지 않은 평가입니다."
-            : assessmentState.status === "CLOSED"
-              ? "응시 기간이 종료된 평가입니다."
-              : assessmentState.status === "ARCHIVED"
-                ? "지난 학기 평가로, 읽기 전용입니다."
-                : "";
+        assessmentState.status === "PREREQUISITE_REQUIRED"
+          ? `${formatMockExamRoundShortLabel(assessmentState.requiredRound || "round_1")}를 제출한 뒤 응시할 수 있습니다.`
+          : assessmentState.status === "PERMISSION"
+            ? "현재 학기·학급 배정으로는 이 평가에 응시할 수 없습니다."
+            : assessmentState.status === "NOT_OPEN"
+              ? "아직 응시할 수 있도록 공개되지 않은 평가입니다."
+              : assessmentState.status === "CLOSED"
+                ? "응시 기간이 종료된 평가입니다."
+                : assessmentState.status === "ARCHIVED"
+                  ? "지난 학기 평가로, 읽기 전용입니다."
+                  : "";
       if (stateBlockReason) {
         setBlockReason(stateBlockReason);
         setView("intro");

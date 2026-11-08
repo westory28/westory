@@ -1392,6 +1392,8 @@ const createCommandGatewayCore = ({
           );
         }
         await assertStudentReceiptSemester(transaction, actor, existing.data);
+        if (actor.actorRole === "student" && command.commandType === COMMAND_TYPES.START_ASSESSMENT_ATTEMPT)
+          await assessmentLifecycle.assertMockExamPrerequisite(transaction, existing.data?.result, actor.actorUid);
         return {
           commandId: command.commandId,
           commandType: command.commandType,
@@ -1489,6 +1491,8 @@ const createCommandGatewayCore = ({
       ? await store.runTransaction(async transaction => {
         const document = await transaction.get(`${RECEIPT_COLLECTION}/${receiptId}`);
         if (document.exists) await assertStudentReceiptSemester(transaction, actor, document.data);
+        if (document.exists && command.commandType === COMMAND_TYPES.START_ASSESSMENT_ATTEMPT)
+          await assessmentLifecycle.assertMockExamPrerequisite(transaction, document.data?.result, actor.actorUid);
         return document;
       })
       : await store.get(`${RECEIPT_COLLECTION}/${receiptId}`);
