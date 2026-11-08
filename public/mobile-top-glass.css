@@ -1,61 +1,10 @@
 html {
   --ws-safe-top: env(safe-area-inset-top, 0px);
-  --ws-glass-height: var(--ws-safe-top);
-  --ws-glass-feather: 24px;
-  --ws-glass-sample: 0px;
-  --ws-glass-fade: linear-gradient(to bottom,
-    black calc(var(--ws-glass-height) - var(--ws-glass-feather)),
-    transparent var(--ws-glass-height));
   background-color: #f9fafb;
   scroll-padding-top: var(--ws-safe-top);
 }
 
-@media (max-width: 1023px), (pointer: coarse) {
-  html {
-    /* Keep the edge when the current inset shrinks during navigation, or when
-       the browser reports neither a current nor a maximum inset. */
-    --ws-glass-height: calc(max(var(--ws-safe-top), env(safe-area-max-inset-top, 0px)) + var(--ws-glass-feather));
-    /* Sample past the fade so a passing letter or logo is not mirrored at the
-       visible edge of the filter. This extra area is completely masked out. */
-    --ws-glass-sample: 36px;
-  }
-}
-
-/* The surface stays outside the route tree so menus can scroll underneath. */
-#westory-top-glass,
-:is(dialog:modal, :fullscreen:not(html))::after {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 2147483647;
-  height: calc(var(--ws-glass-height) + var(--ws-glass-sample));
-  pointer-events: none;
-  /* The fixed element itself filters the backdrop; do not let WebKit sample
-     the white drawer through an unfiltered fixed wrapper. */
-  background: transparent;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  -webkit-mask-image: var(--ws-glass-fade);
-  mask-image: var(--ws-glass-fade);
-}
-
-:is(dialog:modal, :fullscreen:not(html))::after {
-  content: "";
-}
-
-/* Native dialogs and fullscreen elements paint above document siblings. */
-html:has(dialog:modal, :fullscreen:not(html)) #westory-top-glass {
-  visibility: hidden;
-}
-
-/* Let the unobstructed iOS dashboard use WebKit's own scroll edge. A top-layer
-   dialog or fullscreen window still paints its own transparent filter. */
-html[data-system-top-edge] #westory-top-glass {
+/* Keep older standalone documents harmless while their cached HTML refreshes. */
+#westory-top-glass {
   display: none;
-}
-
-@media print {
-  #westory-top-glass,
-  :is(dialog:modal, :fullscreen:not(html))::after {
-    display: none;
-  }
 }

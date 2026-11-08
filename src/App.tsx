@@ -167,14 +167,6 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   return <Navigate to={`${to}${location.search}`} replace />;
 };
 
-const MobileTopEdgeNavigation = () => {
-  const { pathname, search } = useLocation();
-  React.useLayoutEffect(() => {
-    window.dispatchEvent(new Event("westory:routechange"));
-  }, [pathname, search]);
-  return null;
-};
-
 const RouteContentFallback: React.FC = () => (
   <InlineLoading className="min-h-[12rem] items-center" />
 );
@@ -209,7 +201,6 @@ const App: React.FC = () => {
     <AuthProvider>
       <AppToastProvider>
         <Router>
-          <MobileTopEdgeNavigation />
           <ArchiveRouteContent>
             <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
               <Routes>

@@ -2097,7 +2097,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   return (
     <div className="quiz-authoring-surface quiz-registration-workspace flex h-full min-h-0 flex-col">
-      <div className="quiz-editor-toolbar quiz-registration-heading">
+      <div
+        className={`quiz-editor-toolbar quiz-registration-heading${type === "special" ? " quiz-registration-heading--mock" : ""}`}
+      >
         <div className="quiz-registration-context">
           {type !== "special" && (
             <div className="text-sm text-gray-500 mb-1">{parentTitle}</div>
@@ -2114,7 +2116,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   title="평가 설정"
                   aria-label="평가 설정"
                 >
-                  <i className="fas fa-cog"></i>
+                  <i className="fas fa-cog" aria-hidden="true"></i>
                 </button>
               )}
             </div>
@@ -2200,7 +2202,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               disabled={loading || catalogScope !== questionScope}
               className="quiz-authoring-primary"
             >
-              <i className="fas fa-plus"></i>
+              <i className="fas fa-plus" aria-hidden="true"></i>
               <span>문제 등록</span>
             </button>
           )}
@@ -2367,15 +2369,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 ))}
               </select>
             </label>
-            <span className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+            <span className="quiz-unit-filter-count rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
               {filteredQuestions.length.toLocaleString("ko-KR")}문제
             </span>
             <button
               onClick={() => setEpFilter({ big: "", mid: "", small: "" })}
               className="ml-auto text-xs text-blue-400 hover:text-blue-600"
               title="필터 초기화"
+              aria-label="필터 초기화"
             >
-              <i className="fas fa-sync-alt"></i>
+              <i className="fas fa-sync-alt" aria-hidden="true"></i>
             </button>
           </div>
         </div>
