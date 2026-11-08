@@ -1610,7 +1610,7 @@ const QuizRunner: React.FC = () => {
   );
 
   if (view === "loading") {
-    return <PageLoading message="퀴즈를 준비하는 중입니다." />;
+    return <PageLoading message="문제를 준비하는 중입니다." />;
   }
 
   if (view === "intro") {

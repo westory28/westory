@@ -26,6 +26,10 @@ const fixture = await fs.readFile(
 );
 let service = fixture.match(/const service = `([\s\S]*?)`;/)[1];
 service = service.replace(
+  "export const refreshPublishedQuizDefinitions=async()=>{};",
+  "export const refreshPublishedQuizDefinitions=async(config,unitId,category,rounds)=>{(fixtureState.refreshes ||= []).push({unitId,category,rounds});if(fixtureState.failNextRefresh){fixtureState.failNextRefresh=false;throw new Error('공개 반영 합성 실패')}};",
+);
+service = service.replace(
   "category:q.category,type:q.type,refBig:",
   "category:q.category,type:q.type,examRound:q.examRound,paperOrder:q.paperOrder,points:q.points,passageSetId:q.passageSet?.id,passageSetInstruction:q.passageSet?.instruction,refBig:",
 );
@@ -1044,8 +1048,26 @@ try {
     await form.waitFor({ state: "hidden" });
     const savedAnswer = await page.evaluate(() => window.assessmentTeacherFixture.questions.find(q => q.question === "쉼표 허용 답안 저장 검증")?.answer);
     assert.equal(savedAnswer, accepted, `${mode}: alternatives persist without a combined 20-character limit`);
+    const refresh = await page.evaluate(() => window.assessmentTeacherFixture.refreshes.at(-1));
+    assert.deepEqual(refresh.rounds, mode === "mock" ? ["round_1"] : undefined);
+    if (mode === "mock") {
+      await page.getByRole("searchbox", { name: "검색", exact: true }).fill("쉼표 허용 답안 저장 검증");
+      const card = page.locator(".quiz-question-card").filter({ hasText: "쉼표 허용 답안 저장 검증" });
+      await card.getByRole("button", { name: /번 문제 수정$/ }).click();
+      const edit = page.getByRole("dialog", { name: "문제 수정", exact: true });
+      await edit.getByLabel("회차", { exact: true }).selectOption("round_2");
+      await edit.getByRole("button", { name: "수정 저장", exact: true }).click();
+      await edit.waitFor({ state: "hidden" });
+      assert.deepEqual(await page.evaluate(() => window.assessmentTeacherFixture.refreshes.at(-1).rounds), ["round_2", "round_1"], "Moving a question refreshes only its new and old rounds");
+      await page.evaluate(() => { window.assessmentTeacherFixture.failNextRefresh = true; });
+      await card.getByRole("button", { name: /번 문제 삭제$/ }).click();
+      await card.waitFor({ state: "hidden" });
+      assert.deepEqual(await page.evaluate(() => window.assessmentTeacherFixture.refreshes.at(-1).rounds), ["round_2"], "Deletion refreshes only the deleted question's round");
+      assert(alerts.at(-1).startsWith("문항은 삭제되었지만 공개 평가에 반영하지 못했습니다."), "A refresh failure must not claim the successful deletion failed");
+    }
   }
   checks.push("Mock and diagnostic authoring reject comma-only answers and individual answers over 20 characters, while saving multiple accepted answers over 20 characters combined without extra writes on validation failures.");
+  checks.push("Mock saves/deletes send only affected round IDs, moves include old and new rounds, and a failed post-delete publication refresh reports successful deletion separately.");
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   await fs.writeFile(

@@ -5,6 +5,8 @@ const assessment = require("../assessmentLifecycle");
 const archiveEnrollment = require("../archiveEnrollment");
 
 const clone = (value) => structuredClone(value);
+const matchesQuery = (data, filter) => !filter || (filter.filters || [filter]).every(clause =>
+  clause.operator === "in" ? clause.value.includes(data?.[clause.field]) : data?.[clause.field] === clause.value);
 
 class MemoryStore {
   constructor(seed = {}) {
@@ -28,7 +30,7 @@ class MemoryStore {
     const prefix = `${collectionPath}/`;
     return [...this.documents.entries()]
       .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
-      .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
+      .filter(([, data]) => matchesQuery(data, filter))
       .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
       .slice(0, filter?.limit || Infinity);
   }
@@ -51,7 +53,7 @@ class MemoryStore {
       const prefix = `${collectionPath}/`;
       return [...staged.entries()]
         .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
-        .filter(([, data]) => !filter || (filter.filters || [filter]).every(clause => data?.[clause.field] === clause.value))
+        .filter(([, data]) => matchesQuery(data, filter))
         .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
         .slice(0, filter?.limit || Infinity);
     };
@@ -1067,6 +1069,69 @@ const runMockExamPaper = async () => {
   }
 };
 
+const runMockSourceQueryBounds = async () => {
+  const makeFixture = (questions) => {
+    const boundedStore = new MemoryStore({ ...seed, ...Object.fromEntries(questions.map(q => [
+      `years/2026/semesters/2/quiz_questions/${q.id}`, q,
+    ])) });
+    const apply = (commandType, payload) => boundedStore.runTransaction(transaction => adapter.apply({
+      transaction, commandId: commandId(), receiptId: "source-query-test", timestamp: { __serverTimestamp: nowMs },
+      actor: { actorUid: admin.uid, actorRole: "admin" }, commandType,
+      payload: assessment.normalizeAssessmentPayload(commandType, payload),
+    }));
+    const config = (round, revision = 0, count = 1) => {
+      const base = definitionPayload("QUIZ");
+      return { ...base, definitionId: `quiz:2026-2:exam_prep:exam_prep:round_${round}`, sourceId: "exam_prep", category: "exam_prep", examRound: `round_${round}`,
+        questionCount: count, maxAttempts: 20, legacyConfigKey: `exam_prep_exam_prep__round_${round}`, expectedRevision: revision, reason: "Synthetic source query test",
+        presentationSettings: { ...base.presentationSettings, questionCount: count } };
+    };
+    return { store: boundedStore, apply, config, save: payload => apply("saveQuizAssessmentSettings", payload),
+      questionReads: () => boundedStore.queryLog.filter(item => item.collectionPath.endsWith("/quiz_questions")) };
+  };
+  const question = (id, round) => ({ id, unitId: "exam_prep", category: "exam_prep", type: "short", question: "합성 자료", answer: "명, 명나라", contentRevision: 1,
+    ...(round ? { examRound: `round_${round}`, paperOrder: 1, points: 3 } : {}) });
+  const f = makeFixture([question(801, 1), question(802, 2), question(803, 3), question(804)]);
+  const oldKeyConfig = { ...f.config(1), legacyConfigKey: "exam_prep_exam_prep" };
+  const saved = await f.save(oldKeyConfig);
+  const expectedHash = commandGateway.sha256(commandGateway.canonicalize([{ id: "801", answer: "명, 명나라", sourceRevision: "1", examRound: "round_1", paperOrder: 1, points: 3 }]));
+  assert.equal(saved.result.sourceHash, expectedHash, "Selecting a round in Firestore preserves the published source hash");
+  assert.equal(f.questionReads().length, 1);
+  assert.equal(f.questionReads()[0].filter.limit, 201);
+  assert.deepEqual(f.questionReads()[0].filter.filters.at(-1), { field: "examRound", operator: "==", value: "round_1" });
+  const writesBeforeInvalidKey = f.store.writeCount;
+  await assert.rejects(f.save({ ...f.config(1, 1), legacyConfigKey: "exam_prep_exam_prep__round_2" }),
+    error => error?.details?.reason === "ASSESSMENT_IDENTITY_IMMUTABLE");
+  assert.equal(f.store.writeCount, writesBeforeInvalidKey);
+  const migrated = await f.save(f.config(1, 1));
+  assert.equal(migrated.result.sourceHash, expectedHash);
+  assert.equal(f.store.snapshot(`${assessment.DEFINITION_COLLECTION}/${f.config(1).definitionId}`).data.legacyConfigKey, "exam_prep_exam_prep__round_1");
+  await assert.rejects(f.save({ ...oldKeyConfig, expectedRevision: 2 }), error => error?.details?.reason === "ASSESSMENT_IDENTITY_IMMUTABLE");
+  f.store.documents.delete("years/2026/semesters/2/quiz_questions/802");
+  f.store.queryLog.length = 0;
+  const beforeEmpty = f.store.writeCount;
+  await assert.rejects(f.save(f.config(2)), error => error?.details?.reason === "ASSESSMENT_SOURCE_EMPTY");
+  assert.equal(f.store.writeCount, beforeEmpty);
+  assert.equal(f.questionReads().length, 2, "An empty authored round uses one bounded probe, never the whole bank");
+  assert.equal(f.questionReads()[1].filter.limit, 1);
+  assert.deepEqual(f.questionReads()[1].filter.fieldMask, ["examRound"]);
+  assert.equal(f.questionReads()[1].filter.filters.at(-1).operator, "in");
+  for (const round of [1, 2, 3]) {
+    const legacy = makeFixture([question(811), question(812)]);
+    const result = await legacy.save(legacy.config(round, 0, 2));
+    assert.equal(result.result.itemCount, 2, `Unassigned legacy bank remains available in round ${round}`);
+    assert.equal(legacy.questionReads().length, 3);
+    assert.equal(legacy.questionReads()[2].filter.filters.length, 2);
+  }
+  const encoded = makeFixture([{ ...question(821), category: "exam_prep__round_2" }]);
+  await encoded.save({ ...encoded.config(2), definitionId: "quiz:2026-2:exam_prep:exam_prep__round_2", category: "exam_prep__round_2", examRound: "" });
+  assert.equal(encoded.questionReads().length, 1, "Encoded legacy categories retain their existing exact category query");
+  const malformed = makeFixture([{ ...question(831), examRound: "unexpected_round" }, question(832)]);
+  await assert.rejects(malformed.save(malformed.config(2)), error => error?.details?.reason === "ASSESSMENT_SOURCE_EMPTY");
+  const tooMany = makeFixture(Array.from({ length: 205 }, (_, index) => ({ ...question(2000 + index, 1), paperOrder: index + 1 })));
+  await assert.rejects(tooMany.save(tooMany.config(1)), error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+  assert.equal(tooMany.questionReads()[0].filter.limit, 201, "The 200-question validation needs at most one extra document");
+};
+
 const runShortAnswerAliases = async () => {
   // Each fixture uses the real authoring, publication, attempt and progress handlers.
   // Legacy attempts intentionally omit only the fields unavailable in that version.
@@ -1241,6 +1306,7 @@ const runLegacyReceiptHints = async () => {
   await runLegacyReceiptHints();
   await runMockExamPaper();
   await runShortAnswerAliases();
+  await runMockSourceQueryBounds();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
   await runKind("QUIZ");
@@ -1386,6 +1452,7 @@ const runLegacyReceiptHints = async () => {
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
+      "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
       "HISTORY_LESSON_METADATA_PRESERVED",
       "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",

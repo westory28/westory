@@ -1912,7 +1912,21 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         setEditingQuestionId(targetId);
       }
       try {
-        await refreshPublishedQuizDefinitions(config, node.id, category);
+        await refreshPublishedQuizDefinitions(
+          config,
+          node.id,
+          category,
+          type === "special"
+            ? Array.from(
+                new Set([
+                  formExamRound,
+                  ...(existingQuestion
+                    ? [existingQuestion.examRound || "round_1"]
+                    : []),
+                ]),
+              )
+            : undefined,
+        );
       } catch (error) {
         console.error(
           "Saved question could not refresh published definitions",
@@ -1920,7 +1934,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         );
         if (currentPager.current === pager)
           setFormError(
-            "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 저장을 다시 눌러 반영해 주세요.",
+            `문항은 저장되었지만 일부 공개 평가에 반영하지 못했습니다. ${error instanceof Error ? error.message : "저장을 다시 눌러 반영해 주세요."}`,
           );
         return;
       }
@@ -1945,25 +1959,40 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const handleDelete = async (id: number) => {
     if (!canEdit) return;
     if (!window.confirm("이 문제를 삭제하시겠습니까?")) return;
+    const question = questions.find((item) => item.id === id);
     try {
       await executeAssessmentManagementCommand("deleteQuizQuestion", {
         semesterId: getAssessmentSemesterId(config),
         questionId: String(id),
-        expectedRevision: Number(
-          questions.find((question) => question.id === id)?.contentRevision ||
-            0,
-        ),
+        expectedRevision: Number(question?.contentRevision || 0),
         reason: "교사 문항 삭제",
       });
       if (currentPager.current === pager) {
         setQuestions((prev) => prev.filter((q) => q.id !== id));
         setCatalog(pager.remove(String(id)));
       }
-      await refreshPublishedQuizDefinitions(config, node.id, category);
     } catch (error) {
       console.error("Delete question failed", error);
       if (currentPager.current === pager)
         alert("현재 학기 문제를 삭제하지 못했습니다.");
+      return;
+    }
+    try {
+      await refreshPublishedQuizDefinitions(
+        config,
+        node.id,
+        category,
+        type === "special" ? [question?.examRound || "round_1"] : undefined,
+      );
+    } catch (error) {
+      console.error(
+        "Deleted question could not refresh published definitions",
+        error,
+      );
+      if (currentPager.current === pager)
+        alert(
+          `문항은 삭제되었지만 공개 평가에 반영하지 못했습니다. ${error instanceof Error ? error.message : "해당 회차의 공개 설정을 확인해 주세요."}`,
+        );
     }
   };
 

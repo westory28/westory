@@ -37,6 +37,53 @@ const payload = (revision, update = {}) => {
     legacyConfigKey: "release-unit_diagnostic", presentationSettings, expectedRevision: revision, reason: "격리된 검증" };
 };
 
+const verifyAllClassConcurrentMockStarts = async () => {
+  const students = Array.from({ length: 11 }, (_, index) => `synthetic-all-class-${index + 1}`);
+  const session = await get(`application_sessions/student-three/sessions/${authTime}`);
+  const batch = db.batch();
+  for (const [index, uid] of students.entries()) {
+    const classId = index < 2 ? ["class_one", "class_two"][index] : `class_release_${index + 1}`;
+    const enrollmentId = `enrollment_${uid}`;
+    if (index >= 2) batch.set(db.doc(`semester_classes/${classId}`), { semesterId, classId, grade: "3", classNumber: String(index + 1), status: "ACTIVE" });
+    batch.set(db.doc(`users/${uid}`), { role: "student" });
+    batch.set(db.doc(`application_sessions/${uid}/sessions/${authTime}`), { ...session, uid, email: auth(uid).token.email });
+    batch.set(db.doc(`student_identities/${uid}`), { studentUid: uid });
+    batch.set(db.doc(`semester_enrollments/${enrollmentId}`), { semesterId, studentUid: uid, enrollmentId, classId, enrollmentStatus: "ACTIVE" });
+    batch.set(db.doc(`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, uid)}`), { semesterId, studentUid: uid, activeEnrollmentId: enrollmentId });
+  }
+  await batch.commit();
+  const defId = `quiz:${semesterId}:exam_prep:exam_prep:round_1`;
+  const visibleClassIds = Array.from({ length: 10 }, (_, index) => `3-${index + 1}`);
+  const current = await get(`semester_assessment_definitions/${defId}`);
+  await execute("teacher", "saveQuizAssessmentSettings", { ...payload(current.revision, { visibleClassIds, questionCount: 2 }),
+    definitionId: defId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1", legacyConfigKey: "exam_prep_exam_prep__round_1" });
+  const assigned = students.slice(0, 10);
+  const attemptsForStudents = () => db.collection("semester_assessment_attempts")
+    .where("definitionId", "==", defId).where("studentUid", "in", assigned).get();
+  const prepared = await Promise.all(assigned.map(uid => state(uid, { definitionId: defId, prepareAssets: true })));
+  assert.ok(prepared.every(item => item.status === "READY" && item.attempt === null && item.preparedAssets.sourceHash));
+  assert.ok(prepared.every(item => Object.keys(item.preparedAssets).sort().join(",") === "fontCharacters,imageUrls,sourceHash"));
+  assert.equal((await attemptsForStudents()).size, 0, "Fresh preparation never starts an attempt");
+  const commands = assigned.map((uid, index) => ({ uid, commandId: randomUUID(), payload: { definitionId: defId, preparedSourceHash: prepared[index].preparedAssets.sourceHash } }));
+  const started = await Promise.all([...commands, commands[0]].map(command =>
+    execute(command.uid, "startAssessmentAttempt", command.payload, command.commandId)));
+  assert.equal(new Set(started.map(item => item.result.attemptId)).size, 10);
+  assert.equal(started[0].result.attemptId, started[10].result.attemptId);
+  assert.ok(started[0].replayed || started[10].replayed, "The duplicate command replays one immutable receipt");
+  const attempts = await attemptsForStudents();
+  assert.equal(attempts.size, 10);
+  assert.equal(new Set(attempts.docs.map(doc => doc.data().studentUid)).size, 10);
+  assert.ok(started.every(item => item.result.questionPresentation.length === 2 && item.result.questionPresentation.every(question =>
+    !Object.hasOwn(question, "answer") && !Object.hasOwn(question, "explanation") && !Object.hasOwn(question, "hint"))));
+  const recovered = await production.getCommandStatus.run(request(commands[0].uid, { commandType: "startAssessmentAttempt", commandId: commands[0].commandId }));
+  assert.equal(recovered.result.attemptId, started[0].result.attemptId);
+  const outsider = students[10];
+  assert.equal((await state(outsider, { definitionId: defId })).status, "PERMISSION");
+  await assert.rejects(state(outsider, { definitionId: defId, prepareAssets: true }), reason("ASSESSMENT_ASSET_PREPARATION_FORBIDDEN"));
+  await assert.rejects(execute(outsider, "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_CLASS_NOT_ASSIGNED"));
+  console.log("PASS authenticated 10-class publication, fresh preparation, simultaneous starts with duplicate command receipt, outsider block and private answer fields");
+};
+
 (async () => {
   const cleared = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: "DELETE" });
   assert.ok(cleared.ok, "Only the guarded demo project fixture is cleared before a rerun");
@@ -240,6 +287,7 @@ const payload = (revision, update = {}) => {
     expectedRevision: staleDraft.revision, answers: { 32: "조선" }, submitReason: "STUDENT" }), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
   assert.deepEqual(await get(`semester_assessment_attempts/${staleId}`), staleDraft);
   console.log("PASS mock round overview scoped to self, sequential start/assets/recovery/save/submit gates, no draft mutation");
+  await verifyAllClassConcurrentMockStarts();
 
   const races = await Promise.allSettled([
     execute("teacher", "saveQuizAssessmentSettings", payload(2, { timeLimit: 900 })),

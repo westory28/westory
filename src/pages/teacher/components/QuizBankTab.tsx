@@ -66,6 +66,7 @@ export interface Question extends QuizLearningMetadata {
   docId: string;
   id: number;
   category: string;
+  examRound?: string;
   unitId: string;
   subUnitId?: string | null;
   type: string;
@@ -1003,11 +1004,14 @@ const QuizBankTab: React.FC<{
           config,
           payload.unitId,
           payload.category,
+          isMockExamCategory(payload.category)
+            ? [payload.examRound || "round_1"]
+            : undefined,
         );
       } catch (error) {
         console.error(error);
         alert(
-          "문항은 저장되었지만 공개 평가에 반영하지 못했습니다. 수정 저장을 다시 눌러 반영해 주세요.",
+          `문항은 저장되었지만 공개 평가에 반영하지 못했습니다. ${error instanceof Error ? error.message : "수정 저장을 다시 눌러 반영해 주세요."}`,
         );
         return;
       }

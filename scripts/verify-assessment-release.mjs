@@ -27,6 +27,10 @@ vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
     if (name === "node:crypto") return { createHash };
     if (name === "firebase-functions/v2/https") return { HttpsError: class extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } } };
     if (name === "./semesterCore") return semesterCore;
+    if (name === "../quizAnswerMatching") return require("../functions/quizAnswerMatching.js");
+    if (name === "../historyAchievementMetadata") return require("../functions/historyAchievementMetadata.js");
+    if (name === "../achievementProfiles") return require("../functions/achievementProfiles.js");
+    if (name === "./mockExamProgress") return require("../functions/productionGateway/mockExamProgress.js");
     if (name === "./historyClassroomExemptions") return exemptionModule.exports;
     if (name === "./assessmentLearning") return require("../functions/productionGateway/assessmentLearning.js");
     if (name === "./mockExamMaterials") return require("../functions/productionGateway/mockExamMaterials.js");
@@ -55,13 +59,14 @@ function harness() {
   const calls = [];
   const browserReads = [];
   const browserQueries = [];
+  const browserDocumentReads = [];
   const operations = new Map();
   let afterCommand;
   let afterRead;
   const auth = { currentUser: { uid: "teacher-a", getIdTokenResult: async () => ({ claims: { auth_time: 1234 } }) } };
   const transaction = {
     get: async (path) => snap(path), getAll: async (paths) => paths.map(snap),
-    query: async (path, filter) => list(path).filter((item) => !filter || (filter.filters || [filter]).every(clause => item.data[clause.field] === clause.value)),
+    query: async (path, filter) => list(path).filter((item) => !filter || (filter.filters || [filter]).every(clause => clause.operator === "in" ? clause.value.includes(item.data[clause.field]) : item.data[clause.field] === clause.value)).slice(0, filter?.limit),
     create: (path, data) => { assert.equal(docs.has(path), false); docs.set(path, clone(data)); },
     set: (path, data, options) => docs.set(path, options?.merge ? { ...docs.get(path), ...clone(data) } : clone(data)),
     delete: (path) => docs.delete(path),
@@ -74,8 +79,8 @@ function harness() {
       if (name === "firebase/firestore") return {
         doc: (_db, ...parts) => parts.join("/"), collection: (_db, ...parts) => parts.join("/"),
         getDoc: async (path) => { browserReads.push(path); const data = snap(path); afterRead?.(path); return { exists: () => data.exists, data: () => data.data }; },
-        query: (path, ...filters) => ({ path, filters }), where: (field, operator, value) => ({ field, operator, value }),
-        getDocs: async (input) => { const path = input.path || input; browserReads.push(path); browserQueries.push({ path, filters: clone(input.filters || []) }); return { docs: list(path).filter(item => !input.filters || input.filters.every(filter => item.data[filter.field] === filter.value)).map((item) => ({ id: item.id, data: () => item.data })) }; },
+        query: (path, ...constraints) => ({ path, filters: constraints.filter(item => item.field), limit: constraints.find(item => item.limit)?.limit }), where: (field, operator, value) => ({ field, operator, value }), limit: (value) => ({ limit: value }),
+        getDocs: async (input) => { const path = input.path || input; browserReads.push(path); const docs = list(path).filter(item => !input.filters || input.filters.every(filter => filter.operator === "in" ? filter.value.includes(item.data[filter.field]) : item.data[filter.field] === filter.value)).slice(0, input.limit); browserQueries.push({ path, filters: clone(input.filters || []), ...(input.limit ? { limit: input.limit } : {}) }); browserDocumentReads.push(docs.map(item => item.path)); return { docs: docs.map((item) => ({ id: item.id, data: () => item.data })) }; },
       };
       if (name === "./semesterScope") return { getYearSemester: (value) => value || config, getSemesterCollectionPath: (value, collection) => `years/${value.year}/semesters/${value.semester}/${collection}`, getSemesterDocPath: (value, collection, id) => `years/${value.year}/semesters/${value.semester}/${collection}/${id}` };
       if (name === "./mockExamRounds") return { DEFAULT_MOCK_EXAM_ROUND: "round_1" };
@@ -109,7 +114,7 @@ function harness() {
       throw new Error(name);
     },
   });
-  return { api: module.exports, docs, calls, browserReads, browserQueries, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
+  return { api: module.exports, docs, calls, browserReads, browserQueries, browserDocumentReads, auth, hook: (callback) => { afterCommand = callback; }, readHook: (callback) => { afterRead = callback; },
     command: (commandType, raw) => adapter.apply({ transaction, commandId: "direct-test", commandType,
       payload: serverModule.exports.normalizeAssessmentPayload(commandType, raw), timestamp: "2026-10-08T00:00:00.000Z",
       actor: { actorUid: "teacher-a", actorRole: "teacher" } }) };
@@ -197,7 +202,7 @@ for (const explicitFirstRound of [false, true]) {
   assert.deepEqual(calls.map(call => call.payload.examRound), ["round_1", "round_2"]);
   assert.equal(calls[0].payload.legacyConfigKey, explicitFirstRound ? "unit_1_exam_prep__round_1" : "unit_1_exam_prep");
   assert.equal(calls[0].payload.durationSeconds, explicitFirstRound ? 60 : 120);
-  assert.equal(browserQueries.length, 2, "Only the two active target rounds are planned");
+  assert.equal(browserQueries.length, 6, "Each legacy round uses an empty exact read and bounded authored-round probe before the legacy bank fallback");
   assert.ok(browserQueries.every(read => read.path === `${root}/quiz_questions` &&
     read.filters.some(filter => filter.field === "unitId" && filter.value === "unit_1") &&
     read.filters.some(filter => filter.field === "category" && filter.value === "exam_prep")));
@@ -246,6 +251,54 @@ console.log("PASS targeted mock-exam refresh preserves all active rounds, legacy
   assert.notEqual(changed.items.find(item => item.payload.examRound === "round_2").sourceHash, second.sourceHash);
 }
 console.log("PASS fixed mock papers isolate rounds, reject empty rounds, normalize counts and share exact server hashes");
+{
+  const { api, docs, calls, browserQueries, browserDocumentReads } = harness();
+  for (let round = 1; round <= 3; round++) {
+    for (let index = 1; index <= 23; index++) docs.set(`${root}/quiz_questions/mock-${round}-${index}`, {
+      id: `mock-${round}-${index}`, unitId: "exam_prep", category: "exam_prep", type: "word", question: "합성 회차 격리 검증", answer: "명", contentRevision: 1,
+      examRound: `round_${round}`, paperOrder: index, points: 4,
+    });
+    await api.saveQuizAssessmentSettings(config, "exam_prep", "exam_prep", `round_${round}`, "모의고사", `exam_prep_exam_prep__round_${round}`, { ...settings, hintLimit: 0 }, 0);
+  }
+  const definitionPath = round => `semester_assessment_definitions/quiz:2026-2:exam_prep:exam_prep:round_${round}`;
+  const originalFirst = structuredClone(docs.get(definitionPath(1)));
+  const originalThird = structuredClone(docs.get(definitionPath(3)));
+  docs.get(`${root}/quiz_questions/mock-2-1`).contentRevision = 2;
+  const writeStart = calls.length;
+  await api.refreshPublishedQuizDefinitions(config, "exam_prep", "exam_prep", ["round_2"]);
+  assert.equal(browserQueries.length, 1, "One changed authored round reads only that exact round");
+  assert.deepEqual(browserQueries[0].filters, [
+    { field: "unitId", operator: "==", value: "exam_prep" },
+    { field: "category", operator: "==", value: "exam_prep" },
+    { field: "examRound", operator: "==", value: "round_2" },
+  ]);
+  assert.equal(browserQueries[0].limit, 201);
+  assert.equal(browserDocumentReads.flat().length, 23, "Read 23 changed-round documents, never the 69-question bank");
+  assert.equal(calls.length - writeStart, 1);
+  assert.deepEqual(docs.get(definitionPath(1)), originalFirst);
+  assert.deepEqual(docs.get(definitionPath(3)), originalThird);
+  const secondHash = docs.get(definitionPath(2)).sourceHash;
+  for (let index = 1; index <= 23; index++) docs.delete(`${root}/quiz_questions/mock-1-${index}`);
+  docs.get(`${root}/quiz_questions/mock-2-1`).contentRevision = 3;
+  await assert.rejects(api.refreshPublishedQuizDefinitions(config, "exam_prep", "exam_prep", ["round_1", "round_2"]), /1회 모의고사: 문항과 정답이 없습니다/);
+  assert.notEqual(docs.get(definitionPath(2)).sourceHash, secondHash, "A now-empty old round does not block the valid destination refresh");
+  assert.deepEqual(docs.get(definitionPath(1)), originalFirst, "Empty rounds are not silently paused or rewritten");
+  assert.deepEqual(docs.get(definitionPath(3)), originalThird, "An unrelated published round stays untouched");
+  const lastReads = browserQueries.slice(1);
+  assert.equal(lastReads.length, 3, "Affected round exact reads plus one bounded empty-round probe");
+  assert(lastReads.some(read => read.limit === 1 && read.filters.some(filter => filter.operator === "in")));
+  console.log("PASS exact changed-round refresh reads 23/69 questions; empty old-round failure is aggregated after valid destination refresh; unrelated publication is untouched");
+}
+{
+  const { api, docs, calls, browserQueries } = harness();
+  docs.set(`${root}/assessment_config/settings`, { exam_prep_exam_prep__round_1: { ...settings } });
+  docs.set(`${root}/quiz_questions/legacy-paper`, { id: "legacy-paper", unitId: "exam_prep", category: "exam_prep", type: "word", question: "구형", answer: "답" });
+  docs.set(`${root}/quiz_questions/custom-round`, { id: "custom-round", unitId: "exam_prep", category: "exam_prep", type: "word", question: "기타 회차", answer: "답", examRound: "round_4", paperOrder: 1, points: 4 });
+  await assert.rejects(api.refreshPublishedQuizDefinitions(config, "exam_prep", "exam_prep", ["round_1"]), /문항과 정답이 없습니다/);
+  assert.equal(browserQueries.length, 3, "A bank outside the three default rounds still uses the legacy-boundary check");
+  assert.equal(calls.length, 0, "An empty authored round never inherits the old unassigned pool");
+  console.log("PASS custom authored rounds preserve empty-round isolation through the legacy fallback boundary");
+}
 {
   const { api, docs } = harness();
   docs.set(`${root}/quiz_questions/retake-mock`, { id: "retake-mock", unitId: "exam_prep", category: "exam_prep",

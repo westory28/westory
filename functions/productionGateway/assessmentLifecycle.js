@@ -613,14 +613,32 @@ const collectHistoryAnswerKey = (data) => {
 
 const loadDefinitionSource = async (transaction, payload) => {
   if (payload.assessmentKind === "QUIZ") {
-    const bankDocuments = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
+    const collectionPath = `${semesterRoot(payload.semesterId)}/quiz_questions`;
+    const bankFilters = [
       { field: "unitId", operator: "==", value: payload.sourceId },
       ...(payload.category ? [{ field: "category", operator: "==", value: payload.category }] : []),
-    ] });
-    const fixedPaper = payload.category === "exam_prep" && bankDocuments.some(document => document.data?.examRound);
+    ];
+    const mockBank = payload.category === "exam_prep";
+    const examRound = payload.examRound || "round_1";
+    let bankDocuments = await transaction.query(collectionPath, { filters: [
+      ...bankFilters, ...(mockBank ? [{ field: "examRound", operator: "==", value: examRound }] : []),
+    ], ...(mockBank ? { limit: 201 } : {}) });
+    let fixedPaper = mockBank && bankDocuments.length > 0;
+    if (mockBank && !fixedPaper) {
+      // A missing authored round must not fall back to another round or the
+      // unassigned bank. Probe only one projected document before legacy reads.
+      const authored = await transaction.query(collectionPath, { filters: [
+        ...bankFilters, { field: "examRound", operator: "in", value: ["round_1", "round_2", "round_3"] },
+      ], limit: 1, fieldMask: ["examRound"] });
+      if (authored.length) fail("failed-precondition", "No canonical quiz questions were found.", "ASSESSMENT_SOURCE_EMPTY");
+      // Older banks have no round field and remain available in every round.
+      // Preserve the previous validation for malformed legacy round markers too.
+      bankDocuments = await transaction.query(collectionPath, { filters: bankFilters });
+      fixedPaper = bankDocuments.some(document => document.data?.examRound);
+    }
     // Once a teacher assigns rounds, an empty round stays empty. Never substitute
     // another round or a former unassigned question pool for an authored paper.
-    const documents = fixedPaper ? bankDocuments.filter(document => document.data?.examRound === (payload.examRound || "round_1")) : bankDocuments;
+    const documents = fixedPaper ? bankDocuments.filter(document => document.data?.examRound === examRound) : bankDocuments;
     const questions = documents
       .filter((document) => !payload.category || String(document.data?.category || "") === payload.category)
       .map(extractQuizQuestion)
@@ -1121,7 +1139,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         fail("aborted", "평가 설정이 변경되었습니다. 다시 열어 확인해 주세요.", "ASSESSMENT_REVISION_CONFLICT");
       }
       if (current.status === "CLOSED") fail("failed-precondition", "A closed assessment definition cannot be edited.", "ASSESSMENT_DEFINITION_CLOSED");
-      if (snapshot.exists && ["semesterId", "assessmentKind", "sourceId", "category", "examRound", "legacyConfigKey"].some(key => (current[key] || "") !== (payload[key] || ""))) {
+      // Early round-one definitions used the unqualified settings key. Permit
+      // only its forward migration; the assessment and all other identity stay fixed.
+      const migrateFirstRoundKey = current.assessmentKind === "QUIZ"
+        && current.sourceId === "exam_prep" && current.category === "exam_prep"
+        && current.examRound === "round_1" && current.legacyConfigKey === "exam_prep_exam_prep"
+        && payload.legacyConfigKey === "exam_prep_exam_prep__round_1";
+      if (snapshot.exists && ["semesterId", "assessmentKind", "sourceId", "category", "examRound", "legacyConfigKey"].some(key =>
+        !(key === "legacyConfigKey" && migrateFirstRoundKey) && (current[key] || "") !== (payload[key] || ""))) {
         fail("failed-precondition", "Assessment definition identity cannot be changed.", "ASSESSMENT_IDENTITY_IMMUTABLE");
       }
       const published = payload.presentationSettings.active;

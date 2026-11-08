@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   where,
 } from "firebase/firestore";
@@ -98,15 +99,38 @@ const readDefinition = async (definitionId: string) => {
 };
 const readSource = async (config: ConfigLike, payload: Data) => {
   if (payload.assessmentKind === "QUIZ") {
-    const snapshot = await getDocs(
+    const bank = collection(
+      db,
+      getSemesterCollectionPath(config, "quiz_questions"),
+    );
+    const filters = [
+      where("unitId", "==", payload.sourceId),
+      ...(payload.category ? [where("category", "==", payload.category)] : []),
+    ];
+    const mockExam = payload.category === "exam_prep";
+    const round = payload.examRound || DEFAULT_MOCK_EXAM_ROUND;
+    let snapshot = await getDocs(
       query(
-        collection(db, getSemesterCollectionPath(config, "quiz_questions")),
-        where("unitId", "==", payload.sourceId),
-        ...(payload.category
-          ? [where("category", "==", payload.category)]
-          : []),
+        bank,
+        ...filters,
+        ...(mockExam ? [where("examRound", "==", round), limit(201)] : []),
       ),
     );
+    let fixedPaper = mockExam && snapshot.docs.length > 0;
+    if (mockExam && !fixedPaper) {
+      const authoredRound = await getDocs(
+        query(
+          bank,
+          ...filters,
+          where("examRound", "in", ["round_1", "round_2", "round_3"]),
+          limit(1),
+        ),
+      );
+      fixedPaper = authoredRound.docs.length > 0;
+      // Only old banks without any authored round use the unassigned pool.
+      // Keep the final truthy-round check for older/custom round identifiers.
+      if (!fixedPaper) snapshot = await getDocs(query(bank, ...filters));
+    }
     const documents = snapshot.docs
       .map((document) => ({ id: document.id, data: document.data() }))
       .filter(
@@ -116,15 +140,10 @@ const readSource = async (config: ConfigLike, payload: Data) => {
       );
     // Match the server's bank migration boundary: once rounds are authored,
     // an empty round must never silently receive another round or legacy items.
-    const fixedPaper =
-      payload.category === "exam_prep" &&
-      documents.some(({ data }) => Boolean(data.examRound));
+    fixedPaper ||=
+      mockExam && documents.some(({ data }) => Boolean(data.examRound));
     const answerKey = documents
-      .filter(
-        ({ data }) =>
-          !fixedPaper ||
-          data.examRound === (payload.examRound || DEFAULT_MOCK_EXAM_ROUND),
-      )
+      .filter(({ data }) => !fixedPaper || data.examRound === round)
       .map(({ id, data }) => ({
         id: String(data.id ?? id).trim(),
         answer: String(data.answer ?? ""),
@@ -299,7 +318,7 @@ const buildItem = async (
 
 const planAssessmentRelease = async (
   config: ConfigLike,
-  quizTarget?: { sourceId: string; category: string },
+  quizTarget?: { sourceId: string; category: string; examRounds?: string[] },
 ): Promise<AssessmentReleasePlan> => {
   const resolved = getYearSemester(config);
   const [gradeClasses, history] = await Promise.all([
@@ -325,6 +344,12 @@ const planAssessmentRelease = async (
     if (
       quizTarget &&
       (sourceId !== quizTarget.sourceId || category !== quizTarget.category)
+    )
+      continue;
+    if (
+      category === "exam_prep" &&
+      quizTarget?.examRounds &&
+      !quizTarget.examRounds.includes(rawRound || DEFAULT_MOCK_EXAM_ROUND)
     )
       continue;
     if (
@@ -580,14 +605,34 @@ export const refreshPublishedQuizDefinitions = async (
   config: ConfigLike,
   sourceId: string,
   category: string,
+  examRounds?: string[],
 ) => {
   // Limit the plan before reading source questions and definition revisions.
-  const plan = await planAssessmentRelease(config, { sourceId, category });
+  const plan = await planAssessmentRelease(config, {
+    sourceId,
+    category,
+    examRounds,
+  });
+  const failures: string[] = [];
   for (const item of plan.items) {
-    if (item.status === "BLOCKED") throw new Error(item.reason);
-    if (item.status === "PREPARE")
-      await saveAssessmentDefinition(config, item.payload, true, item);
+    try {
+      if (item.status === "BLOCKED") throw new Error(item.reason);
+      if (item.status === "PREPARE")
+        await saveAssessmentDefinition(config, item.payload, true, item);
+    } catch (error) {
+      const round = item.payload.examRound;
+      const prefix = round
+        ? `${String(round).replace("round_", "")}회 모의고사: `
+        : "";
+      failures.push(
+        prefix +
+          (error instanceof Error
+            ? error.message
+            : "공개 평가에 반영하지 못했습니다."),
+      );
+    }
   }
+  if (failures.length) throw new Error(failures.join("\n"));
 };
 
 export const readAssessmentContentRevision = async (

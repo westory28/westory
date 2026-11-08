@@ -255,7 +255,7 @@ const App: React.FC = () => {
                   path="/student/quiz"
                   element={renderWithLayout(
                     <StudentQuizIndex />,
-                    "퀴즈 목록을 준비하는 중입니다.",
+                    "문제 풀이 목록을 준비하는 중입니다.",
                   )}
                 />
                 <Route
@@ -270,7 +270,7 @@ const App: React.FC = () => {
                   path="/student/quiz/run"
                   element={renderWithLayout(
                     <QuizRunner />,
-                    "퀴즈를 준비하는 중입니다.",
+                    "문제를 준비하는 중입니다.",
                   )}
                 />
                 <Route

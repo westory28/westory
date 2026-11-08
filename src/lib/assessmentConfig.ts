@@ -39,6 +39,8 @@ export interface AssessmentConfigEntry extends MockExamPaperHeaderSettings {
   visibleClassIds: string[];
   visibilityVersion?: number;
   hasExplicitClassVisibility: boolean;
+  readonly hasExplicitQuestionCount?: boolean;
+  readonly hasExplicitTimeLimit?: boolean;
 }
 
 interface SchoolOptionShape {
@@ -635,7 +637,7 @@ export const normalizeAssessmentConfigEntry = (
     source.randomOrder,
   );
 
-  return {
+  const normalized: AssessmentConfigEntry = {
     ...(source.paperTitle !== undefined || source.paperHeading !== undefined
       ? normalizeMockExamPaperHeader(source)
       : {}),
@@ -655,6 +657,21 @@ export const normalizeAssessmentConfigEntry = (
         : undefined,
     hasExplicitClassVisibility: explicitVisibility,
   };
+  // Display provenance only. Keep these flags out of spread/JSON/save payloads.
+  return Object.defineProperties(normalized, {
+    hasExplicitQuestionCount: {
+      value:
+        Number.isInteger(Number(source.questionCount)) &&
+        Number(source.questionCount) > 0,
+      enumerable: false,
+    },
+    hasExplicitTimeLimit: {
+      value:
+        Number.isFinite(Number(source.timeLimit)) &&
+        Number(source.timeLimit) > 0,
+      enumerable: false,
+    },
+  });
 };
 
 export const readAssessmentConfigMap = async (

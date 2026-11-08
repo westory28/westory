@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-08: Mock release audit against bd9b96c4: live executeCommand generation 1794147978929338 matches all 115 runtime source files after LF normalization. Live getAssessmentState generation 1794129626434601 has older short-answer alias dependencies, but its query closure and loadDefinitionSource match the baseline. Deploy only executeCommand/getAssessmentState for bounded round-source reads and the exact forward legacy round-one settings-key migration; preserve all other identities and receipts.",
     "2026-11-08: Short-answer alias audit: live executeCommand/getCommandStatus/getAssessmentState source generations 1794129566962970/1794129626275847/1794129626434601 match baseline 6a42819b after LF normalization. Live saveMyQuizReviewNote generation 1794068255377709 matches its handler, session and permission dependencies. Deploy only executeCommand and saveMyQuizReviewNote; include the new ../quizAnswerMatching.js helper.",
     "2026-11-08: Mock-round gating source audit: live executeCommand generation 1794068315420737 matches c2766e0e in all tracked runtime dependencies after LF normalization. Live getAssessmentState 1794065100745184 differs only in unrelated submitted-answer/header return logic within assessmentLifecycle; its query closure matches baseline. Live saveAssessmentProgress 1793944738229753 has older authoring dependencies, but saveAssessmentProgress and normalizeSaveRequest match baseline. Live getCommandStatus 1794054629682179 uses the identical commandGateway baseline. Deploy only Seoul executeCommand/getCommandStatus/getAssessmentState/saveAssessmentProgress.",
     "2026-11-07: Before disabling mock-exam hints, live Seoul executeCommand/getCommandStatus archives matched baseline 79c2d446 in all tracked runtime files except the separately released quizClassAnalysis cache optimization. Live getAssessmentState 00008 has older achievement metadata and worksheet alternative-answer dependencies; its query, serializeAttempt and questionPresentation bodies match the baseline. Only mock hint filtering and new-question normalization change in this patch; preserved attempts and submitted scores are not rewritten.",
@@ -53,7 +54,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "677a9041be199415ac5f46d549fe14074883d5e5e8e389b1a143865f7e897647",
+      "sha256": "ab94ca823d92a17913fb3badce40cbdc77219ff9628211dedd0e00379684adb0",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -76,7 +77,8 @@
         "2026-11-07: Validate achievement metadata, freeze assessment start time, and route the analysis-only teacher review command.",
         "2026-11-08: Validate and persist per-round plain-text mock paper title/header; freeze them on new attempts and expose immutable presentation on scoped reads. Validate up to eight cognitive-process tags without changing permissions or grading.",
         "2026-11-08: Enforce student-owned prior mock-round submissions at start, assets, recovery, save, submit and start-receipt replay/status; preserve submitted review and normal assessments.",
-        "2026-11-08: Accept comma-delimited short-answer keys, freeze question type, retain existing typed snapshots and submitted receipts, and keep other question types exact."
+        "2026-11-08: Accept comma-delimited short-answer keys, freeze question type, retain existing typed snapshots and submitted receipts, and keep other question types exact.",
+        "2026-11-08: Query authored mock papers by unit/category/round with limit 201, probe at most one authored-round marker before legacy fallback, preserve canonical source hashes, and permit only the exact forward round-one legacyConfigKey migration during teacher settings save."
       ]
     },
     {
