@@ -393,6 +393,43 @@
   opacity: 0.7;
   stroke-dasharray: 1.2 0.7;
 }
+.mock-exam-correction {
+  color: #b91c1c;
+  pointer-events: none;
+}
+.mock-exam-correction[data-correction-state="pending"] {
+  visibility: hidden;
+}
+.mock-exam-correction svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mock-exam-option-number .mock-exam-correction {
+  position: absolute;
+  width: 2em;
+  height: 2em;
+  top: -0.75em;
+  left: -0.4em;
+  transform: rotate(-7deg);
+}
+.mock-exam-written-answer .mock-exam-correction {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-height: 1.6em;
+}
+.mock-exam-written-answer .mock-exam-correction svg {
+  flex: 0 0 1.6em;
+  width: 1.6em;
+  height: 1.6em;
+  align-self: center;
+}
 .mock-exam-answer-check .mock-exam-answer-check-reveal {
   stroke: #fff;
   stroke-width: 12;
@@ -518,15 +555,14 @@
   stroke-dasharray: 0.7 2.5 1.3 4;
   opacity: 0.7;
 }
-.mock-exam-pencil .mock-exam-pencil-reveal {
+.mock-exam-pencil-stroke .mock-exam-pencil-reveal {
   stroke: #fff;
   stroke-width: 14;
   stroke-dasharray: 100;
   stroke-dashoffset: 0;
-}
-.mock-exam-pencil.is-drawing .mock-exam-pencil-reveal {
-  /* Requested grading feedback must draw even when reduced motion is enabled. */
-  animation: mock-exam-pencil-draw 640ms linear both !important;
+  /* Explicit grading, correction, and score feedback also runs in reduce mode. */
+  animation: var(--pencil-animation) var(--pencil-duration) linear
+    var(--pencil-delay) both !important;
 }
 @keyframes mock-exam-pencil-draw {
   0% {
@@ -542,8 +578,32 @@
     stroke-dashoffset: 0;
   }
 }
+@keyframes mock-exam-pencil-finish {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mock-exam-correction-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mock-exam-score-write {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 @media print {
-  .mock-exam-pencil.is-drawing .mock-exam-pencil-reveal {
+  .mock-exam-pencil-stroke .mock-exam-pencil-reveal {
     animation: none !important;
     stroke-dashoffset: 0;
   }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 // Original single-line numerals: slightly uneven joins and an open pencil stroke,
 // rather than a typeset italic font. No external font or image request is needed.
@@ -17,8 +17,19 @@ const DIGITS: Record<string, string> = {
   "-": "M3 22L19 21",
 };
 
-export function PencilStrokes({ d }: { d: string }) {
-  return (
+export function PencilStrokes({
+  d,
+  reveal,
+}: {
+  d: string;
+  reveal?: {
+    kind: "mark" | "tail" | "correction" | "score";
+    duration: number;
+    delay?: number;
+  };
+}) {
+  const maskId = useId();
+  const ink = (
     <>
       <path className="mock-exam-pencil-core" d={d} />
       <path
@@ -34,33 +45,103 @@ export function PencilStrokes({ d }: { d: string }) {
       <path className="mock-exam-pencil-fiber" d={d} />
     </>
   );
+  if (!reveal) return ink;
+  const animation = {
+    mark: "mock-exam-pencil-draw",
+    tail: "mock-exam-pencil-finish",
+    correction: "mock-exam-correction-draw",
+    score: "mock-exam-score-write",
+  }[reveal.kind];
+  return (
+    <g
+      className={`mock-exam-pencil-stroke mock-exam-pencil-stroke--${reveal.kind}`}
+      style={
+        {
+          "--pencil-animation": animation,
+          "--pencil-duration": `${reveal.duration}ms`,
+          "--pencil-delay": `${reveal.delay || 0}ms`,
+        } as React.CSSProperties
+      }
+    >
+      <defs>
+        <mask
+          id={maskId}
+          maskUnits="userSpaceOnUse"
+          x="-20"
+          y="-20"
+          width="400"
+          height="160"
+        >
+          <path className="mock-exam-pencil-reveal" d={d} pathLength="100" />
+        </mask>
+      </defs>
+      <g mask={`url(#${maskId})`}>{ink}</g>
+    </g>
+  );
 }
 
-export default function MockExamPencilScore({ score }: { score: number }) {
-  if (!Number.isFinite(score)) return null;
-  // Preserve the two-decimal result precision, without .00 or trailing zeros.
-  const label = String(Number(score.toFixed(2)));
+export const formatMockExamScore = (score: number) =>
+  String(Number(score.toFixed(2)));
+
+function scoreStrokes(score: number) {
+  const label = formatMockExamScore(score);
+  const strokes: Array<{
+    d: string;
+    transform?: string;
+    duration: number;
+    underline?: boolean;
+  }> = [];
   let advance = 4;
-  const numerals = [...label].map((digit, index) => {
+  [...label].forEach((digit, index) => {
     const x = advance;
     advance += digit === "." ? 10 : 28;
-    return (
-      <g
-        key={index}
-        transform={`translate(${x} ${[5, 4, 6][index % 3]}) rotate(${[-3, 2, -1][index % 3]} 13 20)`}
-      >
-        <PencilStrokes d={DIGITS[digit]} />
-      </g>
-    );
+    // Each pen lift gets its own reveal so a later intersecting stroke cannot
+    // appear before the pencil reaches it (including the crossbar in 4).
+    for (const d of DIGITS[digit]?.match(/M[^M]+/g) || []) {
+      strokes.push({
+        d,
+        duration: 90,
+        transform: `translate(${x} ${[5, 4, 6][index % 3]}) rotate(${[-3, 2, -1][index % 3]} 13 20)`,
+      });
+    }
   });
-  const width = advance + 56;
+  const width = advance + 4;
+  strokes.push(
+    {
+      d: `M3 52Q${width * 0.44} 49 ${width - 4} 48`,
+      duration: 80,
+      underline: true,
+    },
+    {
+      d: `M7 57Q${width * 0.5} 54 ${width - 8} 54`,
+      duration: 80,
+      underline: true,
+    },
+  );
+  return { label, width, strokes };
+}
+
+export const getMockExamScoreDuration = (score: number) =>
+  scoreStrokes(score).strokes.reduce((sum, stroke) => sum + stroke.duration, 0);
+
+export default function MockExamPencilScore({
+  score,
+  animate = false,
+}: {
+  score: number;
+  animate?: boolean;
+}) {
+  if (!Number.isFinite(score)) return null;
+  const { label, width, strokes } = scoreStrokes(score);
+  let delay = 0;
   return (
     <strong
       className="mock-exam-score"
       role="img"
-      aria-label={`점수 ${label}점, 100점 만점`}
+      data-score-state={animate ? "drawing" : "complete"}
+      aria-label={`점수 ${label}점`}
     >
-      <span className="mock-exam-sr-only">{label}/100</span>
+      <span className="mock-exam-sr-only">{label}</span>
       <svg
         className="mock-exam-score-pencil"
         viewBox={`0 0 ${width} 62`}
@@ -68,20 +149,28 @@ export default function MockExamPencilScore({ score }: { score: number }) {
         height="62"
         aria-hidden="true"
       >
-        {numerals}
-        <g transform={`translate(${advance} 20) scale(0.55)`}>
-          <PencilStrokes d="M12 1L2 43" />
-          {["1", "0", "0"].map((digit, index) => (
-            <g key={index} transform={`translate(${15 + index * 24} 1)`}>
-              <PencilStrokes d={DIGITS[digit]} />
+        {strokes.map((stroke, index) => {
+          const start = delay;
+          delay += stroke.duration;
+          return (
+            <g
+              key={index}
+              transform={stroke.transform}
+              className={
+                stroke.underline ? "mock-exam-score-underline" : undefined
+              }
+            >
+              <PencilStrokes
+                d={stroke.d}
+                reveal={
+                  animate
+                    ? { kind: "score", duration: stroke.duration, delay: start }
+                    : undefined
+                }
+              />
             </g>
-          ))}
-        </g>
-        <g className="mock-exam-score-underline">
-          <PencilStrokes
-            d={`M3 52Q${width * 0.44} 49 ${width - 4} 48M7 57Q${width * 0.5} 54 ${width - 13} 54`}
-          />
-        </g>
+          );
+        })}
       </svg>
     </strong>
   );

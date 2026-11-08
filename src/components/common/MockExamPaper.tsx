@@ -30,7 +30,11 @@ import {
   type MockExamPassageSet,
 } from "../../lib/mockExamMaterials";
 import "./mockExamPaper.css";
-import MockExamPencilScore, { PencilStrokes } from "./MockExamPencilScore";
+import MockExamPencilScore, {
+  formatMockExamScore,
+  getMockExamScoreDuration,
+  PencilStrokes,
+} from "./MockExamPencilScore";
 
 export interface MockExamPaperQuestion {
   id: string | number;
@@ -145,11 +149,13 @@ export function MockExamPaperHeader({
   settings,
   studentLabel = "3학년　　반　　번　 이름:",
   score,
+  animateScore = false,
 }: {
   round?: unknown;
   settings?: MockExamPaperHeaderSettings;
   studentLabel?: string;
   score?: number | null;
+  animateScore?: boolean;
 }) {
   const title = getMockExamPaperTitle(round, settings);
   const heading = normalizeMockExamPaperHeader(settings).paperHeading;
@@ -173,7 +179,9 @@ export function MockExamPaperHeader({
     <>
       <div className="mock-exam-cover-line">
         {heading && <p className="mock-exam-paper-heading">{heading}</p>}
-        {score != null && <MockExamPencilScore score={score} />}
+        {score != null && (
+          <MockExamPencilScore score={score} animate={animateScore} />
+        )}
         <table className="mock-exam-approval" aria-label="시험지 결재란">
           <thead>
             <tr>
@@ -244,6 +252,45 @@ export function MockExamImage({
   );
 }
 
+type CorrectionState = "pending" | "drawing" | "complete";
+const normalizedAnswer = (value: unknown) =>
+  String(value ?? "").replace(/\s+/g, "");
+function hasCorrection(question: MockExamPaperQuestion) {
+  const correct = normalizedAnswer(question.answer);
+  if (!correct) return false;
+  if (!["choice", "ox"].includes(question.type)) return true;
+  const options = question.type === "ox" ? ["O", "X"] : question.options || [];
+  return options.some((option) => normalizedAnswer(option) === correct);
+}
+
+function MockExamCorrection({
+  state,
+  children,
+}: {
+  state: CorrectionState;
+  children?: React.ReactNode;
+}) {
+  return (
+    <span
+      className="mock-exam-correction"
+      data-correction-state={state}
+      aria-hidden={state === "pending" || undefined}
+    >
+      <svg viewBox="0 0 36 36" role="img" aria-label="정답 표시">
+        <PencilStrokes
+          d="M6 19L14 28L31 5"
+          reveal={
+            state === "drawing"
+              ? { kind: "correction", duration: 220 }
+              : undefined
+          }
+        />
+      </svg>
+      {children}
+    </span>
+  );
+}
+
 export function MockExamQuestionContent({
   question,
   index,
@@ -252,6 +299,7 @@ export function MockExamQuestionContent({
   showPassageSet = true,
   setQuestionRange,
   gradingMark,
+  correction,
 }: {
   question: MockExamPaperQuestion;
   index: number;
@@ -260,6 +308,7 @@ export function MockExamQuestionContent({
   showPassageSet?: boolean;
   setQuestionRange?: [number, number];
   gradingMark?: React.ReactNode;
+  correction?: CorrectionState;
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
   const tableColumns = getQuizChoiceColumnCount(options);
@@ -321,6 +370,12 @@ export function MockExamQuestionContent({
                 <span className="mock-exam-option-number">
                   {examChoiceNumber(optionIndex)}{" "}
                   {answer === option && <MockExamAnswerCheck />}
+                  {correction &&
+                    ["choice", "ox"].includes(question.type) &&
+                    normalizedAnswer(option) ===
+                      normalizedAnswer(question.answer) && (
+                      <MockExamCorrection state={correction} />
+                    )}
                 </span>
                 <span className="mock-exam-option-text">
                   {tableColumns > 1 ? (
@@ -373,11 +428,25 @@ export function MockExamQuestionContent({
         </div>
       )}
       {!hideAnswers && !["choice", "ox"].includes(question.type) && (
-        <p className="mock-exam-written-answer">
-          답:{" "}
-          {answer.split("||").join(" → ").split("=>").join(" → ") ||
-            "　　　　　　　　　　　　　　　　　"}
-        </p>
+        <div className="mock-exam-written-answer">
+          <p>
+            답:{" "}
+            {answer.split("||").join(" → ").split("=>").join(" → ") ||
+              "　　　　　　　　　　　　　　　　　"}
+          </p>
+          {correction && (
+            <MockExamCorrection state={correction}>
+              <span>
+                정답:{" "}
+                {String(question.answer ?? "")
+                  .split("||")
+                  .join(" → ")
+                  .split("=>")
+                  .join(" → ")}
+              </span>
+            </MockExamCorrection>
+          )}
+        </div>
       )}
     </div>
   );
@@ -427,63 +496,66 @@ function PencilMark({
   animate?: boolean;
   variant?: number;
 }) {
-  const maskId = useId();
   if (correct == null) return null;
-  const stroke = correct
-    ? [
-        "M58 9C46 5 29 12 19 20C11 26 7 37 8 47C7 58 13 66 24 68C37 72 52 64 62 57C73 48 75 38 70 27C67 16 57 9 46 11L38 14",
-        "M63 15C49 5 29 7 16 16C7 24 6 37 10 48C12 59 23 66 36 67C51 69 65 62 70 50C75 38 70 24 59 17C52 12 42 10 34 12",
-        "M51 7C36 8 20 17 13 28C6 38 7 53 16 62C24 71 37 70 50 65C64 60 72 49 71 36C72 24 64 12 54 9C47 6 39 10 35 12",
-        "M61 13C46 6 31 10 20 17C10 23 5 35 9 47C11 59 20 66 34 68C47 71 65 63 71 53C77 41 69 26 60 20C53 15 45 14 40 15",
-      ][variant % 4]
-    : "M63 9C54 24 43 38 34 49L17 70";
+  // Start at five o'clock, travel clockwise, then let the pencil leave the loop.
+  // Keep the finishing tail under a separate mask so the opening stroke cannot
+  // reveal it early where the two paths overlap.
+  const circle = [
+    [
+      "M55 64C40 76 19 71 9 58C-2 42 7 23 21 16C39 5 59 9 69 21C84 38 72 54 55 64",
+      "M55 64Q50 70 43 74",
+    ],
+    [
+      "M57 63C42 72 21 68 11 55C0 41 9 20 28 13C45 6 66 14 73 29C79 43 70 56 57 63",
+      "M57 63Q52 68 46 72",
+    ],
+    [
+      "M54 65C38 75 19 69 8 55C0 40 10 22 27 14C43 5 64 12 71 25C81 42 69 57 54 65",
+      "M54 65Q49 71 42 75",
+    ],
+    [
+      "M56 64C39 74 18 67 9 53C1 37 14 20 29 14C48 7 66 15 72 30C78 44 70 56 56 64",
+      "M56 64Q51 70 45 73",
+    ],
+  ][variant % 4];
   return (
     <span
       className={`mock-exam-pencil ${correct ? "is-correct" : "is-incorrect"} ${animate ? "is-drawing" : ""}`}
       role="img"
       aria-label={correct ? "정답" : "오답"}
     >
-      <svg
-        viewBox="0 0 80 80"
-        aria-hidden="true"
-        style={
-          correct
-            ? {
-                transform: [
-                  "rotate(-13deg) scale(1.18, 0.85)",
-                  "rotate(9deg) scale(1.22, 0.81)",
-                  "rotate(-18deg) scale(1.1, 0.91)",
-                  "rotate(5deg) scale(1.16, 0.84)",
-                ][variant % 4],
+      <svg viewBox="0 0 80 80" aria-hidden="true">
+        <PencilStrokes
+          d={correct ? circle[0] : "M63 9C54 24 43 38 34 49L17 70"}
+          reveal={
+            animate
+              ? { kind: "mark", duration: correct ? 280 : 360 }
+              : undefined
+          }
+        />
+        {correct && (
+          <g className="mock-exam-pencil-tail">
+            <PencilStrokes
+              d={circle[1]}
+              reveal={
+                animate ? { kind: "tail", duration: 80, delay: 280 } : undefined
               }
-            : undefined
-        }
-      >
-        <defs>
-          <mask
-            id={maskId}
-            maskUnits="userSpaceOnUse"
-            x="0"
-            y="0"
-            width="80"
-            height="80"
-          >
-            <path
-              className="mock-exam-pencil-reveal"
-              d={stroke}
-              pathLength="100"
             />
-          </mask>
-        </defs>
-        <g mask={`url(#${maskId})`}>
-          <PencilStrokes d={stroke} />
-        </g>
+          </g>
+        )}
       </svg>
     </span>
   );
 }
 
 type PaperPage = { columns: number[][]; height: number };
+type GradingPhase =
+  | "focus"
+  | "mark"
+  | "correction"
+  | "pause"
+  | "score"
+  | "complete";
 const PAGE_WIDTH = 794;
 const PAGE_HEIGHT = 1123;
 const QUESTION_GAPS = [12, 10, 8];
@@ -496,11 +568,13 @@ export default function MockExamPaper({
   studentLabel = "3학년　　반　　번　 이름:",
   paperHeader,
   score,
+  earnedPoints,
   checks = [],
   onQuestionSelect,
   selectedQuestionId,
   animateGrading = false,
   onGradingComplete,
+  onScoreStart,
   fit = "default",
   availableHeight,
   disabled = false,
@@ -511,11 +585,13 @@ export default function MockExamPaper({
   studentLabel?: string;
   paperHeader?: MockExamPaperHeaderSettings;
   score?: number | null;
+  earnedPoints?: number | null;
   checks?: MockExamPaperCheck[];
   onQuestionSelect?: (index: number) => void;
   selectedQuestionId?: string | number | null;
   animateGrading?: boolean;
   onGradingComplete?: () => void;
+  onScoreStart?: () => void;
   fit?: "default" | "width" | "page";
   availableHeight?: number;
   disabled?: boolean;
@@ -554,13 +630,19 @@ export default function MockExamPaper({
     ? JSON.stringify([
         paperIdentity,
         score,
+        earnedPoints,
         checks.map((check) => [check.id, check.correct]),
       ])
     : "";
-  const [grading, setGrading] = useState({ key: "", index: 0, drawing: false });
+  const [grading, setGrading] = useState({
+    key: "",
+    index: 0,
+    phase: "focus" as GradingPhase,
+  });
   const gradingIndex = grading.key === gradingKey ? grading.index : 0;
-  const gradingComplete = !animateGrading || gradingIndex >= questions.length;
-  const gradingDrawing = grading.key === gradingKey && grading.drawing;
+  const gradingPhase = grading.key === gradingKey ? grading.phase : "focus";
+  const gradingComplete = !animateGrading || gradingPhase === "complete";
+  const gradingDrawing = ["mark", "correction", "pause"].includes(gradingPhase);
   const layoutReady =
     measuredDensity === density && heights.length === questions.length;
   const title = getMockExamPaperTitle(round, paperHeader);
@@ -618,6 +700,49 @@ export default function MockExamPaper({
     () => new Map(checks.map((check) => [String(check.id), check.correct])),
     [checks],
   );
+  // The server's frozen earned points remain authoritative even when an old
+  // paper snapshot is incomplete. Never turn a percentage back into raw marks.
+  const paperScore = useMemo(() => {
+    if (typeof earnedPoints === "number" && Number.isFinite(earnedPoints))
+      return earnedPoints;
+    if (
+      score == null ||
+      !questions.length ||
+      checks.length !== questions.length ||
+      questions.some(
+        (question) =>
+          typeof checkMap.get(String(question.id)) !== "boolean" ||
+          !Number.isFinite(question.points),
+      )
+    )
+      return null;
+    return (
+      Math.round(
+        questions.reduce(
+          (sum, question) =>
+            sum +
+            (checkMap.get(String(question.id)) === true ? question.points! : 0),
+          0,
+        ) * 100,
+      ) / 100
+    );
+  }, [earnedPoints, score, questions, checks.length, checkMap]);
+  const correctCurrentAnswer =
+    gradingIndex < questions.length &&
+    checkMap.get(String(questions[gradingIndex].id)) === false &&
+    hasCorrection(questions[gradingIndex]);
+  const correctionState = (
+    question: MockExamPaperQuestion,
+    index: number,
+  ): CorrectionState | undefined => {
+    if (checkMap.get(String(question.id)) !== false || !hasCorrection(question))
+      return undefined;
+    if (gradingComplete || index < gradingIndex) return "complete";
+    if (index === gradingIndex && gradingPhase === "correction")
+      return "drawing";
+    if (index === gradingIndex && gradingPhase === "pause") return "complete";
+    return "pending";
+  };
 
   useLayoutEffect(() => {
     setDensity(0);
@@ -723,40 +848,72 @@ export default function MockExamPaper({
     };
   }, [questions, answers, density]);
   useEffect(() => {
-    setGrading({ key: gradingKey, index: 0, drawing: false });
+    setGrading({ key: gradingKey, index: 0, phase: "focus" });
   }, [gradingKey]);
   useEffect(() => {
     if (!gradingKey || grading.key !== gradingKey || !layoutReady) return;
-    if (grading.index >= questions.length) {
-      if (onGradingComplete) onGradingComplete();
-      else
-        firstSheet.current?.scrollIntoView({
-          block: "start",
-          behavior: "instant",
-        });
+    if (grading.phase === "complete") {
+      onGradingComplete?.();
       return;
     }
-    // Scroll the actual paper (including nested/fullscreen scroll containers),
-    // then draw one server-supplied result. No grading or persistence occurs here.
-    if (!grading.drawing) {
+    let next: GradingPhase;
+    let delay: number;
+    if (grading.index >= questions.length) {
+      if (grading.phase === "focus") {
+        if (onScoreStart) onScoreStart();
+        else
+          firstSheet.current?.scrollIntoView({
+            block: "start",
+            behavior: "instant",
+          });
+        next = paperScore == null ? "complete" : "score";
+        delay = 100;
+      } else {
+        next = "complete";
+        delay =
+          paperScore == null ? 0 : getMockExamScoreDuration(paperScore) + 80;
+      }
+    } else if (grading.phase === "focus") {
       container.current
         ?.querySelector<HTMLElement>(
           `[data-question-index="${grading.index}"] .mock-exam-stem`,
         )
         ?.scrollIntoView({ block: "center", behavior: "instant" });
+      next = "mark";
+      delay = 100;
+    } else if (grading.phase === "mark") {
+      next = correctCurrentAnswer ? "correction" : "pause";
+      delay = 400;
+    } else if (grading.phase === "correction") {
+      container.current
+        ?.querySelector<HTMLElement>(
+          `.mock-exam-sheet [data-question-index="${grading.index}"] .mock-exam-correction`,
+        )
+        ?.scrollIntoView({ block: "nearest", behavior: "instant" });
+      next = "pause";
+      delay = 260;
+    } else {
+      next = "focus";
+      delay = 100;
     }
-    const timer = window.setTimeout(
-      () => {
-        setGrading((previous) =>
-          grading.drawing
-            ? { ...previous, index: previous.index + 1, drawing: false }
-            : { ...previous, drawing: true },
-        );
-      },
-      grading.drawing ? 900 : 160,
-    );
+    const timer = window.setTimeout(() => {
+      setGrading((previous) => ({
+        ...previous,
+        index: previous.index + (previous.phase === "pause" ? 1 : 0),
+        phase: next,
+      }));
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [grading, gradingKey, layoutReady, questions.length, onGradingComplete]);
+  }, [
+    grading,
+    gradingKey,
+    layoutReady,
+    questions.length,
+    correctCurrentAnswer,
+    paperScore,
+    onScoreStart,
+    onGradingComplete,
+  ]);
 
   const pages = useMemo(() => {
     const output: PaperPage[] = [{ columns: [[], []], height: PAGE_HEIGHT }];
@@ -834,8 +991,11 @@ export default function MockExamPaper({
       data-grading-state={
         animateGrading ? (gradingComplete ? "complete" : "grading") : undefined
       }
+      data-grading-phase={animateGrading ? gradingPhase : undefined}
       data-grading-question={
-        animateGrading && !gradingComplete ? gradingIndex + 1 : undefined
+        animateGrading && !gradingComplete && gradingIndex < questions.length
+          ? gradingIndex + 1
+          : undefined
       }
       aria-busy={(animateGrading && !gradingComplete) || undefined}
       aria-label={`${title} 시험지`}
@@ -847,6 +1007,12 @@ export default function MockExamPaper({
               question={question}
               index={index}
               answer={answers[String(question.id)]}
+              correction={
+                checkMap.get(String(question.id)) === false &&
+                hasCorrection(question)
+                  ? "pending"
+                  : undefined
+              }
               showPassageSet={
                 getMockExamSetRun(questions, index)?.start === index
               }
@@ -886,7 +1052,12 @@ export default function MockExamPaper({
                 round={round}
                 settings={paperHeader}
                 studentLabel={studentLabel}
-                score={gradingComplete ? score : null}
+                score={
+                  gradingComplete || gradingPhase === "score"
+                    ? paperScore
+                    : null
+                }
+                animateScore={animateGrading && gradingPhase === "score"}
               />
             ) : (
               <header className="mock-exam-running-title">{title}</header>
@@ -1001,12 +1172,13 @@ export default function MockExamPaper({
                                 animate={
                                   animateGrading &&
                                   index === gradingIndex &&
-                                  gradingDrawing
+                                  gradingPhase === "mark"
                                 }
                               />
                             )
                           }
                           answer={answers[String(question.id)]}
+                          correction={correctionState(question, index)}
                           showPassageSet={
                             getMockExamSetRun(questions, index)?.start === index
                           }
@@ -1047,8 +1219,10 @@ export default function MockExamPaper({
       {animateGrading && (
         <span className="mock-exam-sr-only" role="status">
           {gradingComplete
-            ? `채점 완료. ${score ?? ""}점입니다.`
-            : `${gradingIndex + 1}번 문항 채점 중`}
+            ? `채점 완료.${paperScore == null ? "" : ` ${formatMockExamScore(paperScore)}점입니다.`}`
+            : gradingIndex >= questions.length
+              ? "점수 기록 중"
+              : `${gradingIndex + 1}번 문항 채점 중`}
         </span>
       )}
     </div>

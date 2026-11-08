@@ -250,6 +250,7 @@ const QuizRunner: React.FC = () => {
   const [paperResult, setPaperResult] = useState<{
     questions: MockExamPaperQuestion[];
     checks: MockExamPaperCheck[];
+    earnedPoints?: number;
   } | null>(null);
   const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
@@ -722,6 +723,7 @@ const QuizRunner: React.FC = () => {
           ) || question,
       ),
       checks: submitted.answerChecks,
+      earnedPoints: submitted.earnedPoints,
     });
     setAnswers(submittedAnswers);
     setReviewItems(buildQuizRelearningItems(submitted, submittedAnswers));
@@ -2532,6 +2534,7 @@ const QuizRunner: React.FC = () => {
           onSelect={setCurrentIndex}
           score={score}
           checks={paperResult.checks}
+          earnedPoints={paperResult.earnedPoints}
           onReview={() => navigate(resultReviewUrl)}
           onReturn={() => navigate("/student/quiz")}
         />

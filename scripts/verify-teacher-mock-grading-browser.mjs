@@ -152,15 +152,43 @@ async function trace(page) {
     window.gradeTrace = {
       starts: [],
       ends: [],
+      corrections: [],
+      correctionEnds: [],
+      scoreStarts: [],
+      scoreEnds: [],
+      scoreSamples: [],
       samples: [],
       earlyScore: false,
       overlap: false,
     };
     document.onanimationstart = (event) => {
-      if (event.animationName !== "mock-exam-pencil-draw") return;
       const question = event.target.closest("[data-question-index]");
+      if (event.animationName === "mock-exam-correction-draw") {
+        window.gradeTrace.corrections.push({
+          index: Number(question.dataset.questionIndex),
+          time: performance.now(),
+        });
+        return;
+      }
+      if (event.animationName === "mock-exam-score-write") {
+        const score = event.target.closest(".mock-exam-score"),
+          rect = score.getBoundingClientRect();
+        window.gradeTrace.scoreStarts.push({
+          time: performance.now(),
+          stroke: [...score.querySelectorAll("path")].indexOf(event.target),
+          locked:
+            document.querySelector(".mock-exam-preview-grade").disabled &&
+            document.querySelector(".mock-exam-preview-toolbar select")
+              .disabled,
+          scroll: document.querySelector(".quiz-composer-body").scrollTop,
+          visible: rect.top >= 0 && rect.bottom < innerHeight,
+        });
+        return;
+      }
+      if (event.animationName !== "mock-exam-pencil-draw") return;
       window.gradeTrace.starts.push({
         index: Number(question.dataset.questionIndex),
+        time: performance.now(),
         correct: question
           .querySelector(".mock-exam-pencil")
           .classList.contains("is-correct"),
@@ -168,6 +196,20 @@ async function trace(page) {
       });
     };
     document.onanimationend = (event) => {
+      if (event.animationName === "mock-exam-correction-draw")
+        window.gradeTrace.correctionEnds.push({
+          index: Number(
+            event.target.closest("[data-question-index]").dataset.questionIndex,
+          ),
+          time: performance.now(),
+        });
+      if (event.animationName === "mock-exam-score-write") {
+        const score = event.target.closest(".mock-exam-score");
+        window.gradeTrace.scoreEnds.push({
+          time: performance.now(),
+          stroke: [...score.querySelectorAll("path")].indexOf(event.target),
+        });
+      }
       if (event.animationName === "mock-exam-pencil-draw")
         window.gradeTrace.ends.push(
           Number(
@@ -182,9 +224,25 @@ async function trace(page) {
       if (marks.length > 1) window.gradeTrace.overlap = true;
       if (
         document.querySelector('[data-grading-state="grading"]') &&
-        document.querySelector(".mock-exam-score")
+        document.querySelector(".mock-exam-score") &&
+        window.gradeTrace.ends.length <
+          document.querySelectorAll(".mock-exam-sheet article").length
       )
         window.gradeTrace.earlyScore = true;
+      const score = document.querySelector(".mock-exam-score");
+      if (score)
+        for (const path of score.querySelectorAll("path")) {
+          const style = getComputedStyle(path),
+            offset = parseFloat(style.strokeDashoffset),
+            stroke = [...score.querySelectorAll("path")].indexOf(path);
+          if (
+            style.animationName === "mock-exam-score-write" &&
+            offset > 5 &&
+            offset < 95 &&
+            !window.gradeTrace.scoreSamples.includes(stroke)
+          )
+            window.gradeTrace.scoreSamples.push(stroke);
+        }
       for (const mark of marks) {
         const index = Number(
           mark.closest("[data-question-index]").dataset.questionIndex,
@@ -205,7 +263,7 @@ async function trace(page) {
     observe();
   });
 }
-async function graded(page, expected = "35") {
+async function graded(page, expected = "7") {
   await page
     .locator('[data-grading-state="complete"]')
     .waitFor({ timeout: 15000 });
@@ -226,7 +284,11 @@ async function graded(page, expected = "35") {
       calls: window.fixture,
     };
   });
-  assert.equal(result.score, `${expected}/100`);
+  await fs.writeFile(
+    path.join(evidence, `trace-${reports.length}-${expected}.json`),
+    JSON.stringify(result, null, 2),
+  );
+  assert.equal(result.score, expected);
   assert.equal(result.scroll, 0);
   assert(result.scoreVisible, "Final score is unobscured on page one");
   assert(
@@ -234,8 +296,8 @@ async function graded(page, expected = "35") {
     "Grade one question at a time before revealing score",
   );
   assert(
-    result.starts.every((s) => parseFloat(s.duration) >= 0.6),
-    "Full pencil animation also runs under reduced motion",
+    result.starts.every((s) => s.duration === (s.correct ? "0.28s" : "0.36s")),
+    "Faster pencil animation also runs under reduced motion",
   );
   assert.deepEqual(
     result.ends,
@@ -244,6 +306,31 @@ async function graded(page, expected = "35") {
   assert.deepEqual(
     result.samples,
     result.starts.map((s) => s.index),
+  );
+  assert(
+    result.scoreStarts.length > 0 &&
+      result.scoreStarts.length === result.scoreEnds.length,
+    "Every score stroke finishes",
+  );
+  assert.deepEqual(
+    result.scoreSamples,
+    result.scoreStarts.map((item) => item.stroke),
+    "Handwritten score strokes are visibly drawn",
+  );
+  assert(
+    result.scoreStarts.every(
+      (item) => item.locked && item.scroll === 0 && item.visible,
+    ),
+    "First page is visible and grading/round controls stay locked throughout score writing",
+  );
+  assert(
+    await page.getByRole("button", { name: "채점", exact: true }).isEnabled(),
+    "Grading unlocks after score writing ends",
+  );
+  assert.deepEqual(
+    result.corrections.map((item) => item.index),
+    result.correctionEnds.map((item) => item.index),
+    "Answer corrections finish before the score",
   );
   return result;
 }
@@ -272,6 +359,11 @@ try {
         "Wait for header loading before grading",
       );
       await ready(page);
+      assert.equal(
+        await page.locator(".mock-exam-correction").count(),
+        0,
+        "Teacher answer metadata does not reveal red corrections before grading",
+      );
       const layout = await page.evaluate(() => {
         const toolbar = document.querySelector(".mock-exam-preview-toolbar"),
           grade = document.querySelector(".mock-exam-preview-grade"),
@@ -351,6 +443,30 @@ try {
         { loads: 1, headers: 1 },
         "Grading must not request data again",
       );
+      assert.deepEqual(
+        result.corrections.map((item) => item.index),
+        [2, 3],
+        "Only wrong table choice and unanswered short question receive corrections",
+      );
+      assert(
+        (
+          await page
+            .locator(
+              '.mock-exam-sheet article[data-question-index="2"] .mock-exam-correction',
+            )
+            .locator("..")
+            .textContent()
+        ).includes("②"),
+        "The red answer check is attached to the correct table row",
+      );
+      assert(
+        (
+          await page
+            .locator('.mock-exam-sheet article[data-question-index="3"]')
+            .innerText()
+        ).includes("의정부"),
+        "An unanswered item shows its saved correct answer",
+      );
       await page.screenshot({
         path: path.join(
           evidence,
@@ -401,7 +517,7 @@ try {
           .click();
         await trace(page);
         await page.getByRole("button", { name: "채점", exact: true }).click();
-        await graded(page, "100");
+        await graded(page, "4");
         await page
           .getByRole("combobox", { name: "모의고사 회차", exact: true })
           .selectOption("round_1");

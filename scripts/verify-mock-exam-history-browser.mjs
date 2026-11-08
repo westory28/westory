@@ -17,7 +17,7 @@ const evidence = process.env.MOCK_EXAM_HISTORY_EVIDENCE_DIR || await fs.mkdtemp(
 await fs.mkdir(evidence, { recursive: true });
 const record = {
   id: "saved-paper", title: "중학교 3학년 복시 (2회 모의고사)", category: "exam_prep", examRound: "round_2", score: 75,
-  recordedAtMs: 1793900000000,
+  recordedAtMs: 1793900000000, earnedPoints: 15, maxPoints: 20,
   details: Array.from({ length: 6 }, (_, i) => ({
     id: `saved-${i}`, correct: i !== 1, u: i === 1 ? "고려" : "조선",
     questionSnapshot: {
@@ -65,7 +65,8 @@ try {
     await page.goto(origin);
     await page.getByRole("button", { name: "2번 문제 확대, 답안 입력됨", exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
-    await page.getByLabel("점수 75점, 100점 만점", { exact: true }).waitFor();
+    await page.getByLabel("점수 15점", { exact: true }).waitFor();
+    assert.equal(await page.locator(".mock-exam-score").textContent(), "15", "Saved paper shows earned points without a denominator");
     assert.equal(await page.locator(".mock-exam-sheet").count(), 1, "Saved manual breaks no longer force extra pages; content is automatically placed");
     const savedQuestions = await page.locator(".mock-exam-sheet article").evaluateAll(articles => articles.map(article => {
       const box = article.getBoundingClientRect(), sheet = article.closest(".mock-exam-sheet").getBoundingClientRect();

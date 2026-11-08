@@ -385,6 +385,11 @@ export default function MyQuizHistory({
                         detail.record.paperHeader,
                       )}
                       score={detail.record.score ?? undefined}
+                      earnedPoints={
+                        typeof detail.record.earnedPoints === "number"
+                          ? detail.record.earnedPoints
+                          : undefined
+                      }
                       onQuestionSelect={(questionIndex) => {
                         setWrongOnly(false);
                         setIndex(questionIndex);

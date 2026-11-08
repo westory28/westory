@@ -36,6 +36,7 @@ interface Props {
   onSaveRetry?: () => void;
   checks?: MockExamPaperCheck[];
   score?: number;
+  earnedPoints?: number;
   onReview?: () => void;
   onReturn?: () => void;
   orderOptions?: Record<number, string[]>;
@@ -266,11 +267,13 @@ export default function MockExamWorkspace(props: Props) {
             studentLabel={studentLabel}
             paperHeader={props.paperHeader}
             score={score}
+            earnedPoints={props.earnedPoints}
             checks={checks}
             onQuestionSelect={openQuestion}
             selectedQuestionId={hasSelectedQuestion ? question?.id : null}
             animateGrading={result}
             onGradingComplete={showFinalScore}
+            onScoreStart={showFinalScore}
             disabled={submitting}
           />
         </div>

@@ -55,6 +55,7 @@ export default function MockExamPreview({
   const [previewResult, setPreviewResult] = useState<{
     checks: MockExamPaperCheck[];
     score: number;
+    earnedPoints: number;
   } | null>(null);
   const [isGrading, setIsGrading] = useState(false);
   const [gradingRun, setGradingRun] = useState(0);
@@ -214,6 +215,7 @@ export default function MockExamPreview({
     setPreviewResult({
       checks,
       score: total > 0 ? Math.round((earned / total) * 10000) / 100 : 0,
+      earnedPoints: earned,
     });
     setQuestionIndex(null);
     setSelectedQuestionId(null);
@@ -221,10 +223,13 @@ export default function MockExamPreview({
     setGradingRun((previous) => previous + 1);
     paperScroll.current = 0;
   };
-  const showFinalScore = useCallback(() => {
-    setIsGrading(false);
+  const scrollToScore = useCallback(() => {
     body.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, []);
+  const showFinalScore = useCallback(() => {
+    setIsGrading(false);
+    scrollToScore();
+  }, [scrollToScore]);
   const currentQuestion =
     questionIndex == null ? null : previewQuestions[questionIndex];
 
@@ -328,6 +333,8 @@ export default function MockExamPreview({
                     answers={practiceAnswers}
                     checks={previewResult?.checks}
                     score={previewResult?.score}
+                    earnedPoints={previewResult?.earnedPoints}
+                    onScoreStart={scrollToScore}
                     animateGrading={!!previewResult}
                     onGradingComplete={showFinalScore}
                     selectedQuestionId={selectedQuestionId}
