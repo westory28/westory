@@ -1,8 +1,12 @@
+import { getAcceptedQuizAnswers } from "./quizAnswerMatching";
+
 export const SHORT_ANSWER_MAX_LENGTH = 20;
 
 // Grading ignores whitespace. A teacher's model answer must be possible to enter.
 export const exceedsShortAnswerLimit = (answer: string) =>
-  answer.replace(/\s+/g, "").length > SHORT_ANSWER_MAX_LENGTH;
+  getAcceptedQuizAnswers(answer).some(
+    (value) => value.replace(/\s+/g, "").length > SHORT_ANSWER_MAX_LENGTH,
+  );
 
 // Match the native input maxlength unit and avoid splitting an emoji in a recovered draft.
 export function limitShortAnswer(value: string) {

@@ -1,4 +1,5 @@
 import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
+import { getAcceptedQuizAnswers } from "../../../lib/quizAnswerMatching";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -877,13 +878,13 @@ const QuizBankTab: React.FC<{
       answer = editOxAnswer;
       options = ["O", "X"];
     } else if (editType === "word") {
-      if (!editWordAnswer.trim()) {
+      if (!getAcceptedQuizAnswers(editWordAnswer).length) {
         alert("단답형 정답을 입력하세요.");
         return;
       }
       if (exceedsShortAnswerLimit(editWordAnswer)) {
         alert(
-          "학생이 입력할 수 있도록 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
+          "쉼표로 구분한 각 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
         );
         return;
       }
@@ -1376,7 +1377,7 @@ const QuizBankTab: React.FC<{
                       aria-required="true"
                       value={editWordAnswer}
                       onChange={(e) => setEditWordAnswer(e.target.value)}
-                      placeholder="단답형 정답 입력"
+                      placeholder="예: 명, 명나라"
                       className="w-full border rounded p-2 text-sm bg-white"
                     />
                   </label>

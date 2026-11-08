@@ -428,14 +428,14 @@ try {
       const upload = tools.querySelector('label'), remove = tools.querySelector('button');
       const top = node => node.getBoundingClientRect().top;
       return {
-        first: el.querySelector('.quiz-composer-body').firstElementChild === shared,
-        order: shared.getBoundingClientRect().bottom <= top(info) && top(info) < top(stem) && top(stem) < top(individual),
+        infoFirst: el.querySelector('.quiz-composer-body').firstElementChild === info,
+        order: top(info) < top(el.querySelector('.quiz-achievement-fields')) && el.querySelector('.quiz-achievement-fields').getBoundingClientRect().bottom <= top(shared) && shared.getBoundingClientRect().bottom <= top(stem) && top(stem) < top(individual),
         attachmentInside: frame.contains(shared.querySelector('.quiz-visual-attachment img')) && frame.contains(tools),
         controlsOneRow: Math.abs(top(upload) - top(remove)) < 1,
         documentWidth: document.documentElement.scrollWidth,
       };
     });
-    assert(sharedLayout.first && sharedLayout.order, JSON.stringify(sharedLayout));
+    assert(sharedLayout.infoFirst && sharedLayout.order, JSON.stringify(sharedLayout));
     assert(sharedLayout.attachmentInside && sharedLayout.controlsOneRow, JSON.stringify(sharedLayout));
     assert(sharedLayout.documentWidth <= width + 1, JSON.stringify(sharedLayout));
     await page.screenshot({ path: path.join(evidence, `teacher-shared-material-${width}.png`) });
@@ -443,7 +443,7 @@ try {
   await sharedEditor.getByRole("button", { name: "공통 이미지 제거", exact: true }).click();
   assert.equal(await sharedEditor.getByRole("img").count(), 0);
   assert.equal(await sharedEditor.getByRole("textbox", { name: "공통 지문", exact: true }).innerText(), "세트 자료는 두 문항에서 함께 사용합니다.");
-  checks.push("Set authoring places common material before individual question fields; shared image upload/removal stay in one toolbar row and the image stays inside the passage frame at 390/768/1280/1440px, without extra reads or writes.");
+  checks.push("Set authoring places common material after achievement fields and before the individual stem; shared image upload/removal stay in one toolbar row and the image stays inside the passage frame at 390/768/1280/1440px, without extra reads or writes.");
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, "local edits and live preview must not read or write the server");
   await compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true }).fill("긴 자료에서도 작성 영역과 미리보기는 서로 독립적으로 이동합니다.\n".repeat(60));
@@ -806,7 +806,10 @@ try {
   await compose.getByRole("button",{name:"기존 세트 연결",exact:true}).click();
   await compose.getByRole("combobox",{name:"연결할 세트 지문",exact:true}).selectOption(state.saved.passageSet.id);
   assert.equal(await compose.getByRole("textbox",{name:"공통 지문",exact:true}).count(),0,"linked common passage is read-only until separated");
-  assert(await compose.evaluate(el => el.querySelector('.quiz-composer-body').firstElementChild?.matches('.mock-exam-shared-editor')), "Linked set material also remains above the question fields");
+  assert(await compose.evaluate(el => {
+    const shared = el.querySelector('.mock-exam-shared-editor');
+    return shared.previousElementSibling?.matches('.quiz-achievement-fields') && shared.nextElementSibling?.querySelector('[aria-label="발문"]');
+  }), "Linked set material also stays between achievement fields and the individual stem");
   await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
   assert.equal(await page.evaluate(()=>window.assessmentTeacherFixture.writes.length),2);
   await compose.getByRole("button",{name:"등록",exact:true}).click();
@@ -1018,6 +1021,31 @@ try {
   }
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
   checks.push("Normal diagnostic question dialog stays within 390/768/1280 viewports; only its body scrolls, the footer remains visible, and no mock exam live preview appears.");
+  for (const mode of ["mock", "normal"]) {
+    await page.goto(origin + (mode === "normal" ? "/?normal" : "/"));
+    await page.getByRole("button", { name: "문제 등록", exact: true }).click();
+    const form = page.getByRole("dialog", { name: "새 문제 등록", exact: true });
+    await form.getByLabel("문항 유형", { exact: true }).selectOption("word");
+    await form.getByLabel("발문", { exact: true }).fill("쉼표 허용 답안 저장 검증");
+    const answer = form.getByRole("textbox", { name: "단답형 정답", exact: true });
+    assert.equal(await answer.getAttribute("placeholder"), "예: 명, 명나라");
+    const initialWrites = await page.evaluate(() => window.assessmentTeacherFixture.writes.length);
+    for (const invalid of [", , ", "명, " + "가".repeat(21)]) {
+      const initialAlerts = alerts.length;
+      await answer.fill(invalid);
+      await form.getByRole("button", { name: "등록", exact: true }).click();
+      assert.equal(alerts.length, initialAlerts + 1, `${mode}: invalid aliases show one validation message`);
+      assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), initialWrites, `${mode}: invalid aliases never write`);
+      assert(await form.isVisible());
+    }
+    const accepted = "명, 명나라, " + "가".repeat(20) + ", ,";
+    await answer.fill(accepted);
+    await form.getByRole("button", { name: "등록", exact: true }).click();
+    await form.waitFor({ state: "hidden" });
+    const savedAnswer = await page.evaluate(() => window.assessmentTeacherFixture.questions.find(q => q.question === "쉼표 허용 답안 저장 검증")?.answer);
+    assert.equal(savedAnswer, accepted, `${mode}: alternatives persist without a combined 20-character limit`);
+  }
+  checks.push("Mock and diagnostic authoring reject comma-only answers and individual answers over 20 characters, while saving multiple accepted answers over 20 characters combined without extra writes on validation failures.");
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   await fs.writeFile(

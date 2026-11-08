@@ -1,4 +1,5 @@
 import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
+import { getAcceptedQuizAnswers } from "../../../lib/quizAnswerMatching";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -1705,10 +1706,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return { answer: oxAnswer, options: ["O", "X"] };
     }
     if (formType === "word") {
-      if (!wordAnswer.trim()) return (alert("단답형 정답을 입력하세요."), null);
+      if (!getAcceptedQuizAnswers(wordAnswer).length)
+        return (alert("단답형 정답을 입력하세요."), null);
       if (exceedsShortAnswerLimit(wordAnswer)) {
         alert(
-          "학생이 입력할 수 있도록 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
+          "쉼표로 구분한 각 단답형 정답을 공백 제외 20자 이내로 줄여 주세요.",
         );
         return null;
       }
@@ -2848,15 +2850,6 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 >
                   <div className="quiz-composer-body">
                     {type === "special" && (
-                      <MockExamSharedMaterialFields
-                        passageSet={formPassageSet}
-                        linked={passageSetLinked}
-                        onSetChange={handlePassageSetChange}
-                        onSetImage={handleSetImage}
-                        disabled={savingQuestion || optimizingImage}
-                      />
-                    )}
-                    {type === "special" && (
                       <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         <legend className="mb-2 text-sm font-bold">
                           문항 정보
@@ -3049,6 +3042,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           setMetadata((current) => ({ ...current, ...value }))
                         }
                       />
+
+                      {type === "special" && (
+                        <MockExamSharedMaterialFields
+                          passageSet={formPassageSet}
+                          linked={passageSetLinked}
+                          onSetChange={handlePassageSetChange}
+                          onSetImage={handleSetImage}
+                          disabled={savingQuestion || optimizingImage}
+                        />
+                      )}
 
                       <label className="quiz-composer-field">
                         <span>
@@ -3255,6 +3258,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             onKeyDown={handleVerticalFocus}
                             aria-label="단답형 정답"
                             aria-required="true"
+                            placeholder="예: 명, 명나라"
                             className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
                           />
                         </label>

@@ -8,6 +8,7 @@ const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 const historyExemptions = require("./historyClassroomExemptions");
 const learning = require("./assessmentLearning");
+const { isQuizAnswerCorrect, isValidShortAnswerKey } = require("../quizAnswerMatching");
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require("../historyAchievementMetadata");
 const achievementProfiles = require("../achievementProfiles");
 const mockMaterials = require("./mockExamMaterials");
@@ -421,7 +422,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
         || (question.type === "choice" ? (!Array.isArray(question.options) || question.options.length !== 5
           || question.options.some(option => typeof option !== "string" || !option.trim())
           || new Set(question.options.map(option => option.trim())).size !== 5 || !question.options.includes(question.answer))
-          : question.answer.length > SHORT_ANSWER_LIMIT)) {
+          : !isValidShortAnswerKey(question.answer))) {
         fail("invalid-argument", "시험지의 회차·문항 번호·배점, 객관식 5선지 또는 20자 이내 단답형 정답을 확인해 주세요.", "ASSESSMENT_PAPER_QUESTION_INVALID");
       }
       if (question.type === "choice") {
@@ -1354,9 +1355,12 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const quizDocumentsById = new Map((source.quizDocuments || []).map(document => [
         String(document.data?.id ?? document.path.split("/").at(-1)).trim(), document.data,
       ]));
-      const gradingSnapshot = selectedIds.map(id => quizDocumentsById.has(id)
-        ? { ...answerById.get(id), answerLimit: quizAnswerLimit(quizDocumentsById.get(id)) }
-        : answerById.get(id));
+      const gradingSnapshot = selectedIds.map(id => {
+        const question = quizDocumentsById.get(id);
+        return question ? { ...answerById.get(id),
+          ...(typeof question.type === "string" ? { type: question.type } : {}),
+          answerLimit: quizAnswerLimit(question) } : answerById.get(id);
+      });
       const attemptId = `attempt_${sha256(`${actor.actorUid}\n${payload.definitionId}\n${attemptOrdinal}`)}`;
       const path = attemptPath(attemptId);
       const deadlineMs = Math.min(
@@ -1448,7 +1452,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const effectiveAnswers = payload.answers;
       const analytics = attempt.assessmentKind === "QUIZ"
         ? learning.normalizeAnalytics(payload.analytics === undefined ? attempt.analytics : payload.analytics, attempt, nowDate.getTime(), effectiveAnswers) : null;
-      const checks = attempt.gradingSnapshot.map((item) => ({ id: item.id, correct: normalizeAnswer(effectiveAnswers[item.id]) === normalizeAnswer(item.answer) }));
+      const savedTypes = new Map((attempt.questionSnapshots || []).map(item => [String(item.id), item.type]));
+      const checks = attempt.gradingSnapshot.map((item) => ({ id: item.id,
+        correct: attempt.assessmentKind === "QUIZ"
+          ? isQuizAnswerCorrect(item.type || savedTypes.get(String(item.id)), effectiveAnswers[item.id], item.answer)
+          : normalizeAnswer(effectiveAnswers[item.id]) === normalizeAnswer(item.answer) }));
       const correctCount = checks.filter((item) => item.correct).length;
       const total = checks.length;
       const roundedPoints = value => Math.round(value * 10000) / 10000;

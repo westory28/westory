@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { isQuizAnswerCorrect } from "../../../lib/quizAnswerMatching";
 import { formatMockExamRoundShortLabel } from "../../../lib/mockExamRounds";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import {
@@ -188,18 +189,15 @@ export default function MockExamPreview({
   const headerReady = !loadPaperHeader || !!paperHeaders[previewRound];
   const gradePreview = () => {
     if (isGrading || !headerReady || !previewQuestions.length) return;
-    // Match assessmentLifecycle's whitespace comparison and weighted percentage.
+    // Match the server's typed answer comparison and weighted percentage.
     // This is a local teacher rehearsal; it never submits a student attempt.
-    const normalize = (value: unknown) =>
-      String(value ?? "")
-        .replace(/\s+/g, "")
-        .trim();
     const checks = previewQuestions.map((question) => ({
       id: question.id,
-      correct:
-        !!normalize(question.answer) &&
-        normalize(practiceAnswers[String(question.id)]) ===
-          normalize(question.answer),
+      correct: isQuizAnswerCorrect(
+        question.type,
+        practiceAnswers[String(question.id)],
+        question.answer,
+      ),
     }));
     const points = previewQuestions.map((question) =>
       Number.isFinite(question.points) ? question.points! : 1,

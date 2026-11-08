@@ -108,6 +108,44 @@ test('practice grading enforces frozen answer formats and preserves the assessme
   assert.throws(() => gradePractice(question('ox', 'O'), 'Y'), error => error.code === 'invalid-argument');
 });
 
+test('short and word practice accept each frozen alias without splitting student answers or choice combinations', () => {
+  for (const type of ['short', 'word']) {
+    const question = { type, answer: ' , 명, , 명나라, ' };
+    for (const answer of ['명', '명나라', '명 나 라']) assert.equal(gradePractice(question, answer), true);
+    for (const answer of ['청', '명, 명나라', ',']) assert.equal(gradePractice(question, answer), false);
+    assert.equal(gradePractice(question, ''), null);
+    assert.equal(gradePractice({ type, answer: ', ,' }, '명'), false);
+    assert.equal(gradePractice({ type, answer: `${'가'.repeat(20)}, ${'나'.repeat(20)}` }, '나'.repeat(20)), true);
+    assert.throws(() => gradePractice(question, '나'.repeat(21)), error => error.code === 'invalid-argument');
+  }
+  const choice = { type: 'choice', answer: 'ㄱ, ㄴ', options: ['ㄱ', 'ㄴ', 'ㄱ, ㄴ'] };
+  assert.equal(gradePractice(choice, 'ㄱ, ㄴ'), true);
+  assert.equal(gradePractice(choice, 'ㄱ'), false);
+});
+
+test('alias practice saves and rereads server grades while retaining the original submitted result', async () => {
+  for (const type of ['short', 'word']) {
+    const f = fixture();
+    const result = f.data.get('semester_assessment_results/result-one');
+    result.category = 'exam_prep';
+    result.examRound = 'round_1';
+    result.questionSnapshots[0] = { id: '1', question: '합성 허용 답안 문항', type, answer: '명, 명나라' };
+    const original = structuredClone(result);
+    let revision = 0;
+    for (const [index, answer] of ['명', '명 나라', '명, 명나라'].entries()) {
+      const saved = await f.request({ practiceAnswer: answer, expectedRevision: revision,
+        saveId: `synthetic-alias-${type}-${index}` });
+      revision = saved.reviewNotes.revision;
+      assert.equal(saved.reviewNotes.items[0].correct, index !== 2);
+      assert.equal(saved.reviewNotes.items[0].practiceAnswer, answer);
+      assert.deepEqual((await f.detail()).reviewNotes, saved.reviewNotes);
+      assert.deepEqual(f.data.get('semester_assessment_results/result-one'), original);
+    }
+    assert.equal(revision, 3);
+    assert.ok(f.writes.every(path => path === `semester_quiz_review_notes/${noteId(semesterId, uid, key)}`));
+  }
+});
+
 test('untrusted fields, oversized text and reused foreign scope are rejected before writes', async () => {
   for (const patch of [{ uid: 'other' }, { note: '가'.repeat(1001) }, { reason: 'arbitrary' }, { practiceAnswer: 'x'.repeat(12001) },
     { key: 'canonical:../forged' }, { expectedRevision: -1 }, { note: '\u0000' }]) {

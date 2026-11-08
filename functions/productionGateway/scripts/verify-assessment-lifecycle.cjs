@@ -1067,6 +1067,114 @@ const runMockExamPaper = async () => {
   }
 };
 
+const runShortAnswerAliases = async () => {
+  // Each fixture uses the real authoring, publication, attempt and progress handlers.
+  // Legacy attempts intentionally omit only the fields unavailable in that version.
+  for (const mode of ["new", "legacy-typed", "legacy-untyped"]) {
+    const aliasStore = new MemoryStore(seed);
+    const apply = (commandType, payload, actor = admin) => aliasStore.runTransaction(transaction => adapter.apply({
+      transaction, commandId: commandId(), receiptId: `aliases-${mode}`, timestamp: { __serverTimestamp: nowMs },
+      actor: { actorUid: actor.uid, actorRole: actor.uid === admin.uid ? "admin" : "student" },
+      commandType, payload: assessment.normalizeAssessmentPayload(commandType, payload),
+    }));
+    const question = (id, type, answer, points, extra = {}) => ({ id, type, answer, points,
+      unitId: "exam_prep", category: "exam_prep", examRound: "round_1", paperOrder: id - 1000,
+      question: `합성 허용 답안 문항 ${id}`, ...extra });
+    const choices = ["ㄱ", "ㄴ", "ㄱ, ㄴ", "ㄱ, ㄷ", "ㄴ, ㄷ"];
+    const longAlias = "가".repeat(20);
+    const questions = [
+      question(1001, "short", "명, 명나라", 3),
+      question(1002, "word", "조선, 조선 왕조", 4),
+      question(1003, "short", `${longAlias}, ${"나".repeat(20)}`, 5.5),
+      question(1004, "choice", "ㄱ, ㄴ", 6, { options: choices }),
+      question(1005, "short", " , 명, , 명나라, ", 2),
+      question(1006, "short", "명, 명나라", 7),
+      question(1007, "choice", "ㄱ, ㄴ", 8, { options: choices }),
+    ];
+    const saveQuestion = q => apply("upsertQuizQuestion", { semesterId, questionId: String(q.id), question: q,
+      expectedRevision: 0, reason: "Synthetic accepted-answer verification" });
+    for (const q of questions) await saveQuestion(q);
+    const writesBeforeInvalid = aliasStore.writeCount;
+    for (const answer of [", ,", "명, " + "나".repeat(21)]) {
+      await assert.rejects(saveQuestion(question(1008, "short", answer, 1)),
+        error => error?.details?.reason === "ASSESSMENT_PAPER_QUESTION_INVALID");
+    }
+    assert.equal(aliasStore.writeCount, writesBeforeInvalid, "Invalid alias keys create no question or audit writes");
+    assert.equal(aliasStore.snapshot("years/2026/semesters/2/quiz_questions/1003").data.answer, questions[2].answer,
+      "Each alias may use 20 characters even when their combined key exceeds 20");
+    const base = definitionPayload("QUIZ");
+    const config = { ...base, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1",
+      definitionId: "quiz:2026-2:exam_prep:exam_prep:round_1", questionCount: questions.length, maxAttempts: 20,
+      legacyConfigKey: "exam_prep_exam_prep__round_1", expectedRevision: 0, reason: "Synthetic alias paper",
+      presentationSettings: { ...base.presentationSettings, questionCount: questions.length } };
+    await apply("saveQuizAssessmentSettings", config);
+    const definitionPath = `${assessment.DEFINITION_COLLECTION}/${config.definitionId}`;
+    const definition = aliasStore.snapshot(definitionPath).data;
+    const writesBeforeBlocked = aliasStore.writeCount;
+    aliasStore.documents.set(definitionPath, { ...definition, status: "CLOSED" });
+    await assert.rejects(apply("startAssessmentAttempt", { definitionId: config.definitionId }, student),
+      error => error?.details?.reason === "ASSESSMENT_NOT_PUBLISHED");
+    aliasStore.documents.set(definitionPath, { ...definition, assignedClassIds: ["class_other"] });
+    await assert.rejects(apply("startAssessmentAttempt", { definitionId: config.definitionId }, student),
+      error => error?.details?.reason === "ASSESSMENT_CLASS_NOT_ASSIGNED");
+    aliasStore.documents.set(definitionPath, definition);
+    await assert.rejects(apply("startAssessmentAttempt", { definitionId: config.definitionId }, admin),
+      error => error?.details?.reason === "ASSESSMENT_STUDENT_REQUIRED");
+    assert.equal(aliasStore.writeCount, writesBeforeBlocked, "Aliases do not bypass publication, class or role boundaries");
+    const started = (await apply("startAssessmentAttempt", { definitionId: config.definitionId }, student)).result;
+    const attemptPath = `${assessment.ATTEMPT_COLLECTION}/${started.attemptId}`;
+    const attempt = aliasStore.documents.get(attemptPath);
+    assert.deepEqual(attempt.gradingSnapshot.map(item => item.type), questions.map(item => item.type));
+    assert.ok(started.questionPresentation.every(item => !Object.hasOwn(item, "answer")), "Accepted keys remain private before submission");
+    for (const item of attempt.gradingSnapshot) if (mode !== "new") delete item.type;
+    if (mode === "legacy-untyped") for (const item of attempt.questionSnapshots) delete item.type;
+    const frozenQuestions = clone(attempt.questionSnapshots);
+    // A teacher editing the source later must not change the frozen aliases, type or points.
+    for (const q of questions) aliasStore.documents.set(`years/2026/semesters/2/quiz_questions/${q.id}`,
+      { ...q, type: "choice", answer: "다른 답", points: 99, contentRevision: 2 });
+    const query = assessment.createAssessmentQueryCore({ store: aliasStore, now: () => new Date(nowMs),
+      serverTimestamp: () => ({ __serverTimestamp: nowMs }), assertSession: async request => ({ uid: request.auth.uid }) });
+    const answers = { 1001: "명", 1002: "조 선 왕 조", 1003: longAlias, 1004: "ㄱ, ㄴ", 1005: "명나라", 1006: "명, 명나라", 1007: "ㄱ" };
+    const progress = { attemptId: started.attemptId, expectedRevision: 1, answers, saveId: `aliases-${mode}` };
+    const saved = await query.saveAssessmentProgress({ auth: student, data: progress });
+    assert.equal(saved.revision, 2);
+    assert.equal((await query.saveAssessmentProgress({ auth: student, data: progress })).replayed, true);
+    assert.deepEqual(aliasStore.snapshot(attemptPath).data.answers, answers);
+    const submit = { attemptId: started.attemptId, expectedRevision: 2, answers, submitReason: "STUDENT" };
+    const writesBeforeForeign = aliasStore.writeCount;
+    await assert.rejects(apply("submitAssessmentAttempt", submit, { uid: "other-student" }),
+      error => error?.details?.reason === "ASSESSMENT_ATTEMPT_FORBIDDEN");
+    assert.equal(aliasStore.writeCount, writesBeforeForeign);
+    const graded = (await apply("submitAssessmentAttempt", submit, student)).result;
+    const correct = mode === "legacy-untyped" ? [false, false, false, true, false, true, false] : [true, true, true, true, true, false, false];
+    assert.deepEqual(graded.answerChecks.map(item => item.correct), correct, mode);
+    assert.equal(graded.earnedPoints, mode === "legacy-untyped" ? 13 : 20.5, mode);
+    assert.equal(graded.maxPoints, 35.5);
+    assert.equal(graded.score, correct.filter(Boolean).length);
+    assert.deepEqual(graded.answers, answers, "Student answers are preserved verbatim, never split into aliases");
+    assert.deepEqual(graded.questionSnapshots, frozenQuestions, "Submission uses the original question snapshot");
+    const immutableResult = aliasStore.snapshot(graded.resultRef).data;
+    const immutableSubmission = aliasStore.snapshot(graded.submissionRef).data;
+    const replay = (await apply("submitAssessmentAttempt", { ...submit, answers: {} }, student)).result;
+    assert.equal(replay.replayedSubmission, true);
+    assert.deepEqual(replay.answerChecks, graded.answerChecks);
+    assert.equal(replay.earnedPoints, graded.earnedPoints);
+    assert.deepEqual(aliasStore.snapshot(graded.resultRef).data, immutableResult);
+    assert.deepEqual(aliasStore.snapshot(graded.submissionRef).data, immutableSubmission);
+    if (mode === "legacy-typed") {
+      // Simulate a result graded before aliases existed. Replays must not regrade it.
+      const historic = { ...immutableResult, score: 0, earnedPoints: 0, percent: 0,
+        answerChecks: immutableResult.answerChecks.map(item => ({ ...item, correct: false })) };
+      aliasStore.documents.set(graded.resultRef, historic);
+      const historicalReplay = (await apply("submitAssessmentAttempt", submit, student)).result;
+      assert.equal(historicalReplay.score, 0);
+      assert.equal(historicalReplay.earnedPoints, 0);
+      assert.deepEqual(historicalReplay.answerChecks, historic.answerChecks);
+      assert.deepEqual(aliasStore.snapshot(graded.resultRef).data, historic);
+    }
+  }
+};
+
 const runLegacyReceiptHints = async () => {
   const cases = [
     { name: "mock-definition", category: "exam_prep", remove: [0, 1] },
@@ -1132,6 +1240,7 @@ const runLegacyReceiptHints = async () => {
 (async () => {
   await runLegacyReceiptHints();
   await runMockExamPaper();
+  await runShortAnswerAliases();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
   await runKind("QUIZ");
@@ -1276,6 +1385,7 @@ const runLegacyReceiptHints = async () => {
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
+      "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
       "HISTORY_LESSON_METADATA_PRESERVED",
       "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",

@@ -54,7 +54,7 @@ const questions = [
     type: "short",
     points: 4,
     question: "토지에서 조세를 거둘 수 있는 권리는?",
-    answer: "수조권",
+    answer: "조세 수취권, 수조권",
   },
   {
     id: 25,

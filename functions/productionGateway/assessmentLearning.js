@@ -1,6 +1,7 @@
 // Diagnostic observations never change grading, rewards, or attempt eligibility.
 const { redactLegacyBlankText } = require("./mockExamMaterials");
 const { normalizeAchievementMetadata } = require("../historyAchievementMetadata");
+const { isQuizAnswerCorrect } = require("../quizAnswerMatching");
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const isMockExamCategory = value => /^exam_prep(?:__round_[1-9]\d*)?$/.test(String(value || "").trim());
 const safeText = (value, max = 160) => typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -103,9 +104,9 @@ const rankLearningCandidates = (source, priorAttempts) => {
   for (const attempt of [...priorAttempts].sort((a, b) => String(a.submittedAtIso || "").localeCompare(String(b.submittedAtIso || "")))) {
     for (const id of attempt.questionIds || []) seen.add(id);
     if (attempt.status !== "SUBMITTED") continue;
+    const savedTypes = new Map((attempt.questionSnapshots || []).map(item => [String(item.id), item.type]));
     for (const item of attempt.gradingSnapshot || []) {
-      const clean = value => String(value ?? "").replace(/\s+/g, "").trim();
-      latestByQuestion.set(item.id, { needsReview: clean(attempt.answers?.[item.id]) !== clean(item.answer) || attempt.analytics?.questions?.[item.id]?.hintViewed === true,
+      latestByQuestion.set(item.id, { needsReview: !isQuizAnswerCorrect(item.type || savedTypes.get(String(item.id)), attempt.answers?.[item.id], item.answer) || attempt.analytics?.questions?.[item.id]?.hintViewed === true,
         concepts: attempt.learningSnapshot?.find(question => question.id === item.id)?.concepts || [] });
     }
   }

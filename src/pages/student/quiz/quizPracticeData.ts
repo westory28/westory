@@ -2,6 +2,7 @@ import type {
   AssessmentQuestionSnapshot,
   AssessmentSubmissionResult,
 } from "../../../lib/assessmentLifecycle";
+import { isQuizAnswerCorrect } from "../../../lib/quizAnswerMatching";
 import {
   decodeQuizChoiceColumns,
   formatQuizChoiceText,
@@ -57,11 +58,9 @@ export function buildQuizRelearningItems(
 export function isQuizPracticeAnswerCorrect(
   answer: string,
   expected: string,
+  type?: string,
 ): boolean {
-  const normalize = (value: string) => value.replace(/\s+/g, "").trim();
-  return (
-    normalize(answer).length > 0 && normalize(answer) === normalize(expected)
-  );
+  return isQuizAnswerCorrect(type, answer, expected);
 }
 
 export const formatQuizPracticeAnswer = (answer: string) =>

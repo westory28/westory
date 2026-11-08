@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
+const { isQuizAnswerCorrect } = require('./quizAnswerMatching');
 
 const COLLECTION = 'semester_quiz_review_notes';
 const REASONS = ['', '개념이 헷갈렸어요', '자료의 근거를 놓쳤어요', '답을 잘못 입력했어요'];
@@ -8,7 +9,6 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const noteId = (semesterId, uid, key) => hash(JSON.stringify([semesterId, uid, key]));
 const fail = (code, message, reason) => { throw new HttpsError(code, message, { reason }); };
 const emptyNotes = () => ({ revision: 0, items: [], updatedAt: '' });
-const normalizeAnswer = value => value.replace(/\s+/g, '').trim();
 const validKey = key => typeof key === 'string' && /^(canonical|legacy):[^/\x00-\x1f]{1,180}$/.test(key)
   && !['.', '..'].includes(key.slice(key.indexOf(':') + 1));
 const resultPath = (semesterId, key) => {
@@ -111,7 +111,7 @@ function gradePractice(question, answer) {
     });
     if (selected.length < pairs.length) return null;
   }
-  return normalizeAnswer(answer) === normalizeAnswer(question.answer);
+  return isQuizAnswerCorrect(question.type, answer, question.answer);
 }
 
 const createQuizReviewNoteHandler = ({ db, assertSession = assertScoreWorkflowSession, now = () => new Date() }) => async request => {

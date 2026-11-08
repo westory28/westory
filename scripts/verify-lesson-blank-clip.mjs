@@ -601,7 +601,9 @@ const HistoryView = compile(
   "src/components/common/HistoryClassroomAssignmentView.tsx",
   {
     react: staticReact,
-    "../../lib/assessmentAnswerLimits": compile("src/lib/assessmentAnswerLimits.ts", {}),
+    "../../lib/assessmentAnswerLimits": compile("src/lib/assessmentAnswerLimits.ts", {
+      "./quizAnswerMatching": compile("src/lib/quizAnswerMatching.ts", {}),
+    }),
     "./WorksheetBlankInput": "WorksheetBlankInput",
     "./WorksheetFootnoteAnchor": "WorksheetFootnoteAnchor",
     "./InfoHelp": {

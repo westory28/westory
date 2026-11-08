@@ -691,7 +691,11 @@ export default function QuizRelearning({
                 onClick={() => {
                   setResults((previous) => ({
                     ...previous,
-                    [item.id]: isQuizPracticeAnswerCorrect(answer, item.answer),
+                    [item.id]: isQuizPracticeAnswerCorrect(
+                      answer,
+                      item.answer,
+                      item.type,
+                    ),
                   }));
                   setStage("checked");
                 }}
