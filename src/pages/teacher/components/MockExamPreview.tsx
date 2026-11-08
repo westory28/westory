@@ -376,11 +376,23 @@ export default function MockExamPreview({
                     question={currentQuestion}
                     index={questionIndex}
                     hideAnswers
+                    correct={
+                      previewResult?.checks.find(
+                        (check) =>
+                          String(check.id) === String(currentQuestion.id),
+                      )?.correct
+                    }
                   />
                   <MockExamAnswerControls
                     question={currentQuestion}
                     index={questionIndex}
                     choiceLayout="paper"
+                    correct={
+                      previewResult?.checks.find(
+                        (check) =>
+                          String(check.id) === String(currentQuestion.id),
+                      )?.correct
+                    }
                     answer={practiceAnswers[String(currentQuestion.id)] || ""}
                     onAnswer={(value) => {
                       setPreviewResult(null);

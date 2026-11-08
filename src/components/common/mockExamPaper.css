@@ -536,6 +536,10 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.mock-exam-question-ink--graded-detail .mock-exam-pencil {
+  top: -12px;
+  left: -12px;
+}
 .mock-exam-pencil-core {
   opacity: 0.72;
 }

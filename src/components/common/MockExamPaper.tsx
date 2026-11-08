@@ -299,7 +299,8 @@ export function MockExamQuestionContent({
   showPassageSet = true,
   setQuestionRange,
   gradingMark,
-  correction,
+  correction: animatedCorrection,
+  correct,
 }: {
   question: MockExamPaperQuestion;
   index: number;
@@ -309,7 +310,11 @@ export function MockExamQuestionContent({
   setQuestionRange?: [number, number];
   gradingMark?: React.ReactNode;
   correction?: CorrectionState;
+  correct?: boolean | null;
 }) {
+  const correction =
+    animatedCorrection ||
+    (correct === false && hasCorrection(question) ? "complete" : undefined);
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
   const tableColumns = getQuizChoiceColumnCount(options);
   const choiceColumns = getMockExamChoiceColumns(
@@ -317,7 +322,9 @@ export function MockExamQuestionContent({
     question.choiceOptionImages,
   );
   return (
-    <div className="mock-exam-question-ink">
+    <div
+      className={`mock-exam-question-ink${correct != null ? " mock-exam-question-ink--graded-detail" : ""}`}
+    >
       {showPassageSet && question.passageSet && (
         <MockExamSetPassage
           value={question.passageSet}
@@ -325,7 +332,9 @@ export function MockExamQuestionContent({
         />
       )}
       <p className="mock-exam-stem">
-        {gradingMark}
+        {gradingMark ?? (
+          <PencilMark correct={correct ?? null} variant={index} />
+        )}
         <strong className="mock-exam-number">{index + 1}.</strong>{" "}
         <QuizQuestionText value={question.question} />
         {Number.isFinite(question.points) && (
@@ -370,12 +379,13 @@ export function MockExamQuestionContent({
                 <span className="mock-exam-option-number">
                   {examChoiceNumber(optionIndex)}{" "}
                   {answer === option && <MockExamAnswerCheck />}
-                  {correction &&
-                    ["choice", "ox"].includes(question.type) &&
-                    normalizedAnswer(option) ===
-                      normalizedAnswer(question.answer) && (
-                      <MockExamCorrection state={correction} />
-                    )}
+                  {correction && (
+                    <MockExamAnswerCorrection
+                      question={question}
+                      option={option}
+                      state={correction}
+                    />
+                  )}
                 </span>
                 <span className="mock-exam-option-text">
                   {tableColumns > 1 ? (
@@ -435,20 +445,41 @@ export function MockExamQuestionContent({
               "　　　　　　　　　　　　　　　　　"}
           </p>
           {correction && (
-            <MockExamCorrection state={correction}>
-              <span>
-                정답:{" "}
-                {String(question.answer ?? "")
-                  .split("||")
-                  .join(" → ")
-                  .split("=>")
-                  .join(" → ")}
-              </span>
-            </MockExamCorrection>
+            <MockExamAnswerCorrection question={question} state={correction} />
           )}
         </div>
       )}
     </div>
+  );
+}
+
+export function MockExamAnswerCorrection({
+  question,
+  option,
+  state = "complete",
+}: {
+  question: MockExamPaperQuestion;
+  option?: string;
+  state?: CorrectionState;
+}) {
+  if (!hasCorrection(question)) return null;
+  if (["choice", "ox"].includes(question.type)) {
+    return normalizedAnswer(option) === normalizedAnswer(question.answer) ? (
+      <MockExamCorrection state={state} />
+    ) : null;
+  }
+  if (option !== undefined) return null;
+  return (
+    <MockExamCorrection state={state}>
+      <span>
+        정답:{" "}
+        {String(question.answer ?? "")
+          .split("||")
+          .join(" → ")
+          .split("=>")
+          .join(" → ")}
+      </span>
+    </MockExamCorrection>
   );
 }
 

@@ -409,6 +409,14 @@ try {
         .click();
       await page.locator(".mock-exam-options label").first().click();
       // Grade directly from a zoomed question; the paper must reappear.
+      assert.equal(
+        await page
+          .locator(
+            ".mock-exam-preview-question .mock-exam-pencil,.mock-exam-preview-question .mock-exam-correction",
+          )
+          .count(),
+        0,
+      );
       await trace(page);
       await page.getByRole("button", { name: "채점", exact: true }).focus();
       await page.keyboard.press("Enter");
@@ -474,6 +482,66 @@ try {
         ),
       });
       reports.push({ width, reducedMotion, layout, result });
+      await page
+        .getByRole("button", {
+          name: "1번 문제 확대, 답안 입력됨",
+          exact: true,
+        })
+        .click();
+      for (let index = 0; index < 4; index++) {
+        const detail = page.locator(".mock-exam-preview-question");
+        assert.equal(
+          await detail
+            .locator(
+              `.mock-exam-pencil.is-${index < 2 ? "correct" : "incorrect"}`,
+            )
+            .count(),
+          1,
+        );
+        assert.equal(
+          await detail.locator(".mock-exam-correction").count(),
+          index >= 2 ? 1 : 0,
+        );
+        assert.equal(
+          await detail.locator(".mock-exam-pencil.is-drawing").count(),
+          0,
+        );
+        if (index === 2) {
+          assert(
+            (
+              await detail
+                .locator(".mock-exam-correction")
+                .locator("..")
+                .textContent()
+            ).includes("②"),
+          );
+          assert.equal(
+            await detail
+              .locator(".is-selected .mock-exam-answer-check")
+              .count(),
+            1,
+          );
+          await page.screenshot({
+            path: path.join(
+              evidence,
+              `expanded-${browserName}-${width}-${reducedMotion}.png`,
+            ),
+          });
+        }
+        if (index === 3)
+          assert(
+            (
+              await detail.locator(".mock-exam-correction").textContent()
+            ).includes("의정부"),
+          );
+        if (index < 3)
+          await page
+            .getByRole("button", { name: "다음 문제", exact: true })
+            .click();
+      }
+      await page
+        .getByRole("button", { name: "시험지로 돌아가기", exact: true })
+        .click();
       if (width === 390 && reducedMotion === "reduce") {
         await trace(page);
         await page.getByRole("button", { name: "채점", exact: true }).click();
@@ -493,6 +561,15 @@ try {
           .locator(".mock-exam-answer-controls label")
           .filter({ hasText: "성균관" })
           .click();
+        assert.equal(
+          await page
+            .locator(
+              ".mock-exam-preview-question .mock-exam-pencil,.mock-exam-preview-question .mock-exam-correction",
+            )
+            .count(),
+          0,
+          "Changing an answer clears the expanded grade immediately",
+        );
         await page
           .getByRole("button", { name: "시험지로 돌아가기", exact: true })
           .click();

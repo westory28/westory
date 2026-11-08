@@ -604,6 +604,74 @@ try {
         (await page.getByRole("dialog").textContent()).includes("정답: 성균관"),
         "Post-grading answer review still opens",
       );
+      for (let index = 0; index < questions.length; index++) {
+        const detail = page.getByRole("dialog");
+        const correct = !zero && index % 2 === 0;
+        assert.equal(
+          await detail
+            .locator(
+              `.mock-exam-pencil.is-${correct ? "correct" : "incorrect"}`,
+            )
+            .count(),
+          1,
+        );
+        assert.equal(
+          await detail.locator(".mock-exam-pencil.is-drawing").count(),
+          0,
+        );
+        assert.equal(
+          await detail.locator(".mock-exam-correction").count(),
+          !correct && index !== 5 ? 1 : 0,
+          "Expanded review preserves saved grades and never invents missing answers",
+        );
+        if (index === 1) {
+          assert(
+            (
+              await detail
+                .locator(".mock-exam-correction")
+                .locator("..")
+                .textContent()
+            ).includes("②"),
+          );
+          assert.equal(
+            await detail
+              .locator(".is-selected .mock-exam-answer-check")
+              .count(),
+            1,
+            "Original wrong selection remains alongside the red correct-answer check",
+          );
+          await page.screenshot({
+            path: path.join(evidence, `expanded-${width}-${reducedMotion}.png`),
+          });
+        }
+        if (index === 3)
+          assert(
+            (
+              await detail.locator(".mock-exam-correction").textContent()
+            ).includes("수조권"),
+          );
+        const bounds = await detail.evaluate((el) => {
+          const scroll = el
+            .querySelector(".mock-exam-zoom-scroll")
+            .getBoundingClientRect();
+          const mark = el
+            .querySelector(".mock-exam-pencil")
+            .getBoundingClientRect();
+          return (
+            mark.left >= scroll.left &&
+            mark.top >= scroll.top &&
+            mark.right <= scroll.right
+          );
+        });
+        assert(
+          bounds,
+          "Expanded mark stays inside the scroll viewport, including shared passages",
+        );
+        if (index < questions.length - 1)
+          await detail
+            .getByRole("button", { name: "다음 문제", exact: true })
+            .click();
+      }
       reports.push({ width, reducedMotion, zero, trace });
       await page.close();
     }

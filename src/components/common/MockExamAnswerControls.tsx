@@ -2,6 +2,7 @@ import React from "react";
 import {
   MockExamImage,
   MockExamAnswerCheck,
+  MockExamAnswerCorrection,
   examChoiceNumber,
   type MockExamPaperQuestion,
 } from "./MockExamPaper";
@@ -25,6 +26,7 @@ export default function MockExamAnswerControls({
   disabled = false,
   orderOptions = question.options || [],
   choiceLayout = "list",
+  correct,
 }: {
   question: MockExamPaperQuestion;
   index: number;
@@ -33,6 +35,7 @@ export default function MockExamAnswerControls({
   disabled?: boolean;
   orderOptions?: string[];
   choiceLayout?: "list" | "paper";
+  correct?: boolean | null;
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
   const tableColumns = getQuizChoiceColumnCount(options);
@@ -102,6 +105,12 @@ export default function MockExamAnswerControls({
                 <span className="mock-exam-option-number">
                   {examChoiceNumber(index)}{" "}
                   {answer === option && <MockExamAnswerCheck />}
+                  {correct === false && (
+                    <MockExamAnswerCorrection
+                      question={question}
+                      option={option}
+                    />
+                  )}
                 </span>
                 <span
                   className={
@@ -210,6 +219,11 @@ export default function MockExamAnswerControls({
               </select>
             </label>
           ))}
+        </div>
+      )}
+      {correct === false && !["choice", "ox"].includes(question.type) && (
+        <div className="mock-exam-written-answer">
+          <MockExamAnswerCorrection question={question} />
         </div>
       )}
     </fieldset>

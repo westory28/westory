@@ -366,6 +366,13 @@ export default function MockExamWorkspace(props: Props) {
                 index={currentIndex}
                 answer={answer}
                 hideAnswers={!result}
+                correct={
+                  result
+                    ? checks.find(
+                        (check) => String(check.id) === String(question.id),
+                      )?.correct
+                    : undefined
+                }
               />
               {result ? (
                 <div className="mock-exam-review-answer">
