@@ -12,6 +12,11 @@ import "@fontsource/noto-serif-kr/900.css";
 import QuizPassage from "./QuizPassage";
 import QuizQuestionText from "./QuizQuestionText";
 import {
+  QuizChoiceColumnCells,
+  QuizChoiceColumnHeaders,
+} from "./QuizChoiceColumns";
+import { getQuizChoiceColumnCount } from "../../lib/quizChoiceColumns";
+import {
   getMockExamPaperTitle,
   normalizeMockExamPaperHeader,
   type MockExamPaperHeaderSettings,
@@ -264,6 +269,7 @@ export function MockExamQuestionContent({
   gradingMark?: React.ReactNode;
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
+  const tableColumns = getQuizChoiceColumnCount(options);
   const choiceColumns = getMockExamChoiceColumns(
     options,
     question.choiceOptionImages,
@@ -304,28 +310,42 @@ export function MockExamQuestionContent({
         </fieldset>
       )}
       {!hideAnswers && options.length > 0 && (
-        <ol className={`mock-exam-options mock-exam-options--${choiceColumns}`}>
-          {options.map((option, optionIndex) => (
-            <li
-              key={optionIndex}
-              className={answer === option ? "is-selected" : ""}
-            >
-              <span className="mock-exam-option-number">
-                {examChoiceNumber(optionIndex)}{" "}
-                {answer === option && <MockExamAnswerCheck />}
-              </span>
-              <span className="mock-exam-option-text">
-                {formatMockExamChoiceLabel(option)}
-                {question.choiceOptionImages?.[optionIndex] && (
-                  <MockExamImage
-                    src={question.choiceOptionImages[optionIndex]!}
-                    alt={`${optionIndex + 1}번 보기 자료`}
-                  />
-                )}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <>
+          {tableColumns > 1 && (
+            <div className="mock-exam-column-header">
+              <span aria-hidden="true" />
+              <QuizChoiceColumnHeaders count={tableColumns} />
+            </div>
+          )}
+          <ol
+            className={`mock-exam-options mock-exam-options--${tableColumns > 1 ? "columns" : choiceColumns}`}
+          >
+            {options.map((option, optionIndex) => (
+              <li
+                key={optionIndex}
+                className={answer === option ? "is-selected" : ""}
+              >
+                <span className="mock-exam-option-number">
+                  {examChoiceNumber(optionIndex)}{" "}
+                  {answer === option && <MockExamAnswerCheck />}
+                </span>
+                <span className="mock-exam-option-text">
+                  {tableColumns > 1 ? (
+                    <QuizChoiceColumnCells value={option} />
+                  ) : (
+                    formatMockExamChoiceLabel(option)
+                  )}
+                  {question.choiceOptionImages?.[optionIndex] && (
+                    <MockExamImage
+                      src={question.choiceOptionImages[optionIndex]!}
+                      alt={`${optionIndex + 1}번 보기 자료`}
+                    />
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </>
       )}
       {!hideAnswers && question.type === "matching" && (
         <div className="mock-exam-matching-material">

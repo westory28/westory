@@ -46,6 +46,21 @@ import {
 } from "../../../lib/quizImageCompression";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
+import {
+  QuizChoiceColumnInputs,
+  QuizChoiceColumnTools,
+} from "./QuizChoiceColumnEditor";
+import {
+  decodeQuizChoiceColumns,
+  normalizeQuizChoiceOption,
+  encodeQuizChoiceColumns,
+  getQuizChoiceColumnCount,
+  formatQuizChoiceText,
+} from "../../../lib/quizChoiceColumns";
+import {
+  QuizChoiceColumnCells,
+  QuizChoiceColumnHeaders,
+} from "../../../components/common/QuizChoiceColumns";
 import QuizRequiredMark from "./QuizRequiredMark";
 import QuizLearningMetadataFields, {
   normalizeQuizLearningMetadata,
@@ -957,7 +972,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   ) =>
     options
       .map((value, index) => ({
-        text: value.trim() || (images[index] ? `${index + 1}번 보기` : ""),
+        text:
+          normalizeQuizChoiceOption(value) ||
+          (images[index] ? `${index + 1}번 보기` : ""),
         image: images[index] || null,
         sourceIndex: index,
       }))
@@ -1287,6 +1304,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const handleChoiceVerticalFocus = (
     event: React.KeyboardEvent<HTMLTextAreaElement>,
     index: number,
+    column = 0,
   ) => {
     if (
       event.nativeEvent.isComposing ||
@@ -1307,8 +1325,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
     const nextIndex = index + (event.key === "ArrowDown" ? 1 : -1);
     if (nextIndex < 0 || nextIndex >= choiceOptions.length) return;
-    const nextField =
-      choiceOptionRows.current[nextIndex]?.querySelector("textarea");
+    const nextField = choiceOptionRows.current[
+      nextIndex
+    ]?.querySelector<HTMLTextAreaElement>(
+      `textarea[data-choice-column="${column}"]`,
+    );
     if (!nextField || nextField.readOnly || nextField.matches(":disabled"))
       return;
     event.preventDefault();
@@ -1512,7 +1533,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   }, [sourceQuestion]);
 
   const addChoiceOption = () => {
-    setChoiceOptions((prev) => [...prev, ""]);
+    setChoiceOptions((prev) => [
+      ...prev,
+      encodeQuizChoiceColumns(Array(getQuizChoiceColumnCount(prev)).fill("")),
+    ]);
     setChoiceOptionImages((prev) => [...prev, null]);
   };
   const removeChoiceOption = (index: number) => {
@@ -1573,6 +1597,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return null;
     }
     if (formType === "choice") {
+      if (
+        getQuizChoiceColumnCount(choiceOptions) > 1 &&
+        choiceOptions.some((option) =>
+          decodeQuizChoiceColumns(option)?.some((cell) => !cell.trim()),
+        )
+      )
+        return (alert("각 보기의 모든 열을 입력해 주세요."), null);
       const rawOptionItems = getChoiceOptionItems(
         choiceOptions,
         choiceOptionImages,
@@ -1874,7 +1905,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const pairs = parseMatchingAnswer(question);
       return pairs.map((pair) => `${pair.left} - ${pair.right}`).join(", ");
     }
-    return question.answer;
+    return formatQuizChoiceText(String(question.answer));
   };
 
   const categoryLabel =
@@ -1895,7 +1926,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const hasPreviewChoiceSupportPanel =
     formType === "choice" && (!!formImage || !!previewPassageText);
   const hasPreviewChoiceOptionImages =
-    formType === "choice" && previewChoiceItems.some((item) => item.image);
+    formType === "choice" &&
+    getQuizChoiceColumnCount(previewChoiceItems.map((item) => item.text)) ===
+      1 &&
+    previewChoiceItems.some((item) => item.image);
   const draftPreviewQuestion = useMemo(
     () => ({
       id: editingQuestionId || "draft",
@@ -2350,7 +2384,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const passageText = String(q.passage || "").trim();
                 const hasChoiceSupportPanel =
                   q.type === "choice" && (!!q.image || !!passageText);
-                const hasChoiceOptionImages = choicePreviewImages.some(Boolean);
+                const hasChoiceOptionImages =
+                  getQuizChoiceColumnCount(choicePreviewOptions) === 1 &&
+                  choicePreviewImages.some(Boolean);
 
                 return (
                   <div
@@ -2451,6 +2487,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                   : "space-y-1.5"
                               }
                             >
+                              {getQuizChoiceColumnCount(choicePreviewOptions) >
+                                1 && (
+                                <div className="quiz-choice-preview-headings">
+                                  <QuizChoiceColumnHeaders
+                                    count={getQuizChoiceColumnCount(
+                                      choicePreviewOptions,
+                                    )}
+                                  />
+                                </div>
+                              )}
                               {choicePreviewOptions.map(
                                 (option, optionIndex) => {
                                   const isCorrectOption =
@@ -2502,13 +2548,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                               />
                                             ) : (
                                               <span className="break-keep text-center text-sm font-bold text-gray-700">
-                                                {option}
+                                                <QuizChoiceColumnCells
+                                                  value={option}
+                                                />
                                               </span>
                                             )}
                                           </div>
                                           {optionImage && option && (
                                             <div className="mt-1.5 line-clamp-2 min-h-[2rem] w-full break-keep text-center text-xs font-bold leading-4">
-                                              {option}
+                                              <QuizChoiceColumnCells
+                                                value={option}
+                                              />
                                             </div>
                                           )}
                                         </>
@@ -2524,7 +2574,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                             {optionIndex + 1}
                                           </span>
                                           <span className="min-w-0 flex-1 break-keep">
-                                            {option}
+                                            <QuizChoiceColumnCells
+                                              value={option}
+                                            />
+                                            {optionImage && (
+                                              <img
+                                                src={optionImage}
+                                                alt={`${optionIndex + 1}번 보기 이미지`}
+                                                className="mx-auto mt-2 max-h-24 max-w-full object-contain"
+                                              />
+                                            )}
                                           </span>
                                         </>
                                       )}
@@ -2975,6 +3034,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                               보기와 정답
                               <QuizRequiredMark />
                             </h4>
+                            <QuizChoiceColumnTools
+                              options={choiceOptions}
+                              onChange={setChoiceOptions}
+                            />
                             <button
                               type="button"
                               onClick={addChoiceOption}
@@ -3006,23 +3069,27 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                   )}
                                 </button>
                                 <div className="quiz-choice-content">
-                                  <QuizTextField
+                                  <QuizChoiceColumnInputs
                                     grow={type === "special"}
-                                    lang="ko"
-                                    inputMode="text"
                                     value={option}
-                                    onChange={(e) =>
+                                    index={index}
+                                    count={getQuizChoiceColumnCount(
+                                      choiceOptions,
+                                    )}
+                                    onChange={(value) =>
                                       setChoiceOptions((prev) =>
                                         prev.map((opt, i) =>
-                                          i === index ? e.target.value : opt,
+                                          i === index ? value : opt,
                                         ),
                                       )
                                     }
-                                    onKeyDown={(event) =>
-                                      handleChoiceVerticalFocus(event, index)
+                                    onKeyDown={(event, column) =>
+                                      handleChoiceVerticalFocus(
+                                        event,
+                                        index,
+                                        column,
+                                      )
                                     }
-                                    aria-label={`${index + 1}번 보기`}
-                                    className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
                                   />
                                   {optionImage && (
                                     <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
@@ -3435,6 +3502,19 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                     : "space-y-2"
                                 }
                               >
+                                {getQuizChoiceColumnCount(
+                                  previewChoiceItems.map((item) => item.text),
+                                ) > 1 && (
+                                  <div className="quiz-choice-preview-headings">
+                                    <QuizChoiceColumnHeaders
+                                      count={getQuizChoiceColumnCount(
+                                        previewChoiceItems.map(
+                                          (item) => item.text,
+                                        ),
+                                      )}
+                                    />
+                                  </div>
+                                )}
                                 {previewChoiceItems.map((item, index) => {
                                   const visibleOptionText =
                                     item.image &&
@@ -3493,13 +3573,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                               />
                                             ) : (
                                               <span className="break-keep text-center text-sm font-bold text-gray-700">
-                                                {visibleOptionText}
+                                                <QuizChoiceColumnCells
+                                                  value={visibleOptionText}
+                                                />
                                               </span>
                                             )}
                                           </div>
                                           {visibleOptionText && item.image && (
                                             <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
-                                              {visibleOptionText}
+                                              <QuizChoiceColumnCells
+                                                value={visibleOptionText}
+                                              />
                                             </div>
                                           )}
                                         </>
@@ -3514,15 +3598,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                           >
                                             {index + 1}
                                           </span>
-                                          {item.image && (
-                                            <img
-                                              src={item.image}
-                                              alt={`${index + 1}번 보기 이미지 미리보기`}
-                                              className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
+                                          <span className="min-w-0 flex-1 break-words">
+                                            <QuizChoiceColumnCells
+                                              value={visibleOptionText}
                                             />
-                                          )}
-                                          <span className="min-w-0 break-words">
-                                            {visibleOptionText}
+                                            {item.image && (
+                                              <img
+                                                src={item.image}
+                                                alt={`${index + 1}번 보기 이미지 미리보기`}
+                                                className="mx-auto mt-2 max-h-24 max-w-full object-contain"
+                                              />
+                                            )}
                                           </span>
                                         </>
                                       )}
@@ -3619,7 +3705,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                           <span className="shrink-0">
                                             {index + 1}.
                                           </span>
-                                          <span className="min-w-0 break-words">
+                                          <span className="min-w-0 flex-1 break-words">
                                             {item}
                                           </span>
                                         </button>

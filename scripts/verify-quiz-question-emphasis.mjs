@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(),
   ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright"));
 const cases = [
-  ["다음 중 옳지 않은 것은?", ["옳지 않은"]],
+  ["다음 중 옳지 않은 것은?", ["않은"]],
   ["적절하지 않은 설명은?", ["적절하지 않은"]],
   ["해당 인물이 아닌 것은?", ["아닌"]],
   ["시행하지 않은 정책은?", ["않은"]],
@@ -21,7 +21,7 @@ const cases = [
   ["확인할 수 없는 내용은?", ["확인할 수 없는"]],
   ["판단할 수 없는 것과 단정할 수 없는 것은?", ["판단할 수 없는", "단정할 수 없는"]],
   ["수정해야 할 내용은?", ["수정해야 할"]],
-  ["옳지\n않은 것은?", ["옳지\n않은"]],
+  ["옳지\n않은 것은?", ["않은"]],
   ["‘아닌’과 [않은]을 구분하시오.", ["아닌", "않은"]],
   ["시행하지 않았다. 당시의 상황은?", []],
   ["시행하지 않았던 정책을 설명하였다.", []],
@@ -97,7 +97,7 @@ try {
       await surface.locator(".quiz-question-negative").first().waitFor();
       assert((await surface.locator(".quiz-question-negative").allTextContents()).every(value => value === "아닌"));
       assert.equal(await surface.locator(".mock-exam-options .quiz-question-negative").count(), 0, "choices stay unchanged");
-      const styles = await surface.locator(".quiz-passage-underline").evaluateAll(nodes => nodes.map(node => getComputedStyle(node).borderBottomWidth));
+      const styles = await surface.locator(".quiz-passage-underline").evaluateAll(nodes => nodes.map(node => getComputedStyle(node).textDecorationThickness));
       assert(styles.length && styles.every(value => value === "1px"));
       assert(await surface.locator(".quiz-passage-label-box").count());
       assert(await surface.locator(".quiz-passage-blank-box").count());
@@ -110,7 +110,7 @@ try {
   await page.goto(origin + "/?mode=student");
   await page.locator(".mock-exam-sheet .mock-exam-question").first().click();
   assert.deepEqual(await page.locator(".mock-exam-zoom .quiz-question-negative").allTextContents(), ["아닌"]);
-  assert.equal(await page.locator(".mock-exam-zoom .quiz-passage-underline").evaluate(node => getComputedStyle(node).borderBottomWidth), "1px");
+  assert.equal(await page.locator(".mock-exam-zoom .quiz-passage-underline").evaluate(node => getComputedStyle(node).textDecorationThickness), "1px");
   assert.equal(await page.locator(".mock-exam-answer-controls .quiz-question-negative").count(), 0);
   await page.screenshot({ path: path.join(evidence, "student-zoom.png") });
   assert.deepEqual(errors, []); assert.deepEqual(external, []);

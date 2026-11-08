@@ -1,0 +1,33 @@
+.quiz-choice-column-headings,
+.quiz-choice-column-cells {
+  display: grid;
+  grid-template-columns: repeat(
+    var(--quiz-choice-column-count),
+    minmax(0, 1fr)
+  );
+  gap: 0.5em;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.quiz-choice-column-headings > span {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
+}
+
+.quiz-choice-column-cells > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.quiz-choice-column-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

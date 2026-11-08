@@ -2,6 +2,10 @@ import type {
   AssessmentQuestionSnapshot,
   AssessmentSubmissionResult,
 } from "../../../lib/assessmentLifecycle";
+import {
+  decodeQuizChoiceColumns,
+  formatQuizChoiceText,
+} from "../../../lib/quizChoiceColumns";
 
 export interface QuizRelearningItem extends AssessmentQuestionSnapshot {
   submittedAnswer: string;
@@ -61,10 +65,12 @@ export function isQuizPracticeAnswerCorrect(
 }
 
 export const formatQuizPracticeAnswer = (answer: string) =>
-  answer
-    .split("||")
-    .map((part) => part.replace("=>", " → "))
-    .join(" → ");
+  decodeQuizChoiceColumns(answer)
+    ? formatQuizChoiceText(answer)
+    : answer
+        .split("||")
+        .map((part) => part.replace("=>", " → "))
+        .join(" → ");
 
 export function getQuizPracticeOrderOptions(
   item: QuizRelearningItem,

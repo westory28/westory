@@ -9,6 +9,11 @@ import MatchingConnectionLines from "../../../components/common/MatchingConnecti
 import { PageLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
+import {
+  QuizChoiceColumnHeaders,
+  QuizChoiceColumnCells,
+} from "../../../components/common/QuizChoiceColumns";
+import { getQuizChoiceColumnCount } from "../../../lib/quizChoiceColumns";
 import InfoHelp from "../../../components/common/InfoHelp";
 import {
   AssessmentTelemetryCollector,
@@ -1818,6 +1823,7 @@ const QuizRunner: React.FC = () => {
     const hasChoiceOptionImages =
       question.type === "choice" &&
       (question.choiceOptionImages || []).some(Boolean);
+    const choiceColumnCount = getQuizChoiceColumnCount(question.options || []);
     const selectedOrderItems =
       question.type === "order" ? parseOrderAnswer(currentAnswer) : [];
     const orderOptions =
@@ -2112,11 +2118,16 @@ const QuizRunner: React.FC = () => {
               {question.type === "choice" && (
                 <div
                   className={
-                    hasChoiceOptionImages
+                    hasChoiceOptionImages && choiceColumnCount === 1
                       ? "student-quiz-choice-grid"
                       : "student-quiz-choice-list"
                   }
                 >
+                  {choiceColumnCount > 1 && (
+                    <div className="student-quiz-column-header">
+                      <QuizChoiceColumnHeaders count={choiceColumnCount} />
+                    </div>
+                  )}
                   {question.options?.map((option, index) => {
                     const optionImage = getChoiceOptionImage(question, index);
                     const visibleOptionText =
@@ -2130,9 +2141,29 @@ const QuizRunner: React.FC = () => {
                         key={`${question.id}-choice-${index}`}
                         onClick={() => handleAnswer(option)}
                         aria-pressed={selected}
-                        className={`student-quiz-choice ${hasChoiceOptionImages ? "student-quiz-image-choice" : ""} ${selected ? "is-selected" : ""}`}
+                        className={`student-quiz-choice ${choiceColumnCount > 1 ? "student-quiz-column-row" : hasChoiceOptionImages ? "student-quiz-image-choice" : ""} ${selected ? "is-selected" : ""}`}
                       >
-                        {hasChoiceOptionImages ? (
+                        {choiceColumnCount > 1 ? (
+                          <>
+                            <span className="student-quiz-column-number">
+                              {index + 1}
+                            </span>
+                            <span className="student-quiz-column-content">
+                              <QuizChoiceColumnCells value={option} />
+                              {optionImage && (
+                                <img
+                                  key={`choice-image-${imageReloadKey}`}
+                                  src={optionImage}
+                                  onLoad={() => finishImageLoad(optionImage)}
+                                  onError={() =>
+                                    finishImageLoad(optionImage, true)
+                                  }
+                                  alt={`${index + 1}번 보기 이미지`}
+                                />
+                              )}
+                            </span>
+                          </>
+                        ) : hasChoiceOptionImages ? (
                           <>
                             <div
                               className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${

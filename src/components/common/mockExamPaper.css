@@ -349,6 +349,23 @@
   min-width: 0;
   white-space: pre-line;
 }
+.mock-exam-column-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.33em;
+  margin-top: 6px;
+}
+.mock-exam-column-header > span:first-child,
+.mock-exam-options--columns .mock-exam-option-number {
+  flex: 0 0 1em;
+}
+.mock-exam-options--columns {
+  grid-template-columns: minmax(0, 1fr);
+  margin-top: 2px;
+}
+.mock-exam-options--columns .mock-exam-option-text {
+  flex: 1;
+}
 .mock-exam-answer-check {
   position: absolute;
   width: 2em;

@@ -173,11 +173,29 @@
   overflow-wrap: anywhere;
 }
 .my-quiz-history__options strong,
-.my-quiz-history__options li > span + span {
+.my-quiz-history__answer-marker {
   display: inline-block;
   margin-left: 12px;
   color: var(--ws-primary);
   font-size: 14px;
+}
+.my-quiz-history__column-header {
+  padding: 0 8px 0 48px;
+}
+.my-quiz-history__options--columns {
+  list-style: none;
+  padding-left: 0;
+}
+.my-quiz-history__options--columns > li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+}
+.my-quiz-history__column-number {
+  text-align: center;
+}
+.my-quiz-history__option-content {
+  min-width: 0;
 }
 .my-quiz-history__lesson {
   display: inline-flex;

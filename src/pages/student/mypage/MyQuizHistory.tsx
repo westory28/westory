@@ -10,6 +10,11 @@ import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
 import { normalizeMockExamPaperHeader } from "../../../lib/mockExamPaperHeader";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
+import {
+  QuizChoiceColumnHeaders,
+  QuizChoiceColumnCells,
+} from "../../../components/common/QuizChoiceColumns";
+import { getQuizChoiceColumnCount } from "../../../lib/quizChoiceColumns";
 import MockExamPaper from "../../../components/common/MockExamPaper";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import QuizRelearning from "../quiz/QuizRelearning";
@@ -241,6 +246,9 @@ export default function MyQuizHistory({
     : questions;
   const current =
     visibleQuestions[Math.min(index, Math.max(0, visibleQuestions.length - 1))];
+  const choiceColumnCount = getQuizChoiceColumnCount(
+    current?.snapshot.options || [],
+  );
   const currentNote = detail?.reviewNotes?.items.find(
     (note) => note.questionId === current?.snapshot.id,
   );
@@ -517,33 +525,62 @@ export default function MyQuizHistory({
                           {(current.snapshot.type === "choice" ||
                             current.snapshot.type === "ox") &&
                           current.snapshot.options?.length ? (
-                            <ol className="my-quiz-history__options">
-                              {current.snapshot.options.map(
-                                (option, optionIndex) => (
-                                  <li key={optionIndex}>
-                                    {current.snapshot.choiceOptionImages?.[
-                                      optionIndex
-                                    ] && (
-                                      <img
-                                        src={
-                                          current.snapshot.choiceOptionImages[
-                                            optionIndex
-                                          ]!
-                                        }
-                                        alt={`보기 ${optionIndex + 1} 자료`}
-                                        loading="lazy"
-                                      />
-                                    )}
-                                    <span>{option}</span>
-                                    {current.snapshot.answer === option && (
-                                      <strong>정답</strong>
-                                    )}
-                                    {current.snapshot.submittedAnswer ===
-                                      option && <span>내 답</span>}
-                                  </li>
-                                ),
+                            <>
+                              {choiceColumnCount > 1 && (
+                                <div className="my-quiz-history__column-header">
+                                  <QuizChoiceColumnHeaders
+                                    count={choiceColumnCount}
+                                  />
+                                </div>
                               )}
-                            </ol>
+                              <ol
+                                className={`my-quiz-history__options ${choiceColumnCount > 1 ? "my-quiz-history__options--columns" : ""}`}
+                              >
+                                {current.snapshot.options.map(
+                                  (option, optionIndex) => (
+                                    <li key={optionIndex}>
+                                      {choiceColumnCount > 1 && (
+                                        <span className="my-quiz-history__column-number">
+                                          {optionIndex + 1}.
+                                        </span>
+                                      )}
+                                      <div className="my-quiz-history__option-content">
+                                        {current.snapshot.choiceOptionImages?.[
+                                          optionIndex
+                                        ] && (
+                                          <img
+                                            src={
+                                              current.snapshot
+                                                .choiceOptionImages[
+                                                optionIndex
+                                              ]!
+                                            }
+                                            alt={`보기 ${optionIndex + 1} 자료`}
+                                            loading="lazy"
+                                          />
+                                        )}
+                                        {choiceColumnCount > 1 ? (
+                                          <QuizChoiceColumnCells
+                                            value={option}
+                                          />
+                                        ) : (
+                                          <span>{option}</span>
+                                        )}
+                                        {current.snapshot.answer === option && (
+                                          <strong>정답</strong>
+                                        )}
+                                        {current.snapshot.submittedAnswer ===
+                                          option && (
+                                          <span className="my-quiz-history__answer-marker">
+                                            내 답
+                                          </span>
+                                        )}
+                                      </div>
+                                    </li>
+                                  ),
+                                )}
+                              </ol>
+                            </>
                           ) : null}
                           <dl className="student-quiz-relearning-answers">
                             <div>

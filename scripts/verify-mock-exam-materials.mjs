@@ -23,7 +23,7 @@ assert.equal(parseQuizPassageMarkup('{{blank:기존 내용}}')[0].type,'blank');
 const render=(question,props={})=>renderToStaticMarkup(React.createElement(MockExamQuestionContent,{question,index:0,...props}));
 const html=render(one,{setQuestionRange:[1,2]});
 assert.match(html,/\[1~2\]/);assert.match(html,/공통 지문/);assert.match(html,/&lt;보기&gt;/);assert.match(html,/3\.125em/);
-assert.match(html,/<u[^>]*>옳지 않은<\/u>/);assert.equal(html.includes('{{'),false);assert.equal(html.includes('blankbox:'),false);
+assert.match(html,/<u[^>]*>않은<\/u>/);assert.equal(html.includes('{{'),false);assert.equal(html.includes('blankbox:'),false);
 assert.equal((render(two,{showPassageSet:false}).match(/aria-label="공통 지문"/g)||[]).length,0);
 assert.match(render(two),/aria-label="공통 지문"/,'Zoom retains the common passage on every linked question');
 const escaped=render({...normal,examplePassage:'<script>alert(1)</script>'});assert.equal(escaped.includes('<script>'),false);

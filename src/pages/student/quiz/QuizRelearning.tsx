@@ -7,6 +7,11 @@ import InfoHelp from "../../../components/common/InfoHelp";
 import QuizPassage from "../../../components/common/QuizPassage";
 import { useQuizContentProtection } from "./useQuizContentProtection";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
+import {
+  QuizChoiceColumnHeaders,
+  QuizChoiceColumnCells,
+} from "../../../components/common/QuizChoiceColumns";
+import { getQuizChoiceColumnCount } from "../../../lib/quizChoiceColumns";
 import type {
   QuizReviewNoteDraft,
   QuizReviewNotes,
@@ -312,6 +317,7 @@ export default function QuizRelearning({
 
   const checked = stage === "checked";
   const reviewing = stage === "review";
+  const choiceColumnCount = getQuizChoiceColumnCount(item.options || []);
   const order = answer ? answer.split("||") : [];
   const pairs = item.type === "matching" ? getQuizPracticePairs(item) : [];
   const rightChoices = [...pairs].sort((a, b) =>
@@ -464,25 +470,49 @@ export default function QuizRelearning({
               role="group"
               aria-label="연습 답안 선택"
             >
+              {item.type === "choice" && choiceColumnCount > 1 && (
+                <div className="student-quiz-column-header">
+                  <QuizChoiceColumnHeaders count={choiceColumnCount} />
+                </div>
+              )}
               {(item.type === "ox" ? ["O", "X"] : item.options || []).map(
                 (option, optionIndex) => (
                   <button
                     type="button"
                     key={`${option}-${optionIndex}`}
-                    className={`student-quiz-choice ${answer === option ? "is-selected" : ""}`}
+                    className={`student-quiz-choice ${choiceColumnCount > 1 ? "student-quiz-column-row" : ""} ${answer === option ? "is-selected" : ""}`}
                     aria-pressed={answer === option}
                     disabled={checked}
                     onClick={() => setAnswer(answer === option ? "" : option)}
                   >
-                    <span>
-                      {item.type === "choice" ? `${optionIndex + 1}. ` : ""}
-                      {option}
-                    </span>
-                    {item.choiceOptionImages?.[optionIndex] && (
-                      <img
-                        src={item.choiceOptionImages[optionIndex]!}
-                        alt={`${optionIndex + 1}번 보기 이미지`}
-                      />
+                    {choiceColumnCount > 1 ? (
+                      <>
+                        <span className="student-quiz-column-number">
+                          {optionIndex + 1}
+                        </span>
+                        <span className="student-quiz-column-content">
+                          <QuizChoiceColumnCells value={option} />
+                          {item.choiceOptionImages?.[optionIndex] && (
+                            <img
+                              src={item.choiceOptionImages[optionIndex]!}
+                              alt={`${optionIndex + 1}번 보기 이미지`}
+                            />
+                          )}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {item.type === "choice" ? `${optionIndex + 1}. ` : ""}
+                          {option}
+                        </span>
+                        {item.choiceOptionImages?.[optionIndex] && (
+                          <img
+                            src={item.choiceOptionImages[optionIndex]!}
+                            alt={`${optionIndex + 1}번 보기 이미지`}
+                          />
+                        )}
+                      </>
                     )}
                   </button>
                 ),

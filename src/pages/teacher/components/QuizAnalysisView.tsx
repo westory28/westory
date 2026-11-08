@@ -15,6 +15,7 @@ import {
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
 import QuizPassage from "../../../components/common/QuizPassage";
+import { formatQuizChoiceText } from "../../../lib/quizChoiceColumns";
 import InfoHelp from "../../../components/common/InfoHelp";
 import QuizItemStatistics from "./QuizItemStatistics";
 import type { Question, TreeUnit } from "./QuizBankTab";
@@ -1444,7 +1445,7 @@ function QuestionContent({
         <ol className="qa-authored-options">
           {question.options.map((option, index) => (
             <li key={index}>
-              <span>{option}</span>
+              <span>{formatQuizChoiceText(option)}</span>
               {question.choiceOptionImages?.[index] && (
                 <img
                   src={question.choiceOptionImages[index]!}

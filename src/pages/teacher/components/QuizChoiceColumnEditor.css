@@ -1,0 +1,40 @@
+.quiz-choice-column-tools {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.quiz-choice-column-inputs {
+  display: grid;
+  grid-template-columns: repeat(var(--choice-input-columns, 1), minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.quiz-choice-column-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.quiz-choice-column-label {
+  height: 20px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 20px;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.quiz-choice-preview-headings {
+  padding-left: 36px;
+  padding-right: 8px;
+}
+.quiz-choice-row:has(.quiz-choice-column-label)
+  > :is(.quiz-choice-answer, .quiz-choice-actions),
+.quiz-bank-choice-row:has(.quiz-choice-column-label)
+  > :not(.quiz-bank-choice-content) {
+  margin-top: 24px;
+}
+@media (max-width: 639px) {
+  .quiz-choice-row:has(.quiz-choice-column-label) > .quiz-choice-actions {
+    margin-top: 0;
+  }
+}

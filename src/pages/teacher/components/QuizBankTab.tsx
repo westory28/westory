@@ -7,6 +7,20 @@ import MatchingConnectionLines from "../../../components/common/MatchingConnecti
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
+import {
+  QuizChoiceColumnInputs,
+  QuizChoiceColumnTools,
+} from "./QuizChoiceColumnEditor";
+import {
+  decodeQuizChoiceColumns,
+  normalizeQuizChoiceOption,
+  encodeQuizChoiceColumns,
+  getQuizChoiceColumnCount,
+} from "../../../lib/quizChoiceColumns";
+import {
+  QuizChoiceColumnCells,
+  QuizChoiceColumnHeaders,
+} from "../../../components/common/QuizChoiceColumns";
 import QuizRequiredMark from "./QuizRequiredMark";
 import { getYearSemester } from "../../../lib/semesterScope";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
@@ -213,7 +227,9 @@ const QuizBankTab: React.FC<{
   ) =>
     options
       .map((value, index) => ({
-        text: value.trim() || (images[index] ? `${index + 1}번 보기` : ""),
+        text:
+          normalizeQuizChoiceOption(value) ||
+          (images[index] ? `${index + 1}번 보기` : ""),
         image: images[index] || null,
         sourceIndex: index,
       }))
@@ -278,7 +294,10 @@ const QuizBankTab: React.FC<{
     return labels.join(" > ") || "단원 미지정";
   };
   const addChoiceOption = () => {
-    setEditChoiceOptions((prev) => [...prev, ""]);
+    setEditChoiceOptions((prev) => [
+      ...prev,
+      encodeQuizChoiceColumns(Array(getQuizChoiceColumnCount(prev)).fill("")),
+    ]);
     setEditChoiceOptionImages((prev) => [...prev, null]);
   };
   const removeChoiceOption = (index: number) => {
@@ -825,6 +844,15 @@ const QuizBankTab: React.FC<{
     let options: string[] = [];
 
     if (editType === "choice") {
+      if (
+        getQuizChoiceColumnCount(editChoiceOptions) > 1 &&
+        editChoiceOptions.some((option) =>
+          decodeQuizChoiceColumns(option)?.some((cell) => !cell.trim()),
+        )
+      ) {
+        alert("각 보기의 모든 열을 입력해 주세요.");
+        return;
+      }
       if (choiceOptions.length < 2) {
         alert("객관식 보기는 최소 2개 이상 필요합니다.");
         return;
@@ -1038,7 +1066,11 @@ const QuizBankTab: React.FC<{
   const hasEditPreviewChoiceSupportPanel =
     editType === "choice" && (!!editImage || !!editPreviewPassageText);
   const hasEditPreviewChoiceOptionImages =
-    editType === "choice" && editPreviewChoiceItems.some((item) => item.image);
+    editType === "choice" &&
+    getQuizChoiceColumnCount(
+      editPreviewChoiceItems.map((item) => item.text),
+    ) === 1 &&
+    editPreviewChoiceItems.some((item) => item.image);
 
   return (
     <div className="quiz-authoring-surface">
@@ -1211,6 +1243,10 @@ const QuizBankTab: React.FC<{
                         보기와 정답
                         <QuizRequiredMark />
                       </p>
+                      <QuizChoiceColumnTools
+                        options={editChoiceOptions}
+                        onChange={setEditChoiceOptions}
+                      />
                       <button
                         type="button"
                         onClick={addChoiceOption}
@@ -1224,25 +1260,25 @@ const QuizBankTab: React.FC<{
                       return (
                         <div
                           key={`choice-option-${index}`}
-                          className="flex items-start gap-2"
+                          className="quiz-bank-choice-row flex items-start gap-2"
                         >
                           <span className="mt-1 w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
                             {index + 1}
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <QuizTextField
-                              lang="ko"
-                              inputMode="text"
+                          <div className="quiz-bank-choice-content min-w-0 flex-1">
+                            <QuizChoiceColumnInputs
                               value={option}
-                              onChange={(e) =>
+                              index={index}
+                              count={getQuizChoiceColumnCount(
+                                editChoiceOptions,
+                              )}
+                              onChange={(value) =>
                                 setEditChoiceOptions((prev) =>
                                   prev.map((opt, i) =>
-                                    i === index ? e.target.value : opt,
+                                    i === index ? value : opt,
                                   ),
                                 )
                               }
-                              placeholder={`${index + 1}번 보기`}
-                              className="w-full border rounded p-2 text-sm bg-white"
                             />
                             {optionImage && (
                               <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
@@ -1620,6 +1656,19 @@ const QuizBankTab: React.FC<{
                                 : "space-y-2"
                             }
                           >
+                            {getQuizChoiceColumnCount(
+                              editPreviewChoiceItems.map((item) => item.text),
+                            ) > 1 && (
+                              <div className="quiz-choice-preview-headings">
+                                <QuizChoiceColumnHeaders
+                                  count={getQuizChoiceColumnCount(
+                                    editPreviewChoiceItems.map(
+                                      (item) => item.text,
+                                    ),
+                                  )}
+                                />
+                              </div>
+                            )}
                             {editPreviewChoiceItems.map((item, index) => {
                               const visibleOptionText =
                                 item.image &&
@@ -1675,13 +1724,17 @@ const QuizBankTab: React.FC<{
                                           />
                                         ) : (
                                           <span className="break-keep text-center text-sm font-bold text-gray-700">
-                                            {visibleOptionText}
+                                            <QuizChoiceColumnCells
+                                              value={visibleOptionText}
+                                            />
                                           </span>
                                         )}
                                       </div>
                                       {visibleOptionText && item.image && (
                                         <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
-                                          {visibleOptionText}
+                                          <QuizChoiceColumnCells
+                                            value={visibleOptionText}
+                                          />
                                         </div>
                                       )}
                                     </>
@@ -1696,15 +1749,17 @@ const QuizBankTab: React.FC<{
                                       >
                                         {index + 1}
                                       </span>
-                                      {item.image && (
-                                        <img
-                                          src={item.image}
-                                          alt={`${index + 1}번 보기 이미지 미리보기`}
-                                          className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
+                                      <span className="min-w-0 flex-1 break-words">
+                                        <QuizChoiceColumnCells
+                                          value={visibleOptionText}
                                         />
-                                      )}
-                                      <span className="min-w-0 break-words">
-                                        {visibleOptionText}
+                                        {item.image && (
+                                          <img
+                                            src={item.image}
+                                            alt={`${index + 1}번 보기 이미지 미리보기`}
+                                            className="mx-auto mt-2 max-h-24 max-w-full object-contain"
+                                          />
+                                        )}
                                       </span>
                                     </>
                                   )}

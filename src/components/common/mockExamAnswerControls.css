@@ -56,6 +56,17 @@
   padding-inline: 0;
   gap: 0.33em;
 }
+.mock-exam-answer-controls .mock-exam-column-header {
+  padding-inline: 9px;
+  gap: 8px;
+}
+.mock-exam-answer-controls--paper .mock-exam-column-header {
+  padding-inline: 1px;
+  gap: 0.33em;
+}
+.mock-exam-answer-controls [role="radiogroup"].mock-exam-options--columns {
+  grid-template-columns: minmax(0, 1fr);
+}
 .mock-exam-answer-controls img {
   max-width: 100%;
   max-height: 320px;

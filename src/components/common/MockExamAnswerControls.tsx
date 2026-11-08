@@ -7,6 +7,11 @@ import {
 } from "./MockExamPaper";
 import { SHORT_ANSWER_MAX_LENGTH } from "../../lib/assessmentAnswerLimits";
 import {
+  QuizChoiceColumnCells,
+  QuizChoiceColumnHeaders,
+} from "./QuizChoiceColumns";
+import { getQuizChoiceColumnCount } from "../../lib/quizChoiceColumns";
+import {
   formatMockExamChoiceLabel,
   getMockExamChoiceColumns,
 } from "../../lib/mockExamChoiceLayout";
@@ -30,6 +35,7 @@ export default function MockExamAnswerControls({
   choiceLayout?: "list" | "paper";
 }) {
   const options = question.type === "ox" ? ["O", "X"] : question.options || [];
+  const tableColumns = getQuizChoiceColumnCount(options);
   const paperColumns = getMockExamChoiceColumns(
     options,
     question.choiceOptionImages,
@@ -54,58 +60,74 @@ export default function MockExamAnswerControls({
     >
       <legend className="mock-exam-sr-only">{index + 1}번 답안</legend>
       {["choice", "ox"].includes(question.type) && (
-        <div
-          role="radiogroup"
-          aria-label="답안 선택"
-          className={
-            choiceLayout === "paper"
-              ? `mock-exam-options mock-exam-options--${paperColumns}`
-              : undefined
-          }
-        >
-          {options.map((option, index) => (
-            <label
-              key={index}
-              className={answer === option ? "is-selected" : ""}
-            >
-              <input
-                type="radio"
-                name={`exam-answer-${question.id}`}
-                value={option}
-                checked={answer === option}
-                onChange={() => onAnswer(option)}
-                onClick={() => {
-                  if (!disabled && answer === option) onAnswer("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== " ") return;
-                  event.preventDefault();
-                  if (!disabled && !event.repeat)
-                    onAnswer(answer === option ? "" : option);
-                }}
-              />
-              <span className="mock-exam-option-number">
-                {examChoiceNumber(index)}{" "}
-                {answer === option && <MockExamAnswerCheck />}
-              </span>
-              <span
-                className={
-                  choiceLayout === "paper" ? "mock-exam-option-text" : undefined
-                }
+        <>
+          {tableColumns > 1 && (
+            <div className="mock-exam-column-header">
+              <span aria-hidden="true" />
+              <QuizChoiceColumnHeaders count={tableColumns} />
+            </div>
+          )}
+          <div
+            role="radiogroup"
+            aria-label="답안 선택"
+            className={
+              tableColumns > 1
+                ? "mock-exam-options mock-exam-options--columns"
+                : choiceLayout === "paper"
+                  ? `mock-exam-options mock-exam-options--${paperColumns}`
+                  : undefined
+            }
+          >
+            {options.map((option, index) => (
+              <label
+                key={index}
+                className={answer === option ? "is-selected" : ""}
               >
-                {choiceLayout === "paper"
-                  ? formatMockExamChoiceLabel(option)
-                  : option}
-                {question.choiceOptionImages?.[index] && (
-                  <MockExamImage
-                    src={question.choiceOptionImages[index]!}
-                    alt={`${index + 1}번 보기 자료`}
-                  />
-                )}
-              </span>
-            </label>
-          ))}
-        </div>
+                <input
+                  type="radio"
+                  name={`exam-answer-${question.id}`}
+                  value={option}
+                  checked={answer === option}
+                  onChange={() => onAnswer(option)}
+                  onClick={() => {
+                    if (!disabled && answer === option) onAnswer("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== " ") return;
+                    event.preventDefault();
+                    if (!disabled && !event.repeat)
+                      onAnswer(answer === option ? "" : option);
+                  }}
+                />
+                <span className="mock-exam-option-number">
+                  {examChoiceNumber(index)}{" "}
+                  {answer === option && <MockExamAnswerCheck />}
+                </span>
+                <span
+                  className={
+                    choiceLayout === "paper" || tableColumns > 1
+                      ? "mock-exam-option-text"
+                      : undefined
+                  }
+                >
+                  {tableColumns > 1 ? (
+                    <QuizChoiceColumnCells value={option} />
+                  ) : choiceLayout === "paper" ? (
+                    formatMockExamChoiceLabel(option)
+                  ) : (
+                    option
+                  )}
+                  {question.choiceOptionImages?.[index] && (
+                    <MockExamImage
+                      src={question.choiceOptionImages[index]!}
+                      alt={`${index + 1}번 보기 자료`}
+                    />
+                  )}
+                </span>
+              </label>
+            ))}
+          </div>
+        </>
       )}
       {["short", "word"].includes(question.type) && (
         <label className="mock-exam-short-label">

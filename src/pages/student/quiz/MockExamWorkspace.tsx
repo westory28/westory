@@ -16,6 +16,7 @@ import { formatMockExamRoundLabel } from "../../../lib/mockExamRounds";
 import type { MockExamPaperHeaderSettings } from "../../../lib/mockExamPaperHeader";
 import "./mockExamWorkspace.css";
 import { useQuizContentProtection } from "./useQuizContentProtection";
+import { formatQuizChoiceText } from "../../../lib/quizChoiceColumns";
 
 interface Props {
   questions: MockExamPaperQuestion[];
@@ -376,8 +377,12 @@ export default function MockExamWorkspace(props: Props) {
                         ? "오답"
                         : "채점 정보 없음"}
                   </strong>
-                  <p>내 답안: {answer || "미응답"}</p>
-                  <p>정답: {question.answer || "미보관"}</p>
+                  <p>내 답안: {formatQuizChoiceText(answer) || "미응답"}</p>
+                  <p>
+                    정답:{" "}
+                    {formatQuizChoiceText(String(question.answer || "")) ||
+                      "미보관"}
+                  </p>
                   {question.explanation && <p>{question.explanation}</p>}
                 </div>
               ) : (
