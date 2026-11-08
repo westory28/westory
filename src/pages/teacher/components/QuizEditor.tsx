@@ -1152,7 +1152,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         const field = section.querySelector<HTMLElement>(
           '[contenteditable="true"][aria-label="공통 지문"]',
         );
-        (field || section).focus({ preventScroll: true });
+        (field || section).focus();
       });
     }
   };

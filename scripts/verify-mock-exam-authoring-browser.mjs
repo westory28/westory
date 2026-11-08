@@ -389,7 +389,16 @@ try {
   await compose.getByRole("button", { name: "〈보기〉 추가", exact: true }).click();
   await compose.getByRole("textbox", { name: "보기", exact: true }).fill("ㄱ. 합성 첫 번째 설명\nㄴ. 합성 두 번째 설명");
   await live.locator('.mock-exam-example').filter({hasText:"ㄱ. 합성 첫 번째 설명"}).waitFor();
+  await page.setViewportSize({ width: 390, height: 900 });
   await compose.getByRole("button", { name: "새 세트 지문", exact: true }).click();
+  await page.waitForFunction(() => {
+    const field = document.querySelector('[aria-label="공통 지문"][contenteditable]');
+    if (!field || document.activeElement !== field) return false;
+    const view = field.closest('.quiz-composer-body').getBoundingClientRect();
+    const box = field.getBoundingClientRect();
+    return box.top >= view.top - 1 && box.bottom <= view.bottom + 1;
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
   await compose.getByRole("textbox", { name: "공통 지문", exact: true }).fill("세트 자료는 두 문항에서 함께 사용합니다.");
   await live.locator('.mock-exam-set-passage').filter({hasText:"세트 자료는 두 문항에서 함께 사용합니다."}).waitFor();
   const sharedEditor = compose.getByRole("region", { name: "세트 공통 지문", exact: true });
