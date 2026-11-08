@@ -276,10 +276,83 @@ try {
       JSON.stringify(layout),
     );
     layouts.push(layout);
+    const cards = await page
+      .locator("[data-quiz-question-card]")
+      .evaluateAll((elements) =>
+        elements.map((el) => {
+          const actions = [
+            ...el.querySelectorAll(".quiz-question-actions button"),
+          ].map((button) => button.getBoundingClientRect());
+          const material = el
+            .querySelector(".quiz-question-material")
+            ?.getBoundingClientRect();
+          const content = el
+            .querySelector(".quiz-question-choice-layout")
+            ?.getBoundingClientRect();
+          return {
+            width: el.clientWidth,
+            actions: actions.map((box) => ({
+              top: box.top,
+              bottom: box.bottom,
+              width: box.width,
+              height: box.height,
+            })),
+            materialWidth: material?.width,
+            contentWidth: content?.width,
+          };
+        }),
+      );
+    for (const card of cards) {
+      assert.equal(card.actions.length, 3);
+      assert(
+        card.actions.every(
+          (action) =>
+            action.top === card.actions[0].top &&
+            action.bottom === card.actions[0].bottom &&
+            action.width >= 44 &&
+            action.height >= 44,
+        ),
+        JSON.stringify(card),
+      );
+      if (card.width < 640 && card.materialWidth)
+        assert(
+          card.materialWidth >= card.contentWidth - 1,
+          JSON.stringify(card),
+        );
+    }
     await page.screenshot({
       path: path.join(evidence, `quiz-toolbars-${width}.png`),
     });
   }
+  await page.locator("#root").evaluate((el) => {
+    el.style.maxWidth = "440px";
+  });
+  const narrowCards = await page
+    .locator("[data-quiz-question-card]")
+    .evaluateAll((elements) =>
+      elements.map((el) => {
+        const material = el
+          .querySelector(".quiz-question-material")
+          ?.getBoundingClientRect();
+        const content = el
+          .querySelector(".quiz-question-choice-layout")
+          ?.getBoundingClientRect();
+        return { material: material?.width, content: content?.width };
+      }),
+    );
+  assert(narrowCards.some((card) => card.material));
+  assert(
+    narrowCards.every(
+      (card) => !card.material || card.material >= card.content - 1,
+    ),
+    "wide viewport with narrow assessment container keeps the material full width",
+  );
+  await page.screenshot({
+    path: path.join(evidence, "quiz-narrow-desktop-container.png"),
+  });
+  await page.locator("#root").evaluate((el) => {
+    el.style.maxWidth = "";
+  });
   await page.getByRole("button", { name: "필터 초기화", exact: true }).click();
   for (const name of ["대단원", "중단원", "소단원"])
     assert.equal(
@@ -304,6 +377,118 @@ try {
   await composer
     .getByRole("button", { name: "문제 편집 닫기", exact: true })
     .click();
+  // The editor must respond to its own width, even on a wide desktop viewport.
+  await page
+    .getByRole("button", { name: /^\d+번 문제 수정$/ })
+    .first()
+    .click();
+  const edit = page.getByRole("dialog", { name: "문제 수정", exact: true });
+  const readCount = await page.evaluate(
+    () => window.assessmentTeacherFixture.reads.length,
+  );
+  const original = await edit.getByLabel("발문", { exact: true }).inputValue();
+  const draft = `${original} 임시 수정`;
+  await edit.getByLabel("발문", { exact: true }).fill(draft);
+  const paper = edit.locator(".mock-exam-draft-preview");
+  for (const { width, container } of [
+    { width: 320 },
+    { width: 390 },
+    { width: 768 },
+    { width: 1280, container: 700 },
+  ]) {
+    await page.setViewportSize({ width, height: 900 });
+    await edit.evaluate((el, container) => {
+      el.style.width = container ? `${container}px` : "";
+    }, container);
+    await edit.getByRole("button", { name: "미리보기", exact: true }).waitFor();
+    assert(!(await paper.isVisible()));
+    const formScroll = await edit
+      .locator(".quiz-composer-body")
+      .evaluate((el) => {
+        el.scrollTop = 160;
+        return el.scrollTop;
+      });
+    await edit.getByRole("button", { name: "미리보기", exact: true }).click();
+    await paper.waitFor({ state: "visible" });
+    assert.equal(
+      await page.getByRole("dialog").count(),
+      1,
+      "preview uses the existing editor dialog",
+    );
+    assert(!(await edit.locator(".quiz-composer-body").isVisible()));
+    const firstAnswer = paper.getByRole("radio").first();
+    if (!(await firstAnswer.isChecked()))
+      await firstAnswer.locator("..").click();
+    assert(await firstAnswer.isChecked());
+    await page.keyboard.press("Escape");
+    assert(
+      await edit.isVisible(),
+      "Escape returns from preview without discarding the editor",
+    );
+    assert(!(await paper.isVisible()));
+    assert.equal(
+      await edit.getByLabel("발문", { exact: true }).inputValue(),
+      draft,
+    );
+    assert.equal(
+      await edit.locator(".quiz-composer-body").evaluate((el) => el.scrollTop),
+      formScroll,
+    );
+    assert(
+      await edit
+        .getByRole("button", { name: "미리보기", exact: true })
+        .evaluate((el) => el === document.activeElement),
+    );
+    await edit.getByRole("button", { name: "미리보기", exact: true }).click();
+    assert(
+      await firstAnswer.isChecked(),
+      "answer remains selected after returning to the preview",
+    );
+    const compactLayout = await edit.evaluate((el) => ({
+      viewport: innerWidth,
+      document: document.documentElement.scrollWidth,
+      formHidden: !el.querySelector(".quiz-composer-body").getClientRects()
+        .length,
+      dialog: el.getBoundingClientRect().width,
+      preview: el
+        .querySelector(".mock-exam-draft-preview")
+        .getBoundingClientRect().width,
+    }));
+    assert(compactLayout.document <= width + 1, JSON.stringify(compactLayout));
+    layouts.push({ scenario: "compact-composer", ...compactLayout });
+    await page.screenshot({
+      path: path.join(
+        evidence,
+        `quiz-compact-preview-${width}-${container || width}.png`,
+      ),
+    });
+    await edit.getByRole("button", { name: "돌아가기", exact: true }).click();
+  }
+  await edit.evaluate((el) => {
+    el.style.width = "";
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await paper.waitFor({ state: "visible" });
+  assert.equal(
+    await edit.getByRole("button", { name: "미리보기", exact: true }).count(),
+    0,
+  );
+  const desktop = await edit.evaluate((el) => ({
+    form: el.querySelector(".quiz-composer-body").getBoundingClientRect().right,
+    preview: el
+      .querySelector(".mock-exam-draft-preview")
+      .getBoundingClientRect().left,
+  }));
+  assert(desktop.preview >= desktop.form);
+  assert.equal(
+    await page.evaluate(() => window.assessmentTeacherFixture.reads.length),
+    readCount,
+    "preview switching performs no server reads",
+  );
+  await edit.getByLabel("발문", { exact: true }).fill(original);
+  await edit
+    .getByRole("button", { name: "문제 편집 닫기", exact: true })
+    .click();
   assert.equal(
     await page.evaluate(() => window.assessmentTeacherFixture.writes.length),
     0,
@@ -319,7 +504,7 @@ try {
       {
         ok: true,
         evidence,
-        widths: layouts.map((v) => v.width),
+        widths: layouts.filter((v) => v.width).map((v) => v.width),
         writes: 0,
         externalRequests: 0,
       },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   MockExamQuestionContent,
   type MockExamPaperQuestion,
@@ -7,10 +7,18 @@ import MockExamAnswerControls from "../../../components/common/MockExamAnswerCon
 
 export default React.memo(function MockExamDraftPreview({
   question,
+  compact = false,
+  open = false,
 }: {
   question: MockExamPaperQuestion;
+  compact?: boolean;
+  open?: boolean;
 }) {
   const [answer, setAnswer] = useState("");
+  const previewRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (compact && open) previewRef.current?.focus();
+  }, [compact, open]);
   const answerIdentity = JSON.stringify([
     question.id,
     question.type,
@@ -21,7 +29,9 @@ export default React.memo(function MockExamDraftPreview({
   const index = Math.max(0, Number(question.paperOrder || 1) - 1);
   return (
     <aside
+      ref={previewRef}
       className="mock-exam-draft-preview"
+      hidden={compact && !open}
       aria-label="학생 화면 미리보기"
       tabIndex={0}
     >

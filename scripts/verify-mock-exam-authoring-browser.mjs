@@ -447,7 +447,7 @@ try {
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.writes.length), 0);
   assert.equal(await page.evaluate(() => window.assessmentTeacherFixture.reads.length), readsBeforeDraft, "local edits and live preview must not read or write the server");
   await compose.getByRole("textbox", { name: "읽기 자료 글상자", exact: true }).fill("긴 자료에서도 작성 영역과 미리보기는 서로 독립적으로 이동합니다.\n".repeat(60));
-  for (const {width, height} of [{width:390,height:568},{width:390,height:900},{width:768,height:900},{width:1280,height:900},{width:1366,height:768},{width:1870,height:888}]) {
+  for (const {width, height} of [{width:1280,height:900},{width:1366,height:768},{width:1870,height:888}]) {
     await page.setViewportSize({ width, height });
     const layout = await compose.evaluate(async (el) => {
       const form = el.querySelector('.quiz-composer-body'), preview = el.querySelector('.mock-exam-draft-preview');
@@ -798,7 +798,7 @@ try {
   checks.push(
     "Direct registration: distinct-five-choice/decimal validation blocks writes, image and selected answer stay paired through sorting, learning metadata persists, failed save retains input and retries the same ID.",
   );
-  checks.push("Draft preview updates locally without server reads/writes; 보기 and set passage are saved only on final registration; 390/768/1280/1366/1870 editor fits the viewport with independent form/preview scrolling and fixed header/footer; preview keyboard scrolling is supported.");
+  checks.push("Draft preview updates locally without server reads/writes; 보기 and set passage are saved only on final registration; 1280/1366/1870 editor fits the viewport with independent form/preview scrolling and fixed header/footer; compact editor switching is covered by verify-quiz-mobile-toolbar.mjs.");
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   await compose.getByLabel("발문", { exact: true }).fill("공통 지문에 연결한 두 번째 문항입니다.");
   for(let index=0;index<5;index++) await compose.getByLabel(`${index+1}번 보기`,{exact:true}).fill(authoredOptions[index]);

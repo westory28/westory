@@ -4639,7 +4639,7 @@ const ManageHistoryClassroom: React.FC = () => {
               </h1>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="history-heading-actions flex flex-wrap gap-2">
             <HistoryActionButton
               icon="ticket"
               label="면제권 관리"
@@ -4669,7 +4669,9 @@ const ManageHistoryClassroom: React.FC = () => {
         <div className="history-filters">
           <div className="history-date-label flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
-            {dashboardDateRangeLabel}
+            <span title={dashboardDateRangeLabel}>
+              {dashboardDateRangeLabel}
+            </span>
           </div>
           <div className="history-filter-actions">
             <div className="history-dashboard-search" role="search">
@@ -4775,8 +4777,9 @@ const ManageHistoryClassroom: React.FC = () => {
             ))}
           </div>
           <label className="history-sort-label flex h-11 items-center gap-2 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-600 xl:h-12 xl:gap-3 xl:px-4">
-            정렬 기준
+            <span className="history-sort-caption">정렬 기준</span>
             <select
+              aria-label="정렬 기준"
               value={dashboardSortOrder}
               onChange={(event) =>
                 setDashboardSortOrder(event.target.value as DashboardSortOrder)

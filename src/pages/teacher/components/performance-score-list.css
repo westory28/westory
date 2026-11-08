@@ -7,12 +7,13 @@
   display: none;
 }
 
-/* Keep the performance roster visible below a single filter and summary row. */
+/* Keep the performance roster visible below compact filters and summary. */
 .score-class-sheet-filter-fields {
   display: contents;
 }
 
 .score-class-sheet--compact {
+  container: score-class-sheet / inline-size;
   height: calc(100dvh - 48px);
   max-height: calc(100dvh - 48px);
 }
@@ -166,6 +167,33 @@
 
 .score-class-sheet--compact .score-class-sheet-footer {
   justify-content: flex-end;
+}
+
+@container score-class-sheet (max-width: 767px) {
+  .score-class-sheet--compact .score-class-sheet-filters {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .score-class-sheet--compact .score-class-sheet-filter-fields {
+    display: contents;
+  }
+
+  .score-class-sheet--compact .score-class-sheet-filter-fields > label {
+    grid-column: span 3;
+  }
+
+  .score-class-sheet--compact .score-class-sheet-filter-fields > label:nth-child(n + 3),
+  .score-class-sheet--compact .score-class-sheet-filters > div:last-child {
+    grid-column: span 2;
+    grid-row: 2;
+  }
+
+  .score-class-sheet--compact .score-class-sheet-filters select,
+  .score-class-sheet--compact .score-class-sheet-filters button {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 
 @media (pointer: coarse), (max-width: 767px) {

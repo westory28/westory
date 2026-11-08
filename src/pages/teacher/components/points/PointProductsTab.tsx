@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import NumericInput from "../../../../components/common/NumericInput";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import WisProductCard, {
@@ -96,7 +97,7 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
   const [previewSelectedProduct, setPreviewSelectedProduct] =
     useState<PointProduct | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const editorRef = useRef<HTMLFormElement>(null);
+  const editorDialogRef = useRef<HTMLDialogElement>(null);
   const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const cropSession = useRef(0);
@@ -157,21 +158,28 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
     if (product) onEditProduct(product);
     else onResetForm();
     setEditorOpen(true);
-    window.requestAnimationFrame(() => {
-      editorRef.current?.scrollIntoView({
-        block: "nearest",
-        behavior: "instant",
-      });
-      editorRef.current
-        ?.querySelector<HTMLInputElement>("input[name='product-name']")
-        ?.focus();
-    });
   };
   const closeEditor = () => {
+    if (productImageUploading) return;
     clearCrop();
     setEditorOpen(false);
-    editorTriggerRef.current?.focus();
   };
+  useEffect(() => {
+    if (!editorOpen || !canManage) return;
+    const dialog = editorDialogRef.current;
+    if (!dialog) return;
+    const trigger = editorTriggerRef.current;
+    const release = acquirePageScrollLock();
+    dialog.showModal();
+    dialog
+      .querySelector<HTMLInputElement>("input[name='product-name']")
+      ?.focus({ preventScroll: true });
+    return () => {
+      dialog.close();
+      release();
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    };
+  }, [editorOpen, canManage]);
 
   return (
     <section className="teacher-wis-shop" aria-label="상점 상품 관리">
@@ -478,209 +486,248 @@ const PointProductsTab: React.FC<PointProductsTabProps> = ({
       )}
 
       {editorOpen && canManage && (
-        <form
-          ref={editorRef}
-          onSubmit={(event) => {
-            if (pendingCrop || productImageUploading) {
-              event.preventDefault();
-              return;
-            }
-            onSubmit(event);
-          }}
-          className="teacher-wis-shop__editor"
+        <dialog
+          ref={editorDialogRef}
+          className="teacher-wis-shop__editor-dialog"
           aria-labelledby="wis-product-editor-title"
-          aria-busy={productImageUploading}
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const dialog = event.currentTarget;
+            const stops = Array.from(
+              dialog.querySelectorAll<HTMLElement>(
+                'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+              ),
+            ).filter((element) => element.getClientRects().length > 0);
+            const first = stops[0];
+            const last = stops[stops.length - 1];
+            if (!first || !last) {
+              event.preventDefault();
+              dialog.focus();
+            } else if (
+              event.shiftKey &&
+              (document.activeElement === first ||
+                document.activeElement === dialog)
+            ) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          }}
+          onCancel={(event) => {
+            event.preventDefault();
+            closeEditor();
+          }}
         >
-          <div className="teacher-wis-shop__heading">
-            <h3 id="wis-product-editor-title">
-              {productForm.id ? "상품·재고 수정" : "새 상품 등록"}
-            </h3>
-            <button
-              type="button"
-              className="teacher-wis-shop__button is-quiet"
-              disabled={productImageUploading}
-              onClick={closeEditor}
-            >
-              닫기
-            </button>
-          </div>
-          <fieldset disabled={productImageUploading}>
-            <div className="teacher-wis-shop__editor-layout">
-              <div
-                className={`teacher-wis-shop__image-editor${pendingCrop ? " is-cropping" : ""}`}
+          <form
+            onSubmit={(event) => {
+              if (pendingCrop || productImageUploading) {
+                event.preventDefault();
+                return;
+              }
+              onSubmit(event);
+            }}
+            className="teacher-wis-shop__editor"
+            aria-labelledby="wis-product-editor-title"
+            aria-busy={productImageUploading}
+          >
+            <div className="teacher-wis-shop__heading">
+              <h3 id="wis-product-editor-title">
+                {productForm.id ? "상품·재고 수정" : "새 상품 등록"}
+              </h3>
+              <button
+                type="button"
+                className="teacher-wis-shop__button is-quiet"
+                disabled={productImageUploading}
+                onClick={closeEditor}
               >
-                {pendingCrop ? (
-                  <ProductImageCropper
-                    key={pendingCrop.session}
-                    file={pendingCrop.file}
-                    initialCrop={pendingCrop.crop}
-                    onCancel={finishCrop}
-                    onApply={(file, crop) => {
-                      if (
-                        pendingCrop.session !== cropSession.current ||
-                        !canManage
-                      )
-                        return;
-                      onProductImageChange(file);
-                      setSelectedImage({ file: pendingCrop.file, crop });
-                      finishCrop();
-                    }}
-                  />
-                ) : (
-                  <div className="teacher-wis-shop__image-preview">
-                    {productImagePreviewUrl ? (
-                      <img
-                        src={productImagePreviewUrl}
-                        alt="선택한 상품 이미지"
-                      />
-                    ) : (
-                      <i className="fas fa-image" aria-hidden="true" />
-                    )}
-                    {selectedImage && <ProductImageWatermark />}
-                  </div>
-                )}
-                <label className="teacher-wis-shop__field">
-                  <span>상품 사진</span>
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) startCrop(file);
-                      event.target.value = "";
-                    }}
-                  />
-                </label>
-                {selectedImage && !pendingCrop && (
-                  <button
-                    type="button"
-                    className="teacher-wis-shop__button"
-                    onClick={() =>
-                      startCrop(selectedImage.file, selectedImage.crop)
-                    }
-                  >
-                    사진 다시 자르기
-                  </button>
-                )}
-              </div>
-              <div className="teacher-wis-shop__fields">
-                <label className="teacher-wis-shop__field">
-                  <span>상품명</span>
-                  <input
-                    name="product-name"
-                    value={productForm.name}
-                    required
-                    maxLength={120}
-                    onChange={(event) =>
-                      onProductFormChange((prev) => ({
-                        ...prev,
-                        name: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="teacher-wis-shop__field">
-                  <span>상품 설명</span>
-                  <textarea
-                    rows={3}
-                    value={productForm.description}
-                    onChange={(event) =>
-                      onProductFormChange((prev) => ({
-                        ...prev,
-                        description: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <div className="teacher-wis-shop__field-pair">
+                닫기
+              </button>
+            </div>
+            <fieldset disabled={productImageUploading}>
+              <div className="teacher-wis-shop__editor-layout">
+                <div
+                  className={`teacher-wis-shop__image-editor${pendingCrop ? " is-cropping" : ""}`}
+                >
+                  {pendingCrop ? (
+                    <ProductImageCropper
+                      key={pendingCrop.session}
+                      file={pendingCrop.file}
+                      initialCrop={pendingCrop.crop}
+                      onCancel={finishCrop}
+                      onApply={(file, crop) => {
+                        if (
+                          pendingCrop.session !== cropSession.current ||
+                          !canManage
+                        )
+                          return;
+                        onProductImageChange(file);
+                        setSelectedImage({ file: pendingCrop.file, crop });
+                        finishCrop();
+                      }}
+                    />
+                  ) : (
+                    <div className="teacher-wis-shop__image-preview">
+                      {productImagePreviewUrl ? (
+                        <img
+                          src={productImagePreviewUrl}
+                          alt="선택한 상품 이미지"
+                        />
+                      ) : (
+                        <i className="fas fa-image" aria-hidden="true" />
+                      )}
+                      {selectedImage && <ProductImageWatermark />}
+                    </div>
+                  )}
                   <label className="teacher-wis-shop__field">
-                    <span>가격 (위스)</span>
-                    <NumericInput
-                      allowEmpty
-                      type="number"
-                      min="0"
-                      step="1"
+                    <span>상품 사진</span>
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) startCrop(file);
+                        event.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {selectedImage && !pendingCrop && (
+                    <button
+                      type="button"
+                      className="teacher-wis-shop__button"
+                      onClick={() =>
+                        startCrop(selectedImage.file, selectedImage.crop)
+                      }
+                    >
+                      사진 다시 자르기
+                    </button>
+                  )}
+                </div>
+                <div className="teacher-wis-shop__fields">
+                  <label className="teacher-wis-shop__field">
+                    <span>상품명</span>
+                    <input
+                      name="product-name"
+                      value={productForm.name}
                       required
-                      value={productForm.price}
+                      maxLength={120}
                       onChange={(event) =>
                         onProductFormChange((prev) => ({
                           ...prev,
-                          price: event.target.value,
+                          name: event.target.value,
                         }))
                       }
                     />
                   </label>
                   <label className="teacher-wis-shop__field">
-                    <span>총 입고 (개)</span>
-                    <NumericInput
-                      allowEmpty
-                      type="number"
-                      min={committedStock}
-                      step="1"
-                      required
-                      value={productForm.stock}
+                    <span>상품 설명</span>
+                    <textarea
+                      rows={3}
+                      value={productForm.description}
                       onChange={(event) =>
                         onProductFormChange((prev) => ({
                           ...prev,
-                          stock: event.target.value,
+                          description: event.target.value,
                         }))
                       }
                     />
-                    {committedStock > 0 && (
-                      <small>주문 확보·지급 완료 {committedStock}개 이상</small>
-                    )}
+                  </label>
+                  <div className="teacher-wis-shop__field-pair">
+                    <label className="teacher-wis-shop__field">
+                      <span>가격 (위스)</span>
+                      <NumericInput
+                        allowEmpty
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={productForm.price}
+                        onChange={(event) =>
+                          onProductFormChange((prev) => ({
+                            ...prev,
+                            price: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="teacher-wis-shop__field">
+                      <span>총 입고 (개)</span>
+                      <NumericInput
+                        allowEmpty
+                        type="number"
+                        min={committedStock}
+                        step="1"
+                        required
+                        value={productForm.stock}
+                        onChange={(event) =>
+                          onProductFormChange((prev) => ({
+                            ...prev,
+                            stock: event.target.value,
+                          }))
+                        }
+                      />
+                      {committedStock > 0 && (
+                        <small>
+                          주문 확보·지급 완료 {committedStock}개 이상
+                        </small>
+                      )}
+                    </label>
+                  </div>
+                  {editingProduct && (
+                    <div className="teacher-wis-shop__stock-result">
+                      저장 후 판매 가능{" "}
+                      <strong>
+                        {Math.max(
+                          0,
+                          Number(productForm.stock || 0) - committedStock,
+                        )}
+                        개
+                      </strong>
+                    </div>
+                  )}
+                  <label className="teacher-wis-shop__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={productForm.isActive}
+                      onChange={(event) =>
+                        onProductFormChange((prev) => ({
+                          ...prev,
+                          isActive: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>학생 상점에 공개</span>
                   </label>
                 </div>
-                {editingProduct && (
-                  <div className="teacher-wis-shop__stock-result">
-                    저장 후 판매 가능{" "}
-                    <strong>
-                      {Math.max(
-                        0,
-                        Number(productForm.stock || 0) - committedStock,
-                      )}
-                      개
-                    </strong>
-                  </div>
-                )}
-                <label className="teacher-wis-shop__checkbox">
-                  <input
-                    type="checkbox"
-                    checked={productForm.isActive}
-                    onChange={(event) =>
-                      onProductFormChange((prev) => ({
-                        ...prev,
-                        isActive: event.target.checked,
-                      }))
-                    }
-                  />
-                  <span>학생 상점에 공개</span>
-                </label>
               </div>
-            </div>
-          </fieldset>
-          {productFeedback && (
-            <p
-              role="status"
-              className={`teacher-wis-shop__feedback ${getPointFeedbackToneClass(productFeedback)}`}
-            >
-              {productFeedback}
-            </p>
-          )}
-          <div className="teacher-wis-shop__editor-footer">
-            {pendingCrop && (
-              <span role="status">사진 자르기를 적용하거나 취소해 주세요.</span>
+            </fieldset>
+            {productFeedback && (
+              <p
+                role="status"
+                className={`teacher-wis-shop__feedback ${getPointFeedbackToneClass(productFeedback)}`}
+              >
+                {productFeedback}
+              </p>
             )}
-            <button
-              type="submit"
-              className="teacher-wis-shop__button is-primary"
-              disabled={productImageUploading || Boolean(pendingCrop)}
-            >
-              {productImageUploading ? "저장 중…" : "상품 저장"}
-            </button>
-          </div>
-        </form>
+            <div className="teacher-wis-shop__editor-footer">
+              {pendingCrop && (
+                <span role="status">
+                  사진 자르기를 적용하거나 취소해 주세요.
+                </span>
+              )}
+              <button
+                type="submit"
+                className="teacher-wis-shop__button is-primary"
+                disabled={productImageUploading || Boolean(pendingCrop)}
+              >
+                {productImageUploading ? "저장 중…" : "상품 저장"}
+              </button>
+            </div>
+          </form>
+        </dialog>
       )}
       <WisProductDetailModal
         open={Boolean(previewSelectedProduct)}

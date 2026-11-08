@@ -800,8 +800,20 @@
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  gap: 24px;
-  padding: 24px;
+  gap: 16px;
+  padding: 16px;
+}
+.quiz-composer-layout--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+.quiz-composer-layout--compact .mock-exam-draft-preview {
+  padding-right: 0;
+}
+.quiz-composer-layout--compact .mock-exam-draft-preview-paper {
+  padding: 12px;
+}
+.quiz-composer-layout--preview > .quiz-composer-body {
+  display: none;
 }
 .quiz-composer-layout--legacy {
   display: contents;
@@ -928,13 +940,6 @@
   max-height: 240px;
   max-width: 100%;
   object-fit: contain;
-}
-@media (max-width: 1023px) {
-  .quiz-composer-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-  }
 }
 @media (max-width: 639px) {
   .quiz-composer-viewport {
@@ -1162,14 +1167,62 @@
 .quiz-question-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   gap: 4px;
 }
 .quiz-question-actions button {
+  flex-shrink: 0;
   min-height: 44px;
   min-width: 44px;
   padding: 8px;
   font-size: 14px;
+  white-space: nowrap;
+}
+.quiz-question-list {
+  padding: 12px;
+}
+.quiz-question-card {
+  container: quiz-question-card / inline-size;
+  min-width: 0;
+  padding: 12px;
+}
+.quiz-question-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+.quiz-question-card-heading > span {
+  min-width: 0;
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+.quiz-question-card-heading .quiz-question-actions {
+  margin-left: auto;
+}
+.quiz-question-choice-layout {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.quiz-question-material {
+  min-width: 0;
+}
+@container quiz-question-card (min-width: 640px) {
+  .quiz-question-choice-layout {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  }
+}
+@media (max-width: 639px) {
+  .quiz-question-list,
+  .quiz-question-card {
+    padding: 8px;
+  }
 }
 .quiz-diagnostic-filters {
   display: grid;

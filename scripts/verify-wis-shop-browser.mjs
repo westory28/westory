@@ -305,7 +305,12 @@ async function compileFixture() {
     format: "esm",
     platform: "browser",
     outfile: path.join(os.tmpdir(), "wis-shop-fixture.js"),
-    loader: { ".svg": "dataurl", ".png": "dataurl", ".woff2": "dataurl" },
+    loader: {
+      ".svg": "dataurl",
+      ".png": "dataurl",
+      ".webp": "dataurl",
+      ".woff2": "dataurl",
+    },
     define: { "process.env.NODE_ENV": '"production"' },
     plugins: [
       {

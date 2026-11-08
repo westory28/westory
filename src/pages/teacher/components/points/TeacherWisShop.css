@@ -375,13 +375,27 @@
   line-height: 1.6;
 }
 
-.teacher-wis-shop__editor {
-  margin-top: 24px;
-  padding: 24px;
+.teacher-wis-shop__editor-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(960px, calc(100% - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  margin: auto;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 12px;
   background: var(--ws-surface, #ffffff);
-  scroll-margin-block: 24px;
+  color: var(--ws-text, #1f2937);
+}
+.teacher-wis-shop__editor-dialog::backdrop {
+  background: var(--ws-overlay, rgba(15, 23, 42, 0.62));
+}
+.teacher-wis-shop__editor {
+  margin: 0;
+  padding: 24px;
 }
 .teacher-wis-shop__editor fieldset {
   padding: 0;

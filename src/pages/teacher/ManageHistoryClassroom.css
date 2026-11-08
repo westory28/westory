@@ -52,6 +52,19 @@
   min-width: 0;
 }
 
+.history-heading-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.history-date-label > svg {
+  flex-shrink: 0;
+}
+
+.history-date-label > span {
+  min-width: 0;
+}
+
 .history-filter-actions {
   display: flex;
   align-items: center;
@@ -592,7 +605,18 @@
   }
 
   .history-classroom .history-date-label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .history-classroom .history-sort-label {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .history-classroom .history-filter-actions {
     grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .history-classroom .history-edit-body {
@@ -668,12 +692,37 @@
 }
 
 @container history-content (max-width: 640px) {
-  .history-classroom .history-filters {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .history-classroom .history-filter-actions {
     gap: 4px;
+  }
+
+  .history-classroom .history-sort-caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .history-classroom .history-sort-label {
+    gap: 0;
+    padding-inline: 8px;
+  }
+
+  .history-classroom .history-sort-label select {
+    min-width: 5.25rem;
+  }
+
+  .history-classroom .history-date-label {
+    gap: 8px;
+    padding-inline: 8px;
+    font-size: 12px;
+    line-height: 16px;
+  }
+
+  .history-classroom .history-date-label > span {
+    white-space: normal;
   }
 }
 

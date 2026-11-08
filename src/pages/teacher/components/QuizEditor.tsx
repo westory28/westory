@@ -347,6 +347,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const hintsAllowed = type !== "special" && !isMockExamCategory(category);
 
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [mockPreviewOpen, setMockPreviewOpen] = useState(false);
+  const [compactComposer, setCompactComposer] = useState(true);
+  const mockPreviewButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMockPreview = () => {
+    setMockPreviewOpen(false);
+    requestAnimationFrame(() => mockPreviewButtonRef.current?.focus());
+  };
   const previewRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (previewOpen) previewRef.current?.focus();
@@ -431,7 +438,23 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const savingQuestionRef = useRef(false);
   const defaultExamPrepFocusKeyRef = useRef("");
   const composerDialogRef = useRef<HTMLDivElement>(null);
-  useQuizDialog(isComposerOpen, composerDialogRef, () => closeComposer());
+  useQuizDialog(isComposerOpen, composerDialogRef, () => {
+    if (mockPreviewOpen && compactComposer) closeMockPreview();
+    else closeComposer();
+  });
+  useLayoutEffect(() => {
+    const dialog = composerDialogRef.current;
+    if (!isComposerOpen || !dialog) return;
+    const updateWidth = () => {
+      const compact = dialog.getBoundingClientRect().width < 1024;
+      setCompactComposer(compact);
+      if (!compact) setMockPreviewOpen(false);
+    };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(dialog);
+    return () => observer.disconnect();
+  }, [isComposerOpen]);
 
   const questionScope = JSON.stringify([
     questionYear,
@@ -1063,6 +1086,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setHintEnabled(false);
     setHintText("");
     setPreviewOpen(false);
+    setMockPreviewOpen(false);
     resetPreview();
     if (type !== "special") {
       setFormSubUnit(
@@ -2384,7 +2408,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
+      <div className="quiz-question-list flex-1 min-h-0 overflow-hidden bg-gray-50">
         <div className="h-full min-h-0 flex flex-col">
           <div
             ref={questionListRef}
@@ -2438,9 +2462,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   <div
                     key={q.id}
                     data-quiz-question-card={q.id}
-                    className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
+                    className="quiz-question-card bg-white rounded-lg border border-gray-200 shadow-sm"
                   >
-                    <div className="flex justify-between items-start mb-1.5">
+                    <div className="quiz-question-card-heading">
                       <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
                         {type === "special" && q.examRound
                           ? `${formatMockExamRoundShortLabel(q.examRound)} · ${q.paperOrder}번 · ${q.points}점`
@@ -2490,12 +2514,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <div
                           className={
                             hasChoiceSupportPanel && hasChoicePreview
-                              ? "mb-2 grid min-h-0 gap-2 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
+                              ? "quiz-question-choice-layout mb-2"
                               : "mb-2 space-y-2"
                           }
                         >
                           {hasChoiceSupportPanel && (
-                            <div className="flex min-h-0 flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                            <div className="quiz-question-material flex min-h-0 flex-col gap-2 text-center">
                               {q.image && (
                                 <div
                                   className={`flex min-h-0 items-center justify-center ${
@@ -2818,7 +2842,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 <div
                   className={
                     type === "special"
-                      ? "quiz-composer-layout"
+                      ? `quiz-composer-layout${compactComposer ? " quiz-composer-layout--compact" : ""}${compactComposer && mockPreviewOpen ? " quiz-composer-layout--preview" : ""}`
                       : "quiz-composer-layout--legacy"
                   }
                 >
@@ -3884,10 +3908,29 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     )}
                   </div>
                   {type === "special" && (
-                    <MockExamDraftPreview question={draftPreviewQuestion} />
+                    <MockExamDraftPreview
+                      question={draftPreviewQuestion}
+                      compact={compactComposer}
+                      open={mockPreviewOpen}
+                    />
                   )}
                 </div>
                 <div className="quiz-composer-footer">
+                  {type === "special" && compactComposer && (
+                    <button
+                      type="button"
+                      ref={mockPreviewButtonRef}
+                      onClick={() =>
+                        mockPreviewOpen
+                          ? closeMockPreview()
+                          : setMockPreviewOpen(true)
+                      }
+                      className="quiz-authoring-button"
+                      aria-expanded={mockPreviewOpen}
+                    >
+                      {mockPreviewOpen ? "돌아가기" : "미리보기"}
+                    </button>
+                  )}
                   {type !== "special" && (
                     <button
                       type="button"
