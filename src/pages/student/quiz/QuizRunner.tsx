@@ -19,6 +19,7 @@ import QuizLearningResult from "./QuizLearningResult";
 import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
 import { loadMyQuizHistoryDetail } from "../../../lib/myQuizHistory";
 import MockExamWorkspace from "./MockExamWorkspace";
+import { useQuizContentProtection } from "./useQuizContentProtection";
 import type {
   MockExamPaperQuestion,
   MockExamPaperCheck,
@@ -161,6 +162,8 @@ const buildGradeClassLabel = (
 };
 
 const QuizRunner: React.FC = () => {
+  const contentProtectionRef = useRef<HTMLDivElement>(null);
+  useQuizContentProtection(contentProtectionRef);
   const { showToast } = useAppToast();
   const { confirm } = useAppDialog();
   const [searchParams] = useSearchParams();
@@ -1840,7 +1843,11 @@ const QuizRunner: React.FC = () => {
         : assessmentCategoryLabel;
 
     return (
-      <div className="student-quiz-runner student-quiz-learning">
+      <div
+        ref={contentProtectionRef}
+        data-quiz-content-protected
+        className="student-quiz-runner student-quiz-learning"
+      >
         <header className="student-quiz-topbar">
           <p
             className="student-quiz-context-title"

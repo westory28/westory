@@ -13,6 +13,7 @@ import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import MockExamPaper from "../../../components/common/MockExamPaper";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import QuizRelearning from "../quiz/QuizRelearning";
+import { useQuizContentProtection } from "../quiz/useQuizContentProtection";
 import { formatQuizPracticeAnswer } from "../quiz/quizPracticeData";
 import { formatRecordedScore } from "./assessmentRecords";
 import {
@@ -43,6 +44,8 @@ export default function MyQuizHistory({
   onClose,
   onStart,
 }: Props) {
+  const contentProtectionRef = useRef<HTMLElement>(null);
+  useQuizContentProtection(contentProtectionRef);
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState<MyQuizHistoryPage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -252,6 +255,8 @@ export default function MyQuizHistory({
       String(detail?.record.title || detail?.record.unitTitle || "평가 결과");
     return (
       <section
+        ref={contentProtectionRef}
+        data-quiz-content-protected
         className="my-quiz-history student-quiz-learning-result"
         aria-label="평가 결과 상세"
       >

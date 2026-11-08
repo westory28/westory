@@ -15,6 +15,7 @@ import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import { formatMockExamRoundLabel } from "../../../lib/mockExamRounds";
 import type { MockExamPaperHeaderSettings } from "../../../lib/mockExamPaperHeader";
 import "./mockExamWorkspace.css";
+import { useQuizContentProtection } from "./useQuizContentProtection";
 
 interface Props {
   questions: MockExamPaperQuestion[];
@@ -67,6 +68,7 @@ export default function MockExamWorkspace(props: Props) {
   );
   const zoomPanel = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLDivElement>(null);
+  useQuizContentProtection(workspace);
   const paperScroll = useRef<HTMLDivElement>(null);
   const [workspaceHeight, setWorkspaceHeight] = useState(window.innerHeight);
   const [paperHeight, setPaperHeight] = useState(0);
@@ -211,6 +213,7 @@ export default function MockExamWorkspace(props: Props) {
   return (
     <div
       ref={workspace}
+      data-quiz-content-protected
       className={`mock-exam-workspace ${fixed ? "is-fixed" : ""}`}
       style={
         {

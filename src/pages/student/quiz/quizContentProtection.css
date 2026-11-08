@@ -1,0 +1,32 @@
+/* Student assessment text and images only; shared teacher renderers stay editable. */
+[data-quiz-content-protected],
+[data-quiz-content-protected] * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+[data-quiz-content-protected] img,
+[data-quiz-content-protected] a {
+  -webkit-user-drag: none;
+}
+
+/* Students retain normal editing, selection and clipboard actions for their work. */
+[data-quiz-content-protected]
+  :is(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="email"],
+    input[type="url"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    textarea,
+    [contenteditable="true"]
+  ),
+[data-quiz-content-protected] [contenteditable="true"] * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}

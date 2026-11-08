@@ -5,6 +5,7 @@ import {
 } from "../../../lib/assessmentAnswerLimits";
 import InfoHelp from "../../../components/common/InfoHelp";
 import QuizPassage from "../../../components/common/QuizPassage";
+import { useQuizContentProtection } from "./useQuizContentProtection";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import type {
   QuizReviewNoteDraft,
@@ -59,6 +60,8 @@ export default function QuizRelearning({
   ) => Promise<QuizReviewNotes>;
   onReload?: () => Promise<QuizReviewNotes>;
 }) {
+  const contentProtectionRef = useRef<HTMLElement>(null);
+  useQuizContentProtection(contentProtectionRef);
   const [queue, setQueue] = useState(items);
   const [index, setIndex] = useState(0);
   const [stage, setStage] = useState<"review" | "practice" | "checked">(
@@ -322,7 +325,12 @@ export default function QuizRelearning({
         : Boolean(answer.trim());
 
   return (
-    <section className="student-quiz-relearning" aria-label="오답 복습">
+    <section
+      ref={contentProtectionRef}
+      data-quiz-content-protected
+      className="student-quiz-relearning"
+      aria-label="오답 복습"
+    >
       <div className="student-quiz-relearning-header">
         <h2 ref={headingRef} tabIndex={-1}>
           오답 복습 {index + 1} / {queue.length}
