@@ -477,6 +477,8 @@ export default function MockExamPaper({
   selectedQuestionId,
   animateGrading = false,
   onGradingComplete,
+  fit = "default",
+  availableHeight,
   disabled = false,
 }: {
   questions: MockExamPaperQuestion[];
@@ -490,6 +492,8 @@ export default function MockExamPaper({
   selectedQuestionId?: string | number | null;
   animateGrading?: boolean;
   onGradingComplete?: () => void;
+  fit?: "default" | "width" | "page";
+  availableHeight?: number;
   disabled?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -600,8 +604,7 @@ export default function MockExamPaper({
     const element = container.current;
     if (!element) return;
     const update = () => {
-      if (element.clientWidth > 0)
-        setWidth(Math.min(PAGE_WIDTH, element.clientWidth));
+      if (element.clientWidth > 0) setWidth(element.clientWidth);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -790,11 +793,19 @@ export default function MockExamPaper({
       setDensity((previous) => previous + 1);
     }
   }, [pages, questions.length, heights.length, measuredDensity, density]);
-  const scale = Math.max(0.1, width / PAGE_WIDTH);
+  const pageScale = (height: number) =>
+    Math.max(
+      0.05,
+      Math.min(
+        width / PAGE_WIDTH,
+        fit === "page" && availableHeight ? availableHeight / height : Infinity,
+      ),
+    );
   return (
     <div
       ref={container}
       className="mock-exam-paper"
+      data-fit={fit}
       data-density={density}
       data-grading-state={
         animateGrading ? (gradingComplete ? "complete" : "grading") : undefined
@@ -831,7 +842,10 @@ export default function MockExamPaper({
         <div
           key={pageIndex}
           className="mock-exam-sheet-space"
-          style={{ height: page.height * scale }}
+          style={{
+            width: PAGE_WIDTH * pageScale(page.height),
+            height: page.height * pageScale(page.height),
+          }}
         >
           <section
             ref={pageIndex === 0 ? firstSheet : undefined}
@@ -840,7 +854,7 @@ export default function MockExamPaper({
             style={{
               width: PAGE_WIDTH,
               minHeight: page.height,
-              transform: `scale(${scale})`,
+              transform: `scale(${pageScale(page.height)})`,
             }}
           >
             {pageIndex === 0 ? (

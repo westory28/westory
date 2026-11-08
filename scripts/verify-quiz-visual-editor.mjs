@@ -301,6 +301,48 @@ if (process.argv.includes("--browser")) {
         `${viewport}: no page overflow`,
       );
       await page.evaluate(() =>
+        window.quizVisualFixture.reset("사림의 {{u:활동}}을 확인하시오."),
+      );
+      await page.locator(".quiz-passage-underline").waitFor();
+      for (const fontSize of [12, 18]) {
+        const underline = await page
+          .locator(".quiz-passage-underline")
+          .evaluate((element, size) => {
+            element.closest(".quiz-passage").style.fontSize = `${size}px`;
+            const style = getComputedStyle(element);
+            return {
+              decoration: style.textDecorationLine,
+              thickness: style.textDecorationThickness,
+              offset: parseFloat(style.textUnderlineOffset),
+              padding: style.paddingBottom,
+              border: style.borderBottomWidth,
+            };
+          }, fontSize);
+        checkBrowser(
+          underline.decoration,
+          "underline",
+          `${viewport}/${fontSize}: underline follows glyphs, not the inline box`,
+        );
+        checkBrowser(
+          underline.thickness,
+          "1px",
+          `${viewport}/${fontSize}: thin underline`,
+        );
+        checkBrowser(
+          Math.abs(underline.offset - fontSize * 0.1) < 0.01,
+          true,
+          `${viewport}/${fontSize}: proportional close underline offset`,
+        );
+        checkBrowser(
+          [underline.padding, underline.border],
+          ["0px", "0px"],
+          `${viewport}/${fontSize}: no box padding or border displaces underline`,
+        );
+      }
+      await page
+        .locator(".quiz-passage")
+        .evaluate((element) => element.style.removeProperty("font-size"));
+      await page.evaluate(() =>
         window.quizVisualFixture.reset("{{blankbox:30|(가)}}"),
       );
       await page.waitForFunction(

@@ -14,6 +14,10 @@
   --mock-exam-question-gap: 10px;
   --mock-exam-material-height: 200px;
 }
+.mock-exam-paper[data-fit="width"],
+.mock-exam-paper[data-fit="page"] {
+  max-width: none;
+}
 .mock-exam-paper[data-density="2"] {
   --mock-exam-body-size: 12px;
   --mock-exam-body-leading: 1.42;
@@ -22,6 +26,7 @@
 }
 .mock-exam-sheet-space {
   position: relative;
+  margin-inline: auto;
   margin-bottom: 24px;
 }
 .mock-exam-sheet {
@@ -523,6 +528,8 @@
   top: 0;
   left: 0;
   width: 345px;
+  height: 0;
+  overflow: hidden;
   visibility: hidden;
   pointer-events: none;
   z-index: -1;

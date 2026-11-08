@@ -36,7 +36,9 @@
 
 
 .quiz-passage-underline {
-  border-bottom: 1px solid #0f172a;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.1em;
 }
 
 .quiz-passage-blank-box,

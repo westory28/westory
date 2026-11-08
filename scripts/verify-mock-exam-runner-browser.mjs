@@ -58,11 +58,11 @@ export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(locat
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz/run?unitId=exam_prep&category=exam_prep&round=round_2']}><AppToastProvider><AppDialogProvider><div className="student-layout"><Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz/run?unitId=exam_prep&category=exam_prep&round=round_2']}><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
     builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
@@ -87,10 +87,10 @@ const server = http.createServer((request, response) => {
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge", headless: true });
-const pageErrors = [];
+const pageErrors = [], viewportReports = [];
 const open = async (width, height = 1024, touch = false, search = "") => {
   const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
-  page.on("pageerror", error => pageErrors.push(error.message));
+  page.on("pageerror", error => pageErrors.push(error.stack || error.message));
   await page.route("**/*", route => route.request().url().startsWith(origin) || route.request().url().startsWith("data:") ? route.continue() : route.abort());
   await page.goto(origin + search);
   await page.getByRole("button", { name: "평가 시작하기", exact: true }).click();
@@ -105,6 +105,50 @@ const openQuestion = async (page, index) => {
   await dialog.waitFor();
   assert.equal(await dialog.getByRole("button", { name: "시험지로 돌아가기" }).evaluate(element => element === document.activeElement), true);
   return dialog;
+};
+const checkPaperViewport = async (page, expectedFit, label) => {
+  try {
+    await page.waitForFunction(fit => document.querySelector('.mock-exam-paper')?.dataset.fit === fit || !document.querySelector('#root')?.childElementCount, expectedFit);
+    assert(await page.locator('.mock-exam-paper').count(),'Exam workspace remains mounted after resizing');
+  } catch(error) {
+    console.error('Browser errors',pageErrors);
+    console.error('Viewport transition failed',label,await page.evaluate(()=>({width:innerWidth,height:innerHeight,fit:document.querySelector('.mock-exam-paper')?.dataset.fit,active:document.activeElement?.outerHTML.slice(0,200),dialog:!!document.querySelector('.mock-exam-zoom'),workspace:document.querySelector('.mock-exam-workspace')?.getAttribute('style')})));
+    throw error;
+  }
+  await page.evaluate(() => document.fonts.ready);
+  await page.locator('.mock-exam-workspace-scroll').evaluate(element => element.scrollTo({top:0,left:0,behavior:'instant'}));
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const layout = await page.evaluate(() => {
+    const workspace = document.querySelector('.mock-exam-workspace');
+    const scroll = document.querySelector('.mock-exam-workspace-scroll');
+    const sheet = document.querySelector('.mock-exam-sheet');
+    const toolbar = document.querySelector('.mock-exam-toolbar');
+    const footer = document.querySelector('.mock-exam-submit-bar');
+    const rect = element => { const r=element.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}; };
+    const style=getComputedStyle(scroll), bounds=rect(scroll);
+    return {
+      fit:document.querySelector('.mock-exam-paper').dataset.fit, transform:getComputedStyle(workspace).transform,
+      sheet:rect(sheet), toolbar:rect(toolbar), footer:rect(footer), viewport:{width:innerWidth,height:innerHeight},
+      content:{left:bounds.left+parseFloat(style.paddingLeft),right:bounds.left+scroll.clientWidth-parseFloat(style.paddingRight),top:bounds.top+parseFloat(style.paddingTop),bottom:bounds.top+scroll.clientHeight-parseFloat(style.paddingBottom)},
+      scrollHeight:scroll.scrollHeight, clientHeight:scroll.clientHeight, scrollWidth:scroll.scrollWidth, clientWidth:scroll.clientWidth,overflowX:style.overflowX,
+      bodyOverflow:document.documentElement.scrollWidth>innerWidth+1,
+    };
+  });
+  assert.equal(layout.transform,'none',`${label}: no forced rotation`);
+  assert.equal(layout.fit,expectedFit);
+  assert(!layout.bodyOverflow && (layout.scrollWidth<=layout.clientWidth+1 || ['hidden','clip'].includes(layout.overflowX)),`${label}: no visible horizontal overflow ${JSON.stringify(layout)}`);
+  assert(layout.sheet.left>=layout.content.left-1 && layout.sheet.right<=layout.content.right+1,`${label}: sheet fits the available width`);
+  assert(layout.content.top>=layout.toolbar.bottom-1 && layout.content.bottom<=layout.footer.top+1,`${label}: paper is between toolbar and footer`);
+  assert(layout.footer.bottom<=layout.viewport.height+1,`${label}: submit actions remain on screen ${JSON.stringify(layout)}`);
+  if(expectedFit==='page') {
+    assert(layout.sheet.top>=layout.content.top-1 && layout.sheet.bottom<=layout.content.bottom+1,`${label}: entire first page is visible ${JSON.stringify(layout)}`);
+    assert(layout.sheet.bottom<=layout.footer.top+1,`${label}: footer does not cover the first page`);
+  } else {
+    assert(Math.abs(layout.sheet.width-(layout.content.right-layout.content.left))<1,`${label}: landscape paper uses 100% available width ${JSON.stringify(layout)}`);
+    assert(layout.scrollHeight>layout.clientHeight,`${label}: full-width paper scrolls vertically`);
+  }
+  viewportReports.push({label,...layout});
+  return layout;
 };
 const checkRunnerToggle = async (page, dialog, touch) => {
   const radios = dialog.getByRole('radio');
@@ -148,6 +192,44 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
 try {
+  if(process.argv.includes('--viewport-only')) {
+    for(const [width,height,touch] of [[320,568,true],[390,844,true],[768,1024,true],[844,390,true],[1024,768,true],[1280,900,false]]) {
+      const page=await open(width,height,touch);
+      const fit=width<=height || (touch && Math.min(width,height)<=600)?'page':'width';
+      await checkPaperViewport(page,fit,`viewport-only ${width}x${height}`);
+      await page.screenshot({path:path.join(evidence,`viewport-${width}x${height}.png`)});
+      await page.getByRole('button',{name:'전체 화면',exact:true}).click();
+      await checkPaperViewport(page,fit,`viewport-only fullscreen ${width}x${height}`);
+      if(width>=844) {
+        await page.getByRole('button',{name:'전체 화면 닫기',exact:true}).click();
+        const dialog=await openQuestion(page,1);
+        await checkRunnerToggle(page,dialog,touch);
+        await dialog.getByRole('radio',{name:/조선/}).locator('..').click();
+        await page.keyboard.press('Escape');
+        await page.setViewportSize({width:768,height:1024});
+        await checkPaperViewport(page,'page','viewport-only portrait after mobile landscape');
+        const restored=await openQuestion(page,1);
+        assert(await restored.getByRole('radio',{name:/조선/}).isChecked(),'Orientation changes preserve the selected answer');
+        await page.keyboard.press('Escape');
+        const writing=await openQuestion(page,2);
+        const input=writing.getByRole('textbox',{name:'답안',exact:true});
+        await input.focus();
+        await page.setViewportSize({width:768,height:420});
+        assert.equal(await page.locator('.mock-exam-paper').getAttribute('data-fit'),'page','Keyboard height does not change the paper fit mode');
+        await input.fill('입력 유지');
+        await page.setViewportSize({width:768,height:1024});
+        assert.equal(await input.inputValue(),'입력 유지');
+      }
+      await page.close();
+    }
+    const portalPage=await open(768,1024,true,'?portal-header');
+    const portrait=await checkPaperViewport(portalPage,'page','viewport-only portal header portrait');
+    assert(portrait.toolbar.top>=64);
+    await portalPage.screenshot({path:path.join(evidence,'portal-header-portrait.png')});
+    await portalPage.setViewportSize({width:1024,height:768});
+    await checkPaperViewport(portalPage,'width','viewport-only portal header landscape');
+    await portalPage.close();
+  } else {
   const preparedPage = await browser.newPage({viewport:{width:1280,height:1024}});
   let releaseImage;const imageGate=new Promise(resolve=>{releaseImage=resolve;});
   let imageRequested;const requestStarted=new Promise(resolve=>{imageRequested=resolve;});
@@ -224,6 +306,7 @@ try {
     assert.equal(await page.getByText("모의고사에서 숨겨야 하는 기존 힌트", { exact: false }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     await page.evaluate(() => document.fonts.ready);
+    await checkPaperViewport(page,width<=height?'page':'width',`${width}x${height}`);
     await page.screenshot({ path: path.join(evidence, `paper-${width}.png`), fullPage: true });
     await openQuestion(page, 3);
     await page.keyboard.press("Escape");
@@ -323,17 +406,21 @@ try {
     await page.getByText("저장된 답안 확인 경로", { exact: true }).waitFor();
     await page.close();
   }
-  for(const [landscapeWidth,landscapeHeight] of [[844,390],[1024,768]]) {
-  const landscape = await open(landscapeWidth, landscapeHeight, true);
-  await landscape.locator(".mock-exam-workspace.is-rotated").waitFor();
-  assert.equal(await landscape.locator(".mock-exam-workspace").evaluate(element => getComputedStyle(element).transform !== "none"), true);
-  const rotatedDialog = await openQuestion(landscape, 1);
-  await checkRunnerToggle(landscape,rotatedDialog,true);
-  await rotatedDialog.getByRole("radio", { name: /조선/ }).locator("..").click();
+  for(const [landscapeWidth,landscapeHeight,touch] of [[844,390,true],[1024,768,true],[1280,900,false]]) {
+  const landscape = await open(landscapeWidth, landscapeHeight, touch);
+  const expectedFit=landscapeWidth===844?'page':'width';
+  await checkPaperViewport(landscape,expectedFit,`landscape ${landscapeWidth}x${landscapeHeight}`);
+  await landscape.screenshot({ path:path.join(evidence,`landscape-paper-${landscapeWidth}x${landscapeHeight}.png`) });
+  await landscape.getByRole('button',{name:'전체 화면',exact:true}).click();
+  await checkPaperViewport(landscape,expectedFit,`fullscreen ${landscapeWidth}x${landscapeHeight}`);
+  await landscape.getByRole('button',{name:'전체 화면 닫기',exact:true}).click();
+  const landscapeDialog = await openQuestion(landscape, 1);
+  await checkRunnerToggle(landscape,landscapeDialog,touch);
+  await landscapeDialog.getByRole("radio", { name: /조선/ }).locator("..").click();
   await landscape.screenshot({ path: path.join(evidence, `landscape-zoom-${landscapeWidth}x${landscapeHeight}.png`), fullPage: true });
   await landscape.keyboard.press("Escape");
   await landscape.setViewportSize({ width: 768, height: 1024 });
-  await landscape.waitForFunction(() => !document.querySelector('.mock-exam-workspace').classList.contains('is-rotated'));
+  await checkPaperViewport(landscape,'page',`portrait after landscape ${landscapeWidth}`);
   const portraitDialog = await openQuestion(landscape, 1);
   assert.equal(await portraitDialog.getByRole("radio", { name: /조선/ }).isChecked(), true);
   await landscape.keyboard.press("Escape");
@@ -342,11 +429,19 @@ try {
   await keyboardInput.focus();
   await landscape.setViewportSize({ width: 768, height: 420 });
   assert.equal(await landscape.locator('.mock-exam-workspace.is-rotated').count(), 0, 'Keyboard-height changes must not trigger device rotation');
+  assert.equal(await landscape.locator('.mock-exam-paper').getAttribute('data-fit'),'page','Keyboard-height changes preserve portrait paper mode');
   await keyboardInput.fill('입력 유지');
   await landscape.setViewportSize({ width: 768, height: 1024 });
   assert.equal(await keyboardInput.inputValue(), '입력 유지');
   await landscape.close();
   }
+  const portalPage = await open(768,1024,true,'?portal-header');
+  const portalPortrait = await checkPaperViewport(portalPage,'page','portrait below 64px portal header');
+  assert(portalPortrait.toolbar.top>=64,'Portal header height is reserved before the workspace');
+  await portalPage.screenshot({path:path.join(evidence,'portal-header-portrait.png')});
+  await portalPage.setViewportSize({width:1024,height:768});
+  await checkPaperViewport(portalPage,'width','landscape below 64px portal header');
+  await portalPage.close();
   const densePage = await open(1280, 1024, false, "?dense");
   await densePage.evaluate(() => document.fonts.ready);
   await densePage.waitForFunction(() => document.querySelectorAll('.mock-exam-sheet .mock-exam-question').length === 16);
@@ -358,8 +453,12 @@ try {
   assert.equal(await denseZoom.locator('.mock-exam-zoom-scroll').evaluate(element => element.scrollHeight > element.clientHeight), true, 'Long material stays in the zoom scroll area');
   await densePage.screenshot({ path: path.join(evidence, 'dense-long-question.png'), fullPage: true });
   await densePage.close();
+  }
   assert.deepEqual(pageErrors, []);
-  console.log(`Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, touch 320x568/360x800/390x844/768x1024/820x1180 and desktop 1280/1440, click/tap/Space toggle with native Arrow navigation, stationary answer/dialog/scroll layout, no clear button or pre-submit explanation, pencil drawing under normal and reduced motion, touch rotation 844x390/1024x768, keyboard focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
+  await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
+  console.log(process.argv.includes('--viewport-only')
+    ? `Mock exam viewport browser passed: 320x568/390x844/768x1024/844x390 full-page fit, 1024x768/1280x900 full width, fullscreen variants, 64px portal header and orientation change. Evidence: ${evidence}`
+    : `Mock exam runner browser passed: asset decode before timed start, broken-image retry, source-change re-prepare, touch 320x568/360x800/390x844/768x1024/820x1180 and desktop 1280/1440, portrait/mobile full-page fit, landscape 100% width with vertical scroll and no forced rotation at 844x390/1024x768/1280x900, full screen, orientation changes, click/tap/Space toggle with native Arrow navigation, stationary answer/dialog/scroll layout, no clear button or pre-submit explanation, pencil drawing under normal and reduced motion, keyboard focus, save/resume, incomplete confirmation, retry, weighted immutable results. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import MockExamPaper, {
   MockExamQuestionContent,
   type MockExamPaperCheck,
@@ -62,6 +68,8 @@ export default function MockExamWorkspace(props: Props) {
   const zoomPanel = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLDivElement>(null);
   const paperScroll = useRef<HTMLDivElement>(null);
+  const [workspaceHeight, setWorkspaceHeight] = useState(window.innerHeight);
+  const [paperHeight, setPaperHeight] = useState(0);
   const zoomScroll = useRef<HTMLDivElement>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
   const question = questions[currentIndex];
@@ -71,11 +79,11 @@ export default function MockExamWorkspace(props: Props) {
     // Include the toolbar in the target so sticky headers cannot cover the score.
     workspace.current?.scrollIntoView({ block: "start", behavior: "instant" });
   }, []);
-  const rotated =
-    touch &&
-    viewport.width > viewport.height &&
-    Math.min(viewport.width, viewport.height) <= 1024;
-  const fixed = fullPage || rotated;
+  const mobile =
+    viewport.width <= 640 ||
+    (touch && Math.min(viewport.width, viewport.height) <= 600);
+  const fitPage = mobile || viewport.width <= viewport.height;
+  const fixed = fullPage;
   const answer = question ? answers[String(question.id)] || "" : "";
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse)");
@@ -87,6 +95,11 @@ export default function MockExamWorkspace(props: Props) {
         );
         // A keyboard may shrink the viewport without rotating the device.
         if (editing && Math.abs(previous.width - window.innerWidth) < 4)
+          return previous;
+        if (
+          previous.width === window.innerWidth &&
+          previous.height === window.innerHeight
+        )
           return previous;
         return { width: window.innerWidth, height: window.innerHeight };
       });
@@ -100,6 +113,35 @@ export default function MockExamWorkspace(props: Props) {
       media.removeEventListener("change", resize);
     };
   }, []);
+  useLayoutEffect(() => {
+    const root = workspace.current;
+    const scroll = paperScroll.current;
+    if (!root || !scroll) return;
+    const updateHeight = () => {
+      const top = fixed ? 0 : Math.max(0, root.getBoundingClientRect().top);
+      setWorkspaceHeight(Math.max(240, viewport.height - top));
+    };
+    const updatePaperHeight = () => {
+      const style = getComputedStyle(scroll);
+      setPaperHeight(
+        Math.max(
+          1,
+          scroll.clientHeight -
+            parseFloat(style.paddingTop) -
+            parseFloat(style.paddingBottom),
+        ),
+      );
+    };
+    updateHeight();
+    updatePaperHeight();
+    const frame = requestAnimationFrame(updateHeight);
+    const observer = new ResizeObserver(updatePaperHeight);
+    observer.observe(scroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [viewport.width, viewport.height, fixed]);
   useEffect(() => {
     if (!fixed) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -169,11 +211,10 @@ export default function MockExamWorkspace(props: Props) {
   return (
     <div
       ref={workspace}
-      className={`mock-exam-workspace ${fixed ? "is-fixed" : ""} ${rotated ? "is-rotated" : ""}`}
+      className={`mock-exam-workspace ${fixed ? "is-fixed" : ""}`}
       style={
         {
-          "--exam-viewport-width": `${viewport.width}px`,
-          "--exam-viewport-height": `${viewport.height}px`,
+          "--exam-workspace-height": `${workspaceHeight}px`,
         } as React.CSSProperties
       }
       onKeyDown={keyDown}
@@ -214,6 +255,8 @@ export default function MockExamWorkspace(props: Props) {
         <div ref={paperScroll} className="mock-exam-workspace-scroll">
           <MockExamPaper
             questions={questions}
+            fit={fitPage ? "page" : "width"}
+            availableHeight={paperHeight}
             answers={answers}
             round={round}
             studentLabel={studentLabel}
