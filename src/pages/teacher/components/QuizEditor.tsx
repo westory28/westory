@@ -1301,7 +1301,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     fields[nextIndex].focus();
   };
 
-  const handleChoiceVerticalFocus = (
+  const handleChoiceFocus = (
     event: React.KeyboardEvent<HTMLTextAreaElement>,
     index: number,
     column = 0,
@@ -1322,13 +1322,29 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       handleVerticalFocus(event);
       return;
     }
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-    const nextIndex = index + (event.key === "ArrowDown" ? 1 : -1);
+    let nextIndex = index;
+    let nextColumn = column;
+    switch (event.key) {
+      case "ArrowUp":
+        nextIndex -= 1;
+        break;
+      case "ArrowDown":
+        nextIndex += 1;
+        break;
+      case "ArrowLeft":
+        nextColumn -= 1;
+        break;
+      case "ArrowRight":
+        nextColumn += 1;
+        break;
+      default:
+        return;
+    }
     if (nextIndex < 0 || nextIndex >= choiceOptions.length) return;
     const nextField = choiceOptionRows.current[
       nextIndex
     ]?.querySelector<HTMLTextAreaElement>(
-      `textarea[data-choice-column="${column}"]`,
+      `textarea[data-choice-column="${nextColumn}"]`,
     );
     if (!nextField || nextField.readOnly || nextField.matches(":disabled"))
       return;
@@ -3084,11 +3100,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                       )
                                     }
                                     onKeyDown={(event, column) =>
-                                      handleChoiceVerticalFocus(
-                                        event,
-                                        index,
-                                        column,
-                                      )
+                                      handleChoiceFocus(event, index, column)
                                     }
                                   />
                                   {optionImage && (

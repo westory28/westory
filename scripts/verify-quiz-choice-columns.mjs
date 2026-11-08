@@ -157,7 +157,9 @@ try {
         c.encodeQuizChoiceColumns(["가나", "다"]),
         c.encodeQuizChoiceColumns(["가", "나다"]),
       ].map((value) => value.replace(/\s+/g, "")),
-      canonical: c.normalizeQuizChoiceOption(c.encodeQuizChoiceColumns([" 김시민 ", " 이순신 "])),
+      canonical: c.normalizeQuizChoiceOption(
+        c.encodeQuizChoiceColumns([" 김시민 ", " 이순신 "]),
+      ),
     };
   });
   assert.equal(codec.ordinary, null);
@@ -170,7 +172,11 @@ try {
   );
   assert.deepEqual(codec.mixedWhite, ["김 시민", "이 순신"]);
   assert.notEqual(...codec.collision);
-  assert.equal(codec.canonical, "(가) 김시민\t(나) 이순신", "Persisted cells trim draft padding without changing their identity");
+  assert.equal(
+    codec.canonical,
+    "(가) 김시민\t(나) 이순신",
+    "Persisted cells trim draft padding without changing their identity",
+  );
   await page.getByRole("button", { name: "문제 등록", exact: true }).click();
   const compose = page.getByRole("dialog", {
     name: "새 문제 등록",
@@ -220,6 +226,57 @@ try {
       .evaluate((element) => element === document.activeElement),
     "Vertical keys retain column",
   );
+  const expectChoiceFocus = async (name) =>
+    assert.equal(
+      await page.evaluate(() =>
+        document.activeElement?.getAttribute("aria-label"),
+      ),
+      name,
+    );
+  for (const [key, name] of [
+    ["ArrowLeft", "2번 보기 (가)"],
+    ["ArrowLeft", "2번 보기 (가)"],
+    ["ArrowRight", "2번 보기 (나)"],
+    ["ArrowRight", "2번 보기 (나)"],
+    ["ArrowUp", "1번 보기 (나)"],
+  ]) {
+    await page.keyboard.press(key);
+    await expectChoiceFocus(name);
+  }
+  for (const modifiers of [
+    { isComposing: true },
+    { keyCode: 229 },
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { altKey: true },
+  ]) {
+    const allowed = await compose
+      .getByLabel("1번 보기 (나)", { exact: true })
+      .evaluate(
+        (element, modifiers) =>
+          element.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "ArrowLeft",
+              bubbles: true,
+              cancelable: true,
+              ...modifiers,
+            }),
+          ),
+        modifiers,
+      );
+    assert(allowed, "Composition and modified arrows keep native editing");
+    await expectChoiceFocus("1번 보기 (나)");
+  }
+  for (let row = 0; row < rows.length; row++) {
+    for (const [column, label] of ["가", "나"].entries())
+      assert.equal(
+        await compose
+          .getByLabel(`${row + 1}번 보기 (${label})`, { exact: true })
+          .inputValue(),
+        rows[row][column],
+      );
+  }
   await compose.getByRole("button", { name: "열 삭제", exact: true }).click();
   assert.equal(
     await compose.locator(".quiz-choice-column-label").count(),
@@ -230,6 +287,17 @@ try {
   await compose.getByRole("button", { name: "열 추가", exact: true }).click();
   await compose.getByRole("button", { name: "열 추가", exact: true }).click();
   assert.equal(await compose.locator(".quiz-choice-column-label").count(), 5);
+  await compose.getByLabel("3번 보기 (나)", { exact: true }).focus();
+  for (const label of ["다", "라", "마", "마"]) {
+    await page.keyboard.press("ArrowRight");
+    await expectChoiceFocus(`3번 보기 (${label})`);
+  }
+  await page.keyboard.press("ArrowDown");
+  await expectChoiceFocus("4번 보기 (마)");
+  for (const label of ["라", "다", "나", "가", "가"]) {
+    await page.keyboard.press("ArrowLeft");
+    await expectChoiceFocus(`4번 보기 (${label})`);
+  }
   assert(
     await compose
       .getByRole("button", { name: "열 추가", exact: true })
@@ -255,6 +323,12 @@ try {
   const live = compose.locator(".mock-exam-draft-preview");
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
+    await compose
+      .getByLabel("1번 보기 (가)", { exact: true })
+      .press("ArrowRight");
+    await expectChoiceFocus("1번 보기 (나)");
+    await page.keyboard.press("ArrowLeft");
+    await expectChoiceFocus("1번 보기 (가)");
     await compose
       .getByLabel("1번 보기 (가)", { exact: true })
       .scrollIntoViewIfNeeded();
@@ -358,6 +432,19 @@ try {
         .inputValue(),
       saved.options[index].split("\t")[0].slice(4),
     );
+  const singleColumn = edit.getByLabel("1번 보기", { exact: true });
+  await singleColumn.press("Home");
+  await singleColumn.press("ArrowRight");
+  await expectChoiceFocus("1번 보기");
+  assert.equal(
+    await singleColumn.evaluate((element) => element.selectionStart),
+    1,
+  );
+  await singleColumn.press("ArrowLeft");
+  assert.equal(
+    await singleColumn.evaluate((element) => element.selectionStart),
+    0,
+  );
   await edit.getByRole("button", { name: "취소", exact: true }).click();
   await page.evaluate(
     (question) =>
