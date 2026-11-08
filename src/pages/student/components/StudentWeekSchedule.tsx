@@ -438,128 +438,133 @@ const StudentWeekSchedule: React.FC<Props> = ({
               </svg>
             </button>
           </div>
-          <div
-            ref={eventListRef}
-            className="student-week-events"
-            aria-busy={loading}
-          >
-            {loading && (
-              <p className="student-week-events__status" role="status">
-                일정을 불러오는 중입니다.
-              </p>
-            )}
-            {!loading && error && (
-              <p className="student-week-events__status" role="alert">
-                일정을 불러오지 못했습니다.{" "}
-                <Link to="/student/calendar">
-                  {calendarLabel}에서 다시 확인
-                </Link>
-              </p>
-            )}
-            {searchTerm && !loading && !error && (
-              <p className="student-week-search__summary" role="status">
-                검색 결과 {displayedEvents.length}건
-              </p>
-            )}
-            {!loading && !error && !displayedEvents.length && (
-              <p className="student-week-events__status">
-                {searchTerm
-                  ? "검색어와 일치하는 일정이 없습니다."
-                  : "이번 주에 등록된 일정이 없습니다."}
-              </p>
-            )}
-            {displayedEvents.map((event) => {
-              const meta = getScheduleCategoryMeta(event.eventType, categories);
-              const eventColor =
-                event.eventType === "holiday"
-                  ? "var(--ws-danger-text, #b91c1c)"
-                  : getScheduleEventColor(event, categories);
-              const dateLabel = formatCalendarEventDateRange(event);
-              const periodLabel =
-                event.eventType === "holiday"
-                  ? "종일"
-                  : getSchedulePeriodRangeLabel(
-                      event.startPeriod ?? event.period,
-                      event.endPeriod,
-                    );
-              return (
-                <button
-                  key={event.id}
-                  type="button"
-                  aria-label={`${dateLabel}, ${event.title}, ${event.eventType !== "holiday" ? `${meta.label}, ` : ""}${periodLabel}`}
-                  className={`student-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
-                  onClick={() => {
-                    if (searchTerm) {
-                      onSearchSelect(event.start);
-                      closeSearch();
-                    } else onEventClick(event);
-                  }}
-                  style={
-                    {
-                      "--schedule-event-color": eventColor,
-                      "--schedule-event-text-color":
-                        event.eventType === "holiday"
-                          ? eventColor
-                          : readableEventColor(eventColor),
-                    } as React.CSSProperties
-                  }
-                >
-                  <span
-                    title={dateLabel}
-                    aria-label={dateLabel}
-                    className={`student-week-event__date${event.eventType !== "holiday" ? " student-week-event__date-badge" : ""}`}
+          <div className="student-week-events" aria-busy={loading}>
+            <div ref={eventListRef} className="student-week-events__list">
+              {loading && (
+                <p className="student-week-events__status" role="status">
+                  일정을 불러오는 중입니다.
+                </p>
+              )}
+              {!loading && error && (
+                <p className="student-week-events__status" role="alert">
+                  일정을 불러오지 못했습니다.{" "}
+                  <Link to="/student/calendar">
+                    {calendarLabel}에서 다시 확인
+                  </Link>
+                </p>
+              )}
+              {searchTerm && !loading && !error && (
+                <p className="student-week-search__summary" role="status">
+                  검색 결과 {displayedEvents.length}건
+                </p>
+              )}
+              {!loading && !error && !displayedEvents.length && (
+                <p className="student-week-events__status">
+                  {searchTerm
+                    ? "검색어와 일치하는 일정이 없습니다."
+                    : "이번 주에 등록된 일정이 없습니다."}
+                </p>
+              )}
+              {displayedEvents.map((event) => {
+                const meta = getScheduleCategoryMeta(
+                  event.eventType,
+                  categories,
+                );
+                const eventColor =
+                  event.eventType === "holiday"
+                    ? "var(--ws-danger-text, #b91c1c)"
+                    : getScheduleEventColor(event, categories);
+                const dateLabel = formatCalendarEventDateRange(event);
+                const periodLabel =
+                  event.eventType === "holiday"
+                    ? "종일"
+                    : getSchedulePeriodRangeLabel(
+                        event.startPeriod ?? event.period,
+                        event.endPeriod,
+                      );
+                return (
+                  <button
+                    key={event.id}
+                    type="button"
+                    aria-label={`${dateLabel}, ${event.title}, ${event.eventType !== "holiday" ? `${meta.label}, ` : ""}${periodLabel}`}
+                    className={`student-week-event${selectedDate && eventIncludesDate(event, selectedDate) ? " is-selected" : ""}`}
+                    onClick={() => {
+                      if (searchTerm) {
+                        onSearchSelect(event.start);
+                        closeSearch();
+                      } else onEventClick(event);
+                    }}
+                    style={
+                      {
+                        "--schedule-event-color": eventColor,
+                        "--schedule-event-text-color":
+                          event.eventType === "holiday"
+                            ? eventColor
+                            : readableEventColor(eventColor),
+                      } as React.CSSProperties
+                    }
                   >
                     <span
-                      className="student-week-event__date-label student-week-event__date-label--full"
-                      aria-hidden="true"
+                      title={dateLabel}
+                      aria-label={dateLabel}
+                      className={`student-week-event__date${event.eventType !== "holiday" ? " student-week-event__date-badge" : ""}`}
                     >
-                      {dateLabel}
+                      <span
+                        className="student-week-event__date-label student-week-event__date-label--full"
+                        aria-hidden="true"
+                      >
+                        {dateLabel}
+                      </span>
+                      <span
+                        className="student-week-event__date-label student-week-event__date-label--compact"
+                        aria-hidden="true"
+                      >
+                        {formatCalendarEventDateRange(event, true)}
+                      </span>
                     </span>
-                    <span
-                      className="student-week-event__date-label student-week-event__date-label--compact"
-                      aria-hidden="true"
-                    >
-                      {formatCalendarEventDateRange(event, true)}
-                    </span>
-                  </span>
-                  <span className="student-week-event__body">
-                    <strong
-                      className="student-week-event__title"
-                      title={event.title}
-                    >
-                      <StudentScheduleTitle title={event.title} />
-                    </strong>
-                    <span className="student-week-event__metadata">
-                      {event.eventType !== "holiday" && (
-                        <span
-                          className="student-week-event__category"
-                          title={`${meta.label}`}
-                        >
-                          <span className="student-week-event__category-label">
-                            {meta.label}
+                    <span className="student-week-event__body">
+                      <strong
+                        className="student-week-event__title"
+                        title={event.title}
+                      >
+                        <StudentScheduleTitle title={event.title} />
+                      </strong>
+                      <span className="student-week-event__metadata">
+                        {event.eventType !== "holiday" && (
+                          <span
+                            className="student-week-event__category"
+                            title={`${meta.label}`}
+                          >
+                            <span className="student-week-event__category-label">
+                              {meta.label}
+                            </span>
                           </span>
-                        </span>
-                      )}
-                      {event.eventType !== "holiday" && (
-                        <span
-                          className="student-week-event__divider"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className="student-week-event__period">
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <circle cx="12" cy="12" r="8.5" />
-                          <path d="M12 7v5l3 2" />
-                        </svg>
-                        <span className="student-week-event__period-label">
-                          {periodLabel}
+                        )}
+                        {event.eventType !== "holiday" && (
+                          <span
+                            className="student-week-event__divider"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="student-week-event__period">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <circle cx="12" cy="12" r="8.5" />
+                            <path d="M12 7v5l3 2" />
+                          </svg>
+                          <span className="student-week-event__period-label">
+                            {periodLabel}
+                          </span>
                         </span>
                       </span>
                     </span>
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

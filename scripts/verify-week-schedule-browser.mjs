@@ -61,8 +61,12 @@ function Calendar({role}) {
  const [dateClicks,setDateClicks]=useState(0);
  const state=new URLSearchParams(location.search).get('state');
  const markers=new URLSearchParams(location.search).get('scenario')==='markers';
- const shared={events:state==='empty'?[]:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:next=>{setWeekStart(next);setWeekChanges(count=>count+1);},onDateClick:date=>{setSelectedDate(date);setDateClicks(count=>count+1);},onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
- return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid"><div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass={filterClass} availableClassTargets={['3-10']} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={setFilterClass}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid"><div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
+ const dashboard=new URLSearchParams(location.search).get('scenario')==='dashboard';
+ const dashboardEvents=Array.from({length:28},(_,index)=>event('dashboard-'+index,'학사 일정 내부 스크롤 검증 '+(index+1),'2026-10-'+(18+Math.floor(index/4)),undefined,index%2?'exam':'admission'));
+ const prefix=role==='teacher'?'teacher-weekly-dashboard':'student-portal-dashboard';
+ const panels=dashboard?<><div className={prefix+'__notice'}><div className="student-notice-board"><h3>알림장</h3><div style={{aspectRatio:'16/9',background:'#eff6ff'}}>알림 이미지</div><button>다음 알림</button></div></div><div className={prefix+'__ranking'}><div className="wis-ranking-panel"><h3>위스 순위</h3>{Array.from({length:5},(_,i)=><div key={i} style={{minHeight:52,marginTop:8}}>{i+1}위 · 검증 학생</div>)}</div></div></>:null;
+ const shared={events:state==='empty'?[]:dashboard?dashboardEvents:markers?markerEvents:events,categories,weekStart,selectedDate,loading:state==='loading',error:state==='error',onWeekChange:next=>{setWeekStart(next);setWeekChanges(count=>count+1);},onDateClick:date=>{setSelectedDate(date);setDateClicks(count=>count+1);},onSearchSelect:setSelectedDate,onEventClick:e=>setClicked(e.id)};
+ return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid">{panels}<div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass={filterClass} availableClassTargets={['3-10']} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={setFilterClass}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid">{panels}<div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
 const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
 createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
@@ -596,17 +600,110 @@ async function verifyStudentToolbar(page, width) {
     searchAndKeyboard: true,
   });
 }
+async function verifyDashboardLayout(page, width) {
+  const measurements = [];
+  for (const state of ["normal", "empty", "loading", "error"]) {
+    await page.goto(`${origin}/?scenario=dashboard&state=${state}`);
+    const section = page.locator(".student-week-schedule");
+    await section.waitFor();
+    const layout = await section.evaluate((element) => {
+      const grid = element.closest(".student-portal-dashboard__grid");
+      const events = element.querySelector(".student-week-events");
+      const list = element.querySelector(".student-week-events__list");
+      const ranking = grid.querySelector(".wis-ranking-panel");
+      return {
+        bottom: events.getBoundingClientRect().bottom,
+        rankingBottom: ranking.getBoundingClientRect().bottom,
+        gridHeight: grid.getBoundingClientRect().height,
+        scrollHeight: list.scrollHeight,
+        clientHeight: list.clientHeight,
+        overflow: getComputedStyle(list).overflowY,
+        border: getComputedStyle(element).borderTopWidth,
+        background: getComputedStyle(element).backgroundColor,
+        documentOverflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    assert(!layout.documentOverflow, JSON.stringify({ width, state, layout }));
+    assert.equal(layout.border, "0px");
+    assert.equal(layout.background, "rgba(0, 0, 0, 0)");
+    assert(layout.clientHeight > 0);
+    if (width >= 1120) {
+      assert(
+        Math.abs(layout.bottom - layout.rankingBottom) <= 1,
+        JSON.stringify({ width, state, layout }),
+      );
+      if (measurements.length)
+        assert(Math.abs(layout.gridHeight - measurements[0].gridHeight) <= 1);
+    }
+    if (state === "normal") {
+      assert.equal(layout.overflow, "auto");
+      assert(layout.scrollHeight > layout.clientHeight);
+      const last = section.locator(".student-week-event").last();
+      await last.focus();
+      await last.press("Enter");
+      assert.equal(
+        await page.locator('[data-clicked="student"]').innerText(),
+        "dashboard-27",
+      );
+      assert(
+        await section
+          .locator(".student-week-events__list")
+          .evaluate((el) => el.scrollTop > 0),
+      );
+      await section
+        .getByRole("button", { name: "다음 주", exact: true })
+        .click();
+      assert.equal(
+        await section
+          .locator(".student-week-events__list")
+          .evaluate((el) => el.scrollTop),
+        0,
+      );
+      await page.goto(`${origin}/?scenario=dashboard`);
+      await section.waitFor();
+      await page.screenshot({
+        path: path.join(evidence, `${width}-dashboard.png`),
+        fullPage: true,
+      });
+    }
+    measurements.push(layout);
+  }
+  results.push({ width, dashboardLayout: true, measurements });
+}
 try {
   for (const width of [
-    320, 360, 375, 390, 430, 667, 768, 1120, 1280, 1366, 1440,
+    320,
+    360,
+    375,
+    390,
+    430,
+    667,
+    768,
+    1120,
+    1280,
+    1366,
+    1440,
+    ...(process.argv.includes("--dashboard-layout") ? [1886] : []),
   ]) {
     const page = await browser.newPage({
-      viewport: { width, height: 900 },
+      viewport: {
+        width,
+        height:
+          process.argv.includes("--dashboard-layout") && width === 1366
+            ? 768
+            : 900,
+      },
       hasTouch: true,
     });
     await page.clock.setFixedTime(new Date("2026-10-20T12:00:00+09:00"));
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    if (process.argv.includes("--dashboard-layout")) {
+      await verifyDashboardLayout(page, width);
+      assert.deepEqual(errors, []);
+      await page.close();
+      continue;
+    }
     if (process.argv.includes("--student-toolbar")) {
       await verifyStudentToolbar(page, width);
       assert.deepEqual(errors, []);
@@ -1145,9 +1242,11 @@ try {
     JSON.stringify(results, null, 2),
   );
   console.log(
-    process.argv.includes("--student-toolbar")
-      ? `Student week toolbar checks passed (${browserEngine}): ${results.length} responsive widths, search, keyboard, week controls and attendance accessibility. Evidence: ${evidence}`
-      : `Week schedule browser checks passed: ${results.length} desktop/mobile range, priority-marker and native touch navigation cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
+    process.argv.includes("--dashboard-layout")
+      ? `Dashboard layout checks passed (${browserEngine}): ${results.length} widths, internal scrolling, ranking alignment, keyboard and loading/error/empty states. Evidence: ${evidence}`
+      : process.argv.includes("--student-toolbar")
+        ? `Student week toolbar checks passed (${browserEngine}): ${results.length} responsive widths, search, keyboard, week controls and attendance accessibility. Evidence: ${evidence}`
+        : `Week schedule browser checks passed: ${results.length} desktop/mobile range, priority-marker and native touch navigation cases, keyboard, search, reduced motion and loading/error/empty states. Evidence: ${evidence}`,
   );
 } finally {
   await browser.close();
