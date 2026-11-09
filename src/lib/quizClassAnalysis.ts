@@ -1,9 +1,6 @@
 import { callWithApplicationSession } from "./applicationSession";
 import type { QuizAnalysisStudent, QuizBehaviorCategory } from "./quizAnalysis";
-import type {
-  AchievementEvidence,
-  AchievementReviewedProfile,
-} from "./achievementAnalysis";
+import type { AchievementRawRecord } from "./achievementAnalysis";
 import type {
   Question,
   TreeUnit,
@@ -124,83 +121,8 @@ export interface QuizClassDetail {
 }
 
 export interface QuizClassAchievement extends QuizClassDetail {
-  achievementEvidence: AchievementEvidence;
-  profiles?: AchievementReviewedProfile[];
-  canReview?: boolean;
-  rubricVersion?: string;
+  mockExamScoreRows: AchievementRawRecord[];
   historicalQuestionSnapshots?: Record<string, unknown>;
-}
-
-type AchievementEvidenceWire = Omit<AchievementEvidence, "observations"> & {
-  observations?: AchievementEvidence["observations"];
-  observationTable?: {
-    version: 1;
-    keys: string[];
-    values: unknown[];
-    rows: number[][];
-  };
-};
-
-// Whole-grade evidence repeats the same metadata across many pupils. Restore
-// every cell before analysis; malformed or incomplete tables must fail closed.
-function unpackAchievementEvidence(
-  wire: AchievementEvidenceWire,
-): AchievementEvidence {
-  const { observationTable: table, ...evidence } = wire;
-  const invalid = () =>
-    new Error("학습 근거를 모두 확인하지 못했습니다. 다시 조회해 주세요.");
-  if (!table) {
-    if (!Array.isArray(evidence.observations)) throw invalid();
-    return evidence as AchievementEvidence;
-  }
-  if (
-    table.version !== 1 ||
-    evidence.observations !== undefined ||
-    !Array.isArray(table.keys) ||
-    !table.keys.length ||
-    table.keys.length > 128 ||
-    table.keys.some(
-      (key) =>
-        typeof key !== "string" ||
-        ["__proto__", "constructor", "prototype"].includes(key),
-    ) ||
-    new Set(table.keys).size !== table.keys.length ||
-    !Array.isArray(table.values) ||
-    !Array.isArray(table.rows)
-  )
-    throw invalid();
-  const observations = table.rows.map((row) => {
-    if (
-      !Array.isArray(row) ||
-      row.length !== table.keys.length ||
-      row.some(
-        (index) =>
-          !Number.isSafeInteger(index) ||
-          index < -1 ||
-          index >= table.values.length,
-      )
-    )
-      throw invalid();
-    const observation = Object.fromEntries(
-      table.keys.flatMap((key, index) =>
-        row[index] === -1 ? [] : [[key, table.values[row[index]]]],
-      ),
-    );
-    if (
-      !["id", "studentUid", "semesterId", "itemId"].every(
-        (key) => typeof observation[key] === "string",
-      ) ||
-      typeof observation.source !== "string" ||
-      !["worksheet", "diagnostic", "formative"].includes(observation.source) ||
-      !["correct", "filled", "hintViewed"].every(
-        (key) =>
-          observation[key] === null || typeof observation[key] === "boolean",
-      )
-    )
-      throw invalid();
-    return observation as unknown as AchievementEvidence["observations"][number];
-  });
-  return { ...evidence, observations };
 }
 
 export interface QuizClassScope {
@@ -273,45 +195,48 @@ export const getQuizClassAchievement = (
     keyword: _keyword,
     ...analysisScope
   } = scope;
-  return read<
-    Omit<QuizClassAchievement, "achievementEvidence"> & {
-      achievementEvidence: AchievementEvidenceWire;
-    }
-  >(
+  return read<QuizClassAchievement>(
     {
       ...analysisScope,
       mode: "achievement",
       forceRefresh,
-      compactEvidence: true,
     },
     identityKey,
-  ).then((result) => ({
-    ...result,
-    achievementEvidence: unpackAchievementEvidence(result.achievementEvidence),
-    rawRows: result.rawRows.map((row) => {
-      const refs = row.raw.questionSnapshotRefs;
-      if (!Array.isArray(refs)) return row;
-      const dictionary = result.historicalQuestionSnapshots;
-      if (
-        !dictionary ||
-        refs.some(
-          (ref) =>
-            typeof ref !== "string" ||
-            !Object.prototype.hasOwnProperty.call(dictionary, ref),
+  ).then((result) => {
+    if (
+      !Array.isArray(result.mockExamScoreRows) ||
+      !Array.isArray(result.rawRows)
+    )
+      throw new Error(
+        "모의고사 누적 점수 자료를 확인하지 못했습니다. 다시 조회해 주세요.",
+      );
+    return {
+      ...result,
+      rawRows: result.rawRows.map((row) => {
+        const refs = row.raw.questionSnapshotRefs;
+        if (!Array.isArray(refs)) return row;
+        const dictionary = result.historicalQuestionSnapshots;
+        if (
+          !dictionary ||
+          refs.some(
+            (ref) =>
+              typeof ref !== "string" ||
+              !Object.prototype.hasOwnProperty.call(dictionary, ref),
+          )
         )
-      )
-        throw new Error(
-          "응시 당시 문항 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.",
-        );
-      return {
-        ...row,
-        raw: {
-          ...row.raw,
-          questionSnapshots: refs.map((ref) => dictionary[ref]),
-        },
-      };
-    }),
-  }));
+          throw new Error(
+            "응시 당시 문항 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.",
+          );
+        return {
+          ...row,
+          raw: {
+            ...row.raw,
+            questionSnapshots: refs.map((ref) => dictionary[ref]),
+          },
+        };
+      }),
+    };
+  });
 };
 
 export function quizClassAnalysisError(error: unknown) {

@@ -4,6 +4,11 @@ import type {
   QuizItemStatisticsRow,
   QuizItemStatisticsSummary,
 } from "../../../lib/quizAnalysis";
+import {
+  AnalysisSortHeader,
+  sortAnalysisRows,
+  useAnalysisTableSort,
+} from "./QuizAnalysisSort";
 
 const unavailable: Record<string, string> = {
   insufficient_students: "표본 3명 미만",
@@ -25,12 +30,26 @@ export default function QuizItemStatistics({
   answer: string;
 }) {
   const [formKey, setFormKey] = useState("");
+  const sorting = useAnalysisTableSort({
+    key: "default",
+    direction: "ascending",
+  });
   const cohorts = row?.cohorts || [];
   const cohort =
     cohorts.length === 1
       ? cohorts[0]
       : cohorts.find((item) => item.formKey === formKey);
   const correlation = cohort?.correctedItemTotalCorrelation;
+  const options = sortAnalysisRows(
+    cohort?.options || [],
+    sorting.sort,
+    (option, key) => {
+      if (key === "answer") return answerText(option.answer);
+      if (key === "count") return option.count;
+      if (key === "rest") return option.meanRestPercent;
+      return 0;
+    },
+  );
   return (
     <section className="qa-item-statistics" aria-label="첫 제출 문항 분석">
       <div className="qa-section-head">
@@ -167,11 +186,27 @@ export default function QuizItemStatistics({
             aria-label="첫 제출 답안별 분석"
           >
             <div className="qa-first-option" role="row">
-              <span role="columnheader">답안</span>
-              <span role="columnheader">선택</span>
-              <span role="columnheader">나머지 문항 평균</span>
+              <AnalysisSortHeader
+                as="span"
+                column="answer"
+                label="답안"
+                defaultDirection="ascending"
+                {...sorting}
+              />
+              <AnalysisSortHeader
+                as="span"
+                column="count"
+                label="선택"
+                {...sorting}
+              />
+              <AnalysisSortHeader
+                as="span"
+                column="rest"
+                label="나머지 문항 평균"
+                {...sorting}
+              />
             </div>
-            {cohort.options.map((option) => (
+            {options.map((option) => (
               <div className="qa-first-option" role="row" key={option.answer}>
                 <span role="cell">
                   {answerText(option.answer)}

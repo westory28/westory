@@ -63,35 +63,59 @@ const students = Array.from({ length: 24 }, (_, i) => ({
   number: String(i + 1),
   classId: "class_1",
 }));
-const rawRows = students.map((student, i) => ({
-  id: `exam${i}`,
-  source: "canonical",
-  raw: {
-    assessmentKind: "QUIZ",
-    semesterId: "2026-2",
-    studentUid: student.uid,
-    attemptId: `exam${i}`,
-    sourceId: "unit-a",
-    category: "exam_prep",
-    examRound: "round_1",
-    submittedAtIso: "2026-11-06T01:00:00Z",
-    percent: Math.round(((6 - (i % 7)) / 6) * 100),
-    total: 6,
-    maxPoints: 15,
-    learningSnapshot: questions.map((q) => ({ ...q })),
-    questionSnapshotRefs: questions.map((q) => q.id),
-    answers: Object.fromEntries(
-      questions.map((q, j) => [
-        q.id,
-        j < 6 - (i % 7) ? "사림" : i % 3 ? "훈구" : "",
-      ]),
-    ),
-    answerChecks: questions.map((q, j) => ({
-      id: q.id,
-      correct: j < 6 - (i % 7),
-    })),
-  },
-}));
+const correctFor = (studentIndex, itemIndex) =>
+  studentIndex === 23
+    ? [false, true, true, true, false, true][itemIndex]
+    : itemIndex < 6 - (studentIndex % 7);
+const makeRows = (round) =>
+  students.map((student, index) => {
+    const pattern = (index + round - 1) % students.length;
+    const earnedPoints = questions.reduce(
+      (sum, question, itemIndex) =>
+        sum + (correctFor(pattern, itemIndex) ? question.points : 0),
+      0,
+    );
+    return {
+      id: `exam-${round}-${index}`,
+      source: "canonical",
+      raw: {
+        assessmentKind: "QUIZ",
+        semesterId: "2026-2",
+        studentUid: student.uid,
+        attemptId: `exam-${round}-${index}`,
+        sourceId: "unit-a",
+        category: "exam_prep",
+        examRound: `round_${round}`,
+        submittedAtIso: `2026-11-0${5 + round}T01:00:00Z`,
+        percent: (100 * earnedPoints) / 15,
+        earnedPoints,
+        total: 6,
+        maxPoints: 15,
+        learningSnapshot: questions.map((question) => ({ ...question })),
+        questionSnapshotRefs: questions.map((question) => question.id),
+        cutScoreQuestions: questions.map(
+          ({ id, points, targetAchievementLevel, intendedDifficulty }) => ({
+            id,
+            points,
+            targetAchievementLevel,
+            intendedDifficulty,
+          }),
+        ),
+        answers: Object.fromEntries(
+          questions.map((question, itemIndex) => [
+            question.id,
+            correctFor(pattern, itemIndex) ? "사림" : index % 3 ? "훈구" : "",
+          ]),
+        ),
+        answerChecks: questions.map((question, itemIndex) => ({
+          id: question.id,
+          correct: correctFor(pattern, itemIndex),
+        })),
+      },
+    };
+  });
+const rawRows = makeRows(1);
+const mockExamScoreRows = [1, 2, 3].flatMap(makeRows);
 const fixture = {
   semesterId: "2026-2",
   students,
@@ -117,69 +141,10 @@ const fixture = {
   generatedAt: cutoff,
   version: "fixture1",
   complete: true,
-  canReview: true,
-  rubricVersion: "2018-history2-adapted-2025-v1",
-  profiles: students
-    .slice(0, 20)
-    .map((s, i) => ({
-      studentUid: s.uid,
-      standardCode: code,
-      curriculumVersion: "2018-162",
-      level: ["A", "B", "C", "D", "E"][Math.floor(i / 4)],
-      asOf: cutoff,
-      reviewedAt: "2026-11-07T00:00:00Z",
-      examAttemptId: `exam${i}`,
-      revision: 1,
-      rubricVersion: "2018-history2-adapted-2025-v1",
-    })),
-  achievementEvidence: {
-    version: 1,
-    status: "ready",
-    observations: students.flatMap((s) => [
-      ...Array.from({ length: 4 }, (_, i) => ({
-        ...meta,
-        id: `${s.uid}p${i}`,
-        resultId: `prior${s.uid}${i}`,
-        questionId: `p${i}`,
-        studentUid: s.uid,
-        semesterId: "2026-2",
-        source: i % 2 ? "diagnostic" : "formative",
-        itemId: `p${i}`,
-        familyId: `p${i}`,
-        sourceRevision: "1",
-        observedAt: "2026-11-05T00:00:00Z",
-        correct: i !== 3,
-        filled: true,
-        hintViewed: false,
-        quality: "complete",
-        recordSource: "canonical",
-      })),
-      {
-        ...meta,
-        id: `${s.uid}w`,
-        studentUid: s.uid,
-        semesterId: "2026-2",
-        source: "worksheet",
-        itemId: "w1",
-        sourceRevision: "1",
-        observedAt: "2026-11-05T00:00:00Z",
-        correct: null,
-        filled: false,
-        hintViewed: null,
-        quality: "limited",
-      },
-    ]),
-    examCutoffs: students.map((s, i) => ({
-      studentUid: s.uid,
-      resultId: `exam${i}`,
-      attemptId: `exam${i}`,
-      startedAt: cutoff,
-    })),
-    exclusions: {},
-  },
+  mockExamScoreRows,
 };
-const service = `const data=window.fixture=${JSON.stringify(fixture)};if(new URLSearchParams(location.search).get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});const index=data.profiles.findIndex(p=>p.studentUid===payload.studentUid&&p.standardCode===payload.standardCode);const p={...payload,asOf:${JSON.stringify(cutoff)},reviewedAt:'2026-11-07T01:00:00Z',curriculumVersion:'2018-162',revision:payload.expectedRevision+1};if(index<0)data.profiles.push(p);else data.profiles[index]=p;return {result:p};};export const useAppToast=()=>({showToast:()=>{}});`;
-const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const grade=new URLSearchParams(location.search).get('grade');function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_1',classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
+const service = `const data=window.fixture=${JSON.stringify(fixture)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);data.rawRows=data.mockExamScoreRows.filter(row=>row.raw.examRound==='round_'+round);data.mockExamScoreRows=data.mockExamScoreRows.filter(row=>Number(row.raw.examRound.slice(6))<=round);if(query.get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
+const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const query=new URLSearchParams(location.search);const grade=query.get('grade');const round=query.get('round')||'1';function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_'+round,classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -269,37 +234,165 @@ try {
         ),
         `document overflow ${width} view${view}`,
       );
-      const large = await page
-        .locator(".qaa-toolbar")
-        .evaluate((el) =>
-          [...el.querySelectorAll("select,button")]
-            .filter((x) => x.getBoundingClientRect().height > 36)
-            .map((x) => ({
-              tag: x.tagName,
-              height: x.getBoundingClientRect().height,
-            })),
-        );
+      const large = await page.locator(".qaa-toolbar").evaluate((el) =>
+        [...el.querySelectorAll("select,button")]
+          .filter((x) => x.getBoundingClientRect().height > 36)
+          .map((x) => ({
+            tag: x.tagName,
+            height: x.getBoundingClientRect().height,
+          })),
+      );
       assert.deepEqual(large, [], `compact toolbar ${width}`);
     }
   }
   await page.setViewportSize({ width: 1280, height: 900 });
-  const readsBeforeEstimates = await page.evaluate(() => window.qa.calls.length);
-  await page.getByRole("combobox", { name: "분석 보기", exact: true }).selectOption("5");
-  const cutTable = page.getByRole("table", { name: "성취수준별 추정 분할점수", exact: true });
-  assert.deepEqual(await cutTable.locator("thead th").allTextContents(), ["구분", "A/B", "B/C", "C/D", "D/E", "E/미분류"]);
-  assert.doesNotMatch(await cutTable.innerText(), /미만/, "Each boundary displays its own model estimate");
-  assert.ok((await cutTable.innerText()).includes("점"), "Estimated cuts exist with supplied question metadata");
-  assert.equal(await page.getByRole("table", { name: "난도별 A–E 예상 성취율", exact: true }).locator("thead th").count(), 8);
-  await page.getByText("학생별 추정 수준과 성취수준 준거", { exact: true }).click();
-  const inferred = page.getByRole("table", { name: "학생별 현재 성취수준 추정", exact: true });
-  await inferred.locator("tbody tr").first().waitFor();
-  assert.equal(await inferred.locator("tbody tr").count(), students.length);
-  assert.ok((await inferred.locator("tbody tr").first().innerText()).includes("추정"));
-  assert.equal(await page.evaluate(() => window.qa.calls.length), readsBeforeEstimates, "Viewing estimates must never fetch more student records");
-  assert.equal(await page.evaluate(() => window.qa.saves.length), 0, "Estimates must never save student levels or scores");
+  const initialReads = await page.evaluate(() => window.qa.calls.length);
+  await page
+    .getByRole("combobox", { name: "분석 보기", exact: true })
+    .selectOption("4");
+  const sp = page.getByRole("region", {
+    name: "학생과 문항별 정오 S-P표",
+    exact: true,
+  });
+  const counts = () =>
+    sp
+      .locator("tbody tr")
+      .evaluateAll((rows) =>
+        rows.map((row) => Number(row.querySelector("td").textContent)),
+      );
+  const descendingCounts = await counts();
+  assert.deepEqual(
+    descendingCounts,
+    [...descendingCounts].sort((a, b) => b - a),
+  );
+  const colorCounts = await sp.locator("tbody tr").evaluateAll((rows) =>
+    rows.map((row) => ({
+      correct: Number(row.querySelector("td").textContent),
+      filled: row.querySelectorAll(".qaa-sp-correct").length,
+      wrong: row.querySelectorAll(".qaa-sp-incorrect").length,
+    })),
+  );
+  colorCounts.forEach((row) => {
+    assert.equal(row.filled, row.correct, "Every correct response is filled");
+    assert.equal(
+      row.wrong,
+      questions.length - row.correct,
+      "Wrong responses stay unfilled",
+    );
+  });
+  const colors = await sp.evaluate((el) => ({
+    correct: getComputedStyle(el.querySelector(".qaa-sp-correct"))
+      .backgroundColor,
+    wrong: getComputedStyle(el.querySelector(".qaa-sp-incorrect"))
+      .backgroundColor,
+    atypicalCorrect: getComputedStyle(
+      el.querySelector(".qaa-sp-atypical.qaa-sp-correct"),
+    ).backgroundColor,
+  }));
+  assert.notEqual(colors.correct, colors.wrong);
+  assert.equal(
+    colors.atypicalCorrect,
+    colors.correct,
+    "Atypical highlighting cannot replace correct-answer fill",
+  );
+  assert.ok(await sp.locator(".qaa-sp-s-boundary").count());
+  await sp
+    .getByRole("button", { name: "정답수 오름차순 정렬", exact: true })
+    .click();
+  assert.deepEqual(
+    await counts(),
+    [...descendingCounts].sort((a, b) => a - b),
+  );
+  assert.equal(
+    await sp.locator(".qaa-sp-s-boundary,.qaa-sp-p-boundary").count(),
+    0,
+  );
+  await sp
+    .getByRole("button", { name: "정답수 내림차순 정렬", exact: true })
+    .click();
+  const responsePairs = () =>
+    sp.locator("tbody tr").evaluateAll((rows) =>
+      rows.map((row) => ({
+        student: row.querySelector("th").textContent,
+        answers: [...row.querySelectorAll(".qaa-sp-cell")]
+          .map((cell) => cell.getAttribute("aria-label"))
+          .sort(),
+      })),
+    );
+  const originalPairs = await responsePairs();
+  await sp
+    .getByRole("button", { name: "문항 정답률 오름차순 정렬", exact: true })
+    .click();
+  assert.deepEqual(
+    await responsePairs(),
+    originalPairs,
+    "Reordering items keeps every student's response attached to its question",
+  );
+  const itemRates = await sp
+    .locator("thead tr")
+    .nth(1)
+    .locator("th")
+    .evaluateAll((cells) =>
+      cells.slice(1).map((cell) => parseFloat(cell.textContent)),
+    );
+  assert.deepEqual(
+    itemRates,
+    [...itemRates].sort((a, b) => a - b),
+  );
+  assert.equal(
+    await sp.locator(".qaa-sp-s-boundary,.qaa-sp-p-boundary").count(),
+    0,
+  );
+  await sp
+    .getByRole("button", { name: "주의지수 내림차순 정렬", exact: true })
+    .click();
+  assert.equal(
+    await sp.locator("tbody tr").last().locator("td").nth(2).innerText(),
+    "—",
+    "Unavailable values stay last",
+  );
+  await sp
+    .getByRole("button", { name: "학생 오름차순 정렬", exact: true })
+    .focus();
+  await page.keyboard.press("Enter");
+  assert.match(
+    await sp.locator("tbody tr").first().locator("th").innerText(),
+    /^1번 /,
+  );
+  assert.equal(await page.evaluate(() => window.qa.calls.length), initialReads);
   await page
     .getByRole("combobox", { name: "분석 보기", exact: true })
     .selectOption("1");
+  const itemTable = page.getByRole("region", {
+    name: "문항별 통계와 학생 수준별 정답률",
+    exact: true,
+  });
+  const correctRates = () =>
+    itemTable
+      .locator("tbody tr")
+      .evaluateAll((rows) =>
+        rows.map((row) =>
+          parseFloat(row.querySelectorAll("td")[2].textContent),
+        ),
+      );
+  await itemTable
+    .getByRole("button", { name: "정답률 내림차순 정렬", exact: true })
+    .click();
+  const rates = await correctRates();
+  assert.deepEqual(
+    rates,
+    [...rates].sort((a, b) => b - a),
+  );
+  await itemTable
+    .getByRole("button", { name: "정답률 오름차순 정렬", exact: true })
+    .click();
+  assert.deepEqual(
+    await correctRates(),
+    [...rates].sort((a, b) => a - b),
+  );
+  await itemTable
+    .getByRole("button", { name: "문항 오름차순 정렬", exact: true })
+    .click();
   await page.getByRole("button", { name: "1번", exact: true }).first().click();
   await page.getByText("공통 지문 원문 보존 검증", { exact: true }).waitFor();
   await page
@@ -323,50 +416,123 @@ try {
     exact: true,
   });
   assert.equal(await choices.locator("tbody tr").count(), 7);
-  await page
-    .getByRole("combobox", { name: "분석 보기", exact: true })
-    .selectOption("3");
-  await page.getByRole("button", { name: "수준 준거", exact: true }).click();
-  assert.equal(await page.locator(".qaa-rubric dt").count(), 5);
-  await page
-    .getByRole("button", { name: "근거 보기", exact: true })
-    .first()
-    .click();
-  await page
-    .getByRole("region", { name: "선택 학생의 사전 학습 근거", exact: true })
-    .waitFor();
-  await page
-    .getByRole("combobox", { name: "합성학생21 성취수준", exact: true })
-    .selectOption("C");
-  const studentRow = page
-    .getByRole("row")
-    .filter({
-      has: page.getByRole("combobox", {
-        name: "합성학생21 성취수준",
+  assert.equal(
+    await page.evaluate(() => window.qa.calls.length),
+    initialReads,
+    "Sorting and report views do not fetch more student records",
+  );
+  assert.equal(
+    await page.evaluate(() => window.qa.saves.length),
+    0,
+    "Analysis must never save levels or scores",
+  );
+  for (const round of [1, 2, 3]) {
+    await page.goto(`${origin}/?round=${round}&grade=3`);
+    await page
+      .getByRole("combobox", { name: "분석 보기", exact: true })
+      .selectOption("3");
+    const cumulative = page.getByRole("table", {
+      name: "학생별 모의고사 누적 성취수준",
+      exact: true,
+    });
+    await cumulative.locator("tbody tr").first().waitFor();
+    assert.equal(await cumulative.locator("tbody tr").count(), students.length);
+    const firstStudent = cumulative.locator("tbody tr").filter({
+      has: page.getByRole("rowheader", {
+        name: "3학년 1반 1번 합성학생1",
         exact: true,
       }),
     });
-  await studentRow.getByRole("checkbox").check();
-  await studentRow.getByRole("button", { name: "저장", exact: true }).click();
-  await page.waitForFunction(
-    () => window.qa.saves.length === 1 && window.qa.calls.length >= 2,
-  );
-  assert.equal(
-    await page.evaluate(() => window.qa.saves[0].payload.expectedRubricVersion),
-    fixture.rubricVersion,
-  );
-  await page.goto(`${origin}/?grade=3`);
-  await page.getByRole('combobox',{name:'성취기준',exact:true}).selectOption(code);
-  await page.getByRole('combobox',{name:'분석 보기',exact:true}).selectOption('3');
-  const gradeStudent=page.getByRole('row').filter({has:page.getByRole('combobox',{name:'3학년 2반 21번 합성학생21 성취수준',exact:true})});
-  await gradeStudent.getByRole('combobox').selectOption('C');
-  await gradeStudent.getByRole('checkbox').check();
-  await gradeStudent.getByRole('button',{name:'저장',exact:true}).click();
-  await page.waitForFunction(()=>window.qa.saves.length===1&&window.qa.calls.length>=2);
-  const gradeSave=await page.evaluate(()=>window.qa.saves[0].payload);
-  assert.equal(gradeSave.classId,'class_2','Whole-grade review saves to the selected student actual class');
-  assert.equal(gradeSave.studentUid,'s20');
-  assert.equal(await page.evaluate(()=>window.qa.calls[0].grade),'3');
+    const expectedScores = mockExamScoreRows
+      .filter(
+        (row) =>
+          row.raw.studentUid === "s0" &&
+          Number(row.raw.examRound.slice(6)) <= round,
+      )
+      .map((row) => row.raw.percent);
+    const expectedMean =
+      expectedScores.reduce((sum, value) => sum + value, 0) / round;
+    const values = await firstStudent.locator("td").allTextContents();
+    assert.deepEqual(
+      values.slice(0, round),
+      expectedScores.map((value) => value.toFixed(2)),
+    );
+    assert.equal(
+      values[round],
+      expectedMean.toFixed(2),
+      "Only completed rounds up to the selected round enter the mean",
+    );
+    const expectedLevel =
+      ["A", "B", "C", "D"].find(
+        (_, index) =>
+          expectedMean >=
+          100 / (1 + Math.exp(-(Math.log(0.65 / 0.35) + 0.8 * (2 - index)))),
+      ) || "E";
+    assert.equal(values[round + 1], expectedLevel);
+    assert.equal(values[round + 2], `${round}/${round}회`);
+    await cumulative
+      .getByRole("button", { name: "누적 점수 내림차순 정렬", exact: true })
+      .click();
+    const cumulativeScores = await cumulative
+      .locator("tbody tr")
+      .evaluateAll(
+        (rows, column) =>
+          rows.map((row) =>
+            Number(row.querySelectorAll("td")[column].textContent),
+          ),
+        round,
+      );
+    assert.deepEqual(
+      cumulativeScores,
+      [...cumulativeScores].sort((a, b) => b - a),
+    );
+    await cumulative
+      .getByRole("button", { name: "누적 점수 오름차순 정렬", exact: true })
+      .click();
+    assert.deepEqual(
+      await cumulative
+        .locator("tbody tr")
+        .evaluateAll(
+          (rows, column) =>
+            rows.map((row) =>
+              Number(row.querySelectorAll("td")[column].textContent),
+            ),
+          round,
+        ),
+      [...cumulativeScores].sort((a, b) => a - b),
+    );
+    assert.doesNotMatch(
+      await page.locator(".qaa-estimates").innerText(),
+      /진단·형성|근거 보기|교사 확인|저장/,
+    );
+    assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
+    assert.equal(await page.evaluate(() => window.qa.saves.length), 0);
+    await page.screenshot({
+      path: path.join(evidence, `round-${round}.png`),
+      fullPage: true,
+    });
+    await page
+      .getByRole("combobox", { name: "분석 보기", exact: true })
+      .selectOption("5");
+    const paperCuts = page.getByRole("table", {
+      name: "응시 당시 시험지별 추정 분할점수",
+      exact: true,
+    });
+    assert.equal(
+      await paperCuts.locator("tbody tr").count(),
+      students.length * round,
+    );
+    assert.deepEqual(await paperCuts.locator("thead th").allTextContents(), [
+      "학생",
+      "회차",
+      "점수",
+      "A/B",
+      "B/C",
+      "C/D",
+      "D/E",
+    ]);
+    assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
+  }
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(evidence, "verification.json"),
@@ -382,11 +548,12 @@ try {
           "snapshot passage and explanation",
           "level choices",
           "profile graph",
-          "rubric",
-          "evidence details",
-          "profile save",
-          "whole-grade review saves the actual student class",
-          "current level and weighted cut estimates with zero extra reads or writes",
+          "correct-answer fill and atypical outline",
+          "S-P student and item header sorts preserve response identity",
+          "item statistic header sorts in both directions",
+          "keyboard sorting and unavailable values last",
+          "cumulative mock exam levels are read-only",
+          "zero extra reads or writes for report views and sorting",
         ],
       },
       null,

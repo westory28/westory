@@ -820,8 +820,7 @@
   .qa-listbar > label {
     min-width: 0;
   }
-  .qa-listbar > label.qa-search,
-  .qa-listbar > label.qa-sort {
+  .qa-listbar > label.qa-search {
     margin: 0;
     order: 0;
   }

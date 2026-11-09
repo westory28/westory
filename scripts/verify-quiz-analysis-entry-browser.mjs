@@ -42,7 +42,11 @@ export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>!qa.readO
 const classes=[1,2,3,4,5,6].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)})).concat({id:'other_grade',label:'2학년 1반',grade:'2',classNumber:'1'});
 const assessments=[...['unit-a','unit-b'].flatMap(unitId=>['diagnostic','formative'].map(category=>({id:unitId+'-'+category,unitId,unitTitle:unitId==='unit-a'?'조선의 통치 체제':'사림 세력의 성장',category,examRound:'',title:category==='diagnostic'?'진단평가':'형성평가',questionCount:1}))),...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
 const questions=[1,2].map(n=>({id:n,docId:String(n),unitId:'exam_prep',category:'exam_prep',examRound:'round_1',type:'choice',question:n+'번 합성 문항',options:['정답','오답'],answer:'정답',paperOrder:n,points:50,sourceRevision:'1',contentRevision:1,curriculumVersion:'2018-162',achievementStandardCodes:['9역12-01'],targetAchievementLevel:'C',intendedDifficulty:'medium'}));
-const attempts=(scope,paper,students)=>!qa.withAttempt?[]:students.filter((_,i)=>i%2===0).map((student,i)=>({id:'fixture-result-'+i,source:'canonical',raw:{studentUid:student.uid,semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt-'+i,submittedAtIso:'2026-11-07T09:00:00Z',startedAtIso:'2026-11-07T08:40:00Z',percent:100,total:2,answerChecks:paper.map(q=>({id:q.id,correct:true})),answers:{1:'정답',2:'정답'},learningSnapshot:paper,questionSnapshots:paper}}));
+const attempts=(scope,paper,students)=>!qa.withAttempt?[]:students.filter((_,i)=>i%2===0).map((student,i)=>{
+  const round=Number(scope.examRound.replace('round_',''))||1,percent=round===1?100:50;
+  return {id:'fixture-result-'+round+'-'+i,source:'canonical',raw:{studentUid:student.uid,semesterId:scope.semesterId,sourceId:'exam_prep',category:'exam_prep',examRound:scope.examRound,attemptId:'fixture-attempt-'+round+'-'+i,submittedAtIso:'2026-11-0'+(round+5)+'T09:00:00Z',startedAtIso:'2026-11-0'+(round+5)+'T08:40:00Z',percent,total:2,earnedPoints:percent,maxPoints:100,answerChecks:paper.map((q,index)=>({id:q.id,correct:round===1||index===0})),answers:{1:'정답',2:round===1?'정답':'오답'},learningSnapshot:paper,questionSnapshots:paper}};
+});
+const scoreRows=(scope,paper,students)=>Array.from({length:Number(scope.examRound.replace('round_',''))||1},(_,i)=>'round_'+(i+1)).flatMap(examRound=>attempts({...scope,examRound},paper,students).map(({id,source,raw})=>({id,source,raw:{studentUid:raw.studentUid,semesterId:raw.semesterId,category:'exam_prep',examRound,attemptId:raw.attemptId,submittedAtIso:raw.submittedAtIso,percent:raw.percent,total:raw.total,maxPoints:raw.maxPoints,earnedPoints:raw.earnedPoints,cutScoreQuestions:paper.map(({id,points,targetAchievementLevel,intendedDifficulty})=>({id,points,targetAchievementLevel,intendedDifficulty}))}})));
 export const callWithApplicationSession=async(name,input)=>{
   if(name!=='getQuizClassAnalysis')throw new Error('Unexpected callable '+name);
   const data=structuredClone(input);
@@ -58,7 +62,7 @@ export const callWithApplicationSession=async(name,input)=>{
   }
   if(data.mode==='achievement'||data.mode==='detail'){
     const paper=questions.map(q=>({...q,examRound:data.examRound,achievementStandardCodes:[data.examRound==='round_1'?'9역10-01':'9역10-02']}));
-    return {data:{semesterId:data.semesterId,...(data.grade?{grade:qa.wrongGrade?'2':data.grade}:{}),complete:true,students,rawRows:attempts(data,paper,students),questions:paper,treeData:tree,configuredClasses:selectedClasses,generatedAt:'2026-11-07T09:00:00Z',version:'v1',achievementEvidence:{version:1,status:'ready',observations:[]},profiles:[],canReview:false}};
+    return {data:{semesterId:data.semesterId,...(data.grade?{grade:qa.wrongGrade?'2':data.grade}:{}),complete:true,students,rawRows:attempts(data,paper,students),questions:paper,treeData:tree,configuredClasses:selectedClasses,generatedAt:'2026-11-07T09:00:00Z',version:'v1',...(data.mode==='achievement'?{mockExamScoreRows:scoreRows(data,paper,students)}:{})}};
   }
   throw new Error('Unnecessary '+data.mode+' request on achievement entry');
 };
@@ -116,6 +120,7 @@ try {
   assert.deepEqual(await modes(),["catalog"]);
   assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),readsBefore,"analysis reuses server catalog tree without direct Firestore tree reads");
   assert.equal(await report().inputValue(),"0");
+  assert.equal(await report().getByRole("option",{name:"회차별 점수·수준",exact:true}).count(),1);
   assert.equal(await page.locator(".quiz-class-analysis nav").count(),0,"the analysis body has no nested tabs");
   assert.equal(await page.getByRole("combobox",{name:"분석 보기",exact:true}).count(),0);
   assert.equal(await page.getByRole("button",{name:"최신 결과 조회",exact:true}).count(),0);
@@ -167,6 +172,12 @@ try {
   await report().selectOption("0");
   await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
   await query().click();await analysis().getByText("첫 제출 1명",{exact:true}).waitFor();
+  const beforeScoreView=await modes();
+  await report().selectOption("3");
+  const cumulativeTable=()=>analysis().getByRole("table",{name:"학생별 모의고사 누적 성취수준",exact:true});
+  assert.deepEqual(await cumulativeTable().getByRole("row").filter({hasText:"합성 미응시 1"}).getByRole("cell").allTextContents(),["100.00","100.00","A","1/1회"]);
+  assert.deepEqual(await modes(),beforeScoreView,"viewing cumulative scores reuses the same scoped response");
+  await report().selectOption("0");
   await analysis().getByRole("combobox",{name:"성취기준",exact:true}).selectOption("9역10-01");
   await assessment().selectOption("mock-2");await pending().waitFor();
   assert.equal(await analysis().getByRole("combobox",{name:"성취기준",exact:true}).inputValue(),"");
@@ -174,10 +185,15 @@ try {
   assert.equal(await analysis().getByRole("combobox",{name:"성취기준",exact:true}).inputValue(),"");
   assert.equal(await analysis().getByRole("option",{name:/9역10-02/}).count(),1);
   assert.equal(await analysis().getByRole("option",{name:/9역10-01/}).count(),0);
+  const beforeRoundTwoScores=await modes();
+  await report().selectOption("3");
+  assert.deepEqual(await cumulativeTable().getByRole("row").filter({hasText:"합성 미응시 1"}).getByRole("cell").allTextContents(),["100.00","50.00","75.00","C","2/2회"]);
+  assert.deepEqual(await modes(),beforeRoundTwoScores,"second-round cumulative scores require no prior-round client queries");
+  await report().selectOption("0");
   await page.evaluate(()=>window.analysisEntryQa.withAttempt=false);
   await assessment().selectOption("mock-1");await query().click();
   await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
-  checks.push("round change resets criterion filters and uses the new round metadata");
+  checks.push("round change resets criterion filters and uses frozen cumulative scores: round 1 = 100/A, rounds 1–2 = 75/C, without extra queries");
 
   await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
   await query().click();await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
@@ -201,11 +217,12 @@ try {
   checks.push("failure and explicit retry preserve selected assessment and class");
 
   // Slow requests cannot restore a previous class, identity, or semester.
-  for(const change of ["class","identity","semester"]){
+  for(const change of ["round","class","identity","semester"]){
     await report().selectOption("0");
     await page.evaluate(()=>window.analysisEntryQa.hold="achievement");
     await query().click();await page.getByRole("button",{name:"조회 중…",exact:true}).waitFor();
     await page.waitForFunction(()=>window.analysisEntryQa.pending.length===1);
+    if(change==="round")await assessment().selectOption("mock-2");
     if(change==="class")await classSelect().selectOption("class_2");
     if(change==="identity")await page.evaluate(()=>window.analysisEntryQa.changeIdentity("teacher-next","2"));
     if(change==="semester")await page.evaluate(()=>window.analysisEntryQa.changeIdentity("teacher-next","1"));
@@ -218,9 +235,10 @@ try {
     await query().click();await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();
     const latest=await page.evaluate(()=>window.analysisEntryQa.calls.at(-1));
     assert.equal(latest.semesterId,change==="semester"?"2026-1":"2026-2");
-    if(change!=="class")assert.equal(latest.identity,"teacher-next");
+    if(change==="identity"||change==="semester")assert.equal(latest.identity,"teacher-next");
+    if(change==="round"){assert.equal(latest.examRound,"round_2");await assessment().selectOption("mock-1");await query().click();await analysis().getByText("첫 제출 0명",{exact:true}).waitFor();}
   }
-  checks.push("pending responses discarded on class, identity and semester changes");
+  checks.push("pending responses discarded on round, class, identity and semester changes");
 
   // Navigation remains available inside analysis and scopes the two normal assessments.
   await page.setViewportSize({width:1440,height:900});

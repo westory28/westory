@@ -23,6 +23,11 @@ import type { QuizQuestionDraft } from "./QuizEditor";
 import type { QuizReviewSnapshots } from "./useQuizAnalysisData";
 import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
 import "./QuizAnalysis.css";
+import {
+  AnalysisSortHeader,
+  sortAnalysisRows,
+  useAnalysisTableSort,
+} from "./QuizAnalysisSort";
 
 type Assessment = {
   key: string;
@@ -185,7 +190,11 @@ export default function QuizAnalysisView({
     BehaviorCategory | "all"
   >(initialBehaviorFilter || "all");
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("default");
+  const sorting = useAnalysisTableSort({
+    key: "default",
+    direction: "ascending",
+  });
+  const { sort, resetSort: setSort } = sorting;
   const [page, setPage] = useState(1);
   const [selectedQuestionId, setSelectedQuestionId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -480,49 +489,58 @@ export default function QuizAnalysisView({
   const selectedStudent = analysis.students.find(
     (student) => student.uid === selectedStudentId,
   );
-  const visibleQuestions = scopedQuestions
-    .filter((q) =>
+  const questionOrder = new Map(
+    scopedQuestions.map((question, index) => [String(question.id), index + 1]),
+  );
+  const visibleQuestions = sortAnalysisRows(
+    scopedQuestions.filter((q) =>
       [q.question, q.passage, ...(q.concepts || [])]
         .join(" ")
         .toLocaleLowerCase()
         .includes(search.toLocaleLowerCase()),
-    )
-    .sort((a, b) =>
-      sort === "rate"
-        ? (byQuestion.get(String(a.id))?.correctRate ?? 101) -
-          (byQuestion.get(String(b.id))?.correctRate ?? 101)
-        : sort === "responses"
-          ? (byQuestion.get(String(b.id))?.assessedStudentCount || 0) -
-            (byQuestion.get(String(a.id))?.assessedStudentCount || 0)
-          : 0,
-    );
-  const visibleStudents = analysis.students
-    .filter(
-      (student) =>
-        behaviorFilter === "all" ||
-        behaviorCategory(student) === behaviorFilter,
-    )
-    .filter(
-      (student) =>
-        submissionFilter === "all" ||
-        !submissionDataAvailable ||
-        (submissionFilter === "submitted"
-          ? student.attemptCount > 0
-          : student.attemptCount === 0),
-    )
-    .filter((student) =>
-      `${student.classId} ${student.number} ${student.name}`.includes(search),
-    )
-    .sort((a, b) =>
-      sort === "score"
-        ? (a.latestScore ?? 101) - (b.latestScore ?? 101)
-        : String(a.classId || "").localeCompare(String(b.classId || ""), "ko", {
-            numeric: true,
-          }) ||
-          String(a.number || "").localeCompare(String(b.number || ""), "ko", {
-            numeric: true,
-          }),
-    );
+    ),
+    sort,
+    (question, key) => {
+      const stat = byQuestion.get(String(question.id));
+      if (key === "concept") return quizQuestionFocus(question);
+      if (key === "type") return typeName(question.type);
+      if (key === "rate") return stat?.correctRate;
+      if (key === "responses") return stat?.assessedStudentCount || null;
+      return questionOrder.get(String(question.id));
+    },
+  );
+  const visibleStudents = sortAnalysisRows(
+    analysis.students
+      .filter(
+        (student) =>
+          behaviorFilter === "all" ||
+          behaviorCategory(student) === behaviorFilter,
+      )
+      .filter(
+        (student) =>
+          submissionFilter === "all" ||
+          !submissionDataAvailable ||
+          (submissionFilter === "submitted"
+            ? student.attemptCount > 0
+            : student.attemptCount === 0),
+      )
+      .filter((student) =>
+        `${student.classId} ${student.number} ${student.name}`.includes(search),
+      ),
+    sort,
+    (student, key) => {
+      if (key === "score") return student.latestScore;
+      if (key === "behavior")
+        return QUIZ_BEHAVIOR_LABELS[behaviorCategory(student)];
+      if (key === "results")
+        return student.assessedQuestionCount
+          ? student.correctCount / student.assessedQuestionCount
+          : null;
+      if (key === "attempts")
+        return submissionDataAvailable ? student.attemptCount : null;
+      return `${student.classId || ""} ${student.number || ""} ${student.name || ""}`;
+    },
+  );
   const size = 20,
     total =
       view === "questions" ? visibleQuestions.length : visibleStudents.length;
@@ -918,7 +936,7 @@ export default function QuizAnalysisView({
                 aria-pressed={view === "questions"}
                 onClick={() => {
                   setView("questions");
-                  setSort("default");
+                  setSort({ key: "default", direction: "ascending" });
                   setSearch("");
                 }}
               >
@@ -929,7 +947,7 @@ export default function QuizAnalysisView({
                 aria-pressed={view === "students"}
                 onClick={() => {
                   setView("students");
-                  setSort("default");
+                  setSort({ key: "default", direction: "ascending" });
                   setSearch("");
                 }}
               >
@@ -1008,28 +1026,6 @@ export default function QuizAnalysisView({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <label className="qa-sort">
-              <span className="sr-only">정렬</span>
-              <select
-                aria-label="분석 목록 정렬"
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-              >
-                <option value="default">
-                  {view === "questions" ? "기본순" : "반·번호순"}
-                </option>
-                {view === "questions" ? (
-                  <>
-                    <option value="rate">정답률 낮은 순</option>
-                    <option value="responses">응답 학생 많은 순</option>
-                  </>
-                ) : (
-                  <option value="score">
-                    {isKeywordScope ? "정답률 낮은 순" : "최근 점수 낮은 순"}
-                  </option>
-                )}
-              </select>
-            </label>
           </div>
           <div className="qa-list-count" role="status">
             {view === "questions"
@@ -1039,8 +1035,8 @@ export default function QuizAnalysisView({
               <InfoHelp label="문항표 집계 기준">
                 응답 학생은 현재 문항 버전의 정오답이 확인된 학생 수입니다.
                 정답률은 이 학생 수를 기준으로 계산합니다. 핵심 개념이 같은 행도
-                각각 다른 문항입니다. 번호는 현재 목록의 순서이며, 항목을 열면
-                문항 원문을 확인할 수 있습니다.
+                각각 다른 문항입니다. 번호는 평가 문항의 기본 순서이며, 항목을
+                열면 문항 원문을 확인할 수 있습니다.
               </InfoHelp>
             )}
           </div>
@@ -1066,25 +1062,44 @@ export default function QuizAnalysisView({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col" className="qa-centered">
-                      번호
-                    </th>
-                    <th scope="col">핵심 개념</th>
-                    <th scope="col" className="qa-centered">
-                      유형
-                    </th>
-                    <th scope="col" className="qa-numeric">
-                      정답률
-                    </th>
-                    <th scope="col" className="qa-numeric">
-                      응답 학생
-                    </th>
+                    <AnalysisSortHeader
+                      column="default"
+                      label="번호"
+                      className="qa-centered"
+                      defaultDirection="ascending"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="concept"
+                      label="핵심 개념"
+                      defaultDirection="ascending"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="type"
+                      label="유형"
+                      className="qa-centered"
+                      defaultDirection="ascending"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="rate"
+                      label="정답률"
+                      className="qa-numeric"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="responses"
+                      label="응답 학생"
+                      className="qa-numeric"
+                      {...sorting}
+                    />
                   </tr>
                 </thead>
                 <tbody>
                   {visibleQuestions
                     .slice((page - 1) * size, page * size)
-                    .map((q, index) => {
+                    .map((q) => {
                       const stat = byQuestion.get(String(q.id));
                       return (
                         <tr
@@ -1096,14 +1111,14 @@ export default function QuizAnalysisView({
                           }
                         >
                           <td className="qa-centered">
-                            {(page - 1) * size + index + 1}
+                            {questionOrder.get(String(q.id))}
                           </td>
                           <td>
                             <button
                               type="button"
                               className="qa-text-button qa-ellipsis"
                               title={quizQuestionFocus(q)}
-                              aria-label={`${quizQuestionFocus(q)} · ${(page - 1) * size + index + 1}번 문항 상세`}
+                              aria-label={`${quizQuestionFocus(q)} · ${questionOrder.get(String(q.id))}번 문항 상세`}
                               aria-expanded={
                                 selectedQuestionId === String(q.id)
                               }
@@ -1148,23 +1163,42 @@ export default function QuizAnalysisView({
                 </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">학생</th>
-                    <th scope="col" className="qa-numeric">
-                      풀이 분류
-                    </th>
-                    <th scope="col" className="qa-numeric">
-                      {isKeywordScope ? "검색 문항 정답률" : "최근 점수"}
-                    </th>
-                    <th scope="col" className="qa-numeric">
-                      문항 결과
+                    <AnalysisSortHeader
+                      column="default"
+                      label="학생"
+                      defaultDirection="ascending"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="behavior"
+                      label="풀이 분류"
+                      className="qa-numeric"
+                      defaultDirection="ascending"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="score"
+                      label={isKeywordScope ? "검색 문항 정답률" : "최근 점수"}
+                      className="qa-numeric"
+                      {...sorting}
+                    />
+                    <AnalysisSortHeader
+                      column="results"
+                      label="문항 결과"
+                      className="qa-numeric"
+                      {...sorting}
+                    >
                       <InfoHelp label="학생 문항 결과 기준">
                         현재 문항과 같은 버전의 학생별 최근 결과입니다. 정답
                         수/정오답이 확인된 문항 수로 표시합니다.
                       </InfoHelp>
-                    </th>
-                    <th scope="col" className="qa-numeric">
-                      제출
-                    </th>
+                    </AnalysisSortHeader>
+                    <AnalysisSortHeader
+                      column="attempts"
+                      label="제출"
+                      className="qa-numeric"
+                      {...sorting}
+                    />
                   </tr>
                 </thead>
                 <tbody>

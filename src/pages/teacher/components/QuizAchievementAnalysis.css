@@ -380,9 +380,18 @@
   padding: 8px;
   min-width: 32px;
 }
+.qaa-table .qaa-sp-correct {
+  background: var(--ws-primary, #2563eb);
+  color: var(--ws-surface, #fff);
+  font-weight: 700;
+}
+.qaa-table .qaa-sp-incorrect {
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text-muted, #6b7280);
+}
 .qaa-table .qaa-sp-atypical {
-  background: var(--ws-warning-soft, #fffbeb);
-  color: var(--ws-text-strong, #111827);
+  outline: 2px solid var(--ws-accent, #f59e0b);
+  outline-offset: -2px;
   font-weight: 700;
 }
 .qaa-sp-s-boundary {

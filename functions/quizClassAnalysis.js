@@ -7,8 +7,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
-const { buildQuizAchievementEvidence, historicalQuestionEvidence, packHistoricalQuestionSnapshots, packAchievementEvidence } = require('./quizAchievementEvidence');
-const achievementRubrics = require('./shared/historyAchievementRubrics.json');
+const { historicalQuestionEvidence, packHistoricalQuestionSnapshots } = require('./quizAchievementEvidence');
 
 const SCHEMA = 4;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -68,8 +67,12 @@ function normalizeQuery(data) {
     || (data.compactEvidence === true && data.mode !== 'achievement')) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
-  const query = { semesterId: data.semesterId, mode: data.mode, forceRefresh: data.forceRefresh === true,
-    ...(data.compactEvidence === true ? { compactEvidence: true } : {}) };
+  // The prior client dereferences diagnostic evidence in successful responses.
+  // Fail explicitly before any analysis reads rather than returning a new shape
+  // to an already-open tab that has not received the cumulative-score client.
+  if (data.compactEvidence === true)
+    fail('failed-precondition', '모의고사 점수 분석으로 변경되었습니다. 화면을 새로고침해 주세요.', 'QUIZ_ACHIEVEMENT_CLIENT_RETIRED');
+  const query = { semesterId: data.semesterId, mode: data.mode, forceRefresh: data.forceRefresh === true };
   const keyword = typeof data.keyword === 'string' ? data.keyword.normalize('NFC').trim().replace(/\s+/g, ' ') : undefined;
   if (data.keyword !== undefined && (typeof data.keyword !== 'string' || !keyword
     || keyword.length > 80 || /[\x00-\x1f]/.test(keyword) || !searchText(keyword))) {
@@ -130,10 +133,13 @@ async function readBounded(query, maximum, label, budget) {
 
 const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail', 'assessmentKind',
   'semesterId', 'unitId', 'sourceId', 'category', 'examRound', 'definitionId', 'answerChecks', 'details', 'answers',
-  'learningSnapshot', 'questionSnapshots', 'questionSnapshotOmittedIds', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
+  'learningSnapshot', 'earnedPoints', 'maxPoints', 'questionSnapshots', 'questionSnapshotOmittedIds', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
   'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash'];
 const RESULT_SCOPE_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail',
   'assessmentKind', 'semesterId', 'sourceId', 'unitId', 'category', 'examRound', 'definitionId'];
+const SCORE_FIELDS = [...RESULT_SCOPE_FIELDS, 'percent', 'score', 'total', 'earnedPoints', 'maxPoints',
+  'learningSnapshot', 'submittedAtIso', 'timestamp', 'createdAt', 'attemptId', 'canonicalAttemptId',
+  'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'sourceHash'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
   'familyId', 'cognitiveProcess', 'cognitiveProcesses', ...ACHIEVEMENT_FIELDS];
@@ -395,39 +401,47 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     assessments: [...assessments.values()].filter(item => item.questionCount > 0), treeData, generatedAt: new Date(now()).toISOString() };
   }, 'catalog');
   const loadRoster = async (scope, targetClass, budget) => {
-    const enrollmentDocs = await readBounded(db.collection('semester_enrollments').where('classId', '==', targetClass.id), MAX_STUDENTS * 4, '학급 명단', budget);
+    // Both historical class fields accept string/number values. Read each field
+    // once and overlap those independent reads with the canonical roster.
+    const classValues = [...new Set([targetClass.classNumber, Number(targetClass.classNumber)])]
+      .filter(value => value !== '' && (typeof value !== 'number' || Number.isFinite(value)));
+    const [enrollmentDocs, ...profileGroups] = await Promise.all([
+      readBounded(db.collection('semester_enrollments').where('classId', '==', targetClass.id)
+        .select('semesterId', 'studentUid', 'enrollmentStatus', 'rosterExclusionStatus',
+          'displayName', 'studentName', 'studentNumber', 'snapshot'), MAX_STUDENTS * 4, '학급 명단', budget),
+      ...['class', 'studentClass'].map(field => classValues.length ? readBounded(db.collection('users')
+        .where(field, 'in', classValues).select('role', 'grade', 'studentGrade', 'classNumber', 'class', 'studentClass',
+          'enrollmentStatus', 'registrationApprovalStatus', 'studentName', 'name', 'displayName',
+          'studentNumber', 'number', 'email'), 2000, '이전 학급 명단', budget) : []),
+    ]);
     const active = enrollmentDocs.filter(doc => {
       const d = doc.data(); return d.semesterId === scope && d.enrollmentStatus === 'ACTIVE'
         && ['', 'active'].includes(text(d.rosterExclusionStatus));
     });
-    const slots = active.length ? await db.getAll(...active.map(doc => db.doc(`semester_enrollment_slots/${buildEnrollmentSlotId(scope, doc.data().studentUid)}`))) : [];
+    const candidates = new Map();
+    for (const docs of profileGroups) for (const doc of docs) {
+      const data = doc.data();
+      if ((!data.role || data.role === 'student') && classAlias(data) === `${targetClass.grade}-${targetClass.classNumber}`
+        && ['', 'active'].includes(text(data.enrollmentStatus))
+        && (data.registrationApprovalStatus === undefined || data.registrationApprovalStatus === 'APPROVED')) candidates.set(doc.id, data);
+    }
+    const slotUids = [...new Set([...active.map(doc => doc.data().studentUid), ...candidates.keys()])];
+    const slotDocs = slotUids.length ? await db.getAll(...slotUids.map(uid => db.doc(`semester_enrollment_slots/${buildEnrollmentSlotId(scope, uid)}`)),
+      { fieldMask: ['activeEnrollmentId', 'studentUid', 'semesterId', 'status'] }) : [];
+    const slots = new Map(slotUids.map((uid, index) => [uid, slotDocs[index]]));
     const students = new Map();
-    active.forEach((doc, index) => {
-      const data = doc.data(), slot = dataOf(slots[index]);
+    active.forEach(doc => {
+      const data = doc.data(), slot = dataOf(slots.get(data.studentUid));
       if (slot.activeEnrollmentId !== doc.id || slot.studentUid !== data.studentUid || slot.semesterId !== scope || (slot.status && slot.status !== 'ACTIVE')) return;
       students.set(data.studentUid, { uid: data.studentUid, name: text(data.displayName || data.studentName || data.snapshot?.displayName) || '이름 미등록',
         classId: targetClass.id, number: number(data.studentNumber || data.snapshot?.studentNumber) });
     });
     // Legacy profiles are considered only when no canonical slot owns that
     // student's semester. A stale profile can never bring a moved pupil back.
-    const candidates = new Map();
-    for (const field of ['class', 'studentClass']) {
-      for (const value of [targetClass.classNumber, Number(targetClass.classNumber)]) {
-        if (value === '' || (typeof value === 'number' && !Number.isFinite(value))) continue;
-        const docs = await readBounded(db.collection('users').where(field, '==', value), 1000, '이전 학급 명단', budget);
-        for (const doc of docs) {
-          const data = doc.data();
-          if ((!data.role || data.role === 'student') && classAlias(data) === `${targetClass.grade}-${targetClass.classNumber}`
-            && ['', 'active'].includes(text(data.enrollmentStatus))
-            && (data.registrationApprovalStatus === undefined || data.registrationApprovalStatus === 'APPROVED')) candidates.set(doc.id, data);
-        }
-      }
-    }
     const entries = [...candidates.entries()];
-    const profileSlots = entries.length ? await db.getAll(...entries.map(([uid]) => db.doc(`semester_enrollment_slots/${buildEnrollmentSlotId(scope, uid)}`))) : [];
-    entries.forEach(([uid, data], index) => {
+    entries.forEach(([uid, data]) => {
       if (students.has(uid)) { students.get(uid).email = text(data.email); return; }
-      if (profileSlots[index].exists) return;
+      if (slots.get(uid)?.exists) return;
       students.set(uid, { uid, name: text(data.studentName || data.name || data.displayName) || '이름 미등록',
         classId: targetClass.id, number: number(data.studentNumber || data.number), email: text(data.email) });
     });
@@ -450,17 +464,52 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       fail('aborted', '학생의 소속 학급이 중복되어 있습니다. 학급 명단을 확인한 뒤 다시 조회해 주세요.', 'QUIZ_ANALYSIS_ROSTER_CONFLICT');
     return students;
   };
-  const loadQuestions = async (query, detail) => {
-    let q = db.collection(`${root(query.semesterId)}/quiz_questions`).where('unitId', '==', query.unitId);
-    if (!detail) q = q.select(...QUESTION_FIELDS);
-    const bank = (await readBounded(q, MAX_QUESTIONS, '문항')).filter(doc => categoryOf(doc.data().category) === query.category);
-    const fixedPaper = query.category === 'exam_prep' && bank.some(doc => doc.data().examRound);
-    return bank.filter(doc => !fixedPaper || doc.data().examRound === query.examRound).map(doc => ({
-      ...json(doc.data()), id: doc.data().id ?? Number(doc.id), docId: doc.id,
-      sourceRevision: String(doc.data().contentRevision || doc.data().revision || 'legacy'),
+  const loadQuestions = async (query, detail, budget, fields = detail ? null : QUESTION_FIELDS) => {
+    const collection = () => db.collection(`${root(query.semesterId)}/quiz_questions`).where('unitId', '==', query.unitId);
+    const projected = request => fields ? request.select(...fields) : request;
+    let documents;
+    if (query.category === 'exam_prep') {
+      // A fixed paper needs only its own round, including historical category
+      // aliases. Do not transfer other rounds' passages, images or answers.
+      documents = (await readBounded(projected(collection().where('examRound', '==', query.examRound)), MAX_QUESTIONS, '문항', budget))
+        .filter(doc => categoryOf(doc.data().category) === query.category);
+      if (!documents.length) {
+        const metadata = (await readBounded(collection().select('category', 'examRound'), MAX_QUESTIONS, '문항 범위', budget))
+          .filter(doc => categoryOf(doc.data().category) === query.category);
+        // Preserve the original untagged bank only when no authored round
+        // exists. An empty fixed round must never borrow a different paper.
+        documents = [];
+        if (!metadata.some(doc => doc.data().examRound)) {
+          let bytes = 0;
+          for (let offset = 0; offset < metadata.length; offset += 100) {
+            const refs = metadata.slice(offset, offset + 100).map(doc => doc.ref);
+            const rows = await db.getAll(...refs, ...(fields ? [{ fieldMask: fields }] : []));
+            if (rows.some(doc => !doc.exists || doc.data().unitId !== query.unitId
+              || categoryOf(doc.data().category) !== query.category || doc.data().examRound))
+              fail('aborted', '조회 중 평가 문항이 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+            const batchBytes = rows.reduce((sum, doc) => sum + Buffer.byteLength(JSON.stringify(doc.data())), 0);
+            bytes += batchBytes;
+            if (bytes > MAX_BYTES * 4) fail('resource-exhausted', '문항의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
+            if (budget) {
+              budget.documents += rows.length; budget.bytes += batchBytes;
+              if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
+                fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+            }
+            documents.push(...rows);
+          }
+        }
+      }
+    } else {
+      documents = await readBounded(projected(collection().where('category', '==', query.category)), MAX_QUESTIONS, '문항', budget);
+    }
+    return documents.map(doc => ({
+      ...json(doc.data()), id: doc.data().id ?? (query.mode === 'achievement' ? doc.id : Number(doc.id)), docId: doc.id,
+      sourceRevision: String(query.mode === 'achievement'
+        ? doc.data().contentRevision ?? doc.data().revision ?? 'legacy'
+        : doc.data().contentRevision || doc.data().revision || 'legacy'),
     }));
   };
-  const loadResults = async (query, students, detail = false, budget, includePrior = false) => {
+  const loadResults = async (query, students, detail = false, budget, cumulativeMockExams = false) => {
     const rows = new Map(), candidates = new Map(), jobs = [];
     const uids = [...new Set(students.map(student => student.uid))];
     const emails = [...new Set(students.map(student => student.email).filter(Boolean))];
@@ -475,9 +524,9 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       if ((data.semesterId && data.semesterId !== query.semesterId) || (source === 'canonical'
         && (data.assessmentKind !== 'QUIZ' || data.semesterId !== query.semesterId))) return false;
       const parts = text(data.definitionId).split(':'), category = categoryOf(data.category || parts[3]);
-      return query.keyword || (includePrior && ['diagnostic', 'formative'].includes(category))
-        || (text(data.sourceId || data.unitId || parts[2]) === query.unitId && category === query.category
-          && roundOf(data.category || parts[3], data.examRound || parts[4]) === query.examRound);
+      const round = roundOf(data.category || parts[3], data.examRound || parts[4]);
+      return query.keyword || (text(data.sourceId || data.unitId || parts[2]) === query.unitId && category === query.category
+        && (round === query.examRound || (cumulativeMockExams && Number(round.slice(6)) <= Number(query.examRound.slice(6)))));
     };
     const add = (doc, source) => {
       const data = doc.data(), raw = json(data);
@@ -510,45 +559,44 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         });
       }
     };
-    let priorDefinitions = [];
-    if (includePrior && uids.length) {
-      // Earlier immutable quiz results can lack category/sourceId. Their exact
-      // diagnostic/formative definitions provide a bounded compatibility lookup.
-      const definitions = await readBounded(db.collection('semester_assessment_definitions')
-        .where('semesterId', '==', query.semesterId).where('assessmentKind', '==', 'QUIZ')
-        .where('category', 'in', ['diagnostic', 'formative']).select('category'), 1000, '진단·형성평가 정의', budget);
-      priorDefinitions = definitions.map(doc => doc.id);
-    }
     const selectedDefinitions = query.keyword ? [] : [...new Set([definitionId(query),
       ...(query.category === 'exam_prep' ? [definitionId({ ...query, category: `exam_prep__${query.examRound}`, examRound: '' }),
         ...(query.examRound === 'round_1' ? [definitionId({ ...query, examRound: '' })] : [])] : [])])];
+    if (cumulativeMockExams && uids.length) {
+      // The original three rounds also had results without source/category
+      // fields and definitions without sourceId. Keep exact ID compatibility.
+      for (const examRound of ['round_1', 'round_2', 'round_3'].filter(round => Number(round.slice(6)) <= Number(query.examRound.slice(6)))) {
+        for (const id of [definitionId({ ...query, examRound }),
+          definitionId({ ...query, category: `exam_prep__${examRound}`, examRound: '' }),
+          ...(examRound === 'round_1' ? [definitionId({ ...query, examRound: '' })] : [])])
+          if (!selectedDefinitions.includes(id)) selectedDefinitions.push(id);
+      }
+      const definitions = await readBounded(db.collection('semester_assessment_definitions')
+        .where('semesterId', '==', query.semesterId).where('assessmentKind', '==', 'QUIZ')
+        .where('sourceId', '==', query.unitId).select('sourceId', 'category', 'examRound'),
+        1000, '모의고사 정의', budget);
+      for (const document of definitions) {
+        const value = document.data(), parts = document.id.split(':');
+        const category = categoryOf(value.category || parts[3]);
+        const round = roundOf(value.category || parts[3], value.examRound || parts[4]);
+        if (category === 'exam_prep' && Number(round.slice(6)) <= Number(query.examRound.slice(6))
+          && !selectedDefinitions.includes(document.id)) selectedDefinitions.push(document.id);
+      }
+    }
     for (const source of sources) {
       if (!source.ids.length) continue;
       if (query.keyword) { schedule(source, [], false); continue; }
-      if (includePrior) {
-        schedule(source, [['category', 'in', ['diagnostic', 'formative']]], source.source === 'legacy');
-        // Project only identifiers here: modern records already loaded above
-        // never cause a second body/answer/snapshot read.
-        if (source.source === 'canonical' && priorDefinitions.length) {
-          // Choose the definition/pupil split with the fewest bounded queries.
-          let size = 1, minimum = Infinity;
-          for (let count = 1; count <= Math.min(30, priorDefinitions.length); count++) {
-            const calls = Math.ceil(priorDefinitions.length / count) * Math.ceil(uids.length / Math.floor(30 / count));
-            if (calls <= minimum) { minimum = calls; size = count; }
-          }
-          for (let offset = 0; offset < priorDefinitions.length; offset += size)
-            schedule(source, [['definitionId', 'in', priorDefinitions.slice(offset, offset + size)]], true);
-        }
-      }
       // Legacy plain exam_prep records may have no examRound (round 1). Read
       // only small scope fields first; other rounds' bodies are never fetched.
       const categories = query.category === 'exam_prep' ? ['exam_prep', `exam_prep__${query.examRound}`] : [query.category];
       // Legacy QuizRunner always stored unitId/category. Only canonical results
       // predate sourceId/category and need the definition-id compatibility path.
       schedule(source, [[source.source === 'canonical' ? 'sourceId' : 'unitId', '==', query.unitId],
-        ['category', categories.length === 1 ? '==' : 'in', categories.length === 1 ? categories[0] : categories]], true);
-      if (source.source === 'canonical') schedule(source, [['definitionId', selectedDefinitions.length === 1 ? '==' : 'in',
-        selectedDefinitions.length === 1 ? selectedDefinitions[0] : selectedDefinitions]], true);
+        ...(cumulativeMockExams ? [] : [['category', categories.length === 1 ? '==' : 'in', categories.length === 1 ? categories[0] : categories]])], true);
+      if (source.source === 'canonical') for (let offset = 0; offset < selectedDefinitions.length; offset += 30) {
+        const ids = selectedDefinitions.slice(offset, offset + 30);
+        schedule(source, [['definitionId', ids.length === 1 ? '==' : 'in', ids.length === 1 ? ids[0] : ids]], true);
+      }
     }
     let cursor = 0;
     await Promise.all(Array.from({ length: Math.min(RESULT_QUERY_CONCURRENCY, jobs.length) }, async () => {
@@ -556,9 +604,17 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }));
     const pending = [...candidates.entries()].filter(([key]) => !rows.has(key)).map(([, candidate]) => candidate);
     let bodyBytes = 0;
-    for (let offset = 0; offset < pending.length; offset += 100) {
-      const batch = pending.slice(offset, offset + 100);
-      const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: fields });
+    const isSelectedRound = candidate => {
+      const raw = candidate.scope, parts = text(raw.definitionId).split(':');
+      return roundOf(raw.category || parts[3], raw.examRound || parts[4]) === query.examRound;
+    };
+    const groups = cumulativeMockExams
+      ? [{ entries: pending.filter(isSelectedRound), fields },
+        { entries: pending.filter(candidate => !isSelectedRound(candidate)), fields: SCORE_FIELDS }]
+      : [{ entries: pending, fields }];
+    for (const group of groups) for (let offset = 0; offset < group.entries.length; offset += 100) {
+      const batch = group.entries.slice(offset, offset + 100);
+      const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: group.fields });
       for (let i = 0; i < docs.length; i++) {
         const doc = docs[i], candidate = batch[i];
         if (!doc.exists || !matches(doc.data(), candidate.source)
@@ -578,6 +634,58 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }
     return [...rows.values()];
   };
+  const buildMockExamScoreRows = async (rows, students, input, budget) => {
+    const byEmail = new Map(students.filter(student => student.email).map(student => [student.email, student.uid]));
+    const result = rows.map(row => {
+      const raw = row.raw, parts = text(raw.definitionId).split(':');
+      const studentUid = text(raw.studentUid || raw.uid || raw.studentId || raw.userId)
+        || byEmail.get(text(raw.email || raw.studentEmail));
+      const metadata = Array.isArray(raw.learningSnapshot) ? raw.learningSnapshot : [];
+      const presentations = new Map((Array.isArray(raw.questionSnapshots) ? raw.questionSnapshots : []).map(item => [text(item.id), item]));
+      const cutScoreQuestions = metadata.map(item => ({ id: text(item.id),
+        ...(Number.isFinite(item.points ?? presentations.get(text(item.id))?.points)
+          ? { points: item.points ?? presentations.get(text(item.id)).points } : {}),
+        ...(item.targetAchievementLevel ? { targetAchievementLevel: item.targetAchievementLevel } : {}),
+        ...(item.intendedDifficulty ? { intendedDifficulty: item.intendedDifficulty } : {}) }));
+      const projected = Object.fromEntries(SCORE_FIELDS.filter(field => Object.hasOwn(raw, field)
+        && field !== 'learningSnapshot').map(field => [field, raw[field]]));
+      return { id: row.id, source: row.source, raw: { ...projected, studentUid,
+        semesterId: input.semesterId, category: 'exam_prep',
+        examRound: roundOf(raw.category || parts[3], raw.examRound || parts[4]), cutScoreQuestions } };
+    });
+    // Learning metadata predates frozen points. Recover only the matching
+    // attempt's small grading snapshot; never read a previous paper's images,
+    // answer telemetry, submissions, or the current question bank as a fallback.
+    const missingPoints = result.filter(row => row.source === 'canonical' && Number.isFinite(row.raw.maxPoints)
+      && row.raw.maxPoints > 0 && row.raw.cutScoreQuestions.length
+      && row.raw.cutScoreQuestions.some(item => !Number.isFinite(item.points)));
+    const fields = ['attemptId', 'studentUid', 'semesterId', 'assessmentKind', 'definitionId',
+      'resultRef', 'submittedAtIso', 'sourceHash', 'gradingSnapshot'];
+    for (let offset = 0; offset < missingPoints.length; offset += 100) {
+      const entries = missingPoints.slice(offset, offset + 100).map(row => ({ row, id: text(row.raw.attemptId || row.id) }))
+        .filter(entry => validId(entry.id));
+      if (!entries.length) continue;
+      const docs = await db.getAll(...entries.map(entry => db.doc(`semester_assessment_attempts/${entry.id}`)), { fieldMask: fields });
+      entries.forEach(({ row, id }, index) => {
+        const attempt = dataOf(docs[index]);
+        const bytes = Buffer.byteLength(JSON.stringify(attempt));
+        budget.documents++; budget.bytes += bytes;
+        if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
+          fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+        if (attempt.attemptId !== id || attempt.studentUid !== row.raw.studentUid
+          || attempt.semesterId !== input.semesterId || attempt.assessmentKind !== 'QUIZ'
+          || attempt.definitionId !== row.raw.definitionId
+          || attempt.resultRef !== `semester_assessment_results/${row.id}`
+          || !iso(row.raw.submittedAtIso) || iso(attempt.submittedAtIso) !== iso(row.raw.submittedAtIso)
+          || (row.raw.sourceHash && attempt.sourceHash !== row.raw.sourceHash)) return;
+        const grading = new Map((Array.isArray(attempt.gradingSnapshot) ? attempt.gradingSnapshot : []).map(item => [text(item.id), item]));
+        row.raw.cutScoreQuestions = row.raw.cutScoreQuestions.map(item => ({ ...item,
+          ...(!Number.isFinite(item.points) && Number.isFinite(grading.get(item.id)?.points)
+            ? { points: grading.get(item.id).points } : {}) }));
+      });
+    }
+    return result;
+  };
   const query = async input => {
     const budget = { documents: 0, bytes: 0 };
     const gradeRevision = input.grade ? await revision(input.semesterId, '') : null;
@@ -591,20 +699,11 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       })).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })), input);
       const version = await scopeRevision(input.semesterId, selectedClasses);
       const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
-      const profileQuery = db.collection('semester_achievement_profiles').where('classId',
-        selectedClasses.length === 1 ? '==' : 'in', selectedClasses.length === 1 ? selectedClasses[0].id : selectedClasses.map(entry => entry.id));
-      const [allRows, questionDocs, treeData, profileDocs] = await Promise.all([
+      const [allRows, questions, treeData] = await Promise.all([
         loadResults(input, students, true, budget, true),
-        readBounded(db.collection(`${root(input.semesterId)}/quiz_questions`).where('unitId', '==', input.unitId)
-          .select(...QUESTION_FIELDS, 'answer'), MAX_QUESTIONS, '성취 분석 문항', budget),
+        loadQuestions(input, false, budget, [...QUESTION_FIELDS, 'answer']),
         loadTree(input.semesterId),
-        readBounded(profileQuery, 5000, '분석 성취수준', budget),
       ]);
-      const allQuestions = questionDocs.map(doc => ({ ...json(doc.data()), id: doc.data().id ?? doc.id, docId: doc.id,
-        sourceRevision: String(doc.data().contentRevision ?? doc.data().revision ?? 'legacy') }));
-      const bank = allQuestions.filter(question => question.unitId === input.unitId && categoryOf(question.category) === 'exam_prep');
-      const fixedPaper = bank.some(question => question.examRound);
-      const questions = bank.filter(question => !fixedPaper || question.examRound === input.examRound);
       if (!questions.length) fail('not-found', '선택한 모의고사를 찾을 수 없습니다.', 'QUIZ_ANALYSIS_ASSESSMENT_NOT_FOUND');
       const rawRows = allRows.filter(row => {
         const raw = row.raw, parts = text(raw.definitionId).split(':');
@@ -644,39 +743,11 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
           row.raw.answers = json(submission.answers);
         });
       }
-      const missingStarts = rawRows.filter(row => row.source === 'canonical' && (!row.raw.startedAtIso || !iso(row.raw.startedAtIso)));
-      const attempts = [];
-      for (let offset = 0; offset < missingStarts.length; offset += 100) {
-        const entries = missingStarts.slice(offset, offset + 100).map(row => text(row.raw.attemptId || row.id)).filter(validId);
-        if (!entries.length) continue;
-        const docs = await db.getAll(...entries.map(id => db.doc(`semester_assessment_attempts/${id}`)));
-        attempts.push(...docs.filter(doc => doc.exists).map(doc => ({ id: doc.id, raw: json(doc.data()) })));
-      }
-      const achievementEvidence = buildQuizAchievementEvidence({ semesterId: input.semesterId, students,
-        priorRows: allRows, examRows: rawRows, attempts });
-      const studentClasses = new Map(students.map(student => [student.uid, student.classId]));
-      const observationByRef = new Map(achievementEvidence.observations.filter(item => item.recordSource === 'canonical')
-        .map(item => [`${item.studentUid}:${item.resultId}:${item.questionId}`, item]));
-      const profiles = profileDocs.filter(doc => {
-        const p = doc.data(); return p.semesterId === input.semesterId && studentClasses.get(p.studentUid) === p.classId
-          && p.unitId === input.unitId && p.examRound === input.examRound;
-      }).map(doc => {
-        const profile = json(doc.data());
-        const cutoff = achievementEvidence.examCutoffs.find(item => item.studentUid === profile.studentUid && item.attemptId === profile.examAttemptId);
-        const stale = profile.level !== null && (profile.rubricVersion !== achievementRubrics.version || !cutoff || cutoff.startedAt !== profile.asOf
-          || !Array.isArray(profile.evidence) || !profile.evidence.length || profile.evidence.some(ref => {
-            const observed = observationByRef.get(`${profile.studentUid}:${ref.resultId}:${ref.questionId}`);
-            return !observed || observed.sourceRevision !== ref.sourceRevision || observed.observedAt !== ref.observedAt
-              || observed.correct !== ref.correct || observed.hintViewed !== ref.hintViewed
-              || (ref.mappingBasis === 'snapshot' && !observed.achievementStandardCodes.includes(profile.standardCode));
-          }));
-        return { id: doc.id, ...profile, stale };
-      });
+      const mockExamScoreRows = await buildMockExamScoreRows(allRows, students, input, budget);
       const packed = packHistoricalQuestionSnapshots(rawRows);
       const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
-        version, complete: true, achievementEvidence: input.compactEvidence ? packAchievementEvidence(achievementEvidence) : achievementEvidence,
-        profiles, rubricVersion: achievementRubrics.version,
+        version, complete: true, mockExamScoreRows,
         ...(input.grade ? { grade: input.grade } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
       if (await scopeRevision(input.semesterId, selectedClasses) !== version
@@ -836,7 +907,7 @@ const createQuizClassAnalysisHandler = ({ db, assertSession = assertScoreWorkflo
     fail('failed-precondition', '현재 운영 학기에서 평가 분석을 다시 열어 주세요.', 'QUIZ_ANALYSIS_SEMESTER_NOT_ACTIVE');
   }
   const result = await service.query(query);
-  return query.mode === 'achievement' ? { ...result, canReview: admin || profile.role === 'teacher' } : result;
+  return result;
 };
 
 function createQuizAnalysisInvalidation({ db }) {

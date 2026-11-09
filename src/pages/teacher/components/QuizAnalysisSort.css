@@ -1,0 +1,26 @@
+.qaa-sort-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.qaa-sort-button svg {
+  flex-shrink: 0;
+  fill: none;
+  stroke: var(--ws-text-muted, #6b7280);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.qaa-sort-button .qaa-sort-active {
+  stroke: var(--ws-primary, #2563eb);
+  stroke-width: 2.5;
+}

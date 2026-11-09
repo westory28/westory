@@ -55,8 +55,10 @@ const records = students.map((student, index) => ({
   totalCount: 24,
   items: questions.map((q) => ({
     questionId: q.id,
-    correct: index === 1,
-    answer: index === 1 ? "정답" : "오답",
+    correct: index === 1 ? Number(q.id) % 3 !== 0 : Number(q.id) % 5 === 0,
+    answer: (index === 1 ? Number(q.id) % 3 !== 0 : Number(q.id) % 5 === 0)
+      ? "정답"
+      : "오답",
     sourceRevision: "1",
     concepts: q.concepts,
   })),
@@ -127,6 +129,50 @@ try {
     ]);
     assert.equal(await table.locator("tbody tr").count(), 20);
     assert.equal(
+      await dialog
+        .getByRole("combobox", { name: "분석 목록 정렬", exact: true })
+        .count(),
+      0,
+    );
+    const rates = () =>
+      table
+        .locator("tbody tr")
+        .evaluateAll((rows) =>
+          rows.map((row) =>
+            parseFloat(row.querySelectorAll("td")[3].textContent),
+          ),
+        );
+    await table
+      .getByRole("button", { name: "정답률 내림차순 정렬", exact: true })
+      .click();
+    const highRates = await rates();
+    assert.deepEqual(
+      highRates,
+      [...highRates].sort((a, b) => b - a),
+    );
+    await table
+      .getByRole("button", { name: "정답률 오름차순 정렬", exact: true })
+      .focus();
+    await page.keyboard.press("Enter");
+    const lowRates = await rates();
+    assert.deepEqual(
+      lowRates,
+      [...lowRates].sort((a, b) => a - b),
+    );
+    assert.equal(
+      await table.locator("tbody tr").first().locator("td").first().innerText(),
+      "2",
+      "Stable question numbers stay attached to questions when sorted",
+    );
+    await table
+      .getByRole("button", { name: "번호 오름차순 정렬", exact: true })
+      .click();
+    assert.equal(
+      await page.getByLabel("실행한 동작").innerText(),
+      "",
+      "Header sorting never reloads records",
+    );
+    assert.equal(
       await dialog.locator(".qa-distributions").getAttribute("open"),
       null,
     );
@@ -174,9 +220,15 @@ try {
       fullPage: true,
     });
     const first = table.locator("tbody").getByRole("button").first();
-    assert.equal(await first.getAttribute("title"), questions[0].concepts.join(" · "));
+    assert.equal(
+      await first.getAttribute("title"),
+      questions[0].concepts.join(" · "),
+    );
     assert.equal(await first.innerText(), questions[0].concepts.join(" · "));
-    assert.ok(!(await table.innerText()).includes("고르세요"), "list contains concepts, not copied prompts");
+    assert.ok(
+      !(await table.innerText()).includes("고르세요"),
+      "list contains concepts, not copied prompts",
+    );
     await first.focus();
     await page.keyboard.press("Enter");
     const detail = dialog.getByRole("region", {
@@ -184,11 +236,53 @@ try {
       exact: true,
     });
     await detail.waitFor();
-    assert.ok((await detail.innerText()).includes(questions[0].question), "expanded detail preserves the full prompt");
+    assert.ok(
+      (await detail.innerText()).includes(questions[0].question),
+      "expanded detail preserves the full prompt",
+    );
     assert(
       await detail.evaluate((element) => document.activeElement === element),
     );
     assert.equal(await page.getByRole("dialog").count(), 1);
+    const options = detail.getByRole("table", {
+      name: "첫 제출 답안별 분석",
+      exact: true,
+    });
+    await options
+      .getByRole("button", {
+        name: "나머지 문항 평균 내림차순 정렬",
+        exact: true,
+      })
+      .click();
+    const restRates = await options.getByRole("row").all();
+    const highRest = await Promise.all(
+      restRates
+        .slice(1)
+        .map((row) =>
+          row.getByRole("cell").nth(2).innerText().then(parseFloat),
+        ),
+    );
+    assert.deepEqual(
+      highRest,
+      [...highRest].sort((a, b) => b - a),
+    );
+    await options
+      .getByRole("button", {
+        name: "나머지 문항 평균 오름차순 정렬",
+        exact: true,
+      })
+      .click();
+    const lowRest = await Promise.all(
+      (await options.getByRole("row").all())
+        .slice(1)
+        .map((row) =>
+          row.getByRole("cell").nth(2).innerText().then(parseFloat),
+        ),
+    );
+    assert.deepEqual(
+      lowRest,
+      [...highRest].sort((a, b) => a - b),
+    );
     await detail.getByRole("button", { name: "수정", exact: true }).click();
     assert.equal(await page.getByLabel("실행한 동작").textContent(), "edit:1");
     await detail
@@ -207,42 +301,120 @@ try {
     );
     await dialog.getByRole("button", { name: "다음", exact: true }).click();
     assert.equal(await table.locator("tbody tr").count(), 3);
+    await table
+      .getByRole("button", { name: "번호 내림차순 정렬", exact: true })
+      .click();
+    assert.equal(
+      await table.locator("tbody tr").count(),
+      20,
+      "Sorting returns to page one",
+    );
+    assert.equal(
+      await table.locator("tbody tr").first().locator("td").first().innerText(),
+      "23",
+    );
     await dialog.getByRole("button", { name: "학생", exact: true }).click();
     await dialog.locator(".qa-student-table tbody tr").first().waitFor();
     assert.equal(await dialog.locator(".qa-student-table tbody tr").count(), 2);
-    const scoreColumn = (await dialog.locator(".qa-student-table thead th").allTextContents())
-      .findIndex((label) => label.trim() === "최근 점수") + 1;
+    const scoreColumn =
+      (
+        await dialog.locator(".qa-student-table thead th").allTextContents()
+      ).findIndex((label) => label.trim() === "최근 점수") + 1;
     assert.ok(scoreColumn > 0);
     assert.deepEqual(
       await dialog
-        .locator(`.qa-student-table tbody tr td:nth-child(${scoreColumn}) strong`)
+        .locator(
+          `.qa-student-table tbody tr td:nth-child(${scoreColumn}) strong`,
+        )
         .allTextContents(),
       ["99점", "99점"],
       "Normal assessments preserve recorded official scores",
     );
-    await page.screenshot({path:path.join(evidence,`students-${width}.png`),fullPage:true});
-    if(width>=768){
-      const emptySpace=await dialog.evaluate(d=>d.getBoundingClientRect().bottom-d.querySelector('.qa-student-table').getBoundingClientRect().bottom);
-      assert.ok(emptySpace<=40, `short student list has no oversized blank area: ${emptySpace}`);
+    const studentTable = dialog.locator(".qa-student-table");
+    await studentTable
+      .getByRole("button", { name: "문항 결과 내림차순 정렬", exact: true })
+      .click();
+    assert.ok(
+      (await studentTable.locator("tbody tr").first().innerText()).includes(
+        "가상학생 둘",
+      ),
+    );
+    await studentTable
+      .getByRole("button", { name: "학생 오름차순 정렬", exact: true })
+      .click();
+    await page.screenshot({
+      path: path.join(evidence, `students-${width}.png`),
+      fullPage: true,
+    });
+    if (width >= 768) {
+      const emptySpace = await dialog.evaluate(
+        (d) =>
+          d.getBoundingClientRect().bottom -
+          d.querySelector(".qa-student-table").getBoundingClientRect().bottom,
+      );
+      assert.ok(
+        emptySpace <= 40,
+        `short student list has no oversized blank area: ${emptySpace}`,
+      );
     }
-    if(width>=1280){
-      const behavior=await dialog.getByRole("combobox",{name:"학생 풀이 분류",exact:true}).boundingBox();
-      const submission=await dialog.getByRole("combobox",{name:"학생 응시 상태",exact:true}).boundingBox();
-      const search=await dialog.getByRole("searchbox",{name:"학생 검색",exact:true}).boundingBox();
-      assert.ok(Math.abs(behavior.y-submission.y)<1 && Math.abs(behavior.y-search.y)<1, "student filter controls share one baseline");
-      assert.ok((await dialog.getByRole("combobox",{name:"분석할 소단원",exact:true}).boundingBox()).width<=361);
+    if (width >= 1280) {
+      const behavior = await dialog
+        .getByRole("combobox", { name: "학생 풀이 분류", exact: true })
+        .boundingBox();
+      const submission = await dialog
+        .getByRole("combobox", { name: "학생 응시 상태", exact: true })
+        .boundingBox();
+      const search = await dialog
+        .getByRole("searchbox", { name: "학생 검색", exact: true })
+        .boundingBox();
+      assert.ok(
+        Math.abs(behavior.y - submission.y) < 1 &&
+          Math.abs(behavior.y - search.y) < 1,
+        "student filter controls share one baseline",
+      );
+      assert.ok(
+        (
+          await dialog
+            .getByRole("combobox", { name: "분석할 소단원", exact: true })
+            .boundingBox()
+        ).width <= 361,
+      );
     }
     await dialog.locator(".qa-student-table tbody button").first().click();
-    const savedAnswers=dialog.locator(".qa-student-answers");
-    assert.ok((await savedAnswers.locator("summary").first().innerText()).includes(questions[0].concepts[0]));
-    assert.ok(!(await savedAnswers.locator("summary").first().innerText()).includes("고르세요"));
+    const savedAnswers = dialog.locator(".qa-student-answers");
+    assert.ok(
+      (await savedAnswers.locator("summary").first().innerText()).includes(
+        questions[0].concepts[0],
+      ),
+    );
+    assert.ok(
+      !(await savedAnswers.locator("summary").first().innerText()).includes(
+        "고르세요",
+      ),
+    );
     await savedAnswers.locator("summary").first().click();
-    assert.ok((await savedAnswers.locator("details").first().innerText()).includes(questions[0].question));
-    await page.screenshot({path:path.join(evidence,`records-${width}.png`),fullPage:true});
-    await dialog.getByText("분포 보기",{exact:true}).click();
-    assert.ok(!(await dialog.locator(".qa-rate-list").innerText()).includes("고르세요"));
-    assert.ok((await dialog.locator(".qa-rate-list").innerText()).includes(questions[0].concepts[0]));
-    await page.screenshot({path:path.join(evidence,`distributions-${width}.png`),fullPage:true});
+    assert.ok(
+      (await savedAnswers.locator("details").first().innerText()).includes(
+        questions[0].question,
+      ),
+    );
+    await page.screenshot({
+      path: path.join(evidence, `records-${width}.png`),
+      fullPage: true,
+    });
+    await dialog.getByText("분포 보기", { exact: true }).click();
+    assert.ok(
+      !(await dialog.locator(".qa-rate-list").innerText()).includes("고르세요"),
+    );
+    assert.ok(
+      (await dialog.locator(".qa-rate-list").innerText()).includes(
+        questions[0].concepts[0],
+      ),
+    );
+    await page.screenshot({
+      path: path.join(evidence, `distributions-${width}.png`),
+      fullPage: true,
+    });
     checks.push({
       width,
       headerAlignment: true,
@@ -251,6 +423,8 @@ try {
       inlineDetail: true,
       editAndDerive: true,
       pagination: true,
+      headerSorting: true,
+      readOnlySorting: true,
     });
     await page.close();
   }
@@ -274,12 +448,16 @@ try {
     "50%",
   );
   await dialog.getByRole("button", { name: "학생", exact: true }).click();
-  const keywordScoreColumn = (await dialog.locator(".qa-student-table thead th").allTextContents())
-    .findIndex((label) => label.trim() === "검색 문항 정답률") + 1;
+  const keywordScoreColumn =
+    (
+      await dialog.locator(".qa-student-table thead th").allTextContents()
+    ).findIndex((label) => label.trim() === "검색 문항 정답률") + 1;
   assert.ok(keywordScoreColumn > 0);
   assert.deepEqual(
     await dialog
-      .locator(`.qa-student-table tbody tr td:nth-child(${keywordScoreColumn}) strong`)
+      .locator(
+        `.qa-student-table tbody tr td:nth-child(${keywordScoreColumn}) strong`,
+      )
       .allTextContents(),
     ["0%", "100%"],
   );

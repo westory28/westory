@@ -5,13 +5,10 @@ import {
   type MockExamPaperQuestion,
 } from "../../../components/common/MockExamPaper";
 import QuizPassage from "../../../components/common/QuizPassage";
-import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   ACHIEVEMENT_LEVELS,
-  achievementTimestamp,
   adaptAchievementAttempts,
   buildAchievementAnalysis,
-  confirmedAchievementLevel,
   type AchievementAnalysis,
   type AchievementMetadata,
   type AchievementItemStatistics,
@@ -23,7 +20,6 @@ import {
   HISTORY_ACHIEVEMENT_RUBRIC_SOURCE,
   resolveQuestionAchievement,
 } from "../../../lib/historyAchievement";
-import { executeLearningCommand } from "../../../lib/learningCommands";
 import {
   getQuizClassAchievement,
   quizClassAnalysisError,
@@ -32,6 +28,11 @@ import {
 } from "../../../lib/quizClassAnalysis";
 import "./QuizAchievementAnalysis.css";
 import QuizAchievementEstimates from "./QuizAchievementEstimates";
+import {
+  AnalysisSortHeader,
+  sortAnalysisRows,
+  useAnalysisTableSort,
+} from "./QuizAnalysisSort";
 
 const percent = (value: number | null | undefined) =>
   value == null ? "—" : `${value.toFixed(1)}%`;
@@ -45,7 +46,7 @@ export const QUIZ_ACHIEVEMENT_VIEWS = [
   "전체 결과",
   "문항별 분석",
   "성취기준별 분석",
-  "학습 근거·수준 확인",
+  "회차별 점수·수준",
   "S–P표",
   "성취수준·분할점수",
 ];
@@ -81,7 +82,6 @@ const studentLabel = (
 export default function QuizAchievementAnalysis({
   scope,
   identityKey,
-  canEdit,
   enabled = true,
   refreshVersion = 0,
   onLoadingChange,
@@ -108,17 +108,17 @@ export default function QuizAchievementAnalysis({
   const [questionId, setQuestionId] = useState("");
   const [profileId, setProfileId] = useState("");
   const [choiceQuestionId, setChoiceQuestionId] = useState("");
-  const [evidenceUid, setEvidenceUid] = useState("");
-  const [draftLevels, setDraftLevels] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState("");
-  const [saveError, setSaveError] = useState("");
-  const [confirmations, setConfirmations] = useState<Record<string, boolean>>(
-    {},
-  );
+  const standardSorting = useAnalysisTableSort({
+    key: "code",
+    direction: "ascending",
+  });
+  const cellSorting = useAnalysisTableSort({
+    key: "code",
+    direction: "ascending",
+  });
   const currentIdentity = useRef(identityKey);
   currentIdentity.current = identityKey;
   const previewRef = useRef<HTMLDivElement>(null);
-  const { showToast } = useAppToast();
   const requestKey = JSON.stringify([
     identityKey,
     scope.semesterId,
@@ -135,8 +135,6 @@ export default function QuizAchievementAnalysis({
     setData(null);
     setQuestionId("");
     setProfileId("");
-    setDraftLevels({});
-    setConfirmations({});
     if (!enabled) {
       setLoading(false);
       onLoadingChange?.(false);
@@ -200,7 +198,6 @@ export default function QuizAchievementAnalysis({
             students: data.students,
             questions: data.questions,
             rawRows: data.rawRows,
-            evidence: data.achievementEvidence,
             resolveCodes,
           })
         : [],
@@ -214,9 +211,9 @@ export default function QuizAchievementAnalysis({
             students: data.students,
             questions: data.questions,
             attempts,
-            evidence: data.achievementEvidence,
+            examRound: scope.examRound,
+            scoreRows: data.mockExamScoreRows,
             resolveCodes,
-            reviewedProfiles: data.profiles,
           })
         : null,
     [data, attempts, resolveCodes, scope.semesterId],
@@ -230,9 +227,9 @@ export default function QuizAchievementAnalysis({
               students: data.students,
               questions: data.questions,
               attempts,
-              evidence: data.achievementEvidence,
+              examRound: scope.examRound,
+              scoreRows: data.mockExamScoreRows,
               resolveCodes,
-              reviewedProfiles: data.profiles,
               standardCode,
             })
           : full
@@ -283,10 +280,10 @@ export default function QuizAchievementAnalysis({
   }, [questionId]);
   const analysisHelp = (
     <InfoHelp label="성취 분석 집계 기준">
-      학생별 첫 제출을 사용하며 A–E는 교사가 사전 학습 근거를 검토해 확인한
-      분석용 수준입니다. 점수 구간·순위로 교사 확인 수준을 바꾸지 않습니다. 목표
-      A–E는 출제자가 문항에 지정한 수준입니다. 기록 부족은 미분류로 남고 공식
-      점수와 성적은 바뀌지 않습니다.
+      선택 회차까지 각 회차의 최초 유효 제출 점수와 응시 당시 시험지의 추정
+      분할점수를 100점으로 환산해 같은 비중으로 평균합니다. 누적 점수가 해당
+      경계 이상인 가장 높은 A–D 수준을 적용하고 D 경계 미만은 E입니다. 자료가
+      없는 회차는 0점으로 넣지 않습니다. 공식 점수와 성적은 바뀌지 않습니다.
     </InfoHelp>
   );
   const toolbar = (
@@ -305,8 +302,6 @@ export default function QuizAchievementAnalysis({
           onChange={(event) => {
             setStandardCode(event.target.value);
             setProfileId("");
-            setDraftLevels({});
-            setConfirmations({});
           }}
         >
           <option value="">모든 성취기준</option>
@@ -364,7 +359,7 @@ export default function QuizAchievementAnalysis({
           <p role="status" className="qca-muted">
             {!enabled
               ? "학년 또는 학급을 선택하고 결과를 조회해 주세요."
-              : "성취기준과 사전 학습 근거를 불러오는 중입니다."}
+              : "모의고사 점수와 문항을 불러오는 중입니다."}
           </p>
         )}
         <PendingAchievementView view={view} showHeading={!inlineReport} />
@@ -374,84 +369,6 @@ export default function QuizAchievementAnalysis({
   const inspect = (id: string) => {
     setQuestionId(id);
   };
-  const saveLevel = async (uid: string) => {
-    if (!standardCode || !canEdit || data.canReview !== true || saving) return;
-    const studentClassId = data.students.find(
-      (student) => student.uid === uid,
-    )?.classId;
-    if (
-      !studentClassId ||
-      !data.configuredClasses.some((entry) => entry.id === studentClassId)
-    ) {
-      setSaveError("학생의 학급을 확인하지 못했습니다. 다시 조회해 주세요.");
-      return;
-    }
-    const attempt = analysis.attempts.find((value) => value.studentUid === uid);
-    const existing = data.profiles?.find(
-      (value) =>
-        value.studentUid === uid && value.standardCode === standardCode,
-    );
-    const chosen = draftLevels[uid] ?? existing?.level ?? "";
-    if (chosen && (!attempt?.startedAt || !confirmations[uid])) return;
-    const refs = data.achievementEvidence.observations
-      .filter(
-        (row) =>
-          row.studentUid === uid &&
-          row.recordSource === "canonical" &&
-          row.source !== "worksheet" &&
-          row.resultId &&
-          row.questionId &&
-          achievementTimestamp(row.observedAt) != null &&
-          achievementTimestamp(row.observedAt)! < (attempt?.startedAt || 0) &&
-          resolveCodes(row).codes.includes(standardCode),
-      )
-      .map((row) => ({ resultId: row.resultId!, questionId: row.questionId! }));
-    const evidenceRefs = [
-      ...new Map(
-        refs.map((ref) => [`${ref.resultId}:${ref.questionId}`, ref]),
-      ).values(),
-    ].slice(0, 60);
-    if (chosen && !evidenceRefs.length) {
-      setSaveError("이 성취기준에 연결된 사전 평가 근거가 없습니다.");
-      return;
-    }
-    setSaving(uid);
-    setSaveError("");
-    try {
-      await executeLearningCommand("saveAchievementProfile", {
-        semesterId: scope.semesterId,
-        classId: studentClassId,
-        unitId: scope.unitId,
-        examRound: scope.examRound,
-        studentUid: uid,
-        standardCode,
-        level: chosen || null,
-        expectedRevision: existing?.revision || 0,
-        ...(chosen
-          ? {
-              examAttemptId: attempt!.attemptId,
-              evidenceRefs,
-              mappingConfirmed: true,
-              expectedRubricVersion: data.rubricVersion,
-            }
-          : {}),
-      });
-      if (currentIdentity.current !== identityKey) return;
-      showToast({ title: "분석용 성취수준을 저장했습니다.", tone: "success" });
-      setConfirmations({});
-      setDraftLevels({});
-      setReload((value) => value + 1);
-    } catch (failure) {
-      setSaveError(
-        failure instanceof Error
-          ? failure.message
-          : "수준을 저장하지 못했습니다.",
-      );
-    } finally {
-      setSaving("");
-    }
-  };
-
   if (questionId && displayedQuestion)
     return (
       <div
@@ -503,37 +420,12 @@ export default function QuizAchievementAnalysis({
   return (
     <section className={sectionClass} aria-label="성취기준 분석">
       {toolbar}
-      {data.achievementEvidence.status === "partial" &&
-        (!inlineReport || analysis.attempts.length > 0) && (
-          <p className="qca-muted" role="status">
-            일부 사전 근거 제외 · 시각·버전·보관 범위를 확인해 주세요.
-          </p>
-        )}
       <div className="qaa-scope">
         {data.grade && <span>{data.grade}학년 전체</span>}
-        <span>
-          {view === 5
-            ? "진단·형성평가 근거"
-            : `첫 제출 ${analysis.attempts.length}명`}
-        </span>
+        <span>첫 제출 {analysis.attempts.length}명</span>
+        <span>1~{scope.examRound.replace("round_", "")}회 누적 수준</span>
         {analysis.unclassifiedItemCount > 0 && (
           <span>미연결 응답 {analysis.unclassifiedItemCount}건</span>
-        )}
-        {analysis.missingCutoffCount > 0 && (
-          <span>시작 시각 미확인 {analysis.missingCutoffCount}명</span>
-        )}
-        {view !== 5 && (
-          <InfoHelp label="제외된 분석 근거">
-            사전 근거는 해당 학생의 모의고사 시작 전 기록만 포함합니다. 미래
-            기록 {analysis.futureEvidenceCount}건, 응시 순서 미확인{" "}
-            {analysis.excludedChronologyCount}명. 서버에서 시각·소유·버전 확인
-            후 제외한 근거{" "}
-            {Object.values(data.achievementEvidence.exclusions || {}).reduce(
-              (sum, count) => sum + count,
-              0,
-            )}
-            건.
-          </InfoHelp>
         )}
       </div>
       {view === 0 && (
@@ -542,10 +434,9 @@ export default function QuizAchievementAnalysis({
             <div className="qca-section-heading">
               <h3>전체 분포</h3>
               <InfoHelp label="점수 분포와 수준 분포">
-                점수 분포는 원래 제출 점수이며 A–E 분류에 사용하지 않습니다.
-                평균·표준편차는 표시 학생의 실제 점수로 계산합니다. 전체
-                기준에서는 종합 성취수준을 추정하지 않고 미분류로 표시하며,
-                성취기준을 선택하면 교사가 확인한 해당 기준의 A–E를 사용합니다.
+                점수 분포와 평균·표준편차는 선택 회차의 제출 점수입니다. A–E는
+                선택 회차까지의 누적 점수와 시험지별 추정 분할점수로 분류합니다.
+                성취기준을 선택해도 학생의 종합 수준은 유지합니다.
               </InfoHelp>
             </div>
           )}
@@ -674,50 +565,18 @@ export default function QuizAchievementAnalysis({
                   정답수 상·하위 각 27%의 정답률 차이이며 경계 동점이면 계산하지
                   않습니다. 제거 시 α는 해당 문항을 제외한 신뢰도입니다. 선지
                   비율은 무응답을 포함한 전체 표본이 분모이며 답안 미보관은
-                  0으로 채우지 않습니다. A–E는 해당 성취기준의 교사 확인
-                  수준입니다.
+                  0으로 채우지 않습니다. A–E는 모의고사 누적 점수와 시험지별
+                  추정 분할점수로 분류한 수준입니다.
                 </InfoHelp>
               </div>
-              <Table label="문항별 통계와 학생 수준별 정답률" wide>
-                <thead>
-                  <tr>
-                    <th>문항</th>
-                    <th>출제 난도</th>
-                    <th>목표 수준</th>
-                    <th>정답률</th>
-                    <th>변별도</th>
-                    <th>D (27%)</th>
-                    <th>제거 시 α</th>
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <th key={value}>선지 {value}</th>
-                    ))}
-                    <th>무응답</th>
-                    {[...ACHIEVEMENT_LEVELS, "unclassified"].map((value) => (
-                      <th key={value}>{levelLabel(value)}</th>
-                    ))}
-                    <th>수준 프로필</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.items.map((item) => {
-                    const question = data.questions.find(
-                      (row) => String(row.id) === item.id,
-                    );
-                    return (
-                      <FragmentRows
-                        key={item.id}
-                        item={item}
-                        question={question}
-                        onInspect={inspect}
-                        expanded={profileId === item.id}
-                        onToggle={() =>
-                          setProfileId(profileId === item.id ? "" : item.id)
-                        }
-                      />
-                    );
-                  })}
-                </tbody>
-              </Table>
+              <ItemStatisticsTable
+                key={form.key}
+                form={form}
+                data={data}
+                onInspect={inspect}
+                profileId={profileId}
+                setProfileId={setProfileId}
+              />
               <div className="qca-section-heading">
                 <h3>학생 수준별 선택 선지</h3>
                 <label className="qaa-inline-select">
@@ -774,16 +633,42 @@ export default function QuizAchievementAnalysis({
           <Table label="성취기준별 배점 가중 성취율">
             <thead>
               <tr>
-                <th>성취기준</th>
-                <th>배점 가중 성취율</th>
-                <th>정답 / 응답</th>
-                <th>학생</th>
-                <th>진단평가</th>
-                <th>형성평가</th>
+                <AnalysisSortHeader
+                  column="code"
+                  label="성취기준"
+                  defaultDirection="ascending"
+                  {...standardSorting}
+                />
+                <AnalysisSortHeader
+                  column="weighted"
+                  label="배점 가중 성취율"
+                  {...standardSorting}
+                />
+                <AnalysisSortHeader
+                  column="rate"
+                  label="정답 / 응답"
+                  {...standardSorting}
+                />
+                <AnalysisSortHeader
+                  column="students"
+                  label="학생"
+                  {...standardSorting}
+                />
               </tr>
             </thead>
             <tbody>
-              {analysis.standards.map((row) => (
+              {sortAnalysisRows(
+                analysis.standards,
+                standardSorting.sort,
+                (row, key) =>
+                  key === "code"
+                    ? row.code
+                    : key === "weighted"
+                      ? row.weighted.percent
+                      : key === "rate"
+                        ? row.actual.percent
+                        : row.students,
+              ).map((row) => (
                 <tr key={row.code}>
                   <th>
                     <button
@@ -812,18 +697,6 @@ export default function QuizAchievementAnalysis({
                     <small>{percent(row.actual.percent)}</small>
                   </td>
                   <td>{row.students}</td>
-                  <td>
-                    {percent(row.diagnostic.percent)}
-                    <small>
-                      {row.diagnostic.correct}/{row.diagnostic.total}
-                    </small>
-                  </td>
-                  <td>
-                    {percent(row.formative.percent)}
-                    <small>
-                      {row.formative.correct}/{row.formative.total}
-                    </small>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -836,58 +709,70 @@ export default function QuizAchievementAnalysis({
             />
           )}
           <div className="qca-section-heading">
-            <h3>문항 목표수준·난도별 비교</h3>
-            <InfoHelp label="예상 성취율 계산">
-              예상치는 각 학생의 시험 시작 전 동일 기준·문항 목표수준·난도에서
-              서로 다른 문항계열 3개 이상에 대한 최초 정답률입니다. 같은
-              문항계열, 힌트·지원 여부 미확인, 수정 답안은 예상치에서
-              제외합니다. 3개는 자료 표시 기준이며 성취수준 분할점수가 아닙니다.
-              예상과 실제 비교는 예상치를 계산할 수 있는 동일 학생·응답에
-              한정하며 차이가 학습 효과나 문항 적합성을 확정하지 않습니다.
-            </InfoHelp>
+            <h3>문항 목표수준·난도별 정답률</h3>
           </div>
-          <Table label="목표 수준과 난도별 예상 실제 성취율">
+          <Table label="목표 수준과 난도별 실제 정답률">
             <thead>
               <tr>
-                <th>성취기준</th>
-                <th>문항 목표수준</th>
-                <th>출제 난도</th>
-                <th>전체 실제</th>
-                <th>사전 근거 예상</th>
-                <th>비교 대상 실제</th>
-                <th>실제−예상</th>
-                <th>비교 인원 / 응답</th>
-                <th>사전 근거</th>
+                <AnalysisSortHeader
+                  column="code"
+                  label="성취기준"
+                  defaultDirection="ascending"
+                  {...cellSorting}
+                />
+                <AnalysisSortHeader
+                  column="target"
+                  label="문항 목표수준"
+                  defaultDirection="ascending"
+                  {...cellSorting}
+                />
+                <AnalysisSortHeader
+                  column="difficulty"
+                  label="출제 난도"
+                  defaultDirection="ascending"
+                  {...cellSorting}
+                />
+                <AnalysisSortHeader
+                  column="rate"
+                  label="정답률"
+                  {...cellSorting}
+                />
+                <AnalysisSortHeader
+                  column="correct"
+                  label="정답 / 응답"
+                  {...cellSorting}
+                />
               </tr>
             </thead>
             <tbody>
-              {analysis.cells.map((row) => (
+              {sortAnalysisRows(analysis.cells, cellSorting.sort, (row, key) =>
+                key === "code"
+                  ? row.standardCode
+                  : key === "target"
+                    ? row.targetLevel || null
+                    : key === "difficulty"
+                      ? ({ easy: 1, medium: 2, hard: 3, "": null }[
+                          row.difficulty
+                        ] ?? null)
+                      : key === "rate"
+                        ? row.actual.percent
+                        : row.actual.correct,
+              ).map((row) => (
                 <tr
-                  key={`${row.standardCode}:${row.targetLevel}:${row.difficulty}`}
+                  key={
+                    row.standardCode +
+                    ":" +
+                    row.targetLevel +
+                    ":" +
+                    row.difficulty
+                  }
                 >
                   <th>{row.standardCode}</th>
                   <td>{row.targetLevel || "미지정"}</td>
                   <td>{difficultyLabel(row.difficulty)}</td>
+                  <td>{percent(row.actual.percent)}</td>
                   <td>
-                    {percent(row.actual.percent)}
-                    <small>
-                      {row.actual.correct}/{row.actual.total}
-                    </small>
-                  </td>
-                  <td>{percent(row.expectedPercent)}</td>
-                  <td>{percent(row.pairedActual.percent)}</td>
-                  <td>
-                    {row.expectedPercent == null ||
-                    row.pairedActual.percent == null
-                      ? "근거 부족"
-                      : `${(row.pairedActual.percent - row.expectedPercent).toFixed(1)}%p`}
-                  </td>
-                  <td>
-                    {row.pairedStudentCount}명 / {row.pairedActual.total}건
-                  </td>
-                  <td>
-                    {row.priorEvidenceCount}건
-                    <small>비교 제외 {row.missingBaselineCount}건</small>
+                    {row.actual.correct}/{row.actual.total}
                   </td>
                 </tr>
               ))}
@@ -895,169 +780,12 @@ export default function QuizAchievementAnalysis({
           </Table>
         </>
       )}
-      {view === 3 && (
-        <>
-          <div className="qca-section-heading qaa-evidence-heading">
-            <h3>사전 학습 근거와 학생 수준</h3>
-            <InfoHelp label="교사 수준 확인">
-              시험 시작 전 진단·형성평가를 검토한 뒤 성취기준별 분석용 A–E를
-              확인합니다. 오답·미입력·지원 여부 미확인은 구별합니다. 정답률을
-              자동으로 A–E에 대응하지 않습니다. 저장은 공식 점수에 영향을 주지
-              않습니다.
-            </InfoHelp>
-            {standardCode && (
-              <AchievementRubric
-                key={standardCode}
-                code={standardCode}
-                compact
-              />
-            )}
-          </div>
-          {!standardCode ? (
-            <p className="qca-empty">
-              학생 수준을 확인할 성취기준을 선택해 주세요.
-            </p>
-          ) : (
-            <>
-              {saveError && (
-                <div role="alert" className="qca-error">
-                  {saveError}
-                </div>
-              )}
-              <Table label="학생별 사전 근거와 교사 수준 확인">
-                <thead>
-                  <tr>
-                    <th>학생</th>
-                    <th>진단 정답 / 응답</th>
-                    <th>형성 정답 / 응답</th>
-                    <th>분석용 수준</th>
-                    <th>근거 확인</th>
-                    <th>저장</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {analysis.students.map((row) => {
-                    const stats = row.standards.find(
-                      (value) => value.code === standardCode,
-                    );
-                    const existing = data.profiles?.find(
-                      (value) =>
-                        value.studentUid === row.student.uid &&
-                        value.standardCode === standardCode,
-                    );
-                    const selected =
-                      draftLevels[row.student.uid] ?? existing?.level ?? "";
-                    return (
-                      <tr key={row.student.uid}>
-                        <th>
-                          {studentLabel(row.student, data)}
-                          <button
-                            type="button"
-                            className="qaa-text-button"
-                            aria-expanded={evidenceUid === row.student.uid}
-                            onClick={() =>
-                              setEvidenceUid(
-                                evidenceUid === row.student.uid
-                                  ? ""
-                                  : row.student.uid,
-                              )
-                            }
-                          >
-                            근거 보기
-                          </button>
-                        </th>
-                        <td>
-                          {stats
-                            ? `${stats.diagnostic.correct}/${stats.diagnostic.total}`
-                            : "—"}
-                        </td>
-                        <td>
-                          {stats
-                            ? `${stats.formative.correct}/${stats.formative.total}`
-                            : "—"}
-                        </td>
-                        <td>
-                          {existing?.stale && (
-                            <small>준거 변경 · 재확인 필요</small>
-                          )}
-                          <select
-                            aria-label={`${data.grade ? studentLabel(row.student, data) : row.student.name || row.student.number} 성취수준`}
-                            value={selected}
-                            disabled={!canEdit || !data.canReview || !!saving}
-                            onChange={(event) =>
-                              setDraftLevels((current) => ({
-                                ...current,
-                                [row.student.uid]: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">미분류</option>
-                            {ACHIEVEMENT_LEVELS.map((value) => (
-                              <option key={value}>{value}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <label className="qaa-check">
-                            <input
-                              type="checkbox"
-                              checked={confirmations[row.student.uid] || false}
-                              disabled={
-                                !canEdit ||
-                                !data.canReview ||
-                                !selected ||
-                                !row.attempt?.startedAt
-                              }
-                              onChange={(event) =>
-                                setConfirmations((current) => ({
-                                  ...current,
-                                  [row.student.uid]: event.target.checked,
-                                }))
-                              }
-                            />
-                            사전 근거 검토
-                          </label>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="qca-secondary"
-                            disabled={
-                              !canEdit ||
-                              !data.canReview ||
-                              !!saving ||
-                              (selected === (existing?.level || "") &&
-                                !existing?.stale) ||
-                              (!!selected && !confirmations[row.student.uid])
-                            }
-                            onClick={() => void saveLevel(row.student.uid)}
-                          >
-                            {saving === row.student.uid ? "저장 중…" : "저장"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-              {evidenceUid && (
-                <EvidenceDetails
-                  data={data}
-                  analysis={analysis}
-                  uid={evidenceUid}
-                  code={standardCode}
-                  resolveCodes={resolveCodes}
-                />
-              )}
-            </>
-          )}
-        </>
-      )}
-      {view === 5 && (
+      {(view === 3 || view === 5) && (
         <QuizAchievementEstimates
           data={data}
-          semesterId={scope.semesterId}
-          standardCode={standardCode}
+          analysis={analysis}
+          examRound={scope.examRound}
+          showPaper={view === 5}
         />
       )}
       {view === 4 && (
@@ -1068,6 +796,7 @@ export default function QuizAchievementAnalysis({
             setFormKey={setFormKey}
           />
           <SpTable
+            key={form?.key}
             analysis={analysis}
             formKey={form?.key}
             data={data}
@@ -1133,125 +862,6 @@ function AchievementRubric({
         </dl>
       )}
     </div>
-  );
-}
-
-function EvidenceDetails({
-  data,
-  analysis,
-  uid,
-  code,
-  resolveCodes,
-}: {
-  data: QuizClassAchievement;
-  analysis: AchievementAnalysis;
-  uid: string;
-  code: string;
-  resolveCodes: (value: AchievementMetadata) => {
-    codes: string[];
-    source: string;
-  };
-}) {
-  const attempt = analysis.attempts.find((row) => row.studentUid === uid);
-  const student = data.students.find((row) => row.uid === uid);
-  const rows =
-    attempt?.startedAt == null
-      ? []
-      : data.achievementEvidence.observations
-          .filter(
-            (row) =>
-              row.studentUid === uid &&
-              ["diagnostic", "formative"].includes(row.source) &&
-              resolveCodes(row).codes.includes(code) &&
-              achievementTimestamp(row.observedAt) != null &&
-              achievementTimestamp(row.observedAt)! < attempt.startedAt!,
-          )
-          .sort(
-            (a, b) =>
-              achievementTimestamp(b.observedAt)! -
-              achievementTimestamp(a.observedAt)!,
-          );
-  return (
-    <section aria-label={`${studentLabel(student, data)} 사전 근거`}>
-      <div className="qca-section-heading">
-        <h4>{studentLabel(student, data)} · 사전 근거</h4>
-        <InfoHelp label="근거 보관 범위">
-          모의고사 시작 전 기록입니다. 같은 문항의 반복 응답은 각각 확인할 수
-          있으나 요약에는 마지막 상태, 예상에는 독립 문항계열 최초 응답을
-          사용합니다. 진단·형성평가만 조회합니다. 제한된 자료는 당시 고정
-          문항으로 복원했거나 지원 여부를 확인할 수 없는 근거입니다. 수준
-          저장에는 연결된 서버 평가 근거를 최대 60개 기록합니다.
-        </InfoHelp>
-      </div>
-      {rows.length ? (
-        <Table label="선택 학생의 사전 학습 근거">
-          <thead>
-            <tr>
-              <th>유형</th>
-              <th>문항</th>
-              <th>정오</th>
-              <th>입력</th>
-              <th>지원 사용</th>
-              <th>기록 시각</th>
-              <th>보관 범위</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={`${row.source}:${row.id}:${i}`}>
-                <td>
-                  {
-                    {
-                      diagnostic: "진단",
-                      formative: "형성",
-                      worksheet: "학습지",
-                    }[row.source]
-                  }
-                </td>
-                <td>{row.itemId}</td>
-                <td>
-                  {row.source === "worksheet" && row.filled !== true
-                    ? "미입력"
-                    : row.correct === null
-                      ? "미확인"
-                      : row.correct
-                        ? "정답"
-                        : "오답"}
-                </td>
-                <td>
-                  {row.filled === null
-                    ? "미확인"
-                    : row.filled
-                      ? "입력"
-                      : "미입력"}
-                </td>
-                <td>
-                  {row.hintViewed === null
-                    ? "미확인"
-                    : row.hintViewed
-                      ? "있음"
-                      : "없음"}
-                </td>
-                <td>
-                  {new Intl.DateTimeFormat("ko-KR", {
-                    month: "numeric",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    timeZone: "Asia/Seoul",
-                  }).format(new Date(achievementTimestamp(row.observedAt)!))}
-                </td>
-                <td>{row.quality === "limited" ? "제한된 근거" : "보관됨"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      ) : (
-        <p className="qca-empty">
-          시작 시각 이전의 연결 근거를 확인하지 못했습니다.
-        </p>
-      )}
-    </section>
   );
 }
 
@@ -1400,6 +1010,93 @@ function ProfileChart({
         </g>
       ))}
     </svg>
+  );
+}
+function ItemStatisticsTable({
+  form,
+  data,
+  onInspect,
+  profileId,
+  setProfileId,
+}: {
+  form: AchievementAnalysis["forms"][number];
+  data: QuizClassAchievement;
+  onInspect: (id: string) => void;
+  profileId: string;
+  setProfileId: (id: string) => void;
+}) {
+  const sorting = useAnalysisTableSort({ key: "item", direction: "ascending" });
+  const questionById = new Map(
+    data.questions.map((question) => [
+      String(question.id),
+      question as typeof question & { paperOrder?: number },
+    ]),
+  );
+  const rows = sortAnalysisRows(form.items, sorting.sort, (item, key) => {
+    if (key === "item") return questionById.get(item.id)?.paperOrder || item.id;
+    if (key === "difficulty")
+      return item.intendedDifficulty
+        ? { easy: 1, medium: 2, hard: 3 }[item.intendedDifficulty]
+        : null;
+    if (key === "target") return item.targetAchievementLevel || null;
+    if (key === "correctRate") return item.correctRate;
+    if (key === "discrimination") return item.discrimination;
+    if (key === "upperLower27") return item.upperLower27;
+    if (key === "alphaIfDeleted") return item.alphaIfDeleted;
+    if (key === "unanswered")
+      return item.missingAnswer
+        ? null
+        : ratio(item.unanswered, item.sampleSize);
+    if (key.startsWith("choice:"))
+      return item.choices[Number(key.slice(7))]?.percent;
+    return item.levelRates.find((row) => row.level === key)?.percent;
+  });
+  const columns = [
+    ["item", "문항", "ascending"],
+    ["difficulty", "출제 난도", "ascending"],
+    ["target", "목표 수준", "ascending"],
+    ["correctRate", "정답률"],
+    ["discrimination", "변별도"],
+    ["upperLower27", "D (27%)"],
+    ["alphaIfDeleted", "제거 시 α"],
+    ...[0, 1, 2, 3, 4].map((index) => [`choice:${index}`, `선지 ${index + 1}`]),
+    ["unanswered", "무응답"],
+    ...[...ACHIEVEMENT_LEVELS, "unclassified"].map((level) => [
+      level,
+      levelLabel(level),
+    ]),
+  ];
+  return (
+    <Table label="문항별 통계와 학생 수준별 정답률" wide>
+      <thead>
+        <tr>
+          {columns.map(([column, label, direction]) => (
+            <AnalysisSortHeader
+              key={column}
+              column={column}
+              label={label}
+              defaultDirection={
+                direction === "ascending" ? "ascending" : "descending"
+              }
+              {...sorting}
+            />
+          ))}
+          <th>수준 프로필</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((item) => (
+          <FragmentRows
+            key={item.id}
+            item={item}
+            question={questionById.get(item.id)}
+            onInspect={onInspect}
+            expanded={profileId === item.id}
+            onToggle={() => setProfileId(profileId === item.id ? "" : item.id)}
+          />
+        ))}
+      </tbody>
+    </Table>
   );
 }
 function FragmentRows({
@@ -1599,13 +1296,9 @@ function StandardLevelRates({
             const items = analysis.attempts
               .filter(
                 (attempt) =>
-                  confirmedAchievementLevel(
-                    data.profiles || [],
-                    attempt.studentUid,
-                    [code],
-                    attempt.startedAt,
-                    attempt.attemptId,
-                  ) === value,
+                  (analysis.cumulativeScores.find(
+                    (row) => row.student.uid === attempt.studentUid,
+                  )?.level || "unclassified") === value,
               )
               .flatMap((attempt) =>
                 attempt.items.filter(
@@ -1704,20 +1397,56 @@ function SpTable({
   data: QuizClassAchievement;
   onInspect: (id: string) => void;
 }) {
-  if (!formKey) return null;
+  const studentSort = useAnalysisTableSort({
+    key: "correctCount",
+    direction: "descending",
+  });
+  const itemSort = useAnalysisTableSort({
+    key: "correctRate",
+    direction: "descending",
+  });
   const metrics = analysis.forms.find(
     (form) => form.key === formKey,
-  )!.psychometrics;
-  const ids = metrics.spItemOrder;
+  )?.psychometrics;
+  if (!metrics) return null;
+  const studentById = new Map(
+    data.students.map((student) => [student.uid, student]),
+  );
+  const questionById = new Map(
+    data.questions.map((question) => [
+      String(question.id),
+      question as typeof question & { paperOrder?: number },
+    ]),
+  );
+  const columns = sortAnalysisRows(
+    metrics.spItemOrder.map((id, index) => ({
+      id,
+      index,
+      total: metrics.spItemTotals[index],
+    })),
+    itemSort.sort,
+    (column) => column.total,
+  );
+  const rows = sortAnalysisRows(metrics.spRows, studentSort.sort, (row, key) =>
+    key === "student"
+      ? studentLabel(studentById.get(row.studentId), data)
+      : key === "cautionIndex"
+        ? row.cautionIndex
+        : row.correctCount,
+  );
+  const showCurves =
+    ["correctCount", "correctRate"].includes(studentSort.sort.key) &&
+    studentSort.sort.direction === "descending" &&
+    itemSort.sort.direction === "descending";
   return (
     <>
       <div className="qca-section-heading">
         <h3>S–P 응답표</h3>
         <InfoHelp label="S–P표 읽기">
-          학생은 정답수 순, 문항은 정답률 순입니다. 동일 정답수·정답률 내 순서는
-          표시용이며 학생 수준을 뜻하지 않습니다. 파란 세로선은 학생 정답수
-          경계(S), 회색 가로선은 문항 정답자수 경계(P)입니다. 각 학생의
-          정답수까지 모두 맞힌 계단형 기준과 다른 응답을 표시합니다. Sato
+          파란 칸은 정답, 색 없는 칸은 오답입니다. 기본 정렬은 학생 정답수 높은
+          순, 문항 정답률 높은 순입니다. 헤더를 누르면 정렬 방향이 바뀝니다. 두
+          기준이 높은 순일 때만 학생 정답수 경계(S)와 문항 정답자수 경계(P)를
+          표시합니다. 주황 테두리는 기본 계단형 기준과 다른 응답입니다. Sato
           주의지수는 응답 불일치의 원시 지표이고 1보다 클 수도 있습니다.
           상수·만점·0점 등 계산 불가는 —로 두며 부주의·부정행위를 확정하지
           않습니다.
@@ -1726,45 +1455,71 @@ function SpTable({
       <Table label="학생과 문항별 정오 S-P표" wide>
         <thead>
           <tr>
-            <th>학생</th>
-            <th>정답수</th>
-            <th>주의지수</th>
-            {ids.map((id) => (
+            <AnalysisSortHeader
+              column="student"
+              label="학생"
+              defaultDirection="ascending"
+              {...studentSort}
+            />
+            <AnalysisSortHeader
+              column="correctCount"
+              label="정답수"
+              {...studentSort}
+            />
+            <AnalysisSortHeader
+              column="correctRate"
+              label="정답률"
+              {...studentSort}
+            />
+            <AnalysisSortHeader
+              column="cautionIndex"
+              label="주의지수"
+              {...studentSort}
+            />
+            {columns.map(({ id }) => (
               <th key={id}>
                 <button
                   className="qaa-text-button"
                   type="button"
                   onClick={() => onInspect(id)}
                 >
-                  {(
-                    data.questions.find(
-                      (question) => String(question.id) === id,
-                    ) as any
-                  )?.paperOrder || id}
+                  {questionById.get(id)?.paperOrder || id}
                 </button>
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <AnalysisSortHeader
+              column="correctRate"
+              label="문항 정답률"
+              colSpan={4}
+              {...itemSort}
+            />
+            {columns.map(({ id, total }) => (
+              <th key={id} scope="col">
+                {percent(ratio(total, metrics.sampleSize))}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {metrics.spRows.map((row, rowIndex) => {
-            const student = data.students.find(
-              (student) => student.uid === row.studentId,
-            );
+          {rows.map((row, rowIndex) => {
+            const student = studentById.get(row.studentId);
             return (
               <tr key={row.studentId}>
                 <th>{studentLabel(student, data)}</th>
                 <td>{row.correctCount}</td>
+                <td>{percent(row.percentCorrect)}</td>
                 <td>{number(row.cautionIndex, 3)}</td>
-                {ids.map((id, index) => {
+                {columns.map(({ id, index }, displayIndex) => {
                   const correct = row.responses[index];
                   const atypical =
                     index < row.correctCount ? !correct : correct;
                   return (
                     <td
                       key={id}
-                      className={`qaa-sp-cell${atypical ? " qaa-sp-atypical" : ""}${index + 1 === row.sCurve ? " qaa-sp-s-boundary" : ""}${rowIndex + 1 === metrics.spItemTotals[index] ? " qaa-sp-p-boundary" : ""}`}
-                      aria-label={`${id}번 ${correct ? "정답" : "오답"}${atypical ? ", 계단형 기준과 다름" : ""}`}
+                      className={`qaa-sp-cell${correct ? " qaa-sp-correct" : " qaa-sp-incorrect"}${atypical ? " qaa-sp-atypical" : ""}${showCurves && displayIndex + 1 === row.sCurve ? " qaa-sp-s-boundary" : ""}${showCurves && rowIndex + 1 === metrics.spItemTotals[index] ? " qaa-sp-p-boundary" : ""}`}
+                      aria-label={`${questionById.get(id)?.paperOrder || id}번 ${correct ? "정답" : "오답"}${atypical ? ", 계단형 기준과 다름" : ""}`}
                     >
                       {correct ? "1" : "0"}
                     </td>
@@ -1793,10 +1548,10 @@ function AdjacentLevels({
       <div className="qca-section-heading">
         <h3>인접 수준 간 정답률 차이</h3>
         <InfoHelp label="인접 수준별 문항 차이">
-          교사가 확인한 인접 A–E 집단의 정답률 차이가 큰 문항을 보여 줍니다. 두
-          집단 모두 관찰된 경우만 계산하며 차이가 특정 수치 이상이라는 이유로
-          문항을 합격·부적합으로 판정하지 않습니다. 소표본에서 차이는 크게
-          흔들릴 수 있습니다.
+          모의고사 누적 수준이 인접한 A–E 집단의 정답률 차이가 큰 문항을 보여
+          줍니다. 두 집단 모두 관찰된 경우만 계산하며 차이가 특정 수치
+          이상이라는 이유로 문항을 합격·부적합으로 판정하지 않습니다. 소표본에서
+          차이는 크게 흔들릴 수 있습니다.
         </InfoHelp>
       </div>
       <Table label="인접 성취수준별 문항 정답률 차이">
@@ -1864,7 +1619,7 @@ function AdjacentLevels({
                     <th>
                       {upper}/{lower}
                     </th>
-                    <td colSpan={5}>교사 확인 수준별 응답 부족</td>
+                    <td colSpan={5}>누적 수준별 응답 부족</td>
                   </tr>,
                 ];
           })}
@@ -1885,9 +1640,9 @@ function PendingAchievementView({
     ["학생 수준", "인원", "비율", "평균", "표준편차"],
     ["문항", "출제 난도", "목표 수준", "정답률", "변별도"],
     ["성취기준", "문항 수", "응답 학생", "정답률"],
-    ["학생", "사전 학습 근거", "확인 수준"],
+    ["학생", "회차별 점수", "누적 점수", "분석 수준"],
     ["학생", "문항별 정오", "정답 수"],
-    ["성취기준", "A 추정", "B 추정", "C 추정", "D 추정", "E 추정", "자료 부족"],
+    ["학생", "누적 점수", "분석 수준", "A/B", "B/C", "C/D", "D/E"],
   ][view];
   return (
     <>
