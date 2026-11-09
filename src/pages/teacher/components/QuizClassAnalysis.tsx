@@ -641,213 +641,238 @@ export default function QuizClassAnalysis({
     <section className="quiz-class-analysis" aria-label="학급별 평가 분석">
       <div className="qca-toolbar-scroll">
         <form
-          className="ws-filter-bar qca-filters"
+          className={`ws-filter-bar qca-filters${isMockExam ? " qca-filters--mock" : ""}`}
           onSubmit={(event) => {
             event.preventDefault();
             queryResults();
           }}
         >
-          <label
-            className={`qca-assessment-select${unitScoped ? " qca-assessment-select--scoped" : ""}`}
-          >
-            {unitScoped && isMockExam ? "회차" : "평가"}
-            <select
-              aria-label="분석할 평가"
-              value={assessmentId}
-              disabled={catalogLoading || !assessments.length}
-              onChange={(event) => {
-                clearResult();
-                const next = assessments.find(
-                  (entry) => entry.id === event.target.value,
-                );
-                setAssessmentId(event.target.value);
-                setUnitId(next?.unitId || "");
-                setAchievementView(0);
-                setAnalysisMode(
-                  next?.category === "exam_prep" ? "achievement" : "summary",
-                );
-              }}
+          <div className="qca-scope-fields">
+            <label
+              className={`qca-assessment-select${unitScoped ? " qca-assessment-select--scoped" : ""}`}
             >
-              {(!unitScoped || !assessmentId) && (
-                <option value="">
-                  {unitScoped && !catalogLoading && !assessments.length
-                    ? "등록된 평가 없음"
-                    : "평가 선택"}
-                </option>
-              )}
-              {unitScoped
-                ? assessments.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.category === "exam_prep"
-                        ? formatMockExamRoundShortLabel(entry.examRound)
-                        : assessmentLabel(entry.category, entry.examRound)}
-                    </option>
-                  ))
-                : assessmentGroups.map((group) => (
-                    <optgroup key={group.id} label={group.label}>
-                      {group.entries.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
-                          {entry.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-            </select>
-          </label>
-          <label>
-            학년·학급
-            <select
-              aria-label="분석할 학급"
-              value={classId}
-              disabled={catalogLoading || !catalog?.classes.length}
-              onChange={(event) => {
-                clearResult();
-                setClassId(event.target.value);
-                setComparisonOpen(false);
-                setCompareIds((ids) =>
-                  event.target.value.startsWith("grade:")
-                    ? []
-                    : ids.filter((id) => id !== event.target.value),
-                );
-                if (comparisonGrade)
-                  setComparisonGrade(
-                    catalog?.classes.find(
-                      (entry) => entry.id === event.target.value,
-                    )?.grade || "",
-                  );
-              }}
-            >
-              <option value="">학급 선택</option>
-              {grades.map((grade) => (
-                <option value={`grade:${grade}`} key={`grade:${grade}`}>
-                  {grade}학년 전체
-                </option>
-              ))}
-              {catalog?.classes.map((entry) => (
-                <option value={entry.id} key={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {isMockExam && (
-            <label className="qca-report-select">
-              분석 항목
+              {unitScoped && isMockExam ? "회차" : "평가"}
               <select
-                aria-label="분석 항목"
-                value={showAchievement ? String(achievementView) : "summary"}
-                disabled={searchOpen}
+                aria-label="분석할 평가"
+                value={assessmentId}
+                disabled={catalogLoading || !assessments.length}
                 onChange={(event) => {
-                  const nextMode =
-                    event.target.value === "summary"
-                      ? "summary"
-                      : "achievement";
-                  if (nextMode !== analysisMode) clearResult();
-                  setComparisonOpen(false);
-                  setAnalysisMode(nextMode);
-                  if (nextMode === "achievement")
-                    setAchievementView(Number(event.target.value));
+                  clearResult();
+                  const next = assessments.find(
+                    (entry) => entry.id === event.target.value,
+                  );
+                  setAssessmentId(event.target.value);
+                  setUnitId(next?.unitId || "");
+                  setAchievementView(0);
+                  setAnalysisMode(
+                    next?.category === "exam_prep" ? "achievement" : "summary",
+                  );
                 }}
               >
-                {QUIZ_ACHIEVEMENT_VIEWS.map((label, index) => (
-                  <option key={label} value={index}>
-                    {label}
+                {(!unitScoped || !assessmentId) && (
+                  <option value="">
+                    {unitScoped && !catalogLoading && !assessments.length
+                      ? "등록된 평가 없음"
+                      : "평가 선택"}
                   </option>
-                ))}
-                <option value="summary">학급별 결과·비교</option>
+                )}
+                {unitScoped
+                  ? assessments.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.category === "exam_prep"
+                          ? formatMockExamRoundShortLabel(entry.examRound)
+                          : assessmentLabel(entry.category, entry.examRound)}
+                      </option>
+                    ))
+                  : assessmentGroups.map((group) => (
+                      <optgroup key={group.id} label={group.label}>
+                        {group.entries.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {entry.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
               </select>
             </label>
-          )}
-          <div className="qca-filter-actions">
-            {!showAchievement && (
-              <button
-                ref={comparisonButton}
-                type="button"
-                className={`qca-icon-button${compareIds.length || comparisonGrade ? " is-active" : ""}`}
-                aria-label="학급 비교"
-                title="학급 비교"
-                aria-expanded={comparisonOpen}
-                aria-controls={comparisonOpen ? comparisonId : undefined}
-                onClick={() => setComparisonOpen(!comparisonOpen)}
-                disabled={
-                  !classId ||
-                  !!selectedGrade ||
-                  catalogLoading ||
-                  showAchievement
-                }
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                >
-                  <path d="M3 5h8m4 0h6M3 12h3m4 0h11M3 19h11m4 0h3M11 2v6M6 9v6M14 16v6" />
-                </svg>
-                {(compareIds.length > 0 || comparisonGrade) && (
-                  <span className="qca-filter-count">
-                    {compareIds.length + (comparisonGrade ? 1 : 0)}
-                  </span>
-                )}
-              </button>
-            )}
-            <div className="qca-search">
-              {searchOpen && (
-                <div className="qca-search-input">
-                  <label
-                    className="qca-sr-only"
-                    htmlFor={`${comparisonId}-search`}
-                  >
-                    전체 단원 문항 검색
-                  </label>
-                  <input
-                    ref={searchInput}
-                    id={`${comparisonId}-search`}
-                    type="search"
-                    value={keyword}
-                    maxLength={80}
-                    placeholder="전체 단원 문항 검색"
-                    onChange={(event) => setKeyword(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        closeSearch();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="qca-icon-button"
-                    aria-label="검색 해제"
-                    title="검색 해제"
-                    onClick={closeSearch}
-                  >
-                    <CloseIcon />
-                  </button>
-                </div>
-              )}
-              <button
-                ref={searchButton}
-                type="button"
-                className="qca-icon-button"
-                aria-label={
-                  searchOpen ? "전체 단원 검색 실행" : "전체 단원 검색"
-                }
-                title={searchOpen ? "전체 단원 검색 실행" : "전체 단원 검색"}
-                aria-expanded={searchOpen}
-                disabled={
-                  catalogLoading ||
-                  (searchOpen && (!queryKeyword || !classId || loading))
-                }
-                onClick={() => {
-                  if (searchOpen) void loadSummary();
-                  else setSearchOpen(true);
+            <label>
+              학년·학급
+              <select
+                aria-label="분석할 학급"
+                value={classId}
+                disabled={catalogLoading || !catalog?.classes.length}
+                onChange={(event) => {
+                  clearResult();
+                  setClassId(event.target.value);
+                  setComparisonOpen(false);
+                  setCompareIds((ids) =>
+                    event.target.value.startsWith("grade:")
+                      ? []
+                      : ids.filter((id) => id !== event.target.value),
+                  );
+                  if (comparisonGrade)
+                    setComparisonGrade(
+                      catalog?.classes.find(
+                        (entry) => entry.id === event.target.value,
+                      )?.grade || "",
+                    );
                 }}
               >
+                <option value="">학급 선택</option>
+                {grades.map((grade) => (
+                  <option value={`grade:${grade}`} key={`grade:${grade}`}>
+                    {grade}학년 전체
+                  </option>
+                ))}
+                {catalog?.classes.map((entry) => (
+                  <option value={entry.id} key={entry.id}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="qca-analysis-tools">
+            {isMockExam && (
+              <label className="qca-report-select">
+                분석 항목
+                <select
+                  aria-label="분석 항목"
+                  value={showAchievement ? String(achievementView) : "summary"}
+                  disabled={searchOpen}
+                  onChange={(event) => {
+                    const nextMode =
+                      event.target.value === "summary"
+                        ? "summary"
+                        : "achievement";
+                    if (nextMode !== analysisMode) clearResult();
+                    setComparisonOpen(false);
+                    setAnalysisMode(nextMode);
+                    if (nextMode === "achievement")
+                      setAchievementView(Number(event.target.value));
+                  }}
+                >
+                  {QUIZ_ACHIEVEMENT_VIEWS.map((label, index) => (
+                    <option key={label} value={index}>
+                      {label}
+                    </option>
+                  ))}
+                  <option value="summary">학급별 결과·비교</option>
+                </select>
+              </label>
+            )}
+            <div className="qca-filter-actions">
+              {!showAchievement && (
+                <button
+                  ref={comparisonButton}
+                  type="button"
+                  className={`qca-icon-button${compareIds.length || comparisonGrade ? " is-active" : ""}`}
+                  aria-label="학급 비교"
+                  title="학급 비교"
+                  aria-expanded={comparisonOpen}
+                  aria-controls={comparisonOpen ? comparisonId : undefined}
+                  onClick={() => setComparisonOpen(!comparisonOpen)}
+                  disabled={
+                    !classId ||
+                    !!selectedGrade ||
+                    catalogLoading ||
+                    showAchievement
+                  }
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                  >
+                    <path d="M3 5h8m4 0h6M3 12h3m4 0h11M3 19h11m4 0h3M11 2v6M6 9v6M14 16v6" />
+                  </svg>
+                  {(compareIds.length > 0 || comparisonGrade) && (
+                    <span className="qca-filter-count">
+                      {compareIds.length + (comparisonGrade ? 1 : 0)}
+                    </span>
+                  )}
+                </button>
+              )}
+              <div className="qca-search">
+                {searchOpen && (
+                  <div className="qca-search-input">
+                    <label
+                      className="qca-sr-only"
+                      htmlFor={`${comparisonId}-search`}
+                    >
+                      전체 단원 문항 검색
+                    </label>
+                    <input
+                      ref={searchInput}
+                      id={`${comparisonId}-search`}
+                      type="search"
+                      value={keyword}
+                      maxLength={80}
+                      placeholder="전체 단원 문항 검색"
+                      onChange={(event) => setKeyword(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          closeSearch();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="qca-icon-button"
+                      aria-label="검색 해제"
+                      title="검색 해제"
+                      onClick={closeSearch}
+                    >
+                      <CloseIcon />
+                    </button>
+                  </div>
+                )}
+                <button
+                  ref={searchButton}
+                  type="button"
+                  className="qca-icon-button"
+                  aria-label={
+                    searchOpen ? "전체 단원 검색 실행" : "전체 단원 검색"
+                  }
+                  title={searchOpen ? "전체 단원 검색 실행" : "전체 단원 검색"}
+                  aria-expanded={searchOpen}
+                  disabled={
+                    catalogLoading ||
+                    (searchOpen && (!queryKeyword || !classId || loading))
+                  }
+                  onClick={() => {
+                    if (searchOpen) void loadSummary();
+                    else setSearchOpen(true);
+                  }}
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                  >
+                    <circle cx="10.5" cy="10.5" r="6.5" />
+                    <path d="m16 16 5 5" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                type="button"
+                className="qca-icon-button qca-reset"
+                aria-label="조회 전체 초기화"
+                title="조회 전체 초기화"
+                onClick={resetQuery}
+              >
                 <svg
                   width="20"
                   height="20"
@@ -857,38 +882,30 @@ export default function QuizClassAnalysis({
                   stroke="currentColor"
                   strokeWidth="1.75"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <circle cx="10.5" cy="10.5" r="6.5" />
-                  <path d="m16 16 5 5" />
+                  <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
                 </svg>
               </button>
-            </div>
-            <button
-              type="button"
-              className="qca-icon-button qca-reset"
-              aria-label="조회 전체 초기화"
-              title="조회 전체 초기화"
-              onClick={resetQuery}
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              <button
+                type="submit"
+                className="qca-primary"
+                disabled={!canQuery}
+                aria-label={
+                  (showAchievement ? achievementLoading : loading)
+                    ? "조회 중…"
+                    : "결과 조회"
+                }
               >
-                <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
-              </svg>
-            </button>
-            <button type="submit" className="qca-primary" disabled={!canQuery}>
-              {(showAchievement ? achievementLoading : loading)
-                ? "조회 중…"
-                : "결과 조회"}
-            </button>
+                {(showAchievement ? achievementLoading : loading) ? (
+                  "조회 중…"
+                ) : (
+                  <>
+                    <span className="qca-query-prefix">결과 </span>조회
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
