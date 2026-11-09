@@ -99,6 +99,49 @@ test('retired compact evidence requests require a client refresh before analysis
     assert.throws(() => normalizeQuery({ ...achievement, compactEvidence }), error => error.code === 'invalid-argument');
 });
 
+test('snapshot dictionary is an explicit boolean accepted only by detail requests', () => {
+  assert.equal(normalizeQuery({ ...q, mode: 'detail', snapshotDictionary: true }).snapshotDictionary, true);
+  for (const request of [{ ...q, mode: 'detail' }, { ...q, mode: 'detail', snapshotDictionary: false }])
+    assert.equal(Object.hasOwn(normalizeQuery(request), 'snapshotDictionary'), false);
+  for (const mode of ['catalog', 'summary', 'achievement']) for (const snapshotDictionary of [true, false, undefined])
+    assert.throws(() => normalizeQuery({ ...q, mode, snapshotDictionary }), error => error.code === 'invalid-argument');
+  for (const snapshotDictionary of [undefined, null, 1, 'true', {}, []])
+    assert.throws(() => normalizeQuery({ ...q, mode: 'detail', snapshotDictionary }), error => error.code === 'invalid-argument');
+});
+
+function expandSnapshotDictionary(response) {
+  const { historicalQuestionSnapshots, ...inline } = response;
+  return { ...inline, rawRows: inline.rawRows.map(row => {
+    if (!Object.hasOwn(row.raw, 'questionSnapshotRefs')) return row;
+    const { questionSnapshotRefs, ...raw } = row.raw;
+    return { ...row, raw: { ...raw, questionSnapshots: questionSnapshotRefs.map(key => {
+      assert.ok(Object.hasOwn(historicalQuestionSnapshots, key));
+      return historicalQuestionSnapshots[key];
+    }) } };
+  }) };
+}
+
+test('detail dictionary preserves rich historical originals, repeated ordering and inline compatibility', async () => {
+  const initial = fixture();
+  const first = { id: 1, question: '당시 발문', answer: '당시 정답', explanation: '당시 해설', image: 'data:image/svg+xml,old',
+    options: ['가', '나'], passageSegments: [{ type: 'text', text: '원문' }], empty: '', optional: null, sourceRevision: '1' };
+  const changed = { ...first, question: '다른 원문', answer: '다른 정답' };
+  Object.assign(initial['semester_assessment_results/r1'], { answers: { 1: '학생의 당시 답' }, sourceHash: 'a'.repeat(64),
+    questionSnapshots: [first, changed, first], questionSnapshotOmittedIds: ['99'] });
+  Object.assign(initial['semester_assessment_results/r2'], { sourceHash: 'a'.repeat(64), questionSnapshots: [changed] });
+  initial['semester_assessment_submissions/r2'] = { studentUid: 'a', semesterId: SCOPE, attemptId: 'r2', answers: { 1: '복구된 당시 답' } };
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db, now: () => 1800000000000 });
+  const plain = await service.query(normalizeQuery({ ...q, mode: 'detail' }));
+  assert.deepEqual(await service.query(normalizeQuery({ ...q, mode: 'detail', snapshotDictionary: false })), plain);
+  assert.equal(Object.hasOwn(plain, 'historicalQuestionSnapshots'), false);
+  const packed = await service.query(normalizeQuery({ ...q, mode: 'detail', snapshotDictionary: true }));
+  assert.equal(Object.keys(packed.historicalQuestionSnapshots).length, 2);
+  assert.deepEqual(expandSnapshotDictionary(packed), plain);
+  assert.equal(packed.questions[0].question, '사림에 대한 설명은?');
+  assert.deepEqual(packed.rawRows.find(row => row.id === 'r2').raw.answers, { 1: '복구된 당시 답' });
+  assert.ok(f.writes.every(path => path.startsWith('quiz_class_analysis_cache/')), 'only existing derived catalog caches may be written');
+});
+
 test('whole-grade scope is explicit and cannot combine client classes or comparison grades', () => {
   for (const mode of ['summary', 'detail', 'achievement']) {
     const request = { ...q, mode, grade: '3', classIds: [], category: 'exam_prep', unitId: 'exam_prep', examRound: 'round_1' };
@@ -511,12 +554,142 @@ test('achievement still rejects more than 32 MiB of distinct frozen paper conten
   assert.deepEqual(f.writes, []);
 });
 
+test('whole-grade detail dictionary handles repeated papers above 32 MiB in ten-body batches with one decode', async () => {
+  const f = memory(gradeExamFixture()), getAll = f.db.getAll, batches = [], decodes = new Map();
+  for (const key of [...f.data.keys()]) if (key.startsWith('semester_assessment_results/exam_')) f.data.delete(key);
+  const original = { id: '91', question: '당시 발문', answer: '가', image: 'a'.repeat(450 * 1024), options: ['가', '나'] };
+  const changed = { ...original, question: '같은 sourceHash의 다른 원문', image: 'b'.repeat(450 * 1024) };
+  for (let index = 0; index < 80; index++) f.data.set(`semester_assessment_results/detail_${index}`, {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: index % 2 ? 'a' : 'b',
+    sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', sourceHash: 'a'.repeat(64),
+    attemptId: `detail_${index}`, percent: index ? 100 : 60, answers: { 91: `당시 답 ${index}` },
+    questionSnapshots: [index === 1 ? changed : original], questionSnapshotOmittedIds: [],
+  });
+  f.data.set('semester_assessment_results/foreign_detail', { ...f.data.get('semester_assessment_results/detail_0'), studentUid: 'foreign' });
+  f.data.set('semester_assessment_results/old_detail', { ...f.data.get('semester_assessment_results/detail_0'), semesterId: '2026-1' });
+  f.db.getAll = async (...args) => {
+    const bodies = args.at(-1)?.fieldMask?.includes('questionSnapshots');
+    if (bodies) batches.push(args.length - 1);
+    const docs = await getAll(...args);
+    return bodies ? docs.map(doc => ({ ...doc, data() { decodes.set(doc.id, (decodes.get(doc.id) || 0) + 1); return doc.data(); } })) : docs;
+  };
+  const service = createQuizClassAnalysisService({ db: f.db });
+  const input = gradeQuery({ mode: 'detail', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', snapshotDictionary: true });
+  const result = await service.query(input);
+  assert.equal(result.rawRows.length, 80);
+  assert.equal(Object.keys(result.historicalQuestionSnapshots).length, 2);
+  assert.ok(Buffer.byteLength(JSON.stringify(result)) < 8 * 1024 * 1024);
+  assert.deepEqual(batches, Array(8).fill(10));
+  assert.equal(decodes.size, 80);
+  assert.ok([...decodes.values()].every(count => count === 1));
+  for (const row of expandSnapshotDictionary(result).rawRows) {
+    const expected = f.data.get(`semester_assessment_results/${row.id}`);
+    assert.deepEqual(row.raw.questionSnapshots, expected.questionSnapshots);
+    assert.deepEqual(row.raw.answers, expected.answers);
+    assert.equal(row.raw.percent, expected.percent);
+  }
+  for (const snapshotDictionary of [undefined, false]) {
+    const legacy = { ...input }; delete legacy.snapshotDictionary;
+    if (snapshotDictionary === false) legacy.snapshotDictionary = false;
+    await assert.rejects(service.query(legacy), error => error.details?.reason === 'QUIZ_ANALYSIS_BYTE_LIMIT');
+  }
+  assert.ok(f.writes.every(path => path.startsWith('quiz_class_analysis_cache/')), 'only existing derived catalog caches may be written');
+});
+
+test('detail dictionary retains unique-body and response byte limits', async () => {
+  const input = gradeQuery({ mode: 'detail', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', snapshotDictionary: true });
+  for (const [count, reason] of [[80, 'QUIZ_ANALYSIS_BYTE_LIMIT'], [20, 'QUIZ_ANALYSIS_DETAIL_TOO_LARGE']]) {
+    const f = memory(gradeExamFixture()), image = 'x'.repeat(450 * 1024);
+    for (let index = 0; index < count; index++) f.data.set(`semester_assessment_results/unique_detail_${index}`, {
+      assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+      sourceHash: 'a'.repeat(64), answers: {}, questionSnapshots: [{ id: '91', question: `원문 ${index}`, image }],
+    });
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(input), error => error.details?.reason === reason);
+    assert.ok(f.writes.every(path => path.startsWith('quiz_class_analysis_cache/')), 'only existing derived catalog caches may be written');
+  }
+});
+
+function boundedPaperFixture() {
+  const f = memory();
+  for (let index = 0; index < 35; index++) f.data.set(`semester_assessment_results/wave_${String(index).padStart(2, '0')}`, {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    answers: { 91: String(index) }, questionSnapshots: [{ id: '91', question: '당시 원문', answer: '가' }],
+  });
+  return f;
+}
+
+test('dictionary paper reads overlap at most two ten-document batches while decoding and rows retain order', async () => {
+  const f = boundedPaperFixture(), getAll = f.db.getAll, releases = [], sizes = [], decoded = [];
+  let calls = 0, active = 0, peak = 0;
+  f.db.getAll = async (...args) => {
+    const call = calls++;
+    sizes.push(args.length - 1); active++; peak = Math.max(peak, active);
+    if (call < 2) await new Promise(resolve => { releases[call] = resolve; });
+    try {
+      const docs = await getAll(...args);
+      return docs.map(doc => ({ ...doc, data() { decoded.push(doc.id); return doc.data(); } }));
+    } finally { active--; }
+  };
+  const input = gradeQuery({ mode: 'detail', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', snapshotDictionary: true });
+  const loading = createQuizClassAnalysisService({ db: f.db }).loadResults(input, [{ uid: 'a' }], true, { documents: 0, bytes: 0 });
+  for (let index = 0; index < 10 && calls < 2; index++) await new Promise(setImmediate);
+  assert.equal(calls, 2, 'both reads start before either deferred read finishes');
+  assert.equal(active, 2);
+  releases[1](); await new Promise(setImmediate);
+  assert.equal(calls, 2, 'the next wave waits for ordered validation');
+  assert.deepEqual(decoded, [], 'a faster second read cannot move decoding or budget updates ahead');
+  releases[0]();
+  const rows = await loading;
+  assert.equal(peak, 2);
+  assert.deepEqual(sizes, [10, 10, 10, 5]);
+  const expected = Array.from({ length: 35 }, (_, index) => `wave_${String(index).padStart(2, '0')}`);
+  assert.deepEqual(rows.map(row => row.id), expected);
+  assert.deepEqual(decoded, expected);
+  assert.deepEqual(f.writes, []);
+});
+
+test('failed dictionary waves stop scheduling and preserve validation or byte-limit precedence over a later fetch failure', async () => {
+  for (const failure of ['scope', 'limit', 'read']) {
+    const f = boundedPaperFixture(), getAll = f.db.getAll;
+    let calls = 0;
+    f.db.getAll = async (...args) => {
+      const call = ++calls;
+      if (call === 2) throw new Error('Later batch failed');
+      if (failure === 'read') throw new Error('First batch failed');
+      const docs = await getAll(...args);
+      return failure === 'scope' ? docs.map((doc, index) => index ? doc : ({ ...doc, data: () => ({ ...doc.data(), studentUid: 'foreign' }) })) : docs;
+    };
+    const budget = { documents: 0, bytes: 0, ...(failure === 'limit' ? { resultReadBytes: 256 * 1024 * 1024 } : {}) };
+    const input = gradeQuery({ mode: 'detail', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', snapshotDictionary: true });
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(input, [{ uid: 'a' }], true, budget), error =>
+      failure === 'scope' ? error.details?.reason === 'QUIZ_ANALYSIS_CHANGED'
+        : failure === 'limit' ? error.details?.reason === 'QUIZ_ANALYSIS_READ_BYTE_LIMIT' : error.message === 'First batch failed');
+    assert.equal(calls, 2, 'failed validation never schedules a later wave');
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('detail dictionary stops at the original-processing cap even when retained contents are identical', async () => {
+  const f = memory(), budget = { documents: 0, bytes: 0 };
+  const questionSnapshots = [{ id: '91', question: '같은 원문', image: 'x'.repeat(500 * 1024) }];
+  for (let index = 0; index < 560; index++) f.data.set(`semester_assessment_results/repeated_detail_${index}`, {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', questionSnapshots,
+  });
+  const input = gradeQuery({ mode: 'detail', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', snapshotDictionary: true });
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(input, [{ uid: 'a' }], true, budget),
+    error => error.code === 'resource-exhausted' && error.details?.reason === 'QUIZ_ANALYSIS_READ_BYTE_LIMIT');
+  assert.ok(budget.resultReadBytes > 256 * 1024 * 1024);
+  assert.ok(budget.bytes < 2 * 1024 * 1024);
+  assert.ok(f.bodyReads.filter(read => read.path.includes('/repeated_detail_')).length < 560);
+  assert.deepEqual(f.writes, []);
+});
+
 test('achievement rejects over 256 MiB of cumulative original processing even when every image is identical', async () => {
   const f = memory(), budget = { documents: 0, bytes: 0 };
   // Keep one shared synthetic image/snapshot in the fixture, rather than
   // allocating hundreds of MiB just to verify the physical processing bound.
   const questionSnapshots = [{ id: '91', type: 'choice', question: '같은 원문', answer: '가', image: 'x'.repeat(500 * 1024) }];
-  for (let index = 0; index < 540; index++) f.data.set(`semester_assessment_results/repeated_${index}`, {
+  for (let index = 0; index < 560; index++) f.data.set(`semester_assessment_results/repeated_${index}`, {
     assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
     sourceHash: 'a'.repeat(64), questionSnapshots,
   });
@@ -524,7 +697,7 @@ test('achievement rejects over 256 MiB of cumulative original processing even wh
     budget, true), error => error.code === 'resource-exhausted' && error.details?.reason === 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
   assert.ok(budget.resultReadBytes > 256 * 1024 * 1024);
   assert.ok(budget.bytes < 2 * 1024 * 1024, 'small unique retained size cannot bypass the original-processing limit');
-  assert.ok(f.bodyReads.filter(read => read.path.includes('/repeated_')).length < 540, 'the remaining result batches are never read');
+  assert.ok(f.bodyReads.filter(read => read.path.includes('/repeated_')).length < 560, 'no new wave starts after the processing limit');
   await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), [{ uid: 'a' }], true,
     undefined, true), error => error.details?.reason === 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
   assert.deepEqual(f.writes, []);
@@ -929,6 +1102,40 @@ test('keyword detail retains dedupe metadata and only selected question snapshot
   assert.ok(detail.rawRows.every(row => !['search_b', 'rb'].includes(row.id)));
   assert.equal(JSON.stringify(detail).includes('범위 밖'), false);
   assert.deepEqual(detail.rawRows.find(row => row.id === 'search_a').raw.answers, { 2: '검색 답' });
+});
+
+test('keyword detail dictionary trims snapshots and answers before packing and preserves inline values', async () => {
+  const initial = keywordFixture();
+  Object.assign(initial['semester_assessment_results/search_a'], {
+    answers: { 2: '검색 답', 999: '범위 밖 답' },
+    questionSnapshots: [{ id: 2, question: '검색 문항', image: '당시 이미지' }, { id: 999, question: '범위 밖 문제' }],
+  });
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db, now: () => 1800000000000 });
+  const input = keywordQuery({ mode: 'detail', keyword: '광해군 사화' });
+  const inline = await service.query(input);
+  f.queries.length = 0;
+  const packed = await service.query({ ...input, snapshotDictionary: true });
+  const sortRows = response => ({ ...response, rawRows: [...response.rawRows].sort((a, b) => a.id.localeCompare(b.id)) });
+  assert.deepEqual(sortRows(expandSnapshotDictionary(packed)), sortRows(inline));
+  assert.equal(Object.keys(packed.historicalQuestionSnapshots).length, 1);
+  assert.equal(JSON.stringify(packed).includes('범위 밖'), false);
+  const resultQueries = f.queries.filter(query => /(?:semester_assessment_results|quiz_results)$/.test(query.path));
+  assert.ok(resultQueries.length > 0);
+  assert.ok(resultQueries.every(query => query.projection && !query.projection.includes('questionSnapshots')));
+  assert.ok(f.writes.every(path => path.startsWith('quiz_class_analysis_cache/')), 'only existing derived catalog caches may be written');
+});
+
+test('detail dictionary rejects changed student, semester and definition scope between metadata and body reads', async () => {
+  for (const patch of [{ studentUid: 'b' }, { semesterId: '2026-1' }, { category: 'exam_prep' }, { sourceId: 'other-unit' }]) {
+    const f = memory(), getAll = f.db.getAll;
+    f.db.getAll = async (...args) => {
+      if (args.at(-1)?.fieldMask?.includes('questionSnapshots')) Object.assign(f.data.get('semester_assessment_results/r1'), patch);
+      return getAll(...args);
+    };
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery({ ...q, mode: 'detail', snapshotDictionary: true })),
+      error => error.code === 'aborted' && error.details?.reason === 'QUIZ_ANALYSIS_CHANGED');
+    assert.ok(f.writes.every(path => path.startsWith('quiz_class_analysis_cache/')), 'only existing derived catalog caches may be written');
+  }
 });
 
 test('grade and broad keyword bounds fail explicitly without truncated comparison', async () => {

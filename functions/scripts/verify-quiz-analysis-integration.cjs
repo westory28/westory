@@ -58,6 +58,113 @@ for (const [uid, classId] of [[student, 'class_1'], [other, 'class_2']]) {
   seed[`semester_assessment_submissions/${id}`] = { semesterId, studentUid: uid, attemptId: id, answers: { 1: uid === student ? '오답' : '정답' } };
 }
 const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr`, auth_time: authTime } }, data: { semesterId, ...data, _session: proof } });
+// Compile the actual browser adapter, replacing only the SDK transport boundary.
+// Its request still reaches the exported callable and real demo Firestore/session
+// checks. JSON round-trips reproduce the callable wire instead of sharing refs.
+const plain = value => JSON.parse(JSON.stringify(value));
+let clientUid = teacher, lastClientRequest, lastClientWire;
+const clientModule = { exports: {} };
+vm.runInNewContext(buildSync({ entryPoints: [path.join(__dirname, '../../src/lib/quizClassAnalysis.ts')],
+  bundle: true, platform: 'node', format: 'cjs', external: ['./applicationSession'], write: false }).outputFiles[0].text,
+{ module: clientModule, exports: clientModule.exports, require: name => {
+  assert.equal(name, './applicationSession', 'Only the application-session transport is replaced');
+  return { callWithApplicationSession: async (name, data) => {
+    assert.equal(name, 'getQuizClassAnalysis');
+    lastClientRequest = plain(data);
+    lastClientWire = plain(await deployed.getQuizClassAnalysis.run(request(clientUid, lastClientRequest)));
+    return { data: plain(lastClientWire) };
+  } };
+} });
+const { getQuizClassDetail } = clientModule.exports;
+const verifyDetailSnapshotRoundTrip = async () => {
+  const unitId = 'dictionary-integration-unit';
+  const input = { semesterId, unitId, category: 'formative', examRound: '', classIds: [], grade: '3' };
+  const shared = { id: '702', type: 'choice', question: '응시 당시 두 번째 문항', answer: '나',
+    options: ['', '가', '나'], choiceOptionImages: [null, '', null], passage: '', explanation: '원본 해설',
+    image: 'data:image/png;base64,AA==', passageSet: { id: 'shared', passage: '응시 당시 공통 자료', image: null } };
+  const fixtures = {};
+  const resultPaths = [];
+  for (const [uid, classId] of [[student, 'class_1'], [other, 'class_2']]) {
+    const first = { id: '701', type: 'choice', question: `응시 당시 첫 문항 ${uid}`, answer: '가',
+      options: ['가', '나'], passage: '원본 자료', explanation: '', sourceRevision: uid === student ? '1' : '2',
+      image: uid === student ? 'data:image/png;base64,AQ==' : 'data:image/png;base64,Ag==' };
+    const id = `dictionary_${uid}`, resultPath = `semester_assessment_results/${id}`;
+    resultPaths.push(resultPath);
+    fixtures[resultPath] = { semesterId, studentUid: uid, uid, classId, assessmentKind: 'QUIZ', attemptId: id,
+      sourceId: unitId, definitionId: `quiz:${semesterId}:${unitId}:formative`, category: 'formative', total: 2,
+      percent: uid === student ? 50 : 100, score: uid === student ? 1 : 2,
+      submittedAtIso: new Date(now - 1000).toISOString(), answers: { 701: uid === student ? '나' : '가', 702: '' },
+      answerChecks: [{ id: '702', correct: false }, { id: '701', correct: uid !== student }],
+      learningSnapshot: [{ id: '702', sourceRevision: '1' }, { id: '701', sourceRevision: first.sourceRevision }],
+      questionSnapshots: [shared, first, shared], questionSnapshotOmittedIds: [] };
+  }
+  fixtures['years/2026/semesters/2/quiz_questions/dictionary_701'] = {
+    id: 701, unitId, category: 'formative', type: 'choice', question: 'CURRENT_BANK_701', answer: 'CURRENT_ANSWER', contentRevision: 99 };
+  fixtures['years/2026/semesters/2/quiz_questions/dictionary_702'] = {
+    id: 702, unitId, category: 'formative', type: 'choice', question: 'CURRENT_BANK_702', answer: 'CURRENT_ANSWER', contentRevision: 99 };
+  fixtures[`semester_assessment_definitions/quiz:${semesterId}:${unitId}:formative`] = {
+    semesterId, assessmentKind: 'QUIZ', sourceId: unitId, category: 'formative', status: 'PUBLISHED', title: '합성 원문 복원 평가', questionCount: 2 };
+  fixtures['semester_assessment_results/dictionary_old_semester'] = {
+    ...fixtures[resultPaths[0]], semesterId: '2026-1', attemptId: 'dictionary_old_semester', answers: { 701: 'FOREIGN_SEMESTER_ANSWER' } };
+  const legacyPath = 'years/2026/semesters/2/quiz_results/dictionary_legacy';
+  fixtures[legacyPath] = { uid: student, unitId, category: 'formative', score: 50,
+    timestamp: Timestamp.fromMillis(now - 10000), details: [{ id: '702', correct: false, u: '' }, { id: '701', correct: true, u: '가' }],
+    questionSnapshots: [shared, fixtures[resultPaths[0]].questionSnapshots[1], shared] };
+  const seedBatch = db.batch();
+  Object.entries(fixtures).forEach(([fixturePath, data]) => seedBatch.set(db.doc(fixturePath), data));
+  await seedBatch.commit();
+  // Firestore-only emulator has no deployment triggers to invalidate catalog.
+  await createQuizAnalysisInvalidation({ db }).invalidate(semesterId, ['contentGeneration', 'catalogGeneration']);
+  try {
+    const before = await db.getAll(...resultPaths.map(resultPath => db.doc(resultPath)));
+    const inline = plain(await deployed.getQuizClassAnalysis.run(request(teacher, { ...input, mode: 'detail' })));
+    assert.equal(inline.rawRows.length, 3, 'Both current-grade pupils and legacy history remain available');
+    assert.ok(inline.rawRows.every(row => Array.isArray(row.raw.questionSnapshots)
+      && !Object.hasOwn(row.raw, 'questionSnapshotRefs')), 'Old no-flag clients retain inline originals');
+    assert.equal(Object.hasOwn(inline, 'historicalQuestionSnapshots'), false);
+    const restored = plain(await getQuizClassDetail({ ...input, comparisonGrade: '3' }, 'integration-teacher'));
+    assert.equal(lastClientRequest.snapshotDictionary, true);
+    assert.equal(lastClientRequest.mode, 'detail');
+    assert.equal(Object.hasOwn(lastClientRequest, 'comparisonGrade'), false);
+    assert.equal(restored.semesterId, semesterId); assert.equal(restored.grade, '3');
+    assert.deepEqual(restored.students, inline.students);
+    assert.deepEqual(restored.configuredClasses, inline.configuredClasses);
+    assert.deepEqual(restored.questions, inline.questions);
+    assert.deepEqual(restored.rawRows.map(row => [row.id, row.source]), lastClientWire.rawRows.map(row => [row.id, row.source]),
+      'Record ordering and source tags survive this response serialization and restoration');
+    // Separate requests may finish parallel metadata reads in a different order.
+    // Compare their exact record sets by source/id, never impose a new server sort.
+    const byIdentity = rows => new Map(rows.map(row => [`${row.source}:${row.id}`, row.raw]));
+    const inlineByIdentity = byIdentity(inline.rawRows);
+    assert.equal(inlineByIdentity.size, inline.rawRows.length);
+    assert.deepEqual([...byIdentity(restored.rawRows).keys()].sort(), [...inlineByIdentity.keys()].sort());
+    assert.equal(Object.keys(lastClientWire.historicalQuestionSnapshots).length, 3,
+      'Identical bodies are shared while different historical versions of the same ID remain distinct');
+    for (const [index, row] of restored.rawRows.entries()) {
+      const { questionSnapshotRefs: _transportRefs, ...raw } = row.raw;
+      const questionSnapshotRefs = lastClientWire.rawRows[index].raw.questionSnapshotRefs;
+      assert.deepEqual(raw, inlineByIdentity.get(`${row.source}:${row.id}`), 'Every answer, score, order, empty/null field and frozen original survives');
+      assert.equal(questionSnapshotRefs[0], questionSnapshotRefs[2], 'Repeated snapshot order is retained');
+      assert.equal(Object.hasOwn(lastClientWire.rawRows[index].raw, 'questionSnapshots'), false);
+      assert.ok(!JSON.stringify(row.raw.questionSnapshots).includes('CURRENT_BANK'));
+    }
+    assert.ok(!JSON.stringify(restored.rawRows).includes('FOREIGN_SEMESTER_ANSWER'));
+    const inlineAgain = plain(await deployed.getQuizClassAnalysis.run(request(teacher, { ...input, mode: 'detail' })));
+    assert.deepEqual(byIdentity(inlineAgain.rawRows), inlineByIdentity, 'New-client reads do not change later old-client responses');
+    clientUid = student;
+    await assert.rejects(getQuizClassDetail(input, 'integration-student'), error => error.code === 'permission-denied');
+    clientUid = teacher;
+    await assert.rejects(getQuizClassDetail({ ...input, semesterId: '2026-1' }, 'integration-old-semester'),
+      error => error.details?.reason === 'QUIZ_ANALYSIS_SEMESTER_NOT_ACTIVE');
+    const after = await db.getAll(...resultPaths.map(resultPath => db.doc(resultPath)));
+    assert.deepEqual(after.map(document => document.data()), before.map(document => document.data()), 'All stored results remain unchanged');
+    console.log('PASS detail dictionary integration: real Firestore/callable/client, old inline compatibility, frozen versions/images/duplicates/order/answers, current-grade isolation and permission checks');
+  } finally {
+    clientUid = teacher;
+    const cleanup = db.batch(); Object.keys(fixtures).forEach(fixturePath => cleanup.delete(db.doc(fixturePath))); await cleanup.commit();
+    await createQuizAnalysisInvalidation({ db }).invalidate(semesterId, ['contentGeneration', 'catalogGeneration']);
+  }
+};
 (async () => {
   const batch = db.batch(); Object.entries(seed).forEach(([path, value]) => batch.set(db.doc(path), value)); await batch.commit();
   const catalog = await deployed.getQuizClassAnalysis.run(request(teacher, { mode: 'catalog' }));
@@ -97,6 +204,7 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   assert.equal(gradeDetail.grade, '3');
   assert.deepEqual(gradeDetail.students.map(row => row.uid).sort(), [student, other].sort());
   assert.deepEqual(gradeDetail.configuredClasses.map(row => row.id), ['class_1', 'class_2']);
+  await verifyDetailSnapshotRoundTrip();
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(student, gradeScope)), error => error.code === 'permission-denied');
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, { ...gradeScope, classIds: ['class_1'] })), error => error.code === 'invalid-argument');
   await db.doc('years/2026/semesters/2/quiz_questions/91').set({ id: 91, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
@@ -287,6 +395,8 @@ const request = (uid, data) => ({ auth: { uid, token: { email: `${uid}@yongshin-
   console.log('PASS cumulative achievement callable + Firestore + analysis core: frozen weighted cut scores, 1/1-2/1-3 rounds, first submissions, later-round/foreign-semester/pupil exclusion, retired profile denial and unchanged scores');
   await db.doc(`application_sessions/${teacher}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getQuizClassAnalysis.run(request(teacher, scope)), e => e.code === 'unauthenticated');
+  await assert.rejects(getQuizClassDetail({ semesterId, unitId: 'unit-a', category: 'formative', examRound: '', classIds: ['class_1'] },
+    'integration-revoked-teacher'), e => e.code === 'unauthenticated');
   await db.doc(`application_sessions/${student}/sessions/${authTime}`).update({ status: 'revoked' });
   await assert.rejects(deployed.getMyQuizHistory.run(request(student, { mode: 'list' })), e => e.code === 'unauthenticated');
   console.log('PASS real exported callables + Firestore: session/auth, class cache, history, keyword, grade, response classification/counts/detail/cache invalidation, unchanged scores and permission denial');

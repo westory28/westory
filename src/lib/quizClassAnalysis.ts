@@ -118,11 +118,11 @@ export interface QuizClassDetail {
   configuredClasses: Array<{ id: string; label: string }>;
   generatedAt: string;
   version: string;
+  historicalQuestionSnapshots?: Record<string, unknown>;
 }
 
 export interface QuizClassAchievement extends QuizClassDetail {
   mockExamScoreRows: AchievementRawRecord[];
-  historicalQuestionSnapshots?: Record<string, unknown>;
 }
 
 export interface QuizClassScope {
@@ -159,6 +159,53 @@ async function read<T>(
   }
 }
 
+function restoreHistoricalQuestionSnapshots<T extends QuizClassDetail>(
+  result: T,
+): T {
+  const invalid = () =>
+    new Error(
+      "응시 당시 문항 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.",
+    );
+  if (!result || !Array.isArray(result.rawRows)) throw invalid();
+  return {
+    ...result,
+    rawRows: result.rawRows.map((row) => {
+      if (!row?.raw || typeof row.raw !== "object" || Array.isArray(row.raw))
+        throw invalid();
+      // Older responses contain inline snapshots. Never replace those with
+      // current-bank questions or interpret an absent reference list as empty.
+      if (
+        !Object.prototype.hasOwnProperty.call(row.raw, "questionSnapshotRefs")
+      )
+        return row;
+      const refs = row.raw.questionSnapshotRefs;
+      const dictionary = result.historicalQuestionSnapshots;
+      if (
+        !Array.isArray(refs) ||
+        !dictionary ||
+        typeof dictionary !== "object" ||
+        Array.isArray(dictionary) ||
+        refs.some(
+          (ref) =>
+            typeof ref !== "string" ||
+            !Object.prototype.hasOwnProperty.call(dictionary, ref) ||
+            !dictionary[ref] ||
+            typeof dictionary[ref] !== "object" ||
+            Array.isArray(dictionary[ref]),
+        )
+      )
+        throw invalid();
+      return {
+        ...row,
+        raw: {
+          ...row.raw,
+          questionSnapshots: refs.map((ref) => dictionary[ref]),
+        },
+      };
+    }),
+  };
+}
+
 export const getQuizClassCatalog = (semesterId: string, identityKey: string) =>
   read<QuizClassCatalog>({ mode: "catalog", semesterId }, identityKey);
 
@@ -180,9 +227,9 @@ export const getQuizClassDetail = (
   // Firebase encodes undefined as null. Summary-only fields must be absent.
   const { comparisonGrade: _comparisonGrade, ...detailScope } = scope;
   return read<QuizClassDetail>(
-    { ...detailScope, mode: "detail", forceRefresh },
+    { ...detailScope, mode: "detail", forceRefresh, snapshotDictionary: true },
     identityKey,
-  );
+  ).then(restoreHistoricalQuestionSnapshots);
 };
 
 export const getQuizClassAchievement = (
@@ -210,32 +257,7 @@ export const getQuizClassAchievement = (
       throw new Error(
         "모의고사 누적 점수 자료를 확인하지 못했습니다. 다시 조회해 주세요.",
       );
-    return {
-      ...result,
-      rawRows: result.rawRows.map((row) => {
-        const refs = row.raw.questionSnapshotRefs;
-        if (!Array.isArray(refs)) return row;
-        const dictionary = result.historicalQuestionSnapshots;
-        if (
-          !dictionary ||
-          refs.some(
-            (ref) =>
-              typeof ref !== "string" ||
-              !Object.prototype.hasOwnProperty.call(dictionary, ref),
-          )
-        )
-          throw new Error(
-            "응시 당시 문항 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.",
-          );
-        return {
-          ...row,
-          raw: {
-            ...row.raw,
-            questionSnapshots: refs.map((ref) => dictionary[ref]),
-          },
-        };
-      }),
-    };
+    return restoreHistoricalQuestionSnapshots(result);
   });
 };
 

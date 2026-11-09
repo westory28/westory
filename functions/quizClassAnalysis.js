@@ -16,7 +16,7 @@ const MAX_RESULTS = 10000;
 const MAX_QUESTIONS = 5000;
 const MAX_STUDENTS = 150;
 const MAX_BYTES = 8 * 1024 * 1024;
-const MAX_ACHIEVEMENT_RESULT_READ_BYTES = MAX_BYTES * 32; // 256 MiB before snapshot interning.
+const MAX_RESULT_PROCESSING_BYTES = MAX_BYTES * 32; // 256 MiB serialized original bodies before interning.
 const MAX_GRADE_CLASSES = 30;
 const MAX_SEARCH_MATCHES = 500;
 const RESULT_QUERY_CONCURRENCY = 8;
@@ -60,12 +60,13 @@ const studentRevisionRef = (db, scope, uid) => db.doc(`quiz_analysis_student_rev
 const dataOf = snap => snap?.exists ? snap.data() : {};
 
 function normalizeQuery(data) {
-  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', '_session'];
+  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', 'snapshotDictionary', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
     || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
     || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')
     || (data.compactEvidence !== undefined && typeof data.compactEvidence !== 'boolean')
-    || (data.compactEvidence === true && data.mode !== 'achievement')) {
+    || (data.compactEvidence === true && data.mode !== 'achievement')
+    || (Object.hasOwn(data, 'snapshotDictionary') && (data.mode !== 'detail' || typeof data.snapshotDictionary !== 'boolean'))) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
   // The prior client dereferences diagnostic evidence in successful responses.
@@ -101,7 +102,8 @@ function normalizeQuery(data) {
   return { ...query, unitId: keyword ? '' : data.unitId, category: keyword ? '' : data.category,
     examRound: keyword ? '' : roundOf(data.category, data.examRound), classIds: data.classIds,
     ...(keyword ? { keyword } : {}), ...(data.grade ? { grade: data.grade } : {}),
-    ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}) };
+    ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}),
+    ...(data.snapshotDictionary === true ? { snapshotDictionary: true } : {}) };
 }
 
 // Every source query is paginated and has a hard failure bound. A partial page
@@ -515,7 +517,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   };
   const loadResults = async (query, students, detail = false, budget, cumulativeMockExams = false) => {
     const rows = new Map(), candidates = new Map(), jobs = [];
-    const snapshotPool = cumulativeMockExams ? createHistoricalQuestionSnapshotPool(historicalSnapshotHashes) : null;
+    const dictionaryDetail = detail && query.mode === 'detail' && query.snapshotDictionary === true;
+    const snapshotPool = cumulativeMockExams || dictionaryDetail ? createHistoricalQuestionSnapshotPool(historicalSnapshotHashes) : null;
     const uids = [...new Set(students.map(student => student.uid))];
     const emails = [...new Set(students.map(student => student.email).filter(Boolean))];
     const uidSet = new Set(uids), emailSet = new Set(emails);
@@ -590,7 +593,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }
     for (const source of sources) {
       if (!source.ids.length) continue;
-      if (query.keyword) { schedule(source, [], false); continue; }
+      if (query.keyword) { schedule(source, [], dictionaryDetail); continue; }
       // Legacy plain exam_prep records may have no examRound (round 1). Read
       // only small scope fields first; other rounds' bodies are never fetched.
       const categories = query.category === 'exam_prep' ? ['exam_prep', `exam_prep__${query.examRound}`] : [query.category];
@@ -621,35 +624,46 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       // A submitted paper may carry hundreds of KiB of frozen images. Never
       // materialize a whole grade's repeated copies in one getAll response.
       const batchSize = snapshotPool && group.fields.includes('questionSnapshots') ? 10 : 100;
-      for (let offset = 0; offset < group.entries.length; offset += batchSize) {
-        const batch = group.entries.slice(offset, offset + batchSize);
-        const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: group.fields });
-        for (let i = 0; i < docs.length; i++) {
-          const doc = docs[i], candidate = batch[i];
-          // Firestore data() decodes every field on each call, including images.
-          const data = doc.exists ? doc.data() : null;
-          if (!data || !matches(data, candidate.source)
-            || RESULT_SCOPE_FIELDS.some(field => Object.hasOwn(data, field) !== Object.hasOwn(candidate.scope, field)
-              || JSON.stringify(json(data[field])) !== JSON.stringify(candidate.scope[field])))
-            fail('aborted', '조회 중 평가 기록이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
-          const compact = snapshotPool?.intern(data, json);
-          const bytes = compact?.retainedBytes ?? Buffer.byteLength(JSON.stringify(data));
-          bodyBytes += bytes;
-          if (compact) {
-            resultReadBytes += compact.readBytes;
-            if (budget) budget.resultReadBytes = resultReadBytes;
-            if (resultReadBytes > MAX_ACHIEVEMENT_RESULT_READ_BYTES)
-              fail('resource-exhausted', '평가 원문 처리량이 조회 한도를 초과했습니다. 학급을 선택해 다시 조회해 주세요.', 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
+      const readConcurrency = batchSize === 10 ? 2 : 1;
+      for (let offset = 0; offset < group.entries.length; offset += batchSize * readConcurrency) {
+        const batches = Array.from({ length: Math.min(readConcurrency, Math.ceil((group.entries.length - offset) / batchSize)) },
+          (_, index) => group.entries.slice(offset + index * batchSize, offset + (index + 1) * batchSize));
+        // Only reads overlap. Settle both promises before decoding in original
+        // order, so validation/limits keep their precedence and a failed wave
+        // never schedules more reads or leaves an unhandled rejection.
+        const reads = await Promise.allSettled(batches.map(batch => Promise.resolve().then(() =>
+          db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: group.fields }))));
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+          if (reads[batchIndex].status === 'rejected') throw reads[batchIndex].reason;
+          const batch = batches[batchIndex], docs = reads[batchIndex].value;
+          for (let i = 0; i < docs.length; i++) {
+            const doc = docs[i], candidate = batch[i];
+            // Firestore data() decodes every field on each call, including images.
+            const data = doc.exists ? doc.data() : null;
+            if (!data || !matches(data, candidate.source)
+              || RESULT_SCOPE_FIELDS.some(field => Object.hasOwn(data, field) !== Object.hasOwn(candidate.scope, field)
+                || JSON.stringify(json(data[field])) !== JSON.stringify(candidate.scope[field])))
+              fail('aborted', '조회 중 평가 기록이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+            const compact = snapshotPool?.intern(data, json);
+            const bytes = compact?.retainedBytes ?? Buffer.byteLength(JSON.stringify(data));
+            bodyBytes += bytes;
+            if (compact) {
+              resultReadBytes += compact.readBytes;
+              if (budget) budget.resultReadBytes = resultReadBytes;
+              if (resultReadBytes > MAX_RESULT_PROCESSING_BYTES)
+                fail('resource-exhausted', '평가 원문 처리량이 조회 한도를 초과했습니다. 학급을 선택해 다시 조회해 주세요.',
+                  cumulativeMockExams ? 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT' : 'QUIZ_ANALYSIS_READ_BYTE_LIMIT');
+            }
+            if (budget) {
+              budget.documents++; budget.bytes += bytes;
+              // Retained bytes and cumulative original processing have separate
+              // bounds: duplicate images cannot consume unbounded read/CPU work.
+              if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
+                fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+            }
+            if (bodyBytes > MAX_BYTES * 4) fail('resource-exhausted', '평가 기록의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
+            add(doc, candidate.source, compact?.raw, data);
           }
-          if (budget) {
-            budget.documents++; budget.bytes += bytes;
-            // Retained bytes and cumulative original processing have separate
-            // bounds: duplicate images cannot consume unbounded read/CPU work.
-            if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
-              fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
-          }
-          if (bodyBytes > MAX_BYTES * 4) fail('resource-exhausted', '평가 기록의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
-          add(doc, candidate.source, compact?.raw, data);
         }
       }
     }
@@ -848,7 +862,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
           }
         }
       }
-      const result = { semesterId: input.semesterId, students, rawRows, questions: questionRows, treeData: catalog.treeData,
+      const presentations = input.snapshotDictionary === true ? packHistoricalQuestionSnapshots(rawRows, historicalSnapshotHashes) : { rawRows };
+      const result = { semesterId: input.semesterId, students, ...presentations, questions: questionRows, treeData: catalog.treeData,
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(), version, complete: true,
         ...(input.grade ? { grade: input.grade } : {}),
         ...(searchResult ? { keyword: input.keyword, search: searchResult.search, basis: KEYWORD_BASIS } : {}) };
