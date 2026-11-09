@@ -101,6 +101,7 @@ import MockExamMaterialFields, {
   type MockExamSetChoice,
 } from "./MockExamMaterialFields";
 import {
+  mockExamSetSignature,
   validateMockExamMaterials,
   type MockExamPassageSet,
 } from "../../../lib/mockExamMaterials";
@@ -278,6 +279,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [pageRetry, setPageRetry] = useState(0);
   const questionListRef = useRef<HTMLDivElement>(null);
   const pendingQuestionId = useRef<number | null>(null);
+  const pendingSetReload = useRef(false);
   const [category, setCategory] = useState<string>("diagnostic");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -374,6 +376,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     useState("");
   const [editingQuestionId, setEditingQuestionId] = useState<number | null>(
     null,
+  );
+  const editingSetQuestion = questions.find((q) => q.id === editingQuestionId);
+  const canEditLinkedPassageSet = Boolean(
+    passageSetLinked &&
+    formPassageSet &&
+    editingSetQuestion?.passageSet?.id === formPassageSet.id &&
+    editingSetQuestion.examRound === formExamRound,
   );
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -1131,7 +1140,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const handleSetImage = async (file: File) => {
     const setId = formPassageSet?.id;
-    if (!setId || passageSetLinked) return;
+    if (!setId || (passageSetLinked && !canEditLinkedPassageSet)) return;
     const ticket = ++sharedImageRequest.current;
     const isCurrent = () =>
       sharedImageRequest.current === ticket && currentPager.current === pager;
@@ -1420,6 +1429,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return;
     setIsComposerOpen(false);
     resetForm();
+    if (pendingSetReload.current) {
+      pendingSetReload.current = false;
+      fetchQuestions();
+    }
   };
 
   const startEdit = (question: Question) => {
@@ -1847,7 +1860,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               points: formPoints,
               examplePassage: exampleEnabled ? formExample.trim() : "",
               passageSet: formPassageSet
-                ? passageSetLinked
+                ? passageSetLinked &&
+                  (!canEditLinkedPassageSet ||
+                    (existingQuestion?.passageSet &&
+                      mockExamSetSignature(existingQuestion.passageSet) ===
+                        mockExamSetSignature(formPassageSet)))
                   ? { ...formPassageSet }
                   : {
                       ...formPassageSet,
@@ -1892,6 +1909,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       }
       const saved = await executeAssessmentManagementCommand<{
         contentRevision: number;
+        updatedSetQuestionIds?: string[];
       }>("upsertQuizQuestion", {
         semesterId: getAssessmentSemesterId(config),
         questionId: String(targetId),
@@ -1901,6 +1919,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       });
       newQuestion.contentRevision = saved.contentRevision;
       if (currentPager.current === pager) {
+        if (saved.updatedSetQuestionIds?.length)
+          pendingSetReload.current = true;
         setCatalog(
           pager.upsert(quizQuestionCatalogEntry(newQuestion), newQuestion),
         );
@@ -1942,6 +1962,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       if (currentPager.current === pager) {
         resetForm();
         setIsComposerOpen(false);
+        if (pendingSetReload.current) {
+          pendingSetReload.current = false;
+          fetchQuestions();
+        }
       }
     } catch (error: any) {
       console.error("Add question failed", error);
@@ -3076,6 +3100,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <MockExamSharedMaterialFields
                           passageSet={formPassageSet}
                           linked={passageSetLinked}
+                          editableLinked={canEditLinkedPassageSet}
                           onSetChange={handlePassageSetChange}
                           onSetImage={handleSetImage}
                           disabled={savingQuestion || optimizingImage}

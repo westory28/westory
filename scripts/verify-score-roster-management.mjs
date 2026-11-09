@@ -83,6 +83,7 @@ const targets = [
   "applyPerformanceScoreConfirmation",
   "getAcademicStatusLabel",
   "projectScoreDocumentForRosterRow",
+  "projectClassSheetScoreDocumentForRosterRow",
   "getPerformanceEnrollmentLabel",
   "getClassSheetStudentScoreCellValue",
   "getClassSheetTotalScoreCellValue",
@@ -460,6 +461,32 @@ for (const [status, label] of [
     assert.equal(item.average, 0);
     assert.equal(item.count, 1);
     assert.equal(during.totalScore, 15);
+    const historicDocument = {
+      ...rows[0],
+      signatureImage: "old signature",
+      updatedAt: { seconds: 20 },
+    };
+    const originalDocument = JSON.stringify(historicDocument);
+    for (const source of [undefined, historicDocument]) {
+      const exportRecord = subject.projectClassSheetScoreDocumentForRosterRow(
+        rosterWithScope,
+        view.rows[0],
+        source,
+      );
+      const exportStudent = { firstRecord: exportRecord };
+      assert.equal(subject.getAcademicStatusLabel(exportRecord), label);
+      assert.equal(subject.getClassSheetStudentScoreCellValue(exportStudent, exportRecord), 15);
+      assert.equal(subject.getClassSheetStudentScoreCellValue(exportStudent, undefined), label);
+      assert.equal(subject.getClassSheetTotalScoreCellValue(exportStudent), 15);
+      assert.equal(subject.getConfirmedSignatureRecord(exportStudent), null);
+      assert.equal(exportRecord.signatureImage, undefined);
+    }
+    assert.equal(JSON.stringify(historicDocument), originalDocument, "Read-only export preserves stored scores and signatures");
+    const blankMovement = {
+      ...view.rows[0], items: [], enteredScoreCount: 0, totalScore: 0,
+    };
+    const noScore = subject.projectClassSheetScoreDocumentForRosterRow(rosterWithScope, blankMovement);
+    assert.equal(subject.getClassSheetStudentScoreCellValue({ firstRecord: noScore }, noScore), label);
   }
 }
 subject.archive(false);

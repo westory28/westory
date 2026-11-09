@@ -320,9 +320,57 @@ try {
       })),
     );
   const originalPairs = await responsePairs();
+  const originalColumns = await sp
+    .locator("thead tr")
+    .first()
+    .locator("th")
+    .evaluateAll((cells) =>
+      cells.slice(4).map((cell) => cell.textContent.trim()),
+    );
+  const initialRates = await sp
+    .locator("thead tr")
+    .nth(1)
+    .locator("th")
+    .evaluateAll((cells) =>
+      cells.slice(1).map((cell) => parseFloat(cell.textContent)),
+    );
+  assert.deepEqual(
+    initialRates,
+    [...initialRates].sort((a, b) => a - b),
+    "S-P defaults to the hardest items on the left",
+  );
+  const mirroredBoundaries = await sp.locator("tbody tr").evaluateAll((rows) =>
+    rows
+      .filter((row) => row.querySelector(".qaa-sp-s-boundary"))
+      .map((row) => ({
+        correct: Number(row.querySelector("td").textContent),
+        index: [...row.querySelectorAll(".qaa-sp-cell")].findIndex((cell) =>
+          cell.classList.contains("qaa-sp-s-boundary--left"),
+        ),
+        count: row.querySelectorAll(".qaa-sp-cell").length,
+      })),
+  );
+  mirroredBoundaries.forEach((row) =>
+    assert.equal(
+      row.index,
+      row.count - row.correct,
+      "S boundary moves to the left edge of the mirrored correct-answer region",
+    ),
+  );
   await sp
-    .getByRole("button", { name: "문항 정답률 오름차순 정렬", exact: true })
+    .getByRole("button", { name: "문항 정답률 (%) 내림차순 정렬", exact: true })
     .click();
+  assert.deepEqual(
+    await sp
+      .locator("thead tr")
+      .first()
+      .locator("th")
+      .evaluateAll((cells) =>
+        cells.slice(4).map((cell) => cell.textContent.trim()),
+      ),
+    [...originalColumns].reverse(),
+    "Tied item columns also reverse exactly",
+  );
   assert.deepEqual(
     await responsePairs(),
     originalPairs,
@@ -337,11 +385,11 @@ try {
     );
   assert.deepEqual(
     itemRates,
-    [...itemRates].sort((a, b) => a - b),
+    [...itemRates].sort((a, b) => b - a),
   );
-  assert.equal(
+  assert.ok(
     await sp.locator(".qaa-sp-s-boundary,.qaa-sp-p-boundary").count(),
-    0,
+    "Mirrored and original item orders both preserve curves",
   );
   await sp
     .getByRole("button", { name: "주의지수 내림차순 정렬", exact: true })

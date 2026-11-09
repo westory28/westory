@@ -31,7 +31,8 @@
     "2026-10-27: Explicitly export both existing getWisEconomyState regions. Firebase deployment reconciles regions by function name, even with --only; declaring Seoul alone would remove the US compatibility endpoint. The deployment-time removal was detected and the US endpoint was restored before frontend release.",
     "2026-11-02: studentRegistrationPolicyCore.js is newly authored policy code, not a recovered production file; originalSha256 records its initial reviewed source. Login and command closures retain identical policy/session modules.",
     "2026-11-07: Before mock exam authoring changes, live Seoul executeCommand/getAssessmentState/getQuizEditorCatalog/getCommandStatus/saveAssessmentProgress source archives (2026-11-06 deployment) matched HEAD 8e2c01d7 for index.js, commandGateway.js, assessmentLifecycle.js, assessmentLearning.js, quizEditorCatalog.js and package.json after LF normalization. Only executeCommand, getAssessmentState and getQuizEditorCatalog behavior changes; status/progress endpoints are not deployment targets.",
-    "2026-11-07: Before worksheet alternative-answer changes, the live Seoul executeCommand archive (updated 2026-11-07T05:56:36.667575464Z) matched baseline d2dbbe13682ec3147552bb45894b4fb16d476121 in all 104 tracked non-test JS/JSON source files after LF normalization. Only executeCommand is a deployment target; lesson save and answer grading use bounded teacher-authored alternatives without changing command names, authority or canonical answers."
+    "2026-11-07: Before worksheet alternative-answer changes, the live Seoul executeCommand archive (updated 2026-11-07T05:56:36.667575464Z) matched baseline d2dbbe13682ec3147552bb45894b4fb16d476121 in all 104 tracked non-test JS/JSON source files after LF normalization. Only executeCommand is a deployment target; lesson save and answer grading use bounded teacher-authored alternatives without changing command names, authority or canonical answers.",
+    "2026-11-09: Set-edit source audit used live Seoul executeCommand generation 1794204955215884 (updateTime 2026-11-09T06:16:03Z). Baseline 768bdcf matches 114 tracked runtime files after LF normalization; only unrelated quizAchievementEvidence.js and quizClassAnalysis.js query modules differ. Deploy executeCommand only."
   ],
   "files": [
     {
@@ -59,7 +60,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "cda3dba16e520d217b3a13da393dbadb7f4b72f8198feacccdf7f214beab5398",
+      "sha256": "13d9b5044af33b1660b453354e25d94682c53e9ed793fd4909f830be51776a97",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -85,7 +86,8 @@
         "2026-11-08: Accept comma-delimited short-answer keys, freeze question type, retain existing typed snapshots and submitted receipts, and keep other question types exact.",
         "2026-11-08: Query authored mock papers by unit/category/round with limit 201, probe at most one authored-round marker before legacy fallback, preserve canonical source hashes, and permit only the exact forward round-one legacyConfigKey migration during teacher settings save.",
         "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions.",
-        "2026-11-09: Project mock attempt history for state queries, hydrate only selected paper snapshots, and reuse validated semester snapshots without changing response, authorization, source or mutation contracts."
+        "2026-11-09: Project mock attempt history for state queries, hydrate only selected paper snapshots, and reuse validated semester snapshots without changing response, authorization, source or mutation contracts.",
+        "2026-11-09: Atomically update shared material for existing same-round set members, preserve individual questions and frozen attempts, increment revisions to reject stale editors; verified by memory, real Firestore rollback/concurrency and browser authoring tests."
       ]
     },
     {
@@ -552,9 +554,10 @@
       "sourceFile": "mockExamMaterials.js",
       "file": "mockExamMaterials.js",
       "originalSha256": "09be55ac0402aad05e1ed23708eedc774a9d299ba685b2ac344cbf0d5eebfd29",
-      "sha256": "d50c691359fd0953d4038cd71e60efb75ce8df900c877e577d476a9e5a5ac454",
+      "sha256": "6e6cb66074fb688fc84948281ab7669bc3c5fd7c29477f3820a010e45ab2b731",
       "changes": [
-        "2026-11-07: Newly authored public presentation validator and asset manifest builder; originalSha256 records its first reviewed authored source, not a captured production file."
+        "2026-11-07: Newly authored public presentation validator and asset manifest builder; originalSha256 records its first reviewed authored source, not a captured production file.",
+        "2026-11-09: Atomically update shared material for existing same-round set members, preserve individual questions and frozen attempts, increment revisions to reject stale editors; verified by memory, real Firestore rollback/concurrency and browser authoring tests."
       ]
     },
     {

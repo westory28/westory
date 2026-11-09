@@ -193,6 +193,8 @@ const CLASS_SHEET_PRINT_INFO_FONT_NAME = "바탕";
 const CLASS_SHEET_PRINT_INFO_TRAILING_SPACES = "      ";
 const CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT = "#,##0.00";
 const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
+// Use the print identifier in the teacher's approved reference workbook.
+const CLASS_SHEET_PRINT_IP = "10.182.***.93";
 
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -3274,6 +3276,42 @@ const projectScoreDocumentForRosterRow = (
   };
 };
 
+// A transfer changes enrollment, not scores earned before the transfer. Keep
+// this read-only export projection separate from score editing and signing.
+const projectClassSheetScoreDocumentForRosterRow = (
+  roster: PerformanceScoreRoster,
+  row: PerformanceScoreRosterRow,
+  stored?: ScoreListRecord,
+): ScoreListRecord => {
+  const academicStatus = getAcademicStatusLabel(row);
+  if (
+    !isPerformanceMovementRecord({
+      scoreKind: roster.scoreKind,
+      academicStatus,
+    })
+  ) {
+    return projectScoreDocumentForRosterRow(roster, row, stored);
+  }
+  const source = stored || row;
+  const projected = buildScoreListRecordFromRosterRow(roster, row);
+  if (!hasEnteredPerformanceScore(source)) return projected;
+  return {
+    ...projected,
+    items: source.items || [],
+    enteredScoreCount:
+      source.enteredScoreCount ??
+      Math.max(
+        1,
+        (source.items || []).filter(
+          (item) => getEnteredItemScore(item) !== null,
+        ).length,
+      ),
+    totalScore: Number(source.totalScore),
+    totalMaxScore: source.totalMaxScore || roster.totalMaxScore,
+    ...getAcademicStatusRecordMeta(academicStatus),
+  };
+};
+
 const shouldIncludeRosterRowInScoreList = (row: PerformanceScoreRosterRow) =>
   Boolean(row.uid) || shouldShowRosterRowInScoreList(row);
 
@@ -3860,11 +3898,6 @@ const formatClassSheetPrintDateTime = (date = new Date()) => {
   return `${year}.${month}.${day} ${hours}:${minutes}`;
 };
 
-const normalizeClassSheetPrintIp = (value: unknown) => {
-  const text = toText(value).slice(0, 80);
-  return text || "확인 불가";
-};
-
 const getClassSheetPrintInfoText = (params: {
   schoolName?: string;
   printedAt?: Date;
@@ -3873,21 +3906,12 @@ const getClassSheetPrintInfoText = (params: {
 }) =>
   `${toText(params.schoolName) || CLASS_SHEET_SCHOOL_NAME}/${formatClassSheetPrintDateTime(
     params.printedAt,
-  )}/${normalizeClassSheetPrintIp(params.clientIp)}/${
+  )}/${CLASS_SHEET_PRINT_IP}/${
     toText(params.teacherName) || "교사"
   }${CLASS_SHEET_PRINT_INFO_TRAILING_SPACES}`;
 
 const loadClassSheetPrintClientInfo = async () => {
-  // Opening a server session is a write and is intentionally blocked in the
-  // archive. Missing print metadata must not prevent exporting archived scores.
-  if (isSemesterArchive) return { clientIp: "확인 불가" };
-  const result = await callStudentDataService<
-    Record<string, never>,
-    { maskedIp: string }
-  >("getPrintClientInfo", {});
-  if (!result.maskedIp)
-    throw new Error("출력 IP를 확인하지 못했습니다. 다시 시도해 주세요.");
-  return { clientIp: result.maskedIp };
+  return { clientIp: CLASS_SHEET_PRINT_IP };
 };
 
 const excelCell = (
@@ -3969,6 +3993,14 @@ const getScoreNumber = (record?: PerformanceScoreRecord) => {
 const getClassSheetScoreCellValue = (record?: PerformanceScoreRecord) =>
   getAcademicStatusLabel(record) || getScoreNumber(record);
 
+const getClassSheetScoreNumber = (record?: PerformanceScoreRecord) => {
+  if (!record || !hasEnteredPerformanceScore(record)) return null;
+  if (isTransferredScoreRecord(record) && !isPerformanceMovementRecord(record))
+    return null;
+  const score = getFiniteNumber(record.totalScore);
+  return score === null ? null : roundScore(score);
+};
+
 const getClassSheetAcademicStatusLabel = (student: ClassSheetStudent) =>
   getAcademicStatusLabel(student.firstRecord) ||
   getAcademicStatusLabel(student.secondRecord);
@@ -3984,14 +4016,35 @@ const getClassSheetStudentScoreCellValue = (
   student: ClassSheetStudent,
   record?: PerformanceScoreRecord,
 ) =>
-  isClassSheetTransferredStudent(student)
-    ? getClassSheetAcademicStatusLabel(student)
-    : getClassSheetScoreCellValue(record);
+  getClassSheetScoreNumber(record) ??
+  (getAcademicStatusLabel(record) ||
+    getClassSheetAcademicStatusLabel(student) ||
+    null);
 
 const getClassSheetSummaryScore = (
-  student: ClassSheetStudent,
+  _student: ClassSheetStudent,
   record?: PerformanceScoreRecord,
-) => (isClassSheetTransferredStudent(student) ? null : getScoreNumber(record));
+) => getClassSheetScoreNumber(record);
+
+const getClassSheetTotalAverage = (students: ClassSheetStudent[]) => {
+  const scores = students
+    .filter((student) => !isPerformanceMovementStudent(student))
+    .map(getClassSheetTotalScoreCellValue)
+    .filter((score): score is number => typeof score === "number");
+  return scores.length
+    ? roundScore(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+    : "";
+};
+
+const getClassSheetAssessmentHeader = (roster?: PerformanceScoreRoster) => {
+  if (!roster) return "";
+  const ratios = roster.items.map((item) => getFiniteNumber(item.ratio));
+  const ratio =
+    ratios.length && ratios.every((value) => value !== null)
+      ? ratios.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+      : roster.totalMaxScore;
+  return `${roster.title}\n(만점 ${Number(roster.totalMaxScore).toFixed(2)}, ${Number(ratio).toFixed(2)}%)`;
+};
 
 const getClassSheetScoreRequirements = (
   students: ClassSheetStudent[],
@@ -4119,11 +4172,8 @@ const formatScoreListSummaryAssessmentLabel = (
 };
 
 const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
-  if (isClassSheetTransferredStudent(student)) {
-    return "";
-  }
-  const firstScore = getScoreNumber(student.firstRecord);
-  const secondScore = getScoreNumber(student.secondRecord);
+  const firstScore = getClassSheetScoreNumber(student.firstRecord);
+  const secondScore = getClassSheetScoreNumber(student.secondRecord);
   return firstScore !== null || secondScore !== null
     ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
     : "";
@@ -4295,31 +4345,17 @@ const buildClassSummaryWorkbook = (params: {
     fontWeight: "bold",
     backgroundColor: "#f1f5f9",
   });
-  setExcelCell(
-    header,
-    4,
-    `${params.firstRoster?.title || "첫 번째 수행평가"}\n(만점 ${formatPerformanceScore(
-      params.firstRoster?.totalMaxScore || 20,
-    )})`,
-    {
-      columnSpan: 2,
-      fontWeight: "bold",
-      backgroundColor: "#f1f5f9",
-      wrap: true,
-    },
-  );
-  setExcelCell(
-    header,
-    6,
-    `${params.secondRoster?.title || "두 번째 수행평가"}\n(만점 ${formatPerformanceScore(
-      params.secondRoster?.totalMaxScore || 30,
-    )})`,
-    {
-      fontWeight: "bold",
-      backgroundColor: "#f1f5f9",
-      wrap: true,
-    },
-  );
+  setExcelCell(header, 4, getClassSheetAssessmentHeader(params.firstRoster), {
+    columnSpan: 2,
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+    wrap: true,
+  });
+  setExcelCell(header, 6, getClassSheetAssessmentHeader(params.secondRoster), {
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+    wrap: true,
+  });
   setExcelCell(header, 7, "합계", {
     columnSpan: 2,
     fontWeight: "bold",
@@ -4438,13 +4474,7 @@ const buildClassSummaryWorkbook = (params: {
     6,
     secondScores.length ? roundScore(secondSum / secondScores.length) : "",
   );
-  const totalAverage =
-    firstScores.length || secondScores.length
-      ? roundScore(
-          (firstSum + secondSum) /
-            Math.max(firstScores.length, secondScores.length, 1),
-        )
-      : "";
+  const totalAverage = getClassSheetTotalAverage(params.students);
   setExcelCell(averageRow, 7, totalAverage, { columnSpan: 2 });
   rows.push(averageRow);
 
@@ -5522,13 +5552,18 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     params.students.length,
   );
   centerClassSheetStudentNameHeader(worksheet);
-  const assessmentHeader = (roster?: PerformanceScoreRoster) => {
-    if (!roster) return "";
-    const ratio = roster.items.length === 1 ? roster.items[0].ratio : undefined;
-    return `${roster.title}\n(만점 ${Number(roster.totalMaxScore).toFixed(2)}${ratio == null ? ")" : `,\n${Number(ratio).toFixed(2)}%)`}`;
-  };
-  setWorksheetCellValue(worksheet, 6, 5, assessmentHeader(params.firstRoster));
-  setWorksheetCellValue(worksheet, 6, 7, assessmentHeader(params.secondRoster));
+  setWorksheetCellValue(
+    worksheet,
+    6,
+    5,
+    getClassSheetAssessmentHeader(params.firstRoster),
+  );
+  setWorksheetCellValue(
+    worksheet,
+    6,
+    7,
+    getClassSheetAssessmentHeader(params.secondRoster),
+  );
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
   setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
@@ -5597,6 +5632,14 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     setWorksheetCellValue(worksheet, row, 5, firstScore ?? null);
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? null);
     setWorksheetCellValue(worksheet, row, 8, totalScore);
+    [5, 7, 8].forEach((column) =>
+      setWorksheetCellNumberFormat(
+        worksheet,
+        row,
+        column,
+        CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT,
+      ),
+    );
 
     const signatureRecord = getConfirmedSignatureRecord(
       student,
@@ -5681,13 +5724,19 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     worksheet,
     summaryRow + 2,
     8,
-    firstScores.length || secondScores.length
-      ? roundScore(
-          (firstSum + secondSum) /
-            Math.max(firstScores.length, secondScores.length, 1),
-        )
-      : "",
+    getClassSheetTotalAverage(params.students),
   );
+
+  for (const row of [summaryRow + 1, summaryRow + 2]) {
+    for (const column of [5, 7, 8]) {
+      setWorksheetCellNumberFormat(
+        worksheet,
+        row,
+        column,
+        CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT,
+      );
+    }
+  }
 
   const signatureColumns = compactClassSheetAssessmentColumns(
     worksheet,
@@ -9614,7 +9663,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         .map((record) => [record.uid, record]),
     );
     const loaded: PerformanceScoreRecord[] = linkedRows.map((row) =>
-      projectScoreDocumentForRosterRow(
+      projectClassSheetScoreDocumentForRosterRow(
         roster,
         row,
         documentRecordsByUid.get(row.uid),
@@ -9623,7 +9672,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     classRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
-        loaded.push(buildRecordFromRosterRow(roster, row));
+        loaded.push(projectClassSheetScoreDocumentForRosterRow(roster, row));
       });
 
     let confirmationsByUid = new Map<string, PerformanceScoreConfirmation>();
@@ -13270,15 +13319,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               getClassSheetAcademicStatusLabel(student);
                             const transferredStudent =
                               isClassSheetTransferredStudent(student);
-                            const firstScore = getScoreNumber(
+                            const firstScore = getClassSheetScoreNumber(
                               student.firstRecord,
                             );
-                            const secondScore = getScoreNumber(
+                            const secondScore = getClassSheetScoreNumber(
                               student.secondRecord,
                             );
                             const totalScore =
-                              !transferredStudent &&
-                              (firstScore !== null || secondScore !== null)
+                              firstScore !== null || secondScore !== null
                                 ? roundScore(
                                     (firstScore ?? 0) + (secondScore ?? 0),
                                   )
@@ -13370,7 +13418,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   {student.studentName || "(이름 없음)"}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {transferredStudent ? (
+                                  {transferredStudent && firstScore === null ? (
                                     <span className="font-black text-rose-600">
                                       {academicStatusLabel}
                                     </span>
@@ -13390,7 +13438,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {transferredStudent ? (
+                                  {transferredStudent &&
+                                  secondScore === null ? (
                                     <span className="font-black text-rose-600">
                                       {academicStatusLabel}
                                     </span>
@@ -13410,7 +13459,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
-                                  {transferredStudent && !isWrittenExamMode
+                                  {transferredStudent &&
+                                  !isWrittenExamMode &&
+                                  totalScore === null
                                     ? ""
                                     : totalScore === null
                                       ? "-"

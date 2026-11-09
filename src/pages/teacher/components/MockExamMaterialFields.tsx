@@ -3,6 +3,7 @@ import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
 import QuizRequiredMark from "./QuizRequiredMark";
 import QuizPassage from "../../../components/common/QuizPassage";
+import InfoHelp from "../../../components/common/InfoHelp";
 import type { MockExamPassageSet } from "../../../lib/mockExamMaterials";
 
 export interface MockExamSetChoice {
@@ -188,16 +189,19 @@ export default function MockExamMaterialFields({
 export function MockExamSharedMaterialFields({
   passageSet,
   linked,
+  editableLinked = false,
   onSetChange,
   onSetImage,
   disabled = false,
 }: Pick<Props, "passageSet" | "onSetChange" | "disabled"> & {
   linked: boolean;
+  editableLinked?: boolean;
   onSetImage: (file: File) => Promise<void>;
 }) {
   if (!passageSet) return null;
+  const readOnly = linked && !editableLinked;
   const update = (patch: Partial<MockExamPassageSet>) => {
-    if (!linked) onSetChange({ ...passageSet, ...patch }, false);
+    if (!readOnly) onSetChange({ ...passageSet, ...patch }, linked);
   };
   return (
     <section
@@ -206,7 +210,15 @@ export function MockExamSharedMaterialFields({
       tabIndex={-1}
     >
       <div className="quiz-composer-section-heading">
-        <h4>세트 공통 지문{!linked && <QuizRequiredMark />}</h4>
+        <h4>
+          세트 공통 지문{!readOnly && <QuizRequiredMark />}
+          {editableLinked && (
+            <InfoHelp label="세트 공통 지문 수정 범위">
+              공통 지문을 수정하면 같은 회차에 연결된 세트 문항에 함께
+              반영됩니다.
+            </InfoHelp>
+          )}
+        </h4>
         <div className="mock-exam-material-actions">
           {linked && (
             <button
@@ -230,7 +242,7 @@ export function MockExamSharedMaterialFields({
           </button>
         </div>
       </div>
-      {linked ? (
+      {readOnly ? (
         <>
           <p className="mock-exam-shared-instruction">
             {passageSet.instruction}

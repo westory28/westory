@@ -831,6 +831,61 @@ const runAnswerLimits = async () => {
   assert.deepEqual(store.documents.get(`semester_assessment_submissions/${attemptId}`).answers, answers);
 };
 
+const runMockExamSetEditing = async () => {
+  const setStore = new MemoryStore(seed);
+  const path = id => `years/2026/semesters/2/quiz_questions/${id}`;
+  const material = { id: "editable-set", instruction: "다음 자료를 읽고 답하시오.", passage: "공통 지문 원문", image: null };
+  const question = (id, order, round = "round_1") => ({ id, unitId: "exam_prep", category: "exam_prep",
+    type: "word", question: `합성 세트 문항 ${id}`, answer: "고려", options: [], examRound: round,
+    paperOrder: order, points: 20, passageSet: material });
+  const save = (value, revision = 0, role = "admin") => setStore.runTransaction(transaction => {
+    let wrote = false;
+    const checkedTransaction = { ...transaction,
+      get: (...args) => { assert.equal(wrote, false, "All set reads precede writes"); return transaction.get(...args); },
+      query: (...args) => { assert.equal(wrote, false, "All set queries precede writes"); return transaction.query(...args); },
+      set: (...args) => { wrote = true; return transaction.set(...args); },
+    };
+    return adapter.apply({ transaction: checkedTransaction, commandId: commandId(), receiptId: "set-edit-test",
+      timestamp: { __serverTimestamp: nowMs }, actor: { actorUid: role === "student" ? student.uid : admin.uid, actorRole: role },
+      commandType: "upsertQuizQuestion", payload: assessment.normalizeAssessmentPayload("upsertQuizQuestion", {
+        semesterId, questionId: String(value.id), question: value, expectedRevision: revision, reason: "Synthetic set edit regression",
+      }) });
+  });
+  await save(question(9901, 1));
+  await save(question(9902, 2));
+  await save(question(9903, 3));
+  await save(question(9904, 1, "round_2"));
+  const individual = { ...question(9902, 2), question: "개별 발문 수정", explanation: "개별 해설 수정" };
+  await save(individual, 1);
+  assert.equal(setStore.snapshot(path(9902)).data.question, individual.question, "Ordinary editing of a registered set member succeeds");
+  assert.equal(setStore.snapshot(path(9901)).data.contentRevision, 1, "Individual edits do not touch siblings");
+  const frozen = { questionSnapshots: [clone(setStore.snapshot(path(9902)).data)], score: 20 };
+  setStore.documents.set("semester_assessment_submissions/frozen-set-test", clone(frozen));
+  const changed = { ...individual, passageSet: { ...material, passage: "수정한 공통 지문", instruction: "수정한 공통 발문" } };
+  const updated = await save(changed, 2);
+  for (const [id, revision] of [[9901, 2], [9902, 3], [9903, 2]]) {
+    assert.deepEqual(setStore.snapshot(path(id)).data.passageSet, changed.passageSet);
+    assert.equal(setStore.snapshot(path(id)).data.contentRevision, revision);
+  }
+  assert.deepEqual(updated.result.updatedSetQuestionIds, ["9901", "9903"]);
+  assert.deepEqual(setStore.snapshot(path(9904)).data.passageSet, material, "Same set ID in another round is unchanged");
+  assert.deepEqual(setStore.snapshot("semester_assessment_submissions/frozen-set-test").data, frozen, "Submitted answers and grades remain immutable");
+  const noWrites = setStore.writeCount;
+  await assert.rejects(save(question(9901, 1), 1), error => error.details?.reason === "ASSESSMENT_CONTENT_REVISION_CONFLICT");
+  await assert.rejects(save(changed, 3, "student"), error => error.code === "permission-denied");
+  await assert.rejects(save({ ...question(9905, 4), passageSet: material }), error => error.details?.reason === "ASSESSMENT_PAPER_SET_CONFLICT");
+  await assert.rejects(save({ ...changed, paperOrder: 5 }, 3), error => error.details?.reason === "ASSESSMENT_PAPER_SET_ORDER_INVALID");
+  assert.equal(setStore.writeCount, noWrites, "Stale, forbidden, conflicting joins and nonconsecutive edits write nothing");
+  const sibling = { ...question(9901, 1), passageSet: changed.passageSet, question: "다른 교사의 개별 수정" };
+  await save(sibling, 2);
+  await save({ ...changed, passageSet: { ...changed.passageSet, image: "https://example.test/revised.png" } }, 3);
+  assert.equal(setStore.snapshot(path(9901)).data.question, sibling.question, "Shared edits preserve the latest sibling stem");
+  setStore.documents.get(`semester_manifests/${semesterId}`).status = "ARCHIVED";
+  const beforeArchive = setStore.writeCount;
+  await assert.rejects(save(changed, 4), error => error.details?.reason === "ASSESSMENT_SEMESTER_NOT_ACTIVE");
+  assert.equal(setStore.writeCount, beforeArchive);
+};
+
 const runMockExamPaper = async () => {
   const paperStore = new MemoryStore(seed);
   const apply = (commandType, payload, studentActor = false) => paperStore.runTransaction(transaction => adapter.apply({
@@ -1520,6 +1575,7 @@ const runLegacyReceiptHints = async () => {
 (async () => {
   await runLegacyReceiptHints();
   await runMockExamPaper();
+  await runMockExamSetEditing();
   await runMockRetakeOverview();
   await runMockStateReadBounds();
   await runShortAnswerAliases();
@@ -1668,6 +1724,7 @@ const runLegacyReceiptHints = async () => {
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
+      "MOCK_SET_EDIT_SHARED_ATOMIC_REVISIONS_SIBLING_PRESERVATION_STALE_AND_SCOPE_GATES",
       "MOCK_RETAKE_LIMIT_RESET_RESUME_LEGACY_OWNER_SEMESTER_AND_MASKED_READ_BOUNDS",
       "MOCK_STATE_PROJECTED_HISTORY_SINGLE_SELECTED_PAPER_SEMESTER_REUSE_AND_UNCHANGED_GATES",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",

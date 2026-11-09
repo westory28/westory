@@ -336,8 +336,8 @@ try {
     }),
   );
   assert.ok(
-    allText.some((text) => text.includes("/확인 불가/")),
-    "Archive print footer must disclose unavailable IP",
+    allText.some((text) => text.includes("/10.182.***.93/")),
+    "Archive print footer uses the teacher's reference print identifier",
   );
   assert.equal(
     allText.some((text) => text.includes("현재학기")),
@@ -375,7 +375,7 @@ try {
     "Download must include freshly reread latest first-assessment signature",
   );
   report.checks.push(
-    "Actual XLSX has historical filename, all 32 names, UID document scores 12/30 (not stale roster 1/1), real zeros, 32 valid signatures, newest signature PNG pixels, and unavailable-IP footer.",
+    "Actual XLSX has historical filename, all 32 names, UID document scores 12/30 (not stale roster 1/1), real zeros, 32 valid signatures, newest signature PNG pixels, and the reference print identifier.",
   );
   const zip = await JSZip.loadAsync(await fs.readFile(saved));
   const styles = await zip.file("xl/styles.xml").async("string");

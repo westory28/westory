@@ -37,6 +37,10 @@ service = service.replace(
   "if(command==='upsertQuizQuestion'){const q=",
   "if(command==='upsertQuizQuestion'){if(fixtureState.failNextSave){fixtureState.failNextSave=false;throw new Error('합성 저장 실패')}const q=",
 );
+service = service.replace(
+  "if(i<0)questions.push(q);else questions[i]=q;return {contentRevision:q.contentRevision}",
+  "const old=questions[i];if(old&&old.contentRevision!==payload.expectedRevision)throw new Error('합성 revision 충돌');const updatedSetQuestionIds=[];if(old?.passageSet?.id&&old.passageSet.id===q.passageSet?.id&&old.examRound===q.examRound&&JSON.stringify(old.passageSet)!==JSON.stringify(q.passageSet)){for(const sibling of questions){if(sibling.id!==q.id&&sibling.examRound===q.examRound&&sibling.passageSet?.id===q.passageSet?.id){sibling.passageSet={...q.passageSet};sibling.contentRevision=(sibling.contentRevision||0)+1;updatedSetQuestionIds.push(String(sibling.id))}}}if(i<0)questions.push(q);else questions[i]=q;return {contentRevision:q.contentRevision,updatedSetQuestionIds}",
+);
 const image =
   "data:image/svg+xml," +
   encodeURIComponent(
@@ -824,6 +828,37 @@ try {
   await page.keyboard.press('Escape');
   await paired.waitFor({state:'hidden'});
   checks.push("Connect an existing set using cached representative material, persist the second question, and print shared material exactly once with [1~2] range.");
+  await page.getByRole("searchbox", { name: "검색", exact: true }).fill("직접 등록한");
+  await page.waitForFunction(() => document.querySelectorAll("[data-quiz-question-card]").length === 1);
+  await editFirst();
+  await edit.getByRole("textbox", { name: "해설", exact: true }).fill("등록한 세트 문항의 개별 해설 수정");
+  await edit.getByRole("button", { name: "수정 저장", exact: true }).click();
+  await edit.waitFor({ state: "hidden" });
+  await editFirst();
+  assert.equal(await edit.getByRole("textbox", { name: "해설", exact: true }).inputValue(), "등록한 세트 문항의 개별 해설 수정");
+  await edit.getByRole("textbox", { name: "공통 지문", exact: true }).fill("세트 자료를 등록 후 함께 수정했습니다.");
+  const readsBeforeSetEdit = await page.evaluate(() => window.assessmentTeacherFixture.catalogReads);
+  await page.evaluate(() => { window.assessmentTeacherFixture.failNextRefresh = true; });
+  await edit.getByRole("button", { name: "수정 저장", exact: true }).click();
+  await edit.getByRole("alert").filter({ hasText: "문항은 저장되었지만" }).waitFor();
+  assert.equal(await edit.getByRole("textbox", { name: "공통 지문", exact: true }).innerText(), "세트 자료를 등록 후 함께 수정했습니다.");
+  await edit.getByRole("button", { name: "수정 저장", exact: true }).click();
+  await edit.waitFor({ state: "hidden" });
+  await page.waitForFunction(before => window.assessmentTeacherFixture.catalogReads > before, readsBeforeSetEdit);
+  await page.getByRole("searchbox", { name: "검색", exact: true }).fill("공통 지문에 연결한");
+  await page.waitForFunction(() => document.querySelectorAll("[data-quiz-question-card]").length === 1);
+  await editFirst();
+  assert.equal(await edit.getByRole("textbox", { name: "공통 지문", exact: true }).innerText(), "세트 자료를 등록 후 함께 수정했습니다.");
+  await edit.getByRole("textbox", { name: "해설", exact: true }).fill("연결 문항은 최신 revision으로 다시 수정합니다.");
+  await edit.getByRole("button", { name: "수정 저장", exact: true }).click();
+  await edit.waitFor({ state: "hidden" });
+  const updatedPaper = await openPaper(page, "round_1", 2);
+  assert.equal(await updatedPaper.locator(".mock-exam-sheet .mock-exam-set-passage").count(), 1);
+  await updatedPaper.locator(".mock-exam-sheet .mock-exam-set-passage").getByText("세트 자료를 등록 후 함께 수정했습니다.", { exact: true }).waitFor();
+  await page.screenshot({ path: path.join(evidence, "teacher-set-edit-shared-preview.png") });
+  await page.keyboard.press("Escape");
+  await updatedPaper.waitFor({ state: "hidden" });
+  checks.push("Registered set members accept individual edits; a shared passage edit updates the full set, reloads current revisions, and a linked sibling can then be edited without stale-cache errors. Preview prints the revised common passage once.");
   await page
     .getByRole("searchbox", { name: "검색", exact: true })
     .fill("직접 등록한");

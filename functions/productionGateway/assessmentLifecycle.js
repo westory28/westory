@@ -946,6 +946,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const path = `${semesterRoot(payload.semesterId)}/quiz_questions/${payload.questionId}`;
       const snapshot = await transaction.get(path);
       const currentRevision = assertContentRevision(snapshot, payload.expectedRevision, "Quiz question");
+      let sharedUpdates = [];
       if (payload.question.examRound || snapshot.data?.passageSet) {
         const existing = await transaction.query(`${semesterRoot(payload.semesterId)}/quiz_questions`, { filters: [
           { field: "unitId", operator: "==", value: "exam_prep" },
@@ -958,8 +959,25 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         const effectiveQuestion = { ...snapshot.data, ...payload.question };
         const setKey = question => question?.passageSet?.id ? `${question.examRound}\n${question.passageSet.id}` : null;
         const affectedSets = new Set([setKey(snapshot.data), setKey(effectiveQuestion)].filter(Boolean));
-        const candidates = existing.filter(document => document.path !== path
-          && affectedSets.has(setKey(document.data))).map(document => ({ ...document.data }));
+        const siblings = existing.filter(document => document.path !== path
+          && affectedSets.has(setKey(document.data)));
+        const editsExistingSet = setKey(snapshot.data) && setKey(snapshot.data) === setKey(effectiveQuestion)
+          && mockMaterials.mockExamSetSignature(snapshot.data.passageSet) !== mockMaterials.mockExamSetSignature(effectiveQuestion.passageSet);
+        if (editsExistingSet) {
+          // Every member receives a new revision. A stale editor on any member
+          // therefore cannot overwrite a newer shared passage or sibling edit.
+          mockMaterials.validateMockExamSets([...siblings.map(document => ({ ...document.data })), { ...snapshot.data }], fail);
+          sharedUpdates = siblings.map(document => ({ path: document.path, questionId: document.path.split("/").pop(),
+            passageSet: effectiveQuestion.passageSet, contentRevision: Number(document.data.contentRevision || 0) + 1 }));
+          for (const document of siblings) {
+            if (Buffer.byteLength(canonicalJson({ ...document.data, passageSet: effectiveQuestion.passageSet }), "utf8") > 900_000)
+              fail("invalid-argument", "세트 문항의 자료가 너무 큽니다. 공통 자료 이미지 용량을 줄여 주세요.", "ASSESSMENT_PAYLOAD_INVALID");
+          }
+          if (Buffer.byteLength(canonicalJson(sharedUpdates), "utf8") + Buffer.byteLength(canonicalJson(payload.question), "utf8") > 8_000_000)
+            fail("invalid-argument", "세트 전체의 공통 자료가 너무 큽니다. 이미지 용량을 줄여 주세요.", "ASSESSMENT_PAYLOAD_INVALID");
+        }
+        const candidates = siblings.map(document => ({ ...document.data,
+          ...(editsExistingSet ? { passageSet: effectiveQuestion.passageSet } : {}) }));
         mockMaterials.validateMockExamSets([...candidates, effectiveQuestion], fail);
       }
       const nextRevision = currentRevision + 1;
@@ -971,8 +989,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         updateReason: payload.reason,
         ...(snapshot.exists ? {} : { createdAt: timestamp, createdBy: actor.actorUid }),
       };
+      for (const update of sharedUpdates) {
+        transaction.set(update.path, { passageSet: update.passageSet, contentRevision: update.contentRevision,
+          updatedAt: timestamp, updatedBy: actor.actorUid, updateReason: payload.reason }, { merge: true });
+      }
       transaction.set(path, question, { merge: true });
-      return { target: { kind: "quiz-question", id: payload.questionId, refs: [path] }, sourceHash: sha256(canonicalJson(payload.question)), result: { questionId: payload.questionId, contentRevision: nextRevision } };
+      return { target: { kind: "quiz-question", id: payload.questionId, refs: [path, ...sharedUpdates.map(update => update.path)] },
+        sourceHash: sha256(canonicalJson(payload.question)), result: { questionId: payload.questionId, contentRevision: nextRevision,
+          ...(sharedUpdates.length ? { updatedSetQuestionIds: sharedUpdates.map(update => update.questionId) } : {}) } };
     }
 
     if (commandType === ASSESSMENT_COMMAND_TYPES.DELETE_QUIZ_QUESTION) {

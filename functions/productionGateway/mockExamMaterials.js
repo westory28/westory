@@ -56,4 +56,4 @@ const buildPreparedAssets = (source) => {
     fontCharacters: [...new Set(visible.join(""))].sort().join("") };
 };
 
-module.exports = { normalizeMockExamMaterials, validateMockExamSets, buildPreparedAssets, redactLegacyBlankText };
+module.exports = { normalizeMockExamMaterials, validateMockExamSets, mockExamSetSignature: signature, buildPreparedAssets, redactLegacyBlankText };

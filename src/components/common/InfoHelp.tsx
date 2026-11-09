@@ -94,6 +94,7 @@ export function InfoHelpContent({ sections, children }: InfoHelpContentProps) {
 export interface InfoHelpProps extends InfoHelpContentProps {
   label: string;
   className?: string;
+  trigger?: ReactNode;
 }
 
 const getHelpTabStops = (container: HTMLElement | null): HTMLElement[] => {
@@ -122,6 +123,7 @@ const getHelpTabStops = (container: HTMLElement | null): HTMLElement[] => {
 export function InfoHelp({
   label,
   className = "",
+  trigger,
   sections,
   children,
 }: InfoHelpProps) {
@@ -266,7 +268,7 @@ export function InfoHelp({
           setOpen(pinned.current);
         }}
       >
-        <InfoHelpIcon />
+        {trigger ?? <InfoHelpIcon />}
       </button>
       {open &&
         createPortal(

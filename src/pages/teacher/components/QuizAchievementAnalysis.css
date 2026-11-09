@@ -98,9 +98,9 @@
   font-weight: 700;
 }
 .quiz-achievement-analysis.qaa-inline-report .qaa-table :is(th, td) {
-  padding: 8px 16px;
-  font-size: 14px;
-  line-height: 1.6;
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 .quiz-achievement-analysis.qaa-inline-report .qaa-scope {
   font-size: 14px;
@@ -207,6 +207,73 @@
 }
 .qaa-table--wide {
   min-width: 1100px;
+}
+.quiz-achievement-analysis .qaa-table--items {
+  min-width: 1024px;
+}
+.quiz-achievement-analysis .qaa-table.qaa-table--items :is(th, td) {
+  padding: 4px;
+  font-size: 12px;
+}
+.quiz-achievement-analysis .qaa-table--items .qaa-sort-button {
+  gap: 0;
+  padding: 4px 0;
+}
+.qaa-table--items .qaa-sort-button svg {
+  width: 12px;
+  height: 12px;
+}
+.qaa-table--items .qaa-chart-button {
+  min-width: 80px;
+}
+.qaa-table--items .qaa-sparkline {
+  width: 80px;
+}
+.qaa-value-help > .ws-info-help__button {
+  flex-basis: auto;
+  width: auto;
+  min-width: 32px;
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 0;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+.qaa-table--sp {
+  table-layout: fixed;
+}
+.qaa-sp-student-column {
+  width: 96px;
+}
+.qaa-sp-metric-column {
+  width: 64px;
+}
+.qaa-sp-item-column {
+  width: 32px;
+}
+.quiz-achievement-analysis .qaa-table.qaa-table--sp :is(th, td) {
+  padding: 4px 2px;
+  font-size: 12px;
+}
+.quiz-achievement-analysis .qaa-table--sp tbody th {
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.quiz-achievement-analysis .qaa-table--sp .qaa-text-button {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 0;
+}
+.qaa-table--sp .qaa-sort-button {
+  padding: 4px 0;
+  gap: 0;
+}
+.qaa-table--sp .qaa-sort-button svg {
+  width: 12px;
+  height: 12px;
 }
 .qaa-table th,
 .qaa-table td {
@@ -397,6 +464,10 @@
 .qaa-sp-s-boundary {
   border-right: 2px solid var(--ws-primary, #2563eb) !important;
 }
+.qaa-sp-s-boundary--left {
+  border-right: 0 !important;
+  border-left: 2px solid var(--ws-primary, #2563eb) !important;
+}
 .qaa-sp-p-boundary {
   border-bottom: 2px solid var(--ws-text-muted, #6b7280) !important;
 }
@@ -463,5 +534,15 @@
   .qaa-table th,
   .qaa-table td {
     padding: 4px 8px;
+  }
+}
+@media (pointer: coarse) {
+  .qaa-value-help > .ws-info-help__button {
+    min-width: 44px;
+    min-height: 44px;
+    height: 44px;
+  }
+  .quiz-achievement-analysis .qaa-table--sp .qaa-text-button {
+    min-height: 44px;
   }
 }

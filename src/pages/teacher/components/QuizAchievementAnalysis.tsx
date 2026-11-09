@@ -36,6 +36,8 @@ import {
 
 const percent = (value: number | null | undefined) =>
   value == null ? "—" : `${value.toFixed(1)}%`;
+const compactPercent = (value: number | null | undefined) =>
+  value == null ? "—" : `${Number(value.toFixed(1))}%`;
 const number = (value: number | null | undefined, digits = 2) =>
   value == null ? "—" : value.toFixed(digits);
 const difficultyLabel = (value: string | undefined) =>
@@ -869,10 +871,14 @@ function Table({
   children,
   label,
   wide = false,
+  className = "",
+  style,
 }: {
   children: React.ReactNode;
   label: string;
   wide?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <div
@@ -881,7 +887,10 @@ function Table({
       aria-label={label}
       tabIndex={0}
     >
-      <table className={`qca-table qaa-table${wide ? " qaa-table--wide" : ""}`}>
+      <table
+        className={`qca-table qaa-table${wide ? " qaa-table--wide" : ""} ${className}`}
+        style={style}
+      >
         {children}
       </table>
     </div>
@@ -1053,13 +1062,13 @@ function ItemStatisticsTable({
   });
   const columns = [
     ["item", "문항", "ascending"],
-    ["difficulty", "출제 난도", "ascending"],
-    ["target", "목표 수준", "ascending"],
+    ["difficulty", "난도", "ascending"],
+    ["target", "목표", "ascending"],
     ["correctRate", "정답률"],
     ["discrimination", "변별도"],
     ["upperLower27", "D (27%)"],
     ["alphaIfDeleted", "제거 시 α"],
-    ...[0, 1, 2, 3, 4].map((index) => [`choice:${index}`, `선지 ${index + 1}`]),
+    ...[0, 1, 2, 3, 4].map((index) => [`choice:${index}`, `${index + 1}`]),
     ["unanswered", "무응답"],
     ...[...ACHIEVEMENT_LEVELS, "unclassified"].map((level) => [
       level,
@@ -1067,7 +1076,10 @@ function ItemStatisticsTable({
     ]),
   ];
   return (
-    <Table label="문항별 통계와 학생 수준별 정답률" wide>
+    <Table
+      label="문항별 통계와 학생 수준별 정답률"
+      className="qaa-table--items"
+    >
       <thead>
         <tr>
           {columns.map(([column, label, direction]) => (
@@ -1081,7 +1093,7 @@ function ItemStatisticsTable({
               {...sorting}
             />
           ))}
-          <th>수준 프로필</th>
+          <th>프로필</th>
         </tr>
       </thead>
       <tbody>
@@ -1127,17 +1139,25 @@ function FragmentRows({
         <td>{difficultyLabel(item.intendedDifficulty)}</td>
         <td>{item.targetAchievementLevel || "미지정"}</td>
         <td>
-          {percent(item.correctRate)}
-          <small>n={item.sampleSize}</small>
+          <InfoHelp
+            className="qaa-value-help"
+            trigger={compactPercent(item.correctRate)}
+            label={`${question?.paperOrder || item.id}번 정답률 ${compactPercent(item.correctRate)}, 표본 정보`}
+          >
+            정답률 {percent(item.correctRate)} · 표본 {item.sampleSize}명
+          </InfoHelp>
         </td>
         <td>{number(item.discrimination, 3)}</td>
         <td>
-          {number(item.upperLower27)}
-          <small>
+          <InfoHelp
+            className="qaa-value-help"
+            trigger={number(item.upperLower27)}
+            label={`${question?.paperOrder || item.id}번 상·하위 변별도 ${number(item.upperLower27)}, 표본 정보`}
+          >
             {item.upperLowerCount
-              ? `각 ${item.upperLowerCount}명`
-              : "표본·동점 확인"}
-          </small>
+              ? `상·하위 각 ${item.upperLowerCount}명`
+              : "표본이 부족하거나 상·하위 경계에 동점자가 있어 계산하지 않았습니다."}
+          </InfoHelp>
         </td>
         <td>{number(item.alphaIfDeleted, 3)}</td>
         {[0, 1, 2, 3, 4].map((index) => (
@@ -1149,18 +1169,24 @@ function FragmentRows({
                 : ""
             }
           >
-            {percent(item.choices[index]?.percent)}
+            {compactPercent(item.choices[index]?.percent)}
           </td>
         ))}
         <td>
           {item.missingAnswer
             ? "미보관 포함"
-            : percent(ratio(item.unanswered, item.sampleSize))}
+            : compactPercent(ratio(item.unanswered, item.sampleSize))}
         </td>
         {item.levelRates.map((row) => (
           <td key={row.level}>
-            {percent(row.percent)}
-            <small>n={row.total}</small>
+            <InfoHelp
+              className="qaa-value-help"
+              trigger={compactPercent(row.percent)}
+              label={`${question?.paperOrder || item.id}번 ${levelLabel(row.level)} 수준 정답률 ${compactPercent(row.percent)}, 표본 정보`}
+            >
+              {levelLabel(row.level)} 수준 정답률 {percent(row.percent)} · 표본{" "}
+              {row.total}명
+            </InfoHelp>
           </td>
         ))}
         <td>
@@ -1217,7 +1243,7 @@ function LevelChoices({
                 row.answer === item.answerKey ? "qaa-correct-option" : ""
               }
             >
-              선지 {i + 1}
+              {i + 1}
               {row.answer === item.answerKey ? " (정답)" : ""}
             </th>
           ))}
@@ -1403,7 +1429,7 @@ function SpTable({
   });
   const itemSort = useAnalysisTableSort({
     key: "correctRate",
-    direction: "descending",
+    direction: "ascending",
   });
   const metrics = analysis.forms.find(
     (form) => form.key === formKey,
@@ -1418,15 +1444,15 @@ function SpTable({
       question as typeof question & { paperOrder?: number },
     ]),
   );
-  const columns = sortAnalysisRows(
-    metrics.spItemOrder.map((id, index) => ({
-      id,
-      index,
-      total: metrics.spItemTotals[index],
-    })),
-    itemSort.sort,
-    (column) => column.total,
-  );
+  const reversedItems = itemSort.sort.direction === "ascending";
+  const columns = metrics.spItemOrder.map((id, index) => ({
+    id,
+    index,
+    total: metrics.spItemTotals[index],
+  }));
+  // Reverse the entire canonical order, including ties, so the expected
+  // staircase and every response keep the same question identities.
+  if (reversedItems) columns.reverse();
   const rows = sortAnalysisRows(metrics.spRows, studentSort.sort, (row, key) =>
     key === "student"
       ? studentLabel(studentById.get(row.studentId), data)
@@ -1436,23 +1462,32 @@ function SpTable({
   );
   const showCurves =
     ["correctCount", "correctRate"].includes(studentSort.sort.key) &&
-    studentSort.sort.direction === "descending" &&
-    itemSort.sort.direction === "descending";
+    studentSort.sort.direction === "descending";
   return (
     <>
       <div className="qca-section-heading">
         <h3>S–P 응답표</h3>
         <InfoHelp label="S–P표 읽기">
           파란 칸은 정답, 색 없는 칸은 오답입니다. 기본 정렬은 학생 정답수 높은
-          순, 문항 정답률 높은 순입니다. 헤더를 누르면 정렬 방향이 바뀝니다. 두
-          기준이 높은 순일 때만 학생 정답수 경계(S)와 문항 정답자수 경계(P)를
+          순, 문항 정답률 낮은 순입니다. 헤더를 누르면 정렬 방향이 바뀝니다.
+          학생 정답수 높은 순에서 학생 정답수 경계(S)와 문항 정답자수 경계(P)를
+          표시합니다. 낮은 정답률부터 볼 때 S 경계는 오른쪽 정답 영역의 왼쪽에
           표시합니다. 주황 테두리는 기본 계단형 기준과 다른 응답입니다. Sato
           주의지수는 응답 불일치의 원시 지표이고 1보다 클 수도 있습니다.
           상수·만점·0점 등 계산 불가는 —로 두며 부주의·부정행위를 확정하지
           않습니다.
         </InfoHelp>
       </div>
-      <Table label="학생과 문항별 정오 S-P표" wide>
+      <Table
+        label="학생과 문항별 정오 S-P표"
+        className="qaa-table--sp"
+        style={{ minWidth: `${288 + columns.length * 32}px` }}
+      >
+        <colgroup>
+          <col className="qaa-sp-student-column" />
+          <col span={3} className="qaa-sp-metric-column" />
+          <col span={columns.length} className="qaa-sp-item-column" />
+        </colgroup>
         <thead>
           <tr>
             <AnalysisSortHeader
@@ -1491,13 +1526,14 @@ function SpTable({
           <tr>
             <AnalysisSortHeader
               column="correctRate"
-              label="문항 정답률"
+              label="문항 정답률 (%)"
               colSpan={4}
+              defaultDirection="ascending"
               {...itemSort}
             />
             {columns.map(({ id, total }) => (
               <th key={id} scope="col">
-                {percent(ratio(total, metrics.sampleSize))}
+                {number(ratio(total, metrics.sampleSize), 1)}
               </th>
             ))}
           </tr>
@@ -1509,16 +1545,23 @@ function SpTable({
               <tr key={row.studentId}>
                 <th>{studentLabel(student, data)}</th>
                 <td>{row.correctCount}</td>
-                <td>{percent(row.percentCorrect)}</td>
+                <td>{compactPercent(row.percentCorrect)}</td>
                 <td>{number(row.cautionIndex, 3)}</td>
                 {columns.map(({ id, index }, displayIndex) => {
                   const correct = row.responses[index];
                   const atypical =
                     index < row.correctCount ? !correct : correct;
+                  const studentBoundary =
+                    showCurves &&
+                    row.sCurve > 0 &&
+                    row.sCurve < columns.length &&
+                    (reversedItems
+                      ? displayIndex === columns.length - row.sCurve
+                      : displayIndex + 1 === row.sCurve);
                   return (
                     <td
                       key={id}
-                      className={`qaa-sp-cell${correct ? " qaa-sp-correct" : " qaa-sp-incorrect"}${atypical ? " qaa-sp-atypical" : ""}${showCurves && displayIndex + 1 === row.sCurve ? " qaa-sp-s-boundary" : ""}${showCurves && rowIndex + 1 === metrics.spItemTotals[index] ? " qaa-sp-p-boundary" : ""}`}
+                      className={`qaa-sp-cell${correct ? " qaa-sp-correct" : " qaa-sp-incorrect"}${atypical ? " qaa-sp-atypical" : ""}${studentBoundary ? ` qaa-sp-s-boundary${reversedItems ? " qaa-sp-s-boundary--left" : ""}` : ""}${showCurves && rowIndex + 1 === metrics.spItemTotals[index] ? " qaa-sp-p-boundary" : ""}`}
                       aria-label={`${questionById.get(id)?.paperOrder || id}번 ${correct ? "정답" : "오답"}${atypical ? ", 계단형 기준과 다름" : ""}`}
                     >
                       {correct ? "1" : "0"}

@@ -78,8 +78,16 @@ export default function QuizAchievementEstimates({
           수준이며 공식 성적을 변경하지 않습니다.
         </InfoHelp>
       </div>
-      <div className="qaa-table-wrap">
-        <table className="qaa-table" aria-label="학생별 모의고사 누적 성취수준">
+      <div
+        className="qca-table-scroll qaa-table-scroll qaa-table-wrap"
+        role="region"
+        aria-label="학생별 모의고사 누적 성취수준 표"
+        tabIndex={0}
+      >
+        <table
+          className="qca-table qaa-table"
+          aria-label="학생별 모의고사 누적 성취수준"
+        >
           <thead>
             <tr>
               <AnalysisSortHeader
@@ -181,9 +189,14 @@ export default function QuizAchievementEstimates({
               아닙니다.
             </InfoHelp>
           </div>
-          <div className="qaa-table-wrap">
+          <div
+            className="qca-table-scroll qaa-table-scroll qaa-table-wrap"
+            role="region"
+            aria-label="응시 당시 시험지별 추정 분할점수 표"
+            tabIndex={0}
+          >
             <table
-              className="qaa-table"
+              className="qca-table qaa-table"
               aria-label="응시 당시 시험지별 추정 분할점수"
             >
               <thead>

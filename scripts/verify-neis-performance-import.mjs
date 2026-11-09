@@ -95,7 +95,7 @@ await assert.rejects(
 
 const source = await fs.readFile("src/pages/teacher/components/PerformanceScoreManager.tsx", "utf8");
 assert.ok(!source.includes("UPLOAD_ASSESSMENT_OPTIONS"));
-assert.ok(!source.includes("10.182.***.93"));
+assert.ok(source.includes('const CLASS_SHEET_PRINT_IP = "10.182.***.93"'));
 const file = ts.createSourceFile("manager.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const dependencies = {};
 for (const node of file.statements) if (ts.isImportDeclaration(node)) dependencies[node.moduleSpecifier.text] = {};
@@ -171,14 +171,17 @@ const blob = await manager.buildClassSummaryWorkbookFromTemplate(exportParams);
 const wb = new ExcelJS.Workbook();
 await wb.xlsx.load(await blob.arrayBuffer());
 const ws = wb.worksheets[0];
-assert.equal(ws.getCell("E6").value, "새 학기 역사 탐구\n(만점 25.00,\n25.00%)");
-assert.equal(ws.getCell("G6").value, "역사 자료 해석\n(만점 35.00,\n35.00%)");
+assert.equal(ws.getCell("E6").value, "새 학기 역사 탐구\n(만점 25.00, 25.00%)");
+assert.equal(ws.getCell("G6").value, "역사 자료 해석\n(만점 35.00, 35.00%)");
 assert.equal(ws.getCell("B7").value, "2/1");
 assert.equal(ws.getCell("D7").value, "검증1");
 assert.equal(ws.getCell("E7").value, 17);
 assert.equal(ws.getCell("G7").value, 29);
 assert.equal(ws.getCell("H7").value, 46);
-assert.ok(ws.getCell("H45").value.includes("192.0.*.*/검증교사"));
+assert.ok(ws.getCell("H45").value.includes("10.182.***.93/검증교사"));
+for (const address of ["E7", "G7", "H7", "E40", "G40", "H40", "E41", "G41", "H41"]) {
+  assert.equal(ws.getCell(address).numFmt, "#,##0.00", `${address}: scores and summaries always keep two decimals`);
+}
 assert.equal(ws.getCell("E39").value, "32 명");
 assert.equal(ws.getCell("E40").value, 544);
 assert.equal(ws.getCell("H40").value, 1472);
@@ -242,8 +245,8 @@ const assertReferenceBorders = async (buffer, studentCount, label, assessmentCou
 await assertReferenceBorders(await blob.arrayBuffer(), 32, "32 students");
 const movedStudents = students.map((student,index) => index < 2 ? {
   ...student,
-  firstRecord: {...signedFirst, academicStatus: ["전출","정원외"][index]},
-  secondRecord: signedSecond,
+  firstRecord: {...blankSecond, academicStatus: ["전출","정원외"][index]},
+  secondRecord: {...blankSecond, academicStatus: ["전출","정원외"][index]},
 } : student);
 const movementWorkbook = new ExcelJS.Workbook();
 const movedBuffer = await (await manager.buildClassSummaryWorkbookFromTemplate({...exportParams, students: movedStudents})).arrayBuffer();
@@ -262,6 +265,90 @@ assert.equal(movedSheet.getCell("E40").value,510);
 assert.equal(movedSheet.getCell("G40").value,870);
 assert.equal(movedSheet.getCell("H41").value,46);
 await assertReferenceBorders(movedBuffer,32,"two semester movements");
+// A student who left after the first assessment still belongs to that
+// assessment's population. Never use the current enrollment as a score filter.
+const partialMovementStudents = students.map((student, index) => index ? student : {
+  ...student,
+  firstRecord: { ...student.firstRecord, academicStatus: "전출" },
+  secondRecord: { ...blankSecond, academicStatus: "전출" },
+});
+const partialMovementBuffer = await (await manager.buildClassSummaryWorkbookFromTemplate({
+  ...exportParams,
+  firstRoster: { ...firstRoster, items: [{ maxScore: 25 }] },
+  secondRoster: { ...secondRoster, items: [{ maxScore: 15 }, { maxScore: 20 }] },
+  students: partialMovementStudents,
+})).arrayBuffer();
+const partialMovementWorkbook = new ExcelJS.Workbook();
+await partialMovementWorkbook.xlsx.load(partialMovementBuffer);
+const partialMovementSheet = partialMovementWorkbook.worksheets[0];
+assert.equal(partialMovementSheet.getCell("E6").value, "새 학기 역사 탐구\n(만점 25.00, 25.00%)", "Missing NEIS ratios retain the assessment's scaled points");
+assert.equal(partialMovementSheet.getCell("G6").value, "역사 자료 해석\n(만점 35.00, 35.00%)", "Detailed criteria do not omit the assessment ratio");
+assert.equal(partialMovementSheet.getCell("E7").value, 17);
+assert.equal(partialMovementSheet.getCell("G7").value, "전출");
+assert.equal(partialMovementSheet.getCell("H7").value, 17);
+assert.equal(partialMovementSheet.getCell("E39").value, "32 명");
+assert.equal(partialMovementSheet.getCell("G39").value, "31 명");
+assert.equal(partialMovementSheet.getCell("E40").value, 544);
+assert.equal(partialMovementSheet.getCell("G40").value, 899);
+assert.equal(partialMovementSheet.getCell("H40").value, 1443);
+assert.equal(partialMovementSheet.getCell("E41").value, 17);
+assert.equal(partialMovementSheet.getCell("G41").value, 29);
+assert.equal(partialMovementSheet.getCell("H41").value, 46, "Combined average excludes the transferred student's score and headcount");
+assert.equal(partialMovementSheet.getImages().length, 0, "Movement students remain outside the signature workflow");
+await assertReferenceBorders(partialMovementBuffer, 32, "Transfer after the first assessment");
+if (process.env.SCORE_QA_MOVEMENT_OUTPUT) await fs.writeFile(process.env.SCORE_QA_MOVEMENT_OUTPUT, Buffer.from(partialMovementBuffer));
+const disjointStudents = [
+  { ...students[0], firstRecord: { ...signedFirst, academicStatus: "전출" }, secondRecord: { ...blankSecond, academicStatus: "전출" } },
+  { ...students[1], firstRecord: { ...blankSecond, academicStatus: "정원외" }, secondRecord: { ...unsignedSecond, academicStatus: "정원외" } },
+];
+const disjointWorkbook = new ExcelJS.Workbook();
+await disjointWorkbook.xlsx.load(await (await manager.buildClassSummaryWorkbookFromTemplate({ ...exportParams, students: disjointStudents })).arrayBuffer());
+const disjointSheet = disjointWorkbook.worksheets[0];
+assert.equal(disjointSheet.getCell("E7").value, 0, "An earned zero before transfer is included");
+assert.equal(disjointSheet.getCell("E9").value, "1 명");
+assert.equal(disjointSheet.getCell("G9").value, "1 명");
+assert.equal(disjointSheet.getCell("H10").value, 29);
+assert.equal(disjointSheet.getCell("H11").value || "", "", "A class containing only movement students has no combined average");
+const activeDisjointWorkbook = new ExcelJS.Workbook();
+await activeDisjointWorkbook.xlsx.load(await (await manager.buildClassSummaryWorkbookFromTemplate({
+  ...exportParams,
+  students: disjointStudents.map((student) => ({
+    ...student,
+    firstRecord: { ...student.firstRecord, academicStatus: undefined },
+    secondRecord: { ...student.secondRecord, academicStatus: undefined },
+  })),
+})).arrayBuffer());
+assert.equal(activeDisjointWorkbook.worksheets[0].getCell("H11").value, 14.5, "Active combined average counts distinct students, not the larger per-assessment count");
+// Match the supplied aggregate example using fictitious names and scores.
+const referenceAggregateStudents = students.map((student, index) => ({
+  ...student,
+  firstRecord: { ...student.firstRecord,
+    ...(index === 0 ? { academicStatus: "전출" } : {}),
+    totalScore: index === 0 ? 29 : index === 31 ? 16 : 28,
+    totalMaxScore: 30, enteredScoreCount: 1,
+    items: [{ score: index === 0 ? 29 : index === 31 ? 16 : 28, maxScore: 30, scoreEntered: true }],
+  },
+  secondRecord: index === 0 ? { ...blankSecond, academicStatus: "전출" } : {
+    ...student.secondRecord, totalScore: index === 31 ? 11 : 18,
+    totalMaxScore: 20, enteredScoreCount: 1,
+    items: [{ score: index === 31 ? 11 : 18, maxScore: 20, scoreEntered: true }],
+  },
+}));
+const referenceAggregateBuffer = await (await manager.buildClassSummaryWorkbookFromTemplate({
+  ...exportParams,
+  firstRoster: { ...firstRoster, totalMaxScore: 30, items: [{ maxScore: 30 }] },
+  secondRoster: { ...secondRoster, totalMaxScore: 20, items: [{ maxScore: 20 }] },
+  students: referenceAggregateStudents,
+})).arrayBuffer();
+const referenceAggregateWorkbook = new ExcelJS.Workbook();
+await referenceAggregateWorkbook.xlsx.load(referenceAggregateBuffer);
+const referenceAggregateSheet = referenceAggregateWorkbook.worksheets[0];
+for (const [address, value] of Object.entries({
+  E39: "32 명", G39: "31 명", E40: 885, G40: 551, H40: 1436,
+  E41: 27.66, G41: 17.77, H41: 45.39,
+})) assert.equal(referenceAggregateSheet.getCell(address).value, value, `${address}: teacher's separate per-assessment and overall-average populations`);
+await assertReferenceBorders(referenceAggregateBuffer, 32, "Reference aggregate with one first-only transfer");
+if (process.env.SCORE_QA_REFERENCE_AGGREGATE_OUTPUT) await fs.writeFile(process.env.SCORE_QA_REFERENCE_AGGREGATE_OUTPUT, Buffer.from(referenceAggregateBuffer));
 for (const test of finalSignatureCases) {
   const finalBlob = await manager.buildClassSummaryWorkbookFromTemplate({
     ...exportParams,

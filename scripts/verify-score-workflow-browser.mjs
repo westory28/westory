@@ -1402,34 +1402,66 @@ try {
       const moved = new ExcelJS.Workbook();
       await moved.xlsx.readFile(await movementDownload.path());
       const exported = moved.worksheets[0];
-      for (const [row, label] of [
-        [7, "전출"],
-        [8, "정원외"],
-      ]) {
-        for (const col of ["E", "G"])
-          assert.equal(exported.getCell(col + row).value, label);
-        for (const col of ["H", "J"])
-          assert.equal(exported.getCell(col + row).text, "");
+      for (const row of [7, 8]) {
+        assert.equal(exported.getCell("E" + row).value, 12);
+        assert.equal(exported.getCell("G" + row).value, row === 7 ? 30 : 0);
+        assert.equal(exported.getCell("H" + row).value, row === 7 ? 42 : 12);
+        assert.equal(exported.getCell("J" + row).text, "");
       }
       assert.equal(exported.getImages().length, 0);
       assert.equal(exported.getCell("D9").text, "가상학생05");
       assert.equal(exported.getCell("D36").text, "가상학생32");
-      // 28 numeric scores: 27 scores of 12/30 and one actual zero.
+      // 30 numeric scores include two students who transferred after assessment.
+      // Only the two pre-term movements are absent; an actual zero still counts.
       for (const [col, sum, avg] of [
-        ["E", 324, 11.57],
-        ["G", 810, 28.93],
+        ["E", 348, 11.6],
+        ["G", 840, 28],
       ]) {
-        assert.match(exported.getCell(col + "37").text, /^28\s*명$/);
+        assert.match(exported.getCell(col + "37").text, /^30\s*명$/);
         assert.equal(exported.getCell(col + "38").value, sum);
         assert.equal(exported.getCell(col + "39").value, avg);
+        assert.equal(exported.getCell(col + "39").numFmt, "#,##0.00");
       }
       assert.equal(
         await page.evaluate(() => window.scoreQa.events.length),
         priorWrites,
       );
       report.checks.push(
-        "Current-term transfer/outside-quota labels in both exported score columns, blank totals/remarks and no signatures; pre-term students omitted; a real zero retained in both averages without changing score records.",
+        "Current-term transfer/outside-quota students retain scores from completed assessments in export and counts; no signatures, pre-term students omitted, an earned zero included, source scores untouched.",
       );
+      await page.evaluate(() => {
+        for (const [key, value] of window.scoreQa.docs) {
+          if (key.includes("/performance_scores/") && !key.includes("/confirmations/") && value.uid === "qa-1" && value.title === "역사적 판단 글쓰기") {
+            Object.assign(value, { enteredScoreCount: 0, totalScore: 0, items: value.items.map((item) => ({ ...item, score: 0, scoreEntered: false })) });
+          }
+        }
+      });
+      const sourceBeforePartialExport = await page.evaluate(() => JSON.stringify([...window.scoreQa.docs]));
+      await page.getByRole("button", { name: "일람표 다운로드", exact: true }).click();
+      const partialDialog = page.getByRole("alertdialog");
+      await partialDialog.waitFor();
+      const [partialDownload] = await Promise.all([
+        page.waitForEvent("download"),
+        partialDialog.getByRole("button", { name: "그래도 다운로드" }).click(),
+      ]);
+      const partialWorkbook = new ExcelJS.Workbook();
+      await partialWorkbook.xlsx.readFile(await partialDownload.path());
+      const partialSheet = partialWorkbook.worksheets[0];
+      assert.equal(partialSheet.getCell("E7").value, 12);
+      assert.equal(partialSheet.getCell("G7").value, "전출");
+      assert.equal(partialSheet.getCell("H7").value, 12);
+      assert.equal(partialSheet.getCell("G8").value, 0);
+      assert.match(partialSheet.getCell("E37").text, /^30\s*명$/);
+      assert.match(partialSheet.getCell("G37").text, /^29\s*명$/);
+      assert.equal(partialSheet.getCell("E38").value, 348);
+      assert.equal(partialSheet.getCell("G38").value, 810);
+      assert.equal(partialSheet.getCell("H38").value, 1158);
+      assert.equal(partialSheet.getCell("G39").value, 27.93);
+      assert.equal(partialSheet.getCell("H39").value, 40.5, "Combined average excludes movement students from both numerator and denominator");
+      assert.equal(await page.evaluate(() => JSON.stringify([...window.scoreQa.docs])), sourceBeforePartialExport);
+      await page.screenshot({ path: `${out}/performance-sheet-partial-transfer-${width}.png`, fullPage: true });
+      report.screenshots.push(`performance-sheet-partial-transfer-${width}.png`);
+      report.checks.push("Transfer after the first assessment: 30/29 independent assessment populations, first score and earned zero retained, second missing score labeled. Combined total includes earned movement scores; combined average excludes movement scores and students. No score/signature writes.");
       let failedReadDownloads = 0;
       page.on("download", () => {
         failedReadDownloads += 1;
