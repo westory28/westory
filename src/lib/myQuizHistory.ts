@@ -40,7 +40,7 @@ export async function loadMyQuizHistory(input: {
   forceRefresh?: boolean;
 }): Promise<MyQuizHistoryPage> {
   const user = auth.currentUser;
-  if (!user) throw new Error("로그인 후 응시 기록을 확인해 주세요.");
+  if (!user) throw new Error("로그인 후 오답 노트를 확인해 주세요.");
   const response = await callWithApplicationSession<
     Record<string, unknown>,
     MyQuizHistoryPage
@@ -58,7 +58,7 @@ export async function loadMyQuizHistoryDetail(
   key: string,
 ): Promise<MyQuizHistoryDetail> {
   const user = auth.currentUser;
-  if (!user) throw new Error("로그인 후 응시 기록을 확인해 주세요.");
+  if (!user) throw new Error("로그인 후 오답 노트를 확인해 주세요.");
   const response = await callWithApplicationSession<
     Record<string, unknown>,
     MyQuizHistoryDetail

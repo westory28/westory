@@ -2507,8 +2507,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const answerText = String(q.answer || "").trim();
                 const explanationText = String(q.explanation || "").trim();
                 const passageText = String(q.passage || "").trim();
+                const exampleText = String(q.examplePassage || "").trim();
                 const hasChoiceSupportPanel =
-                  q.type === "choice" && (!!q.image || !!passageText);
+                  q.type === "choice" &&
+                  (!!q.image || !!passageText || !!exampleText);
                 const hasChoiceOptionImages =
                   getQuizChoiceColumnCount(choicePreviewOptions) === 1 &&
                   choicePreviewImages.some(Boolean);
@@ -2601,6 +2603,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                   size="compact"
                                   className="shrink-0 text-left"
                                 />
+                              )}
+                              {exampleText && (
+                                <fieldset className="quiz-question-example">
+                                  <legend>&lt;보기&gt;</legend>
+                                  <QuizPassage
+                                    value={exampleText}
+                                    surface="white"
+                                    size="compact"
+                                    className="text-left"
+                                  />
+                                </fieldset>
                               )}
                             </div>
                           )}
@@ -2748,6 +2761,17 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           />
                         )}
                       </div>
+                    )}
+                    {q.type !== "choice" && exampleText && (
+                      <fieldset className="quiz-question-example mb-2">
+                        <legend>&lt;보기&gt;</legend>
+                        <QuizPassage
+                          value={exampleText}
+                          surface="white"
+                          size="compact"
+                          className="text-left"
+                        />
+                      </fieldset>
                     )}
                     {q.type === "choice" ? (
                       <p className="text-xs font-bold text-slate-500">

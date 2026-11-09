@@ -921,7 +921,7 @@ const MyPage: React.FC = () => {
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
     { key: "avatar", title: "아바타 꾸미기", icon: "fa-shirt" },
     { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
-    { key: "wrong_note", title: "응시 기록", icon: "fa-book-open" },
+    { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];
   const profileGradeValue = normalizeClassValue(
     profile?.grade ?? userData?.grade,
@@ -1029,7 +1029,7 @@ const MyPage: React.FC = () => {
             label: `${historyClassroomTitle} 통과율`,
             value: progressSummary?.historyClassroom.totalAttempts
               ? `${historyParticipationPercent}%`
-              : "응시 기록 없음",
+              : "학습 기록 없음",
             color: "violet",
             percent: progressSummary?.historyClassroom.totalAttempts
               ? historyParticipationPercent
@@ -1054,7 +1054,7 @@ const MyPage: React.FC = () => {
     ...(canUseQuiz
       ? [
           {
-            title: "응시 기록 · 오답 복습",
+            title: "오답 노트",
             subtitle: "틀린 문제 다시 보기",
             icon: "fa-pen",
             tone: "bg-violet-50 text-violet-600",
@@ -1345,7 +1345,7 @@ const MyPage: React.FC = () => {
                         className="min-h-11 rounded-lg bg-blue-600 px-4 text-white font-bold"
                         onClick={() => selectMenu("wrong_note")}
                       >
-                        응시 기록 · 오답 복습
+                        오답 노트
                       </button>
                       <button
                         type="button"

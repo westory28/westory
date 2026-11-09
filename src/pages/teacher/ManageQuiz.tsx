@@ -1,5 +1,6 @@
 import PortalWorkspace from "../../components/common/PortalWorkspace";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
+import TeacherNavigationIcon from "../../components/layout/TeacherNavigationIcon";
 import QuizUnitTree from "./components/QuizUnitTree";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import QuizEditor, { type QuizQuestionDraft } from "./components/QuizEditor";
@@ -49,6 +50,8 @@ const ManageQuiz: React.FC = () => {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState("diagnostic");
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const treeId = useId();
   const [sourceQuestion, setSourceQuestion] =
     useState<QuizQuestionDraft | null>(null);
   const canRead = canReadQuizManagement(userData, currentUser?.email || "");
@@ -138,7 +141,9 @@ const ManageQuiz: React.FC = () => {
   };
 
   return (
-    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page quiz-workspace">
+    <PortalWorkspace
+      className={`teacher-sub-workspace teacher-sub-workspace--page quiz-workspace${treeCollapsed ? " quiz-workspace--tree-collapsed" : ""}`}
+    >
       <TeacherSubNavigation
         className="quiz-navigation"
         title="평가 목차"
@@ -146,14 +151,27 @@ const ManageQuiz: React.FC = () => {
         open={mobileTreeOpen}
         onOpenChange={setMobileTreeOpen}
       >
-        <QuizUnitTree
-          onSelect={handleNodeSelect}
-          selectedId={selectedNode?.id}
-          treeData={treeData}
-          loading={treeLoading}
-          loadError={treeState.identity === identityKey && treeState.error}
-          onRetry={() => setTreeVersion((value) => value + 1)}
-        />
+        <div id={treeId} className="quiz-navigation-tree">
+          <QuizUnitTree
+            onSelect={handleNodeSelect}
+            selectedId={selectedNode?.id}
+            treeData={treeData}
+            loading={treeLoading}
+            loadError={treeState.identity === identityKey && treeState.error}
+            onRetry={() => setTreeVersion((value) => value + 1)}
+          />
+        </div>
+        <button
+          type="button"
+          className="quiz-navigation-collapse"
+          aria-label={`평가 목차 ${treeCollapsed ? "펼치기" : "접기"}`}
+          title={`평가 목차 ${treeCollapsed ? "펼치기" : "접기"}`}
+          aria-expanded={!treeCollapsed}
+          aria-controls={treeId}
+          onClick={() => setTreeCollapsed((value) => !value)}
+        >
+          <TeacherNavigationIcon name="chevron" />
+        </button>
       </TeacherSubNavigation>
       <main className="teacher-sub-content">
         <header className="quiz-workspace-header">

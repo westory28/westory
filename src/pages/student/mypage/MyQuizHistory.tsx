@@ -8,14 +8,9 @@ import {
 } from "../../../lib/myQuizHistory";
 import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
 import { normalizeMockExamPaperHeader } from "../../../lib/mockExamPaperHeader";
-import QuizPassage from "../../../components/common/QuizPassage";
-import QuizQuestionText from "../../../components/common/QuizQuestionText";
-import {
-  QuizChoiceColumnHeaders,
-  QuizChoiceColumnCells,
-} from "../../../components/common/QuizChoiceColumns";
-import { getQuizChoiceColumnCount } from "../../../lib/quizChoiceColumns";
-import MockExamPaper from "../../../components/common/MockExamPaper";
+import MockExamPaper, {
+  MockExamQuestionContent,
+} from "../../../components/common/MockExamPaper";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import QuizRelearning from "../quiz/QuizRelearning";
 import { useQuizContentProtection } from "../quiz/useQuizContentProtection";
@@ -110,7 +105,7 @@ export default function MyQuizHistory({
         setError(
           errorText(
             caught,
-            "응시 기록을 불러오지 못했습니다. 다시 시도해 주세요.",
+            "오답 노트를 불러오지 못했습니다. 다시 시도해 주세요.",
           ),
         );
     } finally {
@@ -155,6 +150,11 @@ export default function MyQuizHistory({
       if (detailCache.current.size > 3)
         detailCache.current.delete(detailCache.current.keys().next().value!);
       setDetail({ ...loaded, row });
+      setPracticing(
+        (loaded.record.details || [])
+          .map(historyReviewQuestion)
+          .some((item) => item.practiceAvailable),
+      );
     } catch (caught) {
       if (request === detailRequest.current)
         setDetailError(
@@ -246,9 +246,6 @@ export default function MyQuizHistory({
     : questions;
   const current =
     visibleQuestions[Math.min(index, Math.max(0, visibleQuestions.length - 1))];
-  const choiceColumnCount = getQuizChoiceColumnCount(
-    current?.snapshot.options || [],
-  );
   const currentNote = detail?.reviewNotes?.items.find(
     (note) => note.questionId === current?.snapshot.id,
   );
@@ -278,7 +275,7 @@ export default function MyQuizHistory({
                 onClose();
               }}
             >
-              ← 응시 기록
+              ← 오답 노트
             </button>
           )}
           <h3 ref={heading} tabIndex={-1}>
@@ -316,10 +313,24 @@ export default function MyQuizHistory({
                   )}
                 </span>
               </div>
+              {incorrectCount > reviewItems.length && (
+                <p className="my-quiz-history__muted">
+                  문제 원문이나 정답이 없는 오답{" "}
+                  {incorrectCount - reviewItems.length}개는 다시 풀 수 없습니다.
+                </p>
+              )}
               {practicing ? (
                 <QuizRelearning
                   key={detail.key}
                   items={reviewItems}
+                  questionNumbers={Object.fromEntries(
+                    questions.map((item, position) => [
+                      item.snapshot.id,
+                      position + 1,
+                    ]),
+                  )}
+                  closeLabel="오답 노트 목록"
+                  onShowAnswers={() => setPracticing(false)}
                   reviewNotes={detail.reviewNotes}
                   onReload={async () => {
                     const latest = await loadMyQuizHistoryDetail(
@@ -371,7 +382,10 @@ export default function MyQuizHistory({
                     );
                     return response.reviewNotes;
                   }}
-                  onClose={() => setPracticing(false)}
+                  onClose={() => {
+                    returnFocusKey.current = detail.row?.key || detail.key;
+                    onClose();
+                  }}
                 />
               ) : (
                 <>
@@ -419,17 +433,10 @@ export default function MyQuizHistory({
                         className="student-quiz-primary-action"
                         onClick={() => setPracticing(true)}
                       >
-                        오답 {reviewItems.length}문제 복습하기
+                        오답 {reviewItems.length}문제 점검하기
                       </button>
                     )}
                   </div>
-                  {incorrectCount > reviewItems.length && (
-                    <p className="my-quiz-history__muted">
-                      문제 원문이나 정답이 없는 오답{" "}
-                      {incorrectCount - reviewItems.length}개는 다시 풀 수
-                      없습니다.
-                    </p>
-                  )}
                   {questions.length > 0 ? (
                     <>
                       <div className="my-quiz-history__toolbar">
@@ -485,184 +492,105 @@ export default function MyQuizHistory({
                                 : "오답"
                               : "채점 기록 없음"}
                           </h4>
-                          <div className="my-quiz-history__question-body">
-                            <QuizQuestionText
-                              value={
-                                current.saved.questionAvailable
-                                  ? current.snapshot.question
-                                  : "문제 원문이 보관되어 있지 않습니다."
-                              }
-                            />
-                            {current.snapshot.passageSet && (
-                              <section aria-label="공통 지문">
-                                <p>{current.snapshot.passageSet.instruction}</p>
-                                {current.snapshot.passageSet.passage && (
-                                  <QuizPassage
-                                    value={current.snapshot.passageSet.passage}
-                                  />
-                                )}
-                                {current.snapshot.passageSet.image && (
-                                  <img
-                                    src={current.snapshot.passageSet.image}
-                                    alt="공통 지문 자료"
-                                    loading="lazy"
-                                  />
-                                )}
-                              </section>
-                            )}
-                            {current.snapshot.passage && (
-                              <QuizPassage value={current.snapshot.passage} />
-                            )}
-                            {current.snapshot.image && (
-                              <img
-                                src={current.snapshot.image}
-                                alt="문제 자료"
-                                loading="lazy"
+                          <div className="quiz-notebook__workspace">
+                            <div className="quiz-notebook__paper">
+                              <MockExamQuestionContent
+                                question={{
+                                  ...current.snapshot,
+                                  question: current.saved.questionAvailable
+                                    ? current.snapshot.question
+                                    : "문제 원문이 보관되어 있지 않습니다.",
+                                }}
+                                index={questions.indexOf(current)}
+                                answer={
+                                  current.saved.userAnswerAvailable
+                                    ? current.snapshot.submittedAnswer
+                                    : ""
+                                }
+                                correct={
+                                  current.saved.correctKnown
+                                    ? current.correct
+                                    : undefined
+                                }
                               />
-                            )}
-                            {current.snapshot.examplePassage && (
-                              <section aria-label="보기">
-                                <h5>〈보기〉</h5>
-                                <QuizPassage
-                                  value={current.snapshot.examplePassage}
-                                />
-                              </section>
-                            )}
-                            {(current.snapshot.type === "choice" ||
-                              current.snapshot.type === "ox") &&
-                            current.snapshot.options?.length ? (
-                              <>
-                                {choiceColumnCount > 1 && (
-                                  <div className="my-quiz-history__column-header">
-                                    <QuizChoiceColumnHeaders
-                                      count={choiceColumnCount}
-                                    />
-                                  </div>
-                                )}
-                                <ol
-                                  className={`my-quiz-history__options ${choiceColumnCount > 1 ? "my-quiz-history__options--columns" : ""}`}
+                            </div>
+                            <div className="quiz-notebook__review">
+                              <dl
+                                className="student-quiz-relearning-answers"
+                                aria-label="제출 답안과 정답"
+                              >
+                                <div>
+                                  <dt>내 답</dt>
+                                  <dd>
+                                    {current.saved.userAnswerAvailable
+                                      ? formatQuizPracticeAnswer(
+                                          current.snapshot.submittedAnswer,
+                                        ) || "미응답"
+                                      : "답안 미보관"}
+                                  </dd>
+                                </div>
+                                <div className="student-quiz-relearning-correct-answer">
+                                  <dt>정답</dt>
+                                  <dd>
+                                    {current.saved.answerAvailable
+                                      ? formatQuizPracticeAnswer(
+                                          current.snapshot.answer,
+                                        ) || "정답 미보관"
+                                      : "정답 미보관"}
+                                  </dd>
+                                </div>
+                              </dl>
+                              {current.snapshot.explanation && (
+                                <section
+                                  className="student-quiz-relearning-explanation"
+                                  aria-label="해설"
                                 >
-                                  {current.snapshot.options.map(
-                                    (option, optionIndex) => (
-                                      <li key={optionIndex}>
-                                        {choiceColumnCount > 1 && (
-                                          <span className="my-quiz-history__column-number">
-                                            {optionIndex + 1}.
-                                          </span>
-                                        )}
-                                        <div className="my-quiz-history__option-content">
-                                          {current.snapshot
-                                            .choiceOptionImages?.[
-                                            optionIndex
-                                          ] && (
-                                            <img
-                                              src={
-                                                current.snapshot
-                                                  .choiceOptionImages[
-                                                  optionIndex
-                                                ]!
-                                              }
-                                              alt={`보기 ${optionIndex + 1} 자료`}
-                                              loading="lazy"
-                                            />
-                                          )}
-                                          {choiceColumnCount > 1 ? (
-                                            <QuizChoiceColumnCells
-                                              value={option}
-                                            />
-                                          ) : (
-                                            <span>{option}</span>
-                                          )}
-                                          {current.snapshot.answer ===
-                                            option && <strong>정답</strong>}
-                                          {current.snapshot.submittedAnswer ===
-                                            option && (
-                                            <span className="my-quiz-history__answer-marker">
-                                              내 답
-                                            </span>
-                                          )}
-                                        </div>
-                                      </li>
-                                    ),
+                                  <h4>해설</h4>
+                                  <p>{current.snapshot.explanation}</p>
+                                </section>
+                              )}
+                              {currentNote && (
+                                <section
+                                  className="student-quiz-saved-note"
+                                  aria-label="저장한 오답노트"
+                                >
+                                  <h4>내 오답노트</h4>
+                                  {currentNote.reason && (
+                                    <p>{currentNote.reason}</p>
                                   )}
-                                </ol>
-                              </>
-                            ) : null}
+                                  {currentNote.note && (
+                                    <p style={{ whiteSpace: "pre-wrap" }}>
+                                      {currentNote.note}
+                                    </p>
+                                  )}
+                                  {currentNote.practiceAnswer && (
+                                    <p>
+                                      다시 푼 답:{" "}
+                                      {formatQuizPracticeAnswer(
+                                        currentNote.practiceAnswer,
+                                      )}{" "}
+                                      ·{" "}
+                                      {currentNote.correct === null
+                                        ? "미채점"
+                                        : currentNote.correct
+                                          ? "정답"
+                                          : "다시 확인"}
+                                    </p>
+                                  )}
+                                </section>
+                              )}
+                              {current.snapshot.reviewLessonId && (
+                                <a
+                                  className="quiz-notebook__lesson"
+                                  href={`#/student/lesson/note?id=${encodeURIComponent(current.snapshot.reviewLessonId)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  연결된 학습지 열기 ↗
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <dl
-                            className="student-quiz-relearning-answers"
-                            aria-label="제출 답안과 정답"
-                          >
-                            <div>
-                              <dt>내 답</dt>
-                              <dd>
-                                {current.saved.userAnswerAvailable
-                                  ? formatQuizPracticeAnswer(
-                                      current.snapshot.submittedAnswer,
-                                    ) || "미응답"
-                                  : "답안 미보관"}
-                              </dd>
-                            </div>
-                            <div className="student-quiz-relearning-correct-answer">
-                              <dt>정답</dt>
-                              <dd>
-                                {current.saved.answerAvailable
-                                  ? formatQuizPracticeAnswer(
-                                      current.snapshot.answer,
-                                    ) || "정답 미보관"
-                                  : "정답 미보관"}
-                              </dd>
-                            </div>
-                          </dl>
-                          {current.snapshot.explanation && (
-                            <section
-                              className="student-quiz-relearning-explanation"
-                              aria-label="해설"
-                            >
-                              <h4>해설</h4>
-                              <p>{current.snapshot.explanation}</p>
-                            </section>
-                          )}
-                          {currentNote && (
-                            <section
-                              className="student-quiz-saved-note"
-                              aria-label="저장한 오답노트"
-                            >
-                              <h4>내 오답노트</h4>
-                              {currentNote.reason && (
-                                <p>{currentNote.reason}</p>
-                              )}
-                              {currentNote.note && (
-                                <p style={{ whiteSpace: "pre-wrap" }}>
-                                  {currentNote.note}
-                                </p>
-                              )}
-                              {currentNote.practiceAnswer && (
-                                <p>
-                                  다시 푼 답:{" "}
-                                  {formatQuizPracticeAnswer(
-                                    currentNote.practiceAnswer,
-                                  )}{" "}
-                                  ·{" "}
-                                  {currentNote.correct === null
-                                    ? "미채점"
-                                    : currentNote.correct
-                                      ? "정답"
-                                      : "다시 확인"}
-                                </p>
-                              )}
-                            </section>
-                          )}
-                          {current.snapshot.reviewLessonId && (
-                            <a
-                              className="my-quiz-history__lesson"
-                              href={`#/student/lesson/note?id=${encodeURIComponent(current.snapshot.reviewLessonId)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              연결된 수업 자료 보기 ↗
-                            </a>
-                          )}
                         </article>
                       ) : (
                         <p>이 평가에는 오답이 없습니다.</p>
@@ -687,7 +615,7 @@ export default function MyQuizHistory({
     >
       <header className="my-quiz-history__header">
         <h3 id="my-quiz-history-title" ref={listHeading} tabIndex={-1}>
-          응시 기록
+          오답 노트
         </h3>
         <div>
           <button type="button" onClick={onStart}>
@@ -743,7 +671,7 @@ export default function MyQuizHistory({
                   else rowButtons.current.delete(row.key);
                 }}
                 onClick={() => onSelect(row.key)}
-                aria-label={`${row.title}, ${formatRecordedScore(row.score)}, 결과 보기`}
+                aria-label={`${row.title}, ${formatRecordedScore(row.score)}, 오답 노트 열기`}
               >
                 <div className="my-quiz-history__identity">
                   <span>
@@ -759,7 +687,9 @@ export default function MyQuizHistory({
                       ? "문항별 기록 없음"
                       : `오답 ${row.wrongCount}개${row.totalCount === null ? "" : ` / ${row.totalCount}문항`}`}
                   </span>
-                  <span className="my-quiz-history__open">결과 보기 →</span>
+                  <span className="my-quiz-history__open">
+                    오답 노트 열기 →
+                  </span>
                 </div>
               </button>
             </li>
@@ -772,7 +702,7 @@ export default function MyQuizHistory({
             <p>
               {category === "all"
                 ? "아직 응시한 평가가 없습니다."
-                : "이 종류의 응시 기록이 없습니다."}
+                : "이 종류의 오답 노트가 없습니다."}
             </p>
             <button type="button" onClick={onStart}>
               평가 풀기
@@ -780,7 +710,7 @@ export default function MyQuizHistory({
           </div>
         )
       )}
-      {loading && <p role="status">응시 기록을 불러오는 중입니다.</p>}
+      {loading && <p role="status">오답 노트를 불러오는 중입니다.</p>}
       {page?.nextCursor && (
         <button
           type="button"
@@ -788,7 +718,7 @@ export default function MyQuizHistory({
           disabled={loading || !!error}
           onClick={() => void loadList(true)}
         >
-          이전 기록 더 보기
+          이전 평가 더 보기
         </button>
       )}
     </section>

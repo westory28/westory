@@ -80,7 +80,7 @@ const bundle = await build({
 });
 const js = bundle.outputFiles.find(f=>f.path.endsWith(".js")).text;
 const css = bundle.outputFiles.find(f=>f.path.endsWith(".css")).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,"");
-const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root" class="teacher-layout"></div><script type="module" src="/fixture.js"></script></body></html>';
 const server=http.createServer((req,res)=>{const route=new URL(req.url,"http://localhost").pathname;res.setHeader("Content-Type",route.endsWith(".js")?"text/javascript":route.endsWith(".css")?"text/css":"text/html");res.end(route.endsWith(".js")?js:route.endsWith(".css")?css:html);});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -105,6 +105,39 @@ try {
   // Exercise the real ManageQuiz -> QuizBankTab -> QuizClassAnalysis route.
   await page.goto(origin);
   await selectNode("모의고사");
+  for (const width of [768,1280,1440]) {
+    await page.setViewportSize({width,height:900});
+    const before = await page.locator('main.teacher-sub-content').boundingBox();
+    const toggle = page.getByRole('button',{name:'평가 목차 접기',exact:true});
+    await toggle.focus();await page.keyboard.press('Enter');
+    const expand = page.getByRole('button',{name:'평가 목차 펼치기',exact:true});
+    assert.equal(await expand.getAttribute('aria-expanded'),'false');
+    assert.equal(await page.locator('.quiz-navigation-tree').isVisible(),false);
+    assert.equal(await expand.evaluate(node=>document.activeElement===node),true);
+    const after = await page.locator('main.teacher-sub-content').boundingBox();
+    assert.ok(after.width>before.width+100,'collapsing gives the width back to the assessment');
+    const buttonBox=await expand.boundingBox();
+    assert.ok(buttonBox.width>=44&&buttonBox.height>=44);
+    const navBox=await page.locator('.quiz-navigation').boundingBox();
+    assert.ok(navBox.width<=45,'collapsed navigation reserves only its label width');
+    assert.ok(buttonBox.x>=navBox.x-1&&buttonBox.x+buttonBox.width<=navBox.x+navBox.width+1,'expand label stays within the collapsed navigation');
+    assert.ok(buttonBox.y+buttonBox.height<=900,'toggle remains within the viewport');
+    await screenshot(`navigation-collapsed-${width}.png`);
+    await page.keyboard.press('Space');
+    assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+    assert.equal(await page.locator('.quiz-navigation-tree').isVisible(),true);
+    await assertNoOverflow(width);
+  }
+  await page.getByRole('button',{name:'평가 목차 접기',exact:true}).click();
+  await page.setViewportSize({width:390,height:900});
+  assert.equal(await page.locator('.quiz-navigation-collapse').isVisible(),false);
+  await page.locator('.quiz-navigation .teacher-settings-menu-toggle').click();
+  assert.equal(await page.locator('.quiz-navigation-tree').isVisible(),true,'mobile keeps its own disclosure after desktop collapse');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.quiz-navigation .teacher-settings-menu-toggle').evaluate(node=>document.activeElement===node),true);
+  await page.setViewportSize({width:1440,height:900});
+  await page.getByRole('button',{name:'평가 목차 펼치기',exact:true}).click();
+  checks.push('assessment tree collapse/expand with a single chevron, reclaimed content width, 44px keyboard target, focus retention and independent mobile disclosure');
   const manageLayout=await page.locator("main.teacher-sub-content").boundingBox();
   await page.evaluate(()=>window.analysisEntryQa.navigation=document.querySelector(".quiz-navigation"));
   const readsBefore=await page.evaluate(()=>window.analysisEntryQa.directReads.length);

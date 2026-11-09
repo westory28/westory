@@ -169,7 +169,23 @@ try {
     assert.equal(await input.inputValue(), "내가 쓴 답안");
     await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "복습", exact: true }).click();
-    await checkGuard(page.getByText("합성 지문을 읽습니다.", { exact: true }));
+    const notebook=page.getByRole('region',{name:'오답 복습',exact:true});
+    const reviewQuestion=notebook.getByRole('article',{name:'복습할 문제',exact:true});
+    await reviewQuestion.waitFor();
+    assert.equal(await reviewQuestion.locator('.mock-exam-question-ink').count(),1,'notebook uses the original question renderer');
+    await checkGuard(reviewQuestion.locator('.mock-exam-stem'));
+    await checkGuard(reviewQuestion.getByText("합성 지문을 읽습니다.", { exact: true }));
+    await checkGuard(reviewQuestion.getByText("ㄱ. 합성 보기입니다.", { exact: true }));
+    await checkGuard(reviewQuestion.getByText("첫째 선택지", { exact: true }));
+    await checkGuard(reviewQuestion.getByRole('img',{name:'1번 자료',exact:true}));
+    await notebook.getByRole('button',{name:'해설 가리고 다시 풀기',exact:true}).click();
+    const practiceOption=reviewQuestion.getByRole('radio',{name:/첫째 선택지/});
+    await practiceOption.focus();await page.keyboard.press('Space');assert(await practiceOption.isChecked());
+    await page.keyboard.press('Space');assert.equal(await practiceOption.isChecked(),false,'copy protection does not block practice selection or deselection');
+    await checkGuard(reviewQuestion.getByText('첫째 선택지',{exact:true}));
+    await page.evaluate(()=>navigator.clipboard.writeText('review-clipboard-sentinel'));
+    await practiceOption.focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');
+    assert.doesNotMatch(await page.evaluate(()=>navigator.clipboard.readText()),/합성|선택지|고르시오/,'practice keyboard copy cannot export questions');
     const note = page.getByRole("textbox", { name: "오답 노트", exact: true });
     await note.fill("내 오답노트");
     await checkGuard(note, false);
@@ -179,6 +195,8 @@ try {
       await page.evaluate(() => navigator.clipboard.readText()),
       "내 오답노트",
     );
+    await note.press('Control+x');assert.equal(await note.inputValue(),'');
+    await note.press('Control+v');assert.equal(await note.inputValue(),'내 오답노트','notebook authoring retains native cut and paste');
     await page.screenshot({ path: path.join(evidence, `review-${width}.png`) });
     await page.getByRole("button", { name: "교사", exact: true }).click();
     await checkGuard(
@@ -195,6 +213,9 @@ try {
       nativeClipboard: true,
       inputs: true,
       review: true,
+      reviewOriginalRenderer: true,
+      reviewPracticeRadio: true,
+      reviewNativeClipboard: true,
       teacherUnaffected: true,
     });
     await context.close();

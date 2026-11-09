@@ -146,6 +146,22 @@ test('alias practice saves and rereads server grades while retaining the origina
   }
 });
 
+test('new and previously saved reflection reasons round-trip without changing the submitted assessment', async () => {
+  const f = fixture();
+  const original = structuredClone(f.data.get('semester_assessment_results/result-one'));
+  const reasons = ['', '개념이 헷갈렸어요', '자료의 근거를 놓쳤어요', '답을 잘못 입력했어요',
+    '몰랐어요', '잘못 읽었어요', '찍었어요', '실수했어요'];
+  for (const [index, reason] of reasons.entries()) {
+    const saved = await f.request({ reason, practiceAnswer: '', expectedRevision: index,
+      saveId: `synthetic-reason-save-${index}` });
+    assert.equal(saved.reviewNotes.items[0].reason, reason);
+    assert.equal(saved.reviewNotes.items[0].correct, null);
+    assert.deepEqual((await f.detail()).reviewNotes, saved.reviewNotes);
+    assert.deepEqual(f.data.get('semester_assessment_results/result-one'), original);
+  }
+  assert.ok(f.writes.every(path => path === `semester_quiz_review_notes/${noteId(semesterId, uid, key)}`));
+});
+
 test('untrusted fields, oversized text and reused foreign scope are rejected before writes', async () => {
   for (const patch of [{ uid: 'other' }, { note: '가'.repeat(1001) }, { reason: 'arbitrary' }, { practiceAnswer: 'x'.repeat(12001) },
     { key: 'canonical:../forged' }, { expectedRevision: -1 }, { note: '\u0000' }]) {

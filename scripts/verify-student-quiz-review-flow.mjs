@@ -16,12 +16,13 @@ let playwright;
 try { playwright = require("playwright"); } catch {
   playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright"));
 }
-const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "westory-review-flow-"));
+const evidence = process.env.QUIZ_REVIEW_FLOW_EVIDENCE_DIR || await fs.mkdtemp(path.join(os.tmpdir(), "westory-review-flow-"));
+await fs.mkdir(evidence, { recursive: true });
 const questions = [
   { id: 1, type: "choice", question: "보관된 발문: 조선의 수도는?", passage: "보관된 자료: 조선은 한양을 도읍으로 삼았다.", options: ["경주", "개경", "한양", "평양", "부여"], answer: "한양", explanation: "보관된 해설: 조선의 수도는 한양이었다.", points: 30, paperOrder: 1, image: "/material.svg" },
   { id: 2, type: "short", question: "보관된 발문: 조선을 건국한 인물을 쓰시오.", answer: "이성계", explanation: "보관된 해설: 이성계는 조선을 건국하였다.", points: 40, paperOrder: 2, passageSet: { id: "s1", instruction: "다음 자료를 읽고 물음에 답하시오.", passage: "보관된 공통 지문: 1392년 새로운 왕조가 세워졌다.", image: "/set.svg" } },
   { id: 3, type: "choice", question: "보관된 발문: 조선에서 실시한 관리 선발 제도는?", options: ["과거", "골품", "화랑", "정동행성", "9서당"], answer: "과거", explanation: "보관된 해설: 조선은 과거를 실시하였다.", points: 30, paperOrder: 3, examplePassage: "ㄱ. 관리 선발\nㄴ. 유교 경전", passageSet: { id: "s1", instruction: "다음 자료를 읽고 물음에 답하시오.", passage: "보관된 공통 지문: 1392년 새로운 왕조가 세워졌다.", image: "/set.svg" } },
-].map(q => ({ ...q, unitId: "exam_prep", category: "exam_prep", examRound: "round_2", concepts: ["조선의 통치 체제"], hintEnabled: false, hint: "" }));
+].map(q => ({ ...q, unitId: "exam_prep", category: "exam_prep", examRound: "round_2", concepts: ["조선의 통치 체제"], reviewLessonId: 'fixture-lesson', hintEnabled: false, hint: "" }));
 const snapshots = learning.captureQuestionSnapshots(questions.map(data => ({ path: `questions/${data.id}`, data })), ["1", "2", "3"]).questionSnapshots;
 const presentation = learning.questionPresentation(snapshots);
 assert(presentation.every(q => !q.answer && !q.explanation));
@@ -69,7 +70,7 @@ const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||"msedge",headless:true});
 const reports=[];let activePage;let failure;
 try {
-  for(const width of [390,768,1280])for(const category of ["exam_prep","diagnostic","formative"]){
+  for(const width of [320,390,768,1280,1440])for(const category of ["exam_prep","diagnostic","formative"]){
     const page=activePage=await browser.newPage({viewport:{width,height:1000},hasTouch:width<=768});
     const errors=[],external=[];page.on("pageerror",e=>errors.push(e.message));
     await page.route("**/*",route=>{if(route.request().url().startsWith(origin)||route.request().url().startsWith("data:"))return route.continue();external.push(route.request().url());return route.abort();});
@@ -98,7 +99,10 @@ try {
       await page.getByRole("button",{name:"저장된 답안·해설",exact:true}).click();
     }else await page.getByRole("button",{name:"전체 답안 및 해설 보기",exact:true}).click();
     await page.getByRole("region",{name:"평가 결과 상세",exact:true}).waitFor();
-    await page.getByRole("button",{name:/오답 2문제/}).waitFor();
+    const note=page.getByRole("textbox",{name:"오답 노트",exact:true});
+    await note.waitFor();
+    assert.equal(await page.locator('.quiz-notebook__paper .mock-exam-question-ink').count(),1,'History opens the familiar question and reflection directly');
+    await page.getByRole('button',{name:'전체 답안 보기',exact:true}).click();
     const original=await page.evaluate(()=>JSON.stringify(window.reviewQa.state.result));
     if(category==="exam_prep"){
       assert.equal(await page.locator(".mock-exam-title-box h2").innerText(),"보관된 역사과 시험 제목");
@@ -107,7 +111,14 @@ try {
       assert((await page.locator(".mock-exam-paper").innerText()).includes("ㄱ. 관리 선발"));
     }
     await page.getByRole("button",{name:/오답 2문제/}).click();
-    const note=page.getByRole("textbox",{name:"오답 노트",exact:true});
+    await note.waitFor();
+    for(const name of ['실수했어요','몰랐어요','잘못 읽었어요','찍었어요'])assert(await page.getByRole('radio',{name,exact:true}).isVisible());
+    const layout=await page.evaluate(()=>{
+      const paper=document.querySelector('.quiz-notebook__paper').getBoundingClientRect(),review=document.querySelector('.quiz-notebook__review').getBoundingClientRect();
+      return{width:document.querySelector('.quiz-notebook').clientWidth,sideBySide:paper.right<=review.left&&Math.abs(paper.top-review.top)<2,stacked:paper.bottom<=review.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.equal(layout.overflow,false);
+    assert.equal(layout.width>=880?layout.sideBySide:layout.stacked,true,`Notebook layout at ${width}px for ${category}`);
     await note.fill("한양으로 도읍을 옮긴 배경을 다시 확인했습니다.");
     await page.getByRole("radio",{name:"개념이 헷갈렸어요",exact:true}).check();
     await page.evaluate(()=>window.reviewQa.nextFailure="unavailable");
@@ -126,11 +137,11 @@ try {
     await page.getByText("저장했어요.",{exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>JSON.stringify(window.reviewQa.state.result)),original,"Note writes never alter assessment score or immutable answers");
     await page.reload();
-    await page.getByRole("button",{name:/오답 2문제/}).click();
+    await note.waitFor();
     assert.equal(await note.inputValue(),"다른 기기와 충돌해도 작성한 노트가 유지됩니다.");
     assert.equal(await page.getByRole("radio",{name:"개념이 헷갈렸어요",exact:true}).isChecked(),true);
     await page.getByRole("button",{name:"해설 가리고 다시 풀기",exact:true}).click();
-    await page.getByRole("button",{name:/한양/}).click();
+    await page.getByRole("radio",{name:/한양/}).locator('..').click();
     await page.getByRole("button",{name:"답 확인",exact:true}).click();
     await page.getByRole("button",{name:"노트 저장",exact:true}).click();
     await page.getByText("저장했어요.",{exact:true}).waitFor();
@@ -144,6 +155,11 @@ try {
     assert.equal(await page.evaluate(()=>window.reviewQa.state.notes.items.length),2);
     assert.deepEqual(await page.evaluate(()=>{const item=window.reviewQa.state.notes.items.find(item=>item.questionId==='2');return{practiceAnswer:item.practiceAnswer,correct:item.correct};}),{practiceAnswer:"",correct:null});
     assert.equal(await page.evaluate(()=>JSON.stringify(window.reviewQa.state.result)),original);
+    await page.getByRole('button',{name:'오답 노트 목록',exact:true}).click();
+    await page.getByRole('heading',{name:'오답 노트',exact:true}).waitFor();
+    await page.getByRole('button',{name:/보관된 평가/}).click();
+    await note.waitFor();
+    assert.equal(await note.inputValue(),'다른 기기와 충돌해도 작성한 노트가 유지됩니다.','List selection opens saved first-question reflection directly');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
     await page.screenshot({path:path.join(evidence,`${category}-${width}.png`),fullPage:true});

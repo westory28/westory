@@ -67,7 +67,7 @@ export default function MyAssessmentSummary({
       </header>
       {loading ? (
         <p role="status" className="my-assessment-summary__empty">
-          응시 기록을 불러오는 중입니다.
+          오답 노트를 불러오는 중입니다.
         </p>
       ) : error ? (
         <div role="alert" className="my-assessment-summary__empty">
@@ -78,7 +78,7 @@ export default function MyAssessmentSummary({
         </div>
       ) : !attempts.length ? (
         <p className="my-assessment-summary__empty">
-          아직 응시 기록이 없습니다.
+          아직 오답 노트가 없습니다.
         </p>
       ) : (
         <>
@@ -131,7 +131,7 @@ export default function MyAssessmentSummary({
             )}
           </div>
           <div className="my-assessment-summary__records">
-            <h4>응시 기록</h4>
+            <h4>오답 노트</h4>
             <ul>
               {shown.map((attempt) => {
                 const graded = attempt.allItems.filter(

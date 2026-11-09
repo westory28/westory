@@ -887,7 +887,7 @@ export const loadStudentProgressSummary = async (
   const [lesson, quiz, historyClassroom, wis] = await Promise.all([
     loadLessonSummary(config, safeUid, lessonCatalog),
     options.includeQuiz === false
-      ? emptyQuizSummary("평가 기록은 응시 기록에서 확인합니다.")
+      ? emptyQuizSummary("평가 기록은 오답 노트에서 확인합니다.")
       : loadQuizSummary(
           config,
           safeUid,

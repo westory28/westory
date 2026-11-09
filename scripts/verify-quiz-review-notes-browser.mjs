@@ -8,10 +8,11 @@ import { createRequire } from "node:module";
 import { build } from "esbuild";
 const require = createRequire(import.meta.url);
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright"));
-const evidence = await fs.mkdtemp(path.join(os.tmpdir(), "westory-review-notes-"));
+const evidence = process.env.QUIZ_REVIEW_NOTES_EVIDENCE_DIR || await fs.mkdtemp(path.join(os.tmpdir(), "westory-review-notes-"));
+await fs.mkdir(evidence, { recursive: true });
 const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
 import Review from './src/pages/student/quiz/QuizRelearning';import './src/pages/student/quiz/QuizLearning.css';
-const item={id:'q1',type:'choice',question:'다음 합성 자료의 내용으로 옳지 않은 것은?',options:['정치','경제'],answer:'정치',submittedAnswer:'경제',concepts:['자료 해석'],passage:'{{box:(가)}} {{u:정책}}의 자료',examplePassage:'ㄱ. 합성 보기',passageSet:{id:'set1',instruction:'공통 자료를 읽으시오.',passage:'공통 지문',image:null},explanation:'자료의 정책과 관련된 근거를 확인합니다.',reviewLessonId:'fixture-lesson'};
+const item={id:'q1',type:'choice',question:'다음 합성 자료의 내용으로 옳지 않은 것은?',options:['정치','경제'],answer:'정치',submittedAnswer:'경제',concepts:['자료 해석'],passage:'{{box:(가)}} {{u:정책}}의 자료'+Array(9).fill(' 자료를 차례로 읽고 근거가 되는 내용을 확인합니다.').join(''),examplePassage:'ㄱ. 합성 보기',passageSet:{id:'set1',instruction:'공통 자료를 읽으시오.',passage:'공통 지문',image:null},explanation:'자료의 정책과 관련된 근거를 확인합니다.',reviewLessonId:'fixture-lesson'};
 const variant=new URLSearchParams(location.search).get('type');
 if(variant==='order')Object.assign(item,{type:'order',options:['가','나'],answer:'가||나'});
 if(variant==='matching')Object.assign(item,{type:'matching',matchingPairs:[{left:'인물1',right:'가'},{left:'인물2',right:'나'}],answer:'인물1=>가||인물2=>나'});
@@ -35,8 +36,25 @@ await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge", headless: true });
 const errors = [], external = [], dialogs = [];
+let page;
+const checkLayout = async (page, width) => {
+  await page.setViewportSize({ width, height: 900 });
+  await page.evaluate(() => document.fonts.ready);
+  const layout = await page.evaluate(() => {
+    const paper = document.querySelector('.quiz-notebook__paper').getBoundingClientRect();
+    const review = document.querySelector('.quiz-notebook__review').getBoundingClientRect();
+    const available = document.querySelector('.quiz-notebook').clientWidth;
+    return { available, overflow: document.documentElement.scrollWidth > innerWidth + 1,
+      sideBySide: paper.right <= review.left && Math.abs(paper.top - review.top) < 2,
+      stacked: paper.bottom <= review.top,
+      heights: [...document.querySelectorAll('.student-quiz-primary-action,.student-quiz-secondary-action,.quiz-notebook__reflection label,.quiz-notebook__questions button,.quiz-notebook__lesson')].map(node => node.getBoundingClientRect().height) };
+  });
+  assert.equal(layout.overflow, false, `No horizontal overflow at ${width}px`);
+  assert.equal(layout.available >= 880 ? layout.sideBySide : layout.stacked, true, `Question and explanation layout at ${width}px`);
+  assert(layout.heights.every(height => height >= 44), `Touch controls are at least 44px at ${width}px`);
+};
 try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   page.on("pageerror", error => errors.push(error.message));
   page.on("dialog", async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
   await page.route("**/*", route => {
@@ -48,6 +66,19 @@ try {
   const save = () => page.getByRole("button", { name: "노트 저장", exact: true }).click();
   const reopen = async () => { await page.getByRole("button", { name: "결과로", exact: true }).click(); await page.getByRole("button", { name: "다시 열기", exact: true }).click(); };
   await note.waitFor(); assert.equal(await note.inputValue(), "기존 노트");
+  assert.equal(await page.locator('.quiz-notebook__paper .mock-exam-question-ink').count(), 1, 'Existing exam renderer is used on entry');
+  const lesson = page.getByRole('link', { name: /연결된 학습지 열기/ });
+  assert.equal(await lesson.getAttribute('href'), '#/student/lesson/note?id=fixture-lesson');
+  assert.equal(await lesson.getAttribute('target'), '_blank');
+  assert.match(await lesson.getAttribute('rel'), /noopener/);
+  await lesson.focus();
+  assert.equal(await lesson.evaluate(node => node === document.activeElement), true);
+  for (const label of ['실수했어요', '몰랐어요', '잘못 읽었어요', '찍었어요']) {
+    const control = page.getByRole('radio', { name: label, exact: true });
+    await control.focus(); await page.keyboard.press('Space');
+    assert.equal(await control.isChecked(), true, `Keyboard selects ${label}`);
+  }
+  await page.getByRole('radio', {name:'찍었어요',exact:true}).click();
   await reopen(); assert.deepEqual(dialogs, []);
   await note.fill("임시 변경"); await note.fill("기존 노트"); await reopen(); assert.deepEqual(dialogs, []);
   assert(await page.getByText("공통 지문", { exact: true }).isVisible());
@@ -69,7 +100,7 @@ try {
   await reason.click(); assert.equal(await reason.isChecked(), false);
   await reason.check(); assert(await page.getByRole("button", { name: "노트 저장", exact: true }).isDisabled(), "Reverting a reason is clean");
   await page.getByRole("button", { name: "해설 가리고 다시 풀기", exact: true }).click();
-  await page.getByRole("button", { name: "1. 정치", exact: true }).click();
+  await page.getByRole("radio", { name: /정치/ }).locator('..').click();
   await save(); await page.getByText("저장했어요.", { exact: true }).waitFor();
   await reopen(); await page.getByText("연습한 답: 정치", { exact: true }).waitFor();
   await note.fill("내가 작성 중인 노트");
@@ -93,11 +124,8 @@ try {
   assert.equal(await note.inputValue(), "저장 중에 추가로 쓴 내용");
   await save(); await page.getByText("저장했어요.", { exact: true }).waitFor();
   await reopen(); assert.equal(await note.inputValue(), "저장 중에 추가로 쓴 내용");
-  for (const width of [320, 390, 768, 1280]) {
-    await page.setViewportSize({ width, height: 900 });
-    const layout = await page.evaluate(() => ({ overflow: document.documentElement.scrollWidth > innerWidth,
-      heights: [...document.querySelectorAll('.student-quiz-primary-action,.student-quiz-secondary-action,.student-quiz-relearning-reflection label')].map(node => node.getBoundingClientRect().height) }));
-    assert.equal(layout.overflow, false); assert(layout.heights.every(height => height >= 44));
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    await checkLayout(page, width);
     await note.screenshot({ path: path.join(evidence, `note-${width}.png`) });
     if (width === 390 || width === 1280) await page.screenshot({ path: path.join(evidence, `review-${width}.png`), fullPage: true });
   }
@@ -106,40 +134,50 @@ try {
     await page.goto(origin + "/?type=" + type);
     await page.getByRole("button", { name: "해설 가리고 다시 풀기", exact: true }).click();
     if (type === "order") await page.getByRole("button", { name: "가", exact: true }).click();
-    else await page.getByRole("combobox", { name: "인물1에 연결할 답", exact: true }).selectOption("가");
+    else await page.getByRole("combobox", { name: "인물1", exact: true }).selectOption("가");
     assert(await page.getByRole("button", { name: "답 확인", exact: true }).isDisabled());
     await note.fill("아직 작성 중인 근거"); await save();
     await page.getByText("저장했어요.", { exact: true }).waitFor();
     const partial = await page.evaluate(() => window.reviewQa.requests.at(-1).draft);
     assert.equal(partial.practiceAnswer, type === "order" ? "가" : "인물1=>가");
     await reopen(); await page.getByRole("button", { name: "해설 가리고 다시 풀기", exact: true }).click();
-    if (type === "order") await page.getByText("선택한 순서: 가", { exact: true }).waitFor();
-    else assert.equal(await page.getByRole("combobox", { name: "인물1에 연결할 답", exact: true }).inputValue(), "가");
+    if (type === "order") assert.equal(await page.locator('.mock-exam-order > div').first().getByRole('button').innerText(), '1. 가 ×');
+    else assert.equal(await page.getByRole("combobox", { name: "인물1", exact: true }).inputValue(), "가");
   }
   for (const type of ['short', 'columns']) {
     await page.goto(origin + '/?type=' + type);
     await page.getByRole('article', {name:'복습할 문제',exact:true}).waitFor();
-    for (const width of [320,390,768,1280]) {
-      await page.setViewportSize({width,height:900});
-      const layout = await page.evaluate(() => {
-        const rect = selector => document.querySelector(selector).getBoundingClientRect();
-        const question = rect('.student-quiz-relearning-question');
-        const answers = rect('.student-quiz-relearning-answers');
-        const explanation = rect('.student-quiz-relearning-explanation');
-        return {overflow:document.documentElement.scrollWidth>innerWidth, ordered:question.bottom<=answers.top && answers.bottom<=explanation.top,
-          originalAnswerLabel:document.querySelector('.student-quiz-relearning-correct-answer dt').textContent};
-      });
-      assert.equal(layout.overflow,false);assert.equal(layout.ordered,true);assert.equal(layout.originalAnswerLabel,'정답');
-      if(type==='columns')assert.equal(await page.locator('.student-quiz-review-options .quiz-choice-column-cells').count(),2);
+    for (const width of [320,390,768,1280,1440]) {
+      await checkLayout(page, width);
+      assert.equal(await page.locator('.student-quiz-relearning-correct-answer dt').textContent(),'정답');
+      if(type==='columns')assert.equal(await page.locator('.quiz-notebook__paper .quiz-choice-column-cells').count(),2);
       else assert.equal(await page.locator('.student-quiz-relearning-answers dd').first().textContent(),'미응답');
       await page.screenshot({path:path.join(evidence,`review-${type}-${width}.png`),fullPage:true});
     }
     await page.getByRole('button',{name:'해설 가리고 다시 풀기',exact:true}).click();
     assert.equal(await page.locator('.student-quiz-relearning-answers').count(),0,'Practice hides submitted and correct answers');
     assert.equal(await page.locator('.student-quiz-relearning-explanation').count(),0,'Practice hides explanation');
+    if (type === 'short') {
+      const input = page.getByRole('textbox', {name:'답안',exact:true});
+      await input.fill('수조권');
+      assert.equal(await input.getAttribute('maxlength'), '20');
+      await page.getByRole('button',{name:'답 확인',exact:true}).click();
+      await page.getByText('다시 맞혔어요.',{exact:true}).waitFor();
+      await save(); await page.getByText('저장했어요.',{exact:true}).waitFor();
+    }
     await page.getByRole('button',{name:'해설 다시 보기',exact:true}).click();
     assert(await page.getByRole('region',{name:'해설과 관련 자료',exact:true}).isVisible());
   }
+  for (const label of ['실수했어요', '몰랐어요', '잘못 읽었어요', '찍었어요']) {
+    await page.goto(origin);
+    await page.getByRole('radio', {name:label,exact:true}).check();
+    await save(); await page.getByText('저장했어요.',{exact:true}).waitFor();
+    await reopen();
+    assert.equal(await page.getByRole('radio', {name:label,exact:true}).isChecked(),true, `${label} is restored after reopening`);
+  }
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
-  console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, 320/390/768/1280, no Firebase" }));
+  console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, existing renderer, lesson button, four reasons and keyboard, side-by-side/stacked at 320/390/768/1280/1440, no Firebase" }));
+} catch (error) {
+  if (page) { await page.screenshot({path:path.join(evidence,'failure.png'),fullPage:true}).catch(()=>{}); await fs.writeFile(path.join(evidence,'failure.html'),await page.content()); }
+  console.error(JSON.stringify({pass:false,evidence,error:String(error)})); throw error;
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

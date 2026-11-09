@@ -243,7 +243,7 @@
   transform: scaleX(0.95);
   transform-origin: top left;
   word-break: keep-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   white-space: normal;
 }
 .mock-exam-stem {
@@ -506,7 +506,7 @@
     serif;
   letter-spacing: -0.02em;
   word-break: keep-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .mock-exam-preview-question .mock-exam-image {
   max-height: 440px;

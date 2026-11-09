@@ -24,7 +24,7 @@ const tree = [longLabels, shortLabels].map((labels, i) => ({
   id: `big-${i}`, title: labels[0], children: [{id:`mid-${i}`,title:labels[1],children:[{id:`small-${i}`,title:labels[2]}]}],
 }));
 service += `\ntree.splice(0,tree.length,...${JSON.stringify(tree)});questions.splice(0,questions.length,...${JSON.stringify(tree.map((unit,i)=>({
-  id:9001+i,unitId:"exam_prep",category:"exam_prep",examRound:"round_1",paperOrder:i+1,points:50,type:"choice",question:i?"짧은 단원 합성 문항":"긴 단원 합성 문항",answer:"정답",options:["정답","오답","다른 보기","네 번째","다섯 번째"],contentRevision:1,refBig:unit.id,refMid:unit.children[0].id,refSmall:unit.children[0].children[0].id,
+  id:9001+i,unitId:"exam_prep",category:"exam_prep",examRound:"round_1",paperOrder:i+1,points:50,type:"choice",question:i?"짧은 단원 합성 문항":"긴 단원 합성 문항",passage:i?"":"문항의 본문 자료",examplePassage:"ㄱ. 조선은 의정부와 6조를 두었다.\nㄴ. 지방에 관찰사를 파견하였다.",answer:"정답",options:["정답","오답","다른 보기","네 번째","다섯 번째"],contentRevision:1,refBig:unit.id,refMid:unit.children[0].id,refSmall:unit.children[0].children[0].id,
 })))});`;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import QuizEditor from './src/pages/teacher/components/QuizEditor.tsx';import {tree} from 'fixture:service';import './src/assets/index.css';import './src/pages/teacher/teacherSettings.css';createRoot(document.getElementById('root')).render(<main style={{padding:16,maxWidth:1536,margin:'0 auto',minWidth:0}}><QuizEditor node={{id:'exam_prep',title:'모의고사'}} type="special" treeData={tree} canEdit={true} onOpenSettings={()=>{}}/></main>);`;
 const bundle = await build({
@@ -75,11 +75,18 @@ try{
   }));
   await selects[0].waitFor();await choose(0);
   await page.getByText("긴 단원 합성 문항",{exact:true}).waitFor();
+  const example = page.locator('.quiz-question-example');
+  assert.equal(await example.locator('legend').innerText(), '<보기>');
+  assert.match(await example.innerText(), /ㄱ\. 조선은 의정부와 6조를 두었다\./);
+  const passageBox = await page.getByText('문항의 본문 자료',{exact:true}).boundingBox();
+  assert.ok((await example.boundingBox()).y > passageBox.y + passageBox.height, 'example appears below the passage');
   assert.equal(await page.getByText("짧은 단원 합성 문항",{exact:true}).count(),0,"selected references filter the question list");
   const wide=await dimensions();
   assert.deepEqual(wide.map(value=>value.label),longLabels);
   assert.ok(wide.every(value=>value.width>=value.requiredWidth-1),`wide screen displays all selected Korean labels: ${JSON.stringify(wide)}`);
   await choose(1);await page.getByText("짧은 단원 합성 문항",{exact:true}).waitFor();
+  assert.equal(await page.locator('.quiz-question-material').count(), 1, 'example-only questions retain the material panel');
+  assert.equal(await example.count(), 1);
   const short=await dimensions();
   assert.ok(short.every((value,index)=>value.width<wide[index].width-40),"each dropdown shrinks to its shorter selected label");
   await choose(0);
@@ -111,7 +118,7 @@ try{
   await page.getByText("짧은 단원 합성 문항",{exact:true}).waitFor();
   assert.deepEqual(await page.evaluate(()=>window.assessmentTeacherFixture.writes),[]);
   assert.deepEqual(errors,[]);
-  console.log("PASS real QuizEditor filters: dynamic selected-label widths, full Korean labels with room, bounded ellipsis, three-column mobile layout, accessible names/focus, cascading selection and filtered question list; 1920/1440/1280/768/390/320px");
+  console.log("PASS real QuizEditor filters and example passage: example beneath body and example-only question; dynamic selected-label widths, full Korean labels with room, bounded ellipsis, three-column mobile layout, accessible names/focus, cascading selection and filtered question list; 1920/1440/1280/768/390/320px");
 }finally{
   await browser.close();server.close();
   await fs.writeFile(path.join(evidence,"result.json"),JSON.stringify({checks,errors,screenshots},null,2));

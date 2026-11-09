@@ -23,6 +23,7 @@ const record = {
     questionSnapshot: {
       type: "choice", question: `${i + 1}번 저장 당시 원문: 자료에 해당하는 나라로 옳은 것은?`,
       passage: "새 왕조는 한양으로 도읍을 옮겼다.\n여러 제도를 정비하여 통치 체제를 세웠다.",
+      examplePassage: i === 1 ? "ㄱ. 한양을 수도로 삼았다.\nㄴ. 의정부와 6조를 두었다." : "",
       options: ["가야", "고려", "발해", "신라", "조선"], answer: "조선",
       explanation: `${i + 1}번 저장 당시 해설`, examRound: "round_2", paperOrder: i + 1, points: i === 1 ? 5 : 3,
       paperBreakBefore: i === 4,
@@ -34,7 +35,7 @@ const record=${JSON.stringify(record)};
 window.historyFixtureCalls=[];
 export const saveMyQuizReviewNote=async()=>{throw Error('Read-only saved-paper fixture');};
 export const loadMyQuizHistory=async input=>{window.historyFixtureCalls.push({mode:'list',...input});return {semesterId:input.semesterId,rows:[],totalCount:0,nextCursor:null,version:'fixture',generatedAt:Date.now()};};
-export const loadMyQuizHistoryDetail=async(semesterId,key)=>{window.historyFixtureCalls.push({mode:'detail',semesterId,key});return {semesterId,key,record:location.search.includes('legacy')?{...record,details:record.details.map((item,i)=>i===1?{id:item.id,correct:false,u:'고려'}:item)}:record};};`;
+export const loadMyQuizHistoryDetail=async(semesterId,key)=>{window.historyFixtureCalls.push({mode:'detail',semesterId,key});const params=new URLSearchParams(location.search);return {semesterId,key,record:params.has('legacy')?{...record,details:record.details.map((item,i)=>i===1?{id:item.id,correct:false,u:'고려'}:item)}:params.has('ungraded')?{...record,details:record.details.map((item,i)=>i===1?{...item,correct:undefined}:item)}:params.has('long')?{...record,details:record.details.map((item,i)=>i===1?{...item,questionSnapshot:{...item.questionSnapshot,passage:Array.from({length:16},(_,line)=>'저장된 긴 자료 '+(line+1)+'. '+item.questionSnapshot.passage).join(String.fromCharCode(10))}}:item)}:record};};`;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import MyQuizHistory from './src/pages/student/mypage/MyQuizHistory';import './src/components/common/portalPage.css';createRoot(document.getElementById('root')).render(<MyQuizHistory semesterId="2026-2" active requestedAttemptId="saved-paper" onSelect={()=>{}} onClose={()=>{}} onStart={()=>{}}/>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
@@ -63,6 +64,24 @@ try {
     page.on("pageerror", error => errors.push(error.message));
     await page.route("**/*", route => route.request().url().startsWith(origin) || route.request().url().startsWith("data:") ? route.continue() : route.abort());
     await page.goto(origin);
+    const notebook = page.getByRole('region',{name:'오답 복습',exact:true});
+    await notebook.waitFor();
+    const reviewQuestion=notebook.getByRole('article',{name:'복습할 문제',exact:true});
+    assert.equal(await reviewQuestion.locator('.mock-exam-question-ink').count(),1,'default notebook reuses the existing paper question renderer');
+    assert.match(await reviewQuestion.textContent(),/2번 저장 당시 원문/,'notebook opens the saved incorrect question');
+    assert.equal(await reviewQuestion.locator('.mock-exam-number').textContent(),'2.','original paper numbering survives the wrong-only queue');
+    assert.match(await reviewQuestion.locator('.mock-exam-example').innerText(),/ㄱ\. 한양을 수도로 삼았다\./,'saved example passage survives notebook entry');
+    assert.match(await notebook.getByRole('region',{name:'해설과 관련 자료',exact:true}).innerText(),/2번 저장 당시 해설/);
+    assert.deepEqual(await notebook.locator('.student-quiz-relearning-answers dd').allTextContents(),['고려','조선']);
+    const notebookLayout=await notebook.evaluate(element=>{
+      const paper=element.querySelector('.quiz-notebook__paper').getBoundingClientRect();
+      const review=element.querySelector('.quiz-notebook__review').getBoundingClientRect();
+      return {sideBySide:paper.right<=review.left&&Math.abs(paper.top-review.top)<2,stacked:paper.bottom<=review.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.equal(width>=1280?notebookLayout.sideBySide:notebookLayout.stacked,true,`notebook uses the available width at ${width}px`);
+    assert.equal(notebookLayout.overflow,false);
+    await page.screenshot({path:path.join(evidence,`notebook-${width}.png`),fullPage:true});
+    await notebook.getByRole('button',{name:'전체 답안 보기',exact:true}).click();
     await page.getByRole("button", { name: "2번 문제 확대, 답안 입력됨", exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.getByLabel("점수 15점", { exact: true }).waitFor();
@@ -83,16 +102,19 @@ try {
     assert.equal(await detail.evaluate(element => document.activeElement === element), true, "Opening a saved question transfers keyboard focus");
     assert.ok((await detail.textContent()).includes("2번 저장 당시 해설"));
     assert.ok((await detail.textContent()).includes("고려"));
-    assert.equal(await detail.locator('.my-quiz-history__question-body').count(), 1);
+    assert.equal(await detail.locator('.quiz-notebook__paper .mock-exam-question-ink').count(), 1);
+    assert.match(await detail.locator('.mock-exam-example').innerText(),/ㄴ\. 의정부와 6조를 두었다\./,'saved example also survives full-answer details');
     assert.equal(await detail.locator('.student-quiz-relearning-correct-answer dt').textContent(), '정답');
     assert(await detail.getByRole('region', {name:'해설',exact:true}).isVisible());
     const reviewLayout = await detail.evaluate(element => {
-      const question = element.querySelector('.my-quiz-history__question-body').getBoundingClientRect();
+      const question = element.querySelector('.quiz-notebook__paper').getBoundingClientRect();
+      const review = element.querySelector('.quiz-notebook__review').getBoundingClientRect();
       const answers = element.querySelector('.student-quiz-relearning-answers').getBoundingClientRect();
       const explanation = element.querySelector('.student-quiz-relearning-explanation').getBoundingClientRect();
-      return {ordered:question.bottom<=answers.top&&answers.bottom<=explanation.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
+      return {sideBySide:question.right<=review.left&&Math.abs(question.top-review.top)<2,stacked:question.bottom<=answers.top,answersBeforeExplanation:answers.bottom<=explanation.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
     });
-    assert.equal(reviewLayout.ordered,true); assert.equal(reviewLayout.overflow,false);
+    assert.equal(width>=1280?reviewLayout.sideBySide:reviewLayout.stacked,true);
+    assert.equal(reviewLayout.answersBeforeExplanation,true); assert.equal(reviewLayout.overflow,false);
     await detail.screenshot({path:path.join(evidence, `detail-${width}.png`)});
     assert.deepEqual(await page.evaluate(() => window.historyFixtureCalls.filter(call => call.mode === "detail").map(call => call.key)), ["canonical:saved-paper"]);
     await page.goto(`${origin}/?legacy`);
@@ -100,10 +122,39 @@ try {
     assert.equal(await page.locator(".mock-exam-paper").count(), 0, "Missing old source text must not fabricate a complete paper");
     await page.getByRole("combobox", { name: "확인할 문항", exact: true }).selectOption("1");
     await page.waitForFunction(() => document.querySelector('.my-quiz-history__question')?.textContent.includes('문제 원문이 보관되어 있지 않습니다.'));
+    assert.equal(await page.getByRole('region',{name:'오답 복습',exact:true}).count(),0,'missing source text is not offered for practice');
+    await page.goto(`${origin}/?ungraded`);
+    const questionSelect=page.getByRole('combobox',{name:'확인할 문항',exact:true});
+    await questionSelect.waitFor();
+    await questionSelect.selectOption('1');
+    const ungraded=page.getByRole('article',{name:'2번 문항 상세',exact:true});
+    assert.match(await ungraded.locator('h4').first().innerText(),/채점 기록 없음/,'unknown grading is not reported as a correct or incorrect response');
+    assert.equal(await ungraded.locator('.mock-exam-question-ink--graded-detail,.mock-exam-correction').count(),0,'missing grading has no fabricated grading marks');
+    assert.equal(await page.getByRole('region',{name:'오답 복습',exact:true}).count(),0,'unknown grading is not silently treated as wrong');
+    await page.close();
+  }
+  for (const width of [390,1440]) {
+    const page=await browser.newPage({viewport:{width,height:900}});
+    page.on('pageerror',error=>errors.push(error.message));
+    await page.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
+    await page.goto(`${origin}/?long`);
+    const notebook=page.getByRole('region',{name:'오답 복습',exact:true});
+    await notebook.waitFor();
+    const geometry=await notebook.evaluate(element=>{
+      const paper=element.querySelector('.quiz-notebook__paper').getBoundingClientRect();
+      const review=element.querySelector('.quiz-notebook__review').getBoundingClientRect();
+      return {paperHeight:paper.height,sideBySide:paper.right<=review.left&&Math.abs(paper.top-review.top)<2,stacked:paper.bottom<=review.top,overflow:document.documentElement.scrollWidth>innerWidth+1};
+    });
+    assert.ok(geometry.paperHeight>900,'a long saved question can grow naturally beyond the viewport');
+    assert.equal(width===1440?geometry.sideBySide:geometry.stacked,true,'long questions keep explanation beside them on desktop and below on mobile');
+    assert.equal(geometry.overflow,false);
+    await notebook.getByRole('textbox',{name:'오답 노트',exact:true}).scrollIntoViewIfNeeded();
+    assert.equal(await notebook.getByRole('textbox',{name:'오답 노트',exact:true}).isVisible(),true,'reflection remains reachable after a long question');
+    await page.screenshot({path:path.join(evidence,`long-notebook-${width}.png`),fullPage:true});
     await page.close();
   }
   assert.deepEqual(errors, []);
-  console.log(`Mock exam history browser passed: 320/390/768/1280, automatic pagination with saved score/answers, question/answer/explanation sections, click focus, missing-snapshot fallback. Evidence: ${evidence}`);
+  console.log(`Mock exam history browser passed: 320/390/768/1280, direct notebook entry with the existing question renderer, original numbering and example passage, responsive question/review columns, full-answer automatic pagination with saved score/answers, click focus, missing-snapshot and missing-grading fallbacks. Evidence: ${evidence}`);
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

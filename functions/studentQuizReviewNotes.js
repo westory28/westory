@@ -4,7 +4,8 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { isQuizAnswerCorrect } = require('./quizAnswerMatching');
 
 const COLLECTION = 'semester_quiz_review_notes';
-const REASONS = ['', '개념이 헷갈렸어요', '자료의 근거를 놓쳤어요', '답을 잘못 입력했어요'];
+const REASONS = ['', '개념이 헷갈렸어요', '자료의 근거를 놓쳤어요', '답을 잘못 입력했어요',
+  '몰랐어요', '잘못 읽었어요', '찍었어요', '실수했어요'];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const noteId = (semesterId, uid, key) => hash(JSON.stringify([semesterId, uid, key]));
 const fail = (code, message, reason) => { throw new HttpsError(code, message, { reason }); };

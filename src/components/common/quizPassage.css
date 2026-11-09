@@ -1,5 +1,24 @@
 .quiz-passage {
   overflow-x: auto;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.quiz-question-text {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Keep short authored phrases together; only an overwide phrase wraps inside. */
+.quiz-question-keep,
+.quiz-passage-underline {
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  vertical-align: baseline;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .quiz-passage-list-row {
@@ -19,7 +38,7 @@
 .quiz-passage-list-text {
   min-width: 0;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .quiz-passage .quiz-passage-label-row {

@@ -357,6 +357,9 @@ try {
       ),
       JSON.stringify({ width, fields }),
     );
+    if (!(await live.isVisible()))
+      await compose.getByRole("button", { name: "미리보기", exact: true }).click();
+    await live.waitFor({ state: "visible" });
     assert.equal(
       await live.locator(".quiz-choice-column-headings > span").count(),
       2,
@@ -366,6 +369,8 @@ try {
     await page.screenshot({
       path: path.join(evidence, `authoring-${width}.png`),
     });
+    const returnToEditor=compose.getByRole("button",{name:"돌아가기",exact:true});
+    if (await returnToEditor.isVisible()) await returnToEditor.click();
     report.push({ width, editorFiveByTwo: true, previewFiveByTwo: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -537,15 +542,37 @@ try {
       .getByRole("button", { name: "시험지로 돌아가기", exact: true })
       .click();
   }
-  await page.goto(origin + "/?mode=review");
-  await page
-    .getByRole("button", { name: "해설 가리고 다시 풀기", exact: true })
-    .click();
-  assert.equal(
-    await page.locator(".quiz-choice-column-headings > span").count(),
-    2,
-  );
-  assert.equal(await page.locator(".quiz-choice-column-cells").count(), 5);
+  for (const width of [390,768,1440]) {
+    await page.setViewportSize({width,height:1000});
+    await page.goto(origin + "/?mode=review");
+    const notebook=page.getByRole("region",{name:"오답 복습",exact:true});
+    const question=notebook.getByRole("article",{name:"복습할 문제",exact:true});
+    await question.waitFor();
+    assert.equal(await question.locator('.mock-exam-question-ink').count(),1,"review reuses the original question renderer");
+    assert.equal(await question.locator('.quiz-choice-column-headings > span').count(),2);
+    assert.equal(await question.locator('.mock-exam-options > li').count(),5);
+    assert.equal(await question.locator('.quiz-choice-column-cells').count(),5);
+    await notebook.getByRole("button", { name: "해설 가리고 다시 풀기", exact: true }).click();
+    const controls=question.locator('.mock-exam-answer-controls');
+    assert.equal(await controls.locator('.quiz-choice-column-headings > span').count(),2);
+    assert.equal(await controls.locator('.quiz-choice-column-cells').count(),5);
+    assert.equal(await controls.getByRole('radio').count(),5,"practice retains five complete answer rows");
+    const correct=controls.getByRole('radio').nth(saved.options.indexOf(saved.answer));
+    const correctRow=controls.locator('label').nth(saved.options.indexOf(saved.answer));
+    await correctRow.click();assert(await correct.isChecked());
+    await correct.focus();await page.keyboard.press('Space');assert.equal(await correct.isChecked(),false,"keyboard can clear the selected row");
+    await page.keyboard.press('Space');assert(await correct.isChecked());
+    await notebook.getByRole('button',{name:'답 확인',exact:true}).click();
+    await notebook.getByText('다시 맞혔어요.',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no notebook overflow at ${width}px`);
+    const cells=await controls.locator('.quiz-choice-column-cells').evaluateAll(elements=>elements.map(element=>{
+      const columns=[...element.children].map(column=>column.getBoundingClientRect());
+      return {count:columns.length,sameRow:Math.abs(columns[0].top-columns[1].top)<1,equalWidth:Math.abs(columns[0].width-columns[1].width)<1,overflow:element.scrollWidth>element.clientWidth+1};
+    }));
+    assert(cells.every(row=>row.count===2&&row.sameRow&&row.equalWidth&&!row.overflow),JSON.stringify({width,cells}));
+    await page.screenshot({path:path.join(evidence,`notebook-${width}.png`),fullPage:true});
+    report.push({width,notebookOriginalFiveByTwo:true,notebookPracticeFiveByTwo:true,notebookKeyboardAndGrading:true});
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   await fs.writeFile(
