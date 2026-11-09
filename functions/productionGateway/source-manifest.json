@@ -12,6 +12,9 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-09: Performance source audit against 7a9da91f: live getAssessmentState revision 00014-quk matches all 113 compared runtime files, including its 31-file static relative dependency closure. The getQuizClassAnalysis core files match; older indirectly imported assessment modules are not used by its pure buildEnrollmentSlotId helper. Existing roster class/studentClass IN and unit+round/category question query shapes with document-ID order returned HTTP 200 using limit-1 name-only projections; no student fields or identifiers were retained.",
+    "2026-11-09: Parallelize only the assessment reward adapter's independent enrollment/class/policy reads for canonical server-owned IDs. Preserve enrollment/class/economy/account/policy validation and error order, legacy sequential fallback, all financial writes and receipt/result atomicity. Deploy executeCommand for this behavior; coordinated retired achievement-profile command enforcement also requires getCommandStatus, while teacher analysis uses its isolated getQuizClassAnalysis export.",
+    "2026-11-09: Reduce getAssessmentState mock-paper history payloads to projected attempt metadata and hydrate only the selected response/active paper once per transaction. Reuse the validated semester pointer/manifest snapshots. Preserve ordinary assessment history, legacy source behavior and all START/SAVE/SUBMIT commands; deploy only getAssessmentState for this change.",
     "2026-11-09: Add reset-aware retake availability only to getAssessmentState mockExamOverview. Read canonical limits and projected own attempt metadata only for completed rounds; START/SAVE/SUBMIT, prerequisite completion, roles, semesters, indexes and rules are unchanged. Deploy only Seoul getAssessmentState.",
     "2026-11-09: Incident audit found executeCommand 256 MiB OOM and getAssessmentState read/write transaction contention during class-wide entry. Live executeCommand/getAssessmentState archives including productionSource match f2824907 (112 runtime files); getCommandStatus/saveAssessmentProgress active handler dependencies match. Deploy only these four Seoul endpoints with 512 MiB, CPU 1, concurrency 8, maxInstances 20, minInstances 0 and unchanged 60-second timeout. assessmentRuntime.js is newly authored configuration. Read-only state/status snapshots preserve server authorization; START/SAVE/SUBMIT retain write transactions and receipts.",
     "2026-11-08: Mock release audit against bd9b96c4: live executeCommand generation 1794147978929338 matches all 115 runtime source files after LF normalization. Live getAssessmentState generation 1794129626434601 has older short-answer alias dependencies, but its query closure and loadDefinitionSource match the baseline. Deploy only executeCommand/getAssessmentState for bounded round-source reads and the exact forward legacy round-one settings-key migration; preserve all other identities and receipts.",
@@ -56,7 +59,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "c2e210c5893e173296b81532fa323188ca762ea80d01fe6992ab13c0a53cf825",
+      "sha256": "cda3dba16e520d217b3a13da393dbadb7f4b72f8198feacccdf7f214beab5398",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -81,7 +84,8 @@
         "2026-11-08: Enforce student-owned prior mock-round submissions at start, assets, recovery, save, submit and start-receipt replay/status; preserve submitted review and normal assessments.",
         "2026-11-08: Accept comma-delimited short-answer keys, freeze question type, retain existing typed snapshots and submitted receipts, and keep other question types exact.",
         "2026-11-08: Query authored mock papers by unit/category/round with limit 201, probe at most one authored-round marker before legacy fallback, preserve canonical source hashes, and permit only the exact forward round-one legacyConfigKey migration during teacher settings save.",
-        "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions."
+        "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions.",
+        "2026-11-09: Project mock attempt history for state queries, hydrate only selected paper snapshots, and reuse validated semester snapshots without changing response, authorization, source or mutation contracts."
       ]
     },
     {
@@ -433,12 +437,13 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "319a4dc5e18aed67ed51477de2505bdf6846e50c369f345ee314f250e2149c0c",
+      "sha256": "191605a41cabbcfcc44ac6122ffa7e14715d402b05cd66b10ecabca3cd66414a",
       "changes": [
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
         "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
-        "2026-10-27: Preserve per-account/order/inventory CAS while allowing unrelated economy revisions; fail closed on malformed scope, frozen accounts and unsafe amounts."
+        "2026-10-27: Preserve per-account/order/inventory CAS while allowing unrelated economy revisions; fail closed on malformed scope, frozen accounts and unsafe amounts.",
+        "2026-11-09: Overlap independent assessment reward enrollment/class/policy reads with settled results; preserve existing validation/error priority, legacy-ID sequential reads, policy calculation and atomic reward/result/receipt writes."
       ]
     },
     {

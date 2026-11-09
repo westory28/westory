@@ -23,6 +23,7 @@ const ATTEMPT_COLLECTION = "semester_assessment_attempts";
 const SUBMISSION_COLLECTION = "semester_assessment_submissions";
 const RESULT_COLLECTION = "semester_assessment_results";
 const LEGACY_ISSUE_COLLECTION = "assessment_legacy_issues";
+const MOCK_ATTEMPT_STATE_FIELDS = ["studentUid", "resetAt", "attemptNumber", "status", "submittedAtIso"];
 
 const ASSESSMENT_COMMAND_TYPES = Object.freeze({
   SAVE_ACHIEVEMENT_PROFILE: achievementProfiles.COMMAND_TYPE,
@@ -885,6 +886,7 @@ const assertAssessmentSemesterWritable = async (transaction, semesterId) => {
   ) {
     fail("failed-precondition", "Assessment source writes require the canonical ACTIVE semester.", "ASSESSMENT_SEMESTER_NOT_ACTIVE");
   }
+  return { pointer, manifest };
 };
 
 const assertAssessmentDefinitionSemesterWritable = (manifest, semesterId) => {
@@ -1749,31 +1751,38 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
       if (attemptSnapshot?.exists && (attemptSnapshot.data?.definitionId !== definitionId || attemptSnapshot.data?.semesterId !== definitionSnapshot.data?.semesterId)) {
         fail("permission-denied", "Assessment attempt does not belong to the requested definition and semester.", "ASSESSMENT_QUERY_SCOPE_MISMATCH");
       }
-      if (actor.role === "student") {
-        await assertAssessmentSemesterWritable(transaction, definitionSnapshot.data?.semesterId);
-      }
+      const semesterState = actor.role === "student"
+        ? await assertAssessmentSemesterWritable(transaction, definitionSnapshot.data?.semesterId) : null;
+      const projectOwnAttempts = definitionSnapshot.data?.assessmentKind === "QUIZ"
+        && definitionSnapshot.data?.category === "exam_prep";
+      const hydratedAttempts = new Map();
+      const hydrateAttempt = async document => {
+        if (!projectOwnAttempts || !document?.exists || document === attemptSnapshot) return document;
+        if (!hydratedAttempts.has(document.path)) hydratedAttempts.set(document.path, await transaction.get(document.path));
+        return hydratedAttempts.get(document.path);
+      };
       let ownAttempt = attemptSnapshot;
       let ownAttempts = [];
       if (!ownAttempt && actor.role === "student") {
         const attempts = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
           { field: "definitionId", operator: "==", value: definitionId },
           { field: "studentUid", operator: "==", value: actor.uid },
-        ] })).filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null).sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
+        ], ...(projectOwnAttempts ? { fieldMask: MOCK_ATTEMPT_STATE_FIELDS } : {}) }))
+          .filter((document) => document.data?.studentUid === actor.uid && document.data?.resetAt == null)
+          .sort((left, right) => Number(right.data?.attemptNumber || 0) - Number(left.data?.attemptNumber || 0));
         ownAttempts = attempts;
         ownAttempt = attempts[0] || null;
       }
       const definition = definitionSnapshot.data || {};
       let status = definition.status === "PUBLISHED" ? "READY" : "NOT_OPEN";
-      const manifest = await transaction.get(manifestPath(definition.semesterId));
+      const manifest = semesterState?.manifest || await transaction.get(manifestPath(definition.semesterId));
       const currentTimeMs = now().getTime();
       if (manifest.data?.status === "ARCHIVED" || manifest.data?.status === "CLOSED") status = "ARCHIVED";
       else if (definition.status === "CLOSED" || (definition.closesAt && currentTimeMs > Date.parse(definition.closesAt))) status = "CLOSED";
       else if (definition.status !== "PUBLISHED" || (definition.opensAt && currentTimeMs < Date.parse(definition.opensAt))) status = "NOT_OPEN";
       if (actor.role === "student" && status === "READY") {
-        const [pointer, slot] = await transaction.getAll([
-          semesterCore.ACTIVE_SEMESTER_POINTER_PATH,
-          slotPath(definition.semesterId, actor.uid),
-        ]);
+        const pointer = semesterState.pointer;
+        const slot = await transaction.get(slotPath(definition.semesterId, actor.uid));
         const activeEnrollmentId = String(slot.data?.activeEnrollmentId || "").trim();
         const enrollment = activeEnrollmentId ? await transaction.get(enrollmentPath(activeEnrollmentId)) : null;
         const assignedClassIds = Array.isArray(definition.assignedClassIds) ? definition.assignedClassIds : [];
@@ -1807,8 +1816,9 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
           fail("permission-denied", "시험 자료를 준비할 수 없습니다. 공개 상태를 확인해 주세요.", "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
         const active = ownAttempts.find(document => ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(document.data?.status));
         if (active) {
-          preparedAssets = mockMaterials.buildPreparedAssets({ sourceHash: active.data.sourceHash,
-            quizDocuments: (active.data.questionSnapshots || []).map(data => ({ data })) });
+          const activeAttempt = await hydrateAttempt(active);
+          preparedAssets = mockMaterials.buildPreparedAssets({ sourceHash: activeAttempt.data.sourceHash,
+            quizDocuments: (activeAttempt.data.questionSnapshots || []).map(data => ({ data })) });
         } else {
           if (ownAttempts.length >= Number(definition.maxAttempts || 1))
             fail("failed-precondition", "No assessment attempts remain.", "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
@@ -1826,6 +1836,9 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
       }
       if (!requiredRound && ownAttempt?.exists && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data?.status)) status = "RECOVERABLE";
       if (ownAttempt?.exists && ownAttempt.data?.status === "SUBMITTED") status = "SUBMITTED";
+      // Historical papers carry large frozen materials. Hydrate only the chosen
+      // response/active attempt, once, after the existing access gates succeed.
+      if (!requiredRound) ownAttempt = await hydrateAttempt(ownAttempt);
       const attempt = ownAttempt?.exists && !requiredRound ? serializeAttempt(ownAttempt.data, true) : null;
       if (attempt && ownAttempt.data.assessmentKind === "QUIZ" && ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(ownAttempt.data.status)) {
         const frozenIds = new Set((attempt.questionPresentation || []).map(item => item.id));

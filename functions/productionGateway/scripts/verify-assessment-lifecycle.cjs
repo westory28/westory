@@ -1182,6 +1182,108 @@ const runMockRetakeOverview = async () => {
   assert.equal(allCompleted.calls.find(item => item.type === "getAll").paths.length, 3);
 };
 
+const runMockStateReadBounds = async () => {
+  const definitionId = "quiz:2026-2:exam_prep:exam_prep:round_1";
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${definitionId}`;
+  const pathFor = index => `${assessment.ATTEMPT_COLLECTION}/attempt_${String(index).padStart(64, "0")}`;
+  const makeFixture = () => {
+    const fixture = new MemoryStore({ ...seed, [definitionPath]: {
+      ...definitionPayload("QUIZ"), definitionId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1",
+      status: "PUBLISHED", revision: 1, assignedClassIds: ["class_one"], maxAttempts: 30,
+    } });
+    for (let index = 1; index <= 20; index++) fixture.documents.set(pathFor(index), {
+      attemptId: pathFor(index).split("/").at(-1), definitionId, semesterId, assessmentKind: "QUIZ",
+      category: "exam_prep", sourceId: "exam_prep", examRound: "round_1", studentUid: student.uid,
+      attemptNumber: index, status: index === 20 ? "IN_PROGRESS" : "SUBMITTED", revision: 2,
+      sourceHash: "fixture-source-hash", answers: { "1": "fixture response" }, questionIds: ["1"],
+      startedAtIso: new Date(nowMs - 30_000).toISOString(), deadlineAtIso: new Date(nowMs + 300_000).toISOString(),
+      submittedAtIso: index === 20 ? "" : new Date(nowMs - 60_000).toISOString(),
+      questionSnapshots: [{ id: "1", type: "short", question: "synthetic material ".repeat(4000),
+        answer: "private answer", explanation: "private explanation", image: "https://example.test/frozen.png" }],
+    });
+    fixture.documents.set(pathFor(21), { ...clone(fixture.documents.get(pathFor(20))), attemptNumber: 21, status: "LOCKED", resetAt: { seconds: 1 } });
+    fixture.documents.set(pathFor(22), { ...clone(fixture.documents.get(pathFor(20))), studentUid: "other-student", attemptNumber: 22 });
+    fixture.documents.set(pathFor(23), { ...clone(fixture.documents.get(pathFor(20))), definitionId: "quiz:2025-2:exam_prep:exam_prep:round_1", semesterId: "2025-2", attemptNumber: 23 });
+    const reads = [], queries = [];
+    const originalTransaction = fixture.runTransaction.bind(fixture);
+    fixture.runTransaction = callback => originalTransaction(transaction => callback({ ...transaction,
+      get: async path => { reads.push(path); return transaction.get(path); },
+      getAll: async (paths, options) => { reads.push(...paths); return transaction.getAll(paths, options); },
+      query: async (collectionPath, filter) => {
+        const rows = await transaction.query(collectionPath, filter);
+        const selected = filter?.fieldMask ? rows.map(row => ({ ...row,
+          data: Object.fromEntries(filter.fieldMask.filter(field => Object.hasOwn(row.data, field)).map(field => [field, row.data[field]])),
+        })) : rows;
+        queries.push({ collectionPath, filter: clone(filter), bytes: Buffer.byteLength(JSON.stringify(selected)), rows: selected.length });
+        return selected;
+      },
+    }));
+    const query = assessment.createAssessmentQueryCore({ store: fixture, now: () => new Date(nowMs),
+      assertSession: async request => ({ uid: request.auth.uid }) });
+    const state = data => { reads.length = 0; queries.length = 0; return query.getAssessmentState({ auth: student, data: data || { definitionId } }); };
+    const fullAttemptReads = () => reads.filter(path => path.startsWith(`${assessment.ATTEMPT_COLLECTION}/`));
+    return { fixture, reads, queries, state, fullAttemptReads };
+  };
+  const f = makeFixture();
+  const result = await f.state();
+  assert.equal(result.status, "RECOVERABLE");
+  assert.equal(result.attempt.attemptNumber, 20, "Ignore reset, other-owner and other-semester attempts");
+  assert.deepEqual(result.attempt.answers, { "1": "fixture response" });
+  assert.deepEqual(f.fullAttemptReads(), [pathFor(20)]);
+  for (const path of ["site_settings/semester_active", `semester_manifests/${semesterId}`])
+    assert.equal(f.reads.filter(value => value === path).length, 1, "Reuse validated semester snapshots in the same transaction");
+  const historyQuery = f.queries.find(item => item.collectionPath === assessment.ATTEMPT_COLLECTION);
+  assert.deepEqual(historyQuery.filter.filters.map(item => [item.field, item.operator]), [["definitionId", "=="], ["studentUid", "=="]]);
+  assert.equal(historyQuery.filter.orderBy, undefined, "Do not introduce an ordered index");
+  assert.deepEqual(historyQuery.filter.fieldMask, ["studentUid", "resetAt", "attemptNumber", "status", "submittedAtIso"]);
+  assert.ok(historyQuery.bytes < 20_000, "Historical paper bodies are absent from the metadata query");
+  assert.ok(Buffer.byteLength(JSON.stringify(result.attempt)) > 60_000, "The selected full paper is preserved");
+  assert.ok(!JSON.stringify(result).includes("private answer") && !JSON.stringify(result).includes("private explanation"));
+  assert.deepEqual(await f.state({ attemptId: result.attempt.attemptId }), result, "Explicit attempt recovery and definition lookup return identical data");
+  assert.deepEqual(f.fullAttemptReads(), [pathFor(20)], "Explicit attempt lookup is not hydrated twice");
+  const prepared = await f.state({ definitionId, prepareAssets: true });
+  assert.deepEqual(prepared.attempt, result.attempt);
+  assert.ok(JSON.stringify(prepared.preparedAssets).includes("https://example.test/frozen.png"));
+  assert.deepEqual(f.fullAttemptReads(), [pathFor(20)], "Asset preparation and recovery share the one full read");
+
+  f.fixture.documents.get(pathFor(20)).status = "SUBMITTED";
+  assert.equal((await f.state()).status, "SUBMITTED");
+  f.fixture.documents.get(definitionPath).maxAttempts = 20;
+  await assert.rejects(f.state({ definitionId, prepareAssets: true }), error => error?.details?.reason === "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
+  assert.deepEqual(f.fullAttemptReads(), [], "Retry-limit rejection needs no paper body");
+  f.fixture.documents.get(definitionPath).maxAttempts = 30;
+  f.fixture.documents.get(definitionPath).cooldownMinutes = 30;
+  f.fixture.documents.get(pathFor(20)).submittedAtIso = new Date(nowMs).toISOString();
+  await assert.rejects(f.state({ definitionId, prepareAssets: true }), error => error?.details?.reason === "ASSESSMENT_COOLDOWN_ACTIVE");
+  assert.deepEqual(f.fullAttemptReads(), []);
+  for (let index = 1; index <= 20; index++) f.fixture.documents.get(pathFor(index)).resetAt = { seconds: 1 };
+  const reset = await f.state();
+  assert.equal(reset.status, "READY");
+  assert.equal(reset.attempt, null);
+  assert.deepEqual(f.fullAttemptReads(), [], "Reset history never loads an old paper");
+
+  const blocked = makeFixture(), secondId = definitionId.replace("round_1", "round_2");
+  blocked.fixture.documents.set(`${assessment.DEFINITION_COLLECTION}/${secondId}`, {
+    ...blocked.fixture.documents.get(definitionPath), definitionId: secondId, examRound: "round_2",
+  });
+  for (const value of blocked.fixture.documents.values()) if (value.definitionId === definitionId) {
+    value.definitionId = secondId;
+    if (value.assessmentKind === "QUIZ") value.examRound = "round_2";
+  }
+  const gated = await blocked.state({ definitionId: secondId });
+  assert.equal(gated.status, "PREREQUISITE_REQUIRED");
+  assert.equal(gated.attempt, null);
+  assert.deepEqual(blocked.fullAttemptReads(), [], "Prior-round gating does not hydrate a blocked attempt");
+
+  const ordinary = makeFixture();
+  ordinary.fixture.documents.get(definitionPath).category = "formative";
+  assert.equal((await ordinary.state()).attempt.attemptNumber, 20);
+  assert.equal(ordinary.queries.find(item => item.collectionPath === assessment.ATTEMPT_COLLECTION).filter.fieldMask, undefined,
+    "Ordinary assessment history remains unchanged");
+  assert.deepEqual(ordinary.fullAttemptReads(), []);
+  assert.equal(f.fixture.writeCount + blocked.fixture.writeCount + ordinary.fixture.writeCount, 0);
+};
+
 const runMockSourceQueryBounds = async () => {
   const makeFixture = (questions) => {
     const boundedStore = new MemoryStore({ ...seed, ...Object.fromEntries(questions.map(q => [
@@ -1419,6 +1521,7 @@ const runLegacyReceiptHints = async () => {
   await runLegacyReceiptHints();
   await runMockExamPaper();
   await runMockRetakeOverview();
+  await runMockStateReadBounds();
   await runShortAnswerAliases();
   await runMockSourceQueryBounds();
   await runClassVisibilityCommands();
@@ -1566,6 +1669,7 @@ const runLegacyReceiptHints = async () => {
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
       "MOCK_RETAKE_LIMIT_RESET_RESUME_LEGACY_OWNER_SEMESTER_AND_MASKED_READ_BOUNDS",
+      "MOCK_STATE_PROJECTED_HISTORY_SINGLE_SELECTED_PAPER_SEMESTER_REUSE_AND_UNCHANGED_GATES",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",

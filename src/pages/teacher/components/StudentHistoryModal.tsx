@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import { normalizeMockExamCategory } from "../../../lib/mockExamRounds";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
@@ -50,6 +51,14 @@ interface QuizResultDetail {
   correct?: boolean;
   u?: string;
   passage?: string;
+  question?: string;
+  q?: string;
+  a?: string | number;
+  correctAnswer?: string | number;
+  explanation?: string;
+  exp?: string;
+  questionSnapshot?: QuestionDoc;
+  snapshot?: QuestionDoc;
 }
 
 interface QuizResultRecord {
@@ -61,6 +70,7 @@ interface QuizResultRecord {
   timeString?: string;
   timestamp?: { seconds?: number };
   details?: QuizResultDetail[];
+  questionSnapshots?: Array<QuestionDoc & { id: string | number }>;
 }
 
 interface QuestionDoc {
@@ -75,10 +85,6 @@ interface ResolvedDetail extends QuizResultDetail {
   answerText: string;
   explanationText: string;
   passageText: string;
-}
-
-interface ResolvedQuizResultRecord extends QuizResultRecord {
-  resolvedDetails: ResolvedDetail[];
 }
 
 const BATCH_SIZE = 10;
@@ -142,8 +148,63 @@ const getScoreTone = (score: number) => {
   return "text-red-600";
 };
 
-export const StudentQuizHistoryPanel: React.FC<
-  StudentQuizHistoryPanelProps
+const savedQuestion = (record: QuizResultRecord, detail: QuizResultDetail) => {
+  const snapshot =
+    (Array.isArray(record.questionSnapshots)
+      ? record.questionSnapshots
+      : []
+    ).find((item) => String(item.id) === String(detail.id)) ||
+    detail.questionSnapshot ||
+    detail.snapshot;
+  if (snapshot) return snapshot;
+  if (typeof detail.question !== "string" && typeof detail.q !== "string")
+    return undefined;
+  return {
+    question: detail.question ?? detail.q,
+    answer: String(detail.correctAnswer ?? detail.a ?? ""),
+    explanation: detail.explanation ?? detail.exp,
+    passage: detail.passage,
+  };
+};
+
+export const StudentQuizHistoryPanel: React.FC<StudentQuizHistoryPanelProps> = (
+  props,
+) => {
+  const { config, currentUser, authGeneration } = useAuth();
+  // Reset before paint: an old owner, semester or parent filter cannot show
+  // its pending response or cached questions under a new student's heading.
+  const scopeKey = JSON.stringify([
+    currentUser?.uid,
+    authGeneration,
+    props.studentId,
+    getSemesterCollectionPath(config, "quiz_results"),
+    props.readScope,
+    props.initialFilter?.category,
+    props.initialFilter?.unitId,
+  ]);
+  const [selection, setSelection] = useState({
+    scopeKey: "",
+    source: "current" as HistorySource,
+  });
+  const source =
+    selection.scopeKey === scopeKey && props.readScope === "history"
+      ? selection.source
+      : "current";
+  return (
+    <StudentQuizHistoryContent
+      key={`${scopeKey}:${source}`}
+      {...props}
+      source={source}
+      setSource={(nextSource) => setSelection({ scopeKey, source: nextSource })}
+    />
+  );
+};
+
+const StudentQuizHistoryContent: React.FC<
+  StudentQuizHistoryPanelProps & {
+    source: HistorySource;
+    setSource: (source: HistorySource) => void;
+  }
 > = ({
   studentId,
   studentName,
@@ -154,152 +215,102 @@ export const StudentQuizHistoryPanel: React.FC<
   onClose,
   className = "",
   surface = "modal",
+  source,
+  setSource,
 }) => {
   const { config } = useAuth();
   const allowLegacyLookup = readScope === "history";
-  const [loading, setLoading] = useState(false);
-  const [source, setSource] = useState<HistorySource>("current");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
   const [records, setRecords] = useState<QuizResultRecord[]>([]);
   const [unitTitleMap, setUnitTitleMap] = useState<Record<string, string>>({});
   const [questionMap, setQuestionMap] = useState<Record<string, QuestionDoc>>(
     {},
   );
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [unitFilter, setUnitFilter] = useState("all");
+  const questionCache = useRef(new Map<string, QuestionDoc | null>());
+  const questionFlights = useRef(new Map<string, Promise<void>>());
+  const [detailState, setDetailState] = useState({ key: "", error: false });
+  const [detailReload, setDetailReload] = useState(0);
+  const [categoryFilter, setCategoryFilter] = useState(() =>
+    getInitialCategoryFilter(initialFilter),
+  );
+  const [unitFilter, setUnitFilter] = useState(
+    () => String(initialFilter?.unitId || "").trim() || "all",
+  );
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
     new Set(),
   );
 
-  useEffect(() => {
-    setSource("current");
-    setCategoryFilter(getInitialCategoryFilter(initialFilter));
-    setUnitFilter(String(initialFilter?.unitId || "").trim() || "all");
-    setSelectedRecordId("");
-    setExpandedQuestions(new Set());
-  }, [initialFilter?.category, initialFilter?.unitId, readScope, studentId]);
-
-  useEffect(() => {
-    if (!studentId) return;
-    void fetchHistory(allowLegacyLookup ? source : "current");
-  }, [allowLegacyLookup, config, source, studentId]);
-
   const getRecordUnitLabel = (record: QuizResultRecord) => {
     const unitId = getRecordUnitId(record);
     if (unitId === "exam_prep") return "모의고사";
-    return unitTitleMap[unitId] || unitId || "단원 정보 없음";
+    return (
+      unitTitleMap[unitId] ||
+      (unitId === initialFilter?.unitId ? initialFilter.unitTitle : "") ||
+      unitId ||
+      "단원 정보 없음"
+    );
   };
+  const resultCollectionPath =
+    source === "legacy"
+      ? "quiz_results"
+      : getSemesterCollectionPath(config, "quiz_results");
+  const questionCollectionPath =
+    source === "legacy"
+      ? "quiz_questions"
+      : getSemesterCollectionPath(config, "quiz_questions");
+  const curriculumCollectionPath =
+    source === "legacy"
+      ? "curriculum"
+      : getSemesterCollectionPath(config, "curriculum");
 
-  const fetchHistory = async (selectedSource: HistorySource) => {
-    setLoading(true);
-    setRecords([]);
-    setUnitTitleMap({});
-    setQuestionMap({});
-    setSelectedRecordId("");
-    setExpandedQuestions(new Set());
-
-    const resultCollectionPath =
-      selectedSource === "legacy"
-        ? "quiz_results"
-        : getSemesterCollectionPath(config, "quiz_results");
-    const questionCollectionPath =
-      selectedSource === "legacy"
-        ? "quiz_questions"
-        : getSemesterCollectionPath(config, "quiz_questions");
-    const curriculumCollectionPath =
-      selectedSource === "legacy"
-        ? "curriculum"
-        : getSemesterCollectionPath(config, "curriculum");
-
-    try {
-      const [resultSnap, treeSnap] = await Promise.all([
-        getDocs(
-          query(
-            collection(db, resultCollectionPath),
-            where("uid", "==", studentId),
-          ),
-        ),
-        getDoc(doc(db, curriculumCollectionPath, "tree")).catch(() => null),
-      ]);
-
-      const nextUnitTitleMap: Record<string, string> = {
-        exam_prep: "모의고사",
-      };
-      const tree = treeSnap?.exists() ? treeSnap.data().tree : null;
-      if (Array.isArray(tree)) collectUnitTitles(tree, nextUnitTitleMap);
-      if (initialFilter?.unitId && initialFilter.unitTitle) {
-        nextUnitTitleMap[initialFilter.unitId] = initialFilter.unitTitle;
-      }
-      setUnitTitleMap(nextUnitTitleMap);
-
-      const nextRecords: QuizResultRecord[] = [];
-      resultSnap.forEach((item) => {
-        nextRecords.push({
-          id: item.id,
-          ...(item.data() as Omit<QuizResultRecord, "id">),
-        });
-      });
-      nextRecords.sort((a, b) => getRecordTimeMs(b) - getRecordTimeMs(a));
-      setRecords(nextRecords);
-
-      const allQuestionIds = Array.from(
-        new Set(
-          nextRecords.flatMap((record) =>
-            (record.details || [])
-              .map((detail) => String(detail.id || "").trim())
-              .filter((id) => id.length > 0),
-          ),
-        ),
-      );
-
-      if (allQuestionIds.length === 0) return;
-
-      const resolvedQuestionMap: Record<string, QuestionDoc> = {};
-      await Promise.all(
-        chunk(allQuestionIds, BATCH_SIZE).map(async (ids) => {
-          const questionSnap = await getDocs(
-            query(
-              collection(db, questionCollectionPath),
-              where(documentId(), "in", ids),
-            ),
-          );
-          questionSnap.forEach((item) => {
-            resolvedQuestionMap[item.id] = item.data() as QuestionDoc;
-          });
-        }),
-      );
-
-      setQuestionMap(resolvedQuestionMap);
-    } catch (error) {
-      console.error("Error fetching student history:", error);
-      setRecords([]);
-      setUnitTitleMap({});
-      setQuestionMap({});
-    } finally {
+  useEffect(() => {
+    let active = true;
+    if (!studentId) {
       setLoading(false);
+      return;
     }
-  };
-
-  const resolvedRecords = useMemo<ResolvedQuizResultRecord[]>(
-    () =>
-      records.map((record) => ({
-        ...record,
-        resolvedDetails: (record.details || []).map((detail, idx) => {
-          const qid = String(detail.id || "").trim();
-          const question = qid ? questionMap[qid] : undefined;
-          const no = idx + 1;
-          return {
-            ...detail,
-            questionText: question?.question || `Q${no} 문항 정보 없음`,
-            answerText: question?.answer ? String(question.answer) : "-",
-            explanationText:
-              question?.explanation || "해설이 등록되지 않았습니다.",
-            passageText: String(question?.passage || detail.passage || ""),
-          };
-        }),
-      })),
-    [questionMap, records],
-  );
+    setLoading(true);
+    setLoadError(false);
+    setRecords([]);
+    setSelectedRecordId("");
+    // Optional labels must not delay the actual result list.
+    void getDoc(doc(db, curriculumCollectionPath, "tree"))
+      .then((snapshot) => {
+        if (!active) return;
+        const titles: Record<string, string> = { exam_prep: "모의고사" };
+        const tree = snapshot.exists() ? snapshot.data().tree : null;
+        if (Array.isArray(tree)) collectUnitTitles(tree, titles);
+        setUnitTitleMap(titles);
+      })
+      .catch(() => {});
+    void getDocs(
+      query(
+        collection(db, resultCollectionPath),
+        where("uid", "==", studentId),
+      ),
+    )
+      .then((snapshot) => {
+        if (!active) return;
+        const nextRecords: QuizResultRecord[] = [];
+        snapshot.forEach((item) =>
+          nextRecords.push({ ...item.data(), id: item.id } as QuizResultRecord),
+        );
+        nextRecords.sort((a, b) => getRecordTimeMs(b) - getRecordTimeMs(a));
+        setRecords(nextRecords);
+      })
+      .catch(() => {
+        if (active) setLoadError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [studentId, resultCollectionPath, curriculumCollectionPath, reload]);
 
   const categoryOptions = useMemo(() => {
     const map = new Map<
@@ -345,7 +356,7 @@ export const StudentQuizHistoryPanel: React.FC<
 
   const filteredRecords = useMemo(
     () =>
-      resolvedRecords.filter((record) => {
+      records.filter((record) => {
         const categoryMatches =
           categoryFilter === "all" ||
           getNormalizedCategory(record.category) === categoryFilter;
@@ -354,7 +365,7 @@ export const StudentQuizHistoryPanel: React.FC<
           (getRecordUnitId(record) || "unknown") === unitFilter;
         return categoryMatches && unitMatches;
       }),
-    [categoryFilter, resolvedRecords, unitFilter],
+    [categoryFilter, records, unitFilter],
   );
 
   useEffect(() => {
@@ -372,7 +383,91 @@ export const StudentQuizHistoryPanel: React.FC<
     filteredRecords.find((record) => record.id === selectedRecordId) ||
     filteredRecords[0] ||
     null;
-  const selectedDetails = selectedRecord?.resolvedDetails || [];
+  const missingIds = Array.from(
+    new Set(
+      (selectedRecord?.details || [])
+        .filter((detail) => !savedQuestion(selectedRecord!, detail))
+        .map((detail) => String(detail.id || "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const detailKey = JSON.stringify([selectedRecord?.id, missingIds]);
+  useEffect(() => {
+    let active = true;
+    const needed = missingIds.filter((id) => !questionCache.current.has(id));
+    const loadQuestions = async () => {
+      try {
+        // Reuse in-flight questions on rapid selection, with at most two new
+        // ten-document batches together. No other attempt's questions are read.
+        const batches = chunk(
+          needed.filter((id) => !questionFlights.current.has(id)),
+          BATCH_SIZE,
+        );
+        const pending = needed.flatMap(
+          (id) => questionFlights.current.get(id) || [],
+        );
+        await Promise.all(pending);
+        for (let index = 0; index < batches.length; index += 2) {
+          if (!active) return;
+          await Promise.all(
+            batches.slice(index, index + 2).map((ids) => {
+              const request = getDocs(
+                query(
+                  collection(db, questionCollectionPath),
+                  where(documentId(), "in", ids),
+                ),
+              )
+                .then((snapshot) => {
+                  ids.forEach((id) => questionCache.current.set(id, null));
+                  snapshot.forEach((item) =>
+                    questionCache.current.set(
+                      item.id,
+                      item.data() as QuestionDoc,
+                    ),
+                  );
+                })
+                .finally(() => {
+                  ids.forEach((id) => questionFlights.current.delete(id));
+                });
+              ids.forEach((id) => questionFlights.current.set(id, request));
+              return request;
+            }),
+          );
+        }
+        if (!active) return;
+        setQuestionMap(
+          Object.fromEntries(
+            [...questionCache.current].filter(
+              (entry): entry is [string, QuestionDoc] => entry[1] !== null,
+            ),
+          ),
+        );
+        setDetailState({ key: detailKey, error: false });
+      } catch {
+        if (active) setDetailState({ key: detailKey, error: true });
+      }
+    };
+    void loadQuestions();
+    return () => {
+      active = false;
+    };
+  }, [detailKey, detailReload, questionCollectionPath]);
+  const detailLoading = missingIds.length > 0 && detailState.key !== detailKey;
+  const detailError = detailState.key === detailKey && detailState.error;
+  const selectedDetails: ResolvedDetail[] = (selectedRecord?.details || []).map(
+    (detail, idx) => {
+      const question =
+        savedQuestion(selectedRecord!, detail) ||
+        questionMap[String(detail.id)];
+      return {
+        ...detail,
+        questionText: question?.question || `Q${idx + 1} 문항 정보 없음`,
+        answerText: question?.answer ? String(question.answer) : "-",
+        explanationText: question?.explanation || "해설이 등록되지 않았습니다.",
+        passageText: String(question?.passage ?? detail.passage ?? ""),
+      };
+    },
+  );
   const selectedWrongCount = selectedDetails.filter(
     (detail) => !detail.correct,
   ).length;
@@ -408,10 +503,6 @@ export const StudentQuizHistoryPanel: React.FC<
       ? "이전 기록 조회 중"
       : "현재 학기 조회 중"
     : "현재 학기 전용";
-  const loadingText =
-    activeSource === "legacy"
-      ? "이전 기록을 불러오는 중..."
-      : "현재 학기 기록을 불러오는 중...";
   const emptyTitle =
     activeSource === "legacy"
       ? "이전 기록이 없습니다."
@@ -529,8 +620,17 @@ export const StudentQuizHistoryPanel: React.FC<
 
       <div className="min-h-0 flex-1 overflow-hidden bg-gray-50 p-4">
         {loading ? (
-          <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-500">
-            {loadingText}
+          <InlineLoading />
+        ) : loadError ? (
+          <div role="alert" className="text-center text-sm">
+            응시 기록을 불러오지 못했습니다.
+            <button
+              type="button"
+              className="ml-2 font-bold text-blue-600"
+              onClick={() => setReload((value) => value + 1)}
+            >
+              다시 조회
+            </button>
           </div>
         ) : records.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-white px-4 py-16 text-center">
@@ -566,7 +666,7 @@ export const StudentQuizHistoryPanel: React.FC<
               </div>
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
                 {filteredRecords.map((record) => {
-                  const details = record.resolvedDetails || [];
+                  const details = record.details || [];
                   const wrongCount = details.filter(
                     (detail) => !detail.correct,
                   ).length;
@@ -647,7 +747,23 @@ export const StudentQuizHistoryPanel: React.FC<
                   </div>
 
                   <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-                    {selectedDetails.length === 0 ? (
+                    {detailLoading ? (
+                      <InlineLoading />
+                    ) : detailError ? (
+                      <div role="alert" className="text-center text-sm">
+                        문항을 불러오지 못했습니다.
+                        <button
+                          type="button"
+                          className="ml-2 font-bold text-blue-600"
+                          onClick={() => {
+                            setDetailState({ key: "", error: false });
+                            setDetailReload((value) => value + 1);
+                          }}
+                        >
+                          다시 조회
+                        </button>
+                      </div>
+                    ) : selectedDetails.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-400">
                         문항 상세 정보가 없습니다.
                       </div>

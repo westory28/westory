@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import InfoHelp from "../../../components/common/InfoHelp";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import {
@@ -143,6 +144,8 @@ export default function QuizClassAnalysis({
     "responses",
   );
   const [detailLoading, setDetailLoading] = useState("");
+  const [detailAchievementLoading, setDetailAchievementLoading] =
+    useState(false);
   const [detailError, setDetailError] = useState("");
   const [failedDetailId, setFailedDetailId] = useState("");
   const detailRef = useRef<HTMLDialogElement>(null);
@@ -183,6 +186,7 @@ export default function QuizClassAnalysis({
     setDetail(null);
     setLoading(false);
     setDetailLoading("");
+    setDetailAchievementLoading(false);
     setError("");
     setDetailError("");
     setFailedDetailId("");
@@ -312,6 +316,7 @@ export default function QuizClassAnalysis({
     setDetail(null);
     setLoading(false);
     setDetailLoading("");
+    setDetailAchievementLoading(false);
     setError("");
     setDetailError("");
     setFailedDetailId("");
@@ -530,6 +535,7 @@ export default function QuizClassAnalysis({
     detailRef.current?.close();
     setDetail(null);
     setDetailLoading("");
+    setDetailAchievementLoading(false);
     setDetailError("");
     setFailedDetailId("");
   };
@@ -985,9 +991,7 @@ export default function QuizClassAnalysis({
           document.body,
         )}
       {catalogLoading ? (
-        <p role="status" className="qca-empty">
-          평가와 학급 목록을 불러오는 중입니다.
-        </p>
+        <InlineLoading />
       ) : catalogError ? (
         <div role="alert" className="qca-error">
           {catalogError}
@@ -1008,24 +1012,29 @@ export default function QuizClassAnalysis({
         </p>
       ) : null}
       {showAchievement && (
-        <QuizAchievementAnalysis
-          key={`${identityKey}:${unitId}:${assessmentId}:${classId}`}
-          scope={
-            achievementScope || {
-              semesterId,
-              unitId,
-              category: "exam_prep",
-              examRound: assessment?.examRound || "",
-              classIds: [],
-            }
-          }
-          reportView={achievementView}
-          enabled={!!achievementScope}
-          refreshVersion={achievementVersion}
-          onLoadingChange={setAchievementLoading}
-          identityKey={identityKey}
-          canEdit={canEdit}
-        />
+        <>
+          {achievementLoading && <InlineLoading />}
+          <div hidden={achievementLoading}>
+            <QuizAchievementAnalysis
+              key={`${identityKey}:${unitId}:${assessmentId}:${classId}`}
+              scope={
+                achievementScope || {
+                  semesterId,
+                  unitId,
+                  category: "exam_prep",
+                  examRound: assessment?.examRound || "",
+                  classIds: [],
+                }
+              }
+              reportView={achievementView}
+              enabled={!!achievementScope}
+              refreshVersion={achievementVersion}
+              onLoadingChange={setAchievementLoading}
+              identityKey={identityKey}
+              canEdit={canEdit}
+            />
+          </div>
+        </>
       )}
       {error && !showAchievement && (
         <div role="alert" className="qca-error">
@@ -1039,11 +1048,7 @@ export default function QuizClassAnalysis({
           </button>
         </div>
       )}
-      {loading && !showAchievement && (
-        <p className="qca-empty" role="status">
-          선택한 {selectedGrade ? "학년" : "학급"}의 결과를 불러오는 중입니다.
-        </p>
-      )}
+      {loading && !showAchievement && <InlineLoading />}
       {summary && !showAchievement && (
         <>
           <div className="qca-result-heading">
@@ -1193,6 +1198,9 @@ export default function QuizClassAnalysis({
                                     : "문항·학생"}
                                 </button>
                               )}
+                              {detailLoading === row.classId &&
+                                !detail &&
+                                !detailFilter.current && <InlineLoading />}
                             </td>
                           </tr>
                         );
@@ -1269,6 +1277,11 @@ export default function QuizClassAnalysis({
                                 ) : (
                                   `${counts[category]}명`
                                 )}
+                                {detailLoading === row.classId &&
+                                  !detail &&
+                                  detailFilter.current === category && (
+                                    <InlineLoading />
+                                  )}
                               </td>
                             ))}
                           </tr>
@@ -1387,6 +1400,7 @@ export default function QuizClassAnalysis({
             </button>
           </header>
           <div className="qca-detail-body">
+            {(!!detailLoading || detailAchievementLoading) && <InlineLoading />}
             {detailError && (
               <div className="qca-error" role="alert">
                 {detailError}
@@ -1401,7 +1415,10 @@ export default function QuizClassAnalysis({
                   type="button"
                   className={detailMode === "responses" ? "is-active" : ""}
                   aria-pressed={detailMode === "responses"}
-                  onClick={() => setDetailMode("responses")}
+                  onClick={() => {
+                    setDetailAchievementLoading(false);
+                    setDetailMode("responses");
+                  }}
                 >
                   문항·학생
                 </button>
@@ -1418,12 +1435,15 @@ export default function QuizClassAnalysis({
             {detailMode === "achievement" &&
             detail.scope.category === "exam_prep" &&
             !detail.scope.keyword ? (
-              <QuizAchievementAnalysis
-                key={`${identityKey}:${detail.scope.unitId}:${detail.scope.examRound}:${detail.classId}`}
-                scope={detail.scope}
-                identityKey={identityKey}
-                canEdit={canEdit}
-              />
+              <div hidden={detailAchievementLoading}>
+                <QuizAchievementAnalysis
+                  key={`${identityKey}:${detail.scope.unitId}:${detail.scope.examRound}:${detail.classId}`}
+                  scope={detail.scope}
+                  identityKey={identityKey}
+                  canEdit={canEdit}
+                  onLoadingChange={setDetailAchievementLoading}
+                />
+              </div>
             ) : (
               <QuizAnalysisView
                 key={`${identityKey}:${detail.scope.unitId}:${detail.scope.category}:${detail.scope.examRound}:${detail.scope.keyword || ""}:${detail.classId}:${detail.data.version}:${detail.behaviorFilter || "all"}`}

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SHORT_ANSWER_MAX_LENGTH,
@@ -6,7 +7,10 @@ import {
   restoreAssessmentAnswers,
 } from "../../../lib/assessmentAnswerLimits";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
-import { PageLoading } from "../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  PageLoading,
+} from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import QuizQuestionText from "../../../components/common/QuizQuestionText";
 import {
@@ -75,6 +79,7 @@ import {
 import type {
   AssessmentAttemptState,
   AssessmentRewardResult,
+  AssessmentStateResponse,
 } from "../../../lib/assessmentLifecycle";
 import {
   readStudentCurriculumTree,
@@ -82,6 +87,7 @@ import {
 } from "../../../lib/studentLessonReadCache";
 
 const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
+const OPERATION_LOADING_DELAY_MS = 600;
 
 interface Question {
   examRound?: string;
@@ -219,6 +225,12 @@ const QuizRunner: React.FC = () => {
   const initializationGenerationRef = useRef(0);
   const initializedScopeRef = useRef("");
   const { userData, config, currentUser } = useAuth();
+  const initialPreparationRef = useRef<{
+    scope: string;
+    owner: typeof currentUser;
+    generation: number;
+    state: Pick<AssessmentStateResponse, "status" | "preparedAssets">;
+  } | null>(null);
 
   const unitId = searchParams.get("unitId");
   const category = searchParams.get("category");
@@ -239,7 +251,7 @@ const QuizRunner: React.FC = () => {
 
   const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
-  const [historyCount, setHistoryCount] = useState(0);
+  const [historyCount, setHistoryCount] = useState<number | null>(null);
   const [activeSubmission, setActiveSubmission] =
     useState<QuizSubmissionDoc | null>(null);
   const [canonicalAttempt, setCanonicalAttemptState] =
@@ -299,6 +311,7 @@ const QuizRunner: React.FC = () => {
   } | null>(null);
   const [assessmentTitle, setAssessmentTitle] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
+  const [showOperationLoading, setShowOperationLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitConflict, setSubmitConflict] = useState(false);
   const [finalizedResultId, setFinalizedResultId] = useState("");
@@ -354,6 +367,7 @@ const QuizRunner: React.FC = () => {
     return () => {
       initializationGenerationRef.current += 1;
       preparationGenerationRef.current += 1;
+      initialPreparationRef.current = null;
       startingQuizRef.current = false;
       paperPreparationControllerRef.current?.abort();
       paperPreparationControllerRef.current = null;
@@ -361,6 +375,30 @@ const QuizRunner: React.FC = () => {
       paperAssetLoaderRef.current = null;
     };
   }, [assessmentDefinitionId, fallbackStudentUid]);
+
+  const operationPending = startingQuiz || finishSubmitting;
+  useEffect(() => {
+    setShowOperationLoading(false);
+    if (!operationPending) return;
+    const timer = window.setTimeout(
+      () => setShowOperationLoading(true),
+      OPERATION_LOADING_DELAY_MS,
+    );
+    // A focused paper control must not react behind the loading overlay.
+    // Keep browser shortcuts available while blocking page keyboard actions.
+    const blockKeyboard = (event: KeyboardEvent) => {
+      event.stopImmediatePropagation();
+      if (!event.ctrlKey && !event.metaKey && !event.altKey)
+        event.preventDefault();
+    };
+    window.addEventListener("keydown", blockKeyboard, true);
+    window.addEventListener("keyup", blockKeyboard, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", blockKeyboard, true);
+      window.removeEventListener("keyup", blockKeyboard, true);
+    };
+  }, [operationPending]);
 
   const preparePaperAssets = async (manifest: MockExamAssetManifest) => {
     const controller = new AbortController();
@@ -897,6 +935,7 @@ const QuizRunner: React.FC = () => {
     setScoreComparison(null);
     if (
       view !== "result" ||
+      isMockExamAttempt ||
       !finalizedResultId ||
       !fallbackStudentUid ||
       !canonicalAttempt?.definitionId ||
@@ -922,6 +961,7 @@ const QuizRunner: React.FC = () => {
     };
   }, [
     view,
+    isMockExamAttempt,
     finalizedResultId,
     fallbackStudentUid,
     canonicalAttempt?.definitionId,
@@ -1090,12 +1130,14 @@ const QuizRunner: React.FC = () => {
     const generation = ++initializationGenerationRef.current;
     const isCurrent = () => initializationGenerationRef.current === generation;
     initializedScopeRef.current = "";
+    initialPreparationRef.current = null;
 
     try {
       setView("loading");
       setOpenHintQuestionId(null);
       setErrorMsg(null);
       setBlockReason(null);
+      setHistoryCount(null);
       setResumeNotice("");
       setStartingQuiz(false);
       setAutomaticEntryInProgress(false);
@@ -1113,12 +1155,34 @@ const QuizRunner: React.FC = () => {
       telemetryRef.current = null;
       timeoutHandledRef.current = false;
 
-      const curriculumRead = readStudentCurriculumTree(config).then(
-        (tree) => ({ ok: true as const, tree }),
-        (error: unknown) => ({ ok: false as const, error }),
-      );
+      const curriculumRead = isMockExamAttempt
+        ? null
+        : readStudentCurriculumTree(config).then(
+            (tree) => ({ ok: true as const, tree }),
+            (error: unknown) => ({ ok: false as const, error }),
+          );
+      let preparationChecked = isMockExamAttempt;
       const assessmentState = await getAssessmentState({
         definitionId: assessmentDefinitionId,
+        ...(isMockExamAttempt ? { prepareAssets: true } : {}),
+      }).catch(async (error: unknown) => {
+        const failure = error as {
+          details?: { reason?: string };
+          customData?: { details?: { reason?: string } };
+        };
+        const reason =
+          failure?.details?.reason || failure?.customData?.details?.reason;
+        if (
+          !isMockExamAttempt ||
+          reason !== "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN"
+        )
+          throw error;
+        if (!isCurrent()) throw error;
+        // A closed paper may still contain an authorized recoverable attempt.
+        // Retain the ordinary state gates; this fallback does not authorize
+        // preparation or a new START and is never reused as a prepared state.
+        preparationChecked = false;
+        return getAssessmentState({ definitionId: assessmentDefinitionId });
       });
       if (!isCurrent()) return;
       if (!assessmentState.definition) {
@@ -1158,7 +1222,7 @@ const QuizRunner: React.FC = () => {
       curriculumLabelsRef.current = {};
       // Labels enrich the review only. A slow or unavailable curriculum read
       // must not block an authorized server paper or start its clock late.
-      void curriculumRead.then((result) => {
+      void curriculumRead?.then((result) => {
         if (isCurrent() && result.ok) visitLabels(result.tree);
       });
       const definition = assessmentState.definition;
@@ -1246,10 +1310,44 @@ const QuizRunner: React.FC = () => {
       setRevealedHints({});
       setTimeLeft(nextQuizConfig.timeLimit || 60);
       initializedScopeRef.current = `${fallbackStudentUid}:${assessmentDefinitionId}`;
+      if (preparationChecked) {
+        initialPreparationRef.current = {
+          scope: initializedScopeRef.current,
+          owner: currentUser,
+          generation,
+          state: {
+            status: assessmentState.status,
+            preparedAssets: assessmentState.preparedAssets,
+          },
+        };
+      }
       setView("intro");
     } catch (error) {
       if (!isCurrent()) return;
-      setErrorMsg(getQuizEntryErrorMessage(error));
+      const failure = error as {
+        details?: { reason?: string; requiredRound?: string };
+        customData?: {
+          details?: {
+            reason?: string;
+            requiredRound?: string;
+          };
+        };
+      };
+      const details = failure?.details || failure?.customData?.details;
+      if (details?.reason === "ASSESSMENT_PREREQUISITE_REQUIRED") {
+        setBlockReason(
+          `${formatMockExamRoundShortLabel(details.requiredRound || "round_1")}를 제출한 뒤 응시할 수 있습니다.`,
+        );
+      } else if (details?.reason === "ASSESSMENT_ATTEMPT_LIMIT_REACHED") {
+        setBlockReason("응시 가능 횟수를 모두 사용했습니다.");
+      } else if (
+        details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN" ||
+        details?.reason === "ASSESSMENT_COOLDOWN_ACTIVE"
+      ) {
+        setBlockReason(getQuizEntryErrorMessage(error));
+      } else {
+        setErrorMsg(getQuizEntryErrorMessage(error));
+      }
       setView("intro");
     }
   };
@@ -1314,10 +1412,20 @@ const QuizRunner: React.FC = () => {
       const startPreparedAttempt = async () => {
         let preparedSourceHash: string | undefined;
         if (isMockExamAttempt) {
-          const prepared = await getAssessmentState({
-            definitionId: assessmentDefinitionId,
-            prepareAssets: true,
-          });
+          const initial = initialPreparationRef.current;
+          // Consume once: every explicit retry and stale-source retry must
+          // recheck the server instead of reusing an earlier authorization.
+          initialPreparationRef.current = null;
+          const prepared =
+            initial?.scope ===
+              `${fallbackStudentUid}:${assessmentDefinitionId}` &&
+            initial.owner === currentUser &&
+            initial.generation === initializationGenerationRef.current
+              ? initial.state
+              : await getAssessmentState({
+                  definitionId: assessmentDefinitionId,
+                  prepareAssets: true,
+                });
           assertCurrent();
           if (
             !["READY", "RECOVERABLE", "SUBMITTED"].includes(prepared.status)
@@ -1685,6 +1793,13 @@ const QuizRunner: React.FC = () => {
       ),
     [activeSubmission?.timeLimitSeconds, quizConfig?.timeLimit],
   );
+  const operationLoadingOverlay =
+    showOperationLoading && operationPending
+      ? createPortal(
+          <LoadingOverlay zIndexClassName="z-[1400]" />,
+          document.body,
+        )
+      : null;
 
   if (
     view === "loading" ||
@@ -1726,6 +1841,7 @@ const QuizRunner: React.FC = () => {
 
     return (
       <div className="student-quiz-intro mx-auto flex min-h-0 w-full max-w-5xl flex-1 animate-fadeIn items-center px-4 py-2 lg:py-3">
+        {operationLoadingOverlay}
         <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
           <div className="grid md:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
             <section className="p-4 text-left sm:p-6 lg:p-7">
@@ -1782,7 +1898,7 @@ const QuizRunner: React.FC = () => {
                     응시 횟수
                   </dt>
                   <dd className="mt-1 text-lg font-black text-slate-900 sm:text-xl">
-                    {historyCount}회
+                    {historyCount === null ? "—" : `${historyCount}회`}
                   </dd>
                 </div>
               </dl>
@@ -1873,34 +1989,37 @@ const QuizRunner: React.FC = () => {
 
     if (isMockExamAttempt) {
       return (
-        <MockExamWorkspace
-          questions={selectedQuestions}
-          paperHeader={
-            canonicalAttempt
-              ? canonicalAttempt.paperHeader || {}
-              : quizConfig?.paperHeader
-          }
-          answers={answers}
-          round={examRound}
-          studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
-          currentIndex={currentIndex}
-          onSelect={(index) => void goToQuestion(index)}
-          onAnswer={handleAnswer}
-          onSubmit={() => {
-            if (submitError && !submitConflict)
-              void finishQuiz(timeoutHandledRef.current);
-            else void nextQuestion(true);
-          }}
-          submitting={finishSubmitting}
-          submitError={submitError}
-          submitConflict={submitConflict}
-          timeLeft={timeLeft}
-          saveStatus={saveStatus}
-          onSaveRetry={() => void persistQuizProgress()}
-          orderOptions={orderOptionMap}
-          onImageReady={finishImageLoad}
-          answeredCount={selectedQuestions.filter(isQuestionAnswered).length}
-        />
+        <>
+          {operationLoadingOverlay}
+          <MockExamWorkspace
+            questions={selectedQuestions}
+            paperHeader={
+              canonicalAttempt
+                ? canonicalAttempt.paperHeader || {}
+                : quizConfig?.paperHeader
+            }
+            answers={answers}
+            round={examRound}
+            studentLabel={`${buildGradeClassLabel(userData)}　이름: ${normalizeStudentText(userData?.name)}`}
+            currentIndex={currentIndex}
+            onSelect={(index) => void goToQuestion(index)}
+            onAnswer={handleAnswer}
+            onSubmit={() => {
+              if (submitError && !submitConflict)
+                void finishQuiz(timeoutHandledRef.current);
+              else void nextQuestion(true);
+            }}
+            submitting={finishSubmitting}
+            submitError={submitError}
+            submitConflict={submitConflict}
+            timeLeft={timeLeft}
+            saveStatus={saveStatus}
+            onSaveRetry={() => void persistQuizProgress()}
+            orderOptions={orderOptionMap}
+            onImageReady={finishImageLoad}
+            answeredCount={selectedQuestions.filter(isQuestionAnswered).length}
+          />
+        </>
       );
     }
 
@@ -1946,6 +2065,7 @@ const QuizRunner: React.FC = () => {
         data-quiz-content-protected
         className="student-quiz-runner student-quiz-learning"
       >
+        {operationLoadingOverlay}
         <header className="student-quiz-topbar">
           <p
             className="student-quiz-context-title"

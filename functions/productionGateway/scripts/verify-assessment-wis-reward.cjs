@@ -82,10 +82,10 @@ const attemptFor = (kind = "QUIZ", key = "one") => ({
   gradingSnapshot: [{ id: "one", answer: "a" }, { id: "two", answer: "b" }], sourceHash: hash("source"),
   deadlineAtIso: "2026-09-12T01:00:00.000Z", startedAtIso: "2026-09-12T00:00:00.000Z",
 });
-function harness() {
+function harness(rewardAdapter = rewards) {
   const store = new Store(seed()); let nowMs = Date.parse("2026-09-12T00:10:00.000Z");
   const timestamp = () => ({ seconds: Math.floor(nowMs / 1000), nanoseconds: 0 });
-  const adapter = assessment.createAssessmentCommandAdapter({ now: () => new Date(nowMs), wisRewards: rewards });
+  const adapter = assessment.createAssessmentCommandAdapter({ now: () => new Date(nowMs), wisRewards: rewardAdapter });
   const core = gateway.createCommandGatewayCore({ store, projectId: "demo-assessment-wis", serverTimestamp: timestamp, concreteTimestamp: timestamp,
     assertSession: async request => ({ uid: request.auth.uid, email: "student@example.test", sessionId: "session-one", schemaVersion: 2, revision: 1, expiresAtMs: nowMs + 3600000 }),
     authorizeCommand: async ({ request }) => ({ actorUid: request.auth.uid, actorRole: request.auth.uid === "teacher-one" ? "teacher" : "student", actorCapability: "test" }),
@@ -105,6 +105,56 @@ async function rejectsNoWrites(h, run, reason) {
   assert.equal(JSON.stringify([...h.store.documents]), before, "no partial result/reward/receipt");
 }
 (async () => {
+  await test("reward enrollment class and policy reads overlap before any writes", async () => {
+    const h = harness(), attempt = h.add();
+    const original = h.store.runTransaction.bind(h.store), started = new Set();
+    const independent = new Set(["semester_enrollments/enrollment-one", "semester_classes/class_one", policyPath]);
+    h.store.runTransaction = run => original(transaction => run({ ...transaction, get: async path => {
+      if (independent.has(path)) {
+        started.add(path);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(started.size, 3, "All independent reads start before waiting for any one");
+      }
+      return transaction.get(path);
+    } }));
+    const result = await h.submit(attempt);
+    assert.equal(result.result.reward.totalAwarded, 10);
+    assert.equal(h.ledgers().length, 1);
+  });
+  await test("parallel policy or class failure cannot mask earlier validation", async () => {
+    const policyFailure = new Error("synthetic policy transport failure");
+    const rejectedPolicy = wis.createAssessmentWisRewardAdapter({ loadPolicy: async () => { throw policyFailure; },
+      resolveActivityReward: policyRuntime.resolveActivityReward });
+    for (const [change, reason] of [
+      [docs => docs.get("semester_enrollments/enrollment-one").classId = "class_other", "ASSESSMENT_WIS_ENROLLMENT_CHANGED"],
+      [docs => docs.get("semester_classes/class_one").status = "INACTIVE", "ASSESSMENT_WIS_CLASS_INACTIVE"],
+      [docs => docs.get(economyPath).status = "CLOSED", "ASSESSMENT_WIS_ECONOMY_CLOSED"],
+      [docs => docs.delete(accountPath), "ASSESSMENT_WIS_ACCOUNT_INVALID"],
+    ]) {
+      const h = harness(rejectedPolicy), attempt = h.add(); change(h.store.documents);
+      await rejectsNoWrites(h, () => h.submit(attempt), reason);
+    }
+    const valid = harness(rejectedPolicy), attempt = valid.add();
+    const before = JSON.stringify([...valid.store.documents]);
+    await assert.rejects(valid.submit(attempt), error => error === policyFailure);
+    assert.equal(JSON.stringify([...valid.store.documents]), before);
+    const moved = harness(), movedAttempt = moved.add(), original = moved.store.runTransaction.bind(moved.store);
+    moved.store.documents.get("semester_enrollments/enrollment-one").classId = "class_other";
+    moved.store.runTransaction = run => original(transaction => run({ ...transaction, get: async path => {
+      if (path === "semester_classes/class_one") throw new Error("synthetic class transport failure");
+      return transaction.get(path);
+    } }));
+    await rejectsNoWrites(moved, () => moved.submit(movedAttempt), "ASSESSMENT_WIS_ENROLLMENT_CHANGED");
+  });
+  await test("unusual legacy class IDs preserve sequential validation", async () => {
+    let policyCalls = 0;
+    const custom = wis.createAssessmentWisRewardAdapter({ loadPolicy: async () => { policyCalls++; throw new Error("policy must not run"); },
+      resolveActivityReward: policyRuntime.resolveActivityReward });
+    const h = harness(custom), attempt = h.add();
+    h.store.documents.get(`semester_assessment_attempts/${attempt.attemptId}`).classId = "invalid/class";
+    await rejectsNoWrites(h, () => h.submit(attempt), "ASSESSMENT_WIS_ENROLLMENT_CHANGED");
+    assert.equal(policyCalls, 0);
+  });
   for (const kind of ["QUIZ", "HISTORY_CLASSROOM"]) {
     for (const reason of ["STUDENT", "TIMEOUT"]) await test(kind + " " + reason + " zero score retains legacy base policy", async () => {
       const h = harness(), attempt = h.add(kind); if (reason === "TIMEOUT") h.setNow(Date.parse(attempt.deadlineAtIso) + 1);

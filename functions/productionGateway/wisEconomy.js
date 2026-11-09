@@ -1369,6 +1369,11 @@ const createAssessmentWisRewardAdapter = ({ loadPolicy, resolveActivityReward } 
   const rewardFailure = (reason, message = "평가 보상 계좌를 확인하지 못했습니다. 제출 내용을 유지한 채 다시 시도해 주세요.") =>
     fail("failed-precondition", message, `ASSESSMENT_WIS_${reason}`);
   const safe = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
+  const canonicalDocumentId = value => typeof value === "string" && /^[A-Za-z0-9_-]{1,180}$/.test(value);
+  const settledValue = result => {
+    if (result.status === "rejected") throw result.reason;
+    return result.value;
+  };
   const emptyReward = (status, blockedReason, blockedMessage, extra = {}) => ({
     status, awarded: false, duplicate: status === "DUPLICATE", amount: 0,
     bonusAwarded: false, bonusAmount: 0, totalAwarded: 0,
@@ -1399,13 +1404,24 @@ const createAssessmentWisRewardAdapter = ({ loadPolicy, resolveActivityReward } 
       if (!slotDoc.exists || slotDoc.data?.semesterId !== scope || slotDoc.data?.studentUid !== uid ||
           (slotDoc.data.status !== undefined && slotDoc.data.status !== "ACTIVE") || !slotDoc.data.activeEnrollmentId)
         rewardFailure("ENROLLMENT_INVALID");
-      const enrollmentDoc = await transaction.get(enrollmentPath(slotDoc.data.activeEnrollmentId));
+      // These reads use server-owned IDs and are independent. Keep their errors
+      // until the original validation step so an early policy/class failure
+      // cannot mask an enrollment or account rejection. Unusual legacy IDs use
+      // the original sequential path without constructing speculative paths.
+      const parallelReads = canonicalDocumentId(slotDoc.data.activeEnrollmentId) && canonicalDocumentId(attempt.classId)
+        ? await Promise.allSettled([
+          Promise.resolve().then(() => transaction.get(enrollmentPath(slotDoc.data.activeEnrollmentId))),
+          Promise.resolve().then(() => transaction.get(classPath(attempt.classId))),
+          Promise.resolve().then(() => loadPolicy(transaction, scope)),
+        ]) : null;
+      const enrollmentDoc = parallelReads ? settledValue(parallelReads[0])
+        : await transaction.get(enrollmentPath(slotDoc.data.activeEnrollmentId));
       const enrollment = enrollmentDoc.data || {};
       if (!enrollmentDoc.exists || enrollment.enrollmentId !== slotDoc.data.activeEnrollmentId || enrollment.semesterId !== scope ||
           enrollment.studentUid !== uid || enrollment.enrollmentStatus !== "ACTIVE" || enrollment.readOnly === true ||
           enrollment.enrollmentId !== attempt.enrollmentId || enrollment.classId !== attempt.classId)
         rewardFailure("ENROLLMENT_CHANGED");
-      const classDoc = await transaction.get(classPath(enrollment.classId));
+      const classDoc = parallelReads ? settledValue(parallelReads[1]) : await transaction.get(classPath(enrollment.classId));
       if (!classDoc.exists || classDoc.data?.semesterId !== scope || classDoc.data.status !== "ACTIVE" || classDoc.data.readOnly === true) rewardFailure("CLASS_INACTIVE");
       if (!economyDoc.exists || economy.semesterId !== scope || economy.status !== "ACTIVE_OPEN" || economy.readOnly === true ||
           !safe(economy.revision, 1) || !safe(economy.ledgerEntryCount)) rewardFailure("ECONOMY_CLOSED");
@@ -1415,7 +1431,7 @@ const createAssessmentWisRewardAdapter = ({ loadPolicy, resolveActivityReward } 
           !safe(account.revision, 1) || !["balance", "earnedTotal", "rankEarnedTotal", "spentTotal"].every(key => safe(account[key])) ||
           !Number.isSafeInteger(account.adjustedTotal) || !Array.isArray(account.recentLedgerEntries)) rewardFailure("ACCOUNT_INVALID");
 
-      const policy = await loadPolicy(transaction, scope);
+      const policy = parallelReads ? settledValue(parallelReads[2]) : await loadPolicy(transaction, scope);
       const sourceId = `assessment:${attempt.attemptId}`;
       const plan = resolveActivityReward({ policy, activityType, sourceId,
         sourceLabel: activityType === "quiz" ? "문제 풀이" : "역사교실 제출 완료", score: percent });

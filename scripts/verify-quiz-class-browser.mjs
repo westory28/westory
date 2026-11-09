@@ -63,6 +63,36 @@ try{
  await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
  await page.goto(origin);await page.locator('optgroup[label="Ⅳ. 조선의 성립과 발전"]').waitFor({state:'attached'});
  assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.map(c=>c.mode)),['catalog']);
+ if(process.argv.includes('--loading-only')){
+   const select=async()=>{
+     await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');
+     await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
+   };
+   const release=()=>page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
+   await select();await page.evaluate(()=>window.quizClassQa.hold=true);
+   await page.getByRole('button',{name:'결과 조회',exact:true}).click();
+   await page.getByRole('status',{name:'처리 중',exact:true}).waitFor();
+   await release();await page.getByRole('heading',{name:'학급 결과',exact:true}).waitFor();
+   await page.evaluate(()=>window.quizClassQa.hold=true);
+   await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
+   const status=page.getByRole('status',{name:'처리 중',exact:true});await status.waitFor();
+   for(const width of [390,768,1280]){
+     await page.setViewportSize({width,height:900});await status.scrollIntoViewIfNeeded();
+     assert(await status.isVisible());assert(await page.getByRole('button',{name:'조회 전체 초기화',exact:true}).isEnabled());
+     await page.screenshot({path:path.join(evidence,`detail-loading-${width}.png`),fullPage:true});screenshots.push(`detail-loading-${width}.png`);
+   }
+   await page.getByRole('button',{name:'조회 전체 초기화',exact:true}).click();
+   await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
+   await release();assert.equal(await page.getByRole('dialog').count(),0);
+   await select();await page.getByRole('button',{name:'결과 조회',exact:true}).click();
+   await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
+   const dialog=page.getByRole('dialog',{name:'3학년 1반 · 문항·학생 상세',exact:true});await dialog.waitFor();
+   await page.evaluate(()=>window.quizClassQa.hold=true);
+   await dialog.getByRole('button',{name:'새로고침',exact:true}).click();await dialog.getByRole('status',{name:'처리 중',exact:true}).first().waitFor();
+   await dialog.getByRole('button',{name:'상세 닫기',exact:true}).click();await release();assert.equal(await page.getByRole('dialog').count(),0);
+   assert.deepEqual(errors,[]);console.log('PASS focused class loading: summary/detail progress, visible row loading at 390/768/1280, reset while pending, modal refresh/close and late response discard');
+ } else {
+
 
  await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),1);
@@ -101,7 +131,7 @@ try{
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.at(-1).mode),'detail');assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.at(-1).classIds),['class_1']);
  const detail=page.getByRole('dialog',{name:'3학년 1반 · 문항·학생 상세',exact:true});
  assert.equal(await page.evaluate(()=>document.querySelector('dialog[open]').contains(document.activeElement)),true,'modal takes focus');
- for(const width of [390,768,1280]){await page.setViewportSize({width,height:768});await page.screenshot({path:path.join(evidence,`detail-${width}.png`),fullPage:true});screenshots.push(`detail-${width}.png`);assert.equal(await detail.getByRole('columnheader',{name:'핵심 개념',exact:true}).isVisible(),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`detail overflow ${width}`);}
+ for(const width of [390,768,1280]){await page.setViewportSize({width,height:768});await page.screenshot({path:path.join(evidence,`detail-${width}.png`),fullPage:true});screenshots.push(`detail-${width}.png`);assert.equal(await detail.getByRole('columnheader',{name:'핵심 개념 오름차순 정렬',exact:true}).isVisible(),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`detail overflow ${width}`);}
  await detail.getByRole('button',{name:'학생',exact:true}).click();await detail.getByRole('button',{name:'3학년 1반 1번 가상학생',exact:true}).waitFor();
  await page.getByRole('button',{name:'상세 닫기',exact:true}).click();
  const beforeSearch=await page.evaluate(()=>window.quizClassQa.calls.length);
@@ -117,13 +147,13 @@ try{
  await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
  await detail.waitFor();assert.equal(await page.evaluate(()=>window.quizClassQa.calls.at(-1).keyword),'광해군');
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.at(-1).comparisonGrade),undefined,'grade detail must not be requested');
- await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
+ await detail.getByRole('button',{name:'상세 닫기',exact:true}).focus();await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
  assert.ok((await page.evaluate(()=>document.activeElement.getAttribute('aria-label'))).includes('문항·학생 상세'),'focus returns');
  await page.getByRole('button',{name:'검색 해제',exact:true}).click();
  await page.evaluate(()=>window.quizClassQa.fail=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('alert').waitFor();
  await page.getByRole('button',{name:'다시 조회',exact:true}).click();await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).waitFor();
  await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_3');await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
- await page.getByText('평가와 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
+ await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).count(),0);
  await page.reload();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
  await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
@@ -194,7 +224,7 @@ try{
    if(category==='repeated_choice')assert.ok((await evidencePanel.innerText()).includes('2번 보기 · 25/25문항 (100%)'));
  }
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),beforeFilters,'student filters stay local');
- await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
+ await detail.getByRole('button',{name:'상세 닫기',exact:true}).focus();await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
  assert.equal(await classifyButton.evaluate(button=>document.activeElement===button),true,'classification drilldown restores count trigger');
  await page.getByRole('button',{name:'학급 비교',exact:true}).click();await page.getByRole('checkbox',{name:'3학년 전체 평균',exact:true}).check();await page.getByRole('button',{name:'선택 완료',exact:true}).click();
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();await behaviorTable.getByRole('rowheader',{name:'3학년 전체',exact:true}).waitFor();
@@ -210,7 +240,7 @@ try{
  const resetButton=page.getByRole('button',{name:'조회 전체 초기화',exact:true});
  const beforeReset=await page.evaluate(()=>window.quizClassQa.calls.length);
  await resetButton.click();
- const waiting=page.getByText('평가와 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true});
+ const waiting=page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true});
  await waiting.waitFor();
  for(const name of ['분석할 평가','분석할 학급'])
    assert.equal(await page.getByRole('combobox',{name,exact:true}).inputValue(),'');
@@ -234,6 +264,13 @@ try{
    await page.getByRole('button',{name:mode==='summary'?'결과 조회':'문항·학생 상세 3학년 1반',exact:true}).click();
    await page.waitForFunction(expected=>window.quizClassQa.calls.at(-1).mode===expected,mode);
    const pendingCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
+   await page.getByRole('status',{name:'처리 중',exact:true}).waitFor();
+   if(mode==='detail'){
+     const status=page.getByRole('status',{name:'처리 중',exact:true});
+     await status.scrollIntoViewIfNeeded();
+     assert(await status.isVisible(),'Detail loading stays beside its selected row without blocking reset');
+     await page.screenshot({path:path.join(evidence,'detail-loading-1280.png'),fullPage:true});screenshots.push('detail-loading-1280.png');
+   }
    await resetButton.click();await waiting.waitFor();
    await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
    await page.waitForTimeout(100);
@@ -244,4 +281,5 @@ try{
  await page.screenshot({path:path.join(evidence,'reset-waiting-1280.png'),fullPage:true});screenshots.push('reset-waiting-1280.png');
  assert.deepEqual(errors,[]);
  console.log('PASS catalog-only entry, class/grade comparison, explicit search, modal/focus/Escape, errors/retry, stale response discard, 320–1440px layouts, behavior filters, all-query reset without reads, cleared units/search/comparison and late summary/detail discard');
+}
 }finally{await browser.close();server.close();await fs.writeFile(path.join(evidence,'result.json'),JSON.stringify({errors,screenshots},null,2));console.log(evidence);}
