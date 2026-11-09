@@ -451,6 +451,66 @@ test('cumulative point recovery refuses a foreign or mismatched attempt and neve
   }
 });
 
+test('achievement interns over 32 MiB of repeated frozen papers in ten-result batches without changing each original', async context => {
+  const f = memory(gradeExamFixture()), getAll = f.db.getAll, batches = [], decodeCounts = new Map();
+  f.db.getAll = async (...args) => {
+    const paperBodies = args.at(-1)?.fieldMask?.includes('questionSnapshots');
+    if (paperBodies) batches.push(args.length - 1);
+    const docs = await getAll(...args);
+    return paperBodies ? docs.map(doc => ({ ...doc, data() {
+      decodeCounts.set(doc.id, (decodeCounts.get(doc.id) || 0) + 1);
+      return doc.data();
+    } })) : docs;
+  };
+  for (const key of [...f.data.keys()]) if (key.startsWith('semester_assessment_results/exam_')) f.data.delete(key);
+  const firstImage = 'a'.repeat(450 * 1024), secondImage = 'b'.repeat(450 * 1024);
+  for (let index = 0; index < 80; index++) {
+    const changed = index === 1, targetAchievementLevel = changed ? 'E' : 'A';
+    f.data.set(`semester_assessment_results/large_${index}`, { assessmentKind: 'QUIZ', semesterId: SCOPE,
+      studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', sourceHash: 'a'.repeat(64),
+      attemptId: `large_${index}`, total: 1, percent: index ? 100 : 60, maxPoints: 100, earnedPoints: index ? 100 : 60,
+      submittedAtIso: new Date(Date.UTC(2026, 10, 1, 0, index)).toISOString(), answers: { 91: index ? '나' : '가' },
+      answerChecks: [{ id: '91', correct: index > 0 }], questionSnapshotOmittedIds: [],
+      learningSnapshot: [{ id: '91', sourceRevision: '1', targetAchievementLevel }],
+      questionSnapshots: [{ id: '91', type: 'choice', question: changed ? '다른 발문' : '당시 발문', answer: '가',
+        options: ['가', '나'], points: 100, targetAchievementLevel, image: changed ? secondImage : firstImage }] });
+  }
+  const service = createQuizClassAnalysisService({ db: f.db }), budget = { documents: 0, bytes: 0 };
+  const rows = await service.loadResults(gradeExamQuery(), [{ uid: 'a' }], true, budget, true);
+  assert.equal(rows.length, 80);
+  assert.ok(budget.resultReadBytes > 32 * 1024 * 1024);
+  assert.ok(budget.bytes < 2 * 1024 * 1024, 'retained unique contents stay within the unchanged limits');
+  assert.ok(batches.length === 8 && batches.every(size => size === 10));
+  assert.equal(decodeCounts.size, 80);
+  assert.ok([...decodeCounts.values()].every(count => count === 1), 'full result bodies decode only once, including scope verification');
+  assert.equal(rows.find(row => row.id === 'large_0').raw.questionSnapshots[0], rows.find(row => row.id === 'large_2').raw.questionSnapshots[0]);
+  assert.notEqual(rows.find(row => row.id === 'large_0').raw.questionSnapshots[0], rows.find(row => row.id === 'large_1').raw.questionSnapshots[0]);
+  const result = await service.query(gradeExamQuery());
+  assert.equal(Object.keys(result.historicalQuestionSnapshots).length, 2);
+  assert.ok(Buffer.byteLength(JSON.stringify(result)) < 8 * 1024 * 1024);
+  for (const row of result.rawRows) {
+    const original = f.data.get(`semester_assessment_results/${row.id}`);
+    assert.deepEqual(row.raw.questionSnapshotRefs.map(ref => result.historicalQuestionSnapshots[ref]), original.questionSnapshots);
+    assert.deepEqual(row.raw.answers, original.answers);
+    const score = result.mockExamScoreRows.find(scoreRow => scoreRow.id === row.id);
+    assert.deepEqual(score.raw.cutScoreQuestions, [{ id: '91', points: 100, targetAchievementLevel: original.learningSnapshot[0].targetAchievementLevel }]);
+  }
+  assert.equal(result.mockExamScoreRows.find(row => row.id === 'large_0').raw.percent, 60);
+  assert.deepEqual(f.writes, []);
+  context.diagnostic(`Frozen paper reads: ${budget.resultReadBytes} physical bytes, ${budget.bytes} retained bytes; full contents and original scores preserved.`);
+});
+
+test('achievement still rejects more than 32 MiB of distinct frozen paper contents', async () => {
+  const f = memory(), image = 'x'.repeat(450 * 1024);
+  for (let index = 0; index < 80; index++) f.data.set(`semester_assessment_results/unique_${index}`, {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    sourceHash: 'a'.repeat(64), questionSnapshots: [{ id: '91', type: 'choice', question: `원문 ${index}`, answer: '가', image }],
+  });
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), [{ uid: 'a' }], true,
+    { documents: 0, bytes: 0 }, true), error => error.details?.reason === 'QUIZ_ANALYSIS_BYTE_LIMIT');
+  assert.deepEqual(f.writes, []);
+});
+
 test('scope-only compatibility reads fail closed when a result disappears or changes before its body read', async () => {
   for (const changed of ['missing', 'round']) {
     const f = memory(gradeExamFixture()), getAll = f.db.getAll;

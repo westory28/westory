@@ -7,7 +7,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
-const { historicalQuestionEvidence, packHistoricalQuestionSnapshots } = require('./quizAchievementEvidence');
+const { historicalQuestionEvidence, packHistoricalQuestionSnapshots, createHistoricalQuestionSnapshotPool } = require('./quizAchievementEvidence');
 
 const SCHEMA = 4;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -286,6 +286,9 @@ function selectClasses(classes, input) {
 }
 
 function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
+  // Weak keys reuse digests while this request's interned snapshots are alive;
+  // they never retain pupil records or become a cross-request content cache.
+  const historicalSnapshotHashes = new WeakMap();
   const inFlight = new Map();
   const serial = (key, build) => {
     if (!inFlight.has(key)) inFlight.set(key, Promise.resolve().then(build).finally(() => inFlight.delete(key)));
@@ -511,6 +514,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   };
   const loadResults = async (query, students, detail = false, budget, cumulativeMockExams = false) => {
     const rows = new Map(), candidates = new Map(), jobs = [];
+    const snapshotPool = cumulativeMockExams ? createHistoricalQuestionSnapshotPool(historicalSnapshotHashes) : null;
     const uids = [...new Set(students.map(student => student.uid))];
     const emails = [...new Set(students.map(student => student.email).filter(Boolean))];
     const uidSet = new Set(uids), emailSet = new Set(emails);
@@ -528,8 +532,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       return query.keyword || (text(data.sourceId || data.unitId || parts[2]) === query.unitId && category === query.category
         && (round === query.examRound || (cumulativeMockExams && Number(round.slice(6)) <= Number(query.examRound.slice(6)))));
     };
-    const add = (doc, source) => {
-      const data = doc.data(), raw = json(data);
+    const add = (doc, source, normalizedRaw, decodedData) => {
+      const data = decodedData || doc.data(), raw = normalizedRaw || json(data);
       raw.behaviorAnswersAvailable = source === 'canonical' && !!data.answers
         && typeof data.answers === 'object' && !Array.isArray(data.answers);
       if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
@@ -612,24 +616,36 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       ? [{ entries: pending.filter(isSelectedRound), fields },
         { entries: pending.filter(candidate => !isSelectedRound(candidate)), fields: SCORE_FIELDS }]
       : [{ entries: pending, fields }];
-    for (const group of groups) for (let offset = 0; offset < group.entries.length; offset += 100) {
-      const batch = group.entries.slice(offset, offset + 100);
-      const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: group.fields });
-      for (let i = 0; i < docs.length; i++) {
-        const doc = docs[i], candidate = batch[i];
-        if (!doc.exists || !matches(doc.data(), candidate.source)
-          || RESULT_SCOPE_FIELDS.some(field => Object.hasOwn(doc.data(), field) !== Object.hasOwn(candidate.scope, field)
-            || JSON.stringify(json(doc.data()[field])) !== JSON.stringify(candidate.scope[field])))
-          fail('aborted', '조회 중 평가 기록이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
-        const bytes = Buffer.byteLength(JSON.stringify(doc.data()));
-        bodyBytes += bytes;
-        if (budget) {
-          budget.documents++; budget.bytes += bytes;
-          if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
-            fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+    for (const group of groups) {
+      // A submitted paper may carry hundreds of KiB of frozen images. Never
+      // materialize a whole grade's repeated copies in one getAll response.
+      const batchSize = snapshotPool && group.fields.includes('questionSnapshots') ? 10 : 100;
+      for (let offset = 0; offset < group.entries.length; offset += batchSize) {
+        const batch = group.entries.slice(offset, offset + batchSize);
+        const docs = await db.getAll(...batch.map(candidate => db.doc(candidate.path)), { fieldMask: group.fields });
+        for (let i = 0; i < docs.length; i++) {
+          const doc = docs[i], candidate = batch[i];
+          // Firestore data() decodes every field on each call, including images.
+          const data = doc.exists ? doc.data() : null;
+          if (!data || !matches(data, candidate.source)
+            || RESULT_SCOPE_FIELDS.some(field => Object.hasOwn(data, field) !== Object.hasOwn(candidate.scope, field)
+              || JSON.stringify(json(data[field])) !== JSON.stringify(candidate.scope[field])))
+            fail('aborted', '조회 중 평가 기록이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+          const compact = snapshotPool?.intern(data, json);
+          const bytes = compact?.retainedBytes ?? Buffer.byteLength(JSON.stringify(data));
+          bodyBytes += bytes;
+          if (budget) {
+            budget.documents++; budget.bytes += bytes;
+            // Physical reads remain observable internally, but the existing byte
+            // limits bound retained data after exact content interning. Document
+            // limits and the small read batches still bound the query workload.
+            if (compact) budget.resultReadBytes = (budget.resultReadBytes || 0) + compact.readBytes;
+            if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
+              fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
+          }
+          if (bodyBytes > MAX_BYTES * 4) fail('resource-exhausted', '평가 기록의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
+          add(doc, candidate.source, compact?.raw, data);
         }
-        if (bodyBytes > MAX_BYTES * 4) fail('resource-exhausted', '평가 기록의 자료 크기가 조회 한도를 초과했습니다.', 'QUIZ_ANALYSIS_BYTE_LIMIT');
-        add(doc, candidate.source);
       }
     }
     return [...rows.values()];
@@ -714,7 +730,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       for (const row of rawRows.filter(row => row.source === 'canonical')) {
         const metadata = new Map((row.raw.learningSnapshot || []).map(item => [text(item.id), item]));
         for (const item of row.raw.answerChecks || []) {
-          const itemId = text(item.id), historical = historicalQuestionEvidence(row.raw, itemId);
+          const itemId = text(item.id), historical = historicalQuestionEvidence(row.raw, itemId, historicalSnapshotHashes);
           if (historical?.revisionBasis !== 'frozen-snapshot') continue;
           const source = historical.metadata;
           metadata.set(itemId, { ...(metadata.get(itemId) || {}), id: itemId,
@@ -744,7 +760,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         });
       }
       const mockExamScoreRows = await buildMockExamScoreRows(allRows, students, input, budget);
-      const packed = packHistoricalQuestionSnapshots(rawRows);
+      const packed = packHistoricalQuestionSnapshots(rawRows, historicalSnapshotHashes);
       const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
         version, complete: true, mockExamScoreRows,

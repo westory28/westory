@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { normalizeAchievementMetadata } = require('../historyAchievementMetadata');
-const { historicalQuestionEvidence, packHistoricalQuestionSnapshots } = require('../quizAchievementEvidence');
+const { historicalQuestionEvidence, packHistoricalQuestionSnapshots, createHistoricalQuestionSnapshotPool } = require('../quizAchievementEvidence');
 const { normalizeProfilePayload, applyProfile } = require('../achievementProfiles');
 const code = '9역07-01';
 const metadata = { curriculumVersion: '2018-162', achievementStandardCodes: [code],
@@ -48,4 +48,26 @@ test('historical mock metadata remains bound to frozen presentation, never curre
   assert.equal(result.revisionBasis, 'frozen-snapshot');
   delete raw.questionSnapshots[0].answer;
   assert.equal(historicalQuestionEvidence(raw, '1'), null);
+});
+
+test('snapshot interning preserves complete content, row order and omissions despite identical source hashes', () => {
+  const hashes = new WeakMap(), pool = createHistoricalQuestionSnapshotPool(hashes);
+  const original = { id: '1', type: 'choice', question: '당시 발문', answer: '가', options: ['가', '나'],
+    image: 'first-image', points: 3, targetAchievementLevel: 'A', intendedDifficulty: 'hard' };
+  const changed = { ...original, question: '다른 발문', image: 'second-image', targetAchievementLevel: 'E', intendedDifficulty: 'easy' };
+  const rows = [original, changed, original].map((snapshot, index) => ({ id: String(index), source: 'canonical',
+    raw: { sourceHash: 'a'.repeat(64), answers: { 1: index ? '나' : '가' }, questionSnapshotOmittedIds: ['2'],
+      questionSnapshots: [structuredClone(snapshot)] } }));
+  const retained = rows.map(row => ({ ...row, raw: pool.intern(row.raw).raw }));
+  assert.equal(retained[0].raw.questionSnapshots[0], retained[2].raw.questionSnapshots[0]);
+  assert.notEqual(retained[0].raw.questionSnapshots[0], retained[1].raw.questionSnapshots[0]);
+  const packed = packHistoricalQuestionSnapshots(retained, hashes);
+  assert.equal(Object.keys(packed.historicalQuestionSnapshots).length, 2);
+  for (let index = 0; index < rows.length; index++) {
+    assert.deepEqual(packed.rawRows[index].raw.questionSnapshotRefs.map(ref => packed.historicalQuestionSnapshots[ref]), rows[index].raw.questionSnapshots);
+    assert.deepEqual(packed.rawRows[index].raw.questionSnapshotOmittedIds, ['2']);
+    assert.deepEqual(packed.rawRows[index].raw.answers, rows[index].raw.answers);
+    assert.equal(historicalQuestionEvidence(retained[index].raw, '1', hashes).sourceRevision,
+      historicalQuestionEvidence(rows[index].raw, '1').sourceRevision);
+  }
 });
