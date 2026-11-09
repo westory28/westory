@@ -511,6 +511,25 @@ test('achievement still rejects more than 32 MiB of distinct frozen paper conten
   assert.deepEqual(f.writes, []);
 });
 
+test('achievement rejects over 256 MiB of cumulative original processing even when every image is identical', async () => {
+  const f = memory(), budget = { documents: 0, bytes: 0 };
+  // Keep one shared synthetic image/snapshot in the fixture, rather than
+  // allocating hundreds of MiB just to verify the physical processing bound.
+  const questionSnapshots = [{ id: '91', type: 'choice', question: '같은 원문', answer: '가', image: 'x'.repeat(500 * 1024) }];
+  for (let index = 0; index < 540; index++) f.data.set(`semester_assessment_results/repeated_${index}`, {
+    assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: 'a', sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    sourceHash: 'a'.repeat(64), questionSnapshots,
+  });
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), [{ uid: 'a' }], true,
+    budget, true), error => error.code === 'resource-exhausted' && error.details?.reason === 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
+  assert.ok(budget.resultReadBytes > 256 * 1024 * 1024);
+  assert.ok(budget.bytes < 2 * 1024 * 1024, 'small unique retained size cannot bypass the original-processing limit');
+  assert.ok(f.bodyReads.filter(read => read.path.includes('/repeated_')).length < 540, 'the remaining result batches are never read');
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).loadResults(gradeExamQuery(), [{ uid: 'a' }], true,
+    undefined, true), error => error.details?.reason === 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
+  assert.deepEqual(f.writes, []);
+});
+
 test('scope-only compatibility reads fail closed when a result disappears or changes before its body read', async () => {
   for (const changed of ['missing', 'round']) {
     const f = memory(gradeExamFixture()), getAll = f.db.getAll;

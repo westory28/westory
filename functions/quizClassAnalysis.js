@@ -16,6 +16,7 @@ const MAX_RESULTS = 10000;
 const MAX_QUESTIONS = 5000;
 const MAX_STUDENTS = 150;
 const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_ACHIEVEMENT_RESULT_READ_BYTES = MAX_BYTES * 32; // 256 MiB before snapshot interning.
 const MAX_GRADE_CLASSES = 30;
 const MAX_SEARCH_MATCHES = 500;
 const RESULT_QUERY_CONCURRENCY = 8;
@@ -607,7 +608,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       while (cursor < jobs.length) await jobs[cursor++]();
     }));
     const pending = [...candidates.entries()].filter(([key]) => !rows.has(key)).map(([, candidate]) => candidate);
-    let bodyBytes = 0;
+    let bodyBytes = 0, resultReadBytes = budget?.resultReadBytes || 0;
     const isSelectedRound = candidate => {
       const raw = candidate.scope, parts = text(raw.definitionId).split(':');
       return roundOf(raw.category || parts[3], raw.examRound || parts[4]) === query.examRound;
@@ -634,12 +635,16 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
           const compact = snapshotPool?.intern(data, json);
           const bytes = compact?.retainedBytes ?? Buffer.byteLength(JSON.stringify(data));
           bodyBytes += bytes;
+          if (compact) {
+            resultReadBytes += compact.readBytes;
+            if (budget) budget.resultReadBytes = resultReadBytes;
+            if (resultReadBytes > MAX_ACHIEVEMENT_RESULT_READ_BYTES)
+              fail('resource-exhausted', '평가 원문 처리량이 조회 한도를 초과했습니다. 학급을 선택해 다시 조회해 주세요.', 'QUIZ_ACHIEVEMENT_READ_BYTE_LIMIT');
+          }
           if (budget) {
             budget.documents++; budget.bytes += bytes;
-            // Physical reads remain observable internally, but the existing byte
-            // limits bound retained data after exact content interning. Document
-            // limits and the small read batches still bound the query workload.
-            if (compact) budget.resultReadBytes = (budget.resultReadBytes || 0) + compact.readBytes;
+            // Retained bytes and cumulative original processing have separate
+            // bounds: duplicate images cannot consume unbounded read/CPU work.
             if (budget.documents > 30000 || budget.bytes > MAX_BYTES * 8)
               fail('resource-exhausted', '선택한 범위의 조회 한도를 초과했습니다. 일부 학급만으로 비교하지 않습니다.', 'QUIZ_ANALYSIS_REQUEST_LIMIT');
           }
