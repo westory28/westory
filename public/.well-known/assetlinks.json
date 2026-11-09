@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "kr.westory.app",
       "sha256_cert_fingerprints": [
-        "F0:B6:CE:01:1E:EA:BE:EE:9B:81:9F:2E:D6:4B:8D:46:18:05:87:E0:B1:DB:98:8B:E2:DF:A2:2D:6D:A6:F9:17"
+        "F0:B6:CE:01:1E:EA:BE:EE:9B:81:9F:2E:D6:4B:8D:46:18:05:87:E0:B1:DB:98:8B:E2:DF:A2:2D:6D:A6:F9:17",
+        "A4:FF:B3:A8:CB:F4:E5:5F:63:77:65:57:73:54:4E:5E:A1:B6:61:47:70:8F:0E:CF:E7:31:DE:00:5C:74:20:1D"
       ]
     }
   }
