@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SHORT_ANSWER_MAX_LENGTH,
   limitShortAnswer,
@@ -147,6 +147,43 @@ const normalizeStudentEmail = (value: unknown) =>
   String(value ?? "")
     .trim()
     .toLowerCase();
+const getQuizEntryErrorMessage = (error: unknown) => {
+  const failure = error as {
+    code?: string;
+    details?: { reason?: string };
+    customData?: { details?: { reason?: string } };
+  };
+  const code = String(failure?.code || "").replace(/^functions\//, "");
+  const reason =
+    failure?.details?.reason || failure?.customData?.details?.reason || "";
+  if (reason === "ASSESSMENT_PREREQUISITE_REQUIRED")
+    return "앞 회차를 제출한 뒤 응시할 수 있습니다. 평가 목록에서 다시 확인해 주세요.";
+  if (reason === "ASSESSMENT_COOLDOWN_ACTIVE")
+    return "다시 응시할 수 있는 시간이 되지 않았습니다. 평가 목록에서 다시 확인해 주세요.";
+  if (
+    ["permission-denied", "not-found"].includes(code) ||
+    /ASSESSMENT_(?:NOT_PUBLISHED|WINDOW_CLOSED|ATTEMPT_LIMIT_REACHED|SEMESTER_NOT_ACTIVE)/.test(
+      reason,
+    )
+  )
+    return "현재 이 평가에 응시할 수 없습니다. 평가 목록에서 다시 확인해 주세요.";
+  if (reason === "SESSION_REAUTH_REQUIRED")
+    return "로그인 상태를 다시 확인해야 합니다. 다시 로그인한 뒤 응시해 주세요.";
+  if (code === "unauthenticated" || reason.startsWith("SESSION_"))
+    return "로그인 연결을 확인하지 못했습니다. 다시 시도해 주세요.";
+  if (
+    [
+      "unavailable",
+      "deadline-exceeded",
+      "cancelled",
+      "internal",
+      "unknown",
+    ].includes(code) ||
+    (typeof navigator !== "undefined" && !navigator.onLine)
+  )
+    return "서버 연결을 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
+  return "시험지를 불러오지 못했습니다. 다시 시도해 주세요.";
+};
 const hasStudentAnswer = (value: unknown) =>
   normalizeStudentText(value).length > 0;
 const isGeneratedImageChoiceLabel = (value: string, index: number) => {
@@ -174,6 +211,13 @@ const QuizRunner: React.FC = () => {
   const { confirm } = useAppDialog();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const automaticEntryRequested = location.state?.startAssessment === true;
+  const automaticEntryConsumedRef = useRef<string | null>(null);
+  const [automaticEntryInProgress, setAutomaticEntryInProgress] =
+    useState(false);
+  const initializationGenerationRef = useRef(0);
+  const initializedScopeRef = useRef("");
   const { userData, config, currentUser } = useAuth();
 
   const unitId = searchParams.get("unitId");
@@ -229,6 +273,7 @@ const QuizRunner: React.FC = () => {
   const [startingQuiz, setStartingQuiz] = useState(false);
   const startingQuizRef = useRef(false);
   const [paperPreparationError, setPaperPreparationError] = useState("");
+  const [entryError, setEntryError] = useState("");
   const [paperPreparationProgress, setPaperPreparationProgress] =
     useState<MockExamAssetProgress | null>(null);
   const paperAssetLoaderRef = useRef<ReturnType<
@@ -307,6 +352,7 @@ const QuizRunner: React.FC = () => {
 
   useEffect(() => {
     return () => {
+      initializationGenerationRef.current += 1;
       preparationGenerationRef.current += 1;
       startingQuizRef.current = false;
       paperPreparationControllerRef.current?.abort();
@@ -1041,6 +1087,9 @@ const QuizRunner: React.FC = () => {
   const initializeQuiz = async () => {
     setReviewItems([]);
     if (!unitId || !category || !fallbackStudentUid) return;
+    const generation = ++initializationGenerationRef.current;
+    const isCurrent = () => initializationGenerationRef.current === generation;
+    initializedScopeRef.current = "";
 
     try {
       setView("loading");
@@ -1049,7 +1098,9 @@ const QuizRunner: React.FC = () => {
       setBlockReason(null);
       setResumeNotice("");
       setStartingQuiz(false);
+      setAutomaticEntryInProgress(false);
       startingQuizRef.current = false;
+      setEntryError("");
       setPaperPreparationError("");
       setPaperPreparationProgress(null);
       setFinishSubmitting(false);
@@ -1069,6 +1120,7 @@ const QuizRunner: React.FC = () => {
       const assessmentState = await getAssessmentState({
         definitionId: assessmentDefinitionId,
       });
+      if (!isCurrent()) return;
       if (!assessmentState.definition) {
         setBlockReason(
           "유효하지 않거나 더 이상 사용할 수 없는 평가 링크입니다.",
@@ -1097,9 +1149,6 @@ const QuizRunner: React.FC = () => {
         return;
       }
 
-      const curriculumResult = await curriculumRead;
-      if (!curriculumResult.ok) throw curriculumResult.error;
-      const curriculumTree = curriculumResult.tree;
       const visitLabels = (items: StudentCurriculumTreeItem[]) => {
         items.forEach((item) => {
           curriculumLabelsRef.current[item.id] = item.title;
@@ -1107,7 +1156,11 @@ const QuizRunner: React.FC = () => {
         });
       };
       curriculumLabelsRef.current = {};
-      visitLabels(curriculumTree);
+      // Labels enrich the review only. A slow or unavailable curriculum read
+      // must not block an authorized server paper or start its clock late.
+      void curriculumRead.then((result) => {
+        if (isCurrent() && result.ok) visitLabels(result.tree);
+      });
       const definition = assessmentState.definition;
       const settings = definition.presentationSettings;
       const nextQuizConfig: QuizConfig = {
@@ -1158,6 +1211,7 @@ const QuizRunner: React.FC = () => {
               ? "제한 시간이 끝난 응시입니다. 이어하기를 누르면 저장된 답안으로 제출을 마칩니다."
               : "서버에 저장된 진행 상태를 이어서 풀 수 있습니다.",
           );
+          initializedScopeRef.current = `${fallbackStudentUid}:${assessmentDefinitionId}`;
           setView("intro");
           return;
         }
@@ -1191,18 +1245,16 @@ const QuizRunner: React.FC = () => {
       setHintUsedCount(0);
       setRevealedHints({});
       setTimeLeft(nextQuizConfig.timeLimit || 60);
+      initializedScopeRef.current = `${fallbackStudentUid}:${assessmentDefinitionId}`;
       setView("intro");
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "초기화 중 오류가 발생했습니다.";
-      setErrorMsg(message);
+      if (!isCurrent()) return;
+      setErrorMsg(getQuizEntryErrorMessage(error));
       setView("intro");
     }
   };
 
-  const startQuiz = async () => {
+  const startQuiz = async (automaticEntry = false) => {
     if (
       !unitId ||
       !category ||
@@ -1215,6 +1267,8 @@ const QuizRunner: React.FC = () => {
 
     startingQuizRef.current = true;
     setStartingQuiz(true);
+    setAutomaticEntryInProgress(automaticEntry);
+    setEntryError("");
     setPaperPreparationError("");
     const generation = preparationGenerationRef.current;
     const assertCurrent = () => {
@@ -1355,29 +1409,52 @@ const QuizRunner: React.FC = () => {
         return;
       }
       console.error("Failed to start quiz attempt", {
-        definitionId: assessmentDefinitionId,
-        currentUserUid: currentUser?.uid || "",
-        userDataUid: userData?.uid || "",
         code:
           typeof error === "object" && error && "code" in error
             ? String((error as { code?: unknown }).code || "")
             : "",
-        message: error instanceof Error ? error.message : String(error || ""),
-        error,
       });
-      showToast({
-        tone: "error",
-        title: "평가를 시작하지 못했습니다.",
-        message: "응시 상태 저장에 실패했습니다. 다시 시도해 주세요.",
-      });
+      setEntryError(getQuizEntryErrorMessage(error));
     } finally {
       if (preparationGenerationRef.current === generation) {
         startingQuizRef.current = false;
         setStartingQuiz(false);
+        setAutomaticEntryInProgress(false);
         setPaperPreparationProgress(null);
       }
     }
   };
+
+  useEffect(() => {
+    if (
+      !automaticEntryRequested ||
+      automaticEntryConsumedRef.current === location.key ||
+      view !== "intro" ||
+      errorMsg ||
+      blockReason ||
+      !quizConfig?.questionCount ||
+      initializedScopeRef.current !==
+        `${fallbackStudentUid}:${assessmentDefinitionId}`
+    )
+      return;
+    // The list click is the explicit start action. Consume it before START so
+    // refresh/back navigation and StrictMode cannot create another attempt.
+    automaticEntryConsumedRef.current = location.key;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: { ...location.state, startAssessment: false },
+    });
+    void startQuiz(true);
+  }, [
+    automaticEntryRequested,
+    location.key,
+    view,
+    errorMsg,
+    blockReason,
+    quizConfig?.questionCount,
+    fallbackStudentUid,
+    assessmentDefinitionId,
+  ]);
 
   const handleAnswer = (input: string) => {
     const question = selectedQuestions[currentIndex];
@@ -1609,7 +1686,15 @@ const QuizRunner: React.FC = () => {
     [activeSubmission?.timeLimitSeconds, quizConfig?.timeLimit],
   );
 
-  if (view === "loading") {
+  if (
+    view === "loading" ||
+    automaticEntryInProgress ||
+    (view === "intro" &&
+      automaticEntryRequested &&
+      !blockReason &&
+      !errorMsg &&
+      Boolean(quizConfig?.questionCount))
+  ) {
     return <PageLoading message="문제를 준비하는 중입니다." />;
   }
 
@@ -1633,9 +1718,11 @@ const QuizRunner: React.FC = () => {
       ? "준비 중..."
       : paperPreparationError
         ? "자료 다시 불러오기"
-        : activeSubmission?.status === "in_progress"
-          ? "이어하기"
-          : "평가 시작하기";
+        : entryError
+          ? "다시 시도"
+          : activeSubmission?.status === "in_progress"
+            ? "이어하기"
+            : "평가 시작하기";
 
     return (
       <div className="student-quiz-intro mx-auto flex min-h-0 w-full max-w-5xl flex-1 animate-fadeIn items-center px-4 py-2 lg:py-3">
@@ -1736,9 +1823,9 @@ const QuizRunner: React.FC = () => {
                     {paperPreparationProgress.total}
                   </div>
                 )}
-                {paperPreparationError && (
+                {(paperPreparationError || entryError) && (
                   <p role="alert" className="text-sm font-bold text-red-600">
-                    {paperPreparationError}
+                    {paperPreparationError || entryError}
                   </p>
                 )}
                 {!blockReason ? (

@@ -234,6 +234,8 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         "quizDeadlineMs",
         "timeLeft",
         "startingQuiz",
+        "automaticEntryInProgress",
+        "entryError",
         "paperPreparationError",
         "paperPreparationProgress",
         "paperResult",

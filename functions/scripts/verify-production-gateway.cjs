@@ -50,4 +50,13 @@ for (const name of [...manifest.rootExports, 'getAssessmentState', 'saveAssessme
   assert.equal(deployedFunctions[name].__endpoint?.platform, 'gcfv2');
   assert.ok(Object.hasOwn(deployedFunctions[name].__endpoint, 'callableTrigger'));
 }
+for (const name of ['executeCommand', 'getCommandStatus', 'getAssessmentState', 'saveAssessmentProgress']) {
+  const endpoint = deployedFunctions[name].__endpoint;
+  assert.equal(endpoint.availableMemoryMb, 512, `${name} must retain paper/receipt memory headroom`);
+  assert.equal(endpoint.cpu, 1);
+  assert.equal(endpoint.concurrency, 8, `${name} must scale before class-wide requests exhaust one instance`);
+  assert.equal(endpoint.maxInstances, 20);
+  assert.equal(endpoint.minInstances, 0, 'Do not introduce idle-instance cost for this recovery');
+  assert.equal(endpoint.timeoutSeconds, 60, 'Do not hide contention by extending the deadline');
+}
 console.log(`PASS production gateway: ${manifest.files.length} source hashes, syntax, canonical and restricted fast command/status exports and isolated queries`);

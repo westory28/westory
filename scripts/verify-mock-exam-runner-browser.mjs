@@ -49,20 +49,20 @@ export const qa=window.mockRunnerQa={starts:[],prepares:[],reads:[],saves:[],sub
 const persist=()=>sessionStorage.setItem('mock-runner-attempt',JSON.stringify(attempt));
 export const useAuth=()=>({config,userData,currentUser});
 export const getYearSemester=()=>config;
-export const readStudentCurriculumTree=async()=>[];
+export const readStudentCurriculumTree=async()=>{if(location.search.includes('curriculum-error'))throw Error('Synthetic unavailable optional labels');if(location.search.includes('curriculum-pending'))return new Promise(()=>{});return []};
 export const buildAssessmentDefinitionId=()=>definitionId;
 export const isAssessmentRevisionConflict=error=>error?.code==='aborted';
 export const loadQuizScoreComparison=async()=>null;
-export const getAssessmentState=async(input={})=>{qa.reads.push(input);if(input.prepareAssets)qa.prepares.push(input);return {status:location.search.includes('prerequisite')?'PREREQUISITE_REQUIRED':attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',requiredRound:'round_1',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
-export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();return structuredClone(attempt)};
+export const getAssessmentState=async(input={})=>{qa.reads.push(input);const readNumber=qa.reads.length;if(location.search.includes('stale-initial')&&readNumber===1){await new Promise(r=>setTimeout(r,300));throw Error('Stale initial failure')};if(input.prepareAssets)qa.prepares.push(input);return {status:location.search.includes('prerequisite')?'PREREQUISITE_REQUIRED':attempt?.status==='SUBMITTED'?'SUBMITTED':'READY',requiredRound:'round_1',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})}};
+export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(attempt&&['STARTED','IN_PROGRESS'].includes(attempt.status))return {...structuredClone(attempt),resumed:true};if(location.search.includes('start-offline')&&qa.starts.length===1)throw Object.assign(Error('Synthetic offline'),{code:'functions/unavailable'});if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();if(location.search.includes('lost-start-response')&&qa.starts.length===1)throw Object.assign(Error('Synthetic lost response'),{code:'functions/unavailable'});return structuredClone(attempt)};
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz/run?unitId=exam_prep&category=exam_prep&round=round_2']}><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation();React.useEffect(()=>{window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
-  define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV ? 'development' : 'production') },
+  define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || process.argv.includes('--entry-only') ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
     builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
@@ -99,6 +99,9 @@ const open = async (width, height = 1024, touch = false, search = "") => {
 };
 const openQuestion = async (page, index) => {
   const target = page.getByRole("button", { name: new RegExp(`^${index}번 문제 확대`) });
+  // Result scores appear before their handwriting animation ends; wait until
+  // the paper enables question interaction before sending a keyboard action.
+  await page.waitForFunction(element => element?.getAttribute('aria-disabled') !== 'true', await target.elementHandle());
   await target.focus();
   await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", { name: `${index}번 문제 확대`, exact: true });
@@ -192,7 +195,52 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
 try {
-  if(process.argv.includes('--prerequisite-only')) {
+  if(process.argv.includes('--entry-only')) {
+    for(const [width,search] of [[390,''],[768,'curriculum-error'],[1280,'curriculum-pending'],[1366,'stale-initial'],[768,'start-offline'],[390,'lost-start-response']]) {
+      const page=await browser.newPage({viewport:{width,height:900}});
+      page.on('pageerror',error=>pageErrors.push(error.message));
+      await page.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
+      await page.goto(origin+'?auto-entry&'+search);
+      if(['start-offline','lost-start-response'].includes(search)) {
+        await page.getByRole('alert').filter({hasText:'서버 연결을 확인하지 못했습니다.'}).waitFor();
+        assert.equal(await page.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0,'An entry failure offers a retry, not another start confirmation');
+        const before=await page.evaluate(()=>({starts:window.mockRunnerQa.starts.length,id:window.mockRunnerQa.attempt?.attemptId,deadline:window.mockRunnerQa.attempt?.deadlineAtIso}));
+        assert.equal(before.starts,1,'No automatic retry after a failed start');
+        await page.getByRole('button',{name:'다시 시도',exact:true}).click();
+        await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+        const after=await page.evaluate(()=>({starts:window.mockRunnerQa.starts.length,id:window.mockRunnerQa.attempt?.attemptId,deadline:window.mockRunnerQa.attempt?.deadlineAtIso,number:window.mockRunnerQa.attempt?.attemptNumber}));
+        assert.equal(after.starts,2);assert.equal(after.number,1);
+        if(search==='lost-start-response'){assert.equal(after.id,before.id);assert.equal(after.deadline,before.deadline)}
+      } else {
+        await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+        assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),1,'List intent starts exactly once, including StrictMode');
+      }
+      assert.equal(await page.locator('.student-quiz-intro').count(),0,'No repeated introduction after list entry');
+      assert.equal(await page.evaluate(()=>window.mockRunnerLocationState?.startAssessment),false,'The explicit navigation intent is consumed');
+      assert.equal(await page.evaluate(()=>window.mockRunnerQa.attempt.attemptNumber),1);
+      if(search==='stale-initial') {
+        await page.waitForTimeout(350);
+        assert.equal(await page.locator('.student-quiz-intro').count(),0,'A cancelled initialization cannot overwrite the paper');
+      }
+      if(width===390&&search==='') {
+        const before=await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso}));
+        await page.reload();
+        await page.getByRole('button',{name:'이어하기',exact:true}).click();
+        await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+        assert.deepEqual(await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso})),before);
+        assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),0,'Refresh resumes the existing paper without START');
+      }
+      await page.screenshot({path:path.join(evidence,'direct-entry-'+width+'-'+(search||'normal')+'.png')});
+      await page.close();
+    }
+    const blocked=await browser.newPage({viewport:{width:768,height:900}});
+    await blocked.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
+    await blocked.goto(origin+'?auto-entry&prerequisite');
+    await blocked.getByText('초시 (1회)를 제출한 뒤 응시할 수 있습니다.',{exact:true}).waitFor();
+    assert.equal(await blocked.evaluate(()=>window.mockRunnerQa.starts.length),0);
+    assert.equal(await blocked.evaluate(()=>window.mockRunnerQa.prepares.length),0);
+    await blocked.close();
+  } else if(process.argv.includes('--prerequisite-only')) {
     for(const width of [320,390,768,1280]) {
       const page=await browser.newPage({viewport:{width,height:900}});
       page.on('pageerror',error=>pageErrors.push(error.message));
@@ -470,7 +518,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
-  console.log(process.argv.includes('--prerequisite-only')
+  console.log(process.argv.includes('--entry-only')
+    ? `Direct exam entry passed: StrictMode, consumed intent, optional curriculum failure/pending, cancelled initialization, explicit retry, lost-response resume, deadline preservation and prerequisite block at 390/768/1280/1366. Evidence: ${evidence}`
+    : process.argv.includes('--prerequisite-only')
     ? `Mock exam prerequisite browser passed: direct round-2 link blocked before asset preparation or attempt start at 320/390/768/1280. Evidence: ${evidence}`
     : process.argv.includes('--viewport-only')
     ? `Mock exam viewport browser passed: 320x568/390x844/768x1024/844x390 full-page fit, 1024x768/1280x900 full width, fullscreen variants, 64px portal header and orientation change. Evidence: ${evidence}`

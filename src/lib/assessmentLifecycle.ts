@@ -166,6 +166,10 @@ const isAmbiguous = (error: unknown) =>
     "functions/unavailable",
   ].includes(String((error as { code?: unknown })?.code || "").toLowerCase());
 
+const receivedSessionResponse = (error: unknown) =>
+  (error as { applicationSessionResponseReceived?: boolean })
+    ?.applicationSessionResponseReceived === true;
+
 const captureAssessmentOwner = async () => {
   const owner = auth.currentUser;
   const changed = () =>
@@ -184,6 +188,20 @@ const captureAssessmentOwner = async () => {
     )
       throw changed();
   };
+};
+
+const assertAssessmentResponseOwner = async (
+  assertOwner: () => Promise<void>,
+) => {
+  try {
+    await assertOwner();
+  } catch (error) {
+    // The write already responded. A changed login must reject its result
+    // without discarding the receipt needed by the owner's explicit retry.
+    throw Object.assign(error as Error, {
+      applicationSessionResponseReceived: true,
+    });
+  }
 };
 
 export const executeStudentAssessmentCommand = async <T>(
@@ -205,7 +223,7 @@ export const executeStudentAssessmentCommand = async <T>(
   try {
     await assertOwner();
     const response = await execute({ commandId, commandType, payload });
-    await assertOwner();
+    await assertAssessmentResponseOwner(assertOwner);
     if (
       response.data?.status !== "SUCCEEDED" ||
       response.data.commandId !== commandId ||
@@ -225,6 +243,7 @@ export const executeStudentAssessmentCommand = async <T>(
     }
     return response.data.result;
   } catch (error) {
+    if (receivedSessionResponse(error)) throw error;
     if (!isAmbiguous(error)) {
       forgetPendingCommandId(key);
       throw error;
@@ -359,11 +378,12 @@ export const saveAssessmentProgress = async (input: {
   try {
     await assertOwner();
     const saved = await callable({ ...input, saveId });
-    await assertOwner();
+    await assertAssessmentResponseOwner(assertOwner);
     forgetPendingCommandId(key);
     return saved.data;
   } catch (error) {
-    if (!isAmbiguous(error)) forgetPendingCommandId(key);
+    if (!isAmbiguous(error) && !receivedSessionResponse(error))
+      forgetPendingCommandId(key);
     throw error;
   }
 };

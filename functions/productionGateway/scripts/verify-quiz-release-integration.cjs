@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
+const { AsyncLocalStorage } = require("node:async_hooks");
 const projectId = process.env.GCLOUD_PROJECT || "";
 assert.match(projectId, /^demo-westory-session-[a-z0-9-]+$/);
 assert.match(process.env.FIRESTORE_EMULATOR_HOST || "", /^(127\.0\.0\.1|localhost):\d+$/);
@@ -8,6 +9,33 @@ const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const deployed = require("../../index");
 const app = getApp();
 const db = getFirestore(app);
+const transactionOperation = new AsyncLocalStorage();
+const observedTransactions = [];
+const instanceConcurrency = 8;
+const createRequestQueue = () => {
+  const queued = [];
+  let active = 0, peak = 0;
+  const drain = () => {
+    while (active < instanceConcurrency && queued.length) {
+      const task = queued.shift();
+      peak = Math.max(peak, ++active);
+      Promise.resolve().then(task.run).then(task.resolve, task.reject).finally(() => {
+        active--;
+        drain();
+      });
+    }
+  };
+  return { run: run => new Promise((resolve, reject) => { queued.push({ run, resolve, reject }); drain(); }),
+    get peak() { return peak; } };
+};
+const requestQueues = Object.fromEntries(["command", "query", "status", "save"].map(operation => [operation, createRequestQueue()]));
+const invoke = (operation, callback) => requestQueues[operation].run(() => transactionOperation.run(operation, callback));
+const runTransaction = db.runTransaction.bind(db);
+db.runTransaction = (callback, options) => {
+  const operation = transactionOperation.getStore();
+  if (operation) observedTransactions.push({ operation, readOnly: options?.readOnly === true });
+  return runTransaction(callback, options);
+};
 const production = require("../productionSource");
 const authority = require("../sessionAuthority");
 const enrollment = require("../archiveEnrollment");
@@ -21,8 +49,10 @@ const proof = { authorityGeneration: authority.SESSION_AUTHORITY_GENERATION,
   protocolVersion: authority.MIN_CLIENT_PROTOCOL_VERSION, revision: "a".repeat(64) };
 const request = (uid, data) => ({ auth: auth(uid), data: { ...data, _session: proof } });
 const execute = (uid, commandType, payload, commandId = randomUUID()) =>
-  production.executeCommand.run(request(uid, { commandId, commandType, payload }));
-const state = (uid, data) => production.getAssessmentState.run(request(uid, data));
+  invoke("command", () => production.executeCommand.run(request(uid, { commandId, commandType, payload })));
+const state = (uid, data) => invoke("query", () => production.getAssessmentState.run(request(uid, data)));
+const status = (uid, data) => invoke("status", () => production.getCommandStatus.run(request(uid, data)));
+const saveProgress = (uid, data) => invoke("save", () => production.saveAssessmentProgress.run(request(uid, data)));
 const get = async path => (await db.doc(path).get()).data();
 const reason = expected => error => error.details?.reason === expected;
 const history = (uid, data) => deployed.getMyQuizHistory.run(request(uid, { semesterId, ...data }));
@@ -38,13 +68,19 @@ const payload = (revision, update = {}) => {
 };
 
 const verifyAllClassConcurrentMockStarts = async () => {
-  const students = Array.from({ length: 11 }, (_, index) => `synthetic-all-class-${index + 1}`);
+  // Model admission to one configured instance, not a production load test.
+  // The unbounded 30-call experiment is separate: the emulator reported lock
+  // timeouts, so it must not be described as a successful simultaneous run.
+  const classCount = 10, studentCount = 30;
+  const students = Array.from({ length: studentCount + 1 }, (_, index) => `synthetic-all-class-${index + 1}`);
   const session = await get(`application_sessions/student-three/sessions/${authTime}`);
   const batch = db.batch();
   for (const [index, uid] of students.entries()) {
-    const classId = index < 2 ? ["class_one", "class_two"][index] : `class_release_${index + 1}`;
+    const classIndex = index < studentCount ? index % classCount : classCount;
+    const classId = classIndex < 2 ? ["class_one", "class_two"][classIndex] : `class_release_${classIndex + 1}`;
     const enrollmentId = `enrollment_${uid}`;
-    if (index >= 2) batch.set(db.doc(`semester_classes/${classId}`), { semesterId, classId, grade: "3", classNumber: String(index + 1), status: "ACTIVE" });
+    if (classIndex >= 2 && (index < classCount || index === studentCount))
+      batch.set(db.doc(`semester_classes/${classId}`), { semesterId, classId, grade: "3", classNumber: String(classIndex + 1), status: "ACTIVE" });
     batch.set(db.doc(`users/${uid}`), { role: "student" });
     batch.set(db.doc(`application_sessions/${uid}/sessions/${authTime}`), { ...session, uid, email: auth(uid).token.email });
     batch.set(db.doc(`student_identities/${uid}`), { studentUid: uid });
@@ -53,11 +89,11 @@ const verifyAllClassConcurrentMockStarts = async () => {
   }
   await batch.commit();
   const defId = `quiz:${semesterId}:exam_prep:exam_prep:round_1`;
-  const visibleClassIds = Array.from({ length: 10 }, (_, index) => `3-${index + 1}`);
+  const visibleClassIds = Array.from({ length: classCount }, (_, index) => `3-${index + 1}`);
   const current = await get(`semester_assessment_definitions/${defId}`);
   await execute("teacher", "saveQuizAssessmentSettings", { ...payload(current.revision, { visibleClassIds, questionCount: 2 }),
     definitionId: defId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1", legacyConfigKey: "exam_prep_exam_prep__round_1" });
-  const assigned = students.slice(0, 10);
+  const assigned = students.slice(0, studentCount);
   const attemptsForStudents = () => db.collection("semester_assessment_attempts")
     .where("definitionId", "==", defId).where("studentUid", "in", assigned).get();
   const prepared = await Promise.all(assigned.map(uid => state(uid, { definitionId: defId, prepareAssets: true })));
@@ -65,23 +101,88 @@ const verifyAllClassConcurrentMockStarts = async () => {
   assert.ok(prepared.every(item => Object.keys(item.preparedAssets).sort().join(",") === "fontCharacters,imageUrls,sourceHash"));
   assert.equal((await attemptsForStudents()).size, 0, "Fresh preparation never starts an attempt");
   const commands = assigned.map((uid, index) => ({ uid, commandId: randomUUID(), payload: { definitionId: defId, preparedSourceHash: prepared[index].preparedAssets.sourceHash } }));
-  const started = await Promise.all([...commands, commands[0]].map(command =>
-    execute(command.uid, "startAssessmentAttempt", command.payload, command.commandId)));
-  assert.equal(new Set(started.map(item => item.result.attemptId)).size, 10);
-  assert.equal(started[0].result.attemptId, started[10].result.attemptId);
-  assert.ok(started[0].replayed || started[10].replayed, "The duplicate command replays one immutable receipt");
+  const lostResponseIndex = studentCount - 1;
+  let duplicateStart;
+  const pendingStarts = commands.map((command, index) => {
+    const pending = index === lostResponseIndex
+      ? invoke("command", () => production.executeCommand.run(request(command.uid, {
+        commandType: "startAssessmentAttempt", commandId: command.commandId, payload: command.payload,
+        _testDropResponseAfterCommit: true,
+      })))
+      : execute(command.uid, "startAssessmentAttempt", command.payload, command.commandId);
+    if (index === 0) duplicateStart = execute(command.uid, "startAssessmentAttempt", command.payload, command.commandId);
+    return pending;
+  });
+  const outcomes = await Promise.allSettled([...pendingStarts, duplicateStart]);
+  const rejected = outcomes.flatMap((item, index) => item.status === "rejected" ? [{
+    index, code: item.reason.code, reason: item.reason.details?.reason,
+    message: String(item.reason.message).split("\n")[0],
+  }] : []);
+  assert.equal(rejected.length, 1, `Only the injected response loss fails: ${JSON.stringify(rejected)}`);
+  assert.equal(outcomes[lostResponseIndex].status, "rejected");
+  assert.equal(outcomes[lostResponseIndex].reason.details?.reason, "TEST_RESPONSE_LOSS");
+  const lostCommand = commands[lostResponseIndex];
+  const restored = await status(lostCommand.uid, { commandType: "startAssessmentAttempt", commandId: lostCommand.commandId });
+  assert.equal(restored.status, "SUCCEEDED");
+  assert.equal(restored.replayed, true);
+  const started = outcomes.map(item => item.status === "fulfilled" ? item.value : restored);
+  assert.equal(new Set(started.map(item => item.result.attemptId)).size, studentCount);
+  assert.equal(started[0].result.attemptId, started[studentCount].result.attemptId);
+  assert.ok(started[0].replayed || started[studentCount].replayed, "The duplicate command replays one immutable receipt");
+  const retried = await execute(lostCommand.uid, "startAssessmentAttempt", lostCommand.payload, lostCommand.commandId);
+  assert.equal(retried.replayed, true);
+  assert.equal(retried.result.attemptId, restored.result.attemptId, "Retry after response loss preserves the committed attempt");
   const attempts = await attemptsForStudents();
-  assert.equal(attempts.size, 10);
-  assert.equal(new Set(attempts.docs.map(doc => doc.data().studentUid)).size, 10);
+  assert.equal(attempts.size, studentCount);
+  assert.equal(new Set(attempts.docs.map(doc => doc.data().studentUid)).size, studentCount);
   assert.ok(started.every(item => item.result.questionPresentation.length === 2 && item.result.questionPresentation.every(question =>
     !Object.hasOwn(question, "answer") && !Object.hasOwn(question, "explanation") && !Object.hasOwn(question, "hint"))));
-  const recovered = await production.getCommandStatus.run(request(commands[0].uid, { commandType: "startAssessmentAttempt", commandId: commands[0].commandId }));
+  const recovered = await status(commands[0].uid, { commandType: "startAssessmentAttempt", commandId: commands[0].commandId });
   assert.equal(recovered.result.attemptId, started[0].result.attemptId);
-  const outsider = students[10];
+
+  // Exercise the actual callable query and write paths together for each owner.
+  // A consistent read may see either committed revision, but never partial answers.
+  const answers = { "21": "고려", "22": "신라" };
+  await Promise.all(commands.map(async (command, index) => {
+    const attemptId = started[index].result.attemptId;
+    const save = { attemptId, expectedRevision: 1, answers, currentItemId: "22", saveId: randomUUID() };
+    const [saved, ...reads] = await Promise.all([
+      saveProgress(command.uid, save),
+      state(command.uid, { definitionId: defId }),
+      state(command.uid, { attemptId }),
+    ]);
+    assert.equal(saved.revision, 2);
+    for (const read of reads) {
+      assert.equal(read.attempt.attemptId, attemptId);
+      assert.ok([1, 2].includes(read.attempt.revision));
+      assert.deepEqual(read.attempt.answers, read.attempt.revision === 1 ? {} : answers);
+    }
+    const final = (await state(command.uid, { attemptId })).attempt;
+    assert.equal(final.revision, 2);
+    assert.deepEqual(final.answers, answers);
+  }));
+  const secondSave = { attemptId: started[0].result.attemptId, expectedRevision: 2,
+    answers: { "21": "신라", "22": "신라" }, currentItemId: "21", saveId: randomUUID() };
+  await assert.rejects(saveProgress(commands[0].uid, { ...secondSave, _testDropResponseAfterCommit: true }), reason("TEST_RESPONSE_LOSS"));
+  const recoveredSave = await saveProgress(commands[0].uid, secondSave);
+  assert.equal(recoveredSave.replayed, true);
+  assert.equal(recoveredSave.revision, 3);
+  assert.deepEqual((await state(commands[0].uid, { attemptId: secondSave.attemptId })).attempt.answers, secondSave.answers);
+  assert.equal((await attemptsForStudents()).size, studentCount, "Reads and lost-response retries never consume another attempt");
+  assert.ok((await state("teacher", { semesterId })).classes.length >= classCount);
+  for (const operation of ["query", "status", "command", "save"]) {
+    const transactions = observedTransactions.filter(item => item.operation === operation);
+    assert.ok(transactions.length, `${operation} must exercise actual Firestore transactions`);
+    assert.ok(transactions.every(item => item.readOnly === ["query", "status"].includes(operation)),
+      `${operation} must preserve its Firestore read-only/write transaction boundary`);
+    assert.ok(requestQueues[operation].peak <= instanceConcurrency);
+  }
+  assert.equal(requestQueues.command.peak, instanceConcurrency, "The start queue exercises configured per-instance concurrency");
+  const outsider = students[studentCount];
   assert.equal((await state(outsider, { definitionId: defId })).status, "PERMISSION");
   await assert.rejects(state(outsider, { definitionId: defId, prepareAssets: true }), reason("ASSESSMENT_ASSET_PREPARATION_FORBIDDEN"));
   await assert.rejects(execute(outsider, "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_CLASS_NOT_ASSIGNED"));
-  console.log("PASS authenticated 10-class publication, fresh preparation, simultaneous starts with duplicate command receipt, outsider block and private answer fields");
+  console.log("PASS 30 requests at configured per-instance concurrency 8 across 10 classes, duplicate/lost-response recovery, concurrent owner reads/autosave, read-only transaction boundaries, outsider block and private answer fields");
 };
 
 (async () => {

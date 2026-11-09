@@ -12281,9 +12281,13 @@ const semesterCutoverCommandAdapter =
     projectId: commandGateway.resolveProjectId(),
   });
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
+// State and receipt reads use a consistent snapshot without locking live
+// attempts against concurrent START/SAVE/SUBMIT transactions.
+const assessmentReadOnlyStore = commandGateway.createFirestoreStore(db, { readOnly: true });
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
+  readOnlyStore: assessmentReadOnlyStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
     [mapTagWisReward.COMMAND_TYPE]: wisEconomy.createMapTagWisRewardAdapter({
@@ -12394,6 +12398,7 @@ Object.assign(
 );
 const assessmentQueryCore = assessmentLifecycle.createAssessmentQueryCore({
   store: commandGatewayStore,
+  readOnlyStore: assessmentReadOnlyStore,
   serverTimestamp: () => FieldValue.serverTimestamp(),
   projectId: commandGateway.resolveProjectId(),
 });

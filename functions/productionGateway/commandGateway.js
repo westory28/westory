@@ -1266,6 +1266,7 @@ const createFirestoreStore = (db = getFirestore(), { readOnly = false } = {}) =>
 
 const createCommandGatewayCore = ({
   store = createFirestoreStore(),
+  readOnlyStore = store,
   assertSession = sessionAuthority.assertActiveApplicationSession,
   authorizeCommand = null,
   commandAdapters = {},
@@ -1488,14 +1489,14 @@ const createCommandGatewayCore = ({
       command.commandId,
     );
     const snapshot = actor.actorRole === "student"
-      ? await store.runTransaction(async transaction => {
+      ? await readOnlyStore.runTransaction(async transaction => {
         const document = await transaction.get(`${RECEIPT_COLLECTION}/${receiptId}`);
         if (document.exists) await assertStudentReceiptSemester(transaction, actor, document.data);
         if (document.exists && command.commandType === COMMAND_TYPES.START_ASSESSMENT_ATTEMPT)
           await assessmentLifecycle.assertMockExamPrerequisite(transaction, document.data?.result, actor.actorUid);
         return document;
       })
-      : await store.get(`${RECEIPT_COLLECTION}/${receiptId}`);
+      : await readOnlyStore.get(`${RECEIPT_COLLECTION}/${receiptId}`);
     if (!snapshot.exists) {
       return {
         commandId: command.commandId,
@@ -1543,10 +1544,10 @@ const assertWisTransactionCommand = (request) => {
 };
 
 const createCallableExports = ({ core } = {}) => ({
-  executeCommand: onCall({ region: REGION }, (request) =>
+  executeCommand: onCall(require("./assessmentRuntime"), (request) =>
     (core || getDefaultCore()).execute(request),
   ),
-  getCommandStatus: onCall({ region: REGION }, (request) =>
+  getCommandStatus: onCall(require("./assessmentRuntime"), (request) =>
     (core || getDefaultCore()).getStatus(request),
   ),
   // The same authorization, transaction and receipt namespace serve old and

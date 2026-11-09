@@ -113,6 +113,7 @@ const QuizIndex: React.FC = () => {
       : "";
     navigate(
       `/student/quiz/run?unitId=${unitId}&category=${category}&title=${encodeURIComponent(title)}${roundParam}`,
+      { state: { startAssessment: true } },
     );
   };
 

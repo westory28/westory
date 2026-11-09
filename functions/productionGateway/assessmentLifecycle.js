@@ -1696,7 +1696,7 @@ const normalizeQueryRequest = (data) => {
   };
 };
 
-const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.assertActiveApplicationSession, serverTimestamp, now = () => new Date(), projectId = "" }) => {
+const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession = sessionAuthority.assertActiveApplicationSession, serverTimestamp, now = () => new Date(), projectId = "" }) => {
   if (!store) throw new TypeError("store is required.");
   const actorFor = async (request) => {
     const identity = await assertSession(request, { recentAuth: false, highRisk: false });
@@ -1715,14 +1715,14 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
     const query = normalizeQueryRequest(request.data || {});
     if (query.mockExamOverview) {
       if (actor.role !== "student") fail("permission-denied", "A student account is required.", "ASSESSMENT_STUDENT_REQUIRED");
-      return store.runTransaction(async transaction => {
+      return readOnlyStore.runTransaction(async transaction => {
         await assertActiveEnrollment(transaction, query.semesterId, actor.uid, []);
         return { semesterId: query.semesterId, rounds: await mockProgress.overview(transaction, query.semesterId, actor.uid), writeCount: 0 };
       });
     }
     if (query.semesterId) {
       if (!actor.canReadQuizManagement) fail("permission-denied", "Assessment management permission is required.", "ASSESSMENT_MANAGE_REQUIRED");
-      return store.runTransaction(async (transaction) => {
+      return readOnlyStore.runTransaction(async (transaction) => {
         await assertAssessmentSemesterWritable(transaction, query.semesterId);
         const documents = await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
           field: "semesterId", operator: "==", value: query.semesterId,
@@ -1740,7 +1740,7 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
         return { semesterId: query.semesterId, classes };
       });
     }
-    return store.runTransaction(async (transaction) => {
+    return readOnlyStore.runTransaction(async (transaction) => {
       const attemptSnapshot = query.attemptId ? await transaction.get(attemptPath(query.attemptId)) : null;
       if (attemptSnapshot?.exists && attemptSnapshot.data?.studentUid !== actor.uid && !actor.teacherPortalEnabled && actor.role !== "admin") fail("permission-denied", "Assessment attempt is not visible.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
       const definitionId = query.definitionId || attemptSnapshot?.data?.definitionId || "";
@@ -1928,8 +1928,8 @@ const createAssessmentQueryCore = ({ store, assertSession = sessionAuthority.ass
 };
 
 const createAssessmentCallableExports = ({ core }) => ({
-  getAssessmentState: onCall({ region: REGION }, (request) => core.getAssessmentState(request)),
-  saveAssessmentProgress: onCall({ region: REGION }, (request) => core.saveAssessmentProgress(request)),
+  getAssessmentState: onCall(require("./assessmentRuntime"), (request) => core.getAssessmentState(request)),
+  saveAssessmentProgress: onCall(require("./assessmentRuntime"), (request) => core.saveAssessmentProgress(request)),
 });
 
 const createAssessmentReadinessAdapter = () => ({
