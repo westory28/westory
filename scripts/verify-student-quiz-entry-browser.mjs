@@ -42,11 +42,11 @@ export const getDoc=async ref=>{
  const visibility=params.has('legacy')?{visibleTargetGrade:params.get('targetGrade')||'3'}:{visibilityVersion:2,visibleClassIds:params.has('noClasses')?[]:['3-1']};
  const data=params.has('legacyStatus')
   ?(ref.path.endsWith('/status')?{exam_prep_exam_prep:active,mid_diagnostic:active,mid_formative:active}:{})
-  :ref.path.endsWith('/settings')?Object.fromEntries(keys.map(key=>[key,{active,...visibility,...metadata}])):{};
+  :ref.path.endsWith('/settings')?Object.fromEntries(keys.map(key=>[key,{active,allowRetake:!params.has('noRetake'),...visibility,...metadata}])):{};
  return {exists:()=>true,data:()=>data};
 };
 window.entryReads=[];
-export const getMockExamOverview=async input=>{window.entryReads.push(input);await new Promise(r=>setTimeout(r,100));if(params.has('error')&&window.entryReads.length===1)throw Error('synthetic read failure');return {semesterId:input.semesterId,writeCount:0,rounds:[1,2,3].map(n=>({examRound:'round_'+n,completed:n<=completed,prerequisiteMet:n<=completed+1,requiredRound:n>completed+1?'round_'+(completed+1):''}))}};
+export const getMockExamOverview=async input=>{window.entryReads.push(input);await new Promise(r=>setTimeout(r,100));if(params.has('error')&&window.entryReads.length===1)throw Error('synthetic read failure');return {semesterId:input.semesterId,writeCount:0,rounds:[1,2,3].map(n=>({examRound:'round_'+n,completed:n<=completed,retakeBlocked:n<=completed&&(params.has('noRetake')||params.has('limitReached'))&&!params.has('reset')&&!params.has('resumable'),prerequisiteMet:n<=completed+1,requiredRound:n>completed+1?'round_'+(completed+1):''}))}};
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,Routes,Route,useLocation}from'react-router-dom';import QuizIndex from './src/pages/student/quiz/QuizIndex';import './src/components/common/portalPage.css';import {normalizeAssessmentConfigEntry} from './src/lib/assessmentConfig';const metadata=normalizeAssessmentConfigEntry({questionCount:20,timeLimit:1800});window.metadataQA={count:metadata.hasExplicitQuestionCount,time:metadata.hasExplicitTimeLimit,spread:{...metadata},serialized:JSON.parse(JSON.stringify(metadata)),missing:normalizeAssessmentConfigEntry({active:true}).hasExplicitQuestionCount};const Destination=()=>{const location=useLocation();window.fixtureDestinationState=location.state;return <p role="status">{location.pathname+location.search}</p>};createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz']}><Routes><Route path="/student/quiz" element={<QuizIndex/>}/><Route path="/student/quiz/run" element={<Destination/>}/><Route path="/student/mypage" element={<Destination/>}/></Routes></MemoryRouter>);`;
 const built = await build({ stdin: { contents:entry,loader:'tsx',resolveDir:root },bundle:true,write:false,outdir:'fixture',format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/(?:contexts\/AuthContext|lib\/(?:assessmentLifecycle|semesterScope|studentLessonReadCache)|\.\/(?:firebase|semesterScope|siteSettings|historyDictionarySession)|firebase\/firestore)$/},()=>({path:'stub',namespace:'synthetic'}));p.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:stub,loader:'tsx',resolveDir:root}));}}]});
@@ -97,6 +97,29 @@ try{
     await page.goto(origin+'?completed='+completed);await openMock();
     const name=completed===1?'복시 (2회) · 응시 가능':'전시 (3회) · 응시 가능';await page.getByRole('button',{name,exact:true}).click();await enter().click();
     assert((await page.getByRole('status').textContent()).includes('round=round_'+(completed+1)));assert.equal(await page.evaluate(()=>window.fixtureDestinationState?.startAssessment),true,'A list entry explicitly requests immediate start');
+  }
+  for(const width of [390,768,1280,1366]){
+    await page.setViewportSize({width,height:768});
+    for(const [index,name] of ['초시','복시','전시'].entries()){
+      await page.goto(origin+'?completed=3&noRetake');await openMock();
+      await page.getByRole('button',{name:name+' ('+(index+1)+'회) · 응시 완료',exact:true}).click();
+      const blocked=page.getByRole('button',{name:'재응시 불가',exact:true});
+      assert(await blocked.isDisabled(),'Completed non-retakable round must disable entry');
+      await blocked.evaluate(button=>button.click());
+      assert.equal(await page.locator('#student-exam-heading').textContent(),name,'Disabled entry must not navigate to the old intro');
+      assert.equal(await page.evaluate(()=>window.fixtureDestinationState),undefined);
+      assert.equal(await page.evaluate(()=>window.entryReads.length),1,'Retake guard reuses the existing overview');
+      assert.equal(await page.locator('.student-exam-lobby__notice').count(),0,'Known retake restriction must not claim the state is unknown');
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      if(index===0)await page.screenshot({path:path.join(evidence,'retake-blocked-'+width+'.png'),fullPage:true});
+    }
+  }
+  await page.goto(origin+'?noRetake');await openMock();await firstRound().waitFor();assert(await enter().isEnabled(),'First attempt remains available when retakes are disabled');
+  await page.goto(origin+'?completed=1&noRetake');await openMock();await page.getByRole('button',{name:'복시 (2회) · 응시 가능',exact:true}).click();assert(await enter().isEnabled(),'Completing a non-retakable round still unlocks the next round');
+  await page.goto(origin+'?completed=1');await openMock();await page.getByRole('button',{name:'초시 (1회) · 응시 완료',exact:true}).click();await enter().click();assert((await page.getByRole('status').textContent()).includes('round=round_1'),'Explicitly allowed retakes retain direct entry');
+  await page.goto(origin+'?completed=1&limitReached');await openMock();await page.getByRole('button',{name:'초시 (1회) · 응시 완료',exact:true}).click();assert(await page.getByRole('button',{name:'재응시 불가',exact:true}).isDisabled(),'Server attempt limit overrides locally enabled retakes');
+  for(const state of ['reset','resumable']){
+    await page.goto(origin+'?completed=1&noRetake&'+state);await openMock();await page.getByRole('button',{name:'초시 (1회) · 응시 완료',exact:true}).click();assert(await enter().isEnabled(),'Server-authorized reset/resume must remain available');
   }
   await page.goto(origin+'?error');await openMock();await page.getByRole('alert').waitFor();assert(await enter().isDisabled());
   await page.getByRole('button',{name:'다시 확인',exact:true}).click();await firstRound().waitFor();assert.equal(await page.evaluate(()=>window.entryReads.length),2);

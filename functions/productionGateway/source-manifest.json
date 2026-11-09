@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-09: Add reset-aware retake availability only to getAssessmentState mockExamOverview. Read canonical limits and projected own attempt metadata only for completed rounds; START/SAVE/SUBMIT, prerequisite completion, roles, semesters, indexes and rules are unchanged. Deploy only Seoul getAssessmentState.",
     "2026-11-09: Incident audit found executeCommand 256 MiB OOM and getAssessmentState read/write transaction contention during class-wide entry. Live executeCommand/getAssessmentState archives including productionSource match f2824907 (112 runtime files); getCommandStatus/saveAssessmentProgress active handler dependencies match. Deploy only these four Seoul endpoints with 512 MiB, CPU 1, concurrency 8, maxInstances 20, minInstances 0 and unchanged 60-second timeout. assessmentRuntime.js is newly authored configuration. Read-only state/status snapshots preserve server authorization; START/SAVE/SUBMIT retain write transactions and receipts.",
     "2026-11-08: Mock release audit against bd9b96c4: live executeCommand generation 1794147978929338 matches all 115 runtime source files after LF normalization. Live getAssessmentState generation 1794129626434601 has older short-answer alias dependencies, but its query closure and loadDefinitionSource match the baseline. Deploy only executeCommand/getAssessmentState for bounded round-source reads and the exact forward legacy round-one settings-key migration; preserve all other identities and receipts.",
     "2026-11-08: Short-answer alias audit: live executeCommand/getCommandStatus/getAssessmentState source generations 1794129566962970/1794129626275847/1794129626434601 match baseline 6a42819b after LF normalization. Live saveMyQuizReviewNote generation 1794068255377709 matches its handler, session and permission dependencies. Deploy only executeCommand and saveMyQuizReviewNote; include the new ../quizAnswerMatching.js helper.",
@@ -555,9 +556,10 @@
       "sourceFile": null,
       "file": "mockExamProgress.js",
       "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "sha256": "16cba19de7a439e83ecb189d58ccca72f1ff60ffc68c7246eb40dad6833a116b",
+      "sha256": "2497ad4ef16c49fce9dd048a2ab6366b461b333af0202424136a9483ad52b155",
       "changes": [
-        "2026-11-08: New read-only helper for three-round completion overview and prerequisites; each query uses exact student/semester/round, limit 1 and identity-only field masks; scoped explicit legacy formats retained."
+        "2026-11-08: New read-only helper for three-round completion overview and prerequisites; each query uses exact student/semester/round, limit 1 and identity-only field masks; scoped explicit legacy formats retained.",
+        "2026-11-09: Completed-round overview adds retakeBlocked from one batched definition projection and exact student/definition attempt metadata. Match maximum-attempt, reset and active-resume semantics; preserve immutable completion/prerequisites and legacy result-only admission. No answer or question fields are read."
       ]
     },
     {

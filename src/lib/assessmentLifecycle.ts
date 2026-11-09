@@ -67,6 +67,7 @@ export interface MockExamOverview {
   rounds: {
     examRound: string;
     completed: boolean;
+    retakeBlocked: boolean;
     prerequisiteMet: boolean;
     requiredRound: string;
   }[];

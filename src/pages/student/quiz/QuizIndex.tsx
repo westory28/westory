@@ -212,7 +212,11 @@ const QuizIndex: React.FC = () => {
     assessmentConfig[
       getAssessmentConfigKey("exam_prep", "exam_prep", selected.round)
     ];
-  const canEnter = selected.visible && selectedState?.prerequisiteMet === true;
+  const retakeBlocked = selectedState?.retakeBlocked === true;
+  const canEnter =
+    selected.visible &&
+    selectedState?.prerequisiteMet === true &&
+    !retakeBlocked;
   const selectedStatus = roundStatus(selected.round, selected.visible);
   const pageTitle = getStudentMenuLabel(
     menuConfig,
@@ -465,7 +469,7 @@ const QuizIndex: React.FC = () => {
                 <p className="student-exam-lobby__notice" role="status">
                   응시 상태 확인 중…
                 </p>
-              ) : !canEnter ? (
+              ) : !canEnter && !retakeBlocked ? (
                 <p className="student-exam-lobby__notice">
                   {selected.visible && selectedState?.prerequisiteMet === false
                     ? `${formatMockExamRoundShortLabel(selectedState.requiredRound)}를 제출한 뒤 입장할 수 있습니다.`
@@ -488,7 +492,7 @@ const QuizIndex: React.FC = () => {
                   )
                 }
               >
-                시험 입장{" "}
+                {retakeBlocked ? "재응시 불가" : "시험 입장"}{" "}
                 <svg
                   viewBox="0 0 24 24"
                   width="20"

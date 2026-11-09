@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const commandGateway = require("../commandGateway");
 const assessment = require("../assessmentLifecycle");
 const archiveEnrollment = require("../archiveEnrollment");
+const mockProgress = require("../mockExamProgress");
 
 const clone = (value) => structuredClone(value);
 const matchesQuery = (data, filter) => !filter || (filter.filters || [filter]).every(clause =>
@@ -910,9 +911,9 @@ const runMockExamPaper = async () => {
   const overview = (auth = student, extra = {}) => query.getAssessmentState({ auth, data: { semesterId, mockExamOverview: true, ...extra } });
   const emptyOverview = await overview();
   assert.deepEqual(emptyOverview.rounds, [
-    { examRound: "round_1", completed: false, prerequisiteMet: true, requiredRound: "" },
-    { examRound: "round_2", completed: false, prerequisiteMet: false, requiredRound: "round_1" },
-    { examRound: "round_3", completed: false, prerequisiteMet: false, requiredRound: "round_1" },
+    { examRound: "round_1", completed: false, prerequisiteMet: true, requiredRound: "", retakeBlocked: false },
+    { examRound: "round_2", completed: false, prerequisiteMet: false, requiredRound: "round_1", retakeBlocked: false },
+    { examRound: "round_3", completed: false, prerequisiteMet: false, requiredRound: "round_1", retakeBlocked: false },
   ]);
   assert.equal(emptyOverview.writeCount, 0);
   await assert.rejects(overview(admin), error => error?.details?.reason === "ASSESSMENT_STUDENT_REQUIRED");
@@ -1067,6 +1068,118 @@ const runMockExamPaper = async () => {
     paperStore.documents.set("years/2026/semesters/2/quiz_results/round-one-legacy", { uid: student.uid, unitId: "exam_prep", ...legacy });
     assert.equal((await overview()).rounds[0].completed, true);
   }
+};
+
+const runMockRetakeOverview = async () => {
+  const definitionId = `quiz:${semesterId}:exam_prep:exam_prep:round_1`;
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${definitionId}`;
+  const uid = "student-uid", attemptPath = `${assessment.ATTEMPT_COLLECTION}/submitted`;
+  const makeFixture = (maxAttempts = 1) => {
+    const documents = new Map([
+      [definitionPath, { definitionId, semesterId, maxAttempts, privateMetadata: "not selected" }],
+      [`${assessment.RESULT_COLLECTION}/submitted`, { definitionId, semesterId, studentUid: uid, answers: { secret: "not selected" } }],
+      [attemptPath, { definitionId, semesterId, studentUid: uid, status: "SUBMITTED", answers: { secret: "not selected" }, questionSnapshots: ["not selected"] }],
+    ]);
+    const calls = [];
+    const project = (data, fields) => Object.fromEntries(fields.filter(field => Object.hasOwn(data, field)).map(field => [field, clone(data[field])]));
+    const transaction = {
+      getAll: async (paths, options) => {
+        calls.push({ type: "getAll", paths, options });
+        assert.deepEqual(options.fieldMask, ["definitionId", "semesterId", "maxAttempts"]);
+        // Deliberately return a different order; definition identity controls the pairing.
+        return paths.map(path => ({ path, exists: documents.has(path), data: documents.has(path) ? project(documents.get(path), options.fieldMask) : null })).reverse();
+      },
+      query: async (collectionPath, filter) => {
+        calls.push({ type: "query", collectionPath, filter });
+        assert.ok(filter.fieldMask.length && !filter.fieldMask.some(field => /answer|question|score|private/i.test(field)));
+        if (collectionPath === assessment.ATTEMPT_COLLECTION) {
+          assert.deepEqual(filter.fieldMask, ["studentUid", "semesterId", "definitionId", "resetAt", "status"]);
+          assert.deepEqual(filter.filters.map(item => [item.field, item.operator]), [["definitionId", "=="], ["studentUid", "=="]]);
+          assert.equal(filter.filters[1].value, uid);
+          assert.ok(filter.filters[0].value.startsWith(`quiz:${semesterId}:exam_prep:exam_prep:round_`));
+          assert.equal(filter.orderBy, undefined, "Reuse the existing exact query without a new ordered index");
+        }
+        const prefix = `${collectionPath}/`;
+        return [...documents.entries()].filter(([path, data]) => path.startsWith(prefix)
+          && !path.slice(prefix.length).includes("/") && matchesQuery(data, filter))
+          .slice(0, filter.limit || Infinity)
+          .map(([path, data]) => ({ exists: true, path, data: project(data, filter.fieldMask) }));
+      },
+    };
+    return { documents, calls, overview: () => mockProgress.overview(transaction, semesterId, uid) };
+  };
+  const blocked = makeFixture();
+  const blockedRounds = await blocked.overview();
+  assert.equal(blockedRounds[0].retakeBlocked, true, "A submitted single permitted attempt blocks another start");
+  assert.deepEqual(blockedRounds.map(item => item.completed), [true, false, false]);
+  assert.deepEqual(blockedRounds.map(item => item.prerequisiteMet), [true, true, false]);
+  assert.equal(blockedRounds[2].requiredRound, "round_2");
+  assert.deepEqual(blocked.calls.filter(item => item.type === "getAll").map(item => item.paths), [[definitionPath]], "Only completed round definitions are read in one batch");
+  assert.equal(blocked.calls.filter(item => item.collectionPath === assessment.ATTEMPT_COLLECTION).length, 1);
+
+  const unused = makeFixture();
+  unused.documents.delete(`${assessment.RESULT_COLLECTION}/submitted`);
+  assert.ok((await unused.overview()).every(item => item.retakeBlocked === false));
+  assert.equal(unused.calls.filter(item => item.type === "getAll" || item.collectionPath === assessment.ATTEMPT_COLLECTION).length, 0,
+    "Unsubmitted rounds add no definition or attempt reads");
+
+  const allowed = makeFixture(20);
+  assert.equal((await allowed.overview())[0].retakeBlocked, false, "Nineteen remaining attempts stay available");
+  for (let index = 1; index < 20; index++) allowed.documents.set(`${assessment.ATTEMPT_COLLECTION}/submitted-${index}`, clone(allowed.documents.get(attemptPath)));
+  assert.equal((await allowed.overview())[0].retakeBlocked, true, "The actual twenty-attempt limit is enforced");
+  allowed.documents.get(`${assessment.ATTEMPT_COLLECTION}/submitted-19`).resetAt = { seconds: 1 };
+  assert.equal((await allowed.overview())[0].retakeBlocked, false, "Reset attempts are excluded from the count");
+
+  for (const status of ["STARTED", "IN_PROGRESS", "RECOVERABLE"]) {
+    const resumed = makeFixture();
+    resumed.documents.set(`${assessment.ATTEMPT_COLLECTION}/active`, { ...resumed.documents.get(attemptPath), status });
+    assert.equal((await resumed.overview())[0].retakeBlocked, false, `${status} remains resumable even at the attempt limit`);
+  }
+  const reset = makeFixture();
+  const originalResult = clone(reset.documents.get(`${assessment.RESULT_COLLECTION}/submitted`));
+  Object.assign(reset.documents.get(attemptPath), { status: "LOCKED", resetAt: { seconds: 1 } });
+  assert.equal((await reset.overview())[0].retakeBlocked, false, "Teacher reset preserves another start despite immutable submission evidence");
+  reset.documents.set(`${assessment.ATTEMPT_COLLECTION}/after-reset`, { definitionId, semesterId, studentUid: uid, status: "IN_PROGRESS" });
+  const resetRounds = await reset.overview();
+  assert.equal(resetRounds[0].completed, true);
+  assert.equal(resetRounds[0].retakeBlocked, false, "The post-reset active attempt remains resumable");
+  assert.equal(resetRounds[1].prerequisiteMet, true);
+  assert.deepEqual(reset.documents.get(`${assessment.RESULT_COLLECTION}/submitted`), originalResult);
+  reset.documents.get(`${assessment.ATTEMPT_COLLECTION}/after-reset`).status = "SUBMITTED";
+  assert.equal((await reset.overview())[0].retakeBlocked, true, "The new submission consumes the restored single attempt");
+
+  const scoped = makeFixture();
+  scoped.documents.delete(attemptPath);
+  for (const [id, update] of Object.entries({
+    otherStudent: { studentUid: "another-student" },
+    otherSemester: { semesterId: "2025-2", definitionId: "quiz:2025-2:exam_prep:exam_prep:round_1" },
+    mismatchedSemester: { semesterId: "2025-2" },
+    otherRound: { definitionId: `quiz:${semesterId}:exam_prep:exam_prep:round_2` },
+  })) scoped.documents.set(`${assessment.ATTEMPT_COLLECTION}/${id}`, { definitionId, semesterId, studentUid: uid, status: "SUBMITTED", ...update });
+  assert.equal((await scoped.overview())[0].retakeBlocked, false, "Another owner, semester or round never consumes this limit");
+  scoped.documents.set(`${assessment.ATTEMPT_COLLECTION}/mine`, { definitionId, semesterId, studentUid: uid, status: "SUBMITTED" });
+  scoped.documents.get(`${assessment.ATTEMPT_COLLECTION}/otherStudent`).status = "IN_PROGRESS";
+  assert.equal((await scoped.overview())[0].retakeBlocked, true, "Another student's live attempt cannot reopen a completed limit");
+
+  for (const legacy of [{ category: "exam_prep", examRound: "round_1" }, { category: "exam_prep__round_1" }]) {
+    const migrated = makeFixture();
+    migrated.documents.delete(`${assessment.RESULT_COLLECTION}/submitted`);
+    migrated.documents.delete(attemptPath);
+    migrated.documents.set("years/2026/semesters/2/quiz_results/legacy", { uid, unitId: "exam_prep", ...legacy });
+    const rounds = await migrated.overview();
+    assert.equal(rounds[0].completed, true);
+    assert.equal(rounds[0].retakeBlocked, false, "Legacy result-only history has no canonical attempt to consume");
+    assert.equal(rounds[1].prerequisiteMet, true);
+  }
+  const allCompleted = makeFixture();
+  for (const round of ["round_2", "round_3"]) {
+    const id = `quiz:${semesterId}:exam_prep:exam_prep:${round}`;
+    allCompleted.documents.set(`${assessment.DEFINITION_COLLECTION}/${id}`, { definitionId: id, semesterId, maxAttempts: 20 });
+    allCompleted.documents.set(`${assessment.RESULT_COLLECTION}/${round}`, { definitionId: id, semesterId, studentUid: uid });
+  }
+  assert.deepEqual((await allCompleted.overview()).map(item => item.retakeBlocked), [true, false, false]);
+  assert.equal(allCompleted.calls.filter(item => item.type === "getAll").length, 1);
+  assert.equal(allCompleted.calls.find(item => item.type === "getAll").paths.length, 3);
 };
 
 const runMockSourceQueryBounds = async () => {
@@ -1305,6 +1418,7 @@ const runLegacyReceiptHints = async () => {
 (async () => {
   await runLegacyReceiptHints();
   await runMockExamPaper();
+  await runMockRetakeOverview();
   await runShortAnswerAliases();
   await runMockSourceQueryBounds();
   await runClassVisibilityCommands();
@@ -1451,6 +1565,7 @@ const runLegacyReceiptHints = async () => {
     cases: [
       "RESET_RESTART_BOTH_KINDS_AND_COMMANDS_WITH_IMMUTABLE_IDS",
       "MOCK_PAPER_ROUND_ISOLATION_ORDER_WEIGHTS_SNAPSHOTS_NO_ANSWER_LEAK_REPLAY",
+      "MOCK_RETAKE_LIMIT_RESET_RESUME_LEGACY_OWNER_SEMESTER_AND_MASKED_READ_BOUNDS",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
