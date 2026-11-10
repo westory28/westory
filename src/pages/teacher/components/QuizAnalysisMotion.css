@@ -1,0 +1,23 @@
+/* User-requested chart entrance also runs with reduced motion (2026-11-10).
+   Only plotted marks move; axes, labels and layout keep their final positions. */
+.qa-chart-rise {
+  transform-origin: center bottom;
+  animation: quiz-chart-rise var(--motion-slow, 300ms) var(--ease-out, ease-out)
+    both;
+}
+
+@keyframes quiz-chart-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media print {
+  .qa-chart-rise {
+    animation: none;
+    transform: none;
+  }
+}

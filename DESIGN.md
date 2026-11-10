@@ -1048,6 +1048,8 @@ Motion supports orientation only. Do not use motion to decorate routine admin su
 | `--ease-standard` | `ease` | routine color/border changes |
 | `--press-scale` | `0.985` | press feedback |
 
+교사 평가 분석의 점수 분포 막대와 문항 정답률 그래프는 결과를 처음 표시할 때 기존 `--motion-slow` 300ms·`--ease-out`으로 아래 기준선에서 `scaleY(0)`→`scaleY(1)`을 한 번 재생한다. 새로고침·명시적 재조회 후에도 다시 재생하며 축·라벨·표·통계값은 움직이지 않는다. 사용자 명시 요청에 따라 이 그래프 진입 효과는 동작 줄이기에서도 유지하고 인쇄에는 완성된 정지 그래프를 표시한다. 서버 요청·타이머·새 모션 토큰은 추가하지 않는다. (사용자 지시, 2026-11-10)
+
 Rules:
 
 - Animate only transform, opacity, or filter for new motion.

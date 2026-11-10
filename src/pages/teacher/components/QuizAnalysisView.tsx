@@ -27,6 +27,7 @@ import type { QuizQuestionDraft } from "./QuizEditor";
 import type { QuizReviewSnapshots } from "./useQuizAnalysisData";
 import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
 import "./QuizAnalysis.css";
+import "./QuizAnalysisMotion.css";
 import {
   AnalysisSortHeader,
   sortAnalysisRows,
@@ -860,6 +861,7 @@ export default function QuizAnalysisView({
                           <span>{bucket.count}명</span>
                           <div className="qa-histogram-track">
                             <div
+                              className="qa-chart-rise"
                               style={{
                                 height: `${(bucket.count / maxHistogram) * 100}%`,
                               }}
@@ -925,7 +927,10 @@ export default function QuizAnalysisView({
                               {quizQuestionFocus(q || {})}
                             </span>
                             <span className="qa-rate-track">
-                              <span style={{ width: `${row.correctRate}%` }} />
+                              <span
+                                className="qa-chart-rise"
+                                style={{ width: `${row.correctRate}%` }}
+                              />
                             </span>
                             <strong>
                               {Math.round(row.correctRate || 0)}%{" "}
@@ -1452,7 +1457,10 @@ export default function QuizAnalysisView({
                             )}
                           </span>
                           <div className="qa-option-track">
-                            <div style={{ width: `${option.percent}%` }} />
+                            <div
+                              className="qa-chart-rise"
+                              style={{ width: `${option.percent}%` }}
+                            />
                           </div>
                           <strong>
                             {option.count}명{" "}

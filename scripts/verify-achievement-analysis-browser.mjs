@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import http from "node:http";
+import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
@@ -143,7 +144,24 @@ const fixture = {
   complete: true,
   mockExamScoreRows,
 };
-const service = `const data=window.fixture=${JSON.stringify(fixture)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);data.rawRows=data.mockExamScoreRows.filter(row=>row.raw.examRound==='round_'+round);data.mockExamScoreRows=data.mockExamScoreRows.filter(row=>Number(row.raw.examRound.slice(6))<=round);if(query.get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
+const encodedFixtures = {};
+for (const round of [1, 2, 3]) for (const grade of [false, true]) {
+  const data = structuredClone(fixture);
+  data.rawRows = data.mockExamScoreRows.filter((row) => row.raw.examRound === `round_${round}`);
+  data.mockExamScoreRows = data.mockExamScoreRows.filter((row) => Number(row.raw.examRound.slice(6)) <= round);
+  if (grade) {
+    data.grade = "3";
+    data.configuredClasses.push({ id: "class_2", label: "3학년 2반" });
+    data.students.slice(12).forEach((student) => { student.classId = "class_2"; });
+  }
+  const json = JSON.stringify(data);
+  encodedFixtures[`${round}:${grade}`] = {
+    encoding: "gzip-base64",
+    uncompressedBytes: Buffer.byteLength(json),
+    payload: gzipSync(json).toString("base64"),
+  };
+}
+const service = `const data=window.fixture=${JSON.stringify(fixture)};const encoded=${JSON.stringify(encodedFixtures)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);data.rawRows=data.mockExamScoreRows.filter(row=>row.raw.examRound==='round_'+round);data.mockExamScoreRows=data.mockExamScoreRows.filter(row=>Number(row.raw.examRound.slice(6))<=round);if(query.get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(request.responseEncoding==='gzip-base64'?encoded[round+':'+Boolean(query.get('grade'))]:data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
 const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const query=new URLSearchParams(location.search);const grade=query.get('grade');const round=query.get('round')||'1';function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_'+round,classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
@@ -161,12 +179,12 @@ const bundle = await build({
         p.onResolve(
           {
             filter:
-              /(?:^|\/)(applicationSession|learningCommands|AppToastProvider)$/,
+              /(?:^|\/)(applicationSession|learningCommands|AppToastProvider|quizClassLive)$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
         p.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
-          contents: service,
+          contents: service + "export const watchQuizClassChanges=()=>()=>{};",
           loader: "ts",
           resolveDir: root,
         }));
@@ -206,7 +224,10 @@ try {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => {
+    errors.push(e.message);
+    console.error(e.message);
+  });
   await page.route("**/*", (route) =>
     route.request().url().startsWith(origin) ? route.continue() : route.abort(),
   );
@@ -581,6 +602,81 @@ try {
     ]);
     assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
   }
+  // Hold only this entrance animation so start/midpoint/end geometry can be
+  // inspected deterministically without slowing production motion.
+  await page.addInitScript(() => {
+    window.chartEntrances = [];
+    document.addEventListener("animationstart", (event) => {
+      if (event.animationName !== "quiz-chart-rise") return;
+      const animation = event.target.getAnimations().find(
+        (entry) => entry.animationName === "quiz-chart-rise",
+      );
+      if (!animation) return;
+      animation.pause();
+      animation.currentTime = 0;
+      window.chartEntrances.push({ target: event.target, animation });
+    });
+  });
+  const checkRise = async (selector) => {
+    await page.waitForFunction((selector) =>
+      window.chartEntrances.some(({ target }) => target.matches(selector)), selector);
+    const samples = await page.evaluate(async (selector) => {
+      const entry = window.chartEntrances.find(({ target }) => target.matches(selector)
+        && (target.tagName.toLowerCase() === "g" || parseFloat(target.style.height) > 0));
+      if (!entry) throw new Error("A plotted mark is required");
+      const { target, animation } = entry;
+      const duration = animation.effect.getTiming().duration;
+      const values = [];
+      for (const time of [0, duration / 2, duration]) {
+        animation.currentTime = time;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const box = target.getBoundingClientRect();
+        const matrix = new DOMMatrix(getComputedStyle(target).transform);
+        values.push({ scale: matrix.m22, bottom: box.bottom, height: box.height });
+      }
+      for (const { animation } of window.chartEntrances) animation.finish();
+      return { duration, values };
+    }, selector);
+    assert.equal(samples.duration, 300);
+    assert.equal(samples.values[0].scale, 0);
+    assert.ok(samples.values[1].scale > 0 && samples.values[1].scale < 1);
+    assert.equal(samples.values[2].scale, 1);
+    assert.ok(samples.values[2].height > samples.values[1].height);
+    if (!selector.includes("g.")) {
+      assert.ok(Math.abs(samples.values[0].bottom - samples.values[2].bottom) < 1,
+        "Histogram rises from its fixed baseline without moving layout");
+    }
+  };
+  for (const reducedMotion of ["no-preference", "reduce"]) {
+    await page.emulateMedia({ reducedMotion });
+    for (const width of [390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(origin);
+      await checkRise(".qaa-histogram-column > .qa-chart-rise");
+      assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
+      assert.equal(await page.evaluate(() => window.qa.calls[0].responseEncoding), "gzip-base64");
+      await page.reload();
+      await checkRise(".qaa-histogram-column > .qa-chart-rise");
+      assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
+      await page.evaluate(() => { window.chartEntrances = []; });
+      await page.getByRole("button", { name: "최신 결과 조회", exact: true }).click();
+      await checkRise(".qaa-histogram-column > .qa-chart-rise");
+      assert.equal(await page.evaluate(() => window.qa.calls.length), 2);
+      assert.deepEqual(await page.evaluate(() => window.qa.saves), []);
+      await page.getByRole("combobox", { name: "분석 보기", exact: true }).selectOption("1");
+      await checkRise("g.qa-chart-rise");
+      assert.equal(await page.locator(".qaa-histogram").count(), 0,
+        "Changing reports removes the previous histogram after refresh");
+      assert.equal(await page.evaluate(() => window.qa.calls.length), 2);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+      const filename = `${width}-chart-motion-${reducedMotion}.png`;
+      await page.screenshot({ path: path.join(evidence, filename), fullPage: true });
+      shots.push(filename);
+    }
+  }
+  await page.emulateMedia({ media: "print" });
+  assert.ok(await page.locator("g.qa-chart-rise").evaluateAll((marks) =>
+    marks.every((mark) => getComputedStyle(mark).animationName === "none")));
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(evidence, "verification.json"),
@@ -602,6 +698,9 @@ try {
           "keyboard sorting and unavailable values last",
           "cumulative mock exam levels are read-only",
           "zero extra reads or writes for report views and sorting",
+          "chart baseline rise on entry, reload and explicit refresh at 390/768/1280px",
+          "same 300ms chart entrance with reduced motion; static print",
+          "native browser DecompressionStream restores gzip-base64 class and grade fixtures",
         ],
       },
       null,

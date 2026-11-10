@@ -27,6 +27,7 @@ import {
   type QuizClassScope,
 } from "../../../lib/quizClassAnalysis";
 import "./QuizAchievementAnalysis.css";
+import "./QuizAnalysisMotion.css";
 import QuizAchievementEstimates from "./QuizAchievementEstimates";
 import { useQuizClassUpdates } from "./useQuizClassUpdates";
 import { applyQuizClassChanges } from "../../../lib/quizClassLiveState";
@@ -132,6 +133,7 @@ export default function QuizAchievementAnalysis({
     scope.classIds,
     scope.grade,
   ]);
+  const chartEntranceKey = `${requestKey}:${reload}:${refreshVersion}`;
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -504,10 +506,14 @@ export default function QuizAchievementAnalysis({
               아직 제출한 학생이 없습니다.
             </p>
           ) : (
-            <Histogram analysis={analysis} />
+            <Histogram
+              key={`histogram:${chartEntranceKey}`}
+              analysis={analysis}
+            />
           )}
           {(!inlineReport || analysis.attempts.length > 0) && (
             <div
+              key={`levels:${chartEntranceKey}`}
               className="qaa-level-stack"
               role="img"
               aria-label={analysis.levelCohorts
@@ -519,7 +525,7 @@ export default function QuizAchievementAnalysis({
                 .map((row) => (
                   <span
                     key={row.level}
-                    className={`qaa-level-${row.level}`}
+                    className={`qaa-level-${row.level} qa-chart-rise`}
                     style={{ width: `${row.percent}%` }}
                     title={`${levelLabel(row.level)} ${percent(row.percent)}`}
                   />
@@ -673,7 +679,7 @@ export default function QuizAchievementAnalysis({
                 />
               </div>
               <ItemStatisticsTable
-                key={form.key}
+                key={`${form.key}:${chartEntranceKey}`}
                 form={form}
                 data={data}
                 onInspect={inspect}
@@ -1021,7 +1027,10 @@ function Histogram({ analysis }: { analysis: AchievementAnalysis }) {
       {analysis.histogram.map((row) => (
         <div key={row.label} className="qaa-histogram-column">
           <span>{row.count}</span>
-          <div style={{ height: `${(row.count / maximum) * 100}%` }} />
+          <div
+            className="qa-chart-rise"
+            style={{ height: `${(row.count / maximum) * 100}%` }}
+          />
           <small>{row.label}</small>
         </div>
       ))}
@@ -1107,14 +1116,26 @@ function ProfileChart({
             </text>
           </g>
         ))}
-      {paths.map((value, i) => (
-        <path key={i} d={value} className="qaa-profile-path" />
-      ))}
+      <g
+        className="qa-chart-rise"
+        style={{ transformOrigin: `0 ${height - bottom}px` }}
+      >
+        {paths.map((value, i) => (
+          <path key={i} d={value} className="qaa-profile-path" />
+        ))}
+        {item.levelRates.map((row, i) =>
+          row.percent != null ? (
+            <circle
+              key={row.level}
+              cx={x(i)}
+              cy={y(row.percent)}
+              r={compact ? 2 : 4}
+            />
+          ) : null,
+        )}
+      </g>
       {item.levelRates.map((row, i) => (
         <g key={row.level}>
-          {row.percent != null && (
-            <circle cx={x(i)} cy={y(row.percent)} r={compact ? 2 : 4} />
-          )}
           {!compact && (
             <>
               <text x={x(i)} y={height - 28} textAnchor="middle">
