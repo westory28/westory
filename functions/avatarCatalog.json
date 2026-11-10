@@ -691,8 +691,7 @@
       "price": 120,
       "tier": "premium",
       "characters": [
-        "girl",
-        "boy"
+        "girl"
       ],
       "color": "#a68ac7"
     },
@@ -704,8 +703,7 @@
       "price": 100,
       "tier": "premium",
       "characters": [
-        "girl",
-        "boy"
+        "girl"
       ],
       "color": "#344764"
     },
@@ -717,8 +715,7 @@
       "price": 100,
       "tier": "premium",
       "characters": [
-        "girl",
-        "boy"
+        "girl"
       ],
       "color": "#e8dbc4"
     },
@@ -730,8 +727,7 @@
       "price": 120,
       "tier": "premium",
       "characters": [
-        "girl",
-        "boy"
+        "girl"
       ],
       "color": "#85b9a9"
     },

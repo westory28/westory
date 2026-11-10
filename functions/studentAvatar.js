@@ -5,7 +5,7 @@ const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { readStudentMenuAccess } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
-const { catalog, items, defaultLook, validateLook, lookHash } = require('./studentAvatarCatalog');
+const { catalog, items, defaultLook, validateLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
 const { resolveRankPolicy, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
 
@@ -23,12 +23,19 @@ const requestKey = value => {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(value)) invalid();
   return hash(value);
 };
-const publicState = state => ({
-  schemaVersion: 1, catalogVersion: catalog.version, look: state.look,
-  revision: state.revision, lookHash: lookHash(state.look),
-  ...(state.thumbnailUrl ? { thumbnailUrl: state.thumbnailUrl } : {}),
-});
-const privateState = state => ({ ...publicState(state), ownedItemIds: [...state.ownedItemIds] });
+const publicState = state => {
+  const look = restoreStoredLook(state.look);
+  return {
+    schemaVersion: 1, catalogVersion: catalog.version, look,
+    revision: state.revision, lookHash: lookHash(look),
+    ...(state.thumbnailUrl && lookHash(look) === lookHash(state.look) ? { thumbnailUrl: state.thumbnailUrl } : {}),
+  };
+};
+const privateState = state => {
+  const current = publicState(state);
+  return { ...current, ownedItemIds: [...state.ownedItemIds],
+    ...(current.lookHash !== lookHash(state.look) ? { requiresThumbnailRefresh: true } : {}) };
+};
 const walletState = account => Object.fromEntries(['semesterId', 'accountId', 'balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal', 'adjustedTotal', 'revision'].map(key => [key, account[key]]));
 
 async function encodeThumbnail(input) {
@@ -90,7 +97,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       || !Array.isArray(value.ownedItemIds) || value.ownedItemIds.length > 500
       || value.ownedItemIds.some(id => typeof id !== 'string' || id.length > 100)
       || new Set(value.ownedItemIds).size !== value.ownedItemIds.length
-      || !validateLook(value.look) || value.lookHash !== lookHash(value.look)) {
+      || !restoreStoredLook(value.look) || value.lookHash !== lookHash(value.look)) {
       fail('failed-precondition', '아바타 보관함을 확인하지 못했습니다.', 'AVATAR_STATE_INVALID');
     }
     // Items legitimately saved while free remain owned after a price increase.

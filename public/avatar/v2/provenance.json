@@ -1,7 +1,7 @@
 {
-  "compilerSha256": "6efa36ce763c9f56bb7d42597cfae0eb8cc55d44a93050294ec339883fe30bcc",
-  "registrySha256": "42d2c18452c77640ff532e7c84d579757d069585b2922884e8dbd86f8fa27100",
-  "manifestSha256": "7db3449a38bf7d8ce59531993fd2f205c5e00ceccdc7e8077529bf90c69354f6",
+  "compilerSha256": "1f947950f8ae7ffec99207f46681ffd5332a4f632889bcbb74c9206c003c2388",
+  "registrySha256": "483765eb564f26416831c961eeb469427e64d77ce4f346db8492ef20dc790621",
+  "manifestSha256": "3033b1e3204ee2954c57c8bd1fbf1a785e2fc2ad5d309a4f97fca4ead6098024",
   "sourceHashes": {
     "body": {
       "sha256": "db6bc4a1c071db7588f6340db24fbc6823dec171d3745a4059610b33d78f3fcb",
@@ -9,12 +9,12 @@
       "height": 1086
     },
     "face": {
-      "sha256": "340487322709eb2f1cb3b3332706727f4a572edae44970e8ff4ada15e7239870",
+      "sha256": "a66d3505eb5f597c77f11b7f94ffc9cc62ca624c344aa6527df926ac0cb86e83",
       "width": 1536,
       "height": 1024
     },
     "hair": {
-      "sha256": "389abf688dfe83c6d8363738cad50983d08272e3e5754db4134719b1c9e2bee1",
+      "sha256": "268c1b92709cc5cf49f766a8e21a34b1c6961c929661ab478efc4f04fd7954d9",
       "width": 1536,
       "height": 1024
     },
@@ -27,6 +27,11 @@
       "sha256": "e6d5ab8802271cd6082044631b1cf3c792f30ca3ceda3d05c6351e1cd1e1185f",
       "width": 1774,
       "height": 887
+    },
+    "heads": {
+      "sha256": "adb689529e4ffbfbb9773f9992001642805b46bfb6c3bafc8f463fa882be3e01",
+      "width": 2172,
+      "height": 724
     },
     "v3-jacket-poses": {
       "sha256": "f0a263ec3d90f6677eddb1714552865b90a0d21198d8dc3c936a782b74c69616",
@@ -81,85 +86,226 @@
   },
   "assets": [
     {
-      "id": "head-natural",
-      "file": "layers/head-natural.webp",
-      "sha256": "7fb351db0ff45dd5f6c957f9fdb059764058d67786fe74fbed9f202fc58f08fd",
-      "rawSha256": "9cfe54f43cdcbc44624bec3634cc8e96d208b7d30659e5d008ccd7ef820e9838",
-      "width": 303,
-      "height": 264,
+      "id": "head-natural-tint-mask",
+      "file": "layers/head-natural-tint-mask.webp",
+      "sha256": "a34eae87a4364d2332cd255b19a8880115b06d2375b23e748109e5dfe2a0483b",
+      "rawSha256": "1e027e306eef49bcdafc1db122299d0d62fbe6635855bd9647bb6e0717cef3c8",
+      "width": 475,
+      "height": 531,
       "encoding": "lossless-v1",
       "source": {
-        "sheet": "body",
+        "sheet": "heads",
         "crop": [
           0,
           0,
-          362,
-          362
+          724,
+          724
         ],
         "bounds": {
-          "left": 53,
-          "top": 61,
-          "width": 303,
-          "height": 264,
-          "pixels": 57398
+          "left": 115,
+          "top": 88,
+          "width": 475,
+          "height": 531,
+          "pixels": 183571
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6336880295643745,
+          "referenceSamples": 172695,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
+        "maskFor": "head-natural",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "head-natural",
+      "file": "layers/head-natural.webp",
+      "sha256": "5af02a53ca1abe349537030f3468b9e3cb8a63af17429a3765c4ad13ac6c37ec",
+      "rawSha256": "f9f0dcbe4a43122e0c66cb32555d4f2ce365aae65102fb5c965ca94f7f7ff57b",
+      "width": 475,
+      "height": 531,
+      "encoding": "lossless-v1",
+      "source": {
+        "sheet": "heads",
+        "crop": [
+          0,
+          0,
+          724,
+          724
+        ],
+        "bounds": {
+          "left": 115,
+          "top": 88,
+          "width": 475,
+          "height": 531,
+          "pixels": 183571
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6336880295643745,
+          "referenceSamples": 172695,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
+      }
+    },
+    {
+      "id": "head-round-tint-mask",
+      "file": "layers/head-round-tint-mask.webp",
+      "sha256": "fe69539eee9bc24cc8fa76145a574e7acf79ddb595c220b33adde5de3b2a7acf",
+      "rawSha256": "1069a5a25988dc55789f254ed458ccd5a59c7b7949835323a429724b746ccff9",
+      "width": 495,
+      "height": 528,
+      "encoding": "lossless-v1",
+      "source": {
+        "sheet": "heads",
+        "crop": [
+          724,
+          0,
+          724,
+          724
+        ],
+        "bounds": {
+          "left": 109,
+          "top": 87,
+          "width": 495,
+          "height": 528,
+          "pixels": 191154
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6322781231810454,
+          "referenceSamples": 180064,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
+        "maskFor": "head-round",
+        "tintMask": {
+          "includeSkin": true
         }
       }
     },
     {
       "id": "head-round",
       "file": "layers/head-round.webp",
-      "sha256": "e48ee3d4759e1dc62e05fbd0a3a66250dcacd200a7152b46ccde78f2e6b9d343",
-      "rawSha256": "75342ed6219f9473ae5ee2fbfc356f7ee686e06a253944d15735c5b7fa40b62d",
-      "width": 298,
-      "height": 266,
+      "sha256": "20d628ac316b3cc2207c2c9db23fba259025efe88f7f50f24d1acd6e9d29bf81",
+      "rawSha256": "11bf875b8189cbc0d89f39dd93c30822a2efbfcdbbfef5933cb542469e5d401a",
+      "width": 495,
+      "height": 528,
       "encoding": "lossless-v1",
       "source": {
-        "sheet": "body",
+        "sheet": "heads",
         "crop": [
-          362,
+          724,
           0,
-          362,
-          362
+          724,
+          724
         ],
         "bounds": {
-          "left": 40,
-          "top": 59,
-          "width": 298,
-          "height": 266,
-          "pixels": 56787
+          "left": 109,
+          "top": 87,
+          "width": 495,
+          "height": 528,
+          "pixels": 191154
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6322781231810454,
+          "referenceSamples": 180064,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
+      }
+    },
+    {
+      "id": "head-slim-tint-mask",
+      "file": "layers/head-slim-tint-mask.webp",
+      "sha256": "530c71139e9fea95cc6e8deaac4c0e7f9c9651e9405bdded7cd768e113c0faf7",
+      "rawSha256": "6879dd57df5ec50b594d2b3de960ab772977671f57549fb13a46d23344126e47",
+      "width": 469,
+      "height": 533,
+      "encoding": "lossless-v1",
+      "source": {
+        "sheet": "heads",
+        "crop": [
+          1448,
+          0,
+          724,
+          724
+        ],
+        "bounds": {
+          "left": 134,
+          "top": 88,
+          "width": 469,
+          "height": 533,
+          "pixels": 179216
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6330351388219605,
+          "referenceSamples": 168278,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
+        "maskFor": "head-slim",
+        "tintMask": {
+          "includeSkin": true
         }
       }
     },
     {
       "id": "head-slim",
       "file": "layers/head-slim.webp",
-      "sha256": "e7ab329b102b885b30c198e5ae1ed3b2bd551e5bbff4f37879b1419f4f8450dd",
-      "rawSha256": "fb18606c537006388bcbeb6a745a3c511cceeb2570c7c2ab87ff8f622cf6e26e",
-      "width": 289,
-      "height": 263,
+      "sha256": "82886a1e72bb10b376a616d2cea5fb6169c5f40337132518967ce65608f947eb",
+      "rawSha256": "d1b2d553dbd9fe4eb31ce2a5643e5db3a1065aa37aa767a2e16527f18a5a78dc",
+      "width": 469,
+      "height": 533,
       "encoding": "lossless-v1",
       "source": {
-        "sheet": "body",
+        "sheet": "heads",
         "crop": [
-          724,
+          1448,
           0,
-          362,
-          362
+          724,
+          724
         ],
         "bounds": {
-          "left": 29,
-          "top": 62,
-          "width": 289,
-          "height": 263,
-          "pixels": 54034
+          "left": 134,
+          "top": 88,
+          "width": 469,
+          "height": 533,
+          "pixels": 179216
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6330351388219605,
+          "referenceSamples": 168278,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
     {
-      "id": "leg",
-      "file": "layers/leg.webp",
-      "sha256": "5ba81f06ff5ef602f85e2d73971c9bf25ca27bb58768f6ff18b0e334982f37e9",
-      "rawSha256": "968ed91b1e000628ff642dd5849962b0b6e31111801c07266e10a544ad51fd88",
+      "id": "leg-tint-mask",
+      "file": "layers/leg-tint-mask.webp",
+      "sha256": "b55afffc79d783c4fd948955d7ba94dea3f20f6c18efd111e1c104096af1003a",
+      "rawSha256": "8658068aa4760de4cf39bc85d316007e51c012f7e02396a1faae7a511c4d8bb8",
       "width": 107,
       "height": 307,
       "encoding": "lossless-v1",
@@ -177,206 +323,253 @@
           "width": 107,
           "height": 307,
           "pixels": 27757
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.7000298635281346,
+          "referenceSamples": 23769,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
+        "maskFor": "leg",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "leg",
+      "file": "layers/leg.webp",
+      "sha256": "5d4ef50d1536531c42913dc12689d147f2f0e336e6845a69e6533b75f3cb7350",
+      "rawSha256": "61f958c705393fa59c8a2f1f153399386f93674dc86105cbf684ccb3c0f974dc",
+      "width": 107,
+      "height": 307,
+      "encoding": "lossless-v1",
+      "source": {
+        "sheet": "body",
+        "crop": [
+          125,
+          705,
+          150,
+          335
+        ],
+        "bounds": {
+          "left": 19,
+          "top": 11,
+          "width": 107,
+          "height": 307,
+          "pixels": 27757
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.7000298635281346,
+          "referenceSamples": 23769,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
     {
       "id": "hair-bob",
       "file": "layers/hair-bob.webp",
-      "sha256": "8a0ee74555d303f653c083cf7c451d4672c2cb1bdfd77397e605ed3180042337",
-      "rawSha256": "e8cb1fcbc16485be009c58dfa4d7bd0bce73aa55e3f767ef23c4e5ae5b5f8b6a",
-      "width": 377,
-      "height": 293,
+      "sha256": "aa5a78da2b67c53f1b1191168cad60c17a3e353f2df53b662b51e28843dd409e",
+      "rawSha256": "e3f8feca9f7ed9119ceca27757fdd00330c894fac92115a74e3bf6a2cc280c1e",
+      "width": 345,
+      "height": 283,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          80,
           0,
-          430,
-          330
+          0,
+          512,
+          341
         ],
         "bounds": {
-          "left": 40,
+          "left": 108,
           "top": 32,
-          "width": 377,
-          "height": 293,
-          "pixels": 62556
+          "width": 345,
+          "height": 283,
+          "pixels": 54334
         }
       }
     },
     {
       "id": "hair-curtain",
       "file": "layers/hair-curtain.webp",
-      "sha256": "4463aa85ae5775784ccecd71895134b9c6caa3d647d410b3613681909be060b3",
-      "rawSha256": "2ff259b03224648f7de66238def9659fbfd8a8595bc5f234d8389b9aef1dcc07",
-      "width": 332,
-      "height": 261,
+      "sha256": "31e9afcc020d27ed0f47339247eabd31a5445188c37d9bf91ebe0cc4956bfa45",
+      "rawSha256": "b23060f285f3e57dd3f2dfc652e12625cbc0ed693966f0522ad499e2d1e4e935",
+      "width": 307,
+      "height": 238,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          560,
+          512,
           0,
-          440,
-          330
+          512,
+          341
         ],
         "bounds": {
-          "left": 36,
-          "top": 27,
-          "width": 332,
-          "height": 261,
-          "pixels": 49649
+          "left": 102,
+          "top": 29,
+          "width": 307,
+          "height": 238,
+          "pixels": 39011
         }
       }
     },
     {
       "id": "hair-volume",
       "file": "layers/hair-volume.webp",
-      "sha256": "ca8cbd9e41afe2e8ee2d7114e30344fa4d1bb3d40273868fbd75cb342a53e45a",
-      "rawSha256": "b08c4194a0162f5692a7d392a96638f903f4999a5c92a7add4edf18983183f2b",
-      "width": 358,
-      "height": 262,
+      "sha256": "15d818a744855e82cedc236a3c23b1cddeae714ad3e9cf0513a3162c435efdc1",
+      "rawSha256": "0b44af5d62f980023555c3e4baf97e3e7b46fee7e1176c38377cd86392100b95",
+      "width": 336,
+      "height": 237,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          1030,
+          1024,
           0,
-          430,
-          335
+          512,
+          341
         ],
         "bounds": {
-          "left": 7,
-          "top": 27,
-          "width": 358,
-          "height": 262,
-          "pixels": 54081
+          "left": 70,
+          "top": 25,
+          "width": 336,
+          "height": 237,
+          "pixels": 43086
         }
       }
     },
     {
       "id": "hair-wave",
       "file": "layers/hair-wave.webp",
-      "sha256": "9b1a1d60c0080edfa2c551e8ece56f344f89171c15954f2c091b555fbbe923e1",
-      "rawSha256": "a68fe16c054e733339d2702ed85f9c874b2d25b33be84e18d743d22ee7d345e2",
-      "width": 384,
-      "height": 306,
+      "sha256": "3143fc9164c2f745d217decf930d2e2bb1f94cf00750b971dfbf892f416d8a72",
+      "rawSha256": "f5de75156e2694ddceaa28f80add5ddd7bb0c1bfffec63b6cb6f0c2faf7346ef",
+      "width": 319,
+      "height": 252,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          75,
-          335,
-          440,
-          330
+          0,
+          341,
+          512,
+          341
         ],
         "bounds": {
-          "left": 28,
-          "top": 14,
-          "width": 384,
-          "height": 306,
-          "pixels": 63410
+          "left": 115,
+          "top": 13,
+          "width": 319,
+          "height": 252,
+          "pixels": 40177
         }
       }
     },
     {
       "id": "hair-long",
       "file": "layers/hair-long.webp",
-      "sha256": "22f0d59c765edbe0ff7a2810966b62739b883babb3b3192de8dbd6cc523c52d8",
-      "rawSha256": "29da14ba2d4a95a9afb6852f928312898f9a29db906a71671bb6ad211f1bd036",
-      "width": 413,
-      "height": 350,
+      "sha256": "c8a7b421ddda2af556d70c5976af78a8c2eb0ec29dcc8727752f7ff898686bb7",
+      "rawSha256": "b0b23ed66adb60724d9400eb664f5a66031be3f2fbce625bdd4baaf64de0855f",
+      "width": 353,
+      "height": 319,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          535,
-          325,
-          470,
-          365
+          512,
+          341,
+          512,
+          341
         ],
         "bounds": {
-          "left": 24,
+          "left": 80,
           "top": 10,
-          "width": 413,
-          "height": 350,
-          "pixels": 77883
+          "width": 353,
+          "height": 319,
+          "pixels": 62163
         }
       }
     },
     {
       "id": "hair-crop",
       "file": "layers/hair-crop.webp",
-      "sha256": "5e0a05bdf122d490dbe2b90dc0394c688a05f0b22cc8311698e3e531547bb0ae",
-      "rawSha256": "13aadc3b39c8c764ef2636e198c563debc6856e291a5a7f8835642f8df9372eb",
-      "width": 323,
-      "height": 257,
+      "sha256": "2af11cabd4672c81649dcfd5bd8bb68bcae4fe89c56b740796466cd5b645dda3",
+      "rawSha256": "96fbfb5fd6983a70103178d3ee94dee4252ae943100079937c6b81619cec1774",
+      "width": 286,
+      "height": 222,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          1030,
-          330,
-          440,
+          1024,
+          341,
+          512,
           315
         ],
         "bounds": {
-          "left": 43,
-          "top": 10,
-          "width": 323,
-          "height": 257,
-          "pixels": 43064
+          "left": 98,
+          "top": 15,
+          "width": 286,
+          "height": 222,
+          "pixels": 36470
         }
       }
     },
     {
       "id": "hair-toben",
       "file": "layers/hair-toben.webp",
-      "sha256": "7bdf07bbadad32c1b20322b6df50c96a2bb145eead79990776876163a4e6df1c",
-      "rawSha256": "38389d1f5f0a88ea0e458218315e6957c456b44f561e2bbc52218bc43bf3207f",
-      "width": 332,
-      "height": 249,
+      "sha256": "462797002daf5d99946fa4b8b21161cef7e7f4219c3b85253ac0d6abb747d57e",
+      "rawSha256": "a8e0564d62a268f31c2a923087107171276e613193ea5c13a373d8bd2619b9a4",
+      "width": 294,
+      "height": 230,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          100,
-          660,
-          400,
-          325
+          0,
+          682,
+          512,
+          341
         ],
         "bounds": {
-          "left": 37,
-          "top": 16,
-          "width": 332,
-          "height": 249,
-          "pixels": 47362
+          "left": 134,
+          "top": 7,
+          "width": 294,
+          "height": 230,
+          "pixels": 37388
         }
       }
     },
     {
       "id": "hair-twin-tail-tint-mask",
       "file": "layers/hair-twin-tail-tint-mask.webp",
-      "sha256": "d406320241cb12258047a1c33723a3cf09bd22710bf8ef0c3633e0109aa68000",
-      "rawSha256": "dc9c80a1ce7286e0b067e66937451cfbdfed02a611136cd74a7c0a7a8126c637",
-      "width": 471,
-      "height": 310,
+      "sha256": "06cbaac9976891aef0d4b948f802b97b494308548de5e7945343f9b0313ffcdb",
+      "rawSha256": "6b90f8c03eb3dcaeb0c5d656c06cce6d4619fb2e2101d72b05dd0bf66c6b65a6",
+      "width": 436,
+      "height": 308,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          510,
-          685,
-          490,
-          335
+          512,
+          682,
+          512,
+          341
         ],
         "bounds": {
-          "left": 8,
-          "top": 10,
-          "width": 471,
-          "height": 310,
-          "pixels": 78843
+          "left": 36,
+          "top": 12,
+          "width": 436,
+          "height": 308,
+          "pixels": 69489
         },
         "maskFor": "hair-twin-tail",
         "tintMask": {
@@ -390,50 +583,50 @@
     {
       "id": "hair-twin-tail",
       "file": "layers/hair-twin-tail.webp",
-      "sha256": "bd130e4f6e3f086b99b617e57284b39036569e65658302a6a0314598526c7036",
-      "rawSha256": "724bf1c0757c56054b77c719aa23124ff8509810056491281fa7c38312900d25",
-      "width": 471,
-      "height": 310,
+      "sha256": "36014025cacafb1343db615e228da5fd15c7749bdcd8d8150297b5ad103469d8",
+      "rawSha256": "f574384d2aafba5925031bb55357d0a8dd40d186ce5d1c689177a24aca5e8ee2",
+      "width": 436,
+      "height": 308,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          510,
-          685,
-          490,
-          335
+          512,
+          682,
+          512,
+          341
         ],
         "bounds": {
-          "left": 8,
-          "top": 10,
-          "width": 471,
-          "height": 310,
-          "pixels": 78843
+          "left": 36,
+          "top": 12,
+          "width": 436,
+          "height": 308,
+          "pixels": 69489
         }
       }
     },
     {
       "id": "hair-half-up",
       "file": "layers/hair-half-up.webp",
-      "sha256": "9503b6b15d330f9412a0f7418713ec6cbd0d6308ed7a527325b36b1e31472519",
-      "rawSha256": "539ac01609a5e983c5f5f0a02631343b5e6dafa33073217fb0be10faa9ba52a1",
-      "width": 341,
-      "height": 345,
+      "sha256": "bd61e97a086f3248a38f9663c6c70d0a192731c57980b47a6d3d947ebd702c78",
+      "rawSha256": "9973a7cd3c7157d9645910e5e8ffba8314fe0be27af06412debc86874c9467a5",
+      "width": 334,
+      "height": 335,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "hair",
         "crop": [
-          1030,
+          1024,
           650,
-          430,
+          512,
           374
         ],
         "bounds": {
-          "left": 32,
-          "top": 8,
-          "width": 341,
-          "height": 345,
-          "pixels": 64159
+          "left": 74,
+          "top": 19,
+          "width": 334,
+          "height": 335,
+          "pixels": 58744
         }
       }
     },
@@ -610,6 +803,15 @@
           "height": 811,
           "pixels": 349342
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jacket-idle",
         "tintMask": {
           "includeSkin": true
@@ -619,8 +821,8 @@
     {
       "id": "v3-jacket-idle",
       "file": "layers/v3-jacket-idle.webp",
-      "sha256": "1bb933247faed0a4977d3d6681322adba4bb2fb75b86ffc033bea45692da3e38",
-      "rawSha256": "83ddf65aba69ad2eb3f0db6cd3a475dbf1de7c85d5bbee620aa08b21241ac2c6",
+      "sha256": "20548a47c653213a718f5a52affd9f53325efd1a565423ec840b12c20ab48213",
+      "rawSha256": "e17ba50662a0050f02796f97cb69b9ef9eebc914b8be4ee6e69e215316ddc199",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -638,6 +840,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -664,6 +875,15 @@
           "height": 814,
           "pixels": 353001
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jacket-wave",
         "tintMask": {
           "includeSkin": true
@@ -673,8 +893,8 @@
     {
       "id": "v3-jacket-wave",
       "file": "layers/v3-jacket-wave.webp",
-      "sha256": "feb12ba3ea81541c7f7237e7071af2c86e638f849550cfdae1e746c258906838",
-      "rawSha256": "37fcf78993240e9bb6c8550f1aa8082cdc9e5d9c83e827dde2344498602b6270",
+      "sha256": "b2a03b70b65615edb2f546b2d588553dec49856506c93bfd71cb583763abc215",
+      "rawSha256": "3c913f2435453ec7eec1794d58b6cf3c746af704538498ebc95b0c1e47ec8e30",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -692,6 +912,15 @@
           "width": 784,
           "height": 814,
           "pixels": 353001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -718,6 +947,15 @@
           "height": 640,
           "pixels": 327934
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jacket-cheer",
         "tintMask": {
           "includeSkin": true
@@ -727,8 +965,8 @@
     {
       "id": "v3-jacket-cheer",
       "file": "layers/v3-jacket-cheer.webp",
-      "sha256": "75ba901401d187fec2ad526e8fda63ed42d40ee2d7836344d1d090e12e5f459b",
-      "rawSha256": "b50d14ed48c9e2f7f5a34d39d37e6a4e8e075fcbd9ad5a3da7e267107a20b3b9",
+      "sha256": "1cfd25242dbb4556d7d8b415c3bc46a4402203ef13ec3449eb3fb46de8d797bd",
+      "rawSha256": "eef133bc50760f61228cbbfd8cdbacdc3b89ebb8234e5117aaccb848c0d492d3",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -746,6 +984,15 @@
           "width": 717,
           "height": 640,
           "pixels": 327934
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -772,6 +1019,15 @@
           "height": 811,
           "pixels": 307163
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jacket-think",
         "tintMask": {
           "includeSkin": true
@@ -781,8 +1037,8 @@
     {
       "id": "v3-jacket-think",
       "file": "layers/v3-jacket-think.webp",
-      "sha256": "acab8fd43ceacfdea7ae76dca1b9be1ed222f43fb0382f1808c920216148a835",
-      "rawSha256": "a3ec5307d632a1de41d4bc2f3ae16df403f8aaf2de0fa026a81d392c0f8b9286",
+      "sha256": "9b1487559f5088f25e819f8016ac15a61d8bfbcfc8e868165798f6130b34831c",
+      "rawSha256": "366f0f2637cf53d0b434a3f511fc49f2a7c264026c969427fe81f1af8a047450",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -800,6 +1056,15 @@
           "width": 587,
           "height": 811,
           "pixels": 307163
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -826,6 +1091,15 @@
           "height": 639,
           "pixels": 306212
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jacket-heart",
         "tintMask": {
           "includeSkin": true
@@ -835,8 +1109,8 @@
     {
       "id": "v3-jacket-heart",
       "file": "layers/v3-jacket-heart.webp",
-      "sha256": "85f65ec3f6703e5350633b0e746f4f60c8174777b64f74ca218a3d18f19da4f2",
-      "rawSha256": "e795fd0256c34b533e6c91cf32c13e8a596246838189454b7f68d409f48ea1a1",
+      "sha256": "c292818b5f6ec0fb5ab61a08d1ec5ac0748e084264309832d047801e9fd18cb8",
+      "rawSha256": "c389597cb7f6adcae08245776e58f9caff5c2f18626a40a2af9bce5028339384",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -854,6 +1128,15 @@
           "width": 710,
           "height": 639,
           "pixels": 306212
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -880,6 +1163,15 @@
           "height": 823,
           "pixels": 346001
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5693889278423431,
+          "referenceSamples": 29217,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-plain-idle",
         "tintMask": {
           "includeSkin": true
@@ -889,8 +1181,8 @@
     {
       "id": "v3-plain-idle",
       "file": "layers/v3-plain-idle.webp",
-      "sha256": "0daf6c8fc94da605d0f65831b2351a9059deada0faa0f791dfb65cba80b16aa9",
-      "rawSha256": "47eb25a22bf54a0e37f84fa65c23459a49ad4b74c82053c3ee31f6e57a026aea",
+      "sha256": "52e5249358f8d1045a652cbd921354f175cc0206af979eb159dd113e4cd57963",
+      "rawSha256": "50c07d6fd8a2d0303e8f5d82d66f42ca53d26328f9eec097d067fb23f21b56d4",
       "width": 508,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -908,6 +1200,15 @@
           "width": 653,
           "height": 823,
           "pixels": 346001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5693889278423431,
+          "referenceSamples": 29217,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -934,6 +1235,15 @@
           "height": 823,
           "pixels": 349915
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5740435436886944,
+          "referenceSamples": 35126,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-plain-wave",
         "tintMask": {
           "includeSkin": true
@@ -943,8 +1253,8 @@
     {
       "id": "v3-plain-wave",
       "file": "layers/v3-plain-wave.webp",
-      "sha256": "3e1e0a5334fb0e4d0626d4e26ec72f7a09f2ec60c4f055dd0a19acd76b26d0fa",
-      "rawSha256": "6ac80c88e1ffd7b54fc6ea412f92e006795191666c19faaec7b1afe77ded9b68",
+      "sha256": "9b988888c8d16532bb3e1ce8f651df513de6a679a5a0f878cee4e5dbd5328d81",
+      "rawSha256": "df74b07d9858ae8393e11e415b57876c8c5f5abd0410e00a08af7470518b46e5",
       "width": 610,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -962,6 +1272,15 @@
           "width": 784,
           "height": 823,
           "pixels": 349915
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5740435436886944,
+          "referenceSamples": 35126,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -988,6 +1307,15 @@
           "height": 644,
           "pixels": 322313
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5753240592584151,
+          "referenceSamples": 30090,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-plain-cheer",
         "tintMask": {
           "includeSkin": true
@@ -997,8 +1325,8 @@
     {
       "id": "v3-plain-cheer",
       "file": "layers/v3-plain-cheer.webp",
-      "sha256": "db495ba720d4437b2ce9d0f539549f97f03ed11cff4bc26597444c29be60d3e0",
-      "rawSha256": "7d79db32fee1fcb2c6b448f57927f54d3ca30f6ce0d8713e46c62980f2bc2367",
+      "sha256": "b51ae91b8a04789552ec3c16f4ea18337b12bcc6fe82fdd24ed6dcd4e6e74d2a",
+      "rawSha256": "96ab11f9d0d55f4ea00861601bc7af84d0d0f60b31ab6a86dc6facc58948aea4",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -1016,6 +1344,15 @@
           "width": 722,
           "height": 644,
           "pixels": 322313
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5753240592584151,
+          "referenceSamples": 30090,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1042,6 +1379,15 @@
           "height": 821,
           "pixels": 305733
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5718023572622802,
+          "referenceSamples": 27949,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-plain-think",
         "tintMask": {
           "includeSkin": true
@@ -1051,8 +1397,8 @@
     {
       "id": "v3-plain-think",
       "file": "layers/v3-plain-think.webp",
-      "sha256": "3e7bb52c104652d315debe6ffbc9dca6ece5293a70556dd36df1f22ef1fecf5d",
-      "rawSha256": "c62f0c4befa39ede0f7a26ec6ad6d1d3aba6cc9899d6f669aabf587041ccab44",
+      "sha256": "930dddae42ee41697e9a8a5df9bb52d0e65f98d4fd1363922ef2d630424eaef3",
+      "rawSha256": "aa5edbd1091a20179ff8bf6a4e660e777df4958409012f338bd5a36ad5e81916",
       "width": 464,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1070,6 +1416,15 @@
           "width": 595,
           "height": 821,
           "pixels": 305733
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5718023572622802,
+          "referenceSamples": 27949,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1096,6 +1451,15 @@
           "height": 645,
           "pixels": 306413
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5686833911728497,
+          "referenceSamples": 36925,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-plain-heart",
         "tintMask": {
           "includeSkin": true
@@ -1105,8 +1469,8 @@
     {
       "id": "v3-plain-heart",
       "file": "layers/v3-plain-heart.webp",
-      "sha256": "7f7c89e2d0189401e8df391f724b621b593cab32c4498e32edb9cf87458ae703",
-      "rawSha256": "b54972ac341041dc2c99135dbcb3388cbc1c35dca9041eabad4c7c796ad705f2",
+      "sha256": "068bdd402514d930818ae1697818ea0d29f4b1037954cfb4d8eee7536cd0acef",
+      "rawSha256": "2a68bcb417bae57b4af373d877120d72f008b8314148ea28130a5f07ed0f51d3",
       "width": 640,
       "height": 580,
       "encoding": "webp-q90-640-v1",
@@ -1124,6 +1488,15 @@
           "width": 712,
           "height": 645,
           "pixels": 306413
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5686833911728497,
+          "referenceSamples": 36925,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1150,6 +1523,15 @@
           "height": 820,
           "pixels": 319474
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5639082049289317,
+          "referenceSamples": 30917,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jeogori-idle",
         "tintMask": {
           "includeSkin": true
@@ -1159,8 +1541,8 @@
     {
       "id": "v3-jeogori-idle",
       "file": "layers/v3-jeogori-idle.webp",
-      "sha256": "1cb911f6ddf1ff4f698797b4948d63e4779912b972dabf24df86d7fc1859c7b1",
-      "rawSha256": "68e1e93a6938da347c90b9cc0479157d148d15c8d968fd4540452dfb65ac446f",
+      "sha256": "9cca1dc1b173b21f3d8b9391d01b473afba6ff39d8288888b7ccf1a580fc0d6b",
+      "rawSha256": "36e727b1d94edfb5c84871b20fe3798f9d3ec22f2f1efacc7b3cab4142de7f4e",
       "width": 517,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1178,6 +1560,15 @@
           "width": 662,
           "height": 820,
           "pixels": 319474
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5639082049289317,
+          "referenceSamples": 30917,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1204,6 +1595,15 @@
           "height": 819,
           "pixels": 319481
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5656056293465733,
+          "referenceSamples": 39136,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jeogori-wave",
         "tintMask": {
           "includeSkin": true
@@ -1213,8 +1613,8 @@
     {
       "id": "v3-jeogori-wave",
       "file": "layers/v3-jeogori-wave.webp",
-      "sha256": "0fb9e35d76e3faaf0c0d6c2ff79af06f265418b1d9379ec0d8d1c2b0b5397571",
-      "rawSha256": "000df319ec91bb5f237a4ae04abfeabb7e5968375fa16dcea32c2a1d18492294",
+      "sha256": "dc318cf3bd833943cd2fe51f7f06005a634d36d5ef684b665104732cff98c9e1",
+      "rawSha256": "e19aa88ce264cd88e5da3bac66ba28c6fd52629f7af07b22902aa53f318335c5",
       "width": 613,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1232,6 +1632,15 @@
           "width": 784,
           "height": 819,
           "pixels": 319481
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5656056293465733,
+          "referenceSamples": 39136,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1258,6 +1667,15 @@
           "height": 585,
           "pixels": 293098
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5685740193458697,
+          "referenceSamples": 35375,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jeogori-cheer",
         "tintMask": {
           "includeSkin": true
@@ -1267,8 +1685,8 @@
     {
       "id": "v3-jeogori-cheer",
       "file": "layers/v3-jeogori-cheer.webp",
-      "sha256": "edbc4cf40d20693ff1227c08c195228a400b4dffd9ede5f930951f11a2f18888",
-      "rawSha256": "758d6e223e15cc3962735f04468f6e21ec996b882ef47f437256bfe1feff1515",
+      "sha256": "f14fded6e7e449c484b5ace99ed31d2b5e8dde8575dc4e3800f8dd8d6959fa81",
+      "rawSha256": "65d2497ecfbc92c4bd5b8140f71285d30c4eb15491e108aa65881cc4b9c5f098",
       "width": 640,
       "height": 523,
       "encoding": "webp-q90-640-v1",
@@ -1286,6 +1704,15 @@
           "width": 716,
           "height": 585,
           "pixels": 293098
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5685740193458697,
+          "referenceSamples": 35375,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1312,6 +1739,15 @@
           "height": 816,
           "pixels": 274600
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5589318591760325,
+          "referenceSamples": 31067,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jeogori-think",
         "tintMask": {
           "includeSkin": true
@@ -1321,8 +1757,8 @@
     {
       "id": "v3-jeogori-think",
       "file": "layers/v3-jeogori-think.webp",
-      "sha256": "222fadfd94fb9515709fd83959a7cfbe8d739c771a27e8ed2ac3b94f7c9e093c",
-      "rawSha256": "011ad470efda6341d11a50ce80bb9131d32de8a5f6b18f74a74b6d5d9ef2b0b0",
+      "sha256": "3077d14d55663ebbd63fde19d84399bd7b73afc29914d44153ffcbf31005ebf9",
+      "rawSha256": "3c32fdb8f655c3b13d826a08592986ad7b0652cff99616e8f6e03e64cebcfa3e",
       "width": 471,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1340,6 +1776,15 @@
           "width": 601,
           "height": 816,
           "pixels": 274600
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5589318591760325,
+          "referenceSamples": 31067,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1366,6 +1811,15 @@
           "height": 581,
           "pixels": 268684
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5550169509305897,
+          "referenceSamples": 38042,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-jeogori-heart",
         "tintMask": {
           "includeSkin": true
@@ -1375,8 +1829,8 @@
     {
       "id": "v3-jeogori-heart",
       "file": "layers/v3-jeogori-heart.webp",
-      "sha256": "578e9ab668b6b808dbf8b1896c01bc199b1bbc02865e7164f3e399ca3f5b4424",
-      "rawSha256": "606f76582e9c363b4c7de516810650145be56e4a9cf136946e9f71d8a603e0a9",
+      "sha256": "387387ca2b33e9ebbe0845f1cb16d908db16a1574bb504bce68ba5d1c0632dd0",
+      "rawSha256": "6219cb5f42377315fb190040661a66506b29fe1ff9c21bb7c4d58ac7e88ee5b0",
       "width": 640,
       "height": 524,
       "encoding": "webp-q90-640-v1",
@@ -1394,6 +1848,15 @@
           "width": 709,
           "height": 581,
           "pixels": 268684
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5550169509305897,
+          "referenceSamples": 38042,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1420,6 +1883,15 @@
           "height": 822,
           "pixels": 323936
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6405503219848581,
+          "referenceSamples": 72710,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-polo-idle",
         "tintMask": {
           "includeSkin": true
@@ -1429,8 +1901,8 @@
     {
       "id": "v3-polo-idle",
       "file": "layers/v3-polo-idle.webp",
-      "sha256": "56715fe7df96bc8240e8b3c96cfc100d2459a2b71ac9a2c2c580d6b87f49bc82",
-      "rawSha256": "ba414d6fbd7032cb1e5044ca349a8438436cb7d9f4faafda34d356b05c43f46d",
+      "sha256": "8fb3a07ab9eb090a080151a57d3e727a607b2e864a199d1b4c61c521eae9001c",
+      "rawSha256": "bd04f3f94fc14ce7deb97b843485b2354ec2d6a1a7edd86bf75d784b3dac5cdb",
       "width": 510,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1448,6 +1920,15 @@
           "width": 655,
           "height": 822,
           "pixels": 323936
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6405503219848581,
+          "referenceSamples": 72710,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1474,6 +1955,15 @@
           "height": 822,
           "pixels": 326942
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6383588375113298,
+          "referenceSamples": 77060,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-polo-wave",
         "tintMask": {
           "includeSkin": true
@@ -1483,8 +1973,8 @@
     {
       "id": "v3-polo-wave",
       "file": "layers/v3-polo-wave.webp",
-      "sha256": "5fc91789fd71d2fd0f3e5ad910ad9648b82f57b212d1c0daa6b4dbea42f68d1f",
-      "rawSha256": "960deb7560dade5ef040fde75a66cb0a2af86b8d17dd54f1780418cda213185b",
+      "sha256": "323418c9270caa58d0555328c1d25dbc82809b99c4ef0a68aa76711fd239e9e8",
+      "rawSha256": "2324d8a808f759c85e4c2230da0dcb582569b4f74774972aa998f34fcf122ea6",
       "width": 608,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1502,6 +1992,15 @@
           "width": 781,
           "height": 822,
           "pixels": 326942
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6383588375113298,
+          "referenceSamples": 77060,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1528,6 +2027,15 @@
           "height": 642,
           "pixels": 303308
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6401818548908618,
+          "referenceSamples": 67025,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-polo-cheer",
         "tintMask": {
           "includeSkin": true
@@ -1537,8 +2045,8 @@
     {
       "id": "v3-polo-cheer",
       "file": "layers/v3-polo-cheer.webp",
-      "sha256": "6a3f7ff5d79de3897424be42ed8fc71b66bff2048699447120c9fc7c931c8203",
-      "rawSha256": "470089b92ed71d626587650f1970a8a6d7bb1d81706bc7e67f9b34f501fbe7ed",
+      "sha256": "833020d10feb249ec59b9b0740f51b2112f9dd56138fe403f55c15eed79c126d",
+      "rawSha256": "452edf590ff0a865db6656916bdddf571e5d57a00c3d0d3e8f3f72b118a41aa6",
       "width": 640,
       "height": 581,
       "encoding": "webp-q90-640-v1",
@@ -1556,6 +2064,15 @@
           "width": 707,
           "height": 642,
           "pixels": 303308
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6401818548908618,
+          "referenceSamples": 67025,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1582,6 +2099,15 @@
           "height": 820,
           "pixels": 289770
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 73503,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-polo-think",
         "tintMask": {
           "includeSkin": true
@@ -1591,8 +2117,8 @@
     {
       "id": "v3-polo-think",
       "file": "layers/v3-polo-think.webp",
-      "sha256": "a7fdc14ab7d835bba4305d799d1cdae3d0db10d4bce38bad024c50e1af941148",
-      "rawSha256": "3b546b127facb5b6b8b001bb9bc25eced5b731ae47f7c2e7c8e48b882784f182",
+      "sha256": "a07af5552fa5dae9d64b26d7e9d03670147ca24d7e1f25d8139e1e0aef5ed37e",
+      "rawSha256": "1fdf6522a9b5ce29be1acc30f4291e172a37c6fb80122ab9f487beaab6fea934",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -1610,6 +2136,15 @@
           "width": 593,
           "height": 820,
           "pixels": 289770
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 73503,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -1636,6 +2171,15 @@
           "height": 641,
           "pixels": 287396
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 77436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-polo-heart",
         "tintMask": {
           "includeSkin": true
@@ -1645,8 +2189,8 @@
     {
       "id": "v3-polo-heart",
       "file": "layers/v3-polo-heart.webp",
-      "sha256": "1ca4c6bfbe417015f0ca8b06bc4826fde8dfb76c9f14898ec52d8a87a923bb30",
-      "rawSha256": "e0c0ed79942ddadd82440966643e96aa1382633fae8ceceb69ca1b37fe42b8b5",
+      "sha256": "d9ef97c689e2efb4a1a641de83b9620bdf87b44eeefb66ca61e4864572df6770",
+      "rawSha256": "ad57400097db4008ee554f155c8e9afbdf5cc3125a1fa94d4754887239f64a5b",
       "width": 640,
       "height": 597,
       "encoding": "webp-q90-640-v1",
@@ -1664,6 +2208,15 @@
           "width": 687,
           "height": 641,
           "pixels": 287396
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 77436,
+          "referenceMethod": "opaque-skin-median-v1"
         }
       }
     },
@@ -2010,6 +2563,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6023418892191437,
+          "referenceSamples": 23468,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-robe-idle",
         "tintMask": {
           "includeSkin": true
@@ -2019,8 +2581,8 @@
     {
       "id": "v3-robe-idle",
       "file": "layers/v3-robe-idle.webp",
-      "sha256": "383297bc8de5c7c6e183292632fffb0bcb8f4b61ce9352ebf42a9993a48e9d31",
-      "rawSha256": "093bf14081133cc23e1e6cd58ed480b15964068ccf0d60434c4489ba18865622",
+      "sha256": "56bf24ff89ea2f275ed23f344a177b1b510263204eee333c709d7c38ed652b5b",
+      "rawSha256": "dde3cf8ab84349db93f5a083045f62161d52164c208be9f9fe85c3bd4fd42a50",
       "width": 468,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -2358,7 +2920,16 @@
               0.75171
             ]
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6023418892191437,
+          "referenceSamples": 23468,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -2824,6 +3395,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5989513984096545,
+          "referenceSamples": 29436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-robe-wave",
         "tintMask": {
           "includeSkin": true
@@ -2833,8 +3413,8 @@
     {
       "id": "v3-robe-wave",
       "file": "layers/v3-robe-wave.webp",
-      "sha256": "084fcace661874ac4af3096fb2a18df93168abf76a0c8ce38ebbe244280d4c63",
-      "rawSha256": "bb4231c834c419307f9c1cff62c8c0d3f050368bf0938fcc5da62482b2732a23",
+      "sha256": "615611a4909dc8a720ef3428be84db414014ff43874565367d8e54903d203ada",
+      "rawSha256": "0c0ff3fbb2a7526191c304dfbf6da908f7cb8d5089fddb6b98ac75bd3e8d247a",
       "width": 552,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -3292,7 +3872,16 @@
               0.75428
             ]
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5989513984096545,
+          "referenceSamples": 29436,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -3654,6 +4243,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5974542169431013,
+          "referenceSamples": 25557,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-robe-cheer",
         "tintMask": {
           "includeSkin": true
@@ -3663,8 +4261,8 @@
     {
       "id": "v3-robe-cheer",
       "file": "layers/v3-robe-cheer.webp",
-      "sha256": "b10e479e5c0c3d754c5d01a6e27e04ed4a17f988b24b7f2846365fe7ede470e5",
-      "rawSha256": "84c2390d7be4607c0e9b90dfc24499dc525c251c76af774afa1bad75910f2e55",
+      "sha256": "3e79a1e9d26a3e65996dffe5e18c9fd1398504c3b6da4e9727987b111243f875",
+      "rawSha256": "3f06df15817b00127d2c19d0595293f835a0ee3cff74dd345a848de07b669e70",
       "width": 501,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -4018,7 +4616,16 @@
               0.28682
             ]
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5974542169431013,
+          "referenceSamples": 25557,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -4434,6 +5041,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.598159912759539,
+          "referenceSamples": 24438,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-robe-think",
         "tintMask": {
           "includeSkin": true
@@ -4443,8 +5059,8 @@
     {
       "id": "v3-robe-think",
       "file": "layers/v3-robe-think.webp",
-      "sha256": "3d8b2144974950ce2064b114dbe183bc780d95284f8b40c65197fb60ad33876e",
-      "rawSha256": "3c381df53d983da9f9b4e0bf537415628b4acc92ca5f62b2f48469c1091dcef0",
+      "sha256": "3581a83c8d37df7c5dd8c9b998b4e3fc8212925861a9e52ed025987050484afa",
+      "rawSha256": "cc7281b973c547ad626d01df1912e71dd7e930c8d70dc9c8389441fba37c7af1",
       "width": 426,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -4852,7 +5468,16 @@
               0.71747
             ]
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.598159912759539,
+          "referenceSamples": 24438,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -5302,6 +5927,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5852444648270935,
+          "referenceSamples": 28884,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-robe-heart",
         "tintMask": {
           "includeSkin": true
@@ -5311,8 +5945,8 @@
     {
       "id": "v3-robe-heart",
       "file": "layers/v3-robe-heart.webp",
-      "sha256": "36a53fc3712dc6782f2d750f6ad4b247edcb7d594e0141024466add3b4d1037b",
-      "rawSha256": "c92e83eaed6e34ee55b6ac9a0dc158d2eba342637b6b7239dcf40a1112f4edb1",
+      "sha256": "4caa6b026cb1eebf4cff7d76f7adb33b789f0abe04cd5d62f1843bb8d786a688",
+      "rawSha256": "349007dcf59d53f6ade73d27a58fe6bd4043c5b5c496ccdaa250a634b21c6ea2",
       "width": 466,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -5754,7 +6388,16 @@
               0.31336
             ]
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5852444648270935,
+          "referenceSamples": 28884,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -5800,6 +6443,15 @@
             0.2
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6101648384729444,
+          "referenceSamples": 30426,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-hoodie-idle",
         "tintMask": {
           "includeSkin": true
@@ -5809,8 +6461,8 @@
     {
       "id": "v3-winter-hoodie-idle",
       "file": "layers/v3-winter-hoodie-idle.webp",
-      "sha256": "95aac2fbb987d7350c0c8c3947e1098d44088c5d81c52ccf6f5b248382c44004",
-      "rawSha256": "538b5b111db88f954ef24b67e069fff1b3dbd1eb377495b7d8d042bc10b9f335",
+      "sha256": "c7dc6072c7b3fe40fd130cc313383ebee163c3aa8cd42735192572cc934b1402",
+      "rawSha256": "55a76c56c943810fadb90bb3355dec04470da914524ce2bee95b0592de52efd3",
       "width": 527,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -5848,7 +6500,16 @@
             0.15,
             0.2
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6101648384729444,
+          "referenceSamples": 30426,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -5894,6 +6555,15 @@
             0.21
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6087194499478852,
+          "referenceSamples": 37022,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-hoodie-wave",
         "tintMask": {
           "includeSkin": true
@@ -5903,8 +6573,8 @@
     {
       "id": "v3-winter-hoodie-wave",
       "file": "layers/v3-winter-hoodie-wave.webp",
-      "sha256": "8b58d06d10a28c267b6c68d3251be74f874ab966d697d7db91e5e6a427878767",
-      "rawSha256": "d21ca6b88e5078fbcda2b2512c373d789953abe3991ace2ad5101316a217c99d",
+      "sha256": "dc57fe0d22d13a54820c1ffc7e28dd7251c10d6574b43621c2c9a5f11801647c",
+      "rawSha256": "de7590038a4c14c7cf494339341917dca7572d26ff6bf07266d270b49ef9c21d",
       "width": 619,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -5942,7 +6612,16 @@
             0.15,
             0.21
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6087194499478852,
+          "referenceSamples": 37022,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -5988,6 +6667,15 @@
             0.19
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6046101336192536,
+          "referenceSamples": 31167,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-hoodie-cheer",
         "tintMask": {
           "includeSkin": true
@@ -5997,8 +6685,8 @@
     {
       "id": "v3-winter-hoodie-cheer",
       "file": "layers/v3-winter-hoodie-cheer.webp",
-      "sha256": "058dead8b25e710555af00d5b3dc8d9042e8aa6a65f692a9f75b8ffd8cd1fb7d",
-      "rawSha256": "ece6f79bdfa515fbc5fd1a89732fc08dba394ea6c4e430770f10420f59c62a99",
+      "sha256": "1dd3d3d65b65f9345ac1d56a41c505f656fb882166b71f5af023323d3d64305b",
+      "rawSha256": "9cfab6b00c393503e96e449a722500198732853db3f96725ba25a0ae0a3bf3bc",
       "width": 640,
       "height": 593,
       "encoding": "webp-q90-640-v1",
@@ -6036,7 +6724,16 @@
             0.15,
             0.19
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6046101336192536,
+          "referenceSamples": 31167,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6082,6 +6779,15 @@
             0.21
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6062407149136069,
+          "referenceSamples": 28308,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-hoodie-think",
         "tintMask": {
           "includeSkin": true
@@ -6091,8 +6797,8 @@
     {
       "id": "v3-winter-hoodie-think",
       "file": "layers/v3-winter-hoodie-think.webp",
-      "sha256": "056e9a0f3b17d4e1b00b9fd051e0563fde0507ace30c971ab165a1693b5457af",
-      "rawSha256": "6e60ef16fff9f0530a6387523ee9537e32e8e5454669a8343cac43628a6ad6db",
+      "sha256": "85d4b786594b6054fc1fbdd822267732685acb727bb08083ca0b87b67f237bca",
+      "rawSha256": "3c79f11b191b2995689120e81de2e62fa52ffe97176eb5358ec7045e297794f9",
       "width": 485,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6130,7 +6836,16 @@
             0.15,
             0.21
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6062407149136069,
+          "referenceSamples": 28308,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6170,6 +6885,15 @@
             0.19
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5918515422668729,
+          "referenceSamples": 36181,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-hoodie-heart",
         "tintMask": {
           "includeSkin": true
@@ -6179,8 +6903,8 @@
     {
       "id": "v3-winter-hoodie-heart",
       "file": "layers/v3-winter-hoodie-heart.webp",
-      "sha256": "6ed4464e9ce8cf2f73a048352b8c0cb004317e43defc04e53e36e8873cd695d7",
-      "rawSha256": "5c405a5be4673a4a1503628439c8342d9b9021a8c499941ffea1e0061af0136b",
+      "sha256": "ca43161044099d7ce977f089ebf199a305042dee316495a781c3bab3e4f082ca",
+      "rawSha256": "4c7aeb68a436cc8b43f59f0212f4627019609dd02f25fe6cdc740bae0d791554",
       "width": 640,
       "height": 601,
       "encoding": "webp-q90-640-v1",
@@ -6212,7 +6936,16 @@
             0.34,
             0.19
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5918515422668729,
+          "referenceSamples": 36181,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6258,6 +6991,15 @@
             0.2
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5759983613846457,
+          "referenceSamples": 28935,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-halfzip-idle",
         "tintMask": {
           "includeSkin": true
@@ -6267,8 +7009,8 @@
     {
       "id": "v3-winter-halfzip-idle",
       "file": "layers/v3-winter-halfzip-idle.webp",
-      "sha256": "cbd377231680ed2dd3733cda21694d5e2f55ad8ffc14ff258eeb9cdd17ff067f",
-      "rawSha256": "7eefb792e3b9e1b82977c320910bd457c98364cde3bfcd95b608be0ba8190a8c",
+      "sha256": "28e638ca3d4d545354035d3339e5207ffd7679299eea939fd30fd2cf0049f3d1",
+      "rawSha256": "86dd03b78258b740924b6bde3d17334c86375b208071b1c80fcb5e1289d0c8ed",
       "width": 526,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6306,7 +7048,16 @@
             0.15,
             0.2
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5759983613846457,
+          "referenceSamples": 28935,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6352,6 +7103,15 @@
             0.21
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5817277906173994,
+          "referenceSamples": 35128,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-halfzip-wave",
         "tintMask": {
           "includeSkin": true
@@ -6361,8 +7121,8 @@
     {
       "id": "v3-winter-halfzip-wave",
       "file": "layers/v3-winter-halfzip-wave.webp",
-      "sha256": "ec82fa38d9c626130d5d6964658035fdc4e74fbcfb86b35fbd5c9d56940d0f2a",
-      "rawSha256": "f02875751a2a4b4b4c4edd372516580cb20cc6646587fc693f61b1b53570298f",
+      "sha256": "7ca82505f7f8bd4438b37ced7b889ea3adb5a44df5f307454f0cbef3f37af30b",
+      "rawSha256": "61a12b79257e2e1bd68105b7da1b1d6ee79dd8176daf745810cfd377d571d9c3",
       "width": 621,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6400,7 +7160,16 @@
             0.15,
             0.21
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5817277906173994,
+          "referenceSamples": 35128,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6446,6 +7215,15 @@
             0.19
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5846557884029404,
+          "referenceSamples": 31379,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-halfzip-cheer",
         "tintMask": {
           "includeSkin": true
@@ -6455,8 +7233,8 @@
     {
       "id": "v3-winter-halfzip-cheer",
       "file": "layers/v3-winter-halfzip-cheer.webp",
-      "sha256": "ae3083934ba7941df4e495339b85355b4fc93a1e213cabaa11aaf9a04255d73b",
-      "rawSha256": "9fb88764878ef639243a5b648e35f3f8ea5604810e036140c070ef0ac2481321",
+      "sha256": "ab01709990c1b62939d56ef9132ae54ca06b44d41088ddb81a5e125991fc44fb",
+      "rawSha256": "6d8d18bc310563b2d68f40825747a43417cdfba8de8b4c51c5d369aca93ebd7b",
       "width": 640,
       "height": 572,
       "encoding": "webp-q90-640-v1",
@@ -6494,7 +7272,16 @@
             0.15,
             0.19
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5846557884029404,
+          "referenceSamples": 31379,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6540,6 +7327,15 @@
             0.21
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5756458637322069,
+          "referenceSamples": 29758,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-halfzip-think",
         "tintMask": {
           "includeSkin": true
@@ -6549,8 +7345,8 @@
     {
       "id": "v3-winter-halfzip-think",
       "file": "layers/v3-winter-halfzip-think.webp",
-      "sha256": "22684c8b4a6cc7c96e5d923f6105da67cdf1dbd61459db194db869834fb554a4",
-      "rawSha256": "4593c4b15a2f2f6c7c0048425128985ca3d0e19083945a4a725bd108e2c7d8c7",
+      "sha256": "2ba1281d83ce5c7b75108a3512c94576e2f8e84399821e3b731646105c23883f",
+      "rawSha256": "8faaf83fafb467daba0b0787008698dddad85ccf0fe00161e6377b472c772ebe",
       "width": 475,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6588,7 +7384,16 @@
             0.15,
             0.21
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5756458637322069,
+          "referenceSamples": 29758,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
@@ -6628,6 +7433,15 @@
             0.19
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5484174939885094,
+          "referenceSamples": 38071,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "maskFor": "v3-winter-halfzip-heart",
         "tintMask": {
           "includeSkin": true
@@ -6637,8 +7451,8 @@
     {
       "id": "v3-winter-halfzip-heart",
       "file": "layers/v3-winter-halfzip-heart.webp",
-      "sha256": "9471093eb1fc2e7c84f80a48612bdfe2502451fb92a9113a10a804d2c379c424",
-      "rawSha256": "f46099dbda7bad8f887421afbf42380b2bd1c95d822ae3db5f40f6b406dc1a8b",
+      "sha256": "1034e8e963d73a635a6888cc49262335548fd8d206e2c052a159e93066c841b2",
+      "rawSha256": "3127afc4f82b8e12e76ceaf59d2dbb5e6a4a3af8251639a455b31e3b335514d2",
       "width": 640,
       "height": 580,
       "encoding": "webp-q90-640-v1",
@@ -6670,14 +7484,23 @@
             0.34,
             0.19
           ]
-        ]
+        ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5484174939885094,
+          "referenceSamples": 38071,
+          "referenceMethod": "opaque-skin-median-v1"
+        }
       }
     },
     {
       "id": "v3-trousers",
       "file": "layers/v3-trousers.webp",
-      "sha256": "979a7af67602a2c915fe670dc979bbb60c0a4089703bada238c9ce62b67633c5",
-      "rawSha256": "5af8ce9dcef59be86e0a315e6c0064270774cddc6632fa2f07bb4a56a5b26f2b",
+      "sha256": "836db092734a6aff2bfebcd679c61470e7bb64cf8dda0ef1ff45f6d8aede4c6a",
+      "rawSha256": "77b43b7bd3f8f8a172039769b14a5cc4a1920eed6d07b3002aae88b4cf838940",
       "width": 253,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6751,8 +7574,8 @@
     {
       "id": "v3-baji",
       "file": "layers/v3-baji.webp",
-      "sha256": "729b2280748c30a433db20d4c87dc79f9ffe8569e9e58006a900791e78beca15",
-      "rawSha256": "d0b02087dd823d16f26c62df7d3268637c970d68b8d83686a417a11dbb474db9",
+      "sha256": "517279ce27429adff9c75925c292cea9b3be7958090c14236e9602c94efb3ecc",
+      "rawSha256": "6a21ae7f41efbcac896b047eb44846d132728b2222719f0c6bb37d7e087c08b4",
       "width": 403,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6776,8 +7599,8 @@
     {
       "id": "v3-shorts",
       "file": "layers/v3-shorts.webp",
-      "sha256": "0100a624d84b20a7c8d06423b2f9dd2f9ca1f48e3eb446b8e8a8f097fd1b005c",
-      "rawSha256": "cc4d5aedf1e0db2e6ff7a7369b2f08e29ab5d970cfd194990f947117cee61fbf",
+      "sha256": "cafc61d10bf6fb22b0818eabcad912ee82033e8256b2d9a933957ea10e19e92f",
+      "rawSha256": "3b31bf6f03fd111d0a5774c7d67bd33efa78677a7ed5db66068885fddf82aa3c",
       "width": 605,
       "height": 605,
       "encoding": "webp-q90-640-v1",
@@ -6801,8 +7624,8 @@
     {
       "id": "v3-winter-joggers",
       "file": "layers/v3-winter-joggers.webp",
-      "sha256": "2ce0215dea0ff4d81e137655d29520a039c438158090386e5b15fe3c19c4495d",
-      "rawSha256": "e4158466d307b90b819b5fe24565a1cec848449fc39306ebdd1d02c7413856eb",
+      "sha256": "49b100c7ccce2e7f3a91d952dba7ee48382ed48e8de5d6d5807c02fb1a169f8d",
+      "rawSha256": "5b7c4ee066577e0d5bab29702607ae15641d357ce0f13d39ccabf18b429fd0d1",
       "width": 262,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -6951,308 +7774,308 @@
     {
       "id": "expression-natural-eyes",
       "file": "layers/expression-natural-eyes.webp",
-      "sha256": "cc27db8ed3d4d5a545aa1ac05fec0db8c9f464349875297b560fdf667ed3e040",
-      "rawSha256": "97a52240409025983df499b9b18a3e4a26dc7769eb7cc138e35732790f149e69",
-      "width": 386,
-      "height": 179,
+      "sha256": "2b209b29eb4a719ab80c609a7ba962021a77a479d2bd1807295582270a20f555",
+      "rawSha256": "51b2b7bcd6fdcfb6068d244fdc1e67b898fdaea6185f516002bd1d77d5cd0ecc",
+      "width": 310,
+      "height": 133,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           0,
-          170,
+          140,
           512,
-          215
+          205
         ],
         "bounds": {
-          "left": 80,
-          "top": 22,
-          "width": 386,
-          "height": 179,
-          "pixels": 26593
+          "left": 102,
+          "top": 60,
+          "width": 310,
+          "height": 133,
+          "pixels": 12314
         }
       }
     },
     {
       "id": "expression-natural-mouth",
       "file": "layers/expression-natural-mouth.webp",
-      "sha256": "8e401bf3996155512a77a442d7ad82b8baf61557f2e0adb0b6494be8b244e63c",
-      "rawSha256": "0e2d8b957ecfa9c27a85c9bef883d660d630eeb60054f49925b7bed38ad11cd2",
-      "width": 78,
-      "height": 21,
+      "sha256": "e2cd151d5cec879bdb7a62875e95a33e243baa75cc834c9bead2c5d03c9a841a",
+      "rawSha256": "7b4aeb9be0be6ae444fe55b80d09b6299ea8ed015b6fb881c737f5cc8ede842b",
+      "width": 65,
+      "height": 15,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           180,
-          390,
+          345,
           180,
           100
         ],
         "bounds": {
-          "left": 55,
-          "top": 15,
-          "width": 78,
-          "height": 21,
-          "pixels": 620
+          "left": 45,
+          "top": 40,
+          "width": 65,
+          "height": 15,
+          "pixels": 466
         }
       }
     },
     {
       "id": "expression-calm-eyes",
       "file": "layers/expression-calm-eyes.webp",
-      "sha256": "3214109b9bfc1618dc9feecb0b34a31bc14d3dc7cca45d253e05dd8126ee1394",
-      "rawSha256": "732c6f7a15ce83dddd7eab04f30af0931799c41fa87b1883120e6b2477c8be55",
-      "width": 385,
-      "height": 166,
+      "sha256": "140ef62eae39dcf070230033a8becde3f80ab778594f1b514e35d2800571fc2a",
+      "rawSha256": "b052d0420675c292ae71aa9c339831945fce11b857d3d366d6ebf94cc1160f03",
+      "width": 312,
+      "height": 128,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           512,
-          170,
+          140,
           512,
-          215
+          205
         ],
         "bounds": {
-          "left": 64,
-          "top": 32,
-          "width": 385,
-          "height": 166,
-          "pixels": 24006
+          "left": 100,
+          "top": 66,
+          "width": 312,
+          "height": 128,
+          "pixels": 11931
         }
       }
     },
     {
       "id": "expression-calm-mouth",
       "file": "layers/expression-calm-mouth.webp",
-      "sha256": "05c7e2a3b4e899adb49ddce17a230f283522548e11d228a6b31f4954b68046ec",
-      "rawSha256": "a899b415952caf9d0ebc1931ed7099729dd55a392bbfaeca11b2e673af2df566",
-      "width": 70,
-      "height": 11,
+      "sha256": "2284ca8cc14f860a7df26ada5275fefe463f96cac4fa7336ffed397d15def176",
+      "rawSha256": "005ed247a07decfe478afa843e014a25804006fef95a4a5a07960d749c5e2fc3",
+      "width": 58,
+      "height": 7,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           692,
-          390,
+          345,
           180,
           100
         ],
         "bounds": {
-          "left": 42,
-          "top": 28,
-          "width": 70,
-          "height": 11,
-          "pixels": 578
+          "left": 47,
+          "top": 48,
+          "width": 58,
+          "height": 7,
+          "pixels": 356
         }
       }
     },
     {
       "id": "expression-smile-eyes",
       "file": "layers/expression-smile-eyes.webp",
-      "sha256": "c2d1ba4458829f572373f1f7e417a91e0ed69c97cb7d323b99727ad2d3a7bf35",
-      "rawSha256": "47885ee57eeccb9d2dffa7740ea0d4a3fc50b540c0d2e495bccb670f4ad0a2ff",
-      "width": 389,
-      "height": 153,
+      "sha256": "39d5554193cb0437c1e13db3732d59d6ac42698590a54d09c7d29c6c232d5b1b",
+      "rawSha256": "625023c95273908668af269a68e4c95280b22376c45a750fc4746f0321b67a11",
+      "width": 314,
+      "height": 114,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           1024,
-          170,
+          140,
           512,
-          215
+          205
         ],
         "bounds": {
-          "left": 54,
-          "top": 20,
-          "width": 389,
-          "height": 153,
-          "pixels": 11968
+          "left": 99,
+          "top": 60,
+          "width": 314,
+          "height": 114,
+          "pixels": 4888
         }
       }
     },
     {
       "id": "expression-smile-mouth",
       "file": "layers/expression-smile-mouth.webp",
-      "sha256": "112a86c72ccf7561eb4e29461eaa12bea46c1d80e6e98a878db533441c91be47",
-      "rawSha256": "f6aab55cdfe98b391856b6d6ff3aaa62a23ad9c3ae487271b5464a7a404eb480",
-      "width": 101,
-      "height": 54,
+      "sha256": "fd544de2a2b29e8ce788a28c1a1ac861d98c9367d2277e23b59cabf3d53ca1c4",
+      "rawSha256": "2ae7397eea8241b303338431d4e5509b8779219397d4a66f9008825ce2d1f27c",
+      "width": 87,
+      "height": 43,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           1204,
-          390,
+          345,
           180,
           100
         ],
         "bounds": {
-          "left": 14,
-          "top": 3,
-          "width": 101,
-          "height": 54,
-          "pixels": 3822
+          "left": 32,
+          "top": 28,
+          "width": 87,
+          "height": 43,
+          "pixels": 2847
         }
       }
     },
     {
       "id": "expression-curious-eyes",
       "file": "layers/expression-curious-eyes.webp",
-      "sha256": "3d805e3e7c13f840ad14a63e4a648218cb7c1422aca49ee24007a2e7c9bc5451",
-      "rawSha256": "6ab5646e75470e69cd050068fa611c598ac28aa2ef63a8f510055dde8a271fd8",
-      "width": 399,
-      "height": 210,
+      "sha256": "aa776769aa716f6d767810d3947d27b24e6375626e9f77853fc35161331b03d6",
+      "rawSha256": "0f6ccaa9a1c9dc027591a19bc07e27c2f6a723ebb317d5bd9b88e3f4e2199f32",
+      "width": 308,
+      "height": 139,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           0,
-          602,
+          652,
           512,
-          240
+          205
         ],
         "bounds": {
-          "left": 79,
-          "top": 18,
-          "width": 399,
-          "height": 210,
-          "pixels": 28471
+          "left": 103,
+          "top": 23,
+          "width": 308,
+          "height": 139,
+          "pixels": 12132
         }
       }
     },
     {
       "id": "expression-curious-mouth",
       "file": "layers/expression-curious-mouth.webp",
-      "sha256": "58c1dda088df5de001641e6c8b643bf797d8795469c2a82acd842228db307202",
-      "rawSha256": "7bea071309fe626d345ba3700b1dcd572e7d95e04b1871635cdbbc1dc368c93f",
-      "width": 43,
-      "height": 36,
+      "sha256": "7d1d04839c3e5e1a04bc84c830b921b1826aba802cc915cbad9613712fcf7eca",
+      "rawSha256": "afac355ec20d493080d2baa43a9cb297174181b1f50a7486bf932c2f478c7274",
+      "width": 38,
+      "height": 30,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           180,
-          842,
+          857,
           180,
           100
         ],
         "bounds": {
-          "left": 76,
-          "top": 15,
-          "width": 43,
-          "height": 36,
-          "pixels": 1080
+          "left": 58,
+          "top": 4,
+          "width": 38,
+          "height": 30,
+          "pixels": 904
         }
       }
     },
     {
       "id": "expression-bright-eyes",
       "file": "layers/expression-bright-eyes.webp",
-      "sha256": "e2ab84a1f4ea0a3c6096e2dd1446fd89230fbb74ef282dd98d73d9cc469d08e4",
-      "rawSha256": "9895f8b3081488b2f0617b332d17d68e3eceed5e0c7ec296dc7900d42f2bb7f8",
-      "width": 387,
-      "height": 203,
+      "sha256": "d42b0a883d42655fd03ca12cfc1c0c7f7fba1e584dc01d2b08de5324bf08695f",
+      "rawSha256": "b09b5ffac492bc67ab3140e1d9e862fd11374fe03eb868936c091d6bbfa2b2a4",
+      "width": 310,
+      "height": 134,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           512,
-          602,
+          652,
           512,
-          240
+          205
         ],
         "bounds": {
-          "left": 63,
-          "top": 26,
-          "width": 387,
-          "height": 203,
-          "pixels": 29206
+          "left": 102,
+          "top": 29,
+          "width": 310,
+          "height": 134,
+          "pixels": 12350
         }
       }
     },
     {
       "id": "expression-bright-mouth",
       "file": "layers/expression-bright-mouth.webp",
-      "sha256": "048feaa3f59edf6ae377864ad2f435d7ec8d7105ca5513d8a6dd96ae9cfc6a71",
-      "rawSha256": "b869b3ef029228b4c8236a914d6c0547159d0d5983cc72051324dd711fef28b4",
-      "width": 106,
-      "height": 61,
+      "sha256": "13cd411b6fbed2e15793ea6d9cf74cee07b0e46863aa5d5fd2329af6935e4ebe",
+      "rawSha256": "9dfe60852d82a79a7fa79a0a509f5bb4e0b86cdb1c7b69c071d3a96afe761eb4",
+      "width": 78,
+      "height": 40,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           692,
-          842,
+          857,
           180,
           100
         ],
         "bounds": {
-          "left": 27,
-          "top": 1,
-          "width": 106,
-          "height": 61,
-          "pixels": 4835
+          "left": 37,
+          "top": 0,
+          "width": 78,
+          "height": 40,
+          "pixels": 2461
         }
       }
     },
     {
       "id": "expression-determined-eyes",
       "file": "layers/expression-determined-eyes.webp",
-      "sha256": "39b6144b088f1ba6d638da5f16fbc2a8a9cfffdba3ba1ab7a7f23aa1a9fab89d",
-      "rawSha256": "e73e5f50da2950b6f3059a0e1832022a95a1d69c3694b8069afe325fdc479750",
-      "width": 399,
-      "height": 161,
+      "sha256": "a173534260b3431e9941289e61033d60218c2b2dec69370410e030567380553d",
+      "rawSha256": "2fb3d72145b71502648cdcac2328adad231daae17627d53882ae98b309376987",
+      "width": 309,
+      "height": 125,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           1024,
-          602,
+          652,
           512,
-          240
+          205
         ],
         "bounds": {
-          "left": 52,
-          "top": 63,
-          "width": 399,
-          "height": 161,
-          "pixels": 27166
+          "left": 102,
+          "top": 37,
+          "width": 309,
+          "height": 125,
+          "pixels": 12350
         }
       }
     },
     {
       "id": "expression-determined-mouth",
       "file": "layers/expression-determined-mouth.webp",
-      "sha256": "9ccd73530dd744c490dbc15db8268a2bf2236cded0dbdf1dc1a57f7dbc5d01f6",
-      "rawSha256": "ef7d0b4da71b31880d8a234ef29bf97f63d2b3ccded685ad200188d53faa30e6",
-      "width": 91,
-      "height": 18,
+      "sha256": "b475dd76f1a60337aa7ff942065c4930cdeab3d596e127a6056e54f57243f86a",
+      "rawSha256": "52cf0652c4017f443c16f1b845c7237e129191223a0572764bee8fe60ea99c6e",
+      "width": 69,
+      "height": 14,
       "encoding": "lossless-v1",
       "source": {
         "sheet": "face",
         "crop": [
           1204,
-          842,
+          857,
           180,
           100
         ],
         "bounds": {
-          "left": 29,
-          "top": 18,
-          "width": 91,
-          "height": 18,
-          "pixels": 738
+          "left": 41,
+          "top": 11,
+          "width": 69,
+          "height": 14,
+          "pixels": 478
         }
       }
     },
     {
       "id": "v3-plain-top-idle",
       "file": "layers/v3-plain-top-idle.webp",
-      "sha256": "b8f14282a67fe25af6bd752c3fc19f960294a39d0d3dc255fff015299d3194f1",
-      "rawSha256": "a4c50be3de124bee76f879e4606c2977afac3b33c8618035d189cc01e48198de",
+      "sha256": "bdcf437dbdc6cc31573d4da40a01db27d742916c97e3b7113ae19aeb847ec77d",
+      "rawSha256": "7383f907170edf6dc32d57fb02f8daaee82ba7c8450aa3d04e27b0cba29ffbda",
       "width": 508,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7271,6 +8094,15 @@
           "height": 823,
           "pixels": 346001
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5693889278423431,
+          "referenceSamples": 29217,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-plain-idle",
         "recolor": {
           "color": "#c9cbd4",
@@ -7283,8 +8115,8 @@
     {
       "id": "v3-plain-top-wave",
       "file": "layers/v3-plain-top-wave.webp",
-      "sha256": "de3ce880d4abf400236ad7e235ab3833b1549dc948c45a60ae6fba415aedf71e",
-      "rawSha256": "3f33417994bbca23b8c719308056359d30fa1b8ddcf17695c18a0f5f4c0f0816",
+      "sha256": "66064d37f7a6c9078ce3d9b931841132fd53d194938a8c53e6630a3ac1d65981",
+      "rawSha256": "0777be86daf066cf8b10524971df2d5b394c4e6709a08a626f29acfc8ac82037",
       "width": 610,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7303,6 +8135,15 @@
           "height": 823,
           "pixels": 349915
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5740435436886944,
+          "referenceSamples": 35126,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-plain-wave",
         "recolor": {
           "color": "#c9cbd4",
@@ -7315,8 +8156,8 @@
     {
       "id": "v3-plain-top-cheer",
       "file": "layers/v3-plain-top-cheer.webp",
-      "sha256": "6c4a4d25cdb04caaf44973298120c92bf1e83e03c473f373c66fe373bd5b426b",
-      "rawSha256": "2b6d2bd9be5735e2352ac1186bfc7ad8a1fa871744db111589db3553cfd33c5a",
+      "sha256": "a1bf8c9776cc58afcb0d95d5478ade773b76bb41976a7aaab694e448b2515974",
+      "rawSha256": "2cced147c7459aa9848e66bc71497ad8adfc06724229f329e9cb3782121360d7",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -7335,6 +8176,15 @@
           "height": 644,
           "pixels": 322313
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5753240592584151,
+          "referenceSamples": 30090,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-plain-cheer",
         "recolor": {
           "color": "#c9cbd4",
@@ -7347,8 +8197,8 @@
     {
       "id": "v3-plain-top-think",
       "file": "layers/v3-plain-top-think.webp",
-      "sha256": "99d1b79032c395123039bca751bfdeace7c98a3d77eae596261d9d7cca4c0470",
-      "rawSha256": "c1c4d0ce231986a4b001ac1c0924469119d1d376aeebff174c8659cecb3609fa",
+      "sha256": "1a223f59672ca206b08f21835ad7a4f0cb7d050a3c2426326c88fab573d66977",
+      "rawSha256": "8e433148a78148cffbcaa7294abd86ead9b4a857a0d2288107204c70fa8dbdef",
       "width": 464,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7367,6 +8217,15 @@
           "height": 821,
           "pixels": 305733
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5718023572622802,
+          "referenceSamples": 27949,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-plain-think",
         "recolor": {
           "color": "#c9cbd4",
@@ -7379,8 +8238,8 @@
     {
       "id": "v3-plain-top-heart",
       "file": "layers/v3-plain-top-heart.webp",
-      "sha256": "2012ea6bbc2722edc1ebe9a1236786f2dd96e90e3ea9f9edb9d5ca8ccb442891",
-      "rawSha256": "baefd368e850b9cca597594a18051bf4d0aa377b7377af9ea4b63f479fddda31",
+      "sha256": "4b0dcf16040f183f1a013412ee6b59fbd3269cfcd2de1f4c93991c7dfeb1d4f9",
+      "rawSha256": "7e969479fc376ca202d720275c22ddbf25555571a419a9fd9a97ae2cc61fbd6d",
       "width": 640,
       "height": 580,
       "encoding": "webp-q90-640-v1",
@@ -7399,6 +8258,15 @@
           "height": 645,
           "pixels": 306413
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5686833911728497,
+          "referenceSamples": 36925,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-plain-heart",
         "recolor": {
           "color": "#c9cbd4",
@@ -7411,8 +8279,8 @@
     {
       "id": "v3-jacket-sunshine-idle",
       "file": "layers/v3-jacket-sunshine-idle.webp",
-      "sha256": "37372000ec3b75dcc31d19f50c48d5dda10f7391599d0f3b97fff5c835a58a2d",
-      "rawSha256": "8fa34c0f49e0f864beaf48b5bc3f8bfa2044086b60ee76c0d7ee41efd75a77ff",
+      "sha256": "1098a08dd4477e96d7a522918b5f71eb7b7b05c9649d3ff0866c02c5f9ff2c35",
+      "rawSha256": "5618a256295e516410e97e3e9bdbc36fb1389340da909926367f01fc4ee48c1e",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7430,6 +8298,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-idle",
         "recolor": {
@@ -7443,8 +8320,8 @@
     {
       "id": "v3-jacket-sunshine-wave",
       "file": "layers/v3-jacket-sunshine-wave.webp",
-      "sha256": "0bc26a949490f366edee0621e58eaea5093df5d0f85321b40d89ace81a965e0b",
-      "rawSha256": "98f2f857bdfb45e2b0545386821f444706e4ef179f0a20c4f5dd450daeda66ca",
+      "sha256": "e85d22382cae72298b03973cc6935b9fd0dac1013a8d76a869f7d2a982128c58",
+      "rawSha256": "6df4649a4574867d3fccfce67760c993ed78a5f14c3a8255c186e8e951982e95",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7462,6 +8339,15 @@
           "width": 784,
           "height": 814,
           "pixels": 353001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-wave",
         "recolor": {
@@ -7475,8 +8361,8 @@
     {
       "id": "v3-jacket-sunshine-cheer",
       "file": "layers/v3-jacket-sunshine-cheer.webp",
-      "sha256": "3462040d74b3666c774b3d6fd0c66c9f157ab4a8283ed1103545d168f6999d27",
-      "rawSha256": "5cdb27f460ff816645de63a99c62300ba60c6b56d3d0a132d26c92e939945a3b",
+      "sha256": "3caf18e549c0b9eac4493559cf2b962d0e4d3419596d67db1c63924f772b351c",
+      "rawSha256": "57df429abbe5911e9e3aacd9a6fc8323f220d033003e86cfaa1614c3c0e1746b",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -7494,6 +8380,15 @@
           "width": 717,
           "height": 640,
           "pixels": 327934
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
@@ -7507,8 +8402,8 @@
     {
       "id": "v3-jacket-sunshine-think",
       "file": "layers/v3-jacket-sunshine-think.webp",
-      "sha256": "e8807a2c4b7cee77f4dbd1d7915dd97841159653a8d96941faa0491962002633",
-      "rawSha256": "853ce470c306105d7fa3b6eeecec965f31e0b11f9b452f4e7be3357223915688",
+      "sha256": "bbbe38fdadfa018b8c4133f2bfe1cb5b7ae328fe9a95b207cc87e3bed53aa8e2",
+      "rawSha256": "43edaf81564673a50dbdf20bc595c7ee4b7fed9d74fa196f6a8bda0f19522c00",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7526,6 +8421,15 @@
           "width": 587,
           "height": 811,
           "pixels": 307163
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-think",
         "recolor": {
@@ -7539,8 +8443,8 @@
     {
       "id": "v3-jacket-sunshine-heart",
       "file": "layers/v3-jacket-sunshine-heart.webp",
-      "sha256": "c53e0b6dc4fe6b5e3fe11e932fa2b2d83ae8a6d993d7c7b5aa109650a040c5b7",
-      "rawSha256": "be3a33b5a1dc55a4a996cb2d899c2eed99b52d18afaf7f433ddd1ad92c759ad1",
+      "sha256": "96e11d799fdbed620c93878f88619f24df060a8237eb8c35b91ae84269b1e5ef",
+      "rawSha256": "62107a59235a8e8f8e3daa100bd55cebc892d8eeeae0b373c25419762cb3383d",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -7558,6 +8462,15 @@
           "width": 710,
           "height": 639,
           "pixels": 306212
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-heart",
         "recolor": {
@@ -7571,8 +8484,8 @@
     {
       "id": "v3-jacket-lavender-idle",
       "file": "layers/v3-jacket-lavender-idle.webp",
-      "sha256": "ce3a9c8d872e7b562fccfc868a52fbfdb933cf8690905c50feca8519911dc5b0",
-      "rawSha256": "3e7fb6f482522a7b59221273800822d48772a07b9daa3b3af34f5ec14566c206",
+      "sha256": "66facc239dcba669b11d501f1091ffa059161ef2f0c37f2a20d2a0c92f65aebe",
+      "rawSha256": "99c3d566dcd72888afb66af975157a28f1e1c8614f19a40fae04250d21fa7102",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7590,6 +8503,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-idle",
         "recolor": {
@@ -7603,8 +8525,8 @@
     {
       "id": "v3-jacket-lavender-wave",
       "file": "layers/v3-jacket-lavender-wave.webp",
-      "sha256": "e32c592f4a9c9d8357086c0ac685a87b9980ada0cb38a7491a5a2f6014b9ae56",
-      "rawSha256": "a0b364320ba8fca1a9a23c02583517dd046ecd9b550f2cd5ce15ed9a16990417",
+      "sha256": "456cec5d9000b952f404a73e8727f4fecc9aabcc7f8440b60a58067b0b637e5c",
+      "rawSha256": "8b60e3f71f439975ac0bf1256b374c38e1c06851136119f2b6a6cb974fd7dfea",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7622,6 +8544,15 @@
           "width": 784,
           "height": 814,
           "pixels": 353001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-wave",
         "recolor": {
@@ -7635,8 +8566,8 @@
     {
       "id": "v3-jacket-lavender-cheer",
       "file": "layers/v3-jacket-lavender-cheer.webp",
-      "sha256": "7e41a90fafa94db951c30031ed28a64ec9397ce09a5a59e6d66693c8d9fdbd5d",
-      "rawSha256": "898cfbdff8d79ca1bbe2dd790e35280379bee246050b820de3f272f86284e092",
+      "sha256": "487872e7b8c771e86db150d03e67ed7cc4b2d17b1c6f7a8782920f5bd77bd098",
+      "rawSha256": "903525987407a7834f1780b94f08edaf7e59f7042485647fb5fb6f5340ae1ce6",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -7654,6 +8585,15 @@
           "width": 717,
           "height": 640,
           "pixels": 327934
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
@@ -7667,8 +8607,8 @@
     {
       "id": "v3-jacket-lavender-think",
       "file": "layers/v3-jacket-lavender-think.webp",
-      "sha256": "7ade750db2b790ae7881d706c11cd3f86d797f2b4448b29103829959f3b33039",
-      "rawSha256": "3494263482d5e976172575703952e425e14bcda233c23d616b4c5a28252b32c5",
+      "sha256": "08c4a9a0e28e3fa07d1ede0388e5f2cc7ebd04bb6ded46c0b70e5311928f7f5f",
+      "rawSha256": "e3ec242cd68dbeb7c3a6c37ef528ea8d8c22b0293dc9a876198be8bec0aee17c",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7686,6 +8626,15 @@
           "width": 587,
           "height": 811,
           "pixels": 307163
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-think",
         "recolor": {
@@ -7699,8 +8648,8 @@
     {
       "id": "v3-jacket-lavender-heart",
       "file": "layers/v3-jacket-lavender-heart.webp",
-      "sha256": "c3800b42857d6d2538f1eb13a9ae435d66ffe601e5f2ba3599fb132f5bd5a96f",
-      "rawSha256": "b20e65c7ac550097bca40828579582708ff66228cc300ba0e10fd973784b7cca",
+      "sha256": "b57910fd02beb7d147cd267141f97601bbdd36e9af8706d5012dc85899dabd32",
+      "rawSha256": "bcfdb45745ccda123d701caf66df06be3d682ba7848b7976f185459eb8d2566e",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -7718,6 +8667,15 @@
           "width": 710,
           "height": 639,
           "pixels": 306212
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-heart",
         "recolor": {
@@ -7731,8 +8689,8 @@
     {
       "id": "v3-jacket-navy-idle",
       "file": "layers/v3-jacket-navy-idle.webp",
-      "sha256": "2071f466a5e200b2f151f3e18ecd0f43582d4430c0c1325d6a0f759b75dbdd07",
-      "rawSha256": "4f336a594f3e6d9e619fe8f260004100712167d0637165de50541ea650d4f3da",
+      "sha256": "fcf396b3a808b3c130d84be6a121a0e66409b07169c2585a7c1815802eca1f9a",
+      "rawSha256": "585df964cb7f53781a8bb6be5a347cb23a1e5b1b6eba72717e9b641064692796",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7750,6 +8708,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-idle",
         "recolor": {
@@ -7763,8 +8730,8 @@
     {
       "id": "v3-jacket-navy-wave",
       "file": "layers/v3-jacket-navy-wave.webp",
-      "sha256": "b23b6a3ae32e381cdfd8911d416cd4b08b6d596aeecd98173da70e17c1b9a8c7",
-      "rawSha256": "02abc82f5589a6b40cc2aed5a32e023923f1876e6993186c00302ff088314da4",
+      "sha256": "265c6b2da280de695677b7fd4c023dd082c674b21ab797fab9e47756c94f41e1",
+      "rawSha256": "dc3cc6b2bc99ba6d84a2f9b6aab3ce17d6a08275d5016623ca3daff85f972ed7",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7782,6 +8749,15 @@
           "width": 784,
           "height": 814,
           "pixels": 353001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-wave",
         "recolor": {
@@ -7795,8 +8771,8 @@
     {
       "id": "v3-jacket-navy-cheer",
       "file": "layers/v3-jacket-navy-cheer.webp",
-      "sha256": "ac2910c56a5e7a46d0d60204a7bc7f0ba18803535556220ea16f64fd7ee613f0",
-      "rawSha256": "e69e464c1eb5933e2f68e479c2e3341c8ce38045a3738b2b900c7a2d67b7b487",
+      "sha256": "888809d33d238b235bb32e9c06a85f6c125b3f2f14be6b725aae986f345b507c",
+      "rawSha256": "1a7afe82ba9434b281cfc5428cb632562987a29b10c4b593adb0b4f4878b5939",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -7814,6 +8790,15 @@
           "width": 717,
           "height": 640,
           "pixels": 327934
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
@@ -7827,8 +8812,8 @@
     {
       "id": "v3-jacket-navy-think",
       "file": "layers/v3-jacket-navy-think.webp",
-      "sha256": "acf5f40810ed3f8ff81e42fdeb18d4d9d89cfd36d10865549574a514b87accc5",
-      "rawSha256": "b58450e9479f3ceb3988c952e657a9ead6b1fc2605a73d399d94de9a98003be6",
+      "sha256": "5b2dfb63e7566c99b80edfebedabb4ab89db9fe5a2e49d36625b1fb55187c161",
+      "rawSha256": "59a47a6f98192844f6bdd13ab9a8eb509ef36d838afcdf8788752d2c5bf6d45f",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7846,6 +8831,15 @@
           "width": 587,
           "height": 811,
           "pixels": 307163
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-think",
         "recolor": {
@@ -7859,8 +8853,8 @@
     {
       "id": "v3-jacket-navy-heart",
       "file": "layers/v3-jacket-navy-heart.webp",
-      "sha256": "06b99ec5e4bd6318747f47dbe6e467d157777c170da069e889bae5e267a33e7d",
-      "rawSha256": "ce05b777a5381025b753fe211f9b1f70f8f850003a7cabb07f2e32ac2e2a1308",
+      "sha256": "20d80f73b3806641423f37ae6743cd39c82685745204f50143bccbcb497306f5",
+      "rawSha256": "fd6ebf62badbc905db392a83adf77e8d4b601a825bd062875d1c799676617144",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -7878,6 +8872,15 @@
           "width": 710,
           "height": 639,
           "pixels": 306212
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-heart",
         "recolor": {
@@ -7891,8 +8894,8 @@
     {
       "id": "v3-jacket-mint-idle",
       "file": "layers/v3-jacket-mint-idle.webp",
-      "sha256": "f973f1ed37f331db3cc465abcd4786eebe8e2647d3d407391207631f6173e467",
-      "rawSha256": "f463d36fd73b00d6f8b3f86be7114b33ebad7f287e2f77a9ee6c3367d0860b47",
+      "sha256": "f0f3d566503eb386214a6faea1c44a88448142f2d1e902d79ede840ffaba7362",
+      "rawSha256": "7bc048683552012686222f5ea420a7337ca59f05a3df5f23a8a2a8fb1f7f3cda",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7910,6 +8913,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-idle",
         "recolor": {
@@ -7923,8 +8935,8 @@
     {
       "id": "v3-jacket-mint-wave",
       "file": "layers/v3-jacket-mint-wave.webp",
-      "sha256": "2f4437f5291cb6d80354e3a009f7a32c4a7b15d0fa8d068c27221140690f617f",
-      "rawSha256": "2ab68ff005104485150571ffbaf933e952820440eb7a7f886facf1e329808d33",
+      "sha256": "0560a574d55a8c26c968a9a3368b6e4f6c335009fcfd58eb16f06eff6c5d13e8",
+      "rawSha256": "7c600e82d4ce2a4fe405797e6909f8a6cf29082f8d6fd3e9fb11c267b4908e89",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -7942,6 +8954,15 @@
           "width": 784,
           "height": 814,
           "pixels": 353001
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-wave",
         "recolor": {
@@ -7955,8 +8976,8 @@
     {
       "id": "v3-jacket-mint-cheer",
       "file": "layers/v3-jacket-mint-cheer.webp",
-      "sha256": "2eeb9eeffc581b42b8bef4a419bf0ffc231de51642b8ed25239084ccfdde188d",
-      "rawSha256": "77c382882dda9b58a29ccb6c04daa4b7d01add65140c7b548957f69fa71578b8",
+      "sha256": "5d9641340030402f4cb60ca1ffc277e40af4a8d16434b4d0aa88f4026f76312a",
+      "rawSha256": "33e1100ef9eda63574559383c0a4bcf742f91ba974a1ed2c66ee7350b51428d4",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -7974,6 +8995,15 @@
           "width": 717,
           "height": 640,
           "pixels": 327934
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
@@ -7987,8 +9017,8 @@
     {
       "id": "v3-jacket-mint-think",
       "file": "layers/v3-jacket-mint-think.webp",
-      "sha256": "116ed708110dc27bdbeb43b49c6eed7a5b6945a79e3d592233672692608e144f",
-      "rawSha256": "f285e05f0f2e9e8734d806621f6232782f3b01c2ef0adc1c4ce29dc9f68e66e4",
+      "sha256": "efe988609628ebcccd63823da8edf5d131537fe711e056bf90f4aa17357ed88e",
+      "rawSha256": "6cd72aa3da39fbe25c1339115dbee942f8bfc1a74de27d60f9390c1d27ef6df6",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8006,6 +9036,15 @@
           "width": 587,
           "height": 811,
           "pixels": 307163
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-think",
         "recolor": {
@@ -8019,8 +9058,8 @@
     {
       "id": "v3-jacket-mint-heart",
       "file": "layers/v3-jacket-mint-heart.webp",
-      "sha256": "c0b352ffb966617afdca71f8a529f8e034b785b335c22e3df57ee02f8aa75bc7",
-      "rawSha256": "11f29e58503d019e65c4bb8cb92d11baf4eee9874879dbe7c7a24284d873d646",
+      "sha256": "fb88289f112f5ee1b4be6589f7bb224604c7b92732f6ed8430433f52c8dd9bd2",
+      "rawSha256": "cfc089133cced1e8c00d97d727cee71d237daa99a37a1ca63df5a6f27626bfc9",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -8038,6 +9077,15 @@
           "width": 710,
           "height": 639,
           "pixels": 306212
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-heart",
         "recolor": {
@@ -8051,8 +9099,8 @@
     {
       "id": "v3-jacket-rose-idle",
       "file": "layers/v3-jacket-rose-idle.webp",
-      "sha256": "454f86010f03baba994ad6ee79487ca88f7f30ec170542fb4b9af28be7d5d328",
-      "rawSha256": "bb1ec627eafcc2bf087841ca6ae5d0f6b026bde11a23acde5c4a1fcd643fb4b3",
+      "sha256": "45cacb30140809ba1c2f01c670352abc7ed2b7302a70bf59af74f0ee9d646e27",
+      "rawSha256": "e35e6d119a8c504f6a89f43ea13b01a89306ba194ce28537144faf85bef46840",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8070,6 +9118,15 @@
           "width": 654,
           "height": 811,
           "pixels": 349342
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jacket-idle",
         "recolor": {
@@ -8083,8 +9140,8 @@
     {
       "id": "v3-jacket-rose-wave",
       "file": "layers/v3-jacket-rose-wave.webp",
-      "sha256": "9d51bb514bdd6c37af5d37de4a060dafd5984807805f31985c0bfb3ce529e580",
-      "rawSha256": "4501e3981575b9f61a729bfc5eceb9585adbb2d42ce7a80a6d8c8b75f1c81ed5",
+      "sha256": "8d8cf41968c48330524525210911bc6f790047d5989bcf0b093a49cbb8345804",
+      "rawSha256": "2d650785395a29a3c9ff624c18ff60adf54a71b3c8f0433b7e165c32db403c07",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8103,6 +9160,15 @@
           "height": 814,
           "pixels": 353001
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-wave",
         "recolor": {
           "color": "#e29baf",
@@ -8115,8 +9181,8 @@
     {
       "id": "v3-jacket-rose-cheer",
       "file": "layers/v3-jacket-rose-cheer.webp",
-      "sha256": "96216daf38254a0e6f5d021d2c344b3cbeda162079104d962110454f0eb191d0",
-      "rawSha256": "bd5521fe19ed55ca2a1aa3630e13e7ebb4ec33b8fddb75db39e866c2c43f2dc6",
+      "sha256": "6608cdcc36c811f968e5517c3782f872c14433c153b5ecf3f625558bfaa78f05",
+      "rawSha256": "5a0b309ca9013ea7726d1f168ff83d9cb941e3e47ff7142ae775a1fb804b067d",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -8135,6 +9201,15 @@
           "height": 640,
           "pixels": 327934
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
           "color": "#e29baf",
@@ -8147,8 +9222,8 @@
     {
       "id": "v3-jacket-rose-think",
       "file": "layers/v3-jacket-rose-think.webp",
-      "sha256": "3a6ebbe3fb2630887a843681b9971f7bbdcc53deb6ea2a51f97d07dbe068000f",
-      "rawSha256": "44f088de3ae09ed53b8aaa2c399e1ebd67d77a17e93e9a0b8a5c4c31f1f5bf26",
+      "sha256": "08836115794ebaa78492231c22cf4acff631bd2d3461e38f48b8cdd1d05488c4",
+      "rawSha256": "b67e4f14714f055346c8f26e4b1d3a2013f37cbd09e6dbe3c38bc4be063d11e4",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8167,6 +9242,15 @@
           "height": 811,
           "pixels": 307163
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-think",
         "recolor": {
           "color": "#e29baf",
@@ -8179,8 +9263,8 @@
     {
       "id": "v3-jacket-rose-heart",
       "file": "layers/v3-jacket-rose-heart.webp",
-      "sha256": "46fc6e26adc0a389079900dc7b5eda28d3f0c9ba42b105570241d527fab25fb6",
-      "rawSha256": "ace59e5477114c2f03c63989f9c8863d9aea1694f08ba5d606ab17bf01629a50",
+      "sha256": "f26e600ee0ff62397b54d42626c0a5472851bed607e1899d373ca05918ad0fc6",
+      "rawSha256": "60bdc52609ef9196ed32a82afc00ca31abe3944bfd93fa45910b6ccafa179ad7",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -8199,6 +9283,15 @@
           "height": 639,
           "pixels": 306212
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-heart",
         "recolor": {
           "color": "#e29baf",
@@ -8211,8 +9304,8 @@
     {
       "id": "v3-jacket-cream-idle",
       "file": "layers/v3-jacket-cream-idle.webp",
-      "sha256": "de7a5441dab11b015309893269006bfca33d8b4853bb496f1d3b2a559c97d0fd",
-      "rawSha256": "3ef2f3962e0246b00439f237634143fa58e3bdf52f3a1a1e7ed158d17a761785",
+      "sha256": "2b81057bc86b4e3031fcef719acfb0a8fded9d21da9fa0743088700047ac1a39",
+      "rawSha256": "4f875a52d2d890e8fa4f06eca57dad72491bd0de786f906b9a7a3b2a088f670b",
       "width": 516,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8231,6 +9324,15 @@
           "height": 811,
           "pixels": 349342
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6226423248915737,
+          "referenceSamples": 24813,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-idle",
         "recolor": {
           "color": "#e8dcc4",
@@ -8243,8 +9345,8 @@
     {
       "id": "v3-jacket-cream-wave",
       "file": "layers/v3-jacket-cream-wave.webp",
-      "sha256": "d2357e98deef176771e3fb9f5f995f2e629d0184a531c3cdb4d18623da16e024",
-      "rawSha256": "637a9f5b8456d0372d7e96514f3f764d38346febd54ad7f314df69936c312fa2",
+      "sha256": "fa4c5842da4ce9b5f49a795ee7932684fbc9efafdf81c51ca0c131819b184a23",
+      "rawSha256": "fb2e96e9b0769bd107bb49dfe47619442607541dddd22bfafee7b69b014e7387",
       "width": 616,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8263,6 +9365,15 @@
           "height": 814,
           "pixels": 353001
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6247726709204119,
+          "referenceSamples": 31367,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-wave",
         "recolor": {
           "color": "#e8dcc4",
@@ -8275,8 +9386,8 @@
     {
       "id": "v3-jacket-cream-cheer",
       "file": "layers/v3-jacket-cream-cheer.webp",
-      "sha256": "bfe6a9003192fd781711a3c3bdfbd18fb069391c279b2b25b5f380872213e252",
-      "rawSha256": "3d2e820866e970c4ef7d2cd9ed84c085f6b8ed9251ed222097a179b5ac455dd0",
+      "sha256": "9d294ddc29f99c68ccb56bd85a2cf1503bdd4bd87e6853f8aa1fb66a7b472ad8",
+      "rawSha256": "480b4dc175993c47ebb41f1f71b522e5836d6d36e2b6dc3eff3dcb2eb9bc7c41",
       "width": 640,
       "height": 571,
       "encoding": "webp-q90-640-v1",
@@ -8295,6 +9406,15 @@
           "height": 640,
           "pixels": 327934
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6276028042390691,
+          "referenceSamples": 27498,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-cheer",
         "recolor": {
           "color": "#e8dcc4",
@@ -8307,8 +9427,8 @@
     {
       "id": "v3-jacket-cream-think",
       "file": "layers/v3-jacket-cream-think.webp",
-      "sha256": "36956dd72fe3bef3a7434557fe0f58ca1b3f9e5b9bab4b3e2dafd77867418948",
-      "rawSha256": "33662816f0f0dc6919d2d130709127e6bb55dc0d7c0c2e7e96699f3cf81e1702",
+      "sha256": "ad1a0f5beb7ba66450ea304091b4376e678166e2d685726e926472d24de6e2bb",
+      "rawSha256": "e04f384e6cce0af8a3f2f253355afc2fa28969222230e6b4c3cb6538b71f979a",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8327,6 +9447,15 @@
           "height": 811,
           "pixels": 307163
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6201858617673001,
+          "referenceSamples": 26049,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-think",
         "recolor": {
           "color": "#e8dcc4",
@@ -8339,8 +9468,8 @@
     {
       "id": "v3-jacket-cream-heart",
       "file": "layers/v3-jacket-cream-heart.webp",
-      "sha256": "63c35d333c7997b87972bd1292ab619392ed6adb9c749a6bfb915b53ce481bd5",
-      "rawSha256": "5ba4a5f6375ea383eaad9c539e8be429e9a40292095ca76e9592047d527d3d8c",
+      "sha256": "e02ff2919b10e488ec928a35f5bc8ade696ea0a09cb1bc36f573afac380bf8de",
+      "rawSha256": "f4d7c682197ceb4479e1d6f1560177b8324b5b7b464b8b8fe8101e9aa18fe5ca",
       "width": 640,
       "height": 576,
       "encoding": "webp-q90-640-v1",
@@ -8359,6 +9488,15 @@
           "height": 639,
           "pixels": 306212
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6135533024868024,
+          "referenceSamples": 32748,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jacket-heart",
         "recolor": {
           "color": "#e8dcc4",
@@ -8371,8 +9509,8 @@
     {
       "id": "v3-hanbok-ivory-idle",
       "file": "layers/v3-hanbok-ivory-idle.webp",
-      "sha256": "438e9a6370e25b07952ca9fd0df6606a1f4a81806758bf831ab30b653fd5fec1",
-      "rawSha256": "a617f5cd3f4a0db30f3dc1bfa61531de33b82ac834bcdba3a3e2ac3af0aaa9a1",
+      "sha256": "53a0ecdecf75e3fbba340581fb8330c554971094b2bd29d797720a5d708bd54d",
+      "rawSha256": "36d3a59bd6595ee3f1d8a3c2850e2fcaddbc4982bd8f97a474eb265badf5c20f",
       "width": 517,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8390,6 +9528,15 @@
           "width": 662,
           "height": 820,
           "pixels": 319474
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5639082049289317,
+          "referenceSamples": 30917,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-idle",
         "recolor": {
@@ -8403,8 +9550,8 @@
     {
       "id": "v3-hanbok-ivory-wave",
       "file": "layers/v3-hanbok-ivory-wave.webp",
-      "sha256": "2768179f7595eba2f3df6470bcdd5cc7c2a58869bc0d3f7cfd01091561a3db60",
-      "rawSha256": "1101ec5edbbea464b0ba18fad1fc46f862a16f6a183bd2fca586d46ec072c3a6",
+      "sha256": "30407c95ece41d459af75eec66870e9294a0bca81f834f613125493927c4aa06",
+      "rawSha256": "7af91dcd18cd6f81982ee79f67afd7b268c67bc19a7766366e3031e669732f3a",
       "width": 613,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8422,6 +9569,15 @@
           "width": 784,
           "height": 819,
           "pixels": 319481
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5656056293465733,
+          "referenceSamples": 39136,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-wave",
         "recolor": {
@@ -8435,8 +9591,8 @@
     {
       "id": "v3-hanbok-ivory-cheer",
       "file": "layers/v3-hanbok-ivory-cheer.webp",
-      "sha256": "134c6551208c879397e519aa57dc67b8b9ee0b9cc693448deb12f05d8c4d103a",
-      "rawSha256": "ccba120cfaff70c248c287f26ce1d97bb916c0e4af8b340cb5dbc4c54de4de54",
+      "sha256": "97c1ec4cddca0cb0bebcfda654b31b84261d04f11393ced1680081a6d7c626f5",
+      "rawSha256": "cd6eebccb8fc64ad77f9f123313a4341b9ce66b4f47d7ea0e7d246a90efc6ec8",
       "width": 640,
       "height": 523,
       "encoding": "webp-q90-640-v1",
@@ -8454,6 +9610,15 @@
           "width": 716,
           "height": 585,
           "pixels": 293098
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5685740193458697,
+          "referenceSamples": 35375,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-cheer",
         "recolor": {
@@ -8467,8 +9632,8 @@
     {
       "id": "v3-hanbok-ivory-think",
       "file": "layers/v3-hanbok-ivory-think.webp",
-      "sha256": "ce7ae21794e592f403196bf28b3f48339c42dd5d542c1a587bdff32156b754f1",
-      "rawSha256": "fee604a94c86e4d8ff1a41506cb7ef2c2c245fff5f70f1afce8479a4fe0d4bc5",
+      "sha256": "9f2999e44cc49dbf58011b7bd48f09063be3d2c671161aa4b01d37415e10dd78",
+      "rawSha256": "17f1e0cff9fbbb80167d08b5be0046ec8c10663c9cef21261dadf404c6049059",
       "width": 471,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8486,6 +9651,15 @@
           "width": 601,
           "height": 816,
           "pixels": 274600
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5589318591760325,
+          "referenceSamples": 31067,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-think",
         "recolor": {
@@ -8499,8 +9673,8 @@
     {
       "id": "v3-hanbok-ivory-heart",
       "file": "layers/v3-hanbok-ivory-heart.webp",
-      "sha256": "c244a1d5205c96657810b149707660dcdc5e448cb0b67678cd6d5dc0691a750f",
-      "rawSha256": "1c408354108c27b06c7fc4b70d5ad055e79aa6315804fef6458b689b99f6ac19",
+      "sha256": "e13639d87848e63825600aca944bee18daf45004de34921f34fb4ed95a046e47",
+      "rawSha256": "ed416042d179be575cb8afb94af5df746a9d51b714366eacbda85d96b5e71aeb",
       "width": 640,
       "height": 524,
       "encoding": "webp-q90-640-v1",
@@ -8518,6 +9692,15 @@
           "width": 709,
           "height": 581,
           "pixels": 268684
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5550169509305897,
+          "referenceSamples": 38042,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-heart",
         "recolor": {
@@ -8531,8 +9714,8 @@
     {
       "id": "v3-hanbok-sky-idle",
       "file": "layers/v3-hanbok-sky-idle.webp",
-      "sha256": "72ec380b4361abe0ccc9edafb868bdbf3b309ad1f2225f76a728341f4ac78703",
-      "rawSha256": "81f0a2f8fee62e56e57f42c8e913bf1a8d446c217c74ccd49abd947373b5af5f",
+      "sha256": "f64cb75f40b940a0efce8330607fff87201d1b7808199ede21ffe3c3e2bb2357",
+      "rawSha256": "49c02153e0effee82e8c973a7cafe5f6c620c31e203de59fa244e8f90a073922",
       "width": 517,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8550,6 +9733,15 @@
           "width": 662,
           "height": 820,
           "pixels": 319474
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5639082049289317,
+          "referenceSamples": 30917,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-jeogori-idle",
         "recolor": {
@@ -8563,8 +9755,8 @@
     {
       "id": "v3-hanbok-sky-wave",
       "file": "layers/v3-hanbok-sky-wave.webp",
-      "sha256": "dddbcb22793ecfc719f7d371e7ba4b41a7414e25672b30bafd8c0346472bbbe4",
-      "rawSha256": "2ec6dffadc8a0d1e71e90957aee332903747e2ca33b867ce7ae60021c5ec0b7f",
+      "sha256": "512bbfc4de04c0371f410df1b83644c9a73c4627bb380510e7930ff1829e431d",
+      "rawSha256": "5b00e903955da5d43f2f0a0a8f98e96720cf742053c0b0ad1990da0f3ebd8645",
       "width": 613,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8583,6 +9775,15 @@
           "height": 819,
           "pixels": 319481
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5656056293465733,
+          "referenceSamples": 39136,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-wave",
         "recolor": {
           "color": "#a8cddd",
@@ -8595,8 +9796,8 @@
     {
       "id": "v3-hanbok-sky-cheer",
       "file": "layers/v3-hanbok-sky-cheer.webp",
-      "sha256": "fdb3c2010348a49a6d6593aec3fd5b06d3610c1ff31b95bd74b3c880ed2c8221",
-      "rawSha256": "e1f4ed1dfeaa695063ae2cf3aed6975188e67c76f7626a96e73fcde4530bca85",
+      "sha256": "60fa15362fd485e3ce59ad6e3816664211710bc6b01cc3615472d74b97a4d7c6",
+      "rawSha256": "e99e5add047353eefac1418dbcae51a25aef2bfc4ab9291f9cc6af0bb68edeea",
       "width": 640,
       "height": 523,
       "encoding": "webp-q90-640-v1",
@@ -8615,6 +9816,15 @@
           "height": 585,
           "pixels": 293098
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5685740193458697,
+          "referenceSamples": 35375,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-cheer",
         "recolor": {
           "color": "#a8cddd",
@@ -8627,8 +9837,8 @@
     {
       "id": "v3-hanbok-sky-think",
       "file": "layers/v3-hanbok-sky-think.webp",
-      "sha256": "9228d62bc484f891aafe62b86735e80bf891ea3614885185827d13e0373d4c4b",
-      "rawSha256": "b85a09fb9865d73f1ad44defa3596f36dd84b05b9719ac7c061a1386bb6794b6",
+      "sha256": "3a46ddb3ac8dbcdcace802528b597fcde650969f5562ec58e363cffb2ea74b78",
+      "rawSha256": "2424c17f4effdaee1b25d59017bf31995986856b450a91c2e5af8d134eabf6ee",
       "width": 471,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8647,6 +9857,15 @@
           "height": 816,
           "pixels": 274600
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5589318591760325,
+          "referenceSamples": 31067,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-think",
         "recolor": {
           "color": "#a8cddd",
@@ -8659,8 +9878,8 @@
     {
       "id": "v3-hanbok-sky-heart",
       "file": "layers/v3-hanbok-sky-heart.webp",
-      "sha256": "5e1ff1d613367b1b6b5584a79dfef24cac6035f6463f1e613584b8b7e7d67327",
-      "rawSha256": "3b23a3bae9511c093cd11488378f6a7022da56bc970850defaa56fdc635179e5",
+      "sha256": "77de29831e89a51716292d61fbdb0459909fc2c9695e64b8369ab78cfadb8d02",
+      "rawSha256": "aa99de0140d894cbc51a4ef9a478cab3313b1d4eae110aaa479d3f5bfa95054a",
       "width": 640,
       "height": 524,
       "encoding": "webp-q90-640-v1",
@@ -8679,6 +9898,15 @@
           "height": 581,
           "pixels": 268684
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5550169509305897,
+          "referenceSamples": 38042,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-heart",
         "recolor": {
           "color": "#a8cddd",
@@ -8691,8 +9919,8 @@
     {
       "id": "v3-hanbok-peach-idle",
       "file": "layers/v3-hanbok-peach-idle.webp",
-      "sha256": "b02f37cd362519b8ec09b7b4836c218d1674b10fcae52bbc6d6eece39d966ee2",
-      "rawSha256": "0cf58a866d6ac8fd0d01e168ff6e6c6444ec38541d04ee5804ede7c6e1837fa5",
+      "sha256": "8a0974ce74b97c260e636cc5754ea178d41eeca3eeb8c56479372122b03c00af",
+      "rawSha256": "6a4190b724f62d7dfb1240344ee5650513aae63f1dd781e1a2ae29b029c8cacd",
       "width": 517,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8711,6 +9939,15 @@
           "height": 820,
           "pixels": 319474
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5639082049289317,
+          "referenceSamples": 30917,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-idle",
         "recolor": {
           "color": "#efb0a1",
@@ -8723,8 +9960,8 @@
     {
       "id": "v3-hanbok-peach-wave",
       "file": "layers/v3-hanbok-peach-wave.webp",
-      "sha256": "4014cf3626ae04da94f093834a8493e61bb7ce12efa9552767ae74c6fd38d4c1",
-      "rawSha256": "ee35989e710e192aa22edad6f4d939a8be9b2068ab4ed2c7e9c527b1e3bccafa",
+      "sha256": "cfece4a37f39f8e9948a33d181b9761a340639d3369b487342ffbcb9fc3a69a8",
+      "rawSha256": "bd10656b074b0de9052a93498b4804764b50c990a6388efdfbf0f561d6cf1639",
       "width": 613,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8743,6 +9980,15 @@
           "height": 819,
           "pixels": 319481
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5656056293465733,
+          "referenceSamples": 39136,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-wave",
         "recolor": {
           "color": "#efb0a1",
@@ -8755,8 +10001,8 @@
     {
       "id": "v3-hanbok-peach-cheer",
       "file": "layers/v3-hanbok-peach-cheer.webp",
-      "sha256": "f926c99bbbf8f3da132c8d12afd46961746930bd9eda60329ff9b77734ac7106",
-      "rawSha256": "a147f58c66ee48ad73d479ca2b96cd08973b3bb4a33e7c07612020d6a4a4e13a",
+      "sha256": "f7c9afca8992176c1065477e0064881412ffd1b0004e34401436e1c50a0011f6",
+      "rawSha256": "212461c2b6c42d855524a5e39eec7482ab5e8d3dc80dacc78cf79a10fbe62694",
       "width": 640,
       "height": 523,
       "encoding": "webp-q90-640-v1",
@@ -8775,6 +10021,15 @@
           "height": 585,
           "pixels": 293098
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5685740193458697,
+          "referenceSamples": 35375,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-cheer",
         "recolor": {
           "color": "#efb0a1",
@@ -8787,8 +10042,8 @@
     {
       "id": "v3-hanbok-peach-think",
       "file": "layers/v3-hanbok-peach-think.webp",
-      "sha256": "bf1c83ccb8328005128b9a3c29b8e054071c4c12764dcfaf83139b6233aef9db",
-      "rawSha256": "c081d6e0eb6b421d7b2fa643e94db4ed67e3817621657d84c8520941918ca36a",
+      "sha256": "1c06a661e580f2a9a10a555663235772ce0efa0dce6e7905f9edfe8a65b21c14",
+      "rawSha256": "2fedb09443363dd2b952b2964e91a27971ba34892f270cbac2f05e4b52d6ba71",
       "width": 471,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -8807,6 +10062,15 @@
           "height": 816,
           "pixels": 274600
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5589318591760325,
+          "referenceSamples": 31067,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-think",
         "recolor": {
           "color": "#efb0a1",
@@ -8819,8 +10083,8 @@
     {
       "id": "v3-hanbok-peach-heart",
       "file": "layers/v3-hanbok-peach-heart.webp",
-      "sha256": "af4bd5012656f09dc89d3bfef6fa8cd2041e90fad2c4a24bfe6f2d1724140942",
-      "rawSha256": "3ffd46e7949f541f9f8ce07786b45c639762d23ecd530e0068d657057e9e9eaf",
+      "sha256": "52b184ba23b5f9c9fb9a6b79825186094bfb687cdddf34f15cb663f9f534dec6",
+      "rawSha256": "4af7960a4fbf15059104250142d98ba3f135632446a6b5b0451d5edc92b34bce",
       "width": 640,
       "height": 524,
       "encoding": "webp-q90-640-v1",
@@ -8839,6 +10103,15 @@
           "height": 581,
           "pixels": 268684
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5550169509305897,
+          "referenceSamples": 38042,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-jeogori-heart",
         "recolor": {
           "color": "#efb0a1",
@@ -8851,8 +10124,8 @@
     {
       "id": "v3-official-navy-idle",
       "file": "layers/v3-official-navy-idle.webp",
-      "sha256": "5a3b0285ca86ff5724acbf94901c58748453f8189c874ad50486facd3940ad13",
-      "rawSha256": "539d3d7d3a7266a01024f70b99a115eb1ab77b2cc4712efa9c89e324c6275cb2",
+      "sha256": "aa4ff921bfe8961ebdfbd2aeb1d8dc8c0845b44245fcb1019a864a484a83da3e",
+      "rawSha256": "1a8bf2c18f0be55774b121c3c8b1fb834b328c1087a88e9167fe614bb04dcc8b",
       "width": 468,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -9191,6 +10464,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6023418892191437,
+          "referenceSamples": 23468,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-idle",
         "recolor": {
           "color": "#263854",
@@ -9203,8 +10485,8 @@
     {
       "id": "v3-official-navy-wave",
       "file": "layers/v3-official-navy-wave.webp",
-      "sha256": "fcab31b5c6925735311f7450e4ff71e34c6b6f59bfc00b5178b5ef2f3439f1fd",
-      "rawSha256": "4798cd2f3b025e91ea9565a36a2d670560aeb09183aaaac45b67bcbe55489646",
+      "sha256": "e57c203e96444d5c69ff548fceedd61b54eb4504b0c3e6a16644d70b25eea754",
+      "rawSha256": "938f1dd5ab111c391583404c2f6c1578a0ec8f833be390af51f9df52686f682e",
       "width": 552,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -9663,6 +10945,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5989513984096545,
+          "referenceSamples": 29436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-wave",
         "recolor": {
           "color": "#263854",
@@ -9675,8 +10966,8 @@
     {
       "id": "v3-official-navy-cheer",
       "file": "layers/v3-official-navy-cheer.webp",
-      "sha256": "aef2caec09d418334fb42c1be06e947ba7cba4abdac67252f22eaaec746db2fc",
-      "rawSha256": "7088acbdb4ef6c8ca5eed7206c3c17e648664fb0c5f3ea6a81d0670ccd2b9328",
+      "sha256": "a843feb704bf226730d06fc10e1e62edf23100206ca29e343190cf5ddaee5a66",
+      "rawSha256": "16d448bcf878c34ef56999dfb6d6e46c465ad6e84e3715de5abc6a3734375800",
       "width": 501,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -10031,6 +11322,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5974542169431013,
+          "referenceSamples": 25557,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-cheer",
         "recolor": {
           "color": "#263854",
@@ -10043,8 +11343,8 @@
     {
       "id": "v3-official-navy-think",
       "file": "layers/v3-official-navy-think.webp",
-      "sha256": "85c1959591dd171f72e167b233981600f333a03232cb3c43b17a4e2a78afb705",
-      "rawSha256": "e0a0278d74e7d30f52bec3f5b5f8bb3168492f05ef684be4d1703955c1aa6c27",
+      "sha256": "8ae1b06c540d0e363435caf3f5b3902fb6b7f19d892604371ef52fd1aeaaf483",
+      "rawSha256": "8e7ee904a6c384fb2f3d1ed562497ce2d9145b765b97674d552ad26a886eaa59",
       "width": 426,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -10453,6 +11753,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.598159912759539,
+          "referenceSamples": 24438,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-think",
         "recolor": {
           "color": "#263854",
@@ -10465,8 +11774,8 @@
     {
       "id": "v3-official-navy-heart",
       "file": "layers/v3-official-navy-heart.webp",
-      "sha256": "5761517d19d27dc04c8d9033d5769afad2802eec8e50d70be1bf4a09d2a5ad45",
-      "rawSha256": "a9a1efadb5cbf77bff2fe97088cf9141035779983e7eb733226818666874c767",
+      "sha256": "6f8432a45b8440bc1d478571deb39199ef1cff39b657eb058883bd141710de86",
+      "rawSha256": "f8daae6303ed7877df17f7dc6d4358e9557309323e0c0e1bf4811637c77a4cc2",
       "width": 466,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -10909,6 +12218,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5852444648270935,
+          "referenceSamples": 28884,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-heart",
         "recolor": {
           "color": "#263854",
@@ -10921,8 +12239,8 @@
     {
       "id": "v3-official-red-idle",
       "file": "layers/v3-official-red-idle.webp",
-      "sha256": "a5ce310ebe959af01ebbeb10fcd53449d28a46436b1ed041d39d51961e34b821",
-      "rawSha256": "002f4111cdd307b233d4276dcb55b563673a8a6525ffadda7b13cb8820628f94",
+      "sha256": "d83ac094dce26583a585c266b4ef999eed0fbe28158102d7f39e6fb63197e602",
+      "rawSha256": "032c51142edb54dd5ca08e6860ea1f966472f8c5dc7dbbaa0278aef83c766b17",
       "width": 468,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -11261,6 +12579,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6023418892191437,
+          "referenceSamples": 23468,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-idle",
         "recolor": {
           "color": "#9c312e",
@@ -11273,8 +12600,8 @@
     {
       "id": "v3-official-red-wave",
       "file": "layers/v3-official-red-wave.webp",
-      "sha256": "ce5a06bd44cc4206529337777bf4ef78089a445de5caecbfd7d51059e226b798",
-      "rawSha256": "3d73c335fa1c880b66a4b3839f9ff4a9043996df95f5391fb00fc300921e1c6d",
+      "sha256": "7bc7424773935580d00e07e59b15c42ef71974e8767532bbd3597abf52b9a793",
+      "rawSha256": "43618b8c2d32e7813e3944f7b9c5daf05b5ac16f16988dfd9ef224b428e5441f",
       "width": 552,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -11733,6 +13060,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5989513984096545,
+          "referenceSamples": 29436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-wave",
         "recolor": {
           "color": "#9c312e",
@@ -11745,8 +13081,8 @@
     {
       "id": "v3-official-red-cheer",
       "file": "layers/v3-official-red-cheer.webp",
-      "sha256": "bc1046de311d1be7bcb5247879491881f0607079e9b64d0611fd27a199dfb3f2",
-      "rawSha256": "f5f858ac22fce3618aa372acf40d82f05f4f4592a97663b8caf83d3e69fe269b",
+      "sha256": "aff8c1a6ab5eedc1c8173d48766ba28591910d96d2bcacc3385a1584ca477706",
+      "rawSha256": "482e9a24d19f5937fb9d33a3b7cbcf61e36826ae86f0ad3161322df52eeff316",
       "width": 501,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -12101,6 +13437,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5974542169431013,
+          "referenceSamples": 25557,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-cheer",
         "recolor": {
           "color": "#9c312e",
@@ -12113,8 +13458,8 @@
     {
       "id": "v3-official-red-think",
       "file": "layers/v3-official-red-think.webp",
-      "sha256": "3b1257c8317966fe27a8332635726fbd99e9d593b72f3835672e838546975c67",
-      "rawSha256": "4fa8cc9bb9b620f48022845f450255a43c9a93b969aca22f5183ba390d066744",
+      "sha256": "e19da1caa17c31b718990702ee9ed447db7b6111fb5717bccc8483c3036236b6",
+      "rawSha256": "7093b7a99a7fbfa34a00b65130eba18771dffbf19626d17f725a8f86e11fc2f9",
       "width": 426,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -12523,6 +13868,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.598159912759539,
+          "referenceSamples": 24438,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-think",
         "recolor": {
           "color": "#9c312e",
@@ -12535,8 +13889,8 @@
     {
       "id": "v3-official-red-heart",
       "file": "layers/v3-official-red-heart.webp",
-      "sha256": "9524955d4bb8a5fcc9abbd9a586bff84f27f06c5c600eef4b8b425e72efb8715",
-      "rawSha256": "c98239736109954b0ff2e234632fd9a6c40b0c3b730bdcd703fbc46d0fd49752",
+      "sha256": "cfeac6b0bc3573253975e292d9fa61638f7894a76cb162cb4a47d52958c19430",
+      "rawSha256": "5581ddbb26fa6e3d45fa5479af00f87babd149979b3ae79e2ef16dfc50ef89f8",
       "width": 466,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -12979,6 +14333,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5852444648270935,
+          "referenceSamples": 28884,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-heart",
         "recolor": {
           "color": "#9c312e",
@@ -12991,8 +14354,8 @@
     {
       "id": "v3-official-black-idle",
       "file": "layers/v3-official-black-idle.webp",
-      "sha256": "dc33659f6d1ce2f27e88c7a68cf46ff4170fafb27a956bb8a84c714498f0664f",
-      "rawSha256": "2c62e752ec5d6747569d03d38f2a86111a5a291207daad4decfc672df8df024a",
+      "sha256": "c6b5cfa365d0e8e296ce203348029dc7816baa652331f62b83761ad1c8ed8490",
+      "rawSha256": "fa831db587c562e35d5580cc96abd8b5bf21b83f3bf2645452d7b66709b3cd5e",
       "width": 468,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -13331,6 +14694,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6023418892191437,
+          "referenceSamples": 23468,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-idle",
         "recolor": {
           "color": "#282d39",
@@ -13343,8 +14715,8 @@
     {
       "id": "v3-official-black-wave",
       "file": "layers/v3-official-black-wave.webp",
-      "sha256": "c873a24aa9d6d9574f9c4f0459f4fd7bb8c462127dca2c9ecd3c752d36960692",
-      "rawSha256": "77c53ae5474a5322ef13bcb4e2cf8aa29ffa019146da45eabdff9710b4d19bc0",
+      "sha256": "19c60dd21012e5c20d9941be7dec1ad1e9c2327f768b0f0b50f2206890ac31c4",
+      "rawSha256": "1427bcddd9803c42e794d55f8ba9d9ced924545cf8a85065b004bc787bd8bcac",
       "width": 552,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -13803,6 +15175,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5989513984096545,
+          "referenceSamples": 29436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-wave",
         "recolor": {
           "color": "#282d39",
@@ -13815,8 +15196,8 @@
     {
       "id": "v3-official-black-cheer",
       "file": "layers/v3-official-black-cheer.webp",
-      "sha256": "5848548b5987ca5cdc24b3432910a267ae815aafcdd7d4f2ba39bdcaf0003a0a",
-      "rawSha256": "3c08b7fb15190cd5a1cd96639f65f4f593e8242e035e3e3a5a1ab6ef1a6dda29",
+      "sha256": "ec59beee1a4ae69fa05848ce1c1aefc2bb633b8630c63399638e0b0d735b40ec",
+      "rawSha256": "cf2c7323f792ebdc3e8cacf9905c5996516a9af0b55ea70b492513f39febec65",
       "width": 501,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -14171,6 +15552,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5974542169431013,
+          "referenceSamples": 25557,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-cheer",
         "recolor": {
           "color": "#282d39",
@@ -14183,8 +15573,8 @@
     {
       "id": "v3-official-black-think",
       "file": "layers/v3-official-black-think.webp",
-      "sha256": "3d6f9fd7cc94893042b4999545505120641edc42b4e71da4f08b00d2a62f6508",
-      "rawSha256": "52731e6bc189277d4f1c3b5633a2d9de49112495a551cb2fabb80d8beadb0b16",
+      "sha256": "f0747d031048e0d196c2472f61748e5adf1c3a9f2d4862a183e1cc0c20f48957",
+      "rawSha256": "3efa1f7974fbe282d80e8e80d91f59ad5de94fe4a9a012ba10d4ef8072d846bd",
       "width": 426,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -14593,6 +15983,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.598159912759539,
+          "referenceSamples": 24438,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-think",
         "recolor": {
           "color": "#282d39",
@@ -14605,8 +16004,8 @@
     {
       "id": "v3-official-black-heart",
       "file": "layers/v3-official-black-heart.webp",
-      "sha256": "0f2dfa4be3a9345cecf63805f46c8fd6636b00b6c43ab46adfb624f7c7bfe079",
-      "rawSha256": "34ec4a888f62cb9241484a72d4a8e0ce8ae2b0918b02967634b02781237daafc",
+      "sha256": "1b3c7aaea893acfb8ea57334db77bf678b811fb3591abaf839f2097160ab8a2d",
+      "rawSha256": "f504fcfdaaaf8b3d5a990f22723f81c690db01ab2253172a2cea6b73e5f1d861",
       "width": 466,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15049,6 +16448,15 @@
             ]
           ]
         ],
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.5852444648270935,
+          "referenceSamples": 28884,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-robe-heart",
         "recolor": {
           "color": "#282d39",
@@ -15061,8 +16469,8 @@
     {
       "id": "v3-summer-white-idle",
       "file": "layers/v3-summer-white-idle.webp",
-      "sha256": "2ec5fc433290b423cb25a9709464120463f6daf1d78215d6c60a9d6eaafcdae1",
-      "rawSha256": "f98f7462c5e906c75c63abe4ac770591899019082aff80943953d6e9fd2095f0",
+      "sha256": "95edadc714cd30e6d111210fb11915f8b1e6755dc57fd4d0e99e1c28c4c677bd",
+      "rawSha256": "cc2e4b432e3255eacbe0fdd163d3561c759ecde632e50254d163be6f54004e01",
       "width": 510,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15080,6 +16488,15 @@
           "width": 655,
           "height": 822,
           "pixels": 323936
+        },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6405503219848581,
+          "referenceSamples": 72710,
+          "referenceMethod": "opaque-skin-median-v1"
         },
         "variantOf": "v3-polo-idle",
         "recolor": {
@@ -15093,8 +16510,8 @@
     {
       "id": "v3-summer-white-wave",
       "file": "layers/v3-summer-white-wave.webp",
-      "sha256": "4c593a81385885ef6c315183819c8579fdde1cc2e6b5d2779cb926bb19402f75",
-      "rawSha256": "6fbf2e6ae9a3db2dd61571f92bfff48b94ef18c7c5a2173d583b024a5652a2ed",
+      "sha256": "4703a9ca5fbbb136b00fb7c567ac0d7023f402639b67ab3c4717ec5da77b4121",
+      "rawSha256": "86d4528d4b716e2f4b2e4565f474700e766d34bc2e373c66b5ec009a2585c2df",
       "width": 608,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15113,6 +16530,15 @@
           "height": 822,
           "pixels": 326942
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6383588375113298,
+          "referenceSamples": 77060,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-wave",
         "recolor": {
           "color": "#f0f1ee",
@@ -15125,8 +16551,8 @@
     {
       "id": "v3-summer-white-cheer",
       "file": "layers/v3-summer-white-cheer.webp",
-      "sha256": "326b4ecbee42bacc9a8dab050410ae167365f19fa2f4cd4b4aaf4099be8ce45b",
-      "rawSha256": "9d4662805cb50f899ab86c6f1f4f1f3d1b69fca6aa6ac9baa1cb07e0cde5fe3a",
+      "sha256": "0f3216a50b12c37dd99ff1ec32ad19c53fa8ce6dd2918c6695848f309bbfc1b4",
+      "rawSha256": "7ce5255c35e5b05fca7648294d7d240362dc8f83abc2a584d91a5f90cec23b8c",
       "width": 640,
       "height": 581,
       "encoding": "webp-q90-640-v1",
@@ -15145,6 +16571,15 @@
           "height": 642,
           "pixels": 303308
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6401818548908618,
+          "referenceSamples": 67025,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-cheer",
         "recolor": {
           "color": "#f0f1ee",
@@ -15157,8 +16592,8 @@
     {
       "id": "v3-summer-white-think",
       "file": "layers/v3-summer-white-think.webp",
-      "sha256": "67d2e9bf0176218e5509c3171481b2077cb15b175989d2f66246f9350dfe2bc1",
-      "rawSha256": "ec72085731902e6efeba5555a2d539a3db16f8b9a224bd53ad7957807faf4580",
+      "sha256": "8162cc4e7bd650d88882f9c86cc57568363e9fbff673787959cd18fbae18b703",
+      "rawSha256": "97be172cd49f92c3ebdd17916b056be2413d398b630c6ef0685eefbc54cb49cd",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15177,6 +16612,15 @@
           "height": 820,
           "pixels": 289770
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 73503,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-think",
         "recolor": {
           "color": "#f0f1ee",
@@ -15189,8 +16633,8 @@
     {
       "id": "v3-summer-white-heart",
       "file": "layers/v3-summer-white-heart.webp",
-      "sha256": "8f27729caa50f3932976ac3620df91cffc83422a070e785e6ce4813533652bfe",
-      "rawSha256": "e203fc90f6150efc7c49a2d59c38d47df30c766dfe4383e68a33db0464d7197b",
+      "sha256": "e811945f2f657b000333771806ea7b167d226fbaf6dd059c5728ae6ee7e60a65",
+      "rawSha256": "005eba8e19c9a44021a6f385b85be7afc2e1d0f4b4de4ac914e7954188da5db8",
       "width": 640,
       "height": 597,
       "encoding": "webp-q90-640-v1",
@@ -15209,6 +16653,15 @@
           "height": 641,
           "pixels": 287396
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 77436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-heart",
         "recolor": {
           "color": "#f0f1ee",
@@ -15221,8 +16674,8 @@
     {
       "id": "v3-summer-navy-idle",
       "file": "layers/v3-summer-navy-idle.webp",
-      "sha256": "aa2035f56b595bd1242db04b1fbf173cb0c929e1cb93acf9838d5e472206479b",
-      "rawSha256": "0dabfde327dbccc23f91d3e412d80c9449348f1c105f54a889f4675fee93c9f9",
+      "sha256": "60cbcb9c18676556c2fcf6ecd98f36746ca146136abfa6ea28ab39ed29afc949",
+      "rawSha256": "f99df14eca3f5f193dc772f9030ee90bac68b4dafb5bb304a52a4dc5562954e6",
       "width": 510,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15241,6 +16694,15 @@
           "height": 822,
           "pixels": 323936
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6405503219848581,
+          "referenceSamples": 72710,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-idle",
         "recolor": {
           "color": "#1f2c42",
@@ -15253,8 +16715,8 @@
     {
       "id": "v3-summer-navy-wave",
       "file": "layers/v3-summer-navy-wave.webp",
-      "sha256": "6a0eec4b84f7562a3cba0bdd4b11161a635f50ede96d0d2574b56590df01d276",
-      "rawSha256": "3ec45fc7f4323d6a2f95c5b1d5e71ea5c0d3a263b16c0dc5b0d80ce7851c0e4d",
+      "sha256": "52ee3e6864a67a2ba7795b08655f3aa8f77908890cba1ad91f305fc133f48d48",
+      "rawSha256": "f8fb1e4318d519d4250952955334846b98c9f85ca71e00a199363a1fa83bb321",
       "width": 608,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15273,6 +16735,15 @@
           "height": 822,
           "pixels": 326942
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6383588375113298,
+          "referenceSamples": 77060,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-wave",
         "recolor": {
           "color": "#1f2c42",
@@ -15285,8 +16756,8 @@
     {
       "id": "v3-summer-navy-cheer",
       "file": "layers/v3-summer-navy-cheer.webp",
-      "sha256": "3425aecf68ebcc1c41f94d6855fb2f7f5b71e622049eebac00df783abc25bfe8",
-      "rawSha256": "94b4544f6cfd6a5b16b39e4160176c9b34e21570d14d7abe247ba9e72921cae6",
+      "sha256": "ebe8dcd51dfe28be12b8bfba806e1b230a0f385bd40e9c23f580c27162204471",
+      "rawSha256": "7aace19f89310e98814df50449b012c4a91211bf23b32fa3c15ad0ad0e4e0819",
       "width": 640,
       "height": 581,
       "encoding": "webp-q90-640-v1",
@@ -15305,6 +16776,15 @@
           "height": 642,
           "pixels": 303308
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6401818548908618,
+          "referenceSamples": 67025,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-cheer",
         "recolor": {
           "color": "#1f2c42",
@@ -15317,8 +16797,8 @@
     {
       "id": "v3-summer-navy-think",
       "file": "layers/v3-summer-navy-think.webp",
-      "sha256": "5d9ac6b09f1cc0d3d17608e8a8bc0850b801c561fe81179b293f6c16fbfdfad5",
-      "rawSha256": "4b88f8db96a9c7af6f14c3a367e629b44cf76376d84b9deb08ee7a7197193b02",
+      "sha256": "5e176755049cabd724150794f9b917b378992f96b4e45c5799b57809f8bec92d",
+      "rawSha256": "dfe3194302debe2ba16ec4b36e2a0d5ecb8cd9f47d64fa95ff4e04e89bb3ad55",
       "width": 463,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15337,6 +16817,15 @@
           "height": 820,
           "pixels": 289770
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 73503,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-think",
         "recolor": {
           "color": "#1f2c42",
@@ -15349,8 +16838,8 @@
     {
       "id": "v3-summer-navy-heart",
       "file": "layers/v3-summer-navy-heart.webp",
-      "sha256": "dbecd43348328a6791b3e1598a753ad0d3f3cddd0cca9d113993ca1162159bb9",
-      "rawSha256": "ef55ea4d12214b2513e715a5638a636ac79b75f1248eb16b48febfa0c03e878d",
+      "sha256": "46a80bf5e43d2c397d9870f6a06a97d855ab1db9c3ef7773ff4bf58d03de2467",
+      "rawSha256": "151a4eeb6f48e2e352a8eac034191e3b606a0e595546fb9054490b571f58a839",
       "width": 640,
       "height": 597,
       "encoding": "webp-q90-640-v1",
@@ -15369,6 +16858,15 @@
           "height": 641,
           "pixels": 287396
         },
+        "skinNormalization": {
+          "color": "#f3c6a5",
+          "contrast": 0.35,
+          "minShade": 0.84,
+          "maxShade": 1.06,
+          "referenceLinearLuma": 0.6387273046053261,
+          "referenceSamples": 77436,
+          "referenceMethod": "opaque-skin-median-v1"
+        },
         "variantOf": "v3-polo-heart",
         "recolor": {
           "color": "#1f2c42",
@@ -15381,8 +16879,8 @@
     {
       "id": "v3-plain-bottom",
       "file": "layers/v3-plain-bottom.webp",
-      "sha256": "d8d8f5db729a869c9dd095a57080f4626d14d52e111d73bb9d6e6a772bcf9626",
-      "rawSha256": "daeb5b33e9484313c3dba2a718e6d7d1e6f1a121d495037a3521f7614b4dc074",
+      "sha256": "a2ab97738a8df36d2c891eb360f7609c1e0b9cc2c782592f389baf90889e50d0",
+      "rawSha256": "a3c7d700c9c6755232f9fb088d67dabc66516c0752b4adfcb9796d3e8cece6ad",
       "width": 253,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15629,8 +17127,8 @@
     {
       "id": "v3-summer-shorts",
       "file": "layers/v3-summer-shorts.webp",
-      "sha256": "46bd6fd84a928ea0a7c7b218c39dcd7905cd355f35ed75805f083129500fb882",
-      "rawSha256": "a159a94b2a125a6046ad49b6f95705c9a8442b702eca616239b59283a8bf0314",
+      "sha256": "2965a0701c6637b7a3a8d96debf761c3736a3e393c1f862491e0bfba722fb843",
+      "rawSha256": "a180e66a4e6aa98f984df3950a965c333cd63eb0a4fbd89af6fe7ee9f22d9ce6",
       "width": 605,
       "height": 605,
       "encoding": "webp-q90-640-v1",
@@ -15660,8 +17158,8 @@
     {
       "id": "v3-baji-navy",
       "file": "layers/v3-baji-navy.webp",
-      "sha256": "a287c0e9b8b208d64251acaead4b81fe1bfb6345cff91186010af83db97785d7",
-      "rawSha256": "e455eb0a86a56ca39e357e52bc7bfe7f8ee66d9ab2a4f5b17950d51c0ceadf7d",
+      "sha256": "3cb239908ee8ef2a792dbee42fb5af388f842114c5e8dccbbcb1358f1c3e26c6",
+      "rawSha256": "000aba373f9246f04f571fee4cb22169727f03c346fbc63e25fe36b12604816b",
       "width": 403,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15691,8 +17189,8 @@
     {
       "id": "v3-baji-cream",
       "file": "layers/v3-baji-cream.webp",
-      "sha256": "0508ce93239cc58ca068008a970aba031d446399c21e7621f8c9365e03af1661",
-      "rawSha256": "e996e97abe10743ce7819608eb7d7104e5eeeec3aa9c6b10c06425a7f160abe0",
+      "sha256": "39c602648efcf4259751114a8a2055179f6cf82ba4383a104dbd39ae67042583",
+      "rawSha256": "1be13abda78f707e4df9d082a5d4094c979ed39606f7142531bb15df76474d12",
       "width": 403,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15722,8 +17220,8 @@
     {
       "id": "v3-baji-charcoal",
       "file": "layers/v3-baji-charcoal.webp",
-      "sha256": "9e662dbc51b9f3ae3dff88c2494a7d71c9b5b8d324a01a812c29b72e6ba32c36",
-      "rawSha256": "208f68b59df99f9a7202c435ee95c5443d1b0e41cd74f1b9d90695ce9fc700ad",
+      "sha256": "d1d5598bfac23ed282c31a83b0228ef18e01e34f155082c85dcb30ae3faa8e1a",
+      "rawSha256": "67b42d0f675498326514ff1d9fe9d48e5cdf4af9fb6fb81a60b529692f9f3511",
       "width": 403,
       "height": 640,
       "encoding": "webp-q90-640-v1",
@@ -15753,6 +17251,7 @@
   ],
   "warnings": [
     "official-samo: visible art touches cell edge; inspect for clipping/adjacent parts",
-    "official-gat: visible art touches cell edge; inspect for clipping/adjacent parts"
+    "official-gat: visible art touches cell edge; inspect for clipping/adjacent parts",
+    "expression-bright-mouth: visible art touches cell edge; inspect for clipping/adjacent parts"
   ]
 }

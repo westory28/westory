@@ -17,8 +17,27 @@ const retainedSheets = new Set([
   "hair",
   "accessories",
   "headphones-worn",
+  "heads",
 ]);
 spec.sheets = spec.sheets.filter((s) => retainedSheets.has(s.id));
+for (const [id, name, columns, rows] of [
+  ["heads", "heads", 3, 1],
+  ["face", "expressions", 3, 2],
+  ["hair", "hair", 3, 3],
+]) {
+  const src = `assets/avatar-source/cohesive-20261110/${name}.png`;
+  const sheet = {
+    id,
+    src,
+    columns,
+    rows,
+    sha256: hash(await fs.readFile(src)),
+    cleanup: { minArea: 16 },
+  };
+  const index = spec.sheets.findIndex((entry) => entry.id === id);
+  if (index < 0) spec.sheets.push(sheet);
+  else spec.sheets[index] = sheet;
+}
 spec.cells = spec.cells.filter(
   (c) =>
     ["head-natural", "head-round", "head-slim", "leg"].includes(c.id) ||
@@ -638,13 +657,18 @@ for (const f of [
       rect: [0.2106, y, 0.5788, height],
       z: 30,
       fit: "frame",
-      tint: { slot: "skinTone", sourceColor: "#f7cfa8", mode: "color" },
+      tint: { slot: "skinTone", sourceColor: "#f3c6a5", mode: "color" },
       tintMask: { includeSkin: true },
       ...(f === "robe" ? { skinPolygons: robeSkinPolygons[pose] } : {}),
       ...(f.startsWith("winter-")
         ? { skinRegions: schoolSkinRegions[pose] }
         : {}),
-      recolor: { color: "#f7cfa8", sourceColor: "#eab38d", mode: "skin" },
+      normalizeSkin: {
+        color: "#f3c6a5",
+        contrast: 0.35,
+        minShade: 0.84,
+        maxShade: 1.06,
+      },
     });
     topCells[f][pose] = id;
   }
@@ -680,7 +704,8 @@ for (const [name, v] of Object.entries(lowerFamilies))
     sheet: v.sheet || "v3-bottoms",
     cell: v.cell,
     rect: v.rect,
-    z: 18,
+    // Long hems cover the shoe collar; short hems leave the ankle visible.
+    z: ["trousers", "winter-joggers", "baji", "chima"].includes(name) ? 23 : 18,
     fit: "stretch",
   });
 const shoeItems = catalog.filter((i) => i.slot === "shoes");
@@ -696,12 +721,18 @@ for (const [index, item] of shoeItems.entries())
 
 for (const character of ["girl", "boy"]) {
   const art = spec.characters[character];
+  art.slots.bottom = {};
   art.groups = {
     head: { pivot: [0.5, 0.38] },
     hair: { parent: "head", pivot: [0.5, 0.38] },
     face: { parent: "head", pivot: [0.5, 0.38] },
   };
-  art.base = ["leg", { ref: "leg", id: "right-leg", mirror: true }];
+  art.base = [
+    "leg",
+    { ref: "leg", id: "right-leg", mirror: true },
+    { ref: "leg", id: "ankle", clip: [0, 0.805, 1, 0.08] },
+    { ref: "leg", id: "right-ankle", mirror: true, clip: [0, 0.805, 1, 0.08] },
+  ];
   art.poses = Object.fromEntries(
     ["idle", "wave", "cheer", "think", "heart"].map((p) => [p, {}]),
   );
@@ -765,7 +796,9 @@ for (const character of ["girl", "boy"]) {
       });
     art.slots.bottom[item.value] = {
       layers: [id],
-      ...(f === "trousers" ? { hideIds: ["leg", "right-leg"] } : {}),
+      ...(["trousers", "winter-joggers", "baji"].includes(f)
+        ? { hideIds: ["leg", "right-leg"] }
+        : {}),
     };
   }
   art.slots.shoes = Object.fromEntries(
@@ -781,8 +814,8 @@ for (const character of ["girl", "boy"]) {
     ];
   }
   for (const [hat, y] of [
-    ["official-samo", 0.155],
-    ["official-gat", 0.18],
+    ["official-samo", 0.2],
+    ["official-gat", 0.215],
   ]) {
     const existing = art.slots.accessory[hat];
     art.slots.accessory[hat] = {

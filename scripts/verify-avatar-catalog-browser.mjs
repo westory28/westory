@@ -213,6 +213,24 @@ try {
       const candidates = catalog.items.filter(
         (item) => item.slot === slot && item.characters.includes(character),
       );
+      if (slot === "bottom") {
+        for (const skirt of catalog.items.filter(
+          (item) =>
+            item.slot === "bottom" && /^(pleated|chima)-/.test(item.value),
+        ))
+          assert.equal(
+            await page
+              .locator(".avatar-studio-item")
+              .filter({
+                has: page.locator(".avatar-studio-item-name", {
+                  hasText: skirt.label,
+                }),
+              })
+              .count(),
+            character === "girl" ? 1 : 0,
+            `${character}/${skirt.id} availability`,
+          );
+      }
       const poseImages = new Set();
       for (const item of candidates) {
         await page

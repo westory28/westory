@@ -46,34 +46,83 @@
         {
           "id": "leg",
           "rect": [
-            0.413,
+            0.397,
             0.584,
-            0.077,
-            0.26
+            0.096,
+            0.27
           ],
           "z": 8,
           "tint": {
             "slot": "skinTone",
-            "sourceColor": "#f7cfa8",
-            "mode": "color"
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
           },
           "src": "layers/leg.webp"
         },
         {
           "id": "right-leg",
           "rect": [
-            0.51,
+            0.507,
             0.584,
-            0.077,
-            0.26
+            0.096,
+            0.27
           ],
           "z": 8,
           "tint": {
             "slot": "skinTone",
-            "sourceColor": "#f7cfa8",
-            "mode": "color"
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
           },
           "src": "layers/leg.webp",
+          "flipX": true
+        },
+        {
+          "id": "ankle",
+          "rect": [
+            0.397,
+            0.584,
+            0.096,
+            0.27
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
+          },
+          "src": "layers/leg.webp",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
+        },
+        {
+          "id": "right-ankle",
+          "rect": [
+            0.507,
+            0.584,
+            0.096,
+            0.27
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
+          },
+          "src": "layers/leg.webp",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ],
           "flipX": true
         }
       ],
@@ -84,17 +133,18 @@
               {
                 "id": "head-natural",
                 "rect": [
-                  0.295,
-                  0.10210891089108912,
-                  0.41,
-                  0.28578217821782176
+                  0.3602283427495292,
+                  0.14,
+                  0.2795433145009416,
+                  0.25
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-natural-tint-mask.webp"
                 },
                 "src": "layers/head-natural.webp"
               }
@@ -125,17 +175,18 @@
               {
                 "id": "head-round",
                 "rect": [
-                  0.287,
-                  0.0888979865771812,
-                  0.426,
-                  0.3042040268456376
+                  0.353515625,
+                  0.14,
+                  0.29296875,
+                  0.25
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-round-tint-mask.webp"
                 },
                 "src": "layers/head-round.webp"
               }
@@ -143,19 +194,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               }
@@ -166,17 +217,18 @@
               {
                 "id": "head-slim",
                 "rect": [
-                  0.307,
-                  0.10949065743944635,
-                  0.386,
-                  0.2810186851211073
+                  0.3625117260787992,
+                  0.13999999999999999,
+                  0.27497654784240155,
+                  0.25000000000000006
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-slim-tint-mask.webp"
                 },
                 "src": "layers/head-slim.webp"
               }
@@ -184,19 +236,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               }
@@ -208,10 +260,10 @@
             {
               "id": "expression-natural-eyes",
               "rect": [
-                0.374013671875,
-                0.19646093750000004,
-                0.250673828125,
-                0.09299609374999998
+                0.4187890625,
+                0.23503125000000002,
+                0.1634765625,
+                0.0571484375
               ],
               "z": 45,
               "group": "features",
@@ -220,10 +272,10 @@
             {
               "id": "expression-natural-mouth",
               "rect": [
-                0.466,
-                0.3376769230769231,
-                0.068,
-                0.014646153846153847
+                0.4775,
+                0.3543461538461538,
+                0.045,
+                0.008307692307692308
               ],
               "z": 45,
               "group": "features",
@@ -234,10 +286,10 @@
             {
               "id": "expression-calm-eyes",
               "rect": [
-                0.37271484375,
-                0.19853906250000003,
-                0.2500244140625,
-                0.08624218749999998
+                0.417734375,
+                0.237609375,
+                0.16453125000000002,
+                0.055
               ],
               "z": 45,
               "group": "features",
@@ -246,10 +298,10 @@
             {
               "id": "expression-calm-mouth",
               "rect": [
-                0.466,
-                0.3407257142857143,
-                0.068,
-                0.00854857142857143
+                0.4775,
+                0.35632758620689653,
+                0.045,
+                0.004344827586206896
               ],
               "z": 45,
               "group": "features",
@@ -260,10 +312,10 @@
             {
               "id": "expression-smile-eyes",
               "rect": [
-                0.36946777343750004,
-                0.19386328125000002,
-                0.25262207031249995,
-                0.07948828124999999
+                0.41720703124999997,
+                0.23503125000000002,
+                0.1655859375,
+                0.048984375000000004
               ],
               "z": 45,
               "group": "features",
@@ -272,10 +324,10 @@
             {
               "id": "expression-smile-mouth",
               "rect": [
-                0.466,
-                0.33045742574257425,
-                0.068,
-                0.02908514851485149
+                0.4775,
+                0.34960344827586204,
+                0.045,
+                0.017793103448275862
               ],
               "z": 45,
               "group": "features",
@@ -286,10 +338,10 @@
             {
               "id": "expression-curious-eyes",
               "rect": [
-                0.37141601562500004,
-                0.18035546875000003,
-                0.2591162109375,
-                0.10910156249999999
+                0.41931640625,
+                0.23202343750000004,
+                0.16242187500000002,
+                0.059726562500000004
               ],
               "z": 45,
               "group": "features",
@@ -298,10 +350,10 @@
             {
               "id": "expression-curious-mouth",
               "rect": [
-                0.4671527777777778,
-                0.323,
-                0.06569444444444444,
-                0.044
+                0.47862499999999997,
+                0.345,
+                0.04275,
+                0.027000000000000003
               ],
               "z": 45,
               "group": "features",
@@ -312,10 +364,10 @@
             {
               "id": "expression-bright-eyes",
               "rect": [
-                0.37076660156249996,
-                0.18451171875000003,
-                0.25132324218749996,
-                0.10546484374999998
+                0.4187890625,
+                0.23460156250000003,
+                0.1634765625,
+                0.057578125
               ],
               "z": 45,
               "group": "features",
@@ -324,10 +376,10 @@
             {
               "id": "expression-bright-mouth",
               "rect": [
-                0.466,
-                0.3293471698113208,
-                0.068,
-                0.03130566037735849
+                0.4775,
+                0.3492692307692307,
+                0.045,
+                0.01846153846153846
               ],
               "z": 45,
               "group": "features",
@@ -338,10 +390,10 @@
             {
               "id": "expression-determined-eyes",
               "rect": [
-                0.3668701171875,
-                0.20373437500000002,
-                0.2591162109375,
-                0.08364453124999997
+                0.4187890625,
+                0.23803906250000004,
+                0.16294921875,
+                0.0537109375
               ],
               "z": 45,
               "group": "features",
@@ -350,10 +402,10 @@
             {
               "id": "expression-determined-mouth",
               "rect": [
-                0.466,
-                0.33961978021978023,
-                0.068,
-                0.010760439560439561
+                0.4775,
+                0.3548478260869565,
+                0.045,
+                0.007304347826086956
               ],
               "z": 45,
               "group": "features",
@@ -366,16 +418,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.26,
-                0.05577984084880638,
-                0.48,
-                0.29844031830238726
+                0.31,
+                0.11031594202898551,
+                0.38,
+                0.24936811594202898
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-bob.webp",
@@ -389,16 +441,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.26,
-                0.05577984084880638,
-                0.48,
-                0.29844031830238726
+                0.31,
+                0.11031594202898551,
+                0.38,
+                0.24936811594202898
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-bob.webp",
@@ -414,16 +466,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.25,
-                0.0386312849162011,
-                0.5,
-                0.2927374301675978
+                0.3,
+                0.09964285714285712,
+                0.4,
+                0.22571428571428576
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-volume.webp",
@@ -437,16 +489,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.25,
-                0.0386312849162011,
-                0.5,
-                0.2927374301675978
+                0.3,
+                0.09964285714285712,
+                0.4,
+                0.22571428571428576
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-volume.webp",
@@ -462,16 +514,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.25,
-                0.050625,
-                0.5,
-                0.31875
+                0.3,
+                0.0886050156739812,
+                0.4,
+                0.2527899686520376
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-wave.webp",
@@ -485,16 +537,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.25,
-                0.050625,
-                0.5,
-                0.31875
+                0.3,
+                0.0886050156739812,
+                0.4,
+                0.2527899686520376
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-wave.webp",
@@ -510,16 +562,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.235,
-                0.07033898305084746,
-                0.53,
-                0.3593220338983051
+                0.2899999999999999,
+                0.1181813031161473,
+                0.42000000000000004,
+                0.3036373937677054
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-long.webp",
@@ -533,16 +585,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.235,
-                0.07033898305084746,
-                0.53,
-                0.3593220338983051
+                0.2899999999999999,
+                0.1181813031161473,
+                0.42000000000000004,
+                0.3036373937677054
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-long.webp",
@@ -558,16 +610,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.18,
-                0.08650743099787686,
-                0.64,
-                0.3369851380042463
+                0.24,
+                0.12806422018348623,
+                0.52,
+                0.2938715596330275
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color",
                 "mask": "layers/hair-twin-tail-tint-mask.webp"
               },
@@ -582,16 +634,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.18,
-                0.08650743099787686,
-                0.64,
-                0.3369851380042463
+                0.24,
+                0.12806422018348623,
+                0.52,
+                0.2938715596330275
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color",
                 "mask": "layers/hair-twin-tail-tint-mask.webp"
               },
@@ -608,16 +660,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.25,
-                0.027653958944281527,
-                0.5,
-                0.4046920821114369
+                0.3,
+                0.09452095808383233,
+                0.4,
+                0.3209580838323353
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-half-up.webp",
@@ -631,16 +683,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.25,
-                0.027653958944281527,
-                0.5,
-                0.4046920821114369
+                0.3,
+                0.09452095808383233,
+                0.4,
+                0.3209580838323353
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-half-up.webp",
@@ -667,7 +719,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-plain-idle-tint-mask.webp"
                 },
@@ -688,7 +740,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-wave-tint-mask.webp"
                     },
@@ -709,7 +761,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-cheer-tint-mask.webp"
                     },
@@ -730,7 +782,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-think-tint-mask.webp"
                     },
@@ -751,7 +803,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-heart-tint-mask.webp"
                     },
@@ -774,7 +826,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -795,7 +847,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -816,7 +868,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -837,7 +889,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -858,7 +910,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -881,7 +933,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -902,7 +954,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -923,7 +975,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -944,7 +996,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -965,7 +1017,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -988,7 +1040,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -1009,7 +1061,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -1030,7 +1082,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -1051,7 +1103,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -1072,7 +1124,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -1095,7 +1147,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -1116,7 +1168,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -1137,7 +1189,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -1158,7 +1210,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -1179,7 +1231,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -1202,7 +1254,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -1223,7 +1275,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -1244,7 +1296,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -1265,7 +1317,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -1286,7 +1338,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -1309,7 +1361,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -1330,7 +1382,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -1351,7 +1403,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -1372,7 +1424,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -1393,7 +1445,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -1416,7 +1468,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -1437,7 +1489,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -1458,7 +1510,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -1479,7 +1531,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -1500,7 +1552,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -1523,7 +1575,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -1544,7 +1596,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -1565,7 +1617,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -1586,7 +1638,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -1607,7 +1659,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -1630,7 +1682,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -1651,7 +1703,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -1672,7 +1724,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -1693,7 +1745,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -1714,7 +1766,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -1748,7 +1800,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -1783,7 +1835,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -1815,7 +1867,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -1847,7 +1899,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -1879,7 +1931,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -1917,7 +1969,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -1952,7 +2004,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -1984,7 +2036,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -2016,7 +2068,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -2048,7 +2100,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -2086,7 +2138,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -2121,7 +2173,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -2153,7 +2205,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -2185,7 +2237,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -2217,7 +2269,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -2244,7 +2296,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-polo-idle-tint-mask.webp"
                 },
@@ -2265,7 +2317,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-wave-tint-mask.webp"
                     },
@@ -2286,7 +2338,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-cheer-tint-mask.webp"
                     },
@@ -2307,7 +2359,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-think-tint-mask.webp"
                     },
@@ -2328,7 +2380,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-heart-tint-mask.webp"
                     },
@@ -2351,7 +2403,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-polo-idle-tint-mask.webp"
                 },
@@ -2372,7 +2424,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-wave-tint-mask.webp"
                     },
@@ -2393,7 +2445,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-cheer-tint-mask.webp"
                     },
@@ -2414,7 +2466,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-think-tint-mask.webp"
                     },
@@ -2435,7 +2487,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-heart-tint-mask.webp"
                     },
@@ -2458,7 +2510,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-winter-hoodie-idle-tint-mask.webp"
                 },
@@ -2479,7 +2531,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-wave-tint-mask.webp"
                     },
@@ -2500,7 +2552,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-cheer-tint-mask.webp"
                     },
@@ -2521,7 +2573,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-think-tint-mask.webp"
                     },
@@ -2542,7 +2594,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-heart-tint-mask.webp"
                     },
@@ -2565,7 +2617,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-winter-halfzip-idle-tint-mask.webp"
                 },
@@ -2586,7 +2638,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-wave-tint-mask.webp"
                     },
@@ -2607,7 +2659,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-cheer-tint-mask.webp"
                     },
@@ -2628,7 +2680,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-think-tint-mask.webp"
                     },
@@ -2649,7 +2701,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-heart-tint-mask.webp"
                     },
@@ -2671,7 +2723,7 @@
                   0.246,
                   0.252
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-plain-bottom.webp"
               }
             ],
@@ -2750,7 +2802,7 @@
                   0.546,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-chima-rose.webp"
               }
             ]
@@ -2765,7 +2817,7 @@
                   0.546,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-chima-navy.webp"
               }
             ]
@@ -2780,7 +2832,7 @@
                   0.546,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-chima-jade.webp"
               }
             ]
@@ -2810,9 +2862,13 @@
                   0.286,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-winter-joggers.webp"
               }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           }
         },
@@ -2822,9 +2878,9 @@
               "id": "v3-plain-shoes",
               "rect": [
                 0.367,
-                0.811,
+                0.8056311475409836,
                 0.266,
-                0.082
+                0.11773770491803279
               ],
               "z": 22,
               "src": "layers/v3-plain-shoes.webp"
@@ -2835,9 +2891,9 @@
               "id": "v3-sneakers-pink",
               "rect": [
                 0.367,
-                0.811,
+                0.806109756097561,
                 0.266,
-                0.082
+                0.11678048780487804
               ],
               "z": 22,
               "src": "layers/v3-sneakers-pink.webp"
@@ -2848,9 +2904,9 @@
               "id": "v3-sneakers-white",
               "rect": [
                 0.367,
-                0.811,
+                0.8058714285714286,
                 0.266,
-                0.082
+                0.11725714285714287
               ],
               "z": 22,
               "src": "layers/v3-sneakers-white.webp"
@@ -2861,9 +2917,9 @@
               "id": "v3-sneakers-blue",
               "rect": [
                 0.367,
-                0.811,
+                0.8056311475409836,
                 0.266,
-                0.082
+                0.11773770491803279
               ],
               "z": 22,
               "src": "layers/v3-sneakers-blue.webp"
@@ -2874,9 +2930,9 @@
               "id": "v3-sneakers-lavender",
               "rect": [
                 0.367,
-                0.811,
+                0.8063260162601626,
                 0.266,
-                0.082
+                0.1163479674796748
               ],
               "z": 22,
               "src": "layers/v3-sneakers-lavender.webp"
@@ -2889,10 +2945,10 @@
             {
               "id": "glasses-round",
               "rect": [
-                0.35411096256684493,
-                0.238,
-                0.29177807486631013,
-                0.09
+                0.38,
+                0.2544855670103093,
+                0.23999999999999996,
+                0.07402886597938144
               ],
               "z": 60,
               "group": "headwear",
@@ -2903,10 +2959,10 @@
             {
               "id": "star-clip",
               "rect": [
-                0.62,
-                0.1626532258064516,
-                0.085,
-                0.044693548387096785
+                0.6,
+                0.2071225806451613,
+                0.068,
+                0.035754838709677425
               ],
               "z": 60,
               "group": "headwear",
@@ -2917,10 +2973,10 @@
             {
               "id": "headphones",
               "rect": [
-                0.245,
-                0.055,
-                0.51,
-                0.32
+                0.345,
+                0.11,
+                0.31,
+                0.22
               ],
               "z": 60,
               "group": "headwear",
@@ -2932,10 +2988,10 @@
               {
                 "id": "official-samo",
                 "rect": [
-                  0.25,
-                  0.005,
-                  0.5,
-                  0.19
+                  0.29,
+                  0.065,
+                  0.42,
+                  0.16
                 ],
                 "z": 60,
                 "group": "headwear",
@@ -2945,15 +3001,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ],
               "face": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ]
             }
           },
@@ -2962,10 +3018,10 @@
               {
                 "id": "official-gat",
                 "rect": [
-                  0.248,
-                  0.005,
-                  0.504,
-                  0.21
+                  0.285,
+                  0.06,
+                  0.43,
+                  0.18
                 ],
                 "z": 60,
                 "group": "headwear",
@@ -2975,15 +3031,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ],
               "face": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ]
             }
           }
@@ -3045,34 +3101,83 @@
         {
           "id": "leg",
           "rect": [
-            0.413,
+            0.397,
             0.584,
-            0.077,
-            0.26
+            0.096,
+            0.27
           ],
           "z": 8,
           "tint": {
             "slot": "skinTone",
-            "sourceColor": "#f7cfa8",
-            "mode": "color"
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
           },
           "src": "layers/leg.webp"
         },
         {
           "id": "right-leg",
           "rect": [
-            0.51,
+            0.507,
             0.584,
-            0.077,
-            0.26
+            0.096,
+            0.27
           ],
           "z": 8,
           "tint": {
             "slot": "skinTone",
-            "sourceColor": "#f7cfa8",
-            "mode": "color"
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
           },
           "src": "layers/leg.webp",
+          "flipX": true
+        },
+        {
+          "id": "ankle",
+          "rect": [
+            0.397,
+            0.584,
+            0.096,
+            0.27
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
+          },
+          "src": "layers/leg.webp",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
+        },
+        {
+          "id": "right-ankle",
+          "rect": [
+            0.507,
+            0.584,
+            0.096,
+            0.27
+          ],
+          "z": 8,
+          "tint": {
+            "slot": "skinTone",
+            "sourceColor": "#f3c6a5",
+            "mode": "color",
+            "mask": "layers/leg-tint-mask.webp"
+          },
+          "src": "layers/leg.webp",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ],
           "flipX": true
         }
       ],
@@ -3083,17 +3188,18 @@
               {
                 "id": "head-natural",
                 "rect": [
-                  0.295,
-                  0.10210891089108912,
-                  0.41,
-                  0.28578217821782176
+                  0.3602283427495292,
+                  0.14,
+                  0.2795433145009416,
+                  0.25
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-natural-tint-mask.webp"
                 },
                 "src": "layers/head-natural.webp"
               }
@@ -3124,17 +3230,18 @@
               {
                 "id": "head-round",
                 "rect": [
-                  0.287,
-                  0.0888979865771812,
-                  0.426,
-                  0.3042040268456376
+                  0.353515625,
+                  0.14,
+                  0.29296875,
+                  0.25
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-round-tint-mask.webp"
                 },
                 "src": "layers/head-round.webp"
               }
@@ -3142,19 +3249,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               }
@@ -3165,17 +3272,18 @@
               {
                 "id": "head-slim",
                 "rect": [
-                  0.307,
-                  0.10949065743944635,
-                  0.386,
-                  0.2810186851211073
+                  0.3625117260787992,
+                  0.13999999999999999,
+                  0.27497654784240155,
+                  0.25000000000000006
                 ],
                 "z": 40,
                 "group": "face",
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
-                  "mode": "color"
+                  "sourceColor": "#f3c6a5",
+                  "mode": "color",
+                  "mask": "layers/head-slim-tint-mask.webp"
                 },
                 "src": "layers/head-slim.webp"
               }
@@ -3183,19 +3291,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               }
@@ -3207,10 +3315,10 @@
             {
               "id": "expression-natural-eyes",
               "rect": [
-                0.374013671875,
-                0.19646093750000004,
-                0.250673828125,
-                0.09299609374999998
+                0.4187890625,
+                0.23503125000000002,
+                0.1634765625,
+                0.0571484375
               ],
               "z": 45,
               "group": "features",
@@ -3219,10 +3327,10 @@
             {
               "id": "expression-natural-mouth",
               "rect": [
-                0.466,
-                0.3376769230769231,
-                0.068,
-                0.014646153846153847
+                0.4775,
+                0.3543461538461538,
+                0.045,
+                0.008307692307692308
               ],
               "z": 45,
               "group": "features",
@@ -3233,10 +3341,10 @@
             {
               "id": "expression-calm-eyes",
               "rect": [
-                0.37271484375,
-                0.19853906250000003,
-                0.2500244140625,
-                0.08624218749999998
+                0.417734375,
+                0.237609375,
+                0.16453125000000002,
+                0.055
               ],
               "z": 45,
               "group": "features",
@@ -3245,10 +3353,10 @@
             {
               "id": "expression-calm-mouth",
               "rect": [
-                0.466,
-                0.3407257142857143,
-                0.068,
-                0.00854857142857143
+                0.4775,
+                0.35632758620689653,
+                0.045,
+                0.004344827586206896
               ],
               "z": 45,
               "group": "features",
@@ -3259,10 +3367,10 @@
             {
               "id": "expression-smile-eyes",
               "rect": [
-                0.36946777343750004,
-                0.19386328125000002,
-                0.25262207031249995,
-                0.07948828124999999
+                0.41720703124999997,
+                0.23503125000000002,
+                0.1655859375,
+                0.048984375000000004
               ],
               "z": 45,
               "group": "features",
@@ -3271,10 +3379,10 @@
             {
               "id": "expression-smile-mouth",
               "rect": [
-                0.466,
-                0.33045742574257425,
-                0.068,
-                0.02908514851485149
+                0.4775,
+                0.34960344827586204,
+                0.045,
+                0.017793103448275862
               ],
               "z": 45,
               "group": "features",
@@ -3285,10 +3393,10 @@
             {
               "id": "expression-curious-eyes",
               "rect": [
-                0.37141601562500004,
-                0.18035546875000003,
-                0.2591162109375,
-                0.10910156249999999
+                0.41931640625,
+                0.23202343750000004,
+                0.16242187500000002,
+                0.059726562500000004
               ],
               "z": 45,
               "group": "features",
@@ -3297,10 +3405,10 @@
             {
               "id": "expression-curious-mouth",
               "rect": [
-                0.4671527777777778,
-                0.323,
-                0.06569444444444444,
-                0.044
+                0.47862499999999997,
+                0.345,
+                0.04275,
+                0.027000000000000003
               ],
               "z": 45,
               "group": "features",
@@ -3311,10 +3419,10 @@
             {
               "id": "expression-bright-eyes",
               "rect": [
-                0.37076660156249996,
-                0.18451171875000003,
-                0.25132324218749996,
-                0.10546484374999998
+                0.4187890625,
+                0.23460156250000003,
+                0.1634765625,
+                0.057578125
               ],
               "z": 45,
               "group": "features",
@@ -3323,10 +3431,10 @@
             {
               "id": "expression-bright-mouth",
               "rect": [
-                0.466,
-                0.3293471698113208,
-                0.068,
-                0.03130566037735849
+                0.4775,
+                0.3492692307692307,
+                0.045,
+                0.01846153846153846
               ],
               "z": 45,
               "group": "features",
@@ -3337,10 +3445,10 @@
             {
               "id": "expression-determined-eyes",
               "rect": [
-                0.3668701171875,
-                0.20373437500000002,
-                0.2591162109375,
-                0.08364453124999997
+                0.4187890625,
+                0.23803906250000004,
+                0.16294921875,
+                0.0537109375
               ],
               "z": 45,
               "group": "features",
@@ -3349,10 +3457,10 @@
             {
               "id": "expression-determined-mouth",
               "rect": [
-                0.466,
-                0.33961978021978023,
-                0.068,
-                0.010760439560439561
+                0.4775,
+                0.3548478260869565,
+                0.045,
+                0.007304347826086956
               ],
               "z": 45,
               "group": "features",
@@ -3365,16 +3473,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.2614942528735632,
-                0.04,
-                0.47701149425287354,
-                0.3
+                0.3105435924369748,
+                0.09500000000000001,
+                0.37891281512605035,
+                0.23499999999999996
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-curtain.webp",
@@ -3388,16 +3496,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.2614942528735632,
-                0.04,
-                0.47701149425287354,
-                0.3
+                0.3105435924369748,
+                0.09500000000000001,
+                0.37891281512605035,
+                0.23499999999999996
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-curtain.webp",
@@ -3413,16 +3521,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.25,
-                0.0386312849162011,
-                0.5,
-                0.2927374301675978
+                0.3,
+                0.09964285714285712,
+                0.4,
+                0.22571428571428576
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-volume.webp",
@@ -3436,16 +3544,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.25,
-                0.0386312849162011,
-                0.5,
-                0.2927374301675978
+                0.3,
+                0.09964285714285712,
+                0.4,
+                0.22571428571428576
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-volume.webp",
@@ -3461,16 +3569,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.25,
-                0.050625,
-                0.5,
-                0.31875
+                0.3,
+                0.0886050156739812,
+                0.4,
+                0.2527899686520376
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-wave.webp",
@@ -3484,16 +3592,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.25,
-                0.050625,
-                0.5,
-                0.31875
+                0.3,
+                0.0886050156739812,
+                0.4,
+                0.2527899686520376
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-wave.webp",
@@ -3509,16 +3617,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.274,
-                0.04114365325077398,
-                0.452,
-                0.287712693498452
+                0.31883445945945943,
+                0.1,
+                0.3623310810810811,
+                0.225
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-crop.webp",
@@ -3532,16 +3640,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.274,
-                0.04114365325077398,
-                0.452,
-                0.287712693498452
+                0.31883445945945943,
+                0.1,
+                0.3623310810810811,
+                0.225
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-crop.webp",
@@ -3557,16 +3665,16 @@
             {
               "id": "hair-back",
               "rect": [
-                0.274,
-                0.0494,
-                0.452,
-                0.2712
+                0.31225543478260875,
+                0.09500000000000001,
+                0.37548913043478255,
+                0.23499999999999996
               ],
               "z": 5,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-toben.webp",
@@ -3580,16 +3688,16 @@
             {
               "id": "hair-front",
               "rect": [
-                0.274,
-                0.0494,
-                0.452,
-                0.2712
+                0.31225543478260875,
+                0.09500000000000001,
+                0.37548913043478255,
+                0.23499999999999996
               ],
               "z": 50,
               "group": "hair",
               "tint": {
                 "slot": "hairTone",
-                "sourceColor": "#302a2c",
+                "sourceColor": "#494548",
                 "mode": "color"
               },
               "src": "layers/hair-toben.webp",
@@ -3616,7 +3724,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-plain-idle-tint-mask.webp"
                 },
@@ -3637,7 +3745,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-wave-tint-mask.webp"
                     },
@@ -3658,7 +3766,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-cheer-tint-mask.webp"
                     },
@@ -3679,7 +3787,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-think-tint-mask.webp"
                     },
@@ -3700,7 +3808,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-plain-heart-tint-mask.webp"
                     },
@@ -3723,7 +3831,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -3744,7 +3852,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -3765,7 +3873,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -3786,7 +3894,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -3807,7 +3915,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -3830,7 +3938,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -3851,7 +3959,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -3872,7 +3980,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -3893,7 +4001,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -3914,7 +4022,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -3937,7 +4045,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -3958,7 +4066,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -3979,7 +4087,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -4000,7 +4108,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -4021,7 +4129,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -4044,7 +4152,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -4065,7 +4173,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -4086,7 +4194,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -4107,7 +4215,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -4128,7 +4236,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -4151,7 +4259,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -4172,7 +4280,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -4193,7 +4301,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -4214,7 +4322,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -4235,7 +4343,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -4258,7 +4366,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jacket-idle-tint-mask.webp"
                 },
@@ -4279,7 +4387,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-wave-tint-mask.webp"
                     },
@@ -4300,7 +4408,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-cheer-tint-mask.webp"
                     },
@@ -4321,7 +4429,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-think-tint-mask.webp"
                     },
@@ -4342,7 +4450,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jacket-heart-tint-mask.webp"
                     },
@@ -4365,7 +4473,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -4386,7 +4494,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -4407,7 +4515,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -4428,7 +4536,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -4449,7 +4557,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -4472,7 +4580,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -4493,7 +4601,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -4514,7 +4622,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -4535,7 +4643,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -4556,7 +4664,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -4579,7 +4687,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-jeogori-idle-tint-mask.webp"
                 },
@@ -4600,7 +4708,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-wave-tint-mask.webp"
                     },
@@ -4621,7 +4729,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-cheer-tint-mask.webp"
                     },
@@ -4642,7 +4750,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-think-tint-mask.webp"
                     },
@@ -4663,7 +4771,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-jeogori-heart-tint-mask.webp"
                     },
@@ -4697,7 +4805,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -4732,7 +4840,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -4764,7 +4872,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -4796,7 +4904,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -4828,7 +4936,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -4866,7 +4974,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -4901,7 +5009,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -4933,7 +5041,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -4965,7 +5073,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -4997,7 +5105,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -5035,7 +5143,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-robe-idle-tint-mask.webp"
                 },
@@ -5070,7 +5178,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-wave-tint-mask.webp"
                     },
@@ -5102,7 +5210,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-cheer-tint-mask.webp"
                     },
@@ -5134,7 +5242,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-think-tint-mask.webp"
                     },
@@ -5166,7 +5274,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-robe-heart-tint-mask.webp"
                     },
@@ -5193,7 +5301,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-polo-idle-tint-mask.webp"
                 },
@@ -5214,7 +5322,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-wave-tint-mask.webp"
                     },
@@ -5235,7 +5343,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-cheer-tint-mask.webp"
                     },
@@ -5256,7 +5364,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-think-tint-mask.webp"
                     },
@@ -5277,7 +5385,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-heart-tint-mask.webp"
                     },
@@ -5300,7 +5408,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-polo-idle-tint-mask.webp"
                 },
@@ -5321,7 +5429,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-wave-tint-mask.webp"
                     },
@@ -5342,7 +5450,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-cheer-tint-mask.webp"
                     },
@@ -5363,7 +5471,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-think-tint-mask.webp"
                     },
@@ -5384,7 +5492,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-polo-heart-tint-mask.webp"
                     },
@@ -5407,7 +5515,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-winter-hoodie-idle-tint-mask.webp"
                 },
@@ -5428,7 +5536,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-wave-tint-mask.webp"
                     },
@@ -5449,7 +5557,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-cheer-tint-mask.webp"
                     },
@@ -5470,7 +5578,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-think-tint-mask.webp"
                     },
@@ -5491,7 +5599,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-hoodie-heart-tint-mask.webp"
                     },
@@ -5514,7 +5622,7 @@
                 "z": 30,
                 "tint": {
                   "slot": "skinTone",
-                  "sourceColor": "#f7cfa8",
+                  "sourceColor": "#f3c6a5",
                   "mode": "color",
                   "mask": "layers/v3-winter-halfzip-idle-tint-mask.webp"
                 },
@@ -5535,7 +5643,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-wave-tint-mask.webp"
                     },
@@ -5556,7 +5664,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-cheer-tint-mask.webp"
                     },
@@ -5577,7 +5685,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-think-tint-mask.webp"
                     },
@@ -5598,7 +5706,7 @@
                     "z": 30,
                     "tint": {
                       "slot": "skinTone",
-                      "sourceColor": "#f7cfa8",
+                      "sourceColor": "#f3c6a5",
                       "mode": "color",
                       "mask": "layers/v3-winter-halfzip-heart-tint-mask.webp"
                     },
@@ -5620,73 +5728,13 @@
                   0.246,
                   0.252
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-plain-bottom.webp"
               }
             ],
             "hideIds": [
               "leg",
               "right-leg"
-            ]
-          },
-          "pleated-lilac": {
-            "layers": [
-              {
-                "id": "v3-pleated-lilac",
-                "rect": [
-                  0.318,
-                  0.58,
-                  0.364,
-                  0.177
-                ],
-                "z": 18,
-                "src": "layers/v3-pleated-lilac.webp"
-              }
-            ]
-          },
-          "pleated-navy": {
-            "layers": [
-              {
-                "id": "v3-pleated-navy",
-                "rect": [
-                  0.318,
-                  0.58,
-                  0.364,
-                  0.177
-                ],
-                "z": 18,
-                "src": "layers/v3-pleated-navy.webp"
-              }
-            ]
-          },
-          "pleated-cream": {
-            "layers": [
-              {
-                "id": "v3-pleated-cream",
-                "rect": [
-                  0.318,
-                  0.58,
-                  0.364,
-                  0.177
-                ],
-                "z": 18,
-                "src": "layers/v3-pleated-cream.webp"
-              }
-            ]
-          },
-          "pleated-mint": {
-            "layers": [
-              {
-                "id": "v3-pleated-mint",
-                "rect": [
-                  0.318,
-                  0.58,
-                  0.364,
-                  0.177
-                ],
-                "z": 18,
-                "src": "layers/v3-pleated-mint.webp"
-              }
             ]
           },
           "baji-navy": {
@@ -5699,9 +5747,13 @@
                   0.41,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-baji-navy.webp"
               }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "baji-cream": {
@@ -5714,9 +5766,13 @@
                   0.41,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-baji-cream.webp"
               }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "baji-charcoal": {
@@ -5729,9 +5785,13 @@
                   0.41,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-baji-charcoal.webp"
               }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "summer-shorts": {
@@ -5759,9 +5819,13 @@
                   0.286,
                   0.265
                 ],
-                "z": 18,
+                "z": 23,
                 "src": "layers/v3-winter-joggers.webp"
               }
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           }
         },
@@ -5771,9 +5835,9 @@
               "id": "v3-plain-shoes",
               "rect": [
                 0.367,
-                0.811,
+                0.8056311475409836,
                 0.266,
-                0.082
+                0.11773770491803279
               ],
               "z": 22,
               "src": "layers/v3-plain-shoes.webp"
@@ -5784,9 +5848,9 @@
               "id": "v3-sneakers-pink",
               "rect": [
                 0.367,
-                0.811,
+                0.806109756097561,
                 0.266,
-                0.082
+                0.11678048780487804
               ],
               "z": 22,
               "src": "layers/v3-sneakers-pink.webp"
@@ -5797,9 +5861,9 @@
               "id": "v3-sneakers-white",
               "rect": [
                 0.367,
-                0.811,
+                0.8058714285714286,
                 0.266,
-                0.082
+                0.11725714285714287
               ],
               "z": 22,
               "src": "layers/v3-sneakers-white.webp"
@@ -5810,9 +5874,9 @@
               "id": "v3-sneakers-blue",
               "rect": [
                 0.367,
-                0.811,
+                0.8056311475409836,
                 0.266,
-                0.082
+                0.11773770491803279
               ],
               "z": 22,
               "src": "layers/v3-sneakers-blue.webp"
@@ -5823,9 +5887,9 @@
               "id": "v3-sneakers-lavender",
               "rect": [
                 0.367,
-                0.811,
+                0.8063260162601626,
                 0.266,
-                0.082
+                0.1163479674796748
               ],
               "z": 22,
               "src": "layers/v3-sneakers-lavender.webp"
@@ -5838,10 +5902,10 @@
             {
               "id": "glasses-round",
               "rect": [
-                0.35411096256684493,
-                0.238,
-                0.29177807486631013,
-                0.09
+                0.38,
+                0.2544855670103093,
+                0.23999999999999996,
+                0.07402886597938144
               ],
               "z": 60,
               "group": "headwear",
@@ -5852,10 +5916,10 @@
             {
               "id": "star-clip",
               "rect": [
-                0.62,
-                0.1626532258064516,
-                0.085,
-                0.044693548387096785
+                0.6,
+                0.2071225806451613,
+                0.068,
+                0.035754838709677425
               ],
               "z": 60,
               "group": "headwear",
@@ -5866,10 +5930,10 @@
             {
               "id": "headphones",
               "rect": [
-                0.245,
-                0.055,
-                0.51,
-                0.32
+                0.345,
+                0.11,
+                0.31,
+                0.22
               ],
               "z": 60,
               "group": "headwear",
@@ -5881,10 +5945,10 @@
               {
                 "id": "official-samo",
                 "rect": [
-                  0.25,
-                  0.005,
-                  0.5,
-                  0.19
+                  0.29,
+                  0.065,
+                  0.42,
+                  0.16
                 ],
                 "z": 60,
                 "group": "headwear",
@@ -5894,15 +5958,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ],
               "face": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ]
             }
           },
@@ -5911,10 +5975,10 @@
               {
                 "id": "official-gat",
                 "rect": [
-                  0.248,
-                  0.005,
-                  0.504,
-                  0.21
+                  0.285,
+                  0.06,
+                  0.43,
+                  0.18
                 ],
                 "z": 60,
                 "group": "headwear",
@@ -5924,15 +5988,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ],
               "face": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ]
             }
           }

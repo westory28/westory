@@ -210,6 +210,23 @@ test('teacher profile rejects student portal grants, foreign owner fields and in
   assert.equal(state.reads.length, reads); assert.equal(state.writes.length, 0);
 });
 
+test('teacher boy skirt recovery is read-only and teacher access cannot bypass garment compatibility', async () => {
+  const state = setup(), look = { ...defaultLook('boy'), bottom: 'pleated-lilac' };
+  const old = { schemaVersion: 1, catalogVersion: catalog.version, teacherUid, revision: 2,
+    look, lookHash: lookHash(look), ownedItemIds: [], thumbnailUrl: 'legacy-thumbnail', lastSavedAtMs: 1 };
+  state.documents.set(`teacher_avatars/${teacherUid}`, structuredClone(old));
+  const result = await state.teacher.getTeacherMyPage(scopedTeacherRequest({}));
+  assert.deepEqual(result.avatar.look, defaultLook('boy'));
+  assert.equal(result.avatar.requiresThumbnailRefresh, true);
+  assert.equal(result.avatar.thumbnailUrl, undefined);
+  assert.deepEqual(state.documents.get(`teacher_avatars/${teacherUid}`), old);
+  assert.equal(state.writes.length, 0);
+  const input = await save({ look, expectedRevision: 2 });
+  await assert.rejects(state.teacher.saveStudentAvatar(teacherRequest(input.data)), reason('AVATAR_INPUT_INVALID'));
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.bucket.objects.size, 0);
+});
+
 test('teacher deletion removes only own private inventory and thumbnail prefix', async () => {
   const state = setup();
   await state.teacher.saveStudentAvatar(teacherRequest((await save()).data));

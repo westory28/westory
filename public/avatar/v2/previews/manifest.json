@@ -4,96 +4,100 @@
   "height": 256,
   "sources": {
     "scripts/render-avatar-item-previews.mjs": "bfd08ed233916ceff30c810f2f65b7c7123574ac806216c4ea4a671e4f1cfbb8",
-    "functions/avatarCatalog.json": "a4fbc41713dec0fe885866047c6618316db8675dc6cba75e8aff9a93f5589257",
-    "src/features/avatar/catalog.ts": "52117ee74a4e3554fdcd915164c57ee3a84ebdaf3057e0624c42a0c970ff9767",
+    "functions/avatarCatalog.json": "adf58953158b5c306f12fa0284e8e16f3612f4531126b26d322bd5bbed627529",
+    "src/features/avatar/catalog.ts": "1b3f1fc4a40f294c6767c94585c1fac987366d380577be79437a197bda015905",
     "src/features/avatar/renderer2d/engine.ts": "9258d589e04889b3c095014304fdf9d1dce2d8034c680a4752f39a8441568661",
     "src/features/avatar/renderer2d/manifest.ts": "e3075bc4388df7a3a6ad66efc121d826c483d71e6647e79d37e7bb0ef3711c46",
-    "public/avatar/v2/manifest.json": "7db3449a38bf7d8ce59531993fd2f205c5e00ceccdc7e8077529bf90c69354f6",
-    "public/avatar/v2/layers/expression-bright-eyes.webp": "e2ab84a1f4ea0a3c6096e2dd1446fd89230fbb74ef282dd98d73d9cc469d08e4",
-    "public/avatar/v2/layers/expression-bright-mouth.webp": "048feaa3f59edf6ae377864ad2f435d7ec8d7105ca5513d8a6dd96ae9cfc6a71",
-    "public/avatar/v2/layers/expression-calm-eyes.webp": "3214109b9bfc1618dc9feecb0b34a31bc14d3dc7cca45d253e05dd8126ee1394",
-    "public/avatar/v2/layers/expression-calm-mouth.webp": "05c7e2a3b4e899adb49ddce17a230f283522548e11d228a6b31f4954b68046ec",
-    "public/avatar/v2/layers/expression-curious-eyes.webp": "3d805e3e7c13f840ad14a63e4a648218cb7c1422aca49ee24007a2e7c9bc5451",
-    "public/avatar/v2/layers/expression-curious-mouth.webp": "58c1dda088df5de001641e6c8b643bf797d8795469c2a82acd842228db307202",
-    "public/avatar/v2/layers/expression-determined-eyes.webp": "39b6144b088f1ba6d638da5f16fbc2a8a9cfffdba3ba1ab7a7f23aa1a9fab89d",
-    "public/avatar/v2/layers/expression-determined-mouth.webp": "9ccd73530dd744c490dbc15db8268a2bf2236cded0dbdf1dc1a57f7dbc5d01f6",
-    "public/avatar/v2/layers/expression-natural-eyes.webp": "cc27db8ed3d4d5a545aa1ac05fec0db8c9f464349875297b560fdf667ed3e040",
-    "public/avatar/v2/layers/expression-natural-mouth.webp": "8e401bf3996155512a77a442d7ad82b8baf61557f2e0adb0b6494be8b244e63c",
-    "public/avatar/v2/layers/expression-smile-eyes.webp": "c2d1ba4458829f572373f1f7e417a91e0ed69c97cb7d323b99727ad2d3a7bf35",
-    "public/avatar/v2/layers/expression-smile-mouth.webp": "112a86c72ccf7561eb4e29461eaa12bea46c1d80e6e98a878db533441c91be47",
+    "public/avatar/v2/manifest.json": "3033b1e3204ee2954c57c8bd1fbf1a785e2fc2ad5d309a4f97fca4ead6098024",
+    "public/avatar/v2/layers/expression-bright-eyes.webp": "d42b0a883d42655fd03ca12cfc1c0c7f7fba1e584dc01d2b08de5324bf08695f",
+    "public/avatar/v2/layers/expression-bright-mouth.webp": "13cd411b6fbed2e15793ea6d9cf74cee07b0e46863aa5d5fd2329af6935e4ebe",
+    "public/avatar/v2/layers/expression-calm-eyes.webp": "140ef62eae39dcf070230033a8becde3f80ab778594f1b514e35d2800571fc2a",
+    "public/avatar/v2/layers/expression-calm-mouth.webp": "2284ca8cc14f860a7df26ada5275fefe463f96cac4fa7336ffed397d15def176",
+    "public/avatar/v2/layers/expression-curious-eyes.webp": "aa776769aa716f6d767810d3947d27b24e6375626e9f77853fc35161331b03d6",
+    "public/avatar/v2/layers/expression-curious-mouth.webp": "7d1d04839c3e5e1a04bc84c830b921b1826aba802cc915cbad9613712fcf7eca",
+    "public/avatar/v2/layers/expression-determined-eyes.webp": "a173534260b3431e9941289e61033d60218c2b2dec69370410e030567380553d",
+    "public/avatar/v2/layers/expression-determined-mouth.webp": "b475dd76f1a60337aa7ff942065c4930cdeab3d596e127a6056e54f57243f86a",
+    "public/avatar/v2/layers/expression-natural-eyes.webp": "2b209b29eb4a719ab80c609a7ba962021a77a479d2bd1807295582270a20f555",
+    "public/avatar/v2/layers/expression-natural-mouth.webp": "e2cd151d5cec879bdb7a62875e95a33e243baa75cc834c9bead2c5d03c9a841a",
+    "public/avatar/v2/layers/expression-smile-eyes.webp": "39d5554193cb0437c1e13db3732d59d6ac42698590a54d09c7d29c6c232d5b1b",
+    "public/avatar/v2/layers/expression-smile-mouth.webp": "fd544de2a2b29e8ce788a28c1a1ac861d98c9367d2277e23b59cabf3d53ca1c4",
     "public/avatar/v2/layers/glasses-round.webp": "6260ba39cc61e8d86fb880cbab8ff8e10a653a450f02f7993aaf85fe26804659",
-    "public/avatar/v2/layers/hair-bob.webp": "8a0ee74555d303f653c083cf7c451d4672c2cb1bdfd77397e605ed3180042337",
-    "public/avatar/v2/layers/hair-crop.webp": "5e0a05bdf122d490dbe2b90dc0394c688a05f0b22cc8311698e3e531547bb0ae",
-    "public/avatar/v2/layers/hair-curtain.webp": "4463aa85ae5775784ccecd71895134b9c6caa3d647d410b3613681909be060b3",
-    "public/avatar/v2/layers/hair-half-up.webp": "9503b6b15d330f9412a0f7418713ec6cbd0d6308ed7a527325b36b1e31472519",
-    "public/avatar/v2/layers/hair-long.webp": "22f0d59c765edbe0ff7a2810966b62739b883babb3b3192de8dbd6cc523c52d8",
-    "public/avatar/v2/layers/hair-toben.webp": "7bdf07bbadad32c1b20322b6df50c96a2bb145eead79990776876163a4e6df1c",
-    "public/avatar/v2/layers/hair-twin-tail-tint-mask.webp": "d406320241cb12258047a1c33723a3cf09bd22710bf8ef0c3633e0109aa68000",
-    "public/avatar/v2/layers/hair-twin-tail.webp": "bd130e4f6e3f086b99b617e57284b39036569e65658302a6a0314598526c7036",
-    "public/avatar/v2/layers/hair-volume.webp": "ca8cbd9e41afe2e8ee2d7114e30344fa4d1bb3d40273868fbd75cb342a53e45a",
-    "public/avatar/v2/layers/hair-wave.webp": "9b1a1d60c0080edfa2c551e8ece56f344f89171c15954f2c091b555fbbe923e1",
-    "public/avatar/v2/layers/head-natural.webp": "7fb351db0ff45dd5f6c957f9fdb059764058d67786fe74fbed9f202fc58f08fd",
-    "public/avatar/v2/layers/head-round.webp": "e48ee3d4759e1dc62e05fbd0a3a66250dcacd200a7152b46ccde78f2e6b9d343",
-    "public/avatar/v2/layers/head-slim.webp": "e7ab329b102b885b30c198e5ae1ed3b2bd551e5bbff4f37879b1419f4f8450dd",
+    "public/avatar/v2/layers/hair-bob.webp": "aa5a78da2b67c53f1b1191168cad60c17a3e353f2df53b662b51e28843dd409e",
+    "public/avatar/v2/layers/hair-crop.webp": "2af11cabd4672c81649dcfd5bd8bb68bcae4fe89c56b740796466cd5b645dda3",
+    "public/avatar/v2/layers/hair-curtain.webp": "31e9afcc020d27ed0f47339247eabd31a5445188c37d9bf91ebe0cc4956bfa45",
+    "public/avatar/v2/layers/hair-half-up.webp": "bd61e97a086f3248a38f9663c6c70d0a192731c57980b47a6d3d947ebd702c78",
+    "public/avatar/v2/layers/hair-long.webp": "c8a7b421ddda2af556d70c5976af78a8c2eb0ec29dcc8727752f7ff898686bb7",
+    "public/avatar/v2/layers/hair-toben.webp": "462797002daf5d99946fa4b8b21161cef7e7f4219c3b85253ac0d6abb747d57e",
+    "public/avatar/v2/layers/hair-twin-tail-tint-mask.webp": "06cbaac9976891aef0d4b948f802b97b494308548de5e7945343f9b0313ffcdb",
+    "public/avatar/v2/layers/hair-twin-tail.webp": "36014025cacafb1343db615e228da5fd15c7749bdcd8d8150297b5ad103469d8",
+    "public/avatar/v2/layers/hair-volume.webp": "15d818a744855e82cedc236a3c23b1cddeae714ad3e9cf0513a3162c435efdc1",
+    "public/avatar/v2/layers/hair-wave.webp": "3143fc9164c2f745d217decf930d2e2bb1f94cf00750b971dfbf892f416d8a72",
+    "public/avatar/v2/layers/head-natural-tint-mask.webp": "a34eae87a4364d2332cd255b19a8880115b06d2375b23e748109e5dfe2a0483b",
+    "public/avatar/v2/layers/head-natural.webp": "5af02a53ca1abe349537030f3468b9e3cb8a63af17429a3765c4ad13ac6c37ec",
+    "public/avatar/v2/layers/head-round-tint-mask.webp": "fe69539eee9bc24cc8fa76145a574e7acf79ddb595c220b33adde5de3b2a7acf",
+    "public/avatar/v2/layers/head-round.webp": "20d628ac316b3cc2207c2c9db23fba259025efe88f7f50f24d1acd6e9d29bf81",
+    "public/avatar/v2/layers/head-slim-tint-mask.webp": "530c71139e9fea95cc6e8deaac4c0e7f9c9651e9405bdded7cd768e113c0faf7",
+    "public/avatar/v2/layers/head-slim.webp": "82886a1e72bb10b376a616d2cea5fb6169c5f40337132518967ce65608f947eb",
     "public/avatar/v2/layers/headphones.webp": "92812108e5e0d69703e66fbc7abc652c47cdf2d094c8a36da26637cb57697fc3",
-    "public/avatar/v2/layers/leg.webp": "5ba81f06ff5ef602f85e2d73971c9bf25ca27bb58768f6ff18b0e334982f37e9",
+    "public/avatar/v2/layers/leg-tint-mask.webp": "b55afffc79d783c4fd948955d7ba94dea3f20f6c18efd111e1c104096af1003a",
+    "public/avatar/v2/layers/leg.webp": "5d4ef50d1536531c42913dc12689d147f2f0e336e6845a69e6533b75f3cb7350",
     "public/avatar/v2/layers/official-gat.webp": "b00d59b44f6753e90ca59e8c38cd708c6a324d3e1d76fa65940e01a4075182c0",
     "public/avatar/v2/layers/official-samo.webp": "b0e2621a1e0fc07e38b1c291a50019cd1a8924a5b4c71ce8967144a75234d1e7",
     "public/avatar/v2/layers/star-clip.webp": "1f0a1c5b369dcf77427162a93f091c55275c3b655b2cf6f128ee6461d299a2e7",
-    "public/avatar/v2/layers/v3-baji-charcoal.webp": "9e662dbc51b9f3ae3dff88c2494a7d71c9b5b8d324a01a812c29b72e6ba32c36",
-    "public/avatar/v2/layers/v3-baji-cream.webp": "0508ce93239cc58ca068008a970aba031d446399c21e7621f8c9365e03af1661",
-    "public/avatar/v2/layers/v3-baji-navy.webp": "a287c0e9b8b208d64251acaead4b81fe1bfb6345cff91186010af83db97785d7",
+    "public/avatar/v2/layers/v3-baji-charcoal.webp": "d1d5598bfac23ed282c31a83b0228ef18e01e34f155082c85dcb30ae3faa8e1a",
+    "public/avatar/v2/layers/v3-baji-cream.webp": "39c602648efcf4259751114a8a2055179f6cf82ba4383a104dbd39ae67042583",
+    "public/avatar/v2/layers/v3-baji-navy.webp": "3cb239908ee8ef2a792dbee42fb5af388f842114c5e8dccbbcb1358f1c3e26c6",
     "public/avatar/v2/layers/v3-chima-jade.webp": "478bde9ca1507cf574c112af6cb987f586b13197345c864bbb96a0e8876ea9e4",
     "public/avatar/v2/layers/v3-chima-navy.webp": "ac812bbd554954575eb531edec91c03dc38d8155a60ec5dc2a746b1b0265cf98",
     "public/avatar/v2/layers/v3-chima-rose.webp": "b018de5bb1addfe6a6a122de8c4cbaeb86da8759d7017c80af997c96b744fe60",
-    "public/avatar/v2/layers/v3-hanbok-ivory-cheer.webp": "134c6551208c879397e519aa57dc67b8b9ee0b9cc693448deb12f05d8c4d103a",
-    "public/avatar/v2/layers/v3-hanbok-ivory-heart.webp": "c244a1d5205c96657810b149707660dcdc5e448cb0b67678cd6d5dc0691a750f",
-    "public/avatar/v2/layers/v3-hanbok-ivory-idle.webp": "438e9a6370e25b07952ca9fd0df6606a1f4a81806758bf831ab30b653fd5fec1",
-    "public/avatar/v2/layers/v3-hanbok-ivory-think.webp": "ce7ae21794e592f403196bf28b3f48339c42dd5d542c1a587bdff32156b754f1",
-    "public/avatar/v2/layers/v3-hanbok-ivory-wave.webp": "2768179f7595eba2f3df6470bcdd5cc7c2a58869bc0d3f7cfd01091561a3db60",
-    "public/avatar/v2/layers/v3-hanbok-peach-cheer.webp": "f926c99bbbf8f3da132c8d12afd46961746930bd9eda60329ff9b77734ac7106",
-    "public/avatar/v2/layers/v3-hanbok-peach-heart.webp": "af4bd5012656f09dc89d3bfef6fa8cd2041e90fad2c4a24bfe6f2d1724140942",
-    "public/avatar/v2/layers/v3-hanbok-peach-idle.webp": "b02f37cd362519b8ec09b7b4836c218d1674b10fcae52bbc6d6eece39d966ee2",
-    "public/avatar/v2/layers/v3-hanbok-peach-think.webp": "bf1c83ccb8328005128b9a3c29b8e054071c4c12764dcfaf83139b6233aef9db",
-    "public/avatar/v2/layers/v3-hanbok-peach-wave.webp": "4014cf3626ae04da94f093834a8493e61bb7ce12efa9552767ae74c6fd38d4c1",
-    "public/avatar/v2/layers/v3-hanbok-sky-cheer.webp": "fdb3c2010348a49a6d6593aec3fd5b06d3610c1ff31b95bd74b3c880ed2c8221",
-    "public/avatar/v2/layers/v3-hanbok-sky-heart.webp": "5e1ff1d613367b1b6b5584a79dfef24cac6035f6463f1e613584b8b7e7d67327",
-    "public/avatar/v2/layers/v3-hanbok-sky-idle.webp": "72ec380b4361abe0ccc9edafb868bdbf3b309ad1f2225f76a728341f4ac78703",
-    "public/avatar/v2/layers/v3-hanbok-sky-think.webp": "9228d62bc484f891aafe62b86735e80bf891ea3614885185827d13e0373d4c4b",
-    "public/avatar/v2/layers/v3-hanbok-sky-wave.webp": "dddbcb22793ecfc719f7d371e7ba4b41a7414e25672b30bafd8c0346472bbbe4",
+    "public/avatar/v2/layers/v3-hanbok-ivory-cheer.webp": "97c1ec4cddca0cb0bebcfda654b31b84261d04f11393ced1680081a6d7c626f5",
+    "public/avatar/v2/layers/v3-hanbok-ivory-heart.webp": "e13639d87848e63825600aca944bee18daf45004de34921f34fb4ed95a046e47",
+    "public/avatar/v2/layers/v3-hanbok-ivory-idle.webp": "53a0ecdecf75e3fbba340581fb8330c554971094b2bd29d797720a5d708bd54d",
+    "public/avatar/v2/layers/v3-hanbok-ivory-think.webp": "9f2999e44cc49dbf58011b7bd48f09063be3d2c671161aa4b01d37415e10dd78",
+    "public/avatar/v2/layers/v3-hanbok-ivory-wave.webp": "30407c95ece41d459af75eec66870e9294a0bca81f834f613125493927c4aa06",
+    "public/avatar/v2/layers/v3-hanbok-peach-cheer.webp": "f7c9afca8992176c1065477e0064881412ffd1b0004e34401436e1c50a0011f6",
+    "public/avatar/v2/layers/v3-hanbok-peach-heart.webp": "52b184ba23b5f9c9fb9a6b79825186094bfb687cdddf34f15cb663f9f534dec6",
+    "public/avatar/v2/layers/v3-hanbok-peach-idle.webp": "8a0974ce74b97c260e636cc5754ea178d41eeca3eeb8c56479372122b03c00af",
+    "public/avatar/v2/layers/v3-hanbok-peach-think.webp": "1c06a661e580f2a9a10a555663235772ce0efa0dce6e7905f9edfe8a65b21c14",
+    "public/avatar/v2/layers/v3-hanbok-peach-wave.webp": "cfece4a37f39f8e9948a33d181b9761a340639d3369b487342ffbcb9fc3a69a8",
+    "public/avatar/v2/layers/v3-hanbok-sky-cheer.webp": "60fa15362fd485e3ce59ad6e3816664211710bc6b01cc3615472d74b97a4d7c6",
+    "public/avatar/v2/layers/v3-hanbok-sky-heart.webp": "77de29831e89a51716292d61fbdb0459909fc2c9695e64b8369ab78cfadb8d02",
+    "public/avatar/v2/layers/v3-hanbok-sky-idle.webp": "f64cb75f40b940a0efce8330607fff87201d1b7808199ede21ffe3c3e2bb2357",
+    "public/avatar/v2/layers/v3-hanbok-sky-think.webp": "3a46ddb3ac8dbcdcace802528b597fcde650969f5562ec58e363cffb2ea74b78",
+    "public/avatar/v2/layers/v3-hanbok-sky-wave.webp": "512bbfc4de04c0371f410df1b83644c9a73c4627bb380510e7930ff1829e431d",
     "public/avatar/v2/layers/v3-jacket-cheer-tint-mask.webp": "dad7f680a9d494a7d4d41b3b9cce1b45c457134caf4c7b5f3fb21c3f2d54b34e",
-    "public/avatar/v2/layers/v3-jacket-cream-cheer.webp": "bfe6a9003192fd781711a3c3bdfbd18fb069391c279b2b25b5f380872213e252",
-    "public/avatar/v2/layers/v3-jacket-cream-heart.webp": "63c35d333c7997b87972bd1292ab619392ed6adb9c749a6bfb915b53ce481bd5",
-    "public/avatar/v2/layers/v3-jacket-cream-idle.webp": "de7a5441dab11b015309893269006bfca33d8b4853bb496f1d3b2a559c97d0fd",
-    "public/avatar/v2/layers/v3-jacket-cream-think.webp": "36956dd72fe3bef3a7434557fe0f58ca1b3f9e5b9bab4b3e2dafd77867418948",
-    "public/avatar/v2/layers/v3-jacket-cream-wave.webp": "d2357e98deef176771e3fb9f5f995f2e629d0184a531c3cdb4d18623da16e024",
+    "public/avatar/v2/layers/v3-jacket-cream-cheer.webp": "9d294ddc29f99c68ccb56bd85a2cf1503bdd4bd87e6853f8aa1fb66a7b472ad8",
+    "public/avatar/v2/layers/v3-jacket-cream-heart.webp": "e02ff2919b10e488ec928a35f5bc8ade696ea0a09cb1bc36f573afac380bf8de",
+    "public/avatar/v2/layers/v3-jacket-cream-idle.webp": "2b81057bc86b4e3031fcef719acfb0a8fded9d21da9fa0743088700047ac1a39",
+    "public/avatar/v2/layers/v3-jacket-cream-think.webp": "ad1a0f5beb7ba66450ea304091b4376e678166e2d685726e926472d24de6e2bb",
+    "public/avatar/v2/layers/v3-jacket-cream-wave.webp": "fa4c5842da4ce9b5f49a795ee7932684fbc9efafdf81c51ca0c131819b184a23",
     "public/avatar/v2/layers/v3-jacket-heart-tint-mask.webp": "8d28f910f5cdbcd281600bee4a4f3ca2234fa306f5272d3a493fb9ed799503c8",
     "public/avatar/v2/layers/v3-jacket-idle-tint-mask.webp": "cfb478ca8f6e02ea431196926c06e88f1cf2eb98d34e71af26eb3153dfdd782e",
-    "public/avatar/v2/layers/v3-jacket-lavender-cheer.webp": "7e41a90fafa94db951c30031ed28a64ec9397ce09a5a59e6d66693c8d9fdbd5d",
-    "public/avatar/v2/layers/v3-jacket-lavender-heart.webp": "c3800b42857d6d2538f1eb13a9ae435d66ffe601e5f2ba3599fb132f5bd5a96f",
-    "public/avatar/v2/layers/v3-jacket-lavender-idle.webp": "ce3a9c8d872e7b562fccfc868a52fbfdb933cf8690905c50feca8519911dc5b0",
-    "public/avatar/v2/layers/v3-jacket-lavender-think.webp": "7ade750db2b790ae7881d706c11cd3f86d797f2b4448b29103829959f3b33039",
-    "public/avatar/v2/layers/v3-jacket-lavender-wave.webp": "e32c592f4a9c9d8357086c0ac685a87b9980ada0cb38a7491a5a2f6014b9ae56",
-    "public/avatar/v2/layers/v3-jacket-mint-cheer.webp": "2eeb9eeffc581b42b8bef4a419bf0ffc231de51642b8ed25239084ccfdde188d",
-    "public/avatar/v2/layers/v3-jacket-mint-heart.webp": "c0b352ffb966617afdca71f8a529f8e034b785b335c22e3df57ee02f8aa75bc7",
-    "public/avatar/v2/layers/v3-jacket-mint-idle.webp": "f973f1ed37f331db3cc465abcd4786eebe8e2647d3d407391207631f6173e467",
-    "public/avatar/v2/layers/v3-jacket-mint-think.webp": "116ed708110dc27bdbeb43b49c6eed7a5b6945a79e3d592233672692608e144f",
-    "public/avatar/v2/layers/v3-jacket-mint-wave.webp": "2f4437f5291cb6d80354e3a009f7a32c4a7b15d0fa8d068c27221140690f617f",
-    "public/avatar/v2/layers/v3-jacket-navy-cheer.webp": "ac2910c56a5e7a46d0d60204a7bc7f0ba18803535556220ea16f64fd7ee613f0",
-    "public/avatar/v2/layers/v3-jacket-navy-heart.webp": "06b99ec5e4bd6318747f47dbe6e467d157777c170da069e889bae5e267a33e7d",
-    "public/avatar/v2/layers/v3-jacket-navy-idle.webp": "2071f466a5e200b2f151f3e18ecd0f43582d4430c0c1325d6a0f759b75dbdd07",
-    "public/avatar/v2/layers/v3-jacket-navy-think.webp": "acf5f40810ed3f8ff81e42fdeb18d4d9d89cfd36d10865549574a514b87accc5",
-    "public/avatar/v2/layers/v3-jacket-navy-wave.webp": "b23b6a3ae32e381cdfd8911d416cd4b08b6d596aeecd98173da70e17c1b9a8c7",
-    "public/avatar/v2/layers/v3-jacket-rose-cheer.webp": "96216daf38254a0e6f5d021d2c344b3cbeda162079104d962110454f0eb191d0",
-    "public/avatar/v2/layers/v3-jacket-rose-heart.webp": "46fc6e26adc0a389079900dc7b5eda28d3f0c9ba42b105570241d527fab25fb6",
-    "public/avatar/v2/layers/v3-jacket-rose-idle.webp": "454f86010f03baba994ad6ee79487ca88f7f30ec170542fb4b9af28be7d5d328",
-    "public/avatar/v2/layers/v3-jacket-rose-think.webp": "3a6ebbe3fb2630887a843681b9971f7bbdcc53deb6ea2a51f97d07dbe068000f",
-    "public/avatar/v2/layers/v3-jacket-rose-wave.webp": "9d51bb514bdd6c37af5d37de4a060dafd5984807805f31985c0bfb3ce529e580",
-    "public/avatar/v2/layers/v3-jacket-sunshine-cheer.webp": "3462040d74b3666c774b3d6fd0c66c9f157ab4a8283ed1103545d168f6999d27",
-    "public/avatar/v2/layers/v3-jacket-sunshine-heart.webp": "c53e0b6dc4fe6b5e3fe11e932fa2b2d83ae8a6d993d7c7b5aa109650a040c5b7",
-    "public/avatar/v2/layers/v3-jacket-sunshine-idle.webp": "37372000ec3b75dcc31d19f50c48d5dda10f7391599d0f3b97fff5c835a58a2d",
-    "public/avatar/v2/layers/v3-jacket-sunshine-think.webp": "e8807a2c4b7cee77f4dbd1d7915dd97841159653a8d96941faa0491962002633",
-    "public/avatar/v2/layers/v3-jacket-sunshine-wave.webp": "0bc26a949490f366edee0621e58eaea5093df5d0f85321b40d89ace81a965e0b",
+    "public/avatar/v2/layers/v3-jacket-lavender-cheer.webp": "487872e7b8c771e86db150d03e67ed7cc4b2d17b1c6f7a8782920f5bd77bd098",
+    "public/avatar/v2/layers/v3-jacket-lavender-heart.webp": "b57910fd02beb7d147cd267141f97601bbdd36e9af8706d5012dc85899dabd32",
+    "public/avatar/v2/layers/v3-jacket-lavender-idle.webp": "66facc239dcba669b11d501f1091ffa059161ef2f0c37f2a20d2a0c92f65aebe",
+    "public/avatar/v2/layers/v3-jacket-lavender-think.webp": "08c4a9a0e28e3fa07d1ede0388e5f2cc7ebd04bb6ded46c0b70e5311928f7f5f",
+    "public/avatar/v2/layers/v3-jacket-lavender-wave.webp": "456cec5d9000b952f404a73e8727f4fecc9aabcc7f8440b60a58067b0b637e5c",
+    "public/avatar/v2/layers/v3-jacket-mint-cheer.webp": "5d9641340030402f4cb60ca1ffc277e40af4a8d16434b4d0aa88f4026f76312a",
+    "public/avatar/v2/layers/v3-jacket-mint-heart.webp": "fb88289f112f5ee1b4be6589f7bb224604c7b92732f6ed8430433f52c8dd9bd2",
+    "public/avatar/v2/layers/v3-jacket-mint-idle.webp": "f0f3d566503eb386214a6faea1c44a88448142f2d1e902d79ede840ffaba7362",
+    "public/avatar/v2/layers/v3-jacket-mint-think.webp": "efe988609628ebcccd63823da8edf5d131537fe711e056bf90f4aa17357ed88e",
+    "public/avatar/v2/layers/v3-jacket-mint-wave.webp": "0560a574d55a8c26c968a9a3368b6e4f6c335009fcfd58eb16f06eff6c5d13e8",
+    "public/avatar/v2/layers/v3-jacket-navy-cheer.webp": "888809d33d238b235bb32e9c06a85f6c125b3f2f14be6b725aae986f345b507c",
+    "public/avatar/v2/layers/v3-jacket-navy-heart.webp": "20d80f73b3806641423f37ae6743cd39c82685745204f50143bccbcb497306f5",
+    "public/avatar/v2/layers/v3-jacket-navy-idle.webp": "fcf396b3a808b3c130d84be6a121a0e66409b07169c2585a7c1815802eca1f9a",
+    "public/avatar/v2/layers/v3-jacket-navy-think.webp": "5b2dfb63e7566c99b80edfebedabb4ab89db9fe5a2e49d36625b1fb55187c161",
+    "public/avatar/v2/layers/v3-jacket-navy-wave.webp": "265c6b2da280de695677b7fd4c023dd082c674b21ab797fab9e47756c94f41e1",
+    "public/avatar/v2/layers/v3-jacket-rose-cheer.webp": "6608cdcc36c811f968e5517c3782f872c14433c153b5ecf3f625558bfaa78f05",
+    "public/avatar/v2/layers/v3-jacket-rose-heart.webp": "f26e600ee0ff62397b54d42626c0a5472851bed607e1899d373ca05918ad0fc6",
+    "public/avatar/v2/layers/v3-jacket-rose-idle.webp": "45cacb30140809ba1c2f01c670352abc7ed2b7302a70bf59af74f0ee9d646e27",
+    "public/avatar/v2/layers/v3-jacket-rose-think.webp": "08836115794ebaa78492231c22cf4acff631bd2d3461e38f48b8cdd1d05488c4",
+    "public/avatar/v2/layers/v3-jacket-rose-wave.webp": "8d8cf41968c48330524525210911bc6f790047d5989bcf0b093a49cbb8345804",
+    "public/avatar/v2/layers/v3-jacket-sunshine-cheer.webp": "3caf18e549c0b9eac4493559cf2b962d0e4d3419596d67db1c63924f772b351c",
+    "public/avatar/v2/layers/v3-jacket-sunshine-heart.webp": "96e11d799fdbed620c93878f88619f24df060a8237eb8c35b91ae84269b1e5ef",
+    "public/avatar/v2/layers/v3-jacket-sunshine-idle.webp": "1098a08dd4477e96d7a522918b5f71eb7b7b05c9649d3ff0866c02c5f9ff2c35",
+    "public/avatar/v2/layers/v3-jacket-sunshine-think.webp": "bbbe38fdadfa018b8c4133f2bfe1cb5b7ae328fe9a95b207cc87e3bed53aa8e2",
+    "public/avatar/v2/layers/v3-jacket-sunshine-wave.webp": "e85d22382cae72298b03973cc6935b9fd0dac1013a8d76a869f7d2a982128c58",
     "public/avatar/v2/layers/v3-jacket-think-tint-mask.webp": "2c7ccc6b76e686b918f958e78c09c6d26e23538ad76ce5abcdc72f608ce4ceb3",
     "public/avatar/v2/layers/v3-jacket-wave-tint-mask.webp": "5de2fb1940f68c1ecdeeff5b4e02c3be2807e33202b04f18e402cb10ce945d20",
     "public/avatar/v2/layers/v3-jeogori-cheer-tint-mask.webp": "ea7d10cb66cbb1c6178b754ec68c1ea5c15903006685f8082d10355b6bb40abd",
@@ -101,32 +105,32 @@
     "public/avatar/v2/layers/v3-jeogori-idle-tint-mask.webp": "291965e448182f8b19b15652a30d5b09488494f31952a5629d5f485e1119e07f",
     "public/avatar/v2/layers/v3-jeogori-think-tint-mask.webp": "5dcb9de466fe4b838758e59adda45978c19d24930dc60381ff706ad423de120c",
     "public/avatar/v2/layers/v3-jeogori-wave-tint-mask.webp": "b445251a7e68e507d62b79bb1ed1a493efa398306514e1b3c8eee1384c4f88b1",
-    "public/avatar/v2/layers/v3-official-black-cheer.webp": "5848548b5987ca5cdc24b3432910a267ae815aafcdd7d4f2ba39bdcaf0003a0a",
-    "public/avatar/v2/layers/v3-official-black-heart.webp": "0f2dfa4be3a9345cecf63805f46c8fd6636b00b6c43ab46adfb624f7c7bfe079",
-    "public/avatar/v2/layers/v3-official-black-idle.webp": "dc33659f6d1ce2f27e88c7a68cf46ff4170fafb27a956bb8a84c714498f0664f",
-    "public/avatar/v2/layers/v3-official-black-think.webp": "3d6f9fd7cc94893042b4999545505120641edc42b4e71da4f08b00d2a62f6508",
-    "public/avatar/v2/layers/v3-official-black-wave.webp": "c873a24aa9d6d9574f9c4f0459f4fd7bb8c462127dca2c9ecd3c752d36960692",
-    "public/avatar/v2/layers/v3-official-navy-cheer.webp": "aef2caec09d418334fb42c1be06e947ba7cba4abdac67252f22eaaec746db2fc",
-    "public/avatar/v2/layers/v3-official-navy-heart.webp": "5761517d19d27dc04c8d9033d5769afad2802eec8e50d70be1bf4a09d2a5ad45",
-    "public/avatar/v2/layers/v3-official-navy-idle.webp": "5a3b0285ca86ff5724acbf94901c58748453f8189c874ad50486facd3940ad13",
-    "public/avatar/v2/layers/v3-official-navy-think.webp": "85c1959591dd171f72e167b233981600f333a03232cb3c43b17a4e2a78afb705",
-    "public/avatar/v2/layers/v3-official-navy-wave.webp": "fcab31b5c6925735311f7450e4ff71e34c6b6f59bfc00b5178b5ef2f3439f1fd",
-    "public/avatar/v2/layers/v3-official-red-cheer.webp": "bc1046de311d1be7bcb5247879491881f0607079e9b64d0611fd27a199dfb3f2",
-    "public/avatar/v2/layers/v3-official-red-heart.webp": "9524955d4bb8a5fcc9abbd9a586bff84f27f06c5c600eef4b8b425e72efb8715",
-    "public/avatar/v2/layers/v3-official-red-idle.webp": "a5ce310ebe959af01ebbeb10fcd53449d28a46436b1ed041d39d51961e34b821",
-    "public/avatar/v2/layers/v3-official-red-think.webp": "3b1257c8317966fe27a8332635726fbd99e9d593b72f3835672e838546975c67",
-    "public/avatar/v2/layers/v3-official-red-wave.webp": "ce5a06bd44cc4206529337777bf4ef78089a445de5caecbfd7d51059e226b798",
-    "public/avatar/v2/layers/v3-plain-bottom.webp": "d8d8f5db729a869c9dd095a57080f4626d14d52e111d73bb9d6e6a772bcf9626",
+    "public/avatar/v2/layers/v3-official-black-cheer.webp": "ec59beee1a4ae69fa05848ce1c1aefc2bb633b8630c63399638e0b0d735b40ec",
+    "public/avatar/v2/layers/v3-official-black-heart.webp": "1b3c7aaea893acfb8ea57334db77bf678b811fb3591abaf839f2097160ab8a2d",
+    "public/avatar/v2/layers/v3-official-black-idle.webp": "c6b5cfa365d0e8e296ce203348029dc7816baa652331f62b83761ad1c8ed8490",
+    "public/avatar/v2/layers/v3-official-black-think.webp": "f0747d031048e0d196c2472f61748e5adf1c3a9f2d4862a183e1cc0c20f48957",
+    "public/avatar/v2/layers/v3-official-black-wave.webp": "19c60dd21012e5c20d9941be7dec1ad1e9c2327f768b0f0b50f2206890ac31c4",
+    "public/avatar/v2/layers/v3-official-navy-cheer.webp": "a843feb704bf226730d06fc10e1e62edf23100206ca29e343190cf5ddaee5a66",
+    "public/avatar/v2/layers/v3-official-navy-heart.webp": "6f8432a45b8440bc1d478571deb39199ef1cff39b657eb058883bd141710de86",
+    "public/avatar/v2/layers/v3-official-navy-idle.webp": "aa4ff921bfe8961ebdfbd2aeb1d8dc8c0845b44245fcb1019a864a484a83da3e",
+    "public/avatar/v2/layers/v3-official-navy-think.webp": "8ae1b06c540d0e363435caf3f5b3902fb6b7f19d892604371ef52fd1aeaaf483",
+    "public/avatar/v2/layers/v3-official-navy-wave.webp": "e57c203e96444d5c69ff548fceedd61b54eb4504b0c3e6a16644d70b25eea754",
+    "public/avatar/v2/layers/v3-official-red-cheer.webp": "aff8c1a6ab5eedc1c8173d48766ba28591910d96d2bcacc3385a1584ca477706",
+    "public/avatar/v2/layers/v3-official-red-heart.webp": "cfeac6b0bc3573253975e292d9fa61638f7894a76cb162cb4a47d52958c19430",
+    "public/avatar/v2/layers/v3-official-red-idle.webp": "d83ac094dce26583a585c266b4ef999eed0fbe28158102d7f39e6fb63197e602",
+    "public/avatar/v2/layers/v3-official-red-think.webp": "e19da1caa17c31b718990702ee9ed447db7b6111fb5717bccc8483c3036236b6",
+    "public/avatar/v2/layers/v3-official-red-wave.webp": "7bc7424773935580d00e07e59b15c42ef71974e8767532bbd3597abf52b9a793",
+    "public/avatar/v2/layers/v3-plain-bottom.webp": "a2ab97738a8df36d2c891eb360f7609c1e0b9cc2c782592f389baf90889e50d0",
     "public/avatar/v2/layers/v3-plain-cheer-tint-mask.webp": "3b0314977f7cc274aa79f08fc776a0a0fe5c25296b223a4703544f6c0a8ebf7c",
     "public/avatar/v2/layers/v3-plain-heart-tint-mask.webp": "397911fb6ed8b6dd239fd6df86cb12ebed94480dfbf290e1a5260cc1f1f2f8ef",
     "public/avatar/v2/layers/v3-plain-idle-tint-mask.webp": "9c8ff6ef8522145b9bb8c34c4f3184a3df0f3f3b0d2645dc454e39afd88a529d",
     "public/avatar/v2/layers/v3-plain-shoes.webp": "8fe2e049d286efc47ecc7728aafeee6a34cf763828712097cb54d3151a61bd73",
     "public/avatar/v2/layers/v3-plain-think-tint-mask.webp": "7485cf62f8679ecba34edcc0a29a20895ac8dd297d62bbd8d2d4138135e1a1dd",
-    "public/avatar/v2/layers/v3-plain-top-cheer.webp": "6c4a4d25cdb04caaf44973298120c92bf1e83e03c473f373c66fe373bd5b426b",
-    "public/avatar/v2/layers/v3-plain-top-heart.webp": "2012ea6bbc2722edc1ebe9a1236786f2dd96e90e3ea9f9edb9d5ca8ccb442891",
-    "public/avatar/v2/layers/v3-plain-top-idle.webp": "b8f14282a67fe25af6bd752c3fc19f960294a39d0d3dc255fff015299d3194f1",
-    "public/avatar/v2/layers/v3-plain-top-think.webp": "99d1b79032c395123039bca751bfdeace7c98a3d77eae596261d9d7cca4c0470",
-    "public/avatar/v2/layers/v3-plain-top-wave.webp": "de3ce880d4abf400236ad7e235ab3833b1549dc948c45a60ae6fba415aedf71e",
+    "public/avatar/v2/layers/v3-plain-top-cheer.webp": "a1bf8c9776cc58afcb0d95d5478ade773b76bb41976a7aaab694e448b2515974",
+    "public/avatar/v2/layers/v3-plain-top-heart.webp": "4b0dcf16040f183f1a013412ee6b59fbd3269cfcd2de1f4c93991c7dfeb1d4f9",
+    "public/avatar/v2/layers/v3-plain-top-idle.webp": "bdcf437dbdc6cc31573d4da40a01db27d742916c97e3b7113ae19aeb847ec77d",
+    "public/avatar/v2/layers/v3-plain-top-think.webp": "1a223f59672ca206b08f21835ad7a4f0cb7d050a3c2426326c88fab573d66977",
+    "public/avatar/v2/layers/v3-plain-top-wave.webp": "66064d37f7a6c9078ce3d9b931841132fd53d194938a8c53e6630a3ac1d65981",
     "public/avatar/v2/layers/v3-plain-wave-tint-mask.webp": "2998667a2e512bc3bbfd65fc52b1b3c300cf070b19384bad79144d7bb520b691",
     "public/avatar/v2/layers/v3-pleated-cream.webp": "f3b37bc0f011dd944a223ca3c9c443960c7fe016278ac838f66770b4e1af11e2",
     "public/avatar/v2/layers/v3-pleated-lilac.webp": "437d747fc32c07dc1a4027ce26cd32f4d6b43c25c6a37f67e32ca0504467865a",
@@ -146,1152 +150,1124 @@
     "public/avatar/v2/layers/v3-sneakers-lavender.webp": "5359396a41e78b708a74df2909e8f292f4ea4bc2d635ea83cf6cc9b4bd13886d",
     "public/avatar/v2/layers/v3-sneakers-pink.webp": "f5a927f002e21f0ca7b05cb7e62cea30c3ceaba9e59a92882af7945936963462",
     "public/avatar/v2/layers/v3-sneakers-white.webp": "056e46f16aa3145385a2fec3c3b7ce9cccd2c82e2d730df572d41080d57e5247",
-    "public/avatar/v2/layers/v3-summer-navy-cheer.webp": "3425aecf68ebcc1c41f94d6855fb2f7f5b71e622049eebac00df783abc25bfe8",
-    "public/avatar/v2/layers/v3-summer-navy-heart.webp": "dbecd43348328a6791b3e1598a753ad0d3f3cddd0cca9d113993ca1162159bb9",
-    "public/avatar/v2/layers/v3-summer-navy-idle.webp": "aa2035f56b595bd1242db04b1fbf173cb0c929e1cb93acf9838d5e472206479b",
-    "public/avatar/v2/layers/v3-summer-navy-think.webp": "5d9ac6b09f1cc0d3d17608e8a8bc0850b801c561fe81179b293f6c16fbfdfad5",
-    "public/avatar/v2/layers/v3-summer-navy-wave.webp": "6a0eec4b84f7562a3cba0bdd4b11161a635f50ede96d0d2574b56590df01d276",
-    "public/avatar/v2/layers/v3-summer-shorts.webp": "46bd6fd84a928ea0a7c7b218c39dcd7905cd355f35ed75805f083129500fb882",
-    "public/avatar/v2/layers/v3-summer-white-cheer.webp": "326b4ecbee42bacc9a8dab050410ae167365f19fa2f4cd4b4aaf4099be8ce45b",
-    "public/avatar/v2/layers/v3-summer-white-heart.webp": "8f27729caa50f3932976ac3620df91cffc83422a070e785e6ce4813533652bfe",
-    "public/avatar/v2/layers/v3-summer-white-idle.webp": "2ec5fc433290b423cb25a9709464120463f6daf1d78215d6c60a9d6eaafcdae1",
-    "public/avatar/v2/layers/v3-summer-white-think.webp": "67d2e9bf0176218e5509c3171481b2077cb15b175989d2f66246f9350dfe2bc1",
-    "public/avatar/v2/layers/v3-summer-white-wave.webp": "4c593a81385885ef6c315183819c8579fdde1cc2e6b5d2779cb926bb19402f75",
+    "public/avatar/v2/layers/v3-summer-navy-cheer.webp": "ebe8dcd51dfe28be12b8bfba806e1b230a0f385bd40e9c23f580c27162204471",
+    "public/avatar/v2/layers/v3-summer-navy-heart.webp": "46a80bf5e43d2c397d9870f6a06a97d855ab1db9c3ef7773ff4bf58d03de2467",
+    "public/avatar/v2/layers/v3-summer-navy-idle.webp": "60cbcb9c18676556c2fcf6ecd98f36746ca146136abfa6ea28ab39ed29afc949",
+    "public/avatar/v2/layers/v3-summer-navy-think.webp": "5e176755049cabd724150794f9b917b378992f96b4e45c5799b57809f8bec92d",
+    "public/avatar/v2/layers/v3-summer-navy-wave.webp": "52ee3e6864a67a2ba7795b08655f3aa8f77908890cba1ad91f305fc133f48d48",
+    "public/avatar/v2/layers/v3-summer-shorts.webp": "2965a0701c6637b7a3a8d96debf761c3736a3e393c1f862491e0bfba722fb843",
+    "public/avatar/v2/layers/v3-summer-white-cheer.webp": "0f3216a50b12c37dd99ff1ec32ad19c53fa8ce6dd2918c6695848f309bbfc1b4",
+    "public/avatar/v2/layers/v3-summer-white-heart.webp": "e811945f2f657b000333771806ea7b167d226fbaf6dd059c5728ae6ee7e60a65",
+    "public/avatar/v2/layers/v3-summer-white-idle.webp": "95edadc714cd30e6d111210fb11915f8b1e6755dc57fd4d0e99e1c28c4c677bd",
+    "public/avatar/v2/layers/v3-summer-white-think.webp": "8162cc4e7bd650d88882f9c86cc57568363e9fbff673787959cd18fbae18b703",
+    "public/avatar/v2/layers/v3-summer-white-wave.webp": "4703a9ca5fbbb136b00fb7c567ac0d7023f402639b67ab3c4717ec5da77b4121",
     "public/avatar/v2/layers/v3-winter-halfzip-cheer-tint-mask.webp": "61527900a099b023ffdc6978054ce70726ab5aeda4d3868a95bf72c66f563f58",
-    "public/avatar/v2/layers/v3-winter-halfzip-cheer.webp": "ae3083934ba7941df4e495339b85355b4fc93a1e213cabaa11aaf9a04255d73b",
+    "public/avatar/v2/layers/v3-winter-halfzip-cheer.webp": "ab01709990c1b62939d56ef9132ae54ca06b44d41088ddb81a5e125991fc44fb",
     "public/avatar/v2/layers/v3-winter-halfzip-heart-tint-mask.webp": "986fcacb457bb52fb79ce18793ab842f0d0193ef50fe58f3bb18233569bdb015",
-    "public/avatar/v2/layers/v3-winter-halfzip-heart.webp": "9471093eb1fc2e7c84f80a48612bdfe2502451fb92a9113a10a804d2c379c424",
+    "public/avatar/v2/layers/v3-winter-halfzip-heart.webp": "1034e8e963d73a635a6888cc49262335548fd8d206e2c052a159e93066c841b2",
     "public/avatar/v2/layers/v3-winter-halfzip-idle-tint-mask.webp": "492be07f70c7512d310d2c363f61415a3107a7fd6c0810cf262a0b770f398084",
-    "public/avatar/v2/layers/v3-winter-halfzip-idle.webp": "cbd377231680ed2dd3733cda21694d5e2f55ad8ffc14ff258eeb9cdd17ff067f",
+    "public/avatar/v2/layers/v3-winter-halfzip-idle.webp": "28e638ca3d4d545354035d3339e5207ffd7679299eea939fd30fd2cf0049f3d1",
     "public/avatar/v2/layers/v3-winter-halfzip-think-tint-mask.webp": "c555354c916ba3ea15013dc3e22a213dd67b0ca116d956d974d97a6cc5fa28d6",
-    "public/avatar/v2/layers/v3-winter-halfzip-think.webp": "22684c8b4a6cc7c96e5d923f6105da67cdf1dbd61459db194db869834fb554a4",
+    "public/avatar/v2/layers/v3-winter-halfzip-think.webp": "2ba1281d83ce5c7b75108a3512c94576e2f8e84399821e3b731646105c23883f",
     "public/avatar/v2/layers/v3-winter-halfzip-wave-tint-mask.webp": "46782809d463ae967ef426ad57b3b2be6476f689875d694416cc7b6fb3b969e9",
-    "public/avatar/v2/layers/v3-winter-halfzip-wave.webp": "ec82fa38d9c626130d5d6964658035fdc4e74fbcfb86b35fbd5c9d56940d0f2a",
+    "public/avatar/v2/layers/v3-winter-halfzip-wave.webp": "7ca82505f7f8bd4438b37ced7b889ea3adb5a44df5f307454f0cbef3f37af30b",
     "public/avatar/v2/layers/v3-winter-hoodie-cheer-tint-mask.webp": "2810fd85ae1c2b29b744ff91f50cb31eb4de3dc68fb9edc1693372b5cf1d757f",
-    "public/avatar/v2/layers/v3-winter-hoodie-cheer.webp": "058dead8b25e710555af00d5b3dc8d9042e8aa6a65f692a9f75b8ffd8cd1fb7d",
+    "public/avatar/v2/layers/v3-winter-hoodie-cheer.webp": "1dd3d3d65b65f9345ac1d56a41c505f656fb882166b71f5af023323d3d64305b",
     "public/avatar/v2/layers/v3-winter-hoodie-heart-tint-mask.webp": "2a85ddd6b3c0b8338c6767a15f804d0e61ec533ff3184ea03ae65e2925ea384e",
-    "public/avatar/v2/layers/v3-winter-hoodie-heart.webp": "6ed4464e9ce8cf2f73a048352b8c0cb004317e43defc04e53e36e8873cd695d7",
+    "public/avatar/v2/layers/v3-winter-hoodie-heart.webp": "ca43161044099d7ce977f089ebf199a305042dee316495a781c3bab3e4f082ca",
     "public/avatar/v2/layers/v3-winter-hoodie-idle-tint-mask.webp": "50141eda3b0729acd31d73ff5d15e2f05fba56ddc136a80adb47baac2a238e21",
-    "public/avatar/v2/layers/v3-winter-hoodie-idle.webp": "95aac2fbb987d7350c0c8c3947e1098d44088c5d81c52ccf6f5b248382c44004",
+    "public/avatar/v2/layers/v3-winter-hoodie-idle.webp": "c7dc6072c7b3fe40fd130cc313383ebee163c3aa8cd42735192572cc934b1402",
     "public/avatar/v2/layers/v3-winter-hoodie-think-tint-mask.webp": "a28053fc6188e2afb447716249a69da6b8e26a0a55e1d3da37ffce5affd9500b",
-    "public/avatar/v2/layers/v3-winter-hoodie-think.webp": "056e9a0f3b17d4e1b00b9fd051e0563fde0507ace30c971ab165a1693b5457af",
+    "public/avatar/v2/layers/v3-winter-hoodie-think.webp": "85d4b786594b6054fc1fbdd822267732685acb727bb08083ca0b87b67f237bca",
     "public/avatar/v2/layers/v3-winter-hoodie-wave-tint-mask.webp": "ee3435a29f88e32658e8e861ab515185cec15cf5b6656e7ea415b8f46663bd68",
-    "public/avatar/v2/layers/v3-winter-hoodie-wave.webp": "8b58d06d10a28c267b6c68d3251be74f874ab966d697d7db91e5e6a427878767",
-    "public/avatar/v2/layers/v3-winter-joggers.webp": "2ce0215dea0ff4d81e137655d29520a039c438158090386e5b15fe3c19c4495d"
+    "public/avatar/v2/layers/v3-winter-hoodie-wave.webp": "dc57fe0d22d13a54820c1ffc7e28dd7251c10d6574b43621c2c9a5f11801647c",
+    "public/avatar/v2/layers/v3-winter-joggers.webp": "49b100c7ccce2e7f3a91d952dba7ee48382ed48e8de5d6d5807c02fb1a169f8d"
   },
   "items": [
     {
       "id": "character:girl",
       "character": "girl",
       "file": "girl/character-girl.webp",
-      "bytes": 9950,
-      "sha256": "27b4c9bd721df537c14c9be444b75c23b0091949c67a633ff2fe3b317ad38128"
+      "bytes": 8550,
+      "sha256": "adfa356525756c58f6d9cdf5eb1dda931dae3dab933ab6e4e2e22315e8e01c2f"
     },
     {
       "id": "skinTone:original",
       "character": "girl",
       "file": "girl/skinTone-original.webp",
-      "bytes": 15598,
-      "sha256": "5a7c7d32e168de36ab8652a3254848cc98f72ba626dc80fcf025405d554fd6fd"
+      "bytes": 10286,
+      "sha256": "6718d5fd4b1f2ae0e2aa97c7034eee3b216580182b40eec8974cb9ddf26b1036"
     },
     {
       "id": "skinTone:fair",
       "character": "girl",
       "file": "girl/skinTone-fair.webp",
-      "bytes": 15444,
-      "sha256": "63c2815e85ea25c8616b5cb2005d871e03038766086f1af99f119c2be3f4c65b"
+      "bytes": 10146,
+      "sha256": "732ce0c634374b56bda0ba7b7750ec01def86cf1051d94edae65a287300d006e"
     },
     {
       "id": "skinTone:peach",
       "character": "girl",
       "file": "girl/skinTone-peach.webp",
-      "bytes": 15526,
-      "sha256": "ba7193a03b01a04328f6a4aa16cfd35d3883307270a484f58d4ea362243ac499"
+      "bytes": 10254,
+      "sha256": "95c527c81f3317ca5aae1ee0e892acb7ddfd31c29b1c5dd470ac52ad5dad71c4"
     },
     {
       "id": "skinTone:warm",
       "character": "girl",
       "file": "girl/skinTone-warm.webp",
-      "bytes": 15576,
-      "sha256": "9fff26765e9eb12ed4faa2e130a74973e554e68e29d443062143cdc13d24c97a"
+      "bytes": 10272,
+      "sha256": "42a8997d1cb1587b3cf48125c0d3480b92ae9202a390237d0f1bde33964c75b0"
     },
     {
       "id": "skinTone:honey",
       "character": "girl",
       "file": "girl/skinTone-honey.webp",
-      "bytes": 15256,
-      "sha256": "f369bfca314944ea61444d5caeccdd798b51afdbdbbb54f170e0f28b923233ba"
+      "bytes": 10196,
+      "sha256": "eef0ce1fdca740ef894b12d7562e8fe1ce256fe60b06a9083b0997326803f1ac"
     },
     {
       "id": "skinTone:tan",
       "character": "girl",
       "file": "girl/skinTone-tan.webp",
-      "bytes": 15178,
-      "sha256": "b59cb70aeb8060b39e0219f59111eb987f0c142a8f44312cb3d15937d2d35d63"
+      "bytes": 10034,
+      "sha256": "b8d64623509f30cafe386be882781732dd3f81de705185e2f5ef7995361f29d6"
     },
     {
       "id": "skinTone:brown",
       "character": "girl",
       "file": "girl/skinTone-brown.webp",
-      "bytes": 14648,
-      "sha256": "7b1b95c207e3dbd76cffeb3bd7c0ef6a05bf39309dc22ebb0345316cb6c09b7d"
+      "bytes": 9820,
+      "sha256": "9ee944c650a039c13adbc7f40b384ad7a07d7d693ed353a7f2cc9007cf820218"
     },
     {
       "id": "skinTone:deep",
       "character": "girl",
       "file": "girl/skinTone-deep.webp",
-      "bytes": 14152,
-      "sha256": "568dfa8479cc0aca3dcc3bc2c7152ef7653ac824443262249f98f4d005abea70"
+      "bytes": 9424,
+      "sha256": "4c6dea4ad1ff92752227e949e668471ad378166df38c2d703815fa375557985c"
     },
     {
       "id": "faceShape:natural",
       "character": "girl",
       "file": "girl/faceShape-natural.webp",
-      "bytes": 15598,
-      "sha256": "5a7c7d32e168de36ab8652a3254848cc98f72ba626dc80fcf025405d554fd6fd"
+      "bytes": 10286,
+      "sha256": "6718d5fd4b1f2ae0e2aa97c7034eee3b216580182b40eec8974cb9ddf26b1036"
     },
     {
       "id": "faceShape:round",
       "character": "girl",
       "file": "girl/faceShape-round.webp",
-      "bytes": 15802,
-      "sha256": "8df9bda1e5eb559b10b6389def4bcff290baf9482870a056e037a03c6a05b97b"
+      "bytes": 10242,
+      "sha256": "33873e288911774243a2a81f26d3e57a9c466997d202ca897791b801bc290c70"
     },
     {
       "id": "faceShape:slim",
       "character": "girl",
       "file": "girl/faceShape-slim.webp",
-      "bytes": 14966,
-      "sha256": "8a0ffcdd42a14b236e93ce2b5e763b3885a7dabb6948dddbcade2f95711ca451"
+      "bytes": 9516,
+      "sha256": "e854110bfc643fcae8a276f2d092a1a3c7639688523b709e8c6ccf98f763ac99"
     },
     {
       "id": "expression:natural",
       "character": "girl",
       "file": "girl/expression-natural.webp",
-      "bytes": 15598,
-      "sha256": "5a7c7d32e168de36ab8652a3254848cc98f72ba626dc80fcf025405d554fd6fd"
+      "bytes": 10286,
+      "sha256": "6718d5fd4b1f2ae0e2aa97c7034eee3b216580182b40eec8974cb9ddf26b1036"
     },
     {
       "id": "expression:calm",
       "character": "girl",
       "file": "girl/expression-calm.webp",
-      "bytes": 15452,
-      "sha256": "aa366072253a750d4286902c9ad5603e208380dc7ba5e2bb154744902ba00220"
+      "bytes": 9592,
+      "sha256": "df66aff3419d0cd22e97967c343e20137214942a0bef27a5f2aa85fc910aee4c"
     },
     {
       "id": "expression:smile",
       "character": "girl",
       "file": "girl/expression-smile.webp",
-      "bytes": 15382,
-      "sha256": "710216510a7bc5415a0a570ba210efd5fcf92a3c1bdae0bf024a36b629abe237"
+      "bytes": 10022,
+      "sha256": "52279508cae1bad03d74789a80cdb20f0bd8939c12e6f92216a5d5afac6755fa"
     },
     {
       "id": "expression:curious",
       "character": "girl",
       "file": "girl/expression-curious.webp",
-      "bytes": 15678,
-      "sha256": "8ca8e50e7e9b3db49d0607b23b1ab1a734d3ce213b7b8003b4492f0209cf23a1"
+      "bytes": 10412,
+      "sha256": "c7c12b1cbcf92df7ec64b4a066aa5743c99ee0a2f66402b89d60f374e7d1f7d7"
     },
     {
       "id": "expression:bright",
       "character": "girl",
       "file": "girl/expression-bright.webp",
-      "bytes": 15546,
-      "sha256": "59008589dada5b6e683daf574c03ca13e96cd28ebeb68b21e70e786e712dabf9"
+      "bytes": 10270,
+      "sha256": "16d534101ab65d95bacc31fc551f345729eb3010188e8ad24074022747b0828e"
     },
     {
       "id": "expression:determined",
       "character": "girl",
       "file": "girl/expression-determined.webp",
-      "bytes": 15492,
-      "sha256": "e3498aedabfcbc9373aa30519a19fcd0ccaa238078abb631c6fda61f120cf68d"
+      "bytes": 10248,
+      "sha256": "7d5194b01eebd4a21142a0d4f0690ca60da37d7a42a431b3af2e5217c04794af"
     },
     {
       "id": "hairStyle:bob",
       "character": "girl",
       "file": "girl/hairStyle-bob.webp",
-      "bytes": 13244,
-      "sha256": "8b36f72ee90dbb54b78c0d33bf883aa0095a872357372dab93fab3469220763c"
+      "bytes": 8632,
+      "sha256": "27b741f51552df4e3af73914d55cbbd48eb873ba694625399474b5c9cc5300af"
     },
     {
       "id": "hairStyle:volume",
       "character": "girl",
       "file": "girl/hairStyle-volume.webp",
-      "bytes": 14714,
-      "sha256": "ba25db9d9fec6626543879140026a6499a6d9108c695b35264595b265bac86ea"
+      "bytes": 9218,
+      "sha256": "4e40a6c5723c8c394fc2a2b7ef62f5abe7c8784fe003c08c29937a9ef21f7226"
     },
     {
       "id": "hairStyle:wave",
       "character": "girl",
       "file": "girl/hairStyle-wave.webp",
-      "bytes": 14192,
-      "sha256": "02693fc4ff009928b1c28201a0e62719ea16b98344f12ce47a3d7346eb309966"
+      "bytes": 9242,
+      "sha256": "772808ab52d9338ed794cd9bfdfe9453b4a57f44dc51a5ad915f61ef253a5afe"
     },
     {
       "id": "hairStyle:long",
       "character": "girl",
       "file": "girl/hairStyle-long.webp",
-      "bytes": 15222,
-      "sha256": "3ce8b8982f186be48a5e91709241cf7f15b21d37c0249d0222c735f989178df1"
+      "bytes": 9724,
+      "sha256": "76fa082ba2383dc9e63f37c82622a49f7971f27e90885475bb5a6b3839a6a838"
     },
     {
       "id": "hairStyle:twin-tail",
       "character": "girl",
       "file": "girl/hairStyle-twin-tail.webp",
-      "bytes": 18784,
-      "sha256": "9863335464f07964b6aeea38d7f92ee643e7e2bad391fd5cb4256504dbaf9952"
+      "bytes": 12582,
+      "sha256": "eaf2da321678d005c4a054a3aca729f9038b56fd8939f9235d9fd54f78566cd9"
     },
     {
       "id": "hairStyle:half-up",
       "character": "girl",
       "file": "girl/hairStyle-half-up.webp",
-      "bytes": 16760,
-      "sha256": "76c07c84e86a36ab29a3d39d564f481c0f63f4522d927087199bd4802c5b9ace"
+      "bytes": 9996,
+      "sha256": "931f26bb34550860bc884596e1d7a8efada933f7934c1a16f7f10a7ecb8c324d"
     },
     {
       "id": "hairTone:original",
       "character": "girl",
       "file": "girl/hairTone-original.webp",
-      "bytes": 13244,
-      "sha256": "8b36f72ee90dbb54b78c0d33bf883aa0095a872357372dab93fab3469220763c"
+      "bytes": 8632,
+      "sha256": "27b741f51552df4e3af73914d55cbbd48eb873ba694625399474b5c9cc5300af"
     },
     {
       "id": "hairTone:black",
       "character": "girl",
       "file": "girl/hairTone-black.webp",
-      "bytes": 12760,
-      "sha256": "494d488ee2e389603c90329983517b1d3312b30ec01410ba5e31701ce36f8bbd"
+      "bytes": 8158,
+      "sha256": "fcc62876bbea0f6d9ec18c7077616b5f54fdacf3c210b44641ef92790e7416b9"
     },
     {
       "id": "hairTone:chestnut",
       "character": "girl",
       "file": "girl/hairTone-chestnut.webp",
-      "bytes": 14816,
-      "sha256": "74a686cfe4d2e1951d453c65d5d47e71dbd2c04748091237e1f74f37c6b5bb28"
+      "bytes": 9016,
+      "sha256": "d41bfc01dedfb9e390b69f97465d1c6a768510fe3aa1b28ad27999c5726335f8"
     },
     {
       "id": "hairTone:chocolate",
       "character": "girl",
       "file": "girl/hairTone-chocolate.webp",
-      "bytes": 13616,
-      "sha256": "fb0a729c4cbd0f42ca3590c56caac46fbaad0924658f0b9357788b056ef3fab5"
+      "bytes": 8436,
+      "sha256": "f0a8796e687937d8c65e27b921ef530c5ff787a2cf2567981ee822360d2034e5"
     },
     {
       "id": "hairTone:copper",
       "character": "girl",
       "file": "girl/hairTone-copper.webp",
-      "bytes": 16494,
-      "sha256": "3b797f4c1d4215c8b3ba81c6c877d19256c7c226821e27099171c6c52f2a4113"
+      "bytes": 9720,
+      "sha256": "c0f9d40d2a9f4bbd577569277d9f4100b1ab905a17d232c65dd8346de9d10532"
     },
     {
       "id": "hairTone:blonde",
       "character": "girl",
       "file": "girl/hairTone-blonde.webp",
-      "bytes": 17390,
-      "sha256": "e4ec8f14cc195944e0da7673a064ff80a874108bb612b431a68ea8f9f70e81a3"
+      "bytes": 10064,
+      "sha256": "5a7a0615b1673ce1ebbe860b56e4d02dedb0347972cdd009f517681ce6af60ff"
     },
     {
       "id": "hairTone:platinum",
       "character": "girl",
       "file": "girl/hairTone-platinum.webp",
-      "bytes": 16468,
-      "sha256": "d0f7e0dbf030fe0ebaaaed5c8576e7ff8809ff50724fac44ccaa6cc0d1f0fb68"
+      "bytes": 9960,
+      "sha256": "9b4c9a5913223bb0e0a09d11ec6a1c13282554e7832cf7d4fb5890960adebb75"
     },
     {
       "id": "hairTone:rose",
       "character": "girl",
       "file": "girl/hairTone-rose.webp",
-      "bytes": 16264,
-      "sha256": "c96aecbf87765be83a56d5f717b5328f8030c957bb2782264febc8f020182edb"
+      "bytes": 9530,
+      "sha256": "e505331915d3f4fc6c2746fc078348f3b44e035a491de4d32bb023dd6e423eba"
     },
     {
       "id": "hairTone:lavender",
       "character": "girl",
       "file": "girl/hairTone-lavender.webp",
-      "bytes": 16548,
-      "sha256": "2427a23d764018f126e443dc6b89c6b967aef8e6440777dafe0b42a4d3fc2508"
+      "bytes": 9732,
+      "sha256": "6b4ff22169d1ed8acf621b3a290892b52d73d6c2b5a47cb4ee17534fe99e1c12"
     },
     {
       "id": "hairTone:blue",
       "character": "girl",
       "file": "girl/hairTone-blue.webp",
-      "bytes": 16288,
-      "sha256": "48b37f52e09c923e77a7c035c8d6a79275e7e8ba99d1698844af2cd297103b45"
+      "bytes": 9756,
+      "sha256": "d4c54b22857b1ccbdb33bdadf1f17c3cd54f3d8f678211818cc546415dec82ab"
     },
     {
       "id": "hairTone:mint",
       "character": "girl",
       "file": "girl/hairTone-mint.webp",
-      "bytes": 16588,
-      "sha256": "f6ae87b75a4b4047f49bdcd4ab297c0065f86231f1227beb0cb640b171a3fb49"
+      "bytes": 9802,
+      "sha256": "1159618a9b1bc217f29ca08d52bdf001a77404bdab84bfd253a85b706b605d96"
     },
     {
       "id": "hairTone:silver",
       "character": "girl",
       "file": "girl/hairTone-silver.webp",
-      "bytes": 16184,
-      "sha256": "339d7b6412178cb4541d1218bc91cc95367f45bd40c5eefaf202cd6b71da3c88"
+      "bytes": 9708,
+      "sha256": "397c4fbfce3664a7230d4c4f1f59af8b8c52dfdc7cbfc21b0f2ff70284806d3c"
     },
     {
       "id": "pose:idle",
       "character": "girl",
       "file": "girl/pose-idle.webp",
-      "bytes": 9950,
-      "sha256": "27b4c9bd721df537c14c9be444b75c23b0091949c67a633ff2fe3b317ad38128"
+      "bytes": 8550,
+      "sha256": "adfa356525756c58f6d9cdf5eb1dda931dae3dab933ab6e4e2e22315e8e01c2f"
     },
     {
       "id": "pose:tilt",
       "character": "girl",
       "file": "girl/pose-tilt.webp",
-      "bytes": 10016,
-      "sha256": "bda903b803e001cdcea866e195c4d28b24a4d0fbabf978ef5119e506aee8403a"
+      "bytes": 8604,
+      "sha256": "b711965eab775451eb9c958a84ec96d96408f874c5b8a98f9e8cd3c13cd9708f"
     },
     {
       "id": "pose:wave",
       "character": "girl",
       "file": "girl/pose-wave.webp",
-      "bytes": 10136,
-      "sha256": "06662495d261d1469affa883a7f1deef30a6acbbd05a63d716b6cee4cc38d91a"
+      "bytes": 8766,
+      "sha256": "a839175381ad8943f80ab6dd2e88a578db13e93248fb2c45b8b42b23ee4ef802"
     },
     {
       "id": "pose:cheer",
       "character": "girl",
       "file": "girl/pose-cheer.webp",
-      "bytes": 9598,
-      "sha256": "f5f06986fa3312818f0c99bf8a1dd8e093afd5c60b04db909d4dc1937b2d8267"
+      "bytes": 8246,
+      "sha256": "a6f613e3097aae96ae630f6294ea542d583331958a3269bf7c35f5f8ff380943"
     },
     {
       "id": "pose:think",
       "character": "girl",
       "file": "girl/pose-think.webp",
-      "bytes": 9544,
-      "sha256": "dfb7ee4a28fe12fac7a89e988a984546809f870e597e95b25381efc7d07ea8b1"
+      "bytes": 8214,
+      "sha256": "6a5aec467674ab847ebe8f5c99602f6b1324f1ee07be1b5ef3cae71ad2fe0d74"
     },
     {
       "id": "pose:heart",
       "character": "girl",
       "file": "girl/pose-heart.webp",
-      "bytes": 9432,
-      "sha256": "a1adb1e72bfbb1f6999587707345c10a8325b730d365985990295da37606aff5"
+      "bytes": 7982,
+      "sha256": "cd6224aadca20107cf76fb948b54ff34d6782aab8e102be505d06c30dc841db2"
     },
     {
       "id": "top:plain-top",
       "character": "girl",
       "file": "girl/top-plain-top.webp",
-      "bytes": 13848,
-      "sha256": "a8a165666266ed357bbca5c3c39ecbb792eafcebf57e3ebd2f16b23ffed18a78"
+      "bytes": 13066,
+      "sha256": "790a16739d4c08deb6d8f2ad12008f0867ca844fea486e2bb4f2ba8ca33bb03a"
     },
     {
       "id": "top:jacket-sunshine",
       "character": "girl",
       "file": "girl/top-jacket-sunshine.webp",
-      "bytes": 15202,
-      "sha256": "17079ba38b65f879a3a0b2b717695834af44d9e740da3835276b98302ef32c12"
+      "bytes": 14618,
+      "sha256": "c2f332478c9626c093c79f0aeb6b98aeb8ed2b377ec416d24e09eefaa7c7d697"
     },
     {
       "id": "top:jacket-lavender",
       "character": "girl",
       "file": "girl/top-jacket-lavender.webp",
-      "bytes": 14806,
-      "sha256": "6070590026902370c9422aa75dac3b12816cb7f06c84197245fe7d3a4c736e8a"
+      "bytes": 14252,
+      "sha256": "53261dde126d05b7986d4b5c1660b1077b4fa7a12d1c2fe9c079f7f65d8a7f38"
     },
     {
       "id": "top:jacket-navy",
       "character": "girl",
       "file": "girl/top-jacket-navy.webp",
-      "bytes": 14474,
-      "sha256": "483bb393ed3b88754b360aa27da110836512b699b1a3fcc0405353ace0efac23"
+      "bytes": 13934,
+      "sha256": "20a636bebeb31050b4f96014f589b3938ad1c7415160b1cce3f1f670cade2b30"
     },
     {
       "id": "top:jacket-mint",
       "character": "girl",
       "file": "girl/top-jacket-mint.webp",
-      "bytes": 14738,
-      "sha256": "eec71c1774b2b7c8a7b70f311059f3083a57f0e32d7d637fa8178185d40937f2"
+      "bytes": 14284,
+      "sha256": "f46f57ac4cc12ac5d720c813733c88e00e585e69475b14bfd814d105783b4136"
     },
     {
       "id": "top:jacket-rose",
       "character": "girl",
       "file": "girl/top-jacket-rose.webp",
-      "bytes": 14896,
-      "sha256": "464f15d49d2d8df960af27f47ac7dd539646869d8b74b591d0a441f39ebd953c"
+      "bytes": 14204,
+      "sha256": "432fed914f40ea73edf93bb9ce02f1e85b870b294a1270271fea4504d039309a"
     },
     {
       "id": "top:jacket-cream",
       "character": "girl",
       "file": "girl/top-jacket-cream.webp",
-      "bytes": 14858,
-      "sha256": "85ea7eeb1b74c24aab28c7b8422f46b8c8c6ae4bbf106784cff6ad9ad4bb4cc3"
+      "bytes": 14272,
+      "sha256": "af8ccbe8a6fd80272d72364e2501abe9351d1da3d37a538f5ea3724cb04369b9"
     },
     {
       "id": "bottom:plain-bottom",
       "character": "girl",
       "file": "girl/bottom-plain-bottom.webp",
-      "bytes": 13716,
-      "sha256": "9e9dcbccda94bc88dd5770a32d68bf4cb524ff1d85fcd47993277d7eba633d50"
+      "bytes": 14154,
+      "sha256": "655be0d78d309468f45a2374ca11cb1dc07e8138f66866895733de3c930ad328"
     },
     {
       "id": "bottom:pleated-lilac",
       "character": "girl",
       "file": "girl/bottom-pleated-lilac.webp",
-      "bytes": 13652,
-      "sha256": "a9f7d61784089b6b9ad89f1ac401ba726f8b632765350c52699fe1e6d25cb6a1"
+      "bytes": 14382,
+      "sha256": "54d5e18d3fbcb2819fc20a040df9ac52c154895bcc3c15ec43dfa12537ed653e"
     },
     {
       "id": "bottom:pleated-navy",
       "character": "girl",
       "file": "girl/bottom-pleated-navy.webp",
-      "bytes": 12998,
-      "sha256": "9967a4087ecc126eb28c5ff81d1e8fedac4740d74a178597aad4398b8b095ae5"
+      "bytes": 13574,
+      "sha256": "21d178c226db75073a099bdd108027a80bd2a5b55d51d10acae9f758968da7de"
     },
     {
       "id": "bottom:pleated-cream",
       "character": "girl",
       "file": "girl/bottom-pleated-cream.webp",
-      "bytes": 13932,
-      "sha256": "3b34d15e76aa9b0ab01d11f428974ae8588b590f7315ad86aad5e9595681d5c1"
+      "bytes": 14690,
+      "sha256": "afcc3c1975d9c0772f211fe5b52c15430d5e7de63725640cbaf4022cabc6755d"
     },
     {
       "id": "bottom:pleated-mint",
       "character": "girl",
       "file": "girl/bottom-pleated-mint.webp",
-      "bytes": 13698,
-      "sha256": "e4581f511c01f7e8c841fce20c47a38a9bddc0b50c8f7b3a094f45ba8e8f3d09"
+      "bytes": 14386,
+      "sha256": "a2c3d32d28b9229b011da50fa90b205ec7514047d7d515fc7c95c67e8d3dd60b"
     },
     {
       "id": "shoes:plain-shoes",
       "character": "girl",
       "file": "girl/shoes-plain-shoes.webp",
-      "bytes": 6916,
-      "sha256": "f5e574dd3cb2d7d3f5e40ff390431dcacae818d1d90ce530093dfb2c14a3f2ed"
+      "bytes": 7938,
+      "sha256": "180bb3e5e9b579e83dc1d9fac4bed029e9f99f04dbb985956da9d4400497e594"
     },
     {
       "id": "shoes:sneakers-pink",
       "character": "girl",
       "file": "girl/shoes-sneakers-pink.webp",
-      "bytes": 7656,
-      "sha256": "7fc97e70deff837e2ef67e8741e2c97b5ac2a024d65bd91bf32d61125b280632"
+      "bytes": 8812,
+      "sha256": "4b1f2503e263e03dee46f3657660ce1cffbbecafb03056d5ff5d26a0af7575b6"
     },
     {
       "id": "shoes:sneakers-white",
       "character": "girl",
       "file": "girl/shoes-sneakers-white.webp",
-      "bytes": 7728,
-      "sha256": "e534210ce294422fd9c5d0adace3d0ebf0d70cc0cb65434889d41c4455b9cd1a"
+      "bytes": 9226,
+      "sha256": "daef9f4ff659c18f26c49f905122f1ff19226f9acef6489b806987ca56dc62b7"
     },
     {
       "id": "shoes:sneakers-blue",
       "character": "girl",
       "file": "girl/shoes-sneakers-blue.webp",
-      "bytes": 7652,
-      "sha256": "caaf682be722c09eea73efde3e6dbe1c3a3ff4f453ea77f02923da2a2f2c2176"
+      "bytes": 9054,
+      "sha256": "f04c23fd97525b6ae3c826880cc6eaeb2af405f2c1374bcc0164ce26018198aa"
     },
     {
       "id": "shoes:sneakers-lavender",
       "character": "girl",
       "file": "girl/shoes-sneakers-lavender.webp",
-      "bytes": 7462,
-      "sha256": "5d2234ba1502ca460007dd528ceaebe5d628266cf97496dbb39b6f27e485e7d8"
+      "bytes": 8570,
+      "sha256": "095a1f82d4aad21a80ff70af73096e888cd49674e0ba558259c67ec7e3e5f0de"
     },
     {
       "id": "accessory:none",
       "character": "girl",
       "file": "girl/accessory-none.webp",
-      "bytes": 13024,
-      "sha256": "8303396fc6477e198b1d9442294c52162f1d266b7607f65d6a14d193ad4c7bb5"
+      "bytes": 8732,
+      "sha256": "9baa4c7409b49012312d54a173d08ebf4c89602ae0321ccea771d739c915057b"
     },
     {
       "id": "accessory:glasses-round",
       "character": "girl",
       "file": "girl/accessory-glasses-round.webp",
-      "bytes": 13878,
-      "sha256": "78d6f89ae56a0e5652f7070dae9dd4830aebafa151dd938b45cb74353a6e122c"
+      "bytes": 10262,
+      "sha256": "bb616691c2062b129a6cef562482e967d1395cb4ac966a1889613e3c97b85d4f"
     },
     {
       "id": "accessory:star-clip",
       "character": "girl",
       "file": "girl/accessory-star-clip.webp",
-      "bytes": 13306,
-      "sha256": "692ffedb7f04683ea4082514f28dcf1a3198b012c67b0f1cfcab3dbe876fd794"
+      "bytes": 8960,
+      "sha256": "54bf633c635b6d7d4250ae84894086ba81baf5922bf3c784819590bdbcb63e10"
     },
     {
       "id": "accessory:headphones",
       "character": "girl",
       "file": "girl/accessory-headphones.webp",
-      "bytes": 14176,
-      "sha256": "f8acfa4e41e93d783739bf1395a79e64c5b3b3083f29a3c1754701a75049e368"
+      "bytes": 9536,
+      "sha256": "216c062e0cddf88e839556789a5131941a7e411b8103a51aedc403d49dae2e05"
     },
     {
       "id": "top:hanbok-ivory",
       "character": "girl",
       "file": "girl/top-hanbok-ivory.webp",
-      "bytes": 13988,
-      "sha256": "34ddb99278952d8e1e2d09545c824c7cdb08a5ecfd02141f27670847bfef51b0"
+      "bytes": 12344,
+      "sha256": "20d4ca0bbe8e81e6ae7f454a9378a193b7bcd9bc5c6ff161c71249561731a9da"
     },
     {
       "id": "top:hanbok-sky",
       "character": "girl",
       "file": "girl/top-hanbok-sky.webp",
-      "bytes": 14052,
-      "sha256": "af350c00ca0e4c706e5044a6d915f4d0045f4d3d9807f9c5c7e59233b87790da"
+      "bytes": 12412,
+      "sha256": "e28aa9a585dbcf4f969e0f4e71e8186fddfac13728d3e255d5771c2719009ec9"
     },
     {
       "id": "top:hanbok-peach",
       "character": "girl",
       "file": "girl/top-hanbok-peach.webp",
-      "bytes": 14176,
-      "sha256": "4e70b9a1d9ef99a8831d9c3d48c5835a8e91e21360f02720669d2953b2fbbabd"
+      "bytes": 12484,
+      "sha256": "3cff34c25d7905708f67b4f881275812d06c4d00ab4683cae5865ffe675277cb"
     },
     {
       "id": "top:official-navy",
       "character": "girl",
       "file": "girl/top-official-navy.webp",
-      "bytes": 9260,
-      "sha256": "2e296fb73b58fd7219e775891d53212efe584104cfa4babeddf966d29484da25"
+      "bytes": 7938,
+      "sha256": "c1d36fe85426403d20d0c80d6bba5669dd2bfcdc11d05598fff15f6e3b8c0ca9"
     },
     {
       "id": "top:official-red",
       "character": "girl",
       "file": "girl/top-official-red.webp",
-      "bytes": 9582,
-      "sha256": "709f85b97d016a759893c439bab201f3b3b513cae4a15ab98e0a71d44713e8c5"
+      "bytes": 8222,
+      "sha256": "46ba3b1d24a3d30263adb04236ab217d1ae03e05382f61f3e54f8510f7ea621e"
     },
     {
       "id": "top:official-black",
       "character": "girl",
       "file": "girl/top-official-black.webp",
-      "bytes": 9106,
-      "sha256": "c198cb4be8299856a3956239e464ccb889f8fd11269aa0645ea962e5a83518e8"
+      "bytes": 7728,
+      "sha256": "944e9f97e922c411ed7ea84611df3b9fcca463cb32eafc3fbebb9c2d8270c231"
     },
     {
       "id": "top:summer-white",
       "character": "girl",
       "file": "girl/top-summer-white.webp",
-      "bytes": 14414,
-      "sha256": "7017494f66bcd4e2bdc51cb02fda9b4041b7ef88c64c0b8354f4715f6f614a69"
+      "bytes": 13612,
+      "sha256": "5205801d564870642ae8ca5568a04a6899ee2e4a2986c994a81e7e34c2c24a39"
     },
     {
       "id": "top:summer-navy",
       "character": "girl",
       "file": "girl/top-summer-navy.webp",
-      "bytes": 14858,
-      "sha256": "765b1efb38633943d962a4832a4ca0e169327b8ba51699f9f2b6b26c4c265026"
+      "bytes": 14014,
+      "sha256": "d04a5a007e697cc578df177e486c3dddcf1b627a50ffd220ac05a94d9d3bc93a"
     },
     {
       "id": "bottom:chima-rose",
       "character": "girl",
       "file": "girl/bottom-chima-rose.webp",
-      "bytes": 13194,
-      "sha256": "716e9597595ee6a5942666d6212525696aee35ccc9db5dd00154366b7ecaccce"
+      "bytes": 13494,
+      "sha256": "75ee320bd731c586edc1082e29720067c648944364b60e1dea3ad26c3761e6a0"
     },
     {
       "id": "bottom:chima-navy",
       "character": "girl",
       "file": "girl/bottom-chima-navy.webp",
-      "bytes": 12610,
-      "sha256": "dbe7703e3dc8fd661e9047958b5a2886a45d5c7cfdf93b98768f7caea3187e09"
+      "bytes": 13058,
+      "sha256": "00cf64ff026d8a2d06fb274d8734ad9484bd1d7b33d9c9d33bd8719608154f22"
     },
     {
       "id": "bottom:chima-jade",
       "character": "girl",
       "file": "girl/bottom-chima-jade.webp",
-      "bytes": 13338,
-      "sha256": "0d7138fa5406d82dbad3f85d942e1e02892338c61910010513a1b937e03f93de"
+      "bytes": 13584,
+      "sha256": "3f07a702b2901ee284d3ad3d0f78f66acc5d2b02b648031ab04892a8003c8f97"
     },
     {
       "id": "bottom:summer-shorts",
       "character": "girl",
       "file": "girl/bottom-summer-shorts.webp",
-      "bytes": 12662,
-      "sha256": "58101085b91f4c24ae793219fa396d1ced15750e8712252f49cd82130330e51d"
+      "bytes": 13272,
+      "sha256": "dcfe5772af629f7ef633ed7b0fb7796664bee0c34e665b05d529f05b0399e190"
     },
     {
       "id": "accessory:official-samo",
       "character": "girl",
       "file": "girl/accessory-official-samo.webp",
-      "bytes": 14406,
-      "sha256": "4636c25e276f38a3d31a37b2d2f339e97573f1f0e135d8e35b445ebe12bd4e72"
+      "bytes": 10814,
+      "sha256": "805dd319ff5d1a4cca287231c081ef7dc3e790cd62d41b1618eb4234bcc1db07"
     },
     {
       "id": "accessory:official-gat",
       "character": "girl",
       "file": "girl/accessory-official-gat.webp",
-      "bytes": 14936,
-      "sha256": "f904efa14aa70a51b2a5574477b6b4c71750daf683c70442da256da93c031e6d"
+      "bytes": 10816,
+      "sha256": "1757315a912c6a947e6f8473a29bc838d07fa47180b44ea957ca323489279782"
     },
     {
       "id": "top:winter-hoodie",
       "character": "girl",
       "file": "girl/top-winter-hoodie.webp",
-      "bytes": 15094,
-      "sha256": "d43d47edd30c4caa5e4aa10b3517d0b7d22f001dd1dfcb71692abad22ed6ba9e"
+      "bytes": 14738,
+      "sha256": "715dbe49ab3d6bd20a435267035e96b355f91d38daccf0948d290c87c8c59491"
     },
     {
       "id": "top:winter-halfzip",
       "character": "girl",
       "file": "girl/top-winter-halfzip.webp",
-      "bytes": 14786,
-      "sha256": "3df20203f171d37138b8fd6952a534c3286ed9889ece7b724aa158c5ac8946c3"
+      "bytes": 14054,
+      "sha256": "98c46058d9e0e0cb644044307ec5ff062ce87bb9deb16e598438a091b958f699"
     },
     {
       "id": "bottom:winter-joggers",
       "character": "girl",
       "file": "girl/bottom-winter-joggers.webp",
-      "bytes": 13098,
-      "sha256": "a4c71ea5fb76fde1c16fc1005030ab8e22f490827134935ecb8383cb1d3ac0c5"
+      "bytes": 14196,
+      "sha256": "9c7e246d670418b2ad1c2ba04c54b5484ab218f663432fd6bd70cc016ca0743e"
     },
     {
       "id": "character:boy",
       "character": "boy",
       "file": "boy/character-boy.webp",
-      "bytes": 10032,
-      "sha256": "604db363869108f3abbdb2dd1316aaadb51228f04e41679c50fd05ea49e92fd9"
+      "bytes": 8606,
+      "sha256": "732223e4a447f55568159e558e85e5aca3e6139cdbcf1bfd37115824ef0ab9ee"
     },
     {
       "id": "skinTone:original",
       "character": "boy",
       "file": "boy/skinTone-original.webp",
-      "bytes": 15656,
-      "sha256": "cb410635bc6382cfca54dadc06fdb193233a6c3efd890ca85edc5e9e9b9281c7"
+      "bytes": 9984,
+      "sha256": "798af06160a7f06062b74628dea460c10ed5ee49363647b87b8a44df6c525d20"
     },
     {
       "id": "skinTone:fair",
       "character": "boy",
       "file": "boy/skinTone-fair.webp",
-      "bytes": 15572,
-      "sha256": "5b262bb383cbce8aea527c51dbc32c66be83fa349217c3e4ebf6577656f4fab3"
+      "bytes": 9900,
+      "sha256": "5b7739f5bb802b712f1a41a38f26b50350dde55b1e4c5c4a9107bde1d76fe057"
     },
     {
       "id": "skinTone:peach",
       "character": "boy",
       "file": "boy/skinTone-peach.webp",
-      "bytes": 15450,
-      "sha256": "b7201d28dd63c7cf435e5adf60ed43e6c24adb123c775671012952f8d4521f3e"
+      "bytes": 9918,
+      "sha256": "3c682b574f4d35a44a59179da8bc4d1424b429628dbccb4a3016f3b455ae4100"
     },
     {
       "id": "skinTone:warm",
       "character": "boy",
       "file": "boy/skinTone-warm.webp",
-      "bytes": 15400,
-      "sha256": "60c1846328a52c276e336218f9ee797049c53228da0661e0b616c1c442ddbe6f"
+      "bytes": 9952,
+      "sha256": "e22b2a8b7f8a42c4ec162654b98100388a8d30d42e0f9ff7be65d7d1601c2f1d"
     },
     {
       "id": "skinTone:honey",
       "character": "boy",
       "file": "boy/skinTone-honey.webp",
-      "bytes": 15404,
-      "sha256": "ef9ac2653be37960555b274d60b251de6a68e75ae007b45644bf815865799d28"
+      "bytes": 9810,
+      "sha256": "c30221c1c15f8d24a1e1b15f7b44de62a807946ac23575257c394d6fd7eb420d"
     },
     {
       "id": "skinTone:tan",
       "character": "boy",
       "file": "boy/skinTone-tan.webp",
-      "bytes": 15234,
-      "sha256": "5c32210c1a1a5d2002d94cd40d32aa81e544f2a25b214d4d8bf5b4e272939b10"
+      "bytes": 9754,
+      "sha256": "0687806649fda4ca218707ed65081ec5705a621d0db888544ba4705b276be851"
     },
     {
       "id": "skinTone:brown",
       "character": "boy",
       "file": "boy/skinTone-brown.webp",
-      "bytes": 14554,
-      "sha256": "82e87a6cc33b51a2738e8fe6c76148844601410b9d29053f7d2e766b067e8f54"
+      "bytes": 9506,
+      "sha256": "908e7dac280d1075dfa2864cf170f16ed22a0d266a35e89bfd6d15cbc42414bb"
     },
     {
       "id": "skinTone:deep",
       "character": "boy",
       "file": "boy/skinTone-deep.webp",
-      "bytes": 13974,
-      "sha256": "11807e92ceaa5288e01c9a1026f344a83335922ae1c5a4de2ce85614a4aab032"
+      "bytes": 9110,
+      "sha256": "2b5eb732a88ce418040d2f7c1ac858ab36616b3c9e3db1787ec6ced98dcb985b"
     },
     {
       "id": "faceShape:natural",
       "character": "boy",
       "file": "boy/faceShape-natural.webp",
-      "bytes": 15656,
-      "sha256": "cb410635bc6382cfca54dadc06fdb193233a6c3efd890ca85edc5e9e9b9281c7"
+      "bytes": 9984,
+      "sha256": "798af06160a7f06062b74628dea460c10ed5ee49363647b87b8a44df6c525d20"
     },
     {
       "id": "faceShape:round",
       "character": "boy",
       "file": "boy/faceShape-round.webp",
-      "bytes": 15990,
-      "sha256": "99ba8dbf743108b615d1d951cdb56418e12894a8b9e4d97ff7ce8b475b400601"
+      "bytes": 10858,
+      "sha256": "784ae2f0b8293faf4a219c101368c0face7a9abe832ed0e65309e3fd4f253e7f"
     },
     {
       "id": "faceShape:slim",
       "character": "boy",
       "file": "boy/faceShape-slim.webp",
-      "bytes": 15098,
-      "sha256": "5f270283e298a80e94ab4212b922f0c053bec6256e9a79131790a57da7eb857a"
+      "bytes": 9678,
+      "sha256": "edfd1dc466bf9b982851cbbc822343dc018e3fde6342665d4e3ffa163de24d27"
     },
     {
       "id": "expression:natural",
       "character": "boy",
       "file": "boy/expression-natural.webp",
-      "bytes": 15656,
-      "sha256": "cb410635bc6382cfca54dadc06fdb193233a6c3efd890ca85edc5e9e9b9281c7"
+      "bytes": 9984,
+      "sha256": "798af06160a7f06062b74628dea460c10ed5ee49363647b87b8a44df6c525d20"
     },
     {
       "id": "expression:calm",
       "character": "boy",
       "file": "boy/expression-calm.webp",
-      "bytes": 15562,
-      "sha256": "bf1dcb854d421be35bd993109e28b884b2249b2ef3ea92ff0d4b1dcafaaa8e46"
+      "bytes": 10006,
+      "sha256": "7076ab4d974a5b5e12e0d33ddc92afa9d07ea2099c374200bf5e30c89283c5bd"
     },
     {
       "id": "expression:smile",
       "character": "boy",
       "file": "boy/expression-smile.webp",
-      "bytes": 15600,
-      "sha256": "6ee7c6f00f4e054261902512f9f6467df85a57d4b5bdebcdcb53246947164104"
+      "bytes": 9860,
+      "sha256": "f62eb7cf7650060483c3bfbc868fc3dcb52cfe0bd78ff94aae9598acb03ffbdb"
     },
     {
       "id": "expression:curious",
       "character": "boy",
       "file": "boy/expression-curious.webp",
-      "bytes": 15784,
-      "sha256": "3aa726c670d023fefeac29ce03a29f5da207908455825bed462c481fbedaa247"
+      "bytes": 10146,
+      "sha256": "b6f13841d83a39ef90cfe052a42de2a8e0db0ca6b01974834a20dbecd8be6901"
     },
     {
       "id": "expression:bright",
       "character": "boy",
       "file": "boy/expression-bright.webp",
-      "bytes": 15746,
-      "sha256": "7cb0d5d3dedcade85a64386729733b6330554f751386f800ddae9529d41a1e57"
+      "bytes": 10082,
+      "sha256": "4af072110e0f5df84838020168da9be15431250b9249036d635da8149433a56a"
     },
     {
       "id": "expression:determined",
       "character": "boy",
       "file": "boy/expression-determined.webp",
-      "bytes": 15716,
-      "sha256": "ffbac818a8ea4b8ddc43bc02c31c4fbfe249bc7885d2121a28647e1f38ed258a"
+      "bytes": 10046,
+      "sha256": "1fb3bb9d37f2b4998f4a721ae883a618ddb9f7084a4e5ec53e375c34aceefd66"
     },
     {
       "id": "hairStyle:curtain",
       "character": "boy",
       "file": "boy/hairStyle-curtain.webp",
-      "bytes": 13052,
-      "sha256": "3de02c6b980148254bb36353f6134efe2ea93da2ccec54888fd2cf9a0741b608"
+      "bytes": 8902,
+      "sha256": "a17476f6586e7f2f2704405101edd0df145bb948ca663bae21c47f01fbc3b444"
     },
     {
       "id": "hairStyle:volume",
       "character": "boy",
       "file": "boy/hairStyle-volume.webp",
-      "bytes": 14714,
-      "sha256": "ba25db9d9fec6626543879140026a6499a6d9108c695b35264595b265bac86ea"
+      "bytes": 9218,
+      "sha256": "4e40a6c5723c8c394fc2a2b7ef62f5abe7c8784fe003c08c29937a9ef21f7226"
     },
     {
       "id": "hairStyle:wave",
       "character": "boy",
       "file": "boy/hairStyle-wave.webp",
-      "bytes": 14192,
-      "sha256": "02693fc4ff009928b1c28201a0e62719ea16b98344f12ce47a3d7346eb309966"
+      "bytes": 9242,
+      "sha256": "772808ab52d9338ed794cd9bfdfe9453b4a57f44dc51a5ad915f61ef253a5afe"
     },
     {
       "id": "hairStyle:crop",
       "character": "boy",
       "file": "boy/hairStyle-crop.webp",
-      "bytes": 13760,
-      "sha256": "1c8a3f42e4d75cff1eaaefff93b502d5915c8929e045caa010214b83ecbad803"
+      "bytes": 8924,
+      "sha256": "24dd14ed40a4a50f6ee6fd2ba5ed9e10f196f280cb30d4c7f43a035a7dd1fe5c"
     },
     {
       "id": "hairStyle:toben",
       "character": "boy",
       "file": "boy/hairStyle-toben.webp",
-      "bytes": 12868,
-      "sha256": "68f918ef09183da06c9075ee23e851bab3933b188ac922c7f9bd9d94485fbbe1"
+      "bytes": 9038,
+      "sha256": "b8f24cda2da7d319d0663c238d2d2b51a71f071c27cf1106ee2fc53eac5dd0c5"
     },
     {
       "id": "hairTone:original",
       "character": "boy",
       "file": "boy/hairTone-original.webp",
-      "bytes": 13052,
-      "sha256": "3de02c6b980148254bb36353f6134efe2ea93da2ccec54888fd2cf9a0741b608"
+      "bytes": 8902,
+      "sha256": "a17476f6586e7f2f2704405101edd0df145bb948ca663bae21c47f01fbc3b444"
     },
     {
       "id": "hairTone:black",
       "character": "boy",
       "file": "boy/hairTone-black.webp",
-      "bytes": 12510,
-      "sha256": "b198d38f4616ba031cb932b48254a0d5e7ca8b90eda6af83e1441171278af8a6"
+      "bytes": 8400,
+      "sha256": "126c9804b02101c31e578a34e7723d566e2fd737ff54f61cbbe48af6e022f93c"
     },
     {
       "id": "hairTone:chestnut",
       "character": "boy",
       "file": "boy/hairTone-chestnut.webp",
-      "bytes": 14674,
-      "sha256": "91820f7f7584f0a66a0e46c580148dac9baba09722160f6bbc5c8f0394685d04"
+      "bytes": 9208,
+      "sha256": "db928e7d442634913daf2f84341d1f13ba165bceda5915b21fb2fdd6a09255e1"
     },
     {
       "id": "hairTone:chocolate",
       "character": "boy",
       "file": "boy/hairTone-chocolate.webp",
-      "bytes": 13274,
-      "sha256": "7e533025d479a3f2658fd81df5d80bafa4d8de6e403b740a60d0a0fd45967335"
+      "bytes": 8726,
+      "sha256": "834cd65c8b3bf8cdc0cd9b2c7fa598b7b57b184a13148d33f47a90f649e0ad1e"
     },
     {
       "id": "hairTone:copper",
       "character": "boy",
       "file": "boy/hairTone-copper.webp",
-      "bytes": 16360,
-      "sha256": "5c80225905dcce50314449065e704a90c61631399c904d7ee1acccad099e2ee5"
+      "bytes": 9916,
+      "sha256": "dac3ea22d7db348084b2eaf9a7a7c870c9f0b70a47e002b98956270d244cadb0"
     },
     {
       "id": "hairTone:blonde",
       "character": "boy",
       "file": "boy/hairTone-blonde.webp",
-      "bytes": 17264,
-      "sha256": "fe7eeb1b9097ee170561a9ddd808c93cca586816ed54cf875f83fa0da4794579"
+      "bytes": 10366,
+      "sha256": "a731d23d7b2669b7f52d234ae5d905031e4b3f246b2968a54a36350d0f930192"
     },
     {
       "id": "hairTone:platinum",
       "character": "boy",
       "file": "boy/hairTone-platinum.webp",
-      "bytes": 16692,
-      "sha256": "cd654aaf1c4b6864b58ef028f6c75c147edad7eb4d7abf38eb9e93955b0a6fc9"
+      "bytes": 10212,
+      "sha256": "07efad887a4f05572498c2babfa987e59d8106a52da70a62c809dee70788ce60"
     },
     {
       "id": "hairTone:rose",
       "character": "boy",
       "file": "boy/hairTone-rose.webp",
-      "bytes": 16272,
-      "sha256": "cc6002302a7f32133bd6c5004717a80ef2251fccaf0360df0feff114f1441f70"
+      "bytes": 9774,
+      "sha256": "71e3248e3acae7103aae0ce7ba31efe2e007053956984e55c72dbcb6741ed9f7"
     },
     {
       "id": "hairTone:lavender",
       "character": "boy",
       "file": "boy/hairTone-lavender.webp",
-      "bytes": 16456,
-      "sha256": "3f2edf94c080008ffcddce880e9c5d3784a8fb355dccd63e6c60a4caf7d55c9c"
+      "bytes": 10014,
+      "sha256": "ac445ea30eebc94339f7f715b8cdac42f8bc36fecc90667da8dcf9c72a4d123d"
     },
     {
       "id": "hairTone:blue",
       "character": "boy",
       "file": "boy/hairTone-blue.webp",
-      "bytes": 16062,
-      "sha256": "f5ad7bc183d0e6be0c30732c807ab4482b24f518033ffb2d43bfd6dc5fbe27ef"
+      "bytes": 9818,
+      "sha256": "18bebadbe934c321dc6e3c273a724b7817f9ecd0e1f66771b6d0cf5c609bb084"
     },
     {
       "id": "hairTone:mint",
       "character": "boy",
       "file": "boy/hairTone-mint.webp",
-      "bytes": 16434,
-      "sha256": "bad81f86a67580ac459eb56148352ae59c5725b8b1b0e1b7904d6f3d26021280"
+      "bytes": 10100,
+      "sha256": "f0e97e8b60598f0d2bd42207a14ac3fac1881aad635c42228838cb10bceb36e3"
     },
     {
       "id": "hairTone:silver",
       "character": "boy",
       "file": "boy/hairTone-silver.webp",
-      "bytes": 16280,
-      "sha256": "bbabce203c6ba253ad31ac0e93d02ab1135f32416ffa7f424ac6cc65a78aac13"
+      "bytes": 9850,
+      "sha256": "b8e7728af075874386046e8282946bf802756adf549f316a6fbae6d08ab8e1cf"
     },
     {
       "id": "pose:idle",
       "character": "boy",
       "file": "boy/pose-idle.webp",
-      "bytes": 10032,
-      "sha256": "604db363869108f3abbdb2dd1316aaadb51228f04e41679c50fd05ea49e92fd9"
+      "bytes": 8606,
+      "sha256": "732223e4a447f55568159e558e85e5aca3e6139cdbcf1bfd37115824ef0ab9ee"
     },
     {
       "id": "pose:tilt",
       "character": "boy",
       "file": "boy/pose-tilt.webp",
-      "bytes": 9936,
-      "sha256": "ad1f382a8a1a0e64a549dfc7350cf66d709a82f569765cad607aa92a38cab335"
+      "bytes": 8678,
+      "sha256": "b63cad7e1bf37b4c6ae36469c679423445ffdfc9aba122e44dced28b9921b2cb"
     },
     {
       "id": "pose:wave",
       "character": "boy",
       "file": "boy/pose-wave.webp",
-      "bytes": 10202,
-      "sha256": "82085046bdacdbc1775b4e3d3e7ab109aa96d055fb522fd7e4411f8f29809e3c"
+      "bytes": 8800,
+      "sha256": "0c179c4b4f2969c6bcf7dd7cbac7ad78edcb48a1978f6c8a7d4ab4ba6b0c763d"
     },
     {
       "id": "pose:cheer",
       "character": "boy",
       "file": "boy/pose-cheer.webp",
-      "bytes": 9638,
-      "sha256": "01f70856cf604807acb4a298605e6aeb1bd8cc48f25faf7cad9d3fa756a812d1"
+      "bytes": 8274,
+      "sha256": "f45daf5201cb7e89a8bcdebbe766e4525410c848e92977e270ae00dbabfc8246"
     },
     {
       "id": "pose:think",
       "character": "boy",
       "file": "boy/pose-think.webp",
-      "bytes": 9570,
-      "sha256": "b59e2f8b21feb760d493b14694e7014500831064f62b79569965652bec1df2e0"
+      "bytes": 8248,
+      "sha256": "b38415e87679c6fac739362c913e45865ad8e773c748724d809ccbb19d103470"
     },
     {
       "id": "pose:heart",
       "character": "boy",
       "file": "boy/pose-heart.webp",
-      "bytes": 9474,
-      "sha256": "0b03ba2bd7c70aedecaf1e41b629f4bd39c6f0c7dd0f7edf1372f72359704e73"
+      "bytes": 8038,
+      "sha256": "bcaee34d6ae5f2065f570c1d1308b32e1875894e776bdfaa7cd6c9f8ef97841b"
     },
     {
       "id": "top:plain-top",
       "character": "boy",
       "file": "boy/top-plain-top.webp",
-      "bytes": 13578,
-      "sha256": "2c54a4969997d17d28f8459abdb66e6b21a8e33f902d52b990c12ee1a306bbcd"
+      "bytes": 12542,
+      "sha256": "667fa4db106c13bd1c7e0a270613589abce1ccc71da0445d3951a58fd531af08"
     },
     {
       "id": "top:jacket-sunshine",
       "character": "boy",
       "file": "boy/top-jacket-sunshine.webp",
-      "bytes": 14866,
-      "sha256": "2efee2208787d9283007b7040e11bf457df9f08633d90c63bf264721495d5155"
+      "bytes": 13910,
+      "sha256": "4fde850df39b663cfdf2c07acfa7a7ea80147460346a677f4688297e4d6a1553"
     },
     {
       "id": "top:jacket-lavender",
       "character": "boy",
       "file": "boy/top-jacket-lavender.webp",
-      "bytes": 14278,
-      "sha256": "bf00b8af7302b1beac58eef2bbd3d53f115a95fcb081b538cd05df4ac76d7457"
+      "bytes": 13516,
+      "sha256": "1d6e3516ccc8cde11bc968ecce339518ab916022d5254cd94aca4a432bc7e871"
     },
     {
       "id": "top:jacket-navy",
       "character": "boy",
       "file": "boy/top-jacket-navy.webp",
-      "bytes": 14188,
-      "sha256": "fa8b8cb7aec659480904d8a148a49f3c4f8fe83b8cb8afd6749dcd68a39b7f95"
+      "bytes": 13368,
+      "sha256": "50966c790abf3cda0c250a3d10046028c7c182b55097a86998e534869fa26efe"
     },
     {
       "id": "top:jacket-mint",
       "character": "boy",
       "file": "boy/top-jacket-mint.webp",
-      "bytes": 14446,
-      "sha256": "2494d757eca8c36cb271660502285543495dac96bcded7236e24ec14442d8218"
+      "bytes": 13586,
+      "sha256": "e646fb5d8d3321eb09d5bc6453664765bc376ed136d790778784237657f5b342"
     },
     {
       "id": "top:jacket-rose",
       "character": "boy",
       "file": "boy/top-jacket-rose.webp",
-      "bytes": 14404,
-      "sha256": "d3969547acbb38c2297d7f45fe6ba616fae42547df57192c834ef2ffe2fc3854"
+      "bytes": 13608,
+      "sha256": "2ccb561ac0175bc86623c151e21d3021ef668e8da95d2a26c1606370bd5356cb"
     },
     {
       "id": "top:jacket-cream",
       "character": "boy",
       "file": "boy/top-jacket-cream.webp",
-      "bytes": 14432,
-      "sha256": "7d10531f0ca909f7200053fb78e327ec7e9f73a750c4a73b6d1838f552b1600f"
+      "bytes": 13576,
+      "sha256": "a91d177ef603d95910aaf5c084e415e7b1788ddfc0487b8432f6a2baf5e8b703"
     },
     {
       "id": "bottom:plain-bottom",
       "character": "boy",
       "file": "boy/bottom-plain-bottom.webp",
-      "bytes": 13716,
-      "sha256": "9e9dcbccda94bc88dd5770a32d68bf4cb524ff1d85fcd47993277d7eba633d50"
-    },
-    {
-      "id": "bottom:pleated-lilac",
-      "character": "boy",
-      "file": "boy/bottom-pleated-lilac.webp",
-      "bytes": 13652,
-      "sha256": "a9f7d61784089b6b9ad89f1ac401ba726f8b632765350c52699fe1e6d25cb6a1"
-    },
-    {
-      "id": "bottom:pleated-navy",
-      "character": "boy",
-      "file": "boy/bottom-pleated-navy.webp",
-      "bytes": 12998,
-      "sha256": "9967a4087ecc126eb28c5ff81d1e8fedac4740d74a178597aad4398b8b095ae5"
-    },
-    {
-      "id": "bottom:pleated-cream",
-      "character": "boy",
-      "file": "boy/bottom-pleated-cream.webp",
-      "bytes": 13932,
-      "sha256": "3b34d15e76aa9b0ab01d11f428974ae8588b590f7315ad86aad5e9595681d5c1"
-    },
-    {
-      "id": "bottom:pleated-mint",
-      "character": "boy",
-      "file": "boy/bottom-pleated-mint.webp",
-      "bytes": 13698,
-      "sha256": "e4581f511c01f7e8c841fce20c47a38a9bddc0b50c8f7b3a094f45ba8e8f3d09"
+      "bytes": 14154,
+      "sha256": "655be0d78d309468f45a2374ca11cb1dc07e8138f66866895733de3c930ad328"
     },
     {
       "id": "shoes:plain-shoes",
       "character": "boy",
       "file": "boy/shoes-plain-shoes.webp",
-      "bytes": 6916,
-      "sha256": "f5e574dd3cb2d7d3f5e40ff390431dcacae818d1d90ce530093dfb2c14a3f2ed"
+      "bytes": 7938,
+      "sha256": "180bb3e5e9b579e83dc1d9fac4bed029e9f99f04dbb985956da9d4400497e594"
     },
     {
       "id": "shoes:sneakers-pink",
       "character": "boy",
       "file": "boy/shoes-sneakers-pink.webp",
-      "bytes": 7656,
-      "sha256": "7fc97e70deff837e2ef67e8741e2c97b5ac2a024d65bd91bf32d61125b280632"
+      "bytes": 8812,
+      "sha256": "4b1f2503e263e03dee46f3657660ce1cffbbecafb03056d5ff5d26a0af7575b6"
     },
     {
       "id": "shoes:sneakers-white",
       "character": "boy",
       "file": "boy/shoes-sneakers-white.webp",
-      "bytes": 7728,
-      "sha256": "e534210ce294422fd9c5d0adace3d0ebf0d70cc0cb65434889d41c4455b9cd1a"
+      "bytes": 9226,
+      "sha256": "daef9f4ff659c18f26c49f905122f1ff19226f9acef6489b806987ca56dc62b7"
     },
     {
       "id": "shoes:sneakers-blue",
       "character": "boy",
       "file": "boy/shoes-sneakers-blue.webp",
-      "bytes": 7652,
-      "sha256": "caaf682be722c09eea73efde3e6dbe1c3a3ff4f453ea77f02923da2a2f2c2176"
+      "bytes": 9054,
+      "sha256": "f04c23fd97525b6ae3c826880cc6eaeb2af405f2c1374bcc0164ce26018198aa"
     },
     {
       "id": "shoes:sneakers-lavender",
       "character": "boy",
       "file": "boy/shoes-sneakers-lavender.webp",
-      "bytes": 7462,
-      "sha256": "5d2234ba1502ca460007dd528ceaebe5d628266cf97496dbb39b6f27e485e7d8"
+      "bytes": 8570,
+      "sha256": "095a1f82d4aad21a80ff70af73096e888cd49674e0ba558259c67ec7e3e5f0de"
     },
     {
       "id": "accessory:none",
       "character": "boy",
       "file": "boy/accessory-none.webp",
-      "bytes": 12806,
-      "sha256": "a587a1a8a9a07fe3f9a9e1a754cb308ae7d2888bf3095a667c4e78633bea7e64"
+      "bytes": 9022,
+      "sha256": "661bada2b37a04820c657c68c30c19412dc7778f4c23f214a0867b01b52fd79f"
     },
     {
       "id": "accessory:glasses-round",
       "character": "boy",
       "file": "boy/accessory-glasses-round.webp",
-      "bytes": 13758,
-      "sha256": "d093c7575f4db70daa07dd8980d94bbb29de22121eb837688853e2d9b01b0131"
+      "bytes": 10594,
+      "sha256": "fa37594133417fb12c60b021da58c2d3d364501f6368494e1a72e71d1771adf1"
     },
     {
       "id": "accessory:star-clip",
       "character": "boy",
       "file": "boy/accessory-star-clip.webp",
-      "bytes": 13212,
-      "sha256": "dd7f2736d3c41c0fc78a1dc94b65cde70783818984660e90879d3020c88ea131"
+      "bytes": 9186,
+      "sha256": "467e60775bf033f8aba2db13ef1f96f91d6c7e1df569efd9e8a42fc72bc4d571"
     },
     {
       "id": "accessory:headphones",
       "character": "boy",
       "file": "boy/accessory-headphones.webp",
-      "bytes": 13648,
-      "sha256": "b057bdf21ac48c1c414b11ad67cf62da6d4c523a6ead16ed8eca0f3028fd007f"
+      "bytes": 9742,
+      "sha256": "1dac1ef28aaf0ce04ded800658d7c3ecf16350d0aecc5340abb877fcc213e7ba"
     },
     {
       "id": "top:hanbok-ivory",
       "character": "boy",
       "file": "boy/top-hanbok-ivory.webp",
-      "bytes": 13438,
-      "sha256": "7d792ba9ab33fa98fddff0ed38c6be947363f6f6a845ecad1589323378739b62"
+      "bytes": 12892,
+      "sha256": "548c4e239be473ef2f28fe364a6d1e06150f9f319e07ef7296608286f4dd0070"
     },
     {
       "id": "top:hanbok-sky",
       "character": "boy",
       "file": "boy/top-hanbok-sky.webp",
-      "bytes": 13786,
-      "sha256": "ba0c48e4d846acc2c8a8610406f715ea04a4ef5739ce30b5e5028b4e5f05ecd0"
+      "bytes": 13100,
+      "sha256": "d8584c706caf599f40078e204f68d52a1beb39540524d34dd15df14dc9b4f143"
     },
     {
       "id": "top:hanbok-peach",
       "character": "boy",
       "file": "boy/top-hanbok-peach.webp",
-      "bytes": 13680,
-      "sha256": "020ed06b3ff714c273dd42dd9ce8ffbba2d896a0d2e1f6baeb5182c0746adf8e"
+      "bytes": 13016,
+      "sha256": "aec60e24ff2969d81c14625b831fa785e35d12dad06dbecada96402da09b41a3"
     },
     {
       "id": "top:official-navy",
       "character": "boy",
       "file": "boy/top-official-navy.webp",
-      "bytes": 9276,
-      "sha256": "a86ad3954e0ad344b8adabb318222387d8048c343622e0fed1b9ad4c86520219"
+      "bytes": 7992,
+      "sha256": "c6af27763e6f03a6c9b61b7888c3ecee7ed3aa03770c46c4533c762cac98d75e"
     },
     {
       "id": "top:official-red",
       "character": "boy",
       "file": "boy/top-official-red.webp",
-      "bytes": 9624,
-      "sha256": "05e4112e3ca8d1dedd099ae573782fdfb463dce0fc44775290a67128d261ce86"
+      "bytes": 8298,
+      "sha256": "2a524b8447ed929cbf9a512302649231fe151ede1cc029f812a1a37ba46c2949"
     },
     {
       "id": "top:official-black",
       "character": "boy",
       "file": "boy/top-official-black.webp",
-      "bytes": 9114,
-      "sha256": "1b1b194b5148375118736e4fe8eaf5e08f39c62af985db3bfd65d92f5613138b"
+      "bytes": 7836,
+      "sha256": "4cf4d538a7e96ed5ee563de7861cf2fe39dc0f877333df9f35b1fae25b84b46c"
     },
     {
       "id": "top:summer-white",
       "character": "boy",
       "file": "boy/top-summer-white.webp",
-      "bytes": 14070,
-      "sha256": "1c5f5ad3dca8f6a30e3bbcaa8a6b2351a91f91ba08afcbcbb4b5f30a0c887e6f"
+      "bytes": 13034,
+      "sha256": "c24908428c6a1b7dab93eb081cc3b3491d080b24609c416373e4442c48f3c2aa"
     },
     {
       "id": "top:summer-navy",
       "character": "boy",
       "file": "boy/top-summer-navy.webp",
-      "bytes": 14454,
-      "sha256": "07ff8998a6c09e8392f6112e9db5f2b3fb57eb01330167d6f7a0aea2319e49c6"
+      "bytes": 13458,
+      "sha256": "2f521fdd91bbfea7fa049e7ab6e2963189c352d182cef4b09edd65a1ff7c4caa"
     },
     {
       "id": "bottom:baji-navy",
       "character": "boy",
       "file": "boy/bottom-baji-navy.webp",
-      "bytes": 13520,
-      "sha256": "c40685603b1ec5bfbdbd714ce0afb84e4119ad0dbeedc6a8fe99f5efb493dc86"
+      "bytes": 14004,
+      "sha256": "e42112da8ce6f2e52808f20d86cd68bc9d56ab8d1b1d997d0d4efa5c823bc9c3"
     },
     {
       "id": "bottom:baji-cream",
       "character": "boy",
       "file": "boy/bottom-baji-cream.webp",
-      "bytes": 14880,
-      "sha256": "7b7ebff149ccbb9246e705162ef92d46fb4d708ebce808c7c6cfdca7cc3a9a41"
+      "bytes": 15274,
+      "sha256": "f155a16609755887cc6ea922c4a5c23f63ba58b493fbe8cec4c62282e60277fc"
     },
     {
       "id": "bottom:baji-charcoal",
       "character": "boy",
       "file": "boy/bottom-baji-charcoal.webp",
-      "bytes": 13122,
-      "sha256": "b244719e4ace74c3b8bec5a5858f37e9aea934371a4fbb79d62cdd03fa028d42"
+      "bytes": 13794,
+      "sha256": "d916ccf5ce696296c75aa70108b11238f2b48142cf44c299346543bcb66d93f6"
     },
     {
       "id": "bottom:summer-shorts",
       "character": "boy",
       "file": "boy/bottom-summer-shorts.webp",
-      "bytes": 12662,
-      "sha256": "58101085b91f4c24ae793219fa396d1ced15750e8712252f49cd82130330e51d"
+      "bytes": 13272,
+      "sha256": "dcfe5772af629f7ef633ed7b0fb7796664bee0c34e665b05d529f05b0399e190"
     },
     {
       "id": "accessory:official-samo",
       "character": "boy",
       "file": "boy/accessory-official-samo.webp",
-      "bytes": 12888,
-      "sha256": "d792b2fb906bfcf65ff03107bf6e2694227ec3c45c448a15ac9242910148ca9f"
+      "bytes": 9470,
+      "sha256": "685d5f1aa5af19904d1c7858874a8247af845700cc9b95457e301efb2ae0dd20"
     },
     {
       "id": "accessory:official-gat",
       "character": "boy",
       "file": "boy/accessory-official-gat.webp",
-      "bytes": 13706,
-      "sha256": "c2a81a39ce918ca4330e82d3ab993683977164c7e4f275f9fa26591a83681c86"
+      "bytes": 9732,
+      "sha256": "635f3222793419434c711854530f110409effe0b52ce21bcadb32924b7d7cb73"
     },
     {
       "id": "top:winter-hoodie",
       "character": "boy",
       "file": "boy/top-winter-hoodie.webp",
-      "bytes": 14828,
-      "sha256": "802a57ee5e3b3bc2f448b945d8c7151479d40300c2c651c9ddc970e05abd2a1f"
+      "bytes": 14218,
+      "sha256": "66c23d71f98d1177516ede904c47800c3e3ba78e613410301d81892b1a09e0a2"
     },
     {
       "id": "top:winter-halfzip",
       "character": "boy",
       "file": "boy/top-winter-halfzip.webp",
-      "bytes": 14054,
-      "sha256": "a031cb9b9d1dd3f2309dc9d998277fc845a43e87e300e735a4456d9a04ffebb0"
+      "bytes": 13486,
+      "sha256": "f47ae888677875d98158bbda0db0e3ad60fae48392600244f5f48b55708bf63d"
     },
     {
       "id": "bottom:winter-joggers",
       "character": "boy",
       "file": "boy/bottom-winter-joggers.webp",
-      "bytes": 13098,
-      "sha256": "a4c71ea5fb76fde1c16fc1005030ab8e22f490827134935ecb8383cb1d3ac0c5"
+      "bytes": 14196,
+      "sha256": "9c7e246d670418b2ad1c2ba04c54b5484ab218f663432fd6bd70cc016ca0743e"
     }
   ]
 }

@@ -406,6 +406,87 @@ function recolor(data, options, skinWeights) {
   return result;
 }
 
+/** Match independently authored skin to one palette without touching ink or
+ * fabric. Use the median linear luminance of opaque, high-confidence skin as
+ * the cell's neutral point; retain only a bounded amount of its shading.
+ */
+function normalizeSkin(data, skinWeights, options, id) {
+  assert(
+    options && typeof options === "object" && !Array.isArray(options),
+    `${id}: normalizeSkin must be an object`,
+  );
+  assert(
+    Object.keys(options).every((key) =>
+      ["color", "contrast", "minShade", "maxShade"].includes(key),
+    ),
+    `${id}: unknown skin normalization option`,
+  );
+  const {
+    color = "#f3c6a5",
+    contrast = 0.35,
+    minShade = 0.84,
+    maxShade = 1.06,
+  } = options;
+  const target = rgb(color).map(linear);
+  assert(
+    [contrast, minShade, maxShade].every(Number.isFinite) &&
+      contrast >= 0 &&
+      contrast <= 1 &&
+      minShade >= 0.5 &&
+      minShade <= 1 &&
+      maxShade >= 1 &&
+      maxShade <= 1.2 &&
+      luma(target) > 0.01,
+    `${id}: invalid skin normalization bounds`,
+  );
+  assert(skinWeights?.length === data.length / 4, `${id}: skin mask required`);
+  const luminances = [];
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 250 || skinWeights[i / 4] < 0.85) continue;
+    luminances.push(
+      luma([data[i], data[i + 1], data[i + 2]].map((v) => linear(v / 255))),
+    );
+  }
+  assert(
+    luminances.length >= 16,
+    `${id}: not enough opaque skin for normalization`,
+  );
+  luminances.sort((a, b) => a - b);
+  const reference = luminances[Math.floor((luminances.length - 1) / 2)];
+  assert(reference > 0.01, `${id}: skin reference is too dark`);
+  const result = Buffer.from(data);
+  for (let i = 0; i < data.length; i += 4) {
+    const amount = skinWeights[i / 4];
+    if (!data[i + 3] || !amount) continue;
+    const original = [data[i], data[i + 1], data[i + 2]].map((v) => v / 255);
+    const shade = Math.max(
+      minShade,
+      Math.min(
+        maxShade,
+        1 + contrast * (luma(original.map(linear)) / reference - 1),
+      ),
+    );
+    for (let c = 0; c < 3; c++)
+      result[i + c] = Math.round(
+        255 *
+          (original[c] * (1 - amount) +
+            srgb(Math.min(1, target[c] * shade)) * amount),
+      );
+  }
+  return {
+    pixels: result,
+    metadata: {
+      color,
+      contrast,
+      minShade,
+      maxShade,
+      referenceLinearLuma: reference,
+      referenceSamples: luminances.length,
+      referenceMethod: "opaque-skin-median-v1",
+    },
+  };
+}
+
 async function writeLayer(id, data, width, height, layer, source) {
   assert(safeId(id) && !assets.has(id), `Duplicate/invalid layer ${id}`);
   const file = `layers/${id}.webp`;
@@ -464,6 +545,7 @@ async function writeLayer(id, data, width, height, layer, source) {
     tintMask,
     skinRegions,
     skinPolygons,
+    normalizeSkin: skinNormalization,
     recolor: colorOptions,
     ...metadata
   } = layer;
@@ -629,7 +711,8 @@ for (const cell of spec.cells) {
     cell.skinRegions !== undefined ||
     cell.skinPolygons !== undefined ||
     cell.tintMask?.includeSkin ||
-    cell.recolor?.mode === "skin"
+    cell.recolor?.mode === "skin" ||
+    cell.normalizeSkin !== undefined
   ) {
     skinWeights = new Float32Array(pixels.length / 4);
     for (let y = 0; y < bounds.height; y++)
@@ -663,6 +746,24 @@ for (const cell of spec.cells) {
             "skin",
           );
       }
+  }
+  if (cell.normalizeSkin !== undefined) {
+    assert(
+      cell.recolor === undefined &&
+        cell.tint?.slot === "skinTone" &&
+        cell.tintMask?.includeSkin === true &&
+        cell.tintMask.excludeRed === undefined,
+      `${cell.id}: skin normalization requires an exclusive skin tint mask and replaces recolor`,
+    );
+    const normalized = normalizeSkin(
+      pixels,
+      skinWeights,
+      cell.normalizeSkin,
+      cell.id,
+    );
+    pixels = normalized.pixels;
+    source.skinNormalization = normalized.metadata;
+    layer.tint = { ...layer.tint, sourceColor: normalized.metadata.color };
   }
   if (cell.recolor) pixels = recolor(pixels, cell.recolor, skinWeights);
   if (cell.tintMask) {

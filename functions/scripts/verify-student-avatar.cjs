@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const sharp = require('sharp');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler, encodeThumbnail } = require('../studentAvatar');
-const { defaultLook, catalog, sanitizePublicAvatar, lookHash } = require('../studentAvatarCatalog');
+const { defaultLook, catalog, validateLook, sanitizePublicAvatar, lookHash } = require('../studentAvatarCatalog');
 const { accountIdFor } = require('../studentWisWallet');
 
 const uid = 'avatar-student', semesterId = '2026-2', accountId = accountIdFor(semesterId, uid);
@@ -204,6 +204,65 @@ test('save persists only validated public projection and immutable bounded reenc
   assert.equal(state.documents.get(accountPath).revision, 1);
   const image = [...state.bucket.objects.values()][0]; const meta = await sharp(image.bytes).metadata();
   assert.equal(meta.format, 'webp'); assert.ok(meta.width <= 384 && meta.height <= 512); assert.ok(image.bytes.length <= 64 * 1024); assert.equal(meta.exif, undefined);
+});
+
+test('all skirts remain available to girls and cannot be saved on boys even when owned', async () => {
+  const skirts = catalog.items.filter(item => item.slot === 'bottom' && /^(pleated|chima)-/.test(item.value));
+  assert.equal(skirts.length, 7);
+  const state = fixture();
+  for (const item of skirts) {
+    assert.deepEqual(item.characters, ['girl']);
+    assert.ok(validateLook({ ...defaultLook('girl'), bottom: item.value }, [item.id]));
+    assert.equal(validateLook({ ...defaultLook('boy'), bottom: item.value }, [item.id]), null);
+    await assert.rejects(state.api.saveStudentAvatar(await save({ look: { ...defaultLook('boy'), bottom: item.value } })), reason('AVATAR_INPUT_INVALID'));
+  }
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.bucket.objects.size, 0);
+  for (const item of catalog.items.filter(item => item.slot === 'bottom' && !/^(pleated|chima)-/.test(item.value))) {
+    assert.ok(validateLook({ ...defaultLook('boy'), bottom: item.value }, [item.id]), item.id);
+  }
+});
+
+test('legacy boy skirts recover to free shorts without read-time writes or losing owned clothes', async () => {
+  const state = fixture(), look = { ...defaultLook('boy'), bottom: 'pleated-navy' };
+  const old = { schemaVersion: 1, catalogVersion: catalog.version, studentUid: uid, revision: 3,
+    look, lookHash: lookHash(look), ownedItemIds: ['bottom:pleated-navy', 'top:jacket-navy'], lastSavedAtMs: 1,
+    thumbnailPath: 'student_avatar_thumbnails/v1/legacy/example.webp',
+    thumbnailUrl: `https://firebasestorage.googleapis.com/v0/b/test.appspot.com/o/student_avatar_thumbnails%2Fv1%2F${'a'.repeat(64)}%2F${'b'.repeat(64)}.webp?alt=media&token=11111111-1111-1111-1111-111111111111` };
+  state.documents.set(avatarPath, structuredClone(old));
+  const current = await state.api.getStudentAvatar(req({}));
+  assert.deepEqual(current.look, defaultLook('boy'));
+  assert.equal(current.requiresThumbnailRefresh, true);
+  assert.equal(current.thumbnailUrl, undefined);
+  assert.equal(current.revision, 3);
+  assert.ok(current.ownedItemIds.includes('bottom:pleated-navy'));
+  assert.ok(current.ownedItemIds.includes('top:jacket-navy'));
+  const combined = await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }));
+  assert.deepEqual(combined.avatar, current);
+  assert.deepEqual(state.documents.get(avatarPath), old);
+  assert.equal(state.writes.length, 0);
+  const projection = sanitizePublicAvatar(old);
+  assert.deepEqual(projection.look, current.look);
+  assert.equal(projection.lookHash, lookHash(current.look));
+  assert.equal(projection.thumbnailUrl, undefined);
+  assert.equal(sanitizePublicAvatar({ ...old, lookHash: 'tampered' }), null);
+  const saved = await state.api.saveStudentAvatar(await save({ look: current.look, expectedRevision: 3 }));
+  assert.equal(saved.requiresThumbnailRefresh, undefined);
+  assert.ok(saved.thumbnailUrl);
+  assert.ok(saved.ownedItemIds.includes('bottom:pleated-navy'));
+  assert.deepEqual(state.documents.get(avatarPath).look, current.look);
+});
+
+test('legacy recovery never accepts malformed looks or never-supported boy hanbok skirts', async () => {
+  for (const patch of [{ bottom: 'chima-navy' }, { hairStyle: 'bob' }, { unknown: 'extra' }]) {
+    const state = fixture(), look = { ...defaultLook('boy'), bottom: 'pleated-navy', ...patch };
+    const old = { schemaVersion: 1, catalogVersion: catalog.version, studentUid: uid, revision: 1,
+      look, lookHash: lookHash(look), ownedItemIds: [] };
+    state.documents.set(avatarPath, old);
+    await assert.rejects(state.api.getStudentAvatar(req({})), reason('AVATAR_STATE_INVALID'));
+    assert.equal(sanitizePublicAvatar(old), null);
+    assert.equal(state.writes.length, 0);
+  }
 });
 test('duplicate save is idempotent; conflicting revision and save burst preserve existing profile', async () => {
   const state = fixture(), input = await save(); const saved = await state.api.saveStudentAvatar(input);

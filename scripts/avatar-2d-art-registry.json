@@ -17,17 +17,23 @@
     },
     {
       "id": "face",
-      "src": "assets/avatar-source/v2/expressions.png",
+      "src": "assets/avatar-source/cohesive-20261110/expressions.png",
       "columns": 3,
       "rows": 2,
-      "sha256": "340487322709eb2f1cb3b3332706727f4a572edae44970e8ff4ada15e7239870"
+      "sha256": "a66d3505eb5f597c77f11b7f94ffc9cc62ca624c344aa6527df926ac0cb86e83",
+      "cleanup": {
+        "minArea": 16
+      }
     },
     {
       "id": "hair",
-      "src": "assets/avatar-source/v2/hair.png",
+      "src": "assets/avatar-source/cohesive-20261110/hair.png",
       "columns": 3,
       "rows": 3,
-      "sha256": "389abf688dfe83c6d8363738cad50983d08272e3e5754db4134719b1c9e2bee1"
+      "sha256": "268c1b92709cc5cf49f766a8e21a34b1c6961c929661ab478efc4f04fd7954d9",
+      "cleanup": {
+        "minArea": 16
+      }
     },
     {
       "id": "accessories",
@@ -42,6 +48,16 @@
       "columns": 1,
       "rows": 1,
       "sha256": "e6d5ab8802271cd6082044631b1cf3c792f30ca3ceda3d05c6351e1cd1e1185f"
+    },
+    {
+      "id": "heads",
+      "src": "assets/avatar-source/cohesive-20261110/heads.png",
+      "columns": 3,
+      "rows": 1,
+      "sha256": "adb689529e4ffbfbb9773f9992001642805b46bfb6c3bafc8f463fa882be3e01",
+      "cleanup": {
+        "minArea": 16
+      }
     },
     {
       "id": "v3-jacket-poses",
@@ -147,84 +163,111 @@
   "cells": [
     {
       "id": "head-natural",
-      "sheet": "body",
+      "sheet": "heads",
       "cell": [
         0,
         0
       ],
       "rect": [
-        0.295,
-        0.07,
-        0.41,
-        0.35
+        0.3425,
+        0.14,
+        0.315,
+        0.25
       ],
       "z": 40,
       "fit": "bounds",
       "group": "face",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
+      },
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
+      },
+      "tintMask": {
+        "includeSkin": true
       }
     },
     {
       "id": "head-round",
-      "sheet": "body",
+      "sheet": "heads",
       "cell": [
         1,
         0
       ],
       "rect": [
-        0.287,
-        0.066,
-        0.426,
-        0.35
+        0.336,
+        0.14,
+        0.328,
+        0.25
       ],
       "z": 40,
       "fit": "bounds",
       "group": "face",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
+      },
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
+      },
+      "tintMask": {
+        "includeSkin": true
       }
     },
     {
       "id": "head-slim",
-      "sheet": "body",
+      "sheet": "heads",
       "cell": [
         2,
         0
       ],
       "rect": [
-        0.307,
-        0.075,
-        0.386,
-        0.35
+        0.349,
+        0.14,
+        0.302,
+        0.25
       ],
       "z": 40,
       "fit": "bounds",
       "group": "face",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
+      },
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
+      },
+      "tintMask": {
+        "includeSkin": true
       }
     },
     {
       "id": "leg",
       "sheet": "body",
       "rect": [
-        0.413,
+        0.397,
         0.584,
-        0.077,
-        0.26
+        0.096,
+        0.27
       ],
       "z": 8,
       "fit": "stretch",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "crop": [
@@ -232,47 +275,24 @@
         705,
         150,
         335
-      ]
+      ],
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
+      },
+      "tintMask": {
+        "includeSkin": true
+      }
     },
     {
       "id": "hair-bob",
       "sheet": "hair",
       "rect": [
-        0.26,
-        0.04,
-        0.48,
-        0.33
-      ],
-      "z": 50,
-      "fit": "bounds",
-      "group": "head",
-      "tint": {
-        "slot": "hairTone",
-        "sourceColor": "#302a2c",
-        "mode": "color"
-      },
-      "crop": [
-        80,
-        0,
-        430,
-        330
-      ],
-      "cleanup": {
-        "minArea": 32
-      },
-      "sideTuck": [
-        0.67,
-        0.96,
-        0.8
-      ]
-    },
-    {
-      "id": "hair-curtain",
-      "sheet": "hair",
-      "rect": [
-        0.26,
-        0.04,
-        0.48,
+        0.31,
+        0.085,
+        0.38,
         0.3
       ],
       "z": 50,
@@ -280,14 +300,46 @@
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        560,
         0,
-        440,
-        330
+        0,
+        512,
+        341
+      ],
+      "cleanup": {
+        "minArea": 32
+      },
+      "sideTuck": [
+        0.68,
+        0.96,
+        0.85
+      ]
+    },
+    {
+      "id": "hair-curtain",
+      "sheet": "hair",
+      "rect": [
+        0.31,
+        0.095,
+        0.38,
+        0.235
+      ],
+      "z": 50,
+      "fit": "bounds",
+      "group": "head",
+      "tint": {
+        "slot": "hairTone",
+        "sourceColor": "#494548",
+        "mode": "color"
+      },
+      "crop": [
+        512,
+        0,
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
@@ -297,24 +349,24 @@
       "id": "hair-volume",
       "sheet": "hair",
       "rect": [
-        0.25,
-        0.035,
-        0.5,
-        0.3
+        0.3,
+        0.095,
+        0.4,
+        0.235
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        1030,
+        1024,
         0,
-        430,
-        335
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
@@ -324,87 +376,77 @@
       "id": "hair-wave",
       "sheet": "hair",
       "rect": [
-        0.25,
-        0.035,
-        0.5,
-        0.35
+        0.3,
+        0.085,
+        0.4,
+        0.26
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        75,
-        335,
-        440,
-        330
+        0,
+        341,
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
-      },
-      "sideTuck": [
-        0.66,
-        0.93,
-        0.82
-      ]
+      }
     },
     {
       "id": "hair-long",
       "sheet": "hair",
       "rect": [
-        0.235,
-        0.035,
-        0.53,
-        0.43
+        0.29,
+        0.09,
+        0.42,
+        0.36
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        535,
-        325,
-        470,
-        365
+        512,
+        341,
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
-      },
-      "sideTuck": [
-        0.5,
-        0.74,
-        0.85
-      ]
+      }
     },
     {
       "id": "hair-crop",
       "sheet": "hair",
       "rect": [
-        0.274,
-        0.04,
-        0.452,
-        0.29
+        0.315,
+        0.1,
+        0.37,
+        0.225
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        1030,
-        330,
-        440,
+        1024,
+        341,
+        512,
         315
       ],
       "cleanup": {
@@ -415,24 +457,24 @@
       "id": "hair-toben",
       "sheet": "hair",
       "rect": [
-        0.274,
-        0.035,
-        0.452,
-        0.3
+        0.31,
+        0.095,
+        0.38,
+        0.235
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        100,
-        660,
-        400,
-        325
+        0,
+        682,
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
@@ -442,24 +484,24 @@
       "id": "hair-twin-tail",
       "sheet": "hair",
       "rect": [
-        0.18,
-        0.035,
-        0.64,
-        0.44
+        0.24,
+        0.09,
+        0.52,
+        0.37
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        510,
-        685,
-        490,
-        335
+        512,
+        682,
+        512,
+        341
       ],
       "cleanup": {
         "minArea": 32
@@ -469,44 +511,34 @@
           7,
           16
         ]
-      },
-      "sideTuck": [
-        0.5,
-        0.74,
-        0.9
-      ]
+      }
     },
     {
       "id": "hair-half-up",
       "sheet": "hair",
       "rect": [
-        0.25,
-        0.025,
-        0.5,
-        0.41
+        0.3,
+        0.075,
+        0.4,
+        0.36
       ],
       "z": 50,
       "fit": "bounds",
       "group": "head",
       "tint": {
         "slot": "hairTone",
-        "sourceColor": "#302a2c",
+        "sourceColor": "#494548",
         "mode": "color"
       },
       "crop": [
-        1030,
+        1024,
         650,
-        430,
+        512,
         374
       ],
       "cleanup": {
         "minArea": 32
-      },
-      "sideTuck": [
-        0.55,
-        0.78,
-        0.85
-      ]
+      }
     },
     {
       "id": "plain-shoe-art",
@@ -532,10 +564,10 @@
       "sheet": "accessories",
       "cell": null,
       "rect": [
-        0.345,
-        0.238,
-        0.31,
-        0.09
+        0.38,
+        0.254,
+        0.24,
+        0.075
       ],
       "z": 60,
       "fit": "bounds",
@@ -551,10 +583,10 @@
       "id": "star-clip",
       "sheet": "accessories",
       "rect": [
-        0.62,
-        0.155,
-        0.085,
-        0.06
+        0.6,
+        0.2,
+        0.068,
+        0.05
       ],
       "z": 60,
       "fit": "bounds",
@@ -574,10 +606,10 @@
         0
       ],
       "rect": [
-        0.245,
-        0.055,
-        0.51,
-        0.32
+        0.345,
+        0.11,
+        0.31,
+        0.22
       ],
       "z": 60,
       "fit": "stretch",
@@ -590,10 +622,10 @@
       "id": "official-samo",
       "sheet": "accessories",
       "rect": [
-        0.25,
-        0.005,
-        0.5,
-        0.19
+        0.29,
+        0.065,
+        0.42,
+        0.16
       ],
       "z": 60,
       "fit": "stretch",
@@ -612,10 +644,10 @@
       "id": "official-gat",
       "sheet": "accessories",
       "rect": [
-        0.248,
-        0.005,
-        0.504,
-        0.21
+        0.285,
+        0.06,
+        0.43,
+        0.18
       ],
       "z": 60,
       "fit": "stretch",
@@ -647,16 +679,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -676,16 +709,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -705,16 +739,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -734,16 +769,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -763,16 +799,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -792,16 +829,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -821,16 +859,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -850,16 +889,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -879,16 +919,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -908,16 +949,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -937,16 +979,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -966,16 +1009,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -995,16 +1039,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1024,16 +1069,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1053,16 +1099,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1082,16 +1129,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1111,16 +1159,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1140,16 +1189,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1169,16 +1219,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1198,16 +1249,17 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
         "includeSkin": true
       },
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1227,7 +1279,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -1553,10 +1605,11 @@
           ]
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -1576,7 +1629,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -2022,10 +2075,11 @@
           ]
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -2045,7 +2099,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -2387,10 +2441,11 @@
           ]
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -2410,7 +2465,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -2806,10 +2861,11 @@
           ]
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -2829,7 +2885,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3259,10 +3315,11 @@
           ]
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3282,7 +3339,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3308,10 +3365,11 @@
           0.2
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3331,7 +3389,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3357,10 +3415,11 @@
           0.21
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3380,7 +3439,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3406,10 +3465,11 @@
           0.19
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3429,7 +3489,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3455,10 +3515,11 @@
           0.21
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3478,7 +3539,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3498,10 +3559,11 @@
           0.19
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3521,7 +3583,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3547,10 +3609,11 @@
           0.2
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3570,7 +3633,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3596,10 +3659,11 @@
           0.21
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3619,7 +3683,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3645,10 +3709,11 @@
           0.19
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3668,7 +3733,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3694,10 +3759,11 @@
           0.21
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3717,7 +3783,7 @@
       "fit": "frame",
       "tint": {
         "slot": "skinTone",
-        "sourceColor": "#f7cfa8",
+        "sourceColor": "#f3c6a5",
         "mode": "color"
       },
       "tintMask": {
@@ -3737,10 +3803,11 @@
           0.19
         ]
       ],
-      "recolor": {
-        "color": "#f7cfa8",
-        "sourceColor": "#eab38d",
-        "mode": "skin"
+      "normalizeSkin": {
+        "color": "#f3c6a5",
+        "contrast": 0.35,
+        "minShade": 0.84,
+        "maxShade": 1.06
       }
     },
     {
@@ -3756,8 +3823,12 @@
         0.246,
         0.252
       ],
-      "z": 18,
-      "fit": "stretch"
+      "z": 23,
+      "fit": "stretch",
+      "rowScale": [
+        0.86,
+        1
+      ]
     },
     {
       "id": "v3-pleated",
@@ -3788,7 +3859,7 @@
         0.546,
         0.265
       ],
-      "z": 18,
+      "z": 23,
       "fit": "stretch"
     },
     {
@@ -3804,8 +3875,12 @@
         0.41,
         0.265
       ],
-      "z": 18,
-      "fit": "stretch"
+      "z": 23,
+      "fit": "stretch",
+      "rowScale": [
+        0.84,
+        1
+      ]
     },
     {
       "id": "v3-shorts",
@@ -3821,7 +3896,11 @@
         0.147
       ],
       "z": 18,
-      "fit": "stretch"
+      "fit": "stretch",
+      "rowScale": [
+        0.94,
+        1
+      ]
     },
     {
       "id": "v3-winter-joggers",
@@ -3836,8 +3915,12 @@
         0.286,
         0.265
       ],
-      "z": 18,
-      "fit": "stretch"
+      "z": 23,
+      "fit": "stretch",
+      "rowScale": [
+        0.82,
+        1
+      ]
     },
     {
       "id": "v3-plain-shoes",
@@ -3848,12 +3931,12 @@
       ],
       "rect": [
         0.367,
-        0.811,
+        0.805,
         0.266,
-        0.082
+        0.119
       ],
       "z": 22,
-      "fit": "stretch"
+      "fit": "bounds"
     },
     {
       "id": "v3-sneakers-pink",
@@ -3864,12 +3947,12 @@
       ],
       "rect": [
         0.367,
-        0.811,
+        0.805,
         0.266,
-        0.082
+        0.119
       ],
       "z": 22,
-      "fit": "stretch"
+      "fit": "bounds"
     },
     {
       "id": "v3-sneakers-white",
@@ -3880,12 +3963,12 @@
       ],
       "rect": [
         0.367,
-        0.811,
+        0.805,
         0.266,
-        0.082
+        0.119
       ],
       "z": 22,
-      "fit": "stretch"
+      "fit": "bounds"
     },
     {
       "id": "v3-sneakers-blue",
@@ -3896,12 +3979,12 @@
       ],
       "rect": [
         0.367,
-        0.811,
+        0.805,
         0.266,
-        0.082
+        0.119
       ],
       "z": 22,
-      "fit": "stretch"
+      "fit": "bounds"
     },
     {
       "id": "v3-sneakers-lavender",
@@ -3912,27 +3995,27 @@
       ],
       "rect": [
         0.367,
-        0.811,
+        0.805,
         0.266,
-        0.082
+        0.119
       ],
       "z": 22,
-      "fit": "stretch"
+      "fit": "bounds"
     },
     {
       "id": "expression-natural-eyes",
       "sheet": "face",
       "crop": [
         0,
-        170,
+        140,
         512,
-        215
+        205
       ],
       "rect": [
-        0.322060546875,
-        0.18503125000000004,
-        0.33249999999999996,
-        0.11169921874999998
+        0.365,
+        0.20925000000000002,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -3943,15 +4026,15 @@
       "sheet": "face",
       "crop": [
         180,
-        390,
+        345,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -3962,15 +4045,15 @@
       "sheet": "face",
       "crop": [
         512,
-        170,
+        140,
         512,
-        215
+        205
       ],
       "rect": [
-        0.33115234375,
-        0.18191406250000003,
-        0.33249999999999996,
-        0.11169921874999998
+        0.365,
+        0.20925000000000002,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -3981,15 +4064,15 @@
       "sheet": "face",
       "crop": [
         692,
-        390,
+        345,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -4000,15 +4083,15 @@
       "sheet": "face",
       "crop": [
         1024,
-        170,
+        140,
         512,
-        215
+        205
       ],
       "rect": [
-        0.3343994140625,
-        0.18347265625000003,
-        0.33249999999999996,
-        0.11169921874999998
+        0.365,
+        0.20925000000000002,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -4019,15 +4102,15 @@
       "sheet": "face",
       "crop": [
         1204,
-        390,
+        345,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -4038,15 +4121,15 @@
       "sheet": "face",
       "crop": [
         0,
-        602,
+        652,
         512,
-        240
+        205
       ],
       "rect": [
-        0.3201123046875,
-        0.17100390625000003,
-        0.33249999999999996,
-        0.12468749999999998
+        0.365,
+        0.22214062500000004,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -4057,15 +4140,15 @@
       "sheet": "face",
       "crop": [
         180,
-        842,
+        857,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -4076,15 +4159,15 @@
       "sheet": "face",
       "crop": [
         512,
-        602,
+        652,
         512,
-        240
+        205
       ],
       "rect": [
-        0.329853515625,
-        0.17100390625000003,
-        0.33249999999999996,
-        0.12468749999999998
+        0.365,
+        0.22214062500000004,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -4095,15 +4178,15 @@
       "sheet": "face",
       "crop": [
         692,
-        842,
+        857,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -4114,15 +4197,15 @@
       "sheet": "face",
       "crop": [
         1024,
-        602,
+        652,
         512,
-        240
+        205
       ],
       "rect": [
-        0.3331005859375,
-        0.17100390625000003,
-        0.33249999999999996,
-        0.12468749999999998
+        0.365,
+        0.22214062500000004,
+        0.27,
+        0.0880859375
       ],
       "fit": "frame",
       "z": 45,
@@ -4133,15 +4216,15 @@
       "sheet": "face",
       "crop": [
         1204,
-        842,
+        857,
         180,
         100
       ],
       "rect": [
-        0.466,
-        0.323,
-        0.068,
-        0.044
+        0.4775,
+        0.345,
+        0.045,
+        0.027
       ],
       "fit": "bounds",
       "z": 45,
@@ -5052,6 +5135,27 @@
           "ref": "leg",
           "id": "right-leg",
           "mirror": true
+        },
+        {
+          "ref": "leg",
+          "id": "ankle",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
+        },
+        {
+          "ref": "leg",
+          "id": "right-ankle",
+          "mirror": true,
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
         }
       ],
       "slots": {
@@ -5088,19 +5192,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               }
@@ -5113,19 +5217,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               }
@@ -6266,6 +6370,10 @@
           "winter-joggers": {
             "layers": [
               "v3-winter-joggers"
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           }
         },
@@ -6304,15 +6412,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ],
               "face": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ]
             }
           },
@@ -6323,15 +6431,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ],
               "face": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ]
             }
           }
@@ -6395,6 +6503,27 @@
           "ref": "leg",
           "id": "right-leg",
           "mirror": true
+        },
+        {
+          "ref": "leg",
+          "id": "ankle",
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
+        },
+        {
+          "ref": "leg",
+          "id": "right-ankle",
+          "mirror": true,
+          "clip": [
+            0,
+            0.805,
+            1,
+            0.08
+          ]
         }
       ],
       "slots": {
@@ -6431,19 +6560,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  1.0390243902439025,
+                  1.0412698412698413,
                   1
                 ]
               }
@@ -6456,19 +6585,19 @@
             "transforms": {
               "hair": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "headwear": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               },
               "features": {
                 "scale": [
-                  0.9414634146341464,
+                  0.9587301587301587,
                   1
                 ]
               }
@@ -7540,39 +7669,31 @@
               "right-leg"
             ]
           },
-          "pleated-lilac": {
-            "layers": [
-              "v3-pleated-lilac"
-            ]
-          },
-          "pleated-navy": {
-            "layers": [
-              "v3-pleated-navy"
-            ]
-          },
-          "pleated-cream": {
-            "layers": [
-              "v3-pleated-cream"
-            ]
-          },
-          "pleated-mint": {
-            "layers": [
-              "v3-pleated-mint"
-            ]
-          },
           "baji-navy": {
             "layers": [
               "v3-baji-navy"
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "baji-cream": {
             "layers": [
               "v3-baji-cream"
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "baji-charcoal": {
             "layers": [
               "v3-baji-charcoal"
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           },
           "summer-shorts": {
@@ -7583,6 +7704,10 @@
           "winter-joggers": {
             "layers": [
               "v3-winter-joggers"
+            ],
+            "hideIds": [
+              "leg",
+              "right-leg"
             ]
           }
         },
@@ -7621,15 +7746,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ],
               "face": [
                 0,
-                0.155,
+                0.2,
                 1,
-                0.845
+                0.8
               ]
             }
           },
@@ -7640,15 +7765,15 @@
             "clipGroups": {
               "hair": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ],
               "face": [
                 0,
-                0.18,
+                0.215,
                 1,
-                0.8200000000000001
+                0.785
               ]
             }
           }

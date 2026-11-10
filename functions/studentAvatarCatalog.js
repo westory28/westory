@@ -43,19 +43,29 @@ const validateLook = (look, ownedItemIds) => {
   }
   return result;
 };
+// These four skirts used to be shared. Repair only this retired combination
+// when reading a hash-verified saved look; incoming saves still use validateLook.
+const retiredBoySkirts = new Set(['pleated-lilac', 'pleated-navy', 'pleated-cream', 'pleated-mint']);
+const restoreStoredLook = look => {
+  const current = validateLook(look);
+  if (current) return current;
+  if (look?.character !== 'boy' || !retiredBoySkirts.has(look.bottom)) return null;
+  return validateLook({ ...look, bottom: defaultLook('boy').bottom });
+};
 const lookHash = look => createHash('sha256').update(JSON.stringify(SLOTS.map(slot => [slot, look[slot]]))).digest('hex');
 const sanitizePublicAvatar = value => {
   if (!value || value.schemaVersion !== 1 || value.catalogVersion !== catalog.version
     || !Number.isSafeInteger(value.revision) || value.revision < 1) return null;
-  const look = validateLook(value.look);
-  if (!look || value.lookHash !== lookHash(look)) return null;
-  const result = { schemaVersion: 1, catalogVersion: catalog.version, look, revision: value.revision, lookHash: value.lookHash };
+  const look = restoreStoredLook(value.look);
+  if (!look || value.lookHash !== lookHash(value.look)) return null;
+  const currentHash = lookHash(look);
+  const result = { schemaVersion: 1, catalogVersion: catalog.version, look, revision: value.revision, lookHash: currentHash };
   // Only the server's immutable object namespace is eligible for public projection.
-  if (typeof value.thumbnailUrl === 'string' && value.thumbnailUrl.length < 1024
+  if (currentHash === value.lookHash && typeof value.thumbnailUrl === 'string' && value.thumbnailUrl.length < 1024
     && /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/student_avatar_thumbnails%2Fv1%2F[a-f0-9]{64}%2F[a-f0-9]{64}\.webp\?alt=media&token=[a-f0-9-]{36}$/.test(value.thumbnailUrl)) {
     result.thumbnailUrl = value.thumbnailUrl;
   }
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, catalog, items, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };

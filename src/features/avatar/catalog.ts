@@ -35,6 +35,7 @@ export interface AvatarPublic {
 }
 export interface AvatarState extends AvatarPublic {
   ownedItemIds: string[];
+  requiresThumbnailRefresh?: boolean;
 }
 export const AVATAR_CATALOG_VERSION = catalog.version;
 export const AVATAR_PRICING_POLICY_VERSION = catalog.pricingPolicyVersion;
@@ -110,6 +111,8 @@ export const selectAvatarItem = (
   look: AvatarLook,
   item: AvatarItem,
 ): AvatarLook => {
+  if (item.slot !== "character" && !item.characters.includes(look.character))
+    return look;
   const next = { ...look, [item.slot]: item.value } as AvatarLook;
   if (item.slot === "character") {
     for (const { key } of AVATAR_SLOTS) {
@@ -117,5 +120,15 @@ export const selectAvatarItem = (
         next[key] = defaultAvatarLook(next.character)[key] as never;
     }
   }
+  return next;
+};
+
+// Reconcile saved choices against the current catalog without deleting owned
+// items or saving automatically. Also covers an older API response during rollout.
+export const restoreAvatarLook = (look: AvatarLook): AvatarLook => {
+  const next = { ...look };
+  const fallback = defaultAvatarLook(look.character);
+  for (const { key } of AVATAR_SLOTS)
+    if (!itemForLook(next, key)) next[key] = fallback[key] as never;
   return next;
 };

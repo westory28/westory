@@ -165,7 +165,7 @@ for (const character of ["girl", "boy"]) {
   ];
   const bottomFamilies = [
     "plain-bottom",
-    "pleated-navy",
+    ...(character === "girl" ? ["pleated-navy"] : []),
     character === "girl" ? "chima-navy" : "baji-cream",
     "summer-shorts",
     "winter-joggers",
@@ -431,6 +431,134 @@ function alphaReport(data, width, height, channels, checkConnections = false) {
         }
       : {}),
   };
+}
+
+const shoeOpeningMasks = new Map();
+async function sourceShoeOpenings(relative) {
+  if (shoeOpeningMasks.has(relative)) return shoeOpeningMasks.get(relative);
+  const file = path.resolve(root, "public/avatar/v2", relative);
+  assert(
+    file.startsWith(`${path.resolve(root, "public/avatar/v2")}${path.sep}`),
+    "Local shoe asset boundary",
+  );
+  const { data, info } = await sharp(file)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width, height } = info;
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(visited.length);
+  const holes = [];
+  for (let start = 0; start < visited.length; start++) {
+    if (visited[start] || data[start * 4 + 3] >= 32) continue;
+    let read = 0;
+    let write = 1;
+    let edge = false;
+    let minX = width;
+    let maxX = -1;
+    let minY = height;
+    let maxY = -1;
+    queue[0] = start;
+    visited[start] = 1;
+    while (read < write) {
+      const index = queue[read++];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      if (x === 0 || y === 0 || x === width - 1 || y === height - 1)
+        edge = true;
+      for (const [dx, dy] of [
+        [0, -1],
+        [0, 1],
+        [-1, 0],
+        [1, 0],
+      ]) {
+        const nextX = x + dx;
+        const nextY = y + dy;
+        if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height)
+          continue;
+        const next = nextY * width + nextX;
+        if (visited[next] || data[next * 4 + 3] >= 32) continue;
+        visited[next] = 1;
+        queue[write++] = next;
+      }
+    }
+    // Ignore exterior transparency and tiny lace gaps. The two ankle apertures
+    // are large enclosed holes in every authored shoe pair, regardless of y.
+    if (!edge && write >= Math.max(128, width * height * 0.001))
+      holes.push({
+        pixels: queue.slice(0, write),
+        bounds: [minX, minY, maxX + 1, maxY + 1],
+      });
+  }
+  holes.sort((a, b) => a.bounds[0] - b.bounds[0]);
+  const result = { width, height, holes };
+  shoeOpeningMasks.set(relative, result);
+  return result;
+}
+
+async function shoeOpeningReport(rendered, pixels, info) {
+  const minimumCoverage = 0.95;
+  const result = { minimumCoverage, openings: [], errors: [] };
+  const selection = rendered.coverage.find((slot) => slot.slot === "shoes");
+  if (selection?.hidden) return result;
+  const shoeIds = new Set(selection?.selected || []);
+  const layers = rendered.layers.filter((layer) => shoeIds.has(layer.id));
+  for (const layer of layers) {
+    // Current shoe art has fixed canvas coordinates. Fail explicitly if a
+    // future rig adds transforms instead of silently measuring the wrong area.
+    assert(
+      !layer.group && !layer.clip,
+      "Shoe aperture QA needs transformed coordinates",
+    );
+    const source = await sourceShoeOpenings(layer.src);
+    const [left, top, width, height] = layer.rect;
+    for (const [index, hole] of source.holes.entries()) {
+      const projected = new Set();
+      for (const pixel of hole.pixels) {
+        let u = ((pixel % source.width) + 0.5) / source.width;
+        let v = (Math.floor(pixel / source.width) + 0.5) / source.height;
+        if (layer.flipX) u = 1 - u;
+        if (layer.flipY) v = 1 - v;
+        const x = Math.floor((left + u * width) * info.width);
+        const y = Math.floor((top + v * height) * info.height);
+        assert(
+          x >= 0 && x < info.width && y >= 0 && y < info.height,
+          "Shoe aperture outside full capture",
+        );
+        projected.add(y * info.width + x);
+      }
+      let coveredPixels = 0;
+      for (const pixel of projected)
+        if (pixels[pixel * info.channels + info.channels - 1] >= 200)
+          coveredPixels++;
+      // Source holes themselves are transparent. Opaque final pixels prove the
+      // visible leg/trouser/skirt layer actually fills each opening. This also
+      // checks bare legs without assuming that the ankle lies below y=0.84.
+      const coverage = projected.size ? coveredPixels / projected.size : 0;
+      const side = (index === 0) !== !!layer.flipX ? "left" : "right";
+      result.openings.push({
+        layer: layer.id,
+        side,
+        sourceBounds: hole.bounds,
+        sampledPixels: projected.size,
+        coveredPixels,
+        coverage: Number(coverage.toFixed(4)),
+      });
+      if (coverage < minimumCoverage)
+        result.errors.push(
+          `${side} shoe opening filled ${(coverage * 100).toFixed(1)}%; expected at least 95%`,
+        );
+    }
+  }
+  if (result.openings.length !== 2)
+    result.errors.push(
+      `Expected two visible shoe apertures, found ${result.openings.length}`,
+    );
+  return result;
 }
 
 async function startFixture() {
@@ -759,6 +887,8 @@ try {
         info.channels,
         true,
       );
+      const shoeFit = await shoeOpeningReport(rendered, data, info);
+      result.errors.push(...shoeFit.errors);
       if (!alpha.opaquePixels)
         result.errors.push("full capture is transparent");
       if (alpha.edgePixels)
@@ -799,6 +929,7 @@ try {
       await fs.writeFile(path.join(output, result.file), bytes);
       Object.assign(result, {
         alpha,
+        shoeFit,
         imageSha256: hash(data),
         layers: rendered.layers.map(({ id, src, rect, z, group }) => ({
           id,

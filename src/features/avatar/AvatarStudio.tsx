@@ -14,6 +14,7 @@ import {
   defaultAvatarLook,
   effectiveAvatarItemPrice,
   ownsAvatarItem,
+  restoreAvatarLook,
   selectAvatarItem,
   type AvatarItem,
   type AvatarLook,
@@ -102,12 +103,21 @@ export function AvatarStudio({
     try {
       const data = await adapter.load();
       if (current !== generation.current) return;
-      setSaved(data.avatar);
-      setLook(data.avatar.look);
-      setCharacterChosen(Boolean(data.avatar.thumbnailUrl));
+      const restoredLook = restoreAvatarLook(data.avatar.look);
+      setSaved({ ...data.avatar, look: restoredLook });
+      setLook(restoredLook);
+      setCharacterChosen(
+        Boolean(
+          data.avatar.thumbnailUrl || data.avatar.requiresThumbnailRefresh,
+        ),
+      );
       // Existing saved images can still use the previous renderer. Refresh only
       // after the owner explicitly saves; viewing the studio never writes data.
-      setNeedsThumbnailRefresh(Boolean(data.avatar.thumbnailUrl));
+      setNeedsThumbnailRefresh(
+        Boolean(
+          data.avatar.thumbnailUrl || data.avatar.requiresThumbnailRefresh,
+        ),
+      );
       setBalance(data.balance);
       setPricing(data.pricing || { revision: 0, prices: {} });
     } catch (failure) {
@@ -417,7 +427,9 @@ export function AvatarStudio({
               disabled={Boolean(busy) || !dirty}
               onClick={() => {
                 setLook(saved.look);
-                setCharacterChosen(Boolean(saved.thumbnailUrl));
+                setCharacterChosen(
+                  Boolean(saved.thumbnailUrl || saved.requiresThumbnailRefresh),
+                );
                 stage.current = null;
                 setReady(false);
                 setStageError("");
