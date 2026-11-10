@@ -17,6 +17,14 @@ const LETTERS = BOUNDARIES.slice(0, -1).map(
   (left, index) =>
     `${left} ${BOUNDARIES[index + 1].split(" ").reverse().join(" ")}`,
 );
+const finishers = new WeakMap<SVGSVGElement, () => void>();
+
+export function finishLoadingIn(container: HTMLElement) {
+  for (const svg of container.querySelectorAll<SVGSVGElement>(
+    ".ws-loading__logo",
+  ))
+    finishers.get(svg)?.();
+}
 
 /** A non-interactive visual exit; never holds up content, errors or navigation. */
 function finishLogo(svg: SVGSVGElement, mountedAt: number) {
@@ -31,7 +39,13 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
   )
     return;
   const copy = svg.cloneNode(true) as SVGSVGElement;
-  const surface = svg.closest<HTMLElement>(".ws-loading-screen");
+  const surface = svg.closest<HTMLElement>(".ws-loading-surface");
+  const local = surface?.dataset.loadingScope === "container";
+  const localHost = local
+    ? surface?.closest(".ws-loading-slot")?.parentElement ||
+      surface?.parentElement
+    : null;
+  const hostBox = localHost?.getBoundingClientRect();
   const surfaceBox = surface?.getBoundingClientRect();
   const surfaceStyle = surface ? getComputedStyle(surface) : null;
   const background = surfaceStyle?.backgroundColor || "rgb(255 255 255 / 60%)";
@@ -49,6 +63,11 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
   // and consecutive loading stages must not be mistaken for a completed wait.
   queueMicrotask(() => {
     if (svg.isConnected || document.hidden) return;
+    if (
+      local &&
+      (!localHost?.isConnected || document.querySelector(".ws-loading-screen"))
+    )
+      return;
     const replacement = [
       ...document.querySelectorAll(".ws-loading__logo"),
     ].some((node) => {
@@ -71,16 +90,19 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
     const copyFill = copy.querySelector<SVGRectElement>("[data-loading-fill]")!;
     copyFill.style.animation = "none";
     copyFill.style.transform = "scaleX(1)";
-    document.body.append(copy);
     // Fade the same loading surface with the logo so it never floats over the
     // newly revealed content without its blur. This layer does not block input.
     const exitLayer = document.createElement("div");
     exitLayer.className = "ws-loading-exit-surface";
     exitLayer.setAttribute("aria-hidden", "true");
+    exitLayer.dataset.loadingScope = local ? "container" : "screen";
+    const restorePosition =
+      localHost && getComputedStyle(localHost).position === "static";
+    if (restorePosition) localHost.classList.add("ws-loading-exit-container");
     Object.assign(exitLayer.style, {
-      position: "fixed",
-      left: `${surfaceBox?.x ?? box.x}px`,
-      top: `${surfaceBox?.y ?? box.y}px`,
+      position: local ? "absolute" : "fixed",
+      left: `${(surfaceBox?.x ?? box.x) - (local ? (hostBox?.x ?? 0) + (localHost?.clientLeft ?? 0) - (localHost?.scrollLeft ?? 0) : 0)}px`,
+      top: `${(surfaceBox?.y ?? box.y) - (local ? (hostBox?.y ?? 0) + (localHost?.clientTop ?? 0) - (localHost?.scrollTop ?? 0) : 0)}px`,
       width: `${surfaceBox?.width ?? box.width}px`,
       height: `${surfaceBox?.height ?? box.height}px`,
       maxWidth: "none",
@@ -91,13 +113,15 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
       background,
       backdropFilter: backdrop,
       webkitBackdropFilter: backdrop,
-      overflow: "visible",
+      borderRadius: surfaceStyle?.borderRadius || "0",
+      overflow: "clip",
       pointerEvents: "none",
-      zIndex: "20000",
+      zIndex: local ? "50" : "20000",
     });
-    const topLayer = typeof HTMLElement.prototype.showPopover === "function";
+    const topLayer =
+      !local && typeof HTMLElement.prototype.showPopover === "function";
     if (topLayer) exitLayer.setAttribute("popover", "manual");
-    document.body.append(exitLayer);
+    (localHost || document.body).append(exitLayer);
     exitLayer.append(copy);
     Object.assign(copy.style, {
       position: "absolute",
@@ -126,11 +150,22 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
       color.cancel();
       fade.cancel();
       surfaceFade.cancel();
+      if (
+        restorePosition &&
+        !localHost?.querySelector(":scope > .ws-loading-exit-surface")
+      )
+        localHost?.classList.remove("ws-loading-exit-container");
       document.removeEventListener("visibilitychange", remove);
       window.removeEventListener("pagehide", remove);
+      document.removeEventListener("scroll", remove, true);
+      window.removeEventListener("resize", remove);
     };
     document.addEventListener("visibilitychange", remove);
     window.addEventListener("pagehide", remove);
+    if (local) {
+      document.addEventListener("scroll", remove, true);
+      window.addEventListener("resize", remove);
+    }
     void fade.finished.then(remove, remove);
   });
 }
@@ -170,12 +205,16 @@ export default function LoadingLogo() {
           })
         : null;
     observer?.observe(container);
+    finishers.set(svg, () => {
+      if (visible && pageActive) finishLogo(svg, mountedAt);
+    });
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("pagehide", hide);
     window.addEventListener("pageshow", show);
     sync();
     return () => {
       disposed = true;
+      finishers.delete(svg);
       observer?.disconnect();
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("pagehide", hide);

@@ -64,21 +64,27 @@ const errors=[],screenshots=[];
 try{
  const page=await browser.newPage();page.on('pageerror',e=>errors.push(e.message));
  const loadingStatus=page.getByRole('status',{name:'처리 중',exact:true});
- const assertBlockingLoading=async(target,label)=>{
+ const assertLocalLoading=async(target,label)=>{
    await loadingStatus.waitFor();
-   await page.waitForFunction(()=>document.getElementById('root').inert&&document.querySelector('.ws-loading-screen')?.matches(':modal'));
    const layout=await loadingStatus.evaluate(node=>{
-     const screen=node.closest('.ws-loading-screen'),rect=screen.getBoundingClientRect();
-     return {count:document.querySelectorAll('.ws-loading-screen').length,bodyPortal:screen.parentElement===document.body,x:rect.x,y:rect.y,width:rect.width,height:rect.height,viewportWidth:innerWidth,viewportHeight:innerHeight,blur:getComputedStyle(screen).backdropFilter};
+     const surface=node.closest('.ws-loading-surface[data-loading-scope="container"]');
+     if(!surface)throw Error('Loading has no scoped blur surface');
+     const rect=surface.getBoundingClientRect(),parent=surface.parentElement.getBoundingClientRect(),logo=node.querySelector('svg').getBoundingClientRect();
+     return {count:document.querySelectorAll('[role="status"][aria-label="처리 중"]').length,screenCount:document.querySelectorAll('.ws-loading-screen').length,bodyPortal:surface.parentElement===document.body,position:getComputedStyle(surface).position,x:rect.x,y:rect.y,width:rect.width,height:rect.height,parentWidth:parent.width,viewportWidth:innerWidth,viewportHeight:innerHeight,blur:getComputedStyle(surface).backdropFilter,rootInert:document.getElementById('root').inert,logo:{x:logo.x,y:logo.y,right:logo.right,bottom:logo.bottom,width:logo.width,height:logo.height}};
    });
-   assert.equal(layout.count,1,`${label}: one shared loading screen`);
-   assert.equal(layout.bodyPortal,true,`${label}: status lives in the body portal`);
-   assert.equal(layout.blur,'blur(4px)',`${label}: consistent background blur`);
-   assert.ok(Math.abs(layout.x)<1&&Math.abs(layout.y)<1&&Math.abs(layout.width-layout.viewportWidth)<1&&Math.abs(layout.height-layout.viewportHeight)<1,`${label}: full viewport coverage ${JSON.stringify(layout)}`);
-   assert.equal(await target.evaluate(node=>{node.focus();return document.activeElement===node;}),false,`${label}: inert background rejects focus`);
-   const calls=await page.evaluate(()=>window.quizClassQa.calls.length);
-   await assert.rejects(target.click({timeout:350}),/Timeout/,`${label}: pending blocks real pointer interaction`);
-   assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),calls,`${label}: blocked input sends no requests`);
+   assert.equal(layout.count,1,label+': one status for this request');
+   assert.equal(layout.screenCount,0,label+': no global loading dialog');
+   assert.equal(layout.bodyPortal,false,label+': loading stays inside its container');
+   assert.equal(layout.rootInert,false,label+': portal root remains usable');
+   assert.equal(layout.blur,'blur(4px)',label+': same mild local blur');
+   assert.notEqual(layout.position,'fixed',label+': no viewport positioning');
+   assert.ok(layout.width<=layout.parentWidth+1,label+': loader fits its container');
+   assert.ok(!(Math.abs(layout.x)<1&&Math.abs(layout.y)<1&&Math.abs(layout.width-layout.viewportWidth)<1&&Math.abs(layout.height-layout.viewportHeight)<1),label+': no full viewport coverage');
+   assert.ok(Math.min(layout.logo.right,layout.viewportWidth)-Math.max(layout.logo.x,0)>=layout.logo.width*.95,label+': logo is visible without horizontal scrolling');
+   assert.ok(Math.min(layout.logo.bottom,layout.viewportHeight)-Math.max(layout.logo.y,0)>=layout.logo.height*.95,label+': logo stays in the visible container area');
+   await target.focus();
+   assert.equal(await target.evaluate(node=>document.activeElement===node),true,label+': external control accepts focus');
+   await target.click({trial:true});
  };
  const releasePending=async()=>{
    await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
@@ -86,9 +92,6 @@ try{
    // Let the real component consume the resolved promise and commit any stale response.
    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  };
- // A route/controller may reset state while its background controls are inert.
- // Programmatic dispatch preserves cancellation coverage without claiming user access.
- const programmaticClick=target=>target.evaluate(node=>node.click());
  await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
  await page.goto(origin);await page.locator('optgroup[label="Ⅳ. 조선의 성립과 발전"]').waitFor({state:'attached'});
  assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.map(c=>c.mode)),['catalog']);
@@ -99,18 +102,18 @@ try{
    };
    await select();await page.evaluate(()=>window.quizClassQa.hold=true);
    await page.getByRole('button',{name:'결과 조회',exact:true}).click();
-   await assertBlockingLoading(page.locator('.qca-reset'),'summary');
+   await assertLocalLoading(page.locator('.qca-reset'),'summary');
    await releasePending();await page.getByRole('heading',{name:'학급 결과',exact:true}).waitFor();
    await page.evaluate(()=>window.quizClassQa.hold=true);
    await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
    const status=loadingStatus;await status.waitFor();
    for(const width of [390,768,1280]){
      await page.setViewportSize({width,height:900});
-     await assertBlockingLoading(page.locator('.qca-reset'),`detail ${width}`);
+     await assertLocalLoading(page.locator('.qca-reset'),`detail ${width}`);
      await page.screenshot({path:path.join(evidence,`detail-loading-${width}.png`),fullPage:true});screenshots.push(`detail-loading-${width}.png`);
    }
    const pendingDetailCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
-   await programmaticClick(page.locator('.qca-reset'));
+   await page.locator('.qca-reset').click();
    await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
    await releasePending();
    assert.equal(await page.locator('.qca-detail-dialog').count(),0,'late detail must not reopen after reset');
@@ -122,15 +125,15 @@ try{
    await page.evaluate(()=>window.quizClassQa.hold=true);
    await dialog.getByRole('button',{name:'새로고침',exact:true}).click();
    const close=page.locator('.qca-detail-dialog [aria-label="상세 닫기"]');
-   await assertBlockingLoading(close,'modal refresh');
-   assert.equal(await page.locator('.qca-detail-dialog').evaluate(node=>node.inert),true,'open detail dialog is inert below loading');
+   await assertLocalLoading(close,'modal refresh');
+   assert.equal(await page.locator('.qca-detail-dialog').evaluate(node=>node.inert),false,'detail header remains usable during a local refresh');
    const pendingRefreshCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
-   await programmaticClick(close);await releasePending();
+   await close.click();await releasePending();
    assert.equal(await page.locator('.qca-detail-dialog').count(),0,'late refresh must not reopen closed detail');
    assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingRefreshCalls,'closing does not refetch');
    await loadingStatus.waitFor({state:'hidden'});
    assert.equal(await page.locator('#root').evaluate(node=>node.inert),false,'completion restores background access');
-   assert.deepEqual(errors,[]);console.log('PASS focused class loading: summary/detail full viewport blur at 390/768/1280, inert pointer/focus blocking, body portal status, programmatic reset/modal close and late response discard');
+   assert.deepEqual(errors,[]);console.log('PASS focused class loading: summary/detail local blur at 390/768/1280, external pointer/focus access, real reset/modal close and late response discard');
  } else {
 
 
@@ -216,9 +219,9 @@ try{
  await page.getByRole('button',{name:'다시 조회',exact:true}).click();await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).waitFor();
  await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();
  const pendingClass=page.locator('select[aria-label="분석할 학급"]');
- await assertBlockingLoading(pendingClass,'class context change');
+ await assertLocalLoading(pendingClass,'class context change');
  const beforeContextChange=await page.evaluate(()=>window.quizClassQa.calls.length);
- await pendingClass.evaluate(node=>{node.value='class_3';node.dispatchEvent(new Event('change',{bubbles:true}));});
+ await pendingClass.selectOption('class_3');
  await releasePending();
  await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).count(),0);
@@ -293,7 +296,9 @@ try{
    if(category==='repeated_choice')assert.ok((await evidencePanel.innerText()).includes('2번 보기 · 25/25문항 (100%)'));
  }
  assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),beforeFilters,'student filters stay local');
- await detail.getByRole('button',{name:'상세 닫기',exact:true}).focus();await page.keyboard.press('Escape');await detail.waitFor({state:'hidden'});
+ await page.mouse.move(0,0);
+ await page.getByRole('tooltip').waitFor({state:'hidden'});
+ await detail.getByRole('button',{name:'상세 닫기',exact:true}).focus();await page.keyboard.press('Escape');await detail.waitFor({state:'hidden',timeout:5000});
  assert.equal(await classifyButton.evaluate(button=>document.activeElement===button),true,'classification drilldown restores count trigger');
  await page.getByRole('button',{name:'학급 비교',exact:true}).click();await page.getByRole('checkbox',{name:'3학년 전체 평균',exact:true}).check();await page.getByRole('button',{name:'선택 완료',exact:true}).click();
  await page.getByRole('button',{name:'결과 조회',exact:true}).click();await behaviorTable.getByRole('rowheader',{name:'3학년 전체',exact:true}).waitFor();
@@ -334,12 +339,12 @@ try{
    await page.getByRole('button',{name:mode==='summary'?'결과 조회':'문항·학생 상세 3학년 1반',exact:true}).click();
    await page.waitForFunction(expected=>window.quizClassQa.calls.at(-1).mode===expected,mode);
    const pendingCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
-   await assertBlockingLoading(page.locator('.qca-reset'),`${mode} reset`);
+   await assertLocalLoading(page.locator('.qca-reset'),`${mode} reset`);
    if(mode==='detail'){
-     assert(await loadingStatus.isVisible(),'Detail loading covers the viewport and blocks background reset');
+     assert(await loadingStatus.isVisible(),'Detail loading stays in its container and leaves reset accessible');
      await page.screenshot({path:path.join(evidence,'detail-loading-1280.png'),fullPage:true});screenshots.push('detail-loading-1280.png');
    }
-   await programmaticClick(page.locator('.qca-reset'));await waiting.waitFor();
+   await page.locator('.qca-reset').click();await waiting.waitFor();
    await releasePending();
    assert.equal(await page.locator('.qca-table').count(),0,`late ${mode} must not restore data`);
    assert.equal(await page.locator('.qca-detail-dialog').count(),0,`late ${mode} must not reopen detail`);

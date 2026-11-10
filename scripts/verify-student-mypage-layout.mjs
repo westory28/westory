@@ -27,6 +27,10 @@ source = source
   .replaceAll("4192", "4197")
   .replaceAll("westory-assessment-qa-tailwind.js", "westory-qa-tailwind.js")
   .replace(
+    "위스토리 · 마이페이지 가상 기록 검증</header>",
+    '위스토리 · 마이페이지 가상 기록 검증<button data-testid="outside-my-page" onClick={(event)=>{const next=Number(event.currentTarget.dataset.count||0)+1;event.currentTarget.dataset.count=String(next);event.currentTarget.textContent="외부 메뉴 "+next;}}>외부 메뉴 0</button></header>',
+  )
+  .replace(
     "import MyPage from './src/pages/student/MyPage';",
     "import MyPage from './src/pages/student/MyPage';import DeveloperLog from './src/pages/DeveloperLog';",
   )
@@ -191,7 +195,9 @@ try {
       .getByRole("button", { name: "오답 노트", exact: true })
       .click();
     await page.locator(".my-quiz-history__list li").first().waitFor();
-    await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+    await page
+      .getByRole("status", { name: "처리 중", exact: true })
+      .waitFor({ state: "hidden" });
     assert.equal(await page.locator(".my-quiz-history__list li").count(), 20);
     assert.equal(
       await page.evaluate(() => window.myHistoryQa.detail.length),
@@ -442,21 +448,48 @@ try {
       await page.waitForFunction(
         () => typeof window.myPageQa.releaseProfile === "function",
       );
-      await page.locator(".ws-loading-screen").waitFor();
-      assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+      await page
+        .getByRole("status", { name: "처리 중", exact: true })
+        .waitFor();
+      assert.equal(
+        await page
+          .getByRole("status", { name: "처리 중", exact: true })
+          .count(),
+        1,
+      );
+      assert.equal(await page.locator(".ws-loading-screen").count(), 0);
+      assert.equal(
+        await page.locator("#root").evaluate((node) => node.inert),
+        false,
+      );
+      const local = page.locator(
+        '.student-my-page > .ws-loading-container-overlay[data-loading-scope="container"]',
+      );
+      await local.waitFor();
+      assert.equal(
+        await local.evaluate((node) => getComputedStyle(node).backdropFilter),
+        "blur(4px)",
+      );
+      const outside = page.getByTestId("outside-my-page");
+      await outside.click();
+      assert.equal(await outside.innerText(), "외부 메뉴 1");
       await page.evaluate(() => window.myPageQa.releaseProfile());
     } else {
       const errorAlert = page
         .getByRole("alert")
         .filter({ hasText: "내 정보를 불러오지 못했습니다." });
       await errorAlert.waitFor();
-      await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+      await page
+        .getByRole("status", { name: "처리 중", exact: true })
+        .waitFor({ state: "hidden" });
       await page
         .getByRole("button", { name: "다시 시도", exact: true })
         .click();
       await errorAlert.waitFor({ state: "hidden" });
     }
-    await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+    await page
+      .getByRole("status", { name: "처리 중", exact: true })
+      .waitFor({ state: "hidden" });
     await page.getByText("가상 학생", { exact: true }).waitFor();
     assert.equal(
       await page.evaluate(() => document.getElementById("root").inert),

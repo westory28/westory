@@ -45,24 +45,35 @@ import {flushSync} from 'react-dom';
 import {PageLoading, InlineLoading, LoadingOverlay, LoadingProvider} from './src/components/common/LoadingState';
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') || 'page';
+const scope = params.get('scope') || undefined;
 const root = createRoot(document.getElementById('root'));
 let key = 0;
 const component = mode === 'inline' ? InlineLoading : mode === 'overlay' ? LoadingOverlay : PageLoading;
 const render = (node) => flushSync(() => {
  const content = React.createElement(LoadingProvider, null,
-   React.createElement('section', {id:'source-container', style:params.has('nested') ? {transform:'translateZ(0)', filter:'opacity(1)', overflow:'hidden', width:240, height:120} : {}}, node));
+   React.createElement('section', {id:'source-container', style:params.has('nested') ? {transform:'translateZ(0)', filter:'opacity(1)', overflow:'hidden', width:240, height:120} : {width:'calc(100% - 32px)',margin:'32px auto',position:'relative',minHeight:mode === 'overlay' ? 240 : undefined}}, node));
  root.render(params.has('strict') ? React.createElement(React.StrictMode, null, content) : content);
 });
-const loading = () => mode === 'multiple' ? React.createElement(React.Fragment, null, React.createElement(InlineLoading, {key:'a'+key}), React.createElement(InlineLoading, {key:'b'+key})) : React.createElement(component, {key, message:'OLD MESSAGE', detail:'OLD DETAIL', warning:'OLD WARNING'});
+const loading = () => mode === 'multiple' ? React.createElement(React.Fragment, null, React.createElement(InlineLoading, {scope,key:'a'+key}), React.createElement(InlineLoading, {scope,key:'b'+key})) : React.createElement(component, {scope,key, message:'OLD MESSAGE', detail:'OLD DETAIL', warning:'OLD WARNING'});
 window.startLoading = () => render(loading());
 window.replaceLoading = () => { key++; render(loading()); };
-window.finishFirstLoading = () => render(React.createElement(InlineLoading, {key:'b'+key}));
-window.showHiddenLoading = () => render(React.createElement('div', {id:'hidden-panel', hidden:true}, React.createElement(InlineLoading)));
-window.nativeLoading = (pending=true) => render(React.createElement('dialog',{id:'native-dialog'}, React.createElement('input',{id:'native-draft',defaultValue:'보존할 초안'}), pending ? React.createElement(InlineLoading) : null));
+window.finishFirstLoading = () => render(React.createElement(InlineLoading, {scope,key:'b'+key}));
+window.showHiddenLoading = () => render(React.createElement('div', {id:'hidden-panel', hidden:true}, React.createElement(InlineLoading,{scope})));
+window.nativeLoading = (pending=true) => render(React.createElement('dialog',{id:'native-dialog'}, React.createElement('input',{id:'native-draft',defaultValue:'보존할 초안'}), pending ? React.createElement(InlineLoading,{scope}) : null));
 window.finishLoading = (error=false) => render(React.createElement('main', null, React.createElement('h1', null, error ? '연결 오류' : '준비 완료'), React.createElement('button', {onClick: error ? window.startLoading : () => { window.clicked = true; }}, error ? '다시 시도' : '계속')));
 window.instantLoading = () => { window.startLoading(); window.finishLoading(); };
 window.unmountLoading = () => root.unmount();
-window.startLoading();
+if(mode === 'scoped') {
+ const pending={a:true,b:true,dialog:true,offscreen:false};
+ const click = id => window.scopedClicks[id]=(window.scopedClicks[id]||0)+1;
+ window.scopedClicks={};
+ const area = (id) => <section id={'scope-'+id} className="scoped-area"><article><label>{id} 입력<input id={id+'-input'} defaultValue={'보존 '+id}/></label><button id={id+'-button'} onClick={()=>click(id)}>{id} 작업</button><button id={id+'-preinert'} inert="">기존 비활성</button></article>{pending[id] && <LoadingOverlay key="primary"/>}{id==='b' && pending.duplicate && <LoadingOverlay key="duplicate"/>}</section>;
+ const renderScoped = () => flushSync(()=>root.render(<React.StrictMode><LoadingProvider><nav><button id="outside-nav" onClick={()=>click('nav')}>다른 메뉴</button></nav><main className="scoped-main"><label>외부 입력<input id="outside-input" defaultValue="외부 초안"/></label><button id="outside-button" onClick={()=>click('outside')}>다른 영역 작업</button><div id="outside-scroll"><div>독립 스크롤</div></div><div className="scoped-grid">{area('a')}{area('b')}</div><button id="open-dialog" onClick={()=>document.getElementById('scoped-modal').showModal()}>상세 열기</button><dialog id="scoped-modal"><header><button id="close-dialog" onClick={()=>document.getElementById('scoped-modal').close()}>상세 닫기</button><input id="dialog-outside" defaultValue="상세 초안"/></header>{area('dialog')}</dialog><div className="long-space"/><div id="offscreen-wrapper">{area('offscreen')}</div><button id="bottom-button" onClick={()=>click('bottom')}>아래 영역 작업</button></main></LoadingProvider></React.StrictMode>));
+ window.localSet=(id,value)=>{pending[id]=value;renderScoped();};
+ window.localHide=(id,hidden)=>{document.getElementById('scope-'+id).hidden=hidden;};
+ window.localRemove=id=>document.getElementById('scope-'+id).remove();
+ renderScoped();
+} else window.startLoading();
 `;
 const files = new Map();
 let css = "";
@@ -98,7 +109,7 @@ const server = http.createServer((req, res) => {
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.end(
-    '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Noto Sans KR,sans-serif;background:#f9fafb}.z-\\[90\\]{z-index:90}' +
+    '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Noto Sans KR,sans-serif;background:#f9fafb}.z-\\[90\\]{z-index:90}nav{padding:16px;background:#dbeafe}.scoped-main{padding:16px}input{max-width:100%;min-width:0}button,input{min-height:44px}.scoped-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:20px 0}.scoped-area{min-height:240px;background:#fef3c7}.scoped-area article{padding:16px}.scoped-area label{display:block}.scoped-area input{display:block}#outside-scroll{height:64px;overflow:auto;background:#e2e8f0;margin-top:12px}#outside-scroll>div{height:500px}#scoped-modal{width:min(600px,calc(100vw - 32px));padding:16px}#scoped-modal header{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.long-space{height:1500px}@media(max-width:699px){.scoped-grid{grid-template-columns:1fr;gap:16px}}</style><style>' +
       css +
       '</style><div id="root"></div><script type="module" src="' +
       (req.url.includes("strict") ? "/fixture-dev.js" : "/fixture.js") +
@@ -142,7 +153,8 @@ async function makePage(browser, scenario = "normal", options = {}) {
     const listeners = new Map(),
       targets = [],
       observers = [],
-      exits = [];
+      exits = [],
+      exitNodes = new WeakSet();
     let frameCalls = 0,
       timerCalls = 0,
       disconnects = 0;
@@ -198,39 +210,59 @@ async function makePage(browser, scenario = "normal", options = {}) {
       };
     new MutationObserver((records) => {
       for (const record of records)
-        for (const node of record.addedNodes) {
-          if (
-            !(node instanceof Element) ||
-            !node.matches(".ws-loading__logo--exit")
-          )
-            continue;
-          const animations = node.getAnimations({ subtree: true });
-          const surface = node.closest(".ws-loading-exit-surface");
-          const surfaceStyle = surface && getComputedStyle(surface);
-          const surfaceBox = surface?.getBoundingClientRect();
-          exits.push({
-            ariaHidden: node.getAttribute("aria-hidden"),
-            pointerEvents: getComputedStyle(node).pointerEvents,
-            surface: surface && {
-              blur: surfaceStyle.backdropFilter,
-              background: surfaceStyle.backgroundColor,
-              pointerEvents: surfaceStyle.pointerEvents,
-              coversViewport:
-                surfaceBox.x === 0 &&
-                surfaceBox.y === 0 &&
-                surfaceBox.width === innerWidth &&
-                surfaceBox.height === innerHeight,
-              durations: surface
-                .getAnimations()
-                .map((animation) => animation.effect.getTiming().duration),
-            },
-            animations: animations.map((animation) => ({
-              duration: animation.effect.getTiming().duration,
-              frames: animation.effect
-                .getKeyframes()
-                .map(({ transform, opacity }) => ({ transform, opacity })),
-            })),
-          });
+        for (const added of record.addedNodes) {
+          if (!(added instanceof Element)) continue;
+          for (const node of [
+            added,
+            ...added.querySelectorAll(".ws-loading__logo--exit"),
+          ]) {
+            if (!node.matches(".ws-loading__logo--exit") || exitNodes.has(node))
+              continue;
+            exitNodes.add(node);
+            const animations = node.getAnimations({ subtree: true });
+            const surface = node.closest(".ws-loading-exit-surface");
+            const surfaceStyle = surface && getComputedStyle(surface);
+            const surfaceBox = surface?.getBoundingClientRect();
+            exits.push({
+              ariaHidden: node.getAttribute("aria-hidden"),
+              pointerEvents: getComputedStyle(node).pointerEvents,
+              surface: surface && {
+                scope: surface.dataset.loadingScope,
+                box: {
+                  x: surfaceBox.x,
+                  y: surfaceBox.y,
+                  width: surfaceBox.width,
+                  height: surfaceBox.height,
+                },
+                body: surface.parentElement === document.body,
+                hostId: surface.parentElement.id,
+                blur: surfaceStyle.backdropFilter,
+                background: surfaceStyle.backgroundColor,
+                pointerEvents: surfaceStyle.pointerEvents,
+                coversViewport:
+                  surfaceBox.x === 0 &&
+                  surfaceBox.y === 0 &&
+                  surfaceBox.width === innerWidth &&
+                  surfaceBox.height === innerHeight,
+                durations: surface
+                  .getAnimations()
+                  .map((animation) => animation.effect.getTiming().duration),
+              },
+              animations: animations.map((animation) => ({
+                duration: animation.effect.getTiming().duration,
+                frames: animation.effect
+                  .getKeyframes()
+                  .map(({ transform, opacity }) => ({ transform, opacity })),
+              })),
+            });
+            if (window.pauseLoadingExits) {
+              for (const animation of [
+                ...animations,
+                ...(surface?.getAnimations() || []),
+              ])
+                animation.pause();
+            }
+          }
         }
     }).observe(document, { subtree: true, childList: true });
     if (scenario === "missing-matchMedia") window.matchMedia = undefined;
@@ -376,12 +408,34 @@ async function checkLayout(page, width, label, directory) {
     true,
     label + ": no horizontal overflow",
   );
+  const scope = new URL(page.url()).searchParams.get("scope") || "container";
+  const mode = new URL(page.url()).searchParams.get("mode") || "page";
+  if (scope === "container" && mode === "overlay") {
+    await page.waitForFunction(() => {
+      const parent = document.getElementById("source-container"),
+        surface = parent?.querySelector(".ws-loading-surface"),
+        logo = surface?.querySelector(".ws-loading__logo");
+      if (!surface || !logo) return false;
+      const box = surface.getBoundingClientRect(),
+        mark = logo.getBoundingClientRect();
+      return (
+        Math.abs(box.width - parent.clientWidth) < 1 &&
+        Math.abs(mark.x + mark.width / 2 - box.x - box.width / 2) < 1
+      );
+    });
+  }
   const box = await page.locator(".ws-loading__logo").boundingBox();
+  const surface = page.locator(".ws-loading-surface");
+  const surfaceBox = await surface.boundingBox();
   assert.ok(
-    Math.abs(box.x + box.width / 2 - width / 2) < 1,
+    Math.abs(box.x + box.width / 2 - (surfaceBox.x + surfaceBox.width / 2)) < 1,
     label + ": centered",
   );
-  const screen = await page.locator(".ws-loading-screen").evaluate((node) => {
+  assert.ok(
+    box.width <= (scope === "container" && mode === "inline" ? 192 : 288) + 1,
+    label + ": responsive logo maximum",
+  );
+  const screen = await surface.evaluate((node) => {
     const box = node.getBoundingClientRect(),
       css = getComputedStyle(node);
     return {
@@ -392,27 +446,57 @@ async function checkLayout(page, width, label, directory) {
       height: box.height,
       blur: css.backdropFilter || css.webkitBackdropFilter,
       background: css.backgroundColor,
-      z: css.zIndex,
+      scope: node.dataset.loadingScope,
     };
   });
-  assert.deepEqual(
-    screen,
-    {
-      body: true,
-      x: 0,
-      y: 0,
-      width,
-      height: 900,
-      blur: "blur(4px)",
-      background: "rgba(255, 255, 255, 0.6)",
-      z: "20000",
-    },
-    label + ": one consistent full viewport backdrop",
-  );
-  assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+  assert.equal(screen.blur, "blur(4px)");
+  assert.equal(screen.background, "rgba(255, 255, 255, 0.6)");
+  assert.equal(screen.scope, scope);
+  if (scope === "screen")
+    assert.deepEqual(
+      screen,
+      {
+        body: true,
+        x: 0,
+        y: 0,
+        width,
+        height: 900,
+        blur: "blur(4px)",
+        background: "rgba(255, 255, 255, 0.6)",
+        scope: "screen",
+      },
+      label + ": one consistent full viewport backdrop",
+    );
+  else {
+    assert.equal(
+      screen.body,
+      false,
+      label + ": local surface stays in its container",
+    );
+    const parent = await page.locator("#source-container").boundingBox();
+    assert.ok(
+      Math.abs(screen.x - parent.x) < 1 &&
+        Math.abs(screen.width - parent.width) < 1,
+      label + ": width follows its parent",
+    );
+    assert.ok(
+      screen.height >= (mode === "inline" ? 112 : 240),
+      label + ": reserved local height",
+    );
+    const position = await surface.evaluate(
+      (node) => getComputedStyle(node).position,
+    );
+    assert.ok(
+      mode === "overlay"
+        ? position === "absolute"
+        : ["static", "relative"].includes(position),
+      label + ": local layout mode",
+    );
+    assert.equal(await page.locator(".ws-loading-screen").count(), 0);
+  }
   assert.equal(
     await page.locator("#root").evaluate((node) => node.inert),
-    true,
+    scope === "screen",
   );
   await page.screenshot({ path: path.join(directory, label + ".png") });
 }
@@ -430,6 +514,9 @@ async function checkExit(page, error = false) {
   const oldExits = await page.evaluate(
     () => window.loadingQA.state().exits.length,
   );
+  const expectedBox = await page.locator(".ws-loading-surface").boundingBox();
+  const expectedScope =
+    new URL(page.url()).searchParams.get("scope") || "container";
   await page.evaluate((error) => window.finishLoading(error), error);
   await page
     .getByRole("heading", { name: error ? "연결 오류" : "준비 완료" })
@@ -445,7 +532,14 @@ async function checkExit(page, error = false) {
   assert.equal(exit.surface.blur, "blur(4px)");
   assert.equal(exit.surface.background, "rgba(255, 255, 255, 0.6)");
   assert.equal(exit.surface.pointerEvents, "none");
-  assert.equal(exit.surface.coversViewport, true);
+  assert.equal(exit.surface.scope, expectedScope);
+  assert.equal(exit.surface.body, expectedScope === "screen");
+  for (const key of ["x", "y", "width", "height"])
+    assert.ok(
+      Math.abs(exit.surface.box[key] - expectedBox[key]) < 1,
+      "exit retains its own surface bounds: " + key,
+    );
+  assert.equal(exit.surface.coversViewport, expectedScope === "screen");
   assert.deepEqual(exit.surface.durations, [240]);
   assert.deepEqual(
     exit.animations
@@ -468,6 +562,281 @@ async function checkExit(page, error = false) {
   return exit;
 }
 
+async function checkScopedContainers(browser, directory, result) {
+  const fixture = await makePage(browser),
+    { page } = fixture;
+  const localSurface = (id) => page.locator(`#scope-${id} .ws-loading-surface`);
+  const assertArea = async (id) => {
+    await localSurface(id).waitFor();
+    const area = await page.locator(`#scope-${id}`).boundingBox();
+    const surface = await localSurface(id).boundingBox();
+    for (const key of ["x", "y", "width", "height"])
+      assert.ok(
+        Math.abs(area[key] - surface[key]) < 1,
+        `${id}: local overlay matches parent ${key}`,
+      );
+    const state = await localSurface(id).evaluate((node) => ({
+      scope: node.dataset.loadingScope,
+      position: getComputedStyle(node).position,
+      blur:
+        getComputedStyle(node).backdropFilter ||
+        getComputedStyle(node).webkitBackdropFilter,
+      background: getComputedStyle(node).backgroundColor,
+      parentInert: node.parentElement.inert,
+      parent: node.parentElement.id,
+    }));
+    assert.deepEqual(state, {
+      scope: "container",
+      position: "absolute",
+      blur: "blur(4px)",
+      background: "rgba(255, 255, 255, 0.6)",
+      parentInert: false,
+      parent: `scope-${id}`,
+    });
+    assert.equal(
+      await page.locator(`#${id}-input`).evaluate((node) => {
+        node.focus();
+        return node === document.activeElement;
+      }),
+      false,
+      `${id}: only pending content rejects focus`,
+    );
+    assert.equal(
+      await page.locator(`#scope-${id} article`).evaluate((node) => node.inert),
+      true,
+    );
+  };
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(url + "?mode=scoped&strict=1");
+    await assertArea("a");
+    await assertArea("b");
+    assert.equal(await page.locator(".ws-loading-screen").count(), 0);
+    assert.equal(
+      await page.locator("#root").evaluate((node) => node.inert),
+      false,
+    );
+    assert.equal(await page.evaluate(() => document.body.style.overflowY), "");
+    assert.equal(
+      await page.getByRole("status", { name: "처리 중" }).count(),
+      2,
+      "independent containers keep independent surfaces",
+    );
+    const ids = await page
+      .locator("clipPath[id]")
+      .evaluateAll((nodes) => nodes.map((node) => node.id));
+    assert.equal(
+      new Set(ids).size,
+      ids.length,
+      "independent logos have unique clip IDs",
+    );
+    await assert.rejects(
+      page.locator("#a-button").click({ timeout: 300 }),
+      /Timeout/,
+      "pending local content rejects pointer input",
+    );
+    await page.locator("#outside-nav").click();
+    await page.locator("#outside-button").click();
+    await page.locator("#outside-input").fill(`외부 입력 ${width}`);
+    assert.equal(
+      await page.locator("#outside-input").inputValue(),
+      `외부 입력 ${width}`,
+    );
+    assert.equal(
+      await page.evaluate(() => document.activeElement.id),
+      "outside-input",
+    );
+    assert.deepEqual(await page.evaluate(() => window.scopedClicks), {
+      nav: 1,
+      outside: 1,
+    });
+    await page.locator("#outside-scroll").hover();
+    await page.mouse.wheel(0, 180);
+    await page.waitForFunction(
+      () => document.getElementById("outside-scroll").scrollTop > 0,
+    );
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      "scoped loading adds no horizontal overflow",
+    );
+    await page.screenshot({
+      path: path.join(directory, `scoped-${width}.png`),
+    });
+    await page.locator("#bottom-button").click();
+    assert.ok(
+      await page.evaluate(() => scrollY > 0),
+      "long page remains scrollable during local loading",
+    );
+    assert.equal(await page.evaluate(() => window.scopedClicks.bottom), 1);
+    await page.waitForFunction(() =>
+      document
+        .querySelector("#scope-a .ws-loading")
+        ?.classList.contains("ws-loading--paused"),
+    );
+  }
+  await page.evaluate(() => scrollTo(0, 0));
+  await waitRunning(page);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  result.motion.push(await assertMotion(page, "container reduced motion"));
+  const retainedClip = await page
+    .locator("#scope-b clipPath")
+    .first()
+    .getAttribute("id");
+  await page.evaluate(() => window.localSet("duplicate", true));
+  assert.equal(
+    await localSurface("b").count(),
+    1,
+    "same-parent requests share one local surface",
+  );
+  await page.evaluate(() => window.localSet("b", false));
+  await assertArea("b");
+  assert.equal(
+    await page.locator("#scope-b clipPath").first().getAttribute("id"),
+    retainedClip,
+    "same-parent partial completion keeps its animation",
+  );
+  await page.evaluate(() => {
+    window.localSet("b", true);
+    window.localSet("duplicate", false);
+  });
+  const oldExits = await page.evaluate(
+    () => window.loadingQA.state().exits.length,
+  );
+  await page.evaluate(() => {
+    window.pauseLoadingExits = true;
+    window.localSet("a", false);
+  });
+  await page.waitForFunction(
+    (old) => window.loadingQA.state().exits.length > old,
+    oldExits,
+  );
+  const exit = await page.evaluate(() => window.loadingQA.state().exits.at(-1));
+  assert.equal(exit.surface.scope, "container");
+  assert.equal(exit.surface.body, false);
+  assert.equal(
+    exit.surface.hostId,
+    "scope-a",
+    "completion fade remains in the completed parent",
+  );
+  assert.equal(exit.surface.coversViewport, false);
+  assert.equal(exit.surface.pointerEvents, "none");
+  assert.equal(await localSurface("a").count(), 0);
+  await assertArea("b");
+  assert.equal(
+    await page.locator("#scope-b clipPath").first().getAttribute("id"),
+    retainedClip,
+    "one completion preserves the other animation",
+  );
+  await page.locator("#a-button").click();
+  await page.locator("#outside-input").fill("완료 중에도 입력");
+  assert.equal(
+    await page.locator("#a-preinert").evaluate((node) => node.inert),
+    true,
+    "pre-existing inert remains intact",
+  );
+  const beforeScroll = await page
+    .locator("#scope-a .ws-loading-exit-surface")
+    .boundingBox();
+  assert.ok(
+    beforeScroll,
+    "local completion exists only inside its completed parent",
+  );
+  await page.evaluate(() => scrollBy(0, 100));
+  await page.waitForFunction(
+    () => !document.querySelector(".ws-loading-exit-surface"),
+  );
+  assert.equal(
+    await page.locator(".ws-loading__logo--exit").count(),
+    0,
+    "scroll removes local completion before it can drift across other content",
+  );
+  await page.evaluate(() => {
+    window.pauseLoadingExits = false;
+    document
+      .querySelectorAll(".ws-loading-exit-surface")
+      .forEach((node) =>
+        node
+          .getAnimations({ subtree: true })
+          .forEach((animation) => animation.play()),
+      );
+  });
+  await page.waitForFunction(
+    () => !document.querySelector(".ws-loading-exit-surface"),
+  );
+  await page.evaluate(() => {
+    scrollTo(0, 0);
+    window.localHide("b", true);
+  });
+  await localSurface("b").waitFor({ state: "hidden" });
+  await page.locator("#outside-nav").click();
+  await page.evaluate(() => window.localHide("b", false));
+  await assertArea("b");
+  await page.evaluate(() => window.localSet("a", true));
+  await assertArea("a");
+  await page.locator("#bottom-button").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector("#scope-a .ws-loading")
+      ?.classList.contains("ws-loading--paused"),
+  );
+  const beforeOffscreen = await page.evaluate(
+    () => window.loadingQA.state().exits.length,
+  );
+  await page.evaluate(() => window.localSet("a", false));
+  await page.waitForTimeout(80);
+  assert.equal(
+    await page.evaluate(() => window.loadingQA.state().exits.length),
+    beforeOffscreen,
+    "offscreen completion leaves no fade elsewhere",
+  );
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.locator("#open-dialog").click();
+  await assertArea("dialog");
+  assert.equal(
+    await page.locator("#scoped-modal").evaluate((node) => node.inert),
+    false,
+    "local work does not inert the whole native dialog",
+  );
+  assert.equal(
+    await page.locator(".ws-loading-screen").count(),
+    0,
+    "local work does not create another native modal",
+  );
+  await page.locator("#dialog-outside").fill("수정한 상세 초안");
+  await page.locator("#close-dialog").click();
+  await page.locator("#scoped-modal").waitFor({ state: "hidden" });
+  await page.locator("#outside-button").click();
+  await page.locator("#open-dialog").click();
+  await assertArea("dialog");
+  assert.equal(
+    await page.locator("#dialog-outside").inputValue(),
+    "수정한 상세 초안",
+  );
+  await page.evaluate(() => window.localSet("dialog", false));
+  await page.locator("#dialog-button").click();
+  await page.locator("#close-dialog").click();
+  await page.waitForFunction(
+    () => !document.querySelector(".ws-loading-exit-surface"),
+  );
+  await assertCleanup(page);
+  assert.deepEqual(fixture.errors, []);
+  assert.ok(
+    fixture.requests.every(
+      (request) =>
+        request.url.startsWith(url) &&
+        request.method === "GET" &&
+        !["xhr", "fetch", "websocket"].includes(request.type),
+    ),
+    "container interactions never request backend data",
+  );
+  result.checks.push(
+    "Container boundaries at 320/390/768/1440px: independent pending work, local inert only, outside navigation/input/scroll, retained sibling animation, local completion/scroll/cleanup, hidden panel, native dialog close/draft and offscreen completion",
+  );
+  await page.close();
+}
+
 async function runEngine(engine) {
   const type = ["msedge", "chrome"].includes(engine) ? "chromium" : engine;
   const browser = await playwright[type].launch({
@@ -484,6 +853,7 @@ async function runEngine(engine) {
     compatibility: [],
   };
   try {
+    await checkScopedContainers(browser, directory, result);
     const main = await makePage(browser),
       { page } = main;
     await page.goto(url);
@@ -659,11 +1029,18 @@ async function runEngine(engine) {
     result.checks.push(
       "Fast and slow exits fully fill in 180ms/fade in 240ms without blocking content; errors remain actionable, retry resets; rapid and consecutive loading have no false exit",
     );
+    const screenLife = await makePage(browser);
+    await screenLife.page.goto(url + "?scope=screen");
+    await waitRunning(screenLife.page);
+    result.screenExit = await checkExit(screenLife.page);
+    await assertCleanup(screenLife.page);
+    assert.deepEqual(screenLife.errors, []);
+    await screenLife.page.close();
 
     for (const mode of ["page", "multiple"]) {
       const strict = await makePage(browser),
         sp = strict.page;
-      await sp.goto(url + "?strict=1&mode=" + mode);
+      await sp.goto(url + "?strict=1&scope=screen&mode=" + mode);
       await waitRunning(sp);
       await sp.waitForTimeout(180);
       assert.equal(
@@ -714,7 +1091,7 @@ async function runEngine(engine) {
       "Development StrictMode cleanup and multiple-instance unique IDs/lifecycle listeners",
     );
     const nested = await makePage(browser);
-    await nested.page.goto(url + "?mode=inline&nested=1");
+    await nested.page.goto(url + "?mode=inline&nested=1&scope=screen");
     await waitRunning(nested.page);
     await checkLayout(nested.page, 1280, "nested-container-1280", directory);
     await nested.page.evaluate(() => {
@@ -746,7 +1123,7 @@ async function runEngine(engine) {
       "Shared body portal escapes transformed/clipped parents and existing/new modal backgrounds; restores inert and scroll after last request",
     );
     const hiddenPanel = await makePage(browser);
-    await hiddenPanel.page.goto(url);
+    await hiddenPanel.page.goto(url + "?scope=screen");
     await hiddenPanel.page.evaluate(() => window.showHiddenLoading());
     await hiddenPanel.page.waitForFunction(
       () => !document.querySelector(".ws-loading-screen"),
@@ -778,7 +1155,7 @@ async function runEngine(engine) {
     );
     const native = await makePage(browser),
       nd = native.page;
-    await nd.goto(url);
+    await nd.goto(url + "?scope=screen");
     await nd.evaluate(() => window.nativeLoading());
     await nd.waitForFunction(
       () => !document.querySelector(".ws-loading-screen"),

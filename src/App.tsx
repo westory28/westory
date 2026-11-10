@@ -205,7 +205,7 @@ const ArchiveRouteContent: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
   <SemesterArchiveBoundary>
-    <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    <Suspense fallback={<PageLoading scope="screen" />}>{children}</Suspense>
   </SemesterArchiveBoundary>
 );
 

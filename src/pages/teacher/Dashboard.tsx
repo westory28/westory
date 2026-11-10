@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { LoadingOverlay } from "../../components/common/LoadingState";
+import { InlineLoading } from "../../components/common/LoadingState";
 import { CalendarEvent } from "../../types";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
@@ -272,7 +272,7 @@ const TeacherDashboard: React.FC = () => {
         </div>
       </div>
 
-      <React.Suspense fallback={<LoadingOverlay />}>
+      <React.Suspense fallback={<InlineLoading />}>
         {isEventModalOpen && (
           <EventModal
             isOpen={isEventModalOpen}

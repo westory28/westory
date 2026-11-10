@@ -1,3 +1,13 @@
+.ws-loading-surface {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(255 255 255 / 60%);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
 .ws-loading-screen {
   position: fixed;
   inset: 0;
@@ -8,14 +18,53 @@
   max-height: none;
   margin: 0;
   border: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgb(255 255 255 / 60%);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
   isolation: isolate;
+}
+.ws-loading-slot {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+.ws-loading-slot--inline {
+  min-height: 112px;
+}
+.ws-loading-slot--page {
+  min-height: 240px;
+}
+.ws-loading-inline,
+.ws-loading-page {
+  width: 100%;
+  min-height: inherit;
+  border-radius: inherit;
+}
+.ws-loading-inline .ws-loading__logo {
+  width: 192px;
+}
+.ws-loading-container {
+  isolation: isolate;
+}
+.ws-loading-container--positioned,
+.ws-loading-exit-container {
+  position: relative;
+}
+.ws-loading-container--empty {
+  min-height: 112px;
+}
+.ws-loading-container-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: block;
+  border-radius: inherit;
+  overflow: clip;
+}
+.ws-loading-container-overlay > .ws-loading {
+  position: absolute;
+  left: var(--ws-loading-center-x, 50%);
+  top: var(--ws-loading-center-y, 50%);
+  width: var(--ws-loading-logo-width, min(288px, calc(100% - 32px)));
+  transform: translate(-50%, -50%);
 }
 .ws-loading-screen::backdrop {
   background: transparent;

@@ -353,7 +353,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     authPhase === "opening-session" ||
     authPhase === "loading-profile"
   )
-    return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="로그인 상태를 확인하는 중입니다." />
+    );
 
   if (!profileReady) return <Navigate to="/" replace />;
   if (permissionRedirect) return <Navigate to={permissionRedirect} replace />;
@@ -386,7 +388,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (currentUser && isStudentRoute && !studentAccessReady) {
-    return <PageLoading message="학생 공개 설정을 확인하는 중입니다." />;
+    return (
+      <PageLoading
+        scope="screen"
+        message="학생 공개 설정을 확인하는 중입니다."
+      />
+    );
   }
 
   if (
@@ -395,7 +402,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     studentAccessReady &&
     !studentRouteAccess.allowed
   ) {
-    return <PageLoading message="학생 공개 설정을 반영하는 중입니다." />;
+    return (
+      <PageLoading
+        scope="screen"
+        message="학생 공개 설정을 반영하는 중입니다."
+      />
+    );
   }
 
   return (

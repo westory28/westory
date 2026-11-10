@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
-import { LoadingOverlay } from "../../components/common/LoadingState";
+import { InlineLoading } from "../../components/common/LoadingState";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import TeacherNavigationIcon, {
   type TeacherIconName,
@@ -81,7 +81,7 @@ const Settings: React.FC = () => {
       >
         <h1 className="sr-only">관리자 설정 · {activeSection.label}</h1>
         {(activeTab === "my-page" || activeTab === "avatar-pricing") && (
-          <React.Suspense fallback={<LoadingOverlay />}>
+          <React.Suspense fallback={<InlineLoading />}>
             {activeTab === "my-page" ? (
               <SettingsMyPage />
             ) : (

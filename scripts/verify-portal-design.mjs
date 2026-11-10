@@ -876,7 +876,7 @@ try {
               path: path.join(evidence, `${label}.png`),
               fullPage: true,
             });
-            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+            await page.getByRole("status", { name: "처리 중", exact: true }).waitFor({ state: "hidden" });
             const view = page.getByRole("group", {
               name: "지도 보기",
               exact: true,
@@ -890,7 +890,7 @@ try {
                 .getAttribute("aria-pressed"),
               "true",
             );
-            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+            await page.getByRole("status", { name: "처리 중", exact: true }).waitFor({ state: "hidden" });
             await noOverflow(page, `${label}-world`);
             const worldLayout = await mapLayout(
               page,
@@ -902,7 +902,7 @@ try {
               .getByRole("button", { name: "지구본", exact: true })
               .press("Enter");
             await page.locator(".history-globe canvas").waitFor();
-            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+            await page.getByRole("status", { name: "처리 중", exact: true }).waitFor({ state: "hidden" });
             await noOverflow(page, `${label}-globe`);
             const globeLayout = await mapLayout(
               page,

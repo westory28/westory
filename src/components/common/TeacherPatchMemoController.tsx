@@ -693,7 +693,6 @@ const TeacherPatchMemoController: React.FC = () => {
 
   return (
     <>
-      {(saving || busyNoteIds.size > 0) && <LoadingOverlay />}
       {selectingTarget && (
         <div
           className="pointer-events-none fixed inset-0 z-[118]"
@@ -752,6 +751,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+              {saving && <LoadingOverlay />}
               <label className="block">
                 <span className="text-xs font-extrabold text-slate-700">
                   메모
@@ -960,6 +960,7 @@ const TeacherPatchMemoController: React.FC = () => {
                           : "border-slate-200"
                       } ${completed ? "opacity-75" : ""}`}
                     >
+                      {busyNoteIds.has(note.id) && <LoadingOverlay />}
                       <div className="flex items-start gap-3">
                         <button
                           type="button"

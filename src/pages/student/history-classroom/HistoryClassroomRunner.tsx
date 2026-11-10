@@ -1961,46 +1961,48 @@ const HistoryClassroomRunner: React.FC = () => {
 
   return (
     <>
-      {(submitting || startingAttempt) && <LoadingOverlay />}
-      <HistoryClassroomAssignmentView
-        assignment={assignment}
-        currentPage={currentPage}
-        onCurrentPageChange={handleCurrentPageChange}
-        answers={answers}
-        interactiveViewport
-        layoutVariant="studentSolve"
-        answerChecks={resultSummary?.answerChecks || []}
-        onAnswerChange={handleAnswerChange}
-        hintUseCount={hintUseCount}
-        onUseHint={handleUseHint}
-        onSubmit={() => void submitAnswers()}
-        onStart={
-          !attemptStarted && !completed
-            ? () => void beginCanonicalAttempt()
-            : undefined
-        }
-        submitting={submitting || startingAttempt}
-        answersLocked={!attemptStarted || pendingSubmitAfterOnline}
-        submitLabel={pendingSubmitAfterOnline ? "다시 제출" : undefined}
-        completed={completed}
-        resultText={resultSummary ? "" : resultText}
-        pointNotice={pointNotice}
-        countdownLabel={countdownLabel}
-        timeProgressPercent={timeProgressPercent}
-        dueStatusLabel={dueStatus.label}
-        dueStatusTone={dueStatus.tone}
-        headerAction={
-          resultSummary ? (
-            <button
-              type="button"
-              onClick={() => setResultDialogOpen(true)}
-              className="min-h-11 shrink-0 rounded-lg border border-gray-200 px-3 text-sm font-bold text-gray-700"
-            >
-              결과 보기
-            </button>
-          ) : undefined
-        }
-      />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {(submitting || startingAttempt) && <LoadingOverlay />}
+        <HistoryClassroomAssignmentView
+          assignment={assignment}
+          currentPage={currentPage}
+          onCurrentPageChange={handleCurrentPageChange}
+          answers={answers}
+          interactiveViewport
+          layoutVariant="studentSolve"
+          answerChecks={resultSummary?.answerChecks || []}
+          onAnswerChange={handleAnswerChange}
+          hintUseCount={hintUseCount}
+          onUseHint={handleUseHint}
+          onSubmit={() => void submitAnswers()}
+          onStart={
+            !attemptStarted && !completed
+              ? () => void beginCanonicalAttempt()
+              : undefined
+          }
+          submitting={submitting || startingAttempt}
+          answersLocked={!attemptStarted || pendingSubmitAfterOnline}
+          submitLabel={pendingSubmitAfterOnline ? "다시 제출" : undefined}
+          completed={completed}
+          resultText={resultSummary ? "" : resultText}
+          pointNotice={pointNotice}
+          countdownLabel={countdownLabel}
+          timeProgressPercent={timeProgressPercent}
+          dueStatusLabel={dueStatus.label}
+          dueStatusTone={dueStatus.tone}
+          headerAction={
+            resultSummary ? (
+              <button
+                type="button"
+                onClick={() => setResultDialogOpen(true)}
+                className="min-h-11 shrink-0 rounded-lg border border-gray-200 px-3 text-sm font-bold text-gray-700"
+              >
+                결과 보기
+              </button>
+            ) : undefined
+          }
+        />
+      </div>
       {pendingExitAction && (
         <div
           ref={exitDialogRef}

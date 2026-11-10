@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   SHORT_ANSWER_MAX_LENGTH,
@@ -1892,12 +1891,7 @@ const QuizRunner: React.FC = () => {
   };
 
   const operationLoadingOverlay =
-    showOperationLoading && operationPending
-      ? createPortal(
-          <LoadingOverlay zIndexClassName="z-[1400]" />,
-          document.body,
-        )
-      : null;
+    showOperationLoading && operationPending ? <LoadingOverlay /> : null;
 
   if (entryPending) {
     return (
@@ -1963,7 +1957,7 @@ const QuizRunner: React.FC = () => {
 
     if (isMockExamAttempt) {
       return (
-        <>
+        <div className="relative flex min-h-0 flex-1 flex-col">
           {operationLoadingOverlay}
           <MockExamWorkspace
             questions={selectedQuestions}
@@ -1993,7 +1987,7 @@ const QuizRunner: React.FC = () => {
             onImageReady={finishImageLoad}
             answeredCount={selectedQuestions.filter(isQuestionAnswered).length}
           />
-        </>
+        </div>
       );
     }
 

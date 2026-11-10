@@ -2109,7 +2109,9 @@ const Login: React.FC = () => {
       !consentModalOpen &&
       (redirectRecoveryPending || authBusy || currentUser))
   )
-    return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="로그인 상태를 확인하는 중입니다." />
+    );
 
   const publicTeacherLogin = !classicEntry && (
     <button

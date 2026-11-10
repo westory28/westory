@@ -88,7 +88,12 @@ export const SemesterArchiveBoundary: React.FC<{
       </div>
     );
   if (loading || !configReady || verifiedOwner !== currentUser?.uid) {
-    return <PageLoading message="이전 학기 조회 창을 준비하는 중입니다." />;
+    return (
+      <PageLoading
+        scope="screen"
+        message="이전 학기 조회 창을 준비하는 중입니다."
+      />
+    );
   }
   if (location.pathname.startsWith("/student"))
     return <Navigate to="/teacher/dashboard" replace />;

@@ -234,16 +234,18 @@ export default function MockExamPreview({
 
   return (
     <>
-      {busy && <LoadingOverlay />}
-      <button
-        ref={previewButton}
-        type="button"
-        className="quiz-authoring-button"
-        disabled={disabled || busy || !entries.length}
-        onClick={() => void preview()}
-      >
-        {busy ? "불러오는 중…" : "미리보기"}
-      </button>
+      <div className="relative inline-flex">
+        {busy && <LoadingOverlay />}
+        <button
+          ref={previewButton}
+          type="button"
+          className="quiz-authoring-button"
+          disabled={disabled || busy || !entries.length}
+          onClick={() => void preview()}
+        >
+          {busy ? "불러오는 중…" : "미리보기"}
+        </button>
+      </div>
       {error && (
         <p role="alert" className="w-full text-sm text-red-700">
           {error}

@@ -1,4 +1,7 @@
-import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import PointRankBadge from "../../../components/common/PointRankBadge";
@@ -382,7 +385,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     "rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-8 text-center text-sm font-bold text-gray-400";
 
   const renderLoading = (label: string) => (
-    <LoadingOverlay message={`${label} 불러오는 중`} />
+    <InlineLoading message={`${label} 불러오는 중`} />
   );
 
   const usesFullWorkspace = activeTab === "quiz";

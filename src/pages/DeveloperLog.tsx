@@ -711,6 +711,7 @@ const DeveloperLog: React.FC = () => {
       <article
         className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle ? " developer-log-image-post" : ""}`}
       >
+        {pendingMutation && <LoadingOverlay />}
         <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -967,6 +968,7 @@ const DeveloperLog: React.FC = () => {
 
     return (
       <div className="space-y-5">
+        {saving && <LoadingOverlay />}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-5 flex flex-col gap-3 border-b border-gray-100 pb-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1303,7 +1305,6 @@ const DeveloperLog: React.FC = () => {
 
   return (
     <div className="ws-page developer-log-page">
-      {(saving || pendingMutation) && <LoadingOverlay />}
       <header className="ws-page-header mb-5">
         <h1>개발자 일지</h1>
         {canManage && mode !== "write" && mode !== "edit" && (

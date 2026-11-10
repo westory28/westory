@@ -8,7 +8,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import InfoHelp from "../../../components/common/InfoHelp";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import {
@@ -1154,6 +1157,9 @@ export default function QuizClassAnalysis({
                   role="region"
                   aria-label="학급별 결과 표"
                 >
+                  {!!detailLoading && !detail && !detailFilter.current && (
+                    <LoadingOverlay />
+                  )}
                   <table className="qca-table qca-summary-table">
                     <thead>
                       <tr>
@@ -1258,9 +1264,6 @@ export default function QuizClassAnalysis({
                                     : "문항·학생"}
                                 </button>
                               )}
-                              {detailLoading === row.classId &&
-                                !detail &&
-                                !detailFilter.current && <InlineLoading />}
                             </td>
                           </tr>
                         );
@@ -1280,6 +1283,9 @@ export default function QuizClassAnalysis({
                   role="region"
                   aria-label="학급별 풀이 분류 표"
                 >
+                  {!!detailLoading && !detail && !!detailFilter.current && (
+                    <LoadingOverlay />
+                  )}
                   <table className="qca-table qca-behavior-table">
                     <thead>
                       <tr>
@@ -1337,11 +1343,6 @@ export default function QuizClassAnalysis({
                                 ) : (
                                   `${counts[category]}명`
                                 )}
-                                {detailLoading === row.classId &&
-                                  !detail &&
-                                  detailFilter.current === category && (
-                                    <InlineLoading />
-                                  )}
                               </td>
                             ))}
                           </tr>
@@ -1460,7 +1461,7 @@ export default function QuizClassAnalysis({
             </button>
           </header>
           <div className="qca-detail-body">
-            {(!!detailLoading || detailAchievementLoading) && <InlineLoading />}
+            {detailAchievementLoading && <InlineLoading />}
             {detailError && (
               <div className="qca-error" role="alert">
                 {detailError}

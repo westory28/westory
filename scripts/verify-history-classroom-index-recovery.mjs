@@ -55,7 +55,7 @@ const component = JSON.stringify(
 );
 const output = await build({
   stdin: {
-    contents: `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,useLocation}from'react-router-dom';import Index from ${component};function App(){const location=useLocation();return location.pathname.includes('/run')?<p data-testid="route">{location.pathname+location.search}</p>:<Index/>;}createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/history-classroom']}><App/></MemoryRouter>);`,
+    contents: `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,useLocation}from'react-router-dom';import Index from ${component};function App(){const location=useLocation();const[count,setCount]=React.useState(0);return <><button onClick={()=>setCount(count+1)}>외부 메뉴 {count}</button>{location.pathname.includes('/run')?<p data-testid="route">{location.pathname+location.search}</p>:<Index/>}</>;}createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/history-classroom']}><App/></MemoryRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -1127,10 +1127,39 @@ try {
     await page.goto(url);
     await page.waitForFunction(() => window.__readResolvers?.length === 2);
     assert.equal(
-      await page.locator(".ws-loading-screen").count(),
+      await page.getByRole("status", { name: "처리 중", exact: true }).count(),
       1,
-      "initial reads block until ready",
+      "initial reads show an in-flow loading slot",
     );
+    const checkExternalAccess = async () => {
+      assert.equal(await page.locator(".ws-loading-screen").count(), 0);
+      const slot = page.locator(
+        '.ws-loading-inline[data-loading-scope="container"]',
+      );
+      await slot.waitFor();
+      assert.equal(
+        await slot.evaluate(
+          (node) =>
+            getComputedStyle(node.closest(".ws-loading-slot--inline")).position,
+        ),
+        "relative",
+      );
+      assert.equal(
+        await page.locator("#root").evaluate((node) => node.inert),
+        false,
+      );
+      const calls = await page.evaluate(() => window.__readCalls.length);
+      const outside = page.getByRole("button", { name: /^외부 메뉴/ });
+      const label = await outside.innerText();
+      await outside.click();
+      assert.notEqual(await outside.innerText(), label);
+      assert.equal(
+        await page.evaluate(() => window.__readCalls.length),
+        calls,
+        "outside action adds no reads",
+      );
+    };
+    await checkExternalAccess();
     const releaseReads = () =>
       page.evaluate(() => {
         window.__holdReads = false;
@@ -1154,12 +1183,17 @@ try {
           .click();
       await page.waitForFunction(() => window.__readResolvers?.length === 2);
       if (mode === "explicit")
-        await page.locator(".ws-loading-screen").waitFor();
+        await page
+          .getByRole("status", { name: "처리 중", exact: true })
+          .waitFor();
       assert.equal(
-        await page.locator(".ws-loading-screen").count(),
+        await page
+          .getByRole("status", { name: "처리 중", exact: true })
+          .count(),
         mode === "explicit" ? 1 : 0,
         mode + " loading boundary",
       );
+      if (mode === "explicit") await checkExternalAccess();
       await releaseReads();
       await page
         .getByRole("heading", { name: `갱신 ${mode}`, exact: true })
@@ -1168,7 +1202,9 @@ try {
         (expected) => window.__readCalls.length === expected,
         previousReads + readsPerLoad,
       );
-      await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+      await page
+        .getByRole("status", { name: "처리 중", exact: true })
+        .waitFor({ state: "hidden" });
       assert.equal(
         await page.evaluate(() => document.getElementById("root").inert),
         false,

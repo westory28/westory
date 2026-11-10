@@ -35,7 +35,7 @@ export const useAttendanceDates=()=>({dates:[],loading:false,error:null,retry:()
 `;
 const bundled = await build({
   stdin: {
-    contents: `import React from 'react';import{createRoot}from'react-dom/client';import Calendar from './src/pages/student/Calendar';import{LoadingProvider}from'./src/components/common/LoadingState';createRoot(document.getElementById('root')).render(<LoadingProvider><Calendar/></LoadingProvider>);`,
+    contents: `import React from 'react';import{createRoot}from'react-dom/client';import Calendar from './src/pages/student/Calendar';import{LoadingProvider}from'./src/components/common/LoadingState';function Fixture(){const[count,setCount]=React.useState(0);return <LoadingProvider><aside><button onClick={()=>setCount(count+1)}>외부 메뉴 {count}</button></aside><Calendar/></LoadingProvider>}createRoot(document.getElementById('root')).render(<Fixture/>);`,
     loader: "tsx",
     resolveDir: process.cwd(),
   },
@@ -66,7 +66,7 @@ const bundled = await build({
         }));
         plugin.onLoad({ filter: /.*/, namespace: "view" }, () => ({
           contents:
-            "import React from 'react';export default function Calendar({events}){return <div data-testid='events'>{events.map(item=>item.title).join(',')}</div>}",
+            "import React from 'react';export default function Calendar({events}){return <div><button data-testid='calendar-inside'>일정 내부 작업</button><div data-testid='events'>{events.map(item=>item.title).join(',')}</div></div>}",
           loader: "jsx",
           resolveDir: process.cwd(),
         }));
@@ -102,7 +102,8 @@ await page.route("**/*", (route) => {
   external.push(route.request().url());
   return route.abort();
 });
-const overlay = () => page.locator(".ws-loading-screen");
+const overlay = () =>
+  page.getByRole("status", { name: "처리 중", exact: true });
 const release = async (kind) => {
   await page.waitForFunction(
     (kind) => window.calendarQa.pending.some((item) => item.kind === kind),
@@ -114,6 +115,81 @@ const checkPending = async () => {
   await overlay().waitFor();
   assert.equal(await overlay().count(), 1);
   assert.equal(await page.getByRole("status", { name: "처리 중" }).count(), 1);
+  assert.equal(await page.locator(".ws-loading-screen").count(), 0);
+  assert.equal(
+    await page.locator("#root").evaluate((node) => node.inert),
+    false,
+  );
+  const local = page.locator(
+    '.ws-loading-container-overlay[data-loading-scope="container"]',
+  );
+  const bounds = await local.evaluate((node) => {
+    const rect = node.getBoundingClientRect(),
+      owner = node.parentElement.getBoundingClientRect();
+    return {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      ownerX: owner.x,
+      ownerY: owner.y,
+      ownerWidth: owner.width,
+      ownerHeight: owner.height,
+      blur: getComputedStyle(node).backdropFilter,
+    };
+  });
+  for (const dimension of ["x", "y", "width", "height"]) {
+    const ownerKey = "owner" + dimension[0].toUpperCase() + dimension.slice(1);
+    assert.ok(
+      Math.abs(bounds[dimension] - bounds[ownerKey]) < 1,
+      `Calendar overlay ${dimension} stays inside its owner`,
+    );
+  }
+  assert.equal(bounds.blur, "blur(4px)");
+  const outside = page.getByRole("button", { name: /^외부 메뉴/ });
+  const before = await outside.innerText();
+  await outside.click({ timeout: 2000 }).catch(async (error) => {
+    await page.screenshot({
+      path: path.join(evidence, "calendar-outside-blocked.png"),
+    });
+    const state = await page.evaluate(() => ({
+      calls: window.calendarQa.calls,
+      pending: window.calendarQa.pending.map((item) => item.kind),
+      surfaces: [...document.querySelectorAll(".ws-loading-surface")].map(
+        (node) => {
+          const rect = node.getBoundingClientRect(),
+            owner = node.parentElement;
+          return {
+            classes: node.className,
+            ownerClasses: owner.className,
+            position: getComputedStyle(node).position,
+            ownerPosition: getComputedStyle(owner).position,
+            rect: {
+              x: rect.x,
+              y: rect.y,
+              width: rect.width,
+              height: rect.height,
+            },
+          };
+        },
+      ),
+    }));
+    await fs.writeFile(
+      path.join(evidence, "calendar-outside-blocked.json"),
+      JSON.stringify(state, null, 2),
+    );
+    throw error;
+  });
+  assert.notEqual(
+    await outside.innerText(),
+    before,
+    "outside menu remains operable while calendar is loading",
+  );
+  await assert.rejects(
+    page.getByTestId("calendar-inside").click({ timeout: 200 }),
+    /Timeout/,
+    "only loading calendar content is locked",
+  );
 };
 const results = [];
 try {
@@ -191,7 +267,7 @@ try {
     JSON.stringify({ passed: true, results, errors, external }, null, 2),
   );
   console.log(
-    "PASS student calendar: staged loading, 6 failure/missing-data paths, retry, inert recovery and exact read counts; external requests 0",
+    "PASS student calendar: local bounds/blur, live outside menu, staged loading, 6 failure/missing-data paths, retry and exact read counts; external requests 0",
   );
 } finally {
   await browser.close();

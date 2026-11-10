@@ -3013,7 +3013,6 @@ const ScopedScoreConfirmationView: React.FC<
 
   return (
     <>
-      {signatureActionPending && <LoadingOverlay />}
       {scoreKind === PERFORMANCE_SCORE_KIND ? (
         <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--tabs performance-score-workspace">
           <div className="teacher-sub-content">
@@ -3071,6 +3070,7 @@ const ScopedScoreConfirmationView: React.FC<
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
+              {objecting && <LoadingOverlay />}
               <fieldset>
                 <legend className="text-sm font-black text-slate-800">
                   {resolvedCopy.objectionTargetLabel}
@@ -3368,6 +3368,7 @@ const ScopedScoreConfirmationView: React.FC<
             </div>
 
             <div className="overflow-y-auto px-4 py-4 sm:px-5">
+              {confirming && <LoadingOverlay />}
               {signatureReviewStep === "sign" ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 lg:grid-cols-2">
