@@ -31,6 +31,31 @@ const imageTags = [manifest.cover, ...manifest.panels].map(
     `<figure><img src="/assets/${asset.file}" alt="${asset.alt}" width="${asset.file === "hero.webp" ? 1200 : 1024}" height="${asset.file === "hero.webp" ? 675 : 1536}"></figure>`,
 );
 const article = `<article class="westory-event-article we-notice-images we-notice-images--reopen"><div class="we-notice-images__cover">${imageTags[0]}</div><section class="we-notice-images__details">${imageTags.slice(1).join("")}</section></article>`;
+// DeveloperLog selects its single-column event/image renderer only for notice posts.
+// A direct NoticeImageArticle fixture alone cannot catch an incorrect post category.
+const developerLogSource = await fs.readFile(
+  path.join(root, "src/pages/DeveloperLog.tsx"),
+  "utf8",
+);
+assert.equal(
+  manifest.category,
+  "notice",
+  "Image announcement must select DeveloperLog's notice/event layout instead of the empty card-news column",
+);
+assert.match(
+  developerLogSource,
+  /post\.category === "notice"\s*&&\s*hasEventArticleMarkup\(post\.bodyHtml\)/,
+);
+assert.match(
+  developerLogSource,
+  /eventArticle\s*&&\s*hasNoticeImageArticleMarkup\(post\.bodyHtml\)/,
+);
+assert.match(
+  article,
+  /<article[^>]*class="[^"]*westory-event-article[^"]*we-notice-images/,
+);
+assert.match(article, /we-notice-images__cover/);
+assert.match(article, /we-notice-images__details/);
 const service = `
 import {useSyncExternalStore} from 'react';
 const params=new URLSearchParams(location.search), teacher=params.get('role')!=='student';

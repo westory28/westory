@@ -30,3 +30,12 @@
 - 운영 색인은 기존 11개를 유지하고 필요한 6개만 추가했으며 모두 READY를 확인했다. 서버 첫 배포는 Firestore Rules API의 HTTP 503으로 중단되었으나 동일 대상 재배포가 성공했다. Q&A 함수 2개와 `deleteStudentData`의 ACTIVE, Firestore Rules 게시 완료를 확인했다.
 - 다른 작업의 로딩 변경을 제외한 별도 checkout에서 최종 브라우저 검증도 통과했다(`output/gongsinmoongo-pure-browser-20261110/report.json`).
 - 최종 분리 checkout의 `npm run build` 전체 사전 검사와 Vite 빌드 통과. 배포·공개 결과는 작업 완료 보고와 `output/gongsinmoongo-*` 실행 증거에 남긴다.
+
+## 운영 반영
+
+- 런타임 커밋 `c125cc10b975747a6fbce50ae912dfd0d985205c`의 Vercel 배포 `dpl_2qE8pb8TauALha2a3hshLrgnK2PX`가 READY 이후 운영 승격되었고 `www.westory.kr` 연결을 확인했다.
+- `방재석` Chrome 프로필의 실제 관리자 화면에서 학생 공개를 저장했다. `운영 중` 표시와 공개 설정의 저장 완료를 확인했다. 접수·선정 스토리·기존 알림 연결은 활성화되어 있다.
+- 새 운영 일지 `notice-gongsinmoongo-20261110`과 알림장 `gongsinmoongo-launch-20261110`을 2회 쓰기로 게시했다. 실제 알림장 순서 관리 화면에서 핵심포인트 1번·공신문고 2번을 확인했다.
+- 첫 게시의 `feature` 분류가 일반 카드뉴스 2열을 선택하는 문제를 실제 화면에서 발견했다. 해당 글의 제목·본문·이미지 일치와 문서 updateTime을 검사한 뒤 category 필드만 `notice`로 정정했다. 기존 알림장·날짜·조회수는 보존했다. 반복 실행은 0회 쓰기를 확인했다.
+- 실제 소개 글에서 더보기·원본 보기와 이미지 한 열 배치, 남학생·안경 쓴 남교사 그림을 확인했다. 게시 스크립트와 브라우저 검사에도 공지 분류 계약을 추가했다. 이 후속 수정은 게시 메타데이터와 운영 스크립트에 한정되며 런타임 코드·이미지는 바뀌지 않았다.
+- 운영 증거: `output/gongsinmoongo-live-enabled.png`, `output/gongsinmoongo-notice-order.png`, `output/gongsinmoongo-published-guide.png`, `output/gongsinmoongo-layout-repair.log`, `output/gongsinmoongo-publish-idempotent.log`.

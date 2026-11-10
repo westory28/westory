@@ -27,6 +27,7 @@ const manifest = JSON.parse(
 );
 const apply = process.argv.includes("--apply");
 const offline = process.argv.includes("--offline");
+const repairLayout = process.argv.includes("--repair-layout");
 const reportDirectory = path.join(
   repositoryRoot,
   "output/gongsinmoongo-launch-20261110",
@@ -83,6 +84,10 @@ const equal = (fieldPath, value) => ({
 async function main() {
   if (apply && offline)
     throw new Error("--offline and --apply cannot be combined.");
+  if (manifest.category !== "notice")
+    throw new Error(
+      "Image event articles must use the DeveloperLog notice category.",
+    );
   const publicDirectory = path.join(
     repositoryRoot,
     "public",
@@ -330,13 +335,77 @@ async function main() {
     const notice = unpack(existingNotice);
     if (
       post.title !== postData.title ||
-      post.category !== postData.category ||
       post.bodyHtml !== bodyHtml ||
+      JSON.stringify(post.images) !== JSON.stringify(postData.images) ||
       Object.entries(noticeData).some(([key, value]) => notice[key] !== value)
     )
       throw new Error(
         "An existing publication differs; do not overwrite editorial changes.",
       );
+    if (post.category !== postData.category) {
+      if (
+        !repairLayout ||
+        post.category !== "feature" ||
+        postData.category !== "notice"
+      )
+        throw new Error(
+          "Only the known feature-to-notice layout correction is allowed with --repair-layout.",
+        );
+      if (!existingPost.updateTime || !existingNotice.updateTime)
+        throw new Error(
+          "Layout repair requires both documents' updateTime preconditions.",
+        );
+      const repairReport = {
+        ...report,
+        mode: apply ? "repair-layout" : "repair-layout-dry-run",
+        change: { category: { from: post.category, to: postData.category } },
+        expectedPostUpdateTime: existingPost.updateTime,
+        expectedNoticeUpdateTime: existingNotice.updateTime,
+        writes: apply ? 1 : 0,
+        existingNoticeWrites: 0,
+      };
+      console.log(JSON.stringify(repairReport, null, 2));
+      if (!apply) return;
+      const commit = await api(":commit", {
+        writes: [
+          {
+            verify: existingNotice.name,
+            currentDocument: { updateTime: existingNotice.updateTime },
+          },
+          {
+            update: {
+              name: existingPost.name,
+              fields: pack({ category: "notice" }),
+            },
+            updateMask: { fieldPaths: ["category"] },
+            currentDocument: { updateTime: existingPost.updateTime },
+          },
+        ],
+      });
+      const repaired = await api(postPath);
+      const repairedData = unpack(repaired);
+      if (
+        repairedData.category !== "notice" ||
+        repairedData.title !== post.title ||
+        repairedData.bodyHtml !== post.bodyHtml ||
+        JSON.stringify(repairedData.images) !== JSON.stringify(post.images)
+      )
+        throw new Error(
+          "Layout repair committed but category-only read-back verification did not match.",
+        );
+      console.log(
+        JSON.stringify(
+          {
+            ...repairReport,
+            mode: "layout-repaired",
+            commitTime: commit.commitTime,
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
     console.log(
       JSON.stringify(
         { ...report, mode: "already-published", writes: 0 },
@@ -346,6 +415,10 @@ async function main() {
     );
     return;
   }
+  if (repairLayout)
+    throw new Error(
+      "Layout repair requires an existing exact publication; it never creates posts.",
+    );
   console.log(JSON.stringify(report, null, 2));
   fs.writeFileSync(
     path.join(reportDirectory, "publication-plan.json"),
