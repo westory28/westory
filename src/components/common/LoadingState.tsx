@@ -1,9 +1,9 @@
 import React from "react";
-import LoadingGlobe from "./LoadingGlobe";
+import LoadingLogo from "./LoadingLogo";
 import "./loadingState.css";
 
 type LoadingStateProps = {
-  // Kept for existing callers; shared loading has one consistent visible label.
+  // Kept for existing callers; shared loading uses one accessible status label.
   message?: string;
   detail?: string;
   className?: string;
@@ -23,15 +23,7 @@ const LoadingContent: React.FC<{ className?: string }> = ({
     aria-label="처리 중"
     aria-busy="true"
   >
-    <LoadingGlobe />
-    <div className="ws-loading__message" aria-hidden="true">
-      처리 중
-      <span className="ws-loading__dots">
-        <span>.</span>
-        <span>.</span>
-        <span>.</span>
-      </span>
-    </div>
+    <LoadingLogo />
   </div>
 );
 

@@ -16,7 +16,6 @@ const playwright = require(
       ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
     ),
 );
-// Preserve the existing system-Edge default; opt into installed browser engines.
 const engines = [
   ...new Set(
     (
@@ -32,42 +31,86 @@ const engines = [
 for (const engine of engines)
   assert.ok(
     ["chromium", "firefox", "webkit", "msedge", "chrome"].includes(engine),
-    "Unknown loading browser: " + engine,
+    "Unknown browser: " + engine,
   );
 const evidence =
   process.env.LOADING_EVIDENCE_DIR ||
-  path.join(root, ".superloopy/sessions/globe-loading/evidence");
+  path.join(root, ".superloopy/sessions/logo-loading/evidence");
 await fs.mkdir(evidence, { recursive: true });
-const bundle = await build({
-  stdin: {
-    contents:
-      "import React from 'react';import{createRoot}from'react-dom/client';import{PageLoading,InlineLoading,LoadingOverlay}from'./src/components/common/LoadingState';const mode=new URLSearchParams(location.search).get('mode');const root=createRoot(document.getElementById('root'));window.unmountLoading=()=>root.unmount();root.render(React.createElement(mode==='inline'?InlineLoading:mode==='overlay'?LoadingOverlay:PageLoading,{message:'OLD MESSAGE',detail:'OLD DETAIL',warning:'OLD WARNING'}));",
-    resolveDir: root,
-    loader: "tsx",
-  },
-  bundle: true,
-  write: false,
-  format: "esm",
-  outfile: "fixture.js",
-  define: { "process.env.NODE_ENV": '"production"' },
-});
-const js = bundle.outputFiles.find((file) => file.path.endsWith(".js")).text;
-const css = bundle.outputFiles.find((file) => file.path.endsWith(".css")).text;
-const html =
-  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Noto Sans KR,sans-serif;background:#f9fafb}.z-\\[90\\]{z-index:90}' +
-  css +
-  '</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>';
-const server = http.createServer((req, res) => {
-  res.setHeader(
-    "Content-Type",
-    req.url === "/fixture.js" ? "text/javascript" : "text/html; charset=utf-8",
-  );
-  res.end(req.url === "/fixture.js" ? js : html);
-});
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const url = "http://127.0.0.1:" + server.address().port;
 
-// Keep native rendering/intersections; only explicit compatibility cases omit APIs.
+const fixture = `
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {flushSync} from 'react-dom';
+import {PageLoading, InlineLoading, LoadingOverlay} from './src/components/common/LoadingState';
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode') || 'page';
+const root = createRoot(document.getElementById('root'));
+let key = 0;
+const component = mode === 'inline' ? InlineLoading : mode === 'overlay' ? LoadingOverlay : PageLoading;
+const render = (node) => flushSync(() => root.render(params.has('strict') ? React.createElement(React.StrictMode, null, node) : node));
+const loading = () => mode === 'multiple' ? React.createElement(React.Fragment, null, React.createElement(InlineLoading, {key:'a'+key}), React.createElement(InlineLoading, {key:'b'+key})) : React.createElement(component, {key, message:'OLD MESSAGE', detail:'OLD DETAIL', warning:'OLD WARNING'});
+window.startLoading = () => render(loading());
+window.replaceLoading = () => { key++; render(loading()); };
+window.finishLoading = (error=false) => render(React.createElement('main', null, React.createElement('h1', null, error ? '연결 오류' : '준비 완료'), React.createElement('button', {onClick: error ? window.startLoading : () => { window.clicked = true; }}, error ? '다시 시도' : '계속')));
+window.instantLoading = () => { window.startLoading(); window.finishLoading(); };
+window.unmountLoading = () => root.unmount();
+window.startLoading();
+`;
+const files = new Map();
+let css = "";
+for (const env of ["production", "development"]) {
+  const bundle = await build({
+    stdin: { contents: fixture, resolveDir: root, loader: "tsx" },
+    bundle: true,
+    write: false,
+    format: "esm",
+    outfile: env === "production" ? "fixture.js" : "fixture-dev.js",
+    loader: { ".webp": "file" },
+    publicPath: "/",
+    define: { "process.env.NODE_ENV": JSON.stringify(env) },
+  });
+  for (const file of bundle.outputFiles) {
+    files.set("/" + path.basename(file.path), file.contents);
+    if (file.path.endsWith(".css")) css = file.text;
+  }
+}
+const server = http.createServer((req, res) => {
+  const pathname = new URL(req.url, "http://localhost").pathname;
+  if (files.has(pathname)) {
+    res.setHeader(
+      "Content-Type",
+      pathname.endsWith(".webp")
+        ? "image/webp"
+        : pathname.endsWith(".css")
+          ? "text/css"
+          : "text/javascript",
+    );
+    res.end(files.get(pathname));
+    return;
+  }
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.end(
+    '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Noto Sans KR,sans-serif;background:#f9fafb}.z-\\[90\\]{z-index:90}' +
+      css +
+      '</style><div id="root"></div><script type="module" src="' +
+      (req.url.includes("strict") ? "/fixture-dev.js" : "/fixture.js") +
+      '"></script></html>',
+  );
+});
+await new Promise((resolve) =>
+  server.listen(
+    Number(process.env.LOADING_PREVIEW_PORT || 0),
+    "127.0.0.1",
+    resolve,
+  ),
+);
+const url = "http://127.0.0.1:" + server.address().port;
+if (process.env.LOADING_PREVIEW_ONLY === "1") {
+  console.log("Loading preview: " + url);
+  await new Promise(() => {});
+}
+
 async function makePage(browser, scenario = "normal", options = {}) {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 900 },
@@ -75,53 +118,42 @@ async function makePage(browser, scenario = "normal", options = {}) {
     ...options,
   });
   page.setDefaultTimeout(5000);
-  const errors = [];
+  const errors = [],
+    requests = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request) =>
+    requests.push({
+      url: request.url(),
+      method: request.method(),
+      type: request.resourceType(),
+    }),
+  );
   await page.route("**/*", (route) =>
     route.request().url().startsWith(url) ? route.continue() : route.abort(),
   );
   await page.addInitScript((scenario) => {
-    const frames = new Set(),
-      timers = new Set(),
-      listeners = new Map(),
+    const listeners = new Map(),
       targets = [],
-      observers = [];
+      observers = [],
+      exits = [];
     let frameCalls = 0,
       timerCalls = 0,
       disconnects = 0;
-    const originalRaf = window.requestAnimationFrame?.bind(window),
-      originalCancel = window.cancelAnimationFrame?.bind(window);
-    if (originalRaf)
-      window.requestAnimationFrame = (callback) => {
-        const handle = originalRaf((time) => {
-          frames.delete(handle);
-          frameCalls++;
-          callback(time);
-        });
-        frames.add(handle);
-        return handle;
+    const raf = window.requestAnimationFrame?.bind(window);
+    if (raf)
+      window.requestAnimationFrame = (...args) => {
+        frameCalls++;
+        return raf(...args);
       };
-    if (originalCancel)
-      window.cancelAnimationFrame = (handle) => {
-        frames.delete(handle);
-        originalCancel(handle);
-      };
-    const originalTimeout = window.setTimeout.bind(window),
-      originalClear = window.clearTimeout.bind(window);
-    window.setTimeout = (callback, delay, ...args) => {
-      if (typeof callback !== "function" || delay < 30 || delay > 34)
-        return originalTimeout(callback, delay, ...args);
-      const handle = originalTimeout(() => {
-        timers.delete(handle);
-        timerCalls++;
-        callback(...args);
-      }, delay);
-      timers.add(handle);
-      return handle;
+    const timeout = window.setTimeout.bind(window),
+      interval = window.setInterval.bind(window);
+    window.setTimeout = (...args) => {
+      timerCalls++;
+      return timeout(...args);
     };
-    window.clearTimeout = (handle) => {
-      timers.delete(handle);
-      originalClear(handle);
+    window.setInterval = (...args) => {
+      timerCalls++;
+      return interval(...args);
     };
     for (const [target, types] of [
       [document, ["visibilitychange"]],
@@ -157,11 +189,32 @@ async function makePage(browser, scenario = "normal", options = {}) {
           super.disconnect();
         }
       };
+    new MutationObserver((records) => {
+      for (const record of records)
+        for (const node of record.addedNodes) {
+          if (
+            !(node instanceof Element) ||
+            !node.matches(".ws-loading__logo--exit")
+          )
+            continue;
+          const animations = node.getAnimations({ subtree: true });
+          exits.push({
+            ariaHidden: node.getAttribute("aria-hidden"),
+            pointerEvents: getComputedStyle(node).pointerEvents,
+            animations: animations.map((animation) => ({
+              duration: animation.effect.getTiming().duration,
+              frames: animation.effect
+                .getKeyframes()
+                .map(({ transform, opacity }) => ({ transform, opacity })),
+            })),
+          });
+        }
+    }).observe(document, { subtree: true, childList: true });
     if (scenario === "missing-matchMedia") window.matchMedia = undefined;
     if (scenario === "legacy-matchMedia") {
-      const original = window.matchMedia.bind(window);
+      const match = window.matchMedia.bind(window);
       window.matchMedia = (query) => {
-        const result = original(query);
+        const result = match(query);
         return {
           get matches() {
             return result.matches;
@@ -178,14 +231,15 @@ async function makePage(browser, scenario = "normal", options = {}) {
       window.requestAnimationFrame = undefined;
     if (scenario === "missing-cancelAnimationFrame")
       window.cancelAnimationFrame = undefined;
+    if (scenario === "missing-animate")
+      SVGElement.prototype.animate = undefined;
     window.loadingQA = {
       state: () => ({
-        pendingFrames: frames.size,
-        pendingTimers: timers.size,
         frameCalls,
         timerCalls,
-        targets,
         disconnects,
+        targets,
+        exits,
         listeners: Object.fromEntries(
           [...listeners].map(([type, set]) => [type, set.size]),
         ),
@@ -195,118 +249,103 @@ async function makePage(browser, scenario = "normal", options = {}) {
           configurable: true,
           get: () => hidden,
         });
-        Object.defineProperty(document, "visibilityState", {
-          configurable: true,
-          get: () => (hidden ? "hidden" : "visible"),
-        });
         document.dispatchEvent(new Event("visibilitychange"));
       },
-      fireStaleIntersection: () => observers.forEach((callback) => callback()),
+      staleIntersection: () => observers.forEach((callback) => callback()),
     };
   }, scenario);
-  return { page, errors };
+  return { page, errors, requests };
 }
 const snapshot = (page) =>
   page.evaluate(() => ({
-    land: document.querySelector("[data-land]")?.getAttribute("d"),
-    orbit: document
-      .querySelector("[data-orbit-front]")
-      ?.getAttribute("transform"),
-    dots: [...document.querySelectorAll(".ws-loading__dots span")]
-      .map((node) => getComputedStyle(node).opacity)
-      .join(","),
+    letters: [...document.querySelectorAll("[data-loading-letter]")].map(
+      (node) => getComputedStyle(node).transform,
+    ),
+    fill: getComputedStyle(document.querySelector("[data-loading-fill]"))
+      .transform,
   }));
 async function waitRunning(page) {
-  await page.locator(".ws-loading:not(.ws-loading--paused)").waitFor();
+  await page.locator(".ws-loading:not(.ws-loading--paused)").first().waitFor();
   await page.waitForFunction(
-    () => {
-      const state = window.loadingQA.state();
-      return state.pendingFrames + state.pendingTimers > 0;
-    },
+    () =>
+      document.querySelector(".ws-loading__letter")?.getAnimations().length > 0,
     null,
     { polling: 50 },
   );
 }
-async function assertMotion(page, label, dots = false) {
-  const samples = [await snapshot(page)];
-  for (let i = 0; i < (dots ? 5 : 2); i++) {
-    // Wall time checks computed CSS dots as well as JavaScript SVG frames.
-    await page.waitForTimeout(dots ? 230 : 150);
+async function assertMotion(page, label) {
+  const samples = [];
+  for (let i = 0; i < 7; i++) {
     samples.push(await snapshot(page));
+    await page.waitForTimeout(180);
   }
-  for (const key of dots ? ["land", "orbit", "dots"] : ["land", "orbit"])
+  for (let i = 0; i < 7; i++)
     assert.ok(
-      new Set(samples.map((sample) => sample[key])).size > 1,
-      label + ": " + key + " must animate",
+      new Set(samples.map((sample) => sample.letters[i])).size > 1,
+      label + ": letter " + i + " animates",
     );
-  return {
-    label,
-    dots: dots ? samples.map((sample) => sample.dots) : undefined,
-  };
+  assert.ok(
+    new Set(samples.map((sample) => sample.fill)).size > 1,
+    label + ": color progresses",
+  );
+  assert.ok(
+    samples.some((sample) => new Set(sample.letters).size > 1),
+    label + ": independent staggered glyphs",
+  );
+  return label;
 }
 async function assertPaused(page, label) {
   await page.locator(".ws-loading--paused").waitFor();
+  // CSS pause resolves on the next animation timeline tick in Chromium/WebKit.
+  await page.waitForTimeout(60);
   const before = await snapshot(page);
-  await page.waitForTimeout(180);
-  const after = await snapshot(page);
-  assert.equal(after.land, before.land, label + ": land must pause");
-  assert.equal(after.orbit, before.orbit, label + ": orbit must pause");
+  await page.waitForTimeout(220);
   assert.deepEqual(
-    await page
-      .locator(".ws-loading__dots span")
-      .evaluateAll((nodes) =>
-        nodes.map((node) => getComputedStyle(node).animationPlayState),
-      ),
-    ["paused", "paused", "paused"],
+    await snapshot(page),
+    before,
+    label + ": all visual motion pauses",
   );
-  const state = await page.evaluate(() => window.loadingQA.state());
-  assert.equal(
-    state.pendingFrames + state.pendingTimers,
-    0,
-    label + ": scheduled animation must be cancelled",
+  assert.ok(
+    (
+      await page
+        .locator("[data-loading-letter], [data-loading-fill]")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => getComputedStyle(node).animationPlayState),
+        )
+    ).every((state) => state === "paused"),
   );
 }
 async function assertCleanup(page, observerExpected = true) {
   await page.evaluate(() => window.unmountLoading());
-  const before = await page.evaluate(() => window.loadingQA.state());
+  await page.waitForFunction(
+    () => document.querySelectorAll(".ws-loading__logo").length === 0,
+    null,
+    { polling: 25 },
+  );
   await page.evaluate(() => {
     window.loadingQA.setHidden(false);
     window.dispatchEvent(new Event("pagehide"));
     window.dispatchEvent(new Event("pageshow"));
-    window.loadingQA.fireStaleIntersection();
+    window.loadingQA.staleIntersection();
   });
-  await page.waitForTimeout(100);
-  const after = await page.evaluate(() => window.loadingQA.state());
+  const state = await page.evaluate(() => window.loadingQA.state());
   assert.equal(await page.locator(".ws-loading").count(), 0);
-  assert.equal(
-    after.pendingFrames + after.pendingTimers,
-    0,
-    "unmount must cancel outstanding animation",
-  );
-  assert.equal(
-    after.frameCalls + after.timerCalls,
-    before.frameCalls + before.timerCalls,
-    "unmounted callbacks must not restart animation",
-  );
   assert.ok(
-    Object.values(after.listeners).every((count) => count === 0),
-    "unmount must remove lifecycle listeners",
+    Object.values(state.listeners).every((count) => count === 0),
+    "all lifecycle and exit listeners removed",
   );
   if (observerExpected)
-    assert.ok(
-      after.disconnects > 0,
-      "unmount must disconnect intersection observer",
-    );
-  return after;
+    assert.ok(state.disconnects > 0, "intersection disconnected");
 }
 async function checkLayout(page, width, label, directory) {
   await page.setViewportSize({ width, height: 900 });
-  await page.locator(".ws-loading__land").waitFor();
+  await page.locator("[data-loading-letter]").first().waitFor();
   assert.equal(await page.getByRole("status", { name: "처리 중" }).count(), 1);
   assert.equal(
     (await page.locator("#root").textContent()).replace(/\s+/g, ""),
-    "처리중...",
+    "",
   );
+  assert.equal(await page.locator("[data-loading-letter]").count(), 7);
   assert.equal(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -314,12 +353,57 @@ async function checkLayout(page, width, label, directory) {
     true,
     label + ": no horizontal overflow",
   );
-  const box = await page.locator(".ws-loading").boundingBox();
+  const box = await page.locator(".ws-loading__logo").boundingBox();
   assert.ok(
     Math.abs(box.x + box.width / 2 - width / 2) < 1,
-    label + ": centered loading",
+    label + ": centered",
   );
   await page.screenshot({ path: path.join(directory, label + ".png") });
+}
+async function seekFill(page, ms) {
+  return page.evaluate((ms) => {
+    const node = document.querySelector("[data-loading-fill]");
+    const animation = node.getAnimations()[0];
+    animation.pause();
+    animation.currentTime = ms;
+    return new DOMMatrixReadOnly(getComputedStyle(node).transform).a;
+  }, ms);
+}
+async function checkExit(page, error = false) {
+  await page.waitForTimeout(150);
+  const oldExits = await page.evaluate(
+    () => window.loadingQA.state().exits.length,
+  );
+  await page.evaluate((error) => window.finishLoading(error), error);
+  await page
+    .getByRole("heading", { name: error ? "연결 오류" : "준비 완료" })
+    .waitFor();
+  await page.waitForFunction(
+    (old) => window.loadingQA.state().exits.length > old,
+    oldExits,
+    { polling: 10 },
+  );
+  const exit = await page.evaluate(() => window.loadingQA.state().exits.at(-1));
+  assert.equal(exit.ariaHidden, "true");
+  assert.equal(exit.pointerEvents, "none");
+  assert.deepEqual(
+    exit.animations
+      .map((animation) => animation.duration)
+      .sort((a, b) => a - b),
+    [180, 240],
+  );
+  const fill = exit.animations.find((animation) => animation.duration === 180);
+  assert.equal(fill.frames.at(-1).transform, "scaleX(1)");
+  if (!error) {
+    await page.getByRole("button", { name: "계속" }).click();
+    assert.equal(await page.evaluate(() => window.clicked), true);
+  }
+  await page.waitForFunction(
+    () => document.querySelectorAll(".ws-loading__logo--exit").length === 0,
+    null,
+    { polling: 25 },
+  );
+  return exit;
 }
 
 async function runEngine(engine) {
@@ -336,45 +420,69 @@ async function runEngine(engine) {
     checks: [],
     motion: [],
     compatibility: [],
-    orbit: [],
   };
   try {
-    const { page, errors } = await makePage(browser);
+    const main = await makePage(browser),
+      { page } = main;
     await page.goto(url);
     await waitRunning(page);
-    for (const width of [320, 390, 768, 1280])
-      await checkLayout(page, width, "page-" + width, directory);
-    result.checks.push(
-      "320/390/768/1280px: accessible status, centered, no old copy or horizontal overflow",
-    );
-    result.motion.push(await assertMotion(page, "no-preference", true));
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await waitRunning(page);
-    result.motion.push(
-      await assertMotion(page, "runtime switch to reduce", true),
-    );
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    result.motion.push(
-      await assertMotion(page, "runtime switch back to no-preference", true),
-    );
-    for (const mode of ["inline", "overlay"]) {
+    for (const mode of ["page", "inline", "overlay"]) {
       await page.goto(url + "?mode=" + mode);
       await waitRunning(page);
-      await checkLayout(page, 1280, mode + "-1280", directory);
-      result.motion.push(await assertMotion(page, mode));
+      for (const width of [320, 390, 768, 1280, 1440])
+        await checkLayout(page, width, mode + "-" + width, directory);
     }
+    result.checks.push(
+      "Page/inline/overlay at 320/390/768/1280/1440px: seven glyphs, accessible status, centered, no horizontal overflow",
+    );
+    await page.goto(url);
+    await waitRunning(page);
+    result.motion.push(await assertMotion(page, "no-preference"));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    result.motion.push(await assertMotion(page, "runtime reduce"));
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    result.motion.push(await assertMotion(page, "runtime no-preference"));
+    const activityBefore = await page.evaluate(() => window.loadingQA.state());
+    await page.waitForTimeout(500);
+    const activityAfter = await page.evaluate(() => window.loadingQA.state());
+    assert.equal(
+      activityAfter.frameCalls,
+      activityBefore.frameCalls,
+      "no animation frame loop",
+    );
+    assert.equal(
+      activityAfter.timerCalls,
+      activityBefore.timerCalls,
+      "no animation timer loop",
+    );
+    const times = [0, 1500, 4500, 10500, 19500, 30000, 60000],
+      fills = [];
+    for (const time of times) fills.push(await seekFill(page, time));
+    assert.deepEqual(
+      fills.map((value) => +value.toFixed(2)),
+      [0, 0.32, 0.58, 0.78, 0.89, 0.94, 0.94],
+    );
+    const rates = fills
+      .slice(1, -1)
+      .map((value, i) => (value - fills[i]) / (times[i + 1] - times[i]));
+    assert.ok(
+      rates.every((rate, i) => i === 0 || rate < rates[i - 1]),
+      "pending color slows and never completes early",
+    );
+    result.fill = { times, fills };
+    await seekFill(page, 4500);
+    await page.screenshot({ path: path.join(directory, "partial-color.png") });
     await page.goto(url);
     await waitRunning(page);
     assert.deepEqual(
       await page.evaluate(() => window.loadingQA.state().targets),
       ["DIV"],
-      "intersection must observe HTML loading container",
     );
     await page.evaluate(() => window.loadingQA.setHidden(true));
-    await assertPaused(page, "hidden document");
+    await assertPaused(page, "hidden");
     await page.evaluate(() => window.loadingQA.setHidden(false));
     await waitRunning(page);
-    await assertMotion(page, "visible document resumes");
+    result.motion.push(await assertMotion(page, "visible resumes"));
     await page.evaluate(() => {
       document.querySelector(".ws-loading-page").style.marginTop = "2000px";
     });
@@ -384,26 +492,21 @@ async function runEngine(engine) {
       window.scrollTo(0, 0);
     });
     await waitRunning(page);
-    await assertMotion(page, "onscreen resumes");
     await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
     await assertPaused(page, "pagehide");
     await page.evaluate(() => {
       for (let i = 0; i < 3; i++) window.dispatchEvent(new Event("pageshow"));
     });
     await waitRunning(page);
-    await assertMotion(page, "pageshow resumes");
+    result.motion.push(await assertMotion(page, "pageshow resumes"));
     assert.equal(
-      await page.evaluate(() => {
-        const s = window.loadingQA.state();
-        return s.pendingFrames + s.pendingTimers;
-      }),
+      await page.evaluate(() => window.loadingQA.state().listeners.pageshow),
       1,
-      "repeated pageshow must keep a single animation loop",
     );
     await assertCleanup(page);
-    assert.deepEqual(errors, []);
+    assert.deepEqual(main.errors, []);
     result.checks.push(
-      "native HTML intersection, hidden/offscreen/pagehide pause and return/pageshow resume; single loop and unmount cleanup",
+      "CSS-only motion: no requestAnimationFrame/timer loop; slow 94% plateau; hidden/offscreen/pagehide pause and clean resume/unmount",
     );
     await page.close();
 
@@ -415,21 +518,12 @@ async function runEngine(engine) {
     });
     await mobile.page.goto(url);
     await waitRunning(mobile.page);
+    result.motion.push(await assertMotion(mobile.page, "initial reduce touch"));
     await checkLayout(mobile.page, 390, "touch-reduce-390", directory);
-    result.motion.push(
-      await assertMotion(
-        mobile.page,
-        "touch viewport with reduce on initial load",
-        true,
-      ),
-    );
     await checkLayout(mobile.page, 320, "touch-reduce-320", directory);
     await assertCleanup(mobile.page);
     assert.deepEqual(mobile.errors, []);
     await mobile.page.close();
-    result.checks.push(
-      "390/320px touch viewport under initial reduced-motion (browser emulation, not physical device)",
-    );
 
     for (const scenario of [
       "missing-matchMedia",
@@ -437,126 +531,143 @@ async function runEngine(engine) {
       "missing-IntersectionObserver",
       "missing-requestAnimationFrame",
       "missing-cancelAnimationFrame",
+      "missing-animate",
     ]) {
-      const compatibility = await makePage(browser, scenario, {
-        reducedMotion: "reduce",
-      });
-      await compatibility.page.goto(url);
-      await waitRunning(compatibility.page);
-      await assertMotion(compatibility.page, scenario);
-      const state = await compatibility.page.evaluate(() =>
-        window.loadingQA.state(),
-      );
-      if (scenario.includes("AnimationFrame")) {
-        assert.ok(
-          state.timerCalls > 0 &&
-            state.pendingTimers === 1 &&
-            state.pendingFrames === 0,
-          scenario + ": use one timer fallback loop",
-        );
-        await compatibility.page.evaluate(() =>
-          window.loadingQA.setHidden(true),
-        );
-        await assertPaused(compatibility.page, scenario + " hidden");
-        await compatibility.page.evaluate(() =>
-          window.loadingQA.setHidden(false),
-        );
-        await waitRunning(compatibility.page);
-        await assertMotion(compatibility.page, scenario + " resumes");
-      }
-      await assertCleanup(
-        compatibility.page,
-        scenario !== "missing-IntersectionObserver",
-      );
-      assert.deepEqual(compatibility.errors, []);
-      result.compatibility.push({
-        scenario,
-        usesTimerFallback: state.timerCalls > 0,
-        errors: compatibility.errors,
-      });
-      await compatibility.page.close();
+      const c = await makePage(browser, scenario, { reducedMotion: "reduce" });
+      await c.page.goto(url);
+      await waitRunning(c.page);
+      await assertMotion(c.page, scenario);
+      await assertCleanup(c.page, scenario !== "missing-IntersectionObserver");
+      assert.deepEqual(c.errors, []);
+      result.compatibility.push(scenario);
+      await c.page.close();
     }
+    const life = await makePage(browser),
+      lp = life.page;
+    await lp.goto(url);
+    await waitRunning(lp);
+    result.fastExit = await checkExit(lp);
+    await lp.evaluate(() => window.startLoading());
+    await waitRunning(lp);
+    await seekFill(lp, 30000);
+    result.slowExit = await checkExit(lp, true);
+    await lp.getByRole("button", { name: "다시 시도" }).click();
+    await waitRunning(lp);
+    await assertMotion(lp, "error retry restarts");
+    const before = await lp.evaluate(
+      () => window.loadingQA.state().exits.length,
+    );
+    await lp.evaluate(() => window.replaceLoading());
+    await waitRunning(lp);
+    await lp.waitForTimeout(300);
+    assert.equal(
+      await lp.evaluate(() => window.loadingQA.state().exits.length),
+      before,
+      "continuous same-place loading must not finish visually",
+    );
+    await lp.evaluate(() => window.finishLoading());
+    await lp.waitForTimeout(300);
+    const instantBefore = await lp.evaluate(
+      () => window.loadingQA.state().exits.length,
+    );
+    await lp.evaluate(() => window.instantLoading());
+    await lp.waitForTimeout(300);
+    assert.equal(
+      await lp.evaluate(() => window.loadingQA.state().exits.length),
+      instantBefore,
+      "sub-100ms waits do not flash an exit",
+    );
+    await lp.evaluate(() => window.startLoading());
+    await waitRunning(lp);
+    await lp.waitForTimeout(150);
+    await lp.evaluate(() => {
+      window.finishLoading();
+      queueMicrotask(() => window.loadingQA.setHidden(true));
+    });
+    await lp.waitForTimeout(100);
+    assert.equal(
+      await lp.locator(".ws-loading__logo--exit").count(),
+      0,
+      "hidden exit cleans up",
+    );
+    await assertCleanup(lp);
+    assert.deepEqual(life.errors, []);
+    await lp.close();
     result.checks.push(
-      "missing/legacy matchMedia, missing IntersectionObserver, missing request/cancelAnimationFrame: animate without errors and clean up",
+      "Fast and slow exits fully fill in 180ms/fade in 240ms without blocking content; errors remain actionable, retry resets; rapid and consecutive loading have no false exit",
     );
 
-    const orbitPage = await makePage(browser);
-    await orbitPage.page.clock.install();
-    await orbitPage.page.goto(url);
-    await waitRunning(orbitPage.page);
-    const firstLand = await orbitPage.page
-      .locator("[data-land]")
-      .getAttribute("d");
-    for (let i = 0; i < 45; i++) {
-      await orbitPage.page.clock.runFor(400);
-      result.orbit.push(
-        await orbitPage.page.evaluate(() => {
-          const layer = [
-            ...document.querySelectorAll(
-              "[data-orbit-front],[data-orbit-back]",
-            ),
-          ].find((node) => node.style.display !== "none");
-          const matrix = layer.transform.baseVal.consolidate().matrix;
-          return {
-            rear: layer.hasAttribute("data-orbit-back"),
-            x: matrix.e,
-            y: matrix.f,
-            radius: 6 * matrix.a,
-          };
-        }),
+    for (const mode of ["page", "multiple"]) {
+      const strict = await makePage(browser),
+        sp = strict.page;
+      await sp.goto(url + "?strict=1&mode=" + mode);
+      await waitRunning(sp);
+      await sp.waitForTimeout(180);
+      assert.equal(
+        await sp.locator(".ws-loading__logo--exit").count(),
+        0,
+        "StrictMode leaves no ghost",
       );
+      const ids = await sp
+        .locator("clipPath[id]")
+        .evaluateAll((nodes) => nodes.map((n) => n.id));
+      assert.equal(
+        new Set(ids).size,
+        ids.length,
+        "multiple instances have unique clips",
+      );
+      const expected = mode === "multiple" ? 2 : 1;
+      assert.equal(
+        await sp.evaluate(
+          () => window.loadingQA.state().listeners.visibilitychange,
+        ),
+        expected,
+        "StrictMode keeps one listener per loader",
+      );
+      await assertCleanup(sp);
+      assert.deepEqual(strict.errors, []);
+      await sp.close();
     }
-    assert.notEqual(
-      await orbitPage.page.locator("[data-land]").getAttribute("d"),
-      firstLand,
-      "land must rotate on sphere",
-    );
-    assert.ok(
-      result.orbit.some(
-        (p) => p.rear && Math.hypot(p.x - 104, p.y - 88) + p.radius < 56,
-      ),
-      "dot must fully disappear behind globe",
-    );
-    assert.ok(
-      result.orbit.some(
-        (p) => p.rear && Math.hypot(p.x - 104, p.y - 88) - p.radius > 56,
-      ),
-      "rear arc must emerge outside globe",
-    );
-    assert.ok(
-      result.orbit.some((p) => !p.rear && p.x < 104) &&
-        result.orbit.some((p) => !p.rear && p.x > 104),
-      "dot must cross front in both directions",
-    );
-    const turns = result.orbit.slice(1).map((p, index) => {
-      const previous = result.orbit[index],
-        difference =
-          Math.atan2(p.y - 88, p.x - 104) -
-          Math.atan2(previous.y - 88, previous.x - 104);
-      return Math.atan2(Math.sin(difference), Math.cos(difference));
-    });
-    assert.ok(
-      turns.some((turn) => turn > 0.05) && turns.some((turn) => turn < -0.05),
-      "orbit must reverse smoothly",
-    );
-    assert.deepEqual(orbitPage.errors, []);
-    await orbitPage.page.close();
     result.checks.push(
-      "18 simulated seconds: SVG rotation, rear occlusion, re-emergence, front passage and smooth reversal",
+      "Development StrictMode cleanup and multiple-instance unique IDs/lifecycle listeners",
+    );
+    const network = await makePage(browser),
+      np = network.page;
+    await np.goto(url + "?mode=multiple");
+    await waitRunning(np);
+    await np.waitForTimeout(1200);
+    assert.equal(
+      network.requests.filter((r) => r.type === "image").length,
+      1,
+      "one shared optimized logo fetch for multiple loaders",
+    );
+    assert.ok(
+      network.requests.every(
+        (r) =>
+          r.url.startsWith(url) &&
+          r.method === "GET" &&
+          !["fetch", "xhr", "websocket"].includes(r.type),
+      ),
+      "no backend calls, writes or external media requests",
+    );
+    result.network = network.requests;
+    await assertCleanup(np);
+    assert.deepEqual(network.errors, []);
+    await np.close();
+    result.checks.push(
+      "Exactly one shared WebP fetch; no fetch/XHR/WebSocket, writes, polling or external requests",
     );
     result.passed = true;
-    return result;
   } catch (error) {
     result.passed = false;
     result.error = error.stack || String(error);
-    for (const [index, page] of browser
+    for (const [i, page] of browser
       .contexts()
-      .flatMap((context) => context.pages())
+      .flatMap((c) => c.pages())
       .entries())
       await page
-        .screenshot({ path: path.join(directory, "failure-" + index + ".png") })
+        .screenshot({ path: path.join(directory, `failure-${i}.png`) })
         .catch(() => {});
-    return result;
   } finally {
     await browser.close();
     await fs.writeFile(
@@ -564,11 +675,10 @@ async function runEngine(engine) {
       JSON.stringify(result, null, 2),
     );
   }
+  return result;
 }
-
 const results = [];
 try {
-  // Sequential engines avoid CPU contention in short animation samples.
   for (const engine of engines) {
     try {
       results.push(await runEngine(engine));
@@ -581,10 +691,7 @@ try {
     }
     const latest = results.at(-1);
     console.log(
-      engine +
-        ": " +
-        (latest.passed ? "PASS" : "FAIL") +
-        (latest.error ? "\n" + latest.error : ""),
+      `${engine}: ${latest.passed ? "PASS" : "FAIL"}${latest.error ? "\n" + latest.error : ""}`,
     );
   }
   await fs.writeFile(
@@ -594,7 +701,7 @@ try {
         engines,
         results,
         limitations:
-          "Automated desktop engines and emulated touch viewports; physical iOS/Android devices and every browser version were not tested.",
+          "Automated desktop engines and emulated touch viewports; no physical iOS/Android device verification.",
       },
       null,
       2,

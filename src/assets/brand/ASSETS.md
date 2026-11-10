@@ -12,7 +12,7 @@ The user supplied `위스토리 로고_full.png` (2163×727, 627,336 bytes) and 
 
 Reproduce with Pillow using `python scripts/export-brand-assets.py <full.png> <we.png>`. Source PNGs remain outside the deployed bundle. Vite fingerprints both WebP URLs; Vercel gives those hashed assets a one-year immutable cache. Public icon URLs use revision `20261025` with a one-day revalidated cache. Manifest identity, start URL, scope and routing are unchanged. Installed apps may refresh their icons on the device's next manifest update.
 
-The shared loading components deliberately display no wordmark. Existing uploaded images are not reprocessed; new uploads use the shared optimized logo.
+Since 2026-11-10, shared loading reuses the same optimized wordmark with seven SVG letter clips, local bounce animations and a left-to-right color reveal. The supplied pixels are preserved; no generated replacement, new raster export or external media service is used. Existing uploaded images are not reprocessed; new uploads use the shared optimized logo.
 
 ## Archived upload watermark master (2026-10-25)
 
