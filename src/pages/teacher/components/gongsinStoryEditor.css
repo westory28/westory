@@ -1,0 +1,80 @@
+.gongsin-workspace.gongsin-story-dialog {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 32px));
+  height: fit-content;
+  max-width: 720px;
+  max-height: min(720px, calc(100dvh - 32px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  font-family: inherit;
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1));
+}
+.gongsin-story-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.gongsin-story-dialog::backdrop {
+  background: rgb(17 24 39 / 32%);
+}
+.gongsin-story-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.gongsin-story-dialog-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.gongsin-story-dialog-body {
+  min-height: 0;
+  padding: 20px 24px 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.gongsin-story-dialog .gongsin-public-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.gongsin-story-dialog .gongsin-public-fields textarea {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  resize: none;
+}
+.gongsin-story-dialog .gongsin-privacy-check {
+  align-items: flex-start;
+  line-height: 1.6;
+}
+.gongsin-story-dialog .gongsin-privacy-check input {
+  margin-top: 2px;
+}
+.gongsin-story-dialog-actions {
+  flex: 0 0 auto;
+  padding: 12px 24px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+@media (max-width: 480px) {
+  .gongsin-story-dialog-heading,
+  .gongsin-story-dialog-actions {
+    padding: 12px 16px;
+  }
+  .gongsin-story-dialog-body {
+    padding: 16px 16px 4px;
+  }
+  .gongsin-story-dialog-heading h2 {
+    font-size: 18px;
+  }
+}

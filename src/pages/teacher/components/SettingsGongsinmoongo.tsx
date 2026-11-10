@@ -5,13 +5,13 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import GongsinStudentPreview from "./GongsinStudentPreview";
+import GongsinStoryEditor from "./GongsinStoryEditor";
 import GongsinAdminSettings from "./GongsinAdminSettings";
 import { createDefaultGongsinmoongoSettings } from "./gongsinmoongoSettings";
 import type { WestoryNotificationType } from "../../../types";
 import {
   createDraftQuestions,
   createDraftStories,
-  DRAFT_SOURCES,
   PREVIEW_STUDENT,
   sourceById,
   type DraftQuestion,
@@ -21,21 +21,12 @@ import {
 import "../../../components/common/portalPage.css";
 import "./gongsinmoongoDraft.css";
 
-type View = "inbox" | "student" | "operation";
+type View = "inbox" | "operation";
 interface DraftQuestionRestriction {
   studentId: string;
   until: number;
   reason: string;
 }
-const restrictionTime = (until: number) =>
-  new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(until);
 interface DraftNotification {
   id: string;
   questionId: string;
@@ -53,7 +44,6 @@ type EditorDraft = Pick<
 >;
 const VIEWS = [
   ["inbox", "질문함"],
-  ["student", "학생 화면"],
   ["operation", "운영 설정"],
 ] as const;
 
@@ -113,6 +103,10 @@ function Icon({
 function DraftWorkspace() {
   const { showToast } = useAppToast();
   const [view, setView] = useState<View>("inbox");
+  const [perspective, setPerspective] = useState<"teacher" | "student">(
+    "teacher",
+  );
+  const [storyEditorOpen, setStoryEditorOpen] = useState(false);
   const [questions, setQuestions] = useState(createDraftQuestions);
   const [editorDrafts, setEditorDrafts] = useState<Record<string, EditorDraft>>(
     {},
@@ -196,6 +190,7 @@ function DraftWorkspace() {
     setListPage(index < 0 ? 0 : Math.floor(index / pageSize));
   }, [selectedId, filter, questions.length, pageSize]);
   const manageStudent = (studentId: string) => {
+    setStoryEditorOpen(false);
     setSettingsNavigation((value) => ({
       studentId,
       requestId: value.requestId + 1,
@@ -280,8 +275,12 @@ function DraftWorkspace() {
   }, [sourcePreview]);
   useEffect(() => {
     if (!jumpTarget || view !== "inbox") return;
-    detailRef.current?.focus({ preventScroll: true });
-    detailRef.current?.scrollIntoView({ block: "nearest" });
+    const target = Array.from(
+      detailRef.current?.querySelectorAll<HTMLElement>("[data-question-id]") ??
+        [],
+    ).find((element) => element.dataset.questionId === jumpTarget);
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "nearest" });
     setJumpTarget(null);
   }, [jumpTarget, view]);
   useEffect(() => {
@@ -313,6 +312,9 @@ function DraftWorkspace() {
   };
   const selectQuestion = (id: string) => {
     setSelectedId(id);
+    setJumpTarget(id);
+    setPerspective("teacher");
+    setStoryEditorOpen(false);
     setView("inbox");
     setListOpen(false);
     setSourcePreview(null);
@@ -346,6 +348,21 @@ function DraftWorkspace() {
       };
       setNotifications((items) => [notification, ...items]);
     }
+  };
+  const updateDraft = (id: string, update: Partial<EditorDraft>) => {
+    const question = questions.find((item) => item.id === id);
+    if (!question) return;
+    setEditorDrafts((drafts) => ({
+      ...drafts,
+      [id]: { ...(drafts[id] ?? question), ...update },
+    }));
+  };
+  const sendReply = () => {
+    if (!selected) return;
+    const reply = (editorDrafts[selected.id] ?? selected).reply.trim();
+    if (!reply || reply.length > 2000 || reply === selected.reply) return;
+    updateQuestion(selected.id, { reply });
+    notify("미리보기 답변을 보냈습니다.");
   };
   const askQuestion = (
     text: string,
@@ -519,6 +536,7 @@ function DraftWorkspace() {
                 aria-pressed={view === id}
                 onClick={() => {
                   setView(id);
+                  setStoryEditorOpen(false);
                   setSourcePreview(null);
                 }}
               >
@@ -579,7 +597,6 @@ function DraftWorkspace() {
                         setFilter("all");
                         selectQuestion(item.questionId);
                         setNotificationsOpen(false);
-                        setJumpTarget(item.questionId);
                       }}
                     >
                       <span>{item.title}</span>
@@ -593,58 +610,101 @@ function DraftWorkspace() {
             )}
           </div>
         </div>
-        {view === "inbox" && (
+        <section
+          hidden={view !== "inbox"}
+          className="gongsin-student-stage"
+          aria-label="공신문고 질문함"
+          data-perspective={perspective}
+        >
+          {perspective === "teacher" && !selected && (
+            <div>
+              <p className="gongsin-empty">선택할 질문이 없습니다.</p>
+              <button
+                type="button"
+                className="gongsin-button"
+                onClick={() => setPerspective("student")}
+              >
+                학생으로 체험
+              </button>
+            </div>
+          )}
           <div
-            className="gongsin-question-detail"
+            className="gongsin-chat-host"
+            hidden={perspective === "teacher" && !selected}
             ref={detailRef}
             tabIndex={-1}
           >
-            {selected ? (
-              <QuestionEditor
-                key={selected.id}
-                question={selected}
-                draft={editorDrafts[selected.id] ?? selected}
-                onDraft={(update) =>
-                  setEditorDrafts((drafts) => ({
-                    ...drafts,
-                    [selected.id]: {
-                      ...(drafts[selected.id] ?? selected),
-                      ...update,
-                    },
-                  }))
-                }
-                selected={Boolean(storyLinks[selected.id])}
-                onUpdate={(update) => updateQuestion(selected.id, update)}
-                onSelect={selectStory}
-                onUnselect={() => unselectStory(selected)}
-                onSource={openSourcePreview}
-                notify={notify}
-                restriction={activeRestriction(selected.studentId)}
-                onManageRestriction={() => manageStudent(selected.studentId)}
-              />
-            ) : (
-              <p className="gongsin-empty">선택할 질문이 없습니다.</p>
-            )}
+            <GongsinStudentPreview
+              active={
+                view === "inbox" &&
+                !storyEditorOpen &&
+                (perspective === "student" || Boolean(selected))
+              }
+              restriction={activeRestriction(
+                perspective === "teacher" && selected
+                  ? selected.studentId
+                  : PREVIEW_STUDENT,
+              )}
+              questions={questions}
+              stories={stories}
+              settings={settings}
+              onAsk={askQuestion}
+              onSource={openSourcePreview}
+              notifications={notifications.filter(
+                (item) => item.recipientId === PREVIEW_STUDENT,
+              )}
+              onReadNotification={markRead}
+              onTogglePerspective={() => {
+                setPerspective((value) =>
+                  value === "teacher" ? "student" : "teacher",
+                );
+                setStoryEditorOpen(false);
+                setSourcePreview(null);
+                setNotificationsOpen(false);
+                if (perspective === "student" && !selected) setFilter("all");
+              }}
+              teacher={
+                perspective === "teacher" && selected
+                  ? {
+                      studentId: selected.studentId,
+                      studentLabel: selected.studentLabel,
+                      selectedQuestionId: selected.id,
+                      reply: (editorDrafts[selected.id] ?? selected).reply,
+                      onReplyChange: (reply) =>
+                        updateDraft(selected.id, { reply }),
+                      onSendReply: sendReply,
+                      onSelectQuestion: (id) => {
+                        setFilter("all");
+                        selectQuestion(id);
+                      },
+                      onManageRestriction: () =>
+                        manageStudent(selected.studentId),
+                      onEditStory: () => {
+                        setSourcePreview(null);
+                        setStoryEditorOpen(true);
+                      },
+                      storySelected: Boolean(storyLinks[selected.id]),
+                    }
+                  : undefined
+              }
+            />
           </div>
-        )}
-        <section
-          hidden={view !== "student"}
-          className="gongsin-student-stage"
-          aria-label="학생 화면 미리보기"
-        >
-          <GongsinStudentPreview
-            active={view === "student"}
-            restriction={activeRestriction(PREVIEW_STUDENT)}
-            questions={questions}
-            stories={stories}
-            settings={settings}
-            onAsk={askQuestion}
-            onSource={openSourcePreview}
-            notifications={notifications.filter(
-              (item) => item.recipientId === PREVIEW_STUDENT,
-            )}
-            onReadNotification={markRead}
-          />
+          {storyEditorOpen && selected && perspective === "teacher" && (
+            <GongsinStoryEditor
+              key={selected.id}
+              question={selected}
+              draft={editorDrafts[selected.id] ?? selected}
+              onDraft={(update) => updateDraft(selected.id, update)}
+              selected={Boolean(storyLinks[selected.id])}
+              onUpdate={(update) => updateQuestion(selected.id, update)}
+              onSelect={selectStory}
+              onUnselect={() => {
+                unselectStory(selected);
+                setStoryEditorOpen(false);
+              }}
+              onClose={() => setStoryEditorOpen(false)}
+            />
+          )}
         </section>
         <section
           hidden={view !== "operation"}
@@ -695,193 +755,6 @@ function DraftWorkspace() {
         )}
       </div>
     </PortalWorkspace>
-  );
-}
-
-function QuestionEditor({
-  question,
-  draft,
-  onDraft,
-  selected,
-  onUpdate,
-  onSelect,
-  onUnselect,
-  onSource,
-  notify,
-  restriction,
-  onManageRestriction,
-}: {
-  question: DraftQuestion;
-  draft: EditorDraft;
-  onDraft: (update: Partial<EditorDraft>) => void;
-  selected: boolean;
-  onUpdate: (update: Partial<DraftQuestion>) => void;
-  onSelect: (question: DraftQuestion) => void;
-  onUnselect: () => void;
-  onSource: (id: DraftSourceId) => void;
-  notify: (title: string) => void;
-  restriction?: DraftQuestionRestriction;
-  onManageRestriction: () => void;
-}) {
-  const { reply, publicQuestion, publicReply, related } = draft;
-  const [privacyChecked, setPrivacyChecked] = useState(false);
-  const [editingStory, setEditingStory] = useState(false);
-  const saveReply = () => {
-    if (!reply.trim()) return;
-    onUpdate({ reply: reply.trim() });
-    notify("미리보기 답변을 저장했습니다.");
-  };
-  return (
-    <section className="gongsin-editor" aria-label="질문 답변 편집">
-      <div className="gongsin-row-meta">
-        <span>{question.studentLabel} · 나와 학생만</span>
-        <button
-          className="gongsin-text-button"
-          type="button"
-          onClick={() => onSource(question.source)}
-        >
-          {sourceById(question.source).detail}
-          <Icon name="right" />
-        </button>
-      </div>
-      <div className="gongsin-editor-mode">
-        <button
-          className="gongsin-text-button"
-          type="button"
-          onClick={onManageRestriction}
-        >
-          질문 제한
-          {restriction ? ` · ${restrictionTime(restriction.until)}까지` : ""}
-        </button>
-        <button
-          className="gongsin-text-button"
-          type="button"
-          disabled={!question.reply}
-          aria-expanded={editingStory}
-          aria-controls="gongsin-public-editor"
-          onClick={() => setEditingStory((value) => !value)}
-        >
-          {editingStory ? "개별 답변으로" : "공개용 문구 편집"}
-        </button>
-      </div>
-      {!editingStory && (
-        <div className="gongsin-private-answer">
-          <h3 className="gongsin-original-question" tabIndex={0}>
-            {question.question}
-          </h3>
-          <label className="gongsin-field">
-            개별 답변
-            <textarea
-              rows={4}
-              maxLength={2000}
-              value={reply}
-              onChange={(event) => onDraft({ reply: event.target.value })}
-              placeholder="학생에게 보낼 답변을 작성하세요."
-            />
-          </label>
-          <div className="gongsin-editor-actions">
-            <button
-              className="gongsin-button gongsin-primary"
-              type="button"
-              disabled={!reply.trim() || reply.trim() === question.reply}
-              onClick={saveReply}
-            >
-              답변 저장 (미리보기)
-            </button>
-          </div>
-        </div>
-      )}
-      {editingStory && (
-        <div className="gongsin-public-editor" id="gongsin-public-editor">
-          <h4>스토리로 선정하기</h4>
-          <div className="gongsin-public-fields">
-            <label className="gongsin-field">
-              공개 질문
-              <textarea
-                rows={2}
-                maxLength={240}
-                value={publicQuestion}
-                onChange={(event) => {
-                  onDraft({ publicQuestion: event.target.value });
-                  setPrivacyChecked(false);
-                }}
-              />
-            </label>
-            <label className="gongsin-field">
-              공개 답변
-              <textarea
-                rows={3}
-                maxLength={1000}
-                value={publicReply}
-                onChange={(event) => {
-                  onDraft({ publicReply: event.target.value });
-                  setPrivacyChecked(false);
-                }}
-              />
-            </label>
-          </div>
-          <fieldset className="gongsin-related-picker">
-            <legend>이어서 공부할 자료</legend>
-            {DRAFT_SOURCES.map((source) => (
-              <label key={source.id}>
-                <input
-                  type="checkbox"
-                  checked={related.includes(source.id)}
-                  onChange={(event) => {
-                    onDraft({
-                      related: event.target.checked
-                        ? [...related, source.id]
-                        : related.filter((id) => id !== source.id),
-                    });
-                    setPrivacyChecked(false);
-                  }}
-                />
-                {source.label}
-              </label>
-            ))}
-          </fieldset>
-          <label className="gongsin-privacy-check">
-            <input
-              type="checkbox"
-              checked={privacyChecked}
-              onChange={(event) => setPrivacyChecked(event.target.checked)}
-            />
-            공개 문구와 연결 자료에 개인정보·비공개 내용이 없는지 확인했습니다.
-          </label>
-          <div className="gongsin-editor-actions">
-            <button
-              className="gongsin-button gongsin-primary"
-              type="button"
-              disabled={
-                !privacyChecked || !publicQuestion.trim() || !publicReply.trim()
-              }
-              onClick={() => {
-                const update = {
-                  publicQuestion: publicQuestion.trim(),
-                  publicReply: publicReply.trim(),
-                };
-                onUpdate(update);
-                onSelect({ ...question, ...update, related: [...related] });
-                setPrivacyChecked(false);
-              }}
-            >
-              {selected
-                ? "선정 스토리 갱신 (미리보기)"
-                : "스토리 선정 (미리보기)"}
-            </button>
-            {selected && (
-              <button
-                className="gongsin-button"
-                type="button"
-                onClick={onUnselect}
-              >
-                선정 해제
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </section>
   );
 }
 

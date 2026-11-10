@@ -11,6 +11,19 @@ import type { GongsinmoongoSettings } from "./gongsinmoongoSettings";
 import "./gongsinStudentPreview.css";
 
 export interface GongsinStudentPreviewProps {
+  teacher?: {
+    studentId: string;
+    studentLabel: string;
+    selectedQuestionId: string;
+    reply: string;
+    onReplyChange: (text: string) => void;
+    onSendReply: () => void;
+    onSelectQuestion: (id: string) => void;
+    onManageRestriction: () => void;
+    onEditStory: () => void;
+    storySelected: boolean;
+  };
+  onTogglePerspective?: () => void;
   active: boolean;
   restriction?: { until: number; reason: string };
   questions: DraftQuestion[];
@@ -82,6 +95,8 @@ function PreviewIcon({
 }
 
 export default function GongsinStudentPreview({
+  teacher,
+  onTogglePerspective,
   active,
   restriction,
   questions,
@@ -92,6 +107,7 @@ export default function GongsinStudentPreview({
   notifications,
   onReadNotification,
 }: GongsinStudentPreviewProps) {
+  const isTeacher = Boolean(teacher);
   const [view, setView] = useState<"conversation" | "stories">("conversation");
   const [wrongNoteOpen, setWrongNoteOpen] = useState(false);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
@@ -126,7 +142,19 @@ export default function GongsinStudentPreview({
   const wrongNoteTriggerRef = useRef<HTMLButtonElement>(null);
   const previousMineCount = useRef<number | null>(null);
   const mine = questions.filter(
-    (question) => question.studentId === PREVIEW_STUDENT,
+    (question) =>
+      question.studentId === (teacher?.studentId ?? PREVIEW_STUDENT),
+  );
+  const selectedTeacherQuestion = teacher
+    ? mine.find((question) => question.id === teacher.selectedQuestionId)
+    : undefined;
+  const canSendTeacherReply = Boolean(
+    active &&
+    teacher &&
+    selectedTeacherQuestion &&
+    teacher.reply.trim() &&
+    teacher.reply.length <= 2000 &&
+    teacher.reply.trim() !== selectedTeacherQuestion.reply.trim(),
   );
   const ownQuestionIds = new Set(mine.map((question) => question.id));
   const ownNotifications = notifications.filter((item) =>
@@ -181,7 +209,7 @@ export default function GongsinStudentPreview({
       : "";
 
   const openGuidelines = () => {
-    if (!active || !settings.warning.enabled) return;
+    if (!active || isTeacher || !settings.warning.enabled) return;
     guidelinesOpenerRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -208,7 +236,7 @@ export default function GongsinStudentPreview({
     });
   };
   useEffect(() => {
-    if (!active) {
+    if (!active || isTeacher) {
       setGuidelinesOpen(false);
       setPopup(null);
       return;
@@ -222,12 +250,13 @@ export default function GongsinStudentPreview({
     } else if (!settings.warning.enabled) setGuidelinesOpen(false);
   }, [
     active,
+    isTeacher,
     guidelinesAcknowledged,
     settings.warning.enabled,
     settings.warning.revision,
   ]);
   useEffect(() => {
-    if (!active || !guidelinesOpen) return;
+    if (!active || isTeacher || !guidelinesOpen) return;
     const dialog = guidelinesRef.current;
     const first = dialog?.querySelector<HTMLButtonElement>("button");
     dialog?.scrollIntoView({ block: "nearest" });
@@ -238,7 +267,25 @@ export default function GongsinStudentPreview({
     };
     document.addEventListener("focusin", containFocus);
     return () => document.removeEventListener("focusin", containFocus);
-  }, [active, guidelinesOpen]);
+  }, [active, isTeacher, guidelinesOpen]);
+
+  useLayoutEffect(() => {
+    if (!active || !teacher || !selectedTeacherQuestion) return;
+    const question = Array.from(
+      conversationRef.current?.querySelectorAll<HTMLElement>(
+        "[data-question-id]",
+      ) ?? [],
+    ).find(
+      (element) => element.dataset.questionId === teacher.selectedQuestionId,
+    );
+    question?.focus({ preventScroll: true });
+    question?.scrollIntoView({ block: "nearest" });
+  }, [
+    active,
+    teacher?.studentId,
+    teacher?.selectedQuestionId,
+    selectedTeacherQuestion?.id,
+  ]);
 
   useEffect(() => {
     if (!active || !popup) return;
@@ -297,6 +344,7 @@ export default function GongsinStudentPreview({
   useEffect(() => {
     if (
       active &&
+      !isTeacher &&
       !guidelinesOpen &&
       previousMineCount.current !== null &&
       mine.length > previousMineCount.current &&
@@ -308,7 +356,7 @@ export default function GongsinStudentPreview({
       if (stream) stream.scrollTop = stream.scrollHeight;
     }
     previousMineCount.current = mine.length;
-  }, [active, guidelinesOpen, mine.length, view, wrongNoteOpen]);
+  }, [active, isTeacher, guidelinesOpen, mine.length, view, wrongNoteOpen]);
 
   useEffect(() => {
     if (active && !guidelinesOpen && wrongNoteOpen)
@@ -342,132 +390,174 @@ export default function GongsinStudentPreview({
 
   return (
     <section
-      className="gongsin-student-preview"
-      aria-label="학생 공신문고 미리보기"
+      className={`gongsin-student-preview${isTeacher ? " is-teacher" : ""}`}
+      aria-label={isTeacher ? "공신문고 대화" : "학생 공신문고 미리보기"}
     >
       <div className="gsp-chat-pane">
         <header className="gsp-header">
-          <button
-            className="gsp-teacher-story"
-            type="button"
-            onClick={showStories}
-            aria-label={`선생님의 선정 스토리 ${visibleStories.length}개`}
-          >
-            <span
-              className={`gsp-teacher-ring${visibleStories.length ? " has-story" : ""}`}
-            >
-              <span>선</span>
+          {isTeacher ? (
+            <span className="gsp-teacher-ring" aria-hidden="true">
+              <span>학</span>
             </span>
-          </button>
+          ) : (
+            <button
+              className="gsp-teacher-story"
+              type="button"
+              onClick={showStories}
+              aria-label={`선생님의 선정 스토리 ${visibleStories.length}개`}
+            >
+              <span
+                className={`gsp-teacher-ring${visibleStories.length ? " has-story" : ""}`}
+              >
+                <span>선</span>
+              </span>
+            </button>
+          )}
           <div className="gsp-heading">
-            <h3>선생님</h3>
-            {view === "conversation" && (
+            <h3>{teacher?.studentLabel ?? "선생님"}</h3>
+            {!isTeacher && view === "conversation" && (
               <span className="gsp-private">
                 <PreviewIcon name="lock" />
                 선생님과 나만
               </span>
             )}
           </div>
-          <div
-            className="gsp-notification-root"
-            ref={notificationsRootRef}
-            onBlur={(event) => {
-              if (
-                !event.currentTarget.contains(
-                  event.relatedTarget as Node | null,
-                ) &&
-                popup === "notifications"
-              )
-                setPopup(null);
-            }}
-          >
+          {onTogglePerspective && (
             <button
-              ref={bellRef}
-              className="gsp-icon-button gsp-bell"
+              className="gsp-perspective-toggle"
               type="button"
-              aria-label={`알림, 읽지 않은 답변 ${unreadCount}개`}
-              aria-expanded={popup === "notifications"}
-              aria-controls="gsp-notifications"
-              onClick={() =>
-                setPopup((value) =>
-                  value === "notifications" ? null : "notifications",
-                )
-              }
+              onClick={onTogglePerspective}
             >
-              <PreviewIcon name="bell" />
-              {unreadCount > 0 && (
-                <span className="gsp-badge" aria-hidden="true">
-                  {unreadCount}
-                </span>
-              )}
+              {isTeacher ? "학생으로 체험" : "교사로 돌아가기"}
             </button>
-            {popup === "notifications" && (
-              <div
-                id="gsp-notifications"
-                className="gsp-notifications"
-                data-gongsin-popover
-                aria-label="내 답변 알림"
+          )}
+          {!isTeacher && (
+            <div
+              className="gsp-notification-root"
+              ref={notificationsRootRef}
+              onBlur={(event) => {
+                if (
+                  !event.currentTarget.contains(
+                    event.relatedTarget as Node | null,
+                  ) &&
+                  popup === "notifications"
+                )
+                  setPopup(null);
+              }}
+            >
+              <button
+                ref={bellRef}
+                className="gsp-icon-button gsp-bell"
+                type="button"
+                aria-label={`알림, 읽지 않은 답변 ${unreadCount}개`}
+                aria-expanded={popup === "notifications"}
+                aria-controls="gsp-notifications"
+                onClick={() =>
+                  setPopup((value) =>
+                    value === "notifications" ? null : "notifications",
+                  )
+                }
               >
-                <strong>답변 알림</strong>
-                {ownNotifications.length ? (
-                  ownNotifications.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => openNotification(item.id, item.questionId)}
-                    >
-                      <span>{item.title}</span>
-                      <small>{item.read ? "읽음" : "새 답변"}</small>
-                    </button>
-                  ))
-                ) : (
-                  <p>새 답변이 없습니다.</p>
+                <PreviewIcon name="bell" />
+                {unreadCount > 0 && (
+                  <span className="gsp-badge" aria-hidden="true">
+                    {unreadCount}
+                  </span>
                 )}
-              </div>
-            )}
-          </div>
+              </button>
+              {popup === "notifications" && (
+                <div
+                  id="gsp-notifications"
+                  className="gsp-notifications"
+                  data-gongsin-popover
+                  aria-label="내 답변 알림"
+                >
+                  <strong>답변 알림</strong>
+                  {ownNotifications.length ? (
+                    ownNotifications.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() =>
+                          openNotification(item.id, item.questionId)
+                        }
+                      >
+                        <span>{item.title}</span>
+                        <small>{item.read ? "읽음" : "새 답변"}</small>
+                      </button>
+                    ))
+                  ) : (
+                    <p>새 답변이 없습니다.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </header>
 
-        <div className="gsp-navigation">
-          <nav
-            className="ws-page-tabs gsp-view-tabs"
-            aria-label="공신문고 학생 보기"
-          >
+        {teacher ? (
+          <div className="gsp-teacher-actions">
             <button
+              className="gsp-secondary"
               type="button"
-              aria-pressed={
-                view === "conversation" && !wrongNoteOpen && !dictionaryOpen
-              }
-              onClick={showConversation}
+              onClick={teacher.onManageRestriction}
             >
-              내 질문
+              질문 제한
             </button>
             <button
+              className="gsp-secondary"
               type="button"
-              aria-pressed={
-                view === "stories" && !wrongNoteOpen && !dictionaryOpen
-              }
-              onClick={showStories}
+              onClick={teacher.onEditStory}
+              disabled={!selectedTeacherQuestion?.reply}
             >
-              선정 스토리
+              공개용 문구 편집
             </button>
-          </nav>
-          <button
-            ref={wrongNoteTriggerRef}
-            className="gsp-wrong-note-link"
-            type="button"
-            onClick={() => {
-              setWrongNoteOpen(true);
-              setDictionaryOpen(false);
-              setPopup(null);
-            }}
-          >
-            <PreviewIcon name="book" />
-            <span>오답 노트</span>
-          </button>
-        </div>
+            {teacher.storySelected && (
+              <span className="gsp-story-selected">스토리 선정</span>
+            )}
+          </div>
+        ) : (
+          <div className="gsp-navigation">
+            <nav
+              className="ws-page-tabs gsp-view-tabs"
+              aria-label="공신문고 학생 보기"
+            >
+              <button
+                type="button"
+                aria-pressed={
+                  view === "conversation" && !wrongNoteOpen && !dictionaryOpen
+                }
+                onClick={showConversation}
+              >
+                내 질문
+              </button>
+              <button
+                type="button"
+                aria-pressed={
+                  view === "stories" && !wrongNoteOpen && !dictionaryOpen
+                }
+                onClick={showStories}
+              >
+                선정 스토리
+              </button>
+            </nav>
+            <button
+              ref={wrongNoteTriggerRef}
+              className="gsp-wrong-note-link"
+              type="button"
+              onClick={() => {
+                setWrongNoteOpen(true);
+                setDictionaryOpen(false);
+                setPopup(null);
+              }}
+            >
+              <PreviewIcon name="book" />
+              <span>오답 노트</span>
+            </button>
+          </div>
+        )}
 
-        {isRestricted && restriction && (
+        {!isTeacher && isRestricted && restriction && (
           <div
             className="gsp-restriction"
             role="status"
@@ -478,7 +568,7 @@ export default function GongsinStudentPreview({
           </div>
         )}
 
-        {dictionaryOpen ? (
+        {!isTeacher && dictionaryOpen ? (
           <section className="gsp-empty">
             <PreviewIcon name="book" />
             <h4>역사 사전</h4>
@@ -491,7 +581,7 @@ export default function GongsinStudentPreview({
               대화로 돌아가기
             </button>
           </section>
-        ) : wrongNoteOpen ? (
+        ) : !isTeacher && wrongNoteOpen ? (
           <section
             className="gsp-wrong-note"
             ref={wrongNoteRef}
@@ -567,7 +657,7 @@ export default function GongsinStudentPreview({
               제출·해설 공개를 가정한 예시 문항입니다.
             </p>
           </section>
-        ) : view === "stories" ? (
+        ) : !isTeacher && view === "stories" ? (
           <div className="gsp-stories">
             {activeStory ? (
               <article className="gsp-story" aria-label="선정 스토리">
@@ -655,7 +745,9 @@ export default function GongsinStudentPreview({
             <div
               className="gsp-conversation"
               ref={conversationRef}
-              aria-label="선생님과의 개인 대화"
+              aria-label={
+                isTeacher ? "학생과의 개인 대화" : "선생님과의 개인 대화"
+              }
               tabIndex={0}
             >
               {mine.length === 0 ? (
@@ -669,8 +761,13 @@ export default function GongsinStudentPreview({
                     className="gsp-message-pair"
                     key={question.id}
                     data-question-id={question.id}
+                    aria-current={
+                      teacher?.selectedQuestionId === question.id
+                        ? true
+                        : undefined
+                    }
                     tabIndex={-1}
-                    aria-label={`내 질문: ${question.question}`}
+                    aria-label={`${isTeacher ? "학생 질문" : "내 질문"}: ${question.question}`}
                   >
                     <div className="gsp-message gsp-message-mine">
                       <button
@@ -686,7 +783,18 @@ export default function GongsinStudentPreview({
                             : sourceById(question.source).title}
                         </span>
                       </button>
-                      <p>{question.question}</p>
+                      {teacher ? (
+                        <button
+                          className="gsp-question-select"
+                          type="button"
+                          aria-label={`이 질문에 답변하기: ${question.question}`}
+                          onClick={() => teacher.onSelectQuestion(question.id)}
+                        >
+                          {question.question}
+                        </button>
+                      ) : (
+                        <p>{question.question}</p>
+                      )}
                     </div>
                     {question.reply ? (
                       <div className="gsp-teacher-reply">
@@ -694,7 +802,7 @@ export default function GongsinStudentPreview({
                           선
                         </span>
                         <div className="gsp-message gsp-message-teacher">
-                          <strong>선생님</strong>
+                          <strong>{isTeacher ? "내 답변" : "선생님"}</strong>
                           <p>{question.reply}</p>
                           {question.related.length > 0 && (
                             <div className="gsp-reply-links">
@@ -713,156 +821,207 @@ export default function GongsinStudentPreview({
                         </div>
                       </div>
                     ) : (
-                      <span className="gsp-pending">답변 기다리는 중</span>
+                      <span className="gsp-pending">
+                        {isTeacher ? "답변 대기" : "답변 기다리는 중"}
+                      </span>
                     )}
                   </article>
                 ))
               )}
             </div>
-            <form
-              className="gsp-composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (
-                  !text.trim() ||
-                  !active ||
-                  !canCompose ||
-                  !guidelinesAcknowledged ||
-                  !sourceAllowed ||
-                  (source === "mock" && !mockAttached)
-                )
-                  return;
-                onAsk(
-                  text.trim(),
-                  source,
-                  source === "mock" ? "wrong-note" : undefined,
-                );
-                setText("");
-                setSendStatus("미리보기 질문을 보냈습니다.");
-              }}
-            >
-              <div className="gsp-source-row">
-                {mockAttached ? (
-                  <span className="gsp-mock-attachment">
-                    <PreviewIcon name="lock" />
-                    <span>오답 노트 · 모의고사 1회 · 7번</span>
-                    <button
-                      className="gsp-icon-button"
-                      type="button"
-                      aria-label="모의고사 문항 연결 해제"
-                      disabled={!canCompose}
-                      onClick={() => {
-                        setMockAttached(false);
-                        setSource("lesson");
-                      }}
-                    >
-                      <PreviewIcon name="close" />
-                    </button>
+            {teacher ? (
+              <form
+                className="gsp-composer gsp-teacher-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (canSendTeacherReply) teacher.onSendReply();
+                }}
+              >
+                <div className="gsp-answer-target">
+                  <span>
+                    {selectedTeacherQuestion?.reply.trim()
+                      ? "답변 수정"
+                      : "답변 대상"}
                   </span>
-                ) : (
-                  <label className="gsp-source-picker">
-                    <PreviewIcon name="book" />
-                    <span className="sr-only">질문할 자료</span>
-                    <select
-                      aria-label="질문할 자료"
-                      value={source}
-                      disabled={!canCompose || regularSources.length === 0}
-                      onChange={(event) =>
-                        setSource(event.target.value as DraftSourceId)
-                      }
-                    >
-                      {!sourceAllowed && (
-                        <option value={source} disabled>
-                          {sourceById(source).label} · 질문 접수 중지
-                        </option>
-                      )}
-                      {regularSources.map((item) => (
-                        <option value={item.id} key={item.id}>
-                          {item.label} · {item.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <div className="gsp-composer-meta">
-                  {settings.warning.enabled && (
-                    <button
-                      ref={guidelinesTriggerRef}
-                      className="gsp-guidelines-trigger"
-                      type="button"
-                      onClick={openGuidelines}
-                    >
-                      {guidelinesAcknowledged ? "질문 안내" : "질문 안내 확인"}
-                    </button>
-                  )}
-                  <span>{text.length}/1,000</span>
+                  <strong>
+                    {selectedTeacherQuestion?.question ??
+                      "질문을 선택해 주세요."}
+                  </strong>
+                  <span>{teacher.reply.length}/2,000</span>
                 </div>
-              </div>
-              {!sourceAllowed && (
-                <p className="gsp-source-unavailable" role="status">
-                  {settings.allowedSources.length === 0
-                    ? "지금은 질문할 수 있는 자료가 없어요."
-                    : regularSources.length === 0 && mockAllowed
-                      ? "모의고사 질문은 오답 노트에서 시작해 주세요."
-                      : mockAttached
-                        ? "모의고사 질문 접수가 중지되었습니다. 연결을 해제하고 다른 자료를 선택해 주세요."
-                        : "이 자료의 질문 접수가 중지되었습니다. 다른 자료를 선택해 주세요."}
-                </p>
-              )}
-              <div className="gsp-compose-row">
-                <label className="gsp-compose-label">
-                  <span className="sr-only">선생님께 질문</span>
-                  <textarea
-                    ref={composerRef}
-                    aria-label="선생님께 질문"
-                    rows={1}
-                    maxLength={1000}
-                    value={text}
-                    onFocus={() => {
-                      if (suppressComposerNoticeRef.current) {
-                        suppressComposerNoticeRef.current = false;
-                        return;
+                <div className="gsp-compose-row">
+                  <label className="gsp-compose-label">
+                    <span className="sr-only">학생에게 답변</span>
+                    <textarea
+                      aria-label="학생에게 답변"
+                      rows={2}
+                      maxLength={2000}
+                      value={teacher.reply}
+                      disabled={!selectedTeacherQuestion}
+                      onChange={(event) =>
+                        teacher.onReplyChange(event.target.value)
                       }
-                      if (!guidelinesAcknowledged) openGuidelines();
-                    }}
-                    onChange={(event) => {
-                      setText(event.target.value);
-                      setSendStatus("");
-                    }}
-                    placeholder={
-                      canCompose
-                        ? "궁금한 내용을 입력하세요"
-                        : isRestricted
-                          ? "질문 제한이 끝나면 보낼 수 있어요"
-                          : "지금은 질문을 받지 않고 있어요"
-                    }
-                    disabled={!canCompose}
-                  />
-                </label>
-                <button
-                  className="gsp-send"
-                  type="submit"
-                  aria-label="질문 보내기 (미리보기)"
-                  disabled={
+                      placeholder="학생에게 답변을 작성하세요"
+                    />
+                  </label>
+                  <button
+                    className="gsp-send"
+                    type="submit"
+                    aria-label="답변 보내기 (미리보기)"
+                    disabled={!canSendTeacherReply}
+                  >
+                    <PreviewIcon name="send" />
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form
+                className="gsp-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (
+                    !text.trim() ||
                     !active ||
                     !canCompose ||
                     !guidelinesAcknowledged ||
                     !sourceAllowed ||
-                    !text.trim()
-                  }
-                >
-                  <PreviewIcon name="send" />
-                </button>
-              </div>
-              <span className="sr-only" role="status">
-                {sendStatus}
-              </span>
-            </form>
+                    (source === "mock" && !mockAttached)
+                  )
+                    return;
+                  onAsk(
+                    text.trim(),
+                    source,
+                    source === "mock" ? "wrong-note" : undefined,
+                  );
+                  setText("");
+                  setSendStatus("미리보기 질문을 보냈습니다.");
+                }}
+              >
+                <div className="gsp-source-row">
+                  {mockAttached ? (
+                    <span className="gsp-mock-attachment">
+                      <PreviewIcon name="lock" />
+                      <span>오답 노트 · 모의고사 1회 · 7번</span>
+                      <button
+                        className="gsp-icon-button"
+                        type="button"
+                        aria-label="모의고사 문항 연결 해제"
+                        disabled={!canCompose}
+                        onClick={() => {
+                          setMockAttached(false);
+                          setSource("lesson");
+                        }}
+                      >
+                        <PreviewIcon name="close" />
+                      </button>
+                    </span>
+                  ) : (
+                    <label className="gsp-source-picker">
+                      <PreviewIcon name="book" />
+                      <span className="sr-only">질문할 자료</span>
+                      <select
+                        aria-label="질문할 자료"
+                        value={source}
+                        disabled={!canCompose || regularSources.length === 0}
+                        onChange={(event) =>
+                          setSource(event.target.value as DraftSourceId)
+                        }
+                      >
+                        {!sourceAllowed && (
+                          <option value={source} disabled>
+                            {sourceById(source).label} · 질문 접수 중지
+                          </option>
+                        )}
+                        {regularSources.map((item) => (
+                          <option value={item.id} key={item.id}>
+                            {item.label} · {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <div className="gsp-composer-meta">
+                    {settings.warning.enabled && (
+                      <button
+                        ref={guidelinesTriggerRef}
+                        className="gsp-guidelines-trigger"
+                        type="button"
+                        onClick={openGuidelines}
+                      >
+                        {guidelinesAcknowledged
+                          ? "질문 안내"
+                          : "질문 안내 확인"}
+                      </button>
+                    )}
+                    <span>{text.length}/1,000</span>
+                  </div>
+                </div>
+                {!sourceAllowed && (
+                  <p className="gsp-source-unavailable" role="status">
+                    {settings.allowedSources.length === 0
+                      ? "지금은 질문할 수 있는 자료가 없어요."
+                      : regularSources.length === 0 && mockAllowed
+                        ? "모의고사 질문은 오답 노트에서 시작해 주세요."
+                        : mockAttached
+                          ? "모의고사 질문 접수가 중지되었습니다. 연결을 해제하고 다른 자료를 선택해 주세요."
+                          : "이 자료의 질문 접수가 중지되었습니다. 다른 자료를 선택해 주세요."}
+                  </p>
+                )}
+                <div className="gsp-compose-row">
+                  <label className="gsp-compose-label">
+                    <span className="sr-only">선생님께 질문</span>
+                    <textarea
+                      ref={composerRef}
+                      aria-label="선생님께 질문"
+                      rows={1}
+                      maxLength={1000}
+                      value={text}
+                      onFocus={() => {
+                        if (suppressComposerNoticeRef.current) {
+                          suppressComposerNoticeRef.current = false;
+                          return;
+                        }
+                        if (!guidelinesAcknowledged) openGuidelines();
+                      }}
+                      onChange={(event) => {
+                        setText(event.target.value);
+                        setSendStatus("");
+                      }}
+                      placeholder={
+                        canCompose
+                          ? "궁금한 내용을 입력하세요"
+                          : isRestricted
+                            ? "질문 제한이 끝나면 보낼 수 있어요"
+                            : "지금은 질문을 받지 않고 있어요"
+                      }
+                      disabled={!canCompose}
+                    />
+                  </label>
+                  <button
+                    className="gsp-send"
+                    type="submit"
+                    aria-label="질문 보내기 (미리보기)"
+                    disabled={
+                      !active ||
+                      !canCompose ||
+                      !guidelinesAcknowledged ||
+                      !sourceAllowed ||
+                      !text.trim()
+                    }
+                  >
+                    <PreviewIcon name="send" />
+                  </button>
+                </div>
+                <span className="sr-only" role="status">
+                  {sendStatus}
+                </span>
+              </form>
+            )}
           </div>
         )}
       </div>
 
-      {active && guidelinesOpen && (
+      {active && !isTeacher && guidelinesOpen && (
         <div
           className="gsp-guidelines-layer"
           onPointerDown={(event) => {
@@ -982,6 +1141,12 @@ export default function GongsinStudentPreview({
               <button
                 type="button"
                 onClick={() => {
+                  if (isTeacher) {
+                    onSource("dictionary");
+                    setPopup(null);
+                    toolsRef.current?.focus();
+                    return;
+                  }
                   setDictionaryOpen(true);
                   setWrongNoteOpen(false);
                   setPopup(null);

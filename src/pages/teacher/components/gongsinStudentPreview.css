@@ -52,6 +52,7 @@
 }
 .gsp-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -59,6 +60,7 @@
 }
 .gsp-heading {
   flex: 1;
+  flex-basis: 96px;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -73,6 +75,38 @@
 }
 .gsp-heading h3 > span {
   color: var(--ws-primary, #2563eb);
+}
+.gsp-perspective-toggle {
+  order: 2;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 14px !important;
+}
+.gsp-perspective-toggle:hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.gsp-teacher-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.gsp-teacher-actions .gsp-secondary {
+  padding-inline: 12px;
+  font-size: 14px !important;
+}
+.gsp-story-selected {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ws-primary-text, #1e3a8a);
 }
 .gsp-private {
   display: inline-flex;
@@ -117,6 +151,7 @@
   font-weight: 700;
 }
 .gsp-notification-root {
+  order: 1;
   position: relative;
   flex: 0 0 auto;
 }
@@ -294,6 +329,76 @@
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.gsp-question-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 16px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 4px 16px 16px 16px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #1f2937);
+  font-size: 16px;
+  line-height: 1.7;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.gsp-message-pair[aria-current="true"] .gsp-question-select {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+  box-shadow: inset 0 0 0 1px var(--ws-primary, #2563eb);
+}
+.gongsin-student-preview.is-teacher .gsp-message-pair:focus-visible {
+  outline: none;
+}
+.gongsin-student-preview.is-teacher
+  .gsp-message-pair:focus-visible
+  .gsp-question-select,
+.gongsin-student-preview.is-teacher .gsp-question-select:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 0;
+  border-color: transparent;
+  box-shadow: none;
+}
+.is-teacher .gsp-message-mine {
+  align-self: flex-start;
+}
+.is-teacher .gsp-teacher-reply {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+.is-teacher .gsp-message-teacher {
+  border-color: var(--ws-primary, #2563eb);
+  border-radius: 16px 4px 16px 16px;
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
+}
+.is-teacher .gsp-message-teacher .gsp-reply-links button {
+  color: #fff;
+}
+.is-teacher .gsp-pending {
+  align-self: flex-start;
+}
+.gsp-answer-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.gsp-answer-target > span {
+  flex: 0 0 auto;
+}
+.gsp-answer-target > strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
 }
 .gsp-message-mine {
   align-self: flex-end;

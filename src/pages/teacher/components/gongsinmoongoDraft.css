@@ -825,6 +825,13 @@
 .gongsin-draft {
   position: relative;
 }
+.gongsin-chat-host {
+  height: 100%;
+  min-height: 0;
+}
+.gongsin-chat-host[hidden] {
+  display: none;
+}
 .gongsin-source-preview {
   position: absolute;
   right: 24px;

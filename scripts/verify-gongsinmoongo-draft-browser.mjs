@@ -242,6 +242,10 @@ try {
           bottom: b.bottom,
         };
       };
+      const visible = (selector) =>
+        [...document.querySelectorAll(selector)].find(
+          (element) => element.getClientRects().length,
+        );
       const controls = [
         ...document.querySelectorAll(
           "main button,main input,main textarea,main select",
@@ -249,7 +253,9 @@ try {
       ].filter(
         (element) =>
           element.getClientRects().length &&
-          !element.closest(".gsp-conversation,[hidden]"),
+          !element.closest(
+            ".gsp-conversation,.gongsin-story-dialog-body,[hidden]",
+          ),
       );
       return {
         viewport: { width: innerWidth, height: innerHeight },
@@ -271,10 +277,10 @@ try {
         studentOuterCard: document
           .querySelector(".gongsin-student-stage")
           ?.classList.contains("ws-surface"),
-        student: rect(document.querySelector(".gongsin-student-preview")),
-        chat: rect(document.querySelector(".gsp-chat-pane")),
-        rail: rect(document.querySelector(".gsp-tools-rail")),
-        conversation: rect(document.querySelector(".gsp-conversation")),
+        student: rect(visible(".gongsin-student-preview")),
+        chat: rect(visible(".gsp-chat-pane")),
+        rail: rect(visible(".gsp-tools-rail")),
+        conversation: rect(visible(".gsp-conversation")),
         clippedControls: controls
           .map((element) => ({
             name:
@@ -377,6 +383,42 @@ try {
       });
   const student = () =>
     page.getByRole("region", { name: "학생 공신문고 미리보기", exact: true });
+  const teacher = () =>
+    page.getByRole("region", { name: "공신문고 대화", exact: true });
+  const closeStoryEditor = async () => {
+    const dialog = page.getByRole("dialog", {
+      name: "공개용 문구 편집",
+      exact: true,
+    });
+    if (await dialog.isVisible())
+      await dialog
+        .getByRole("button", { name: "공개용 문구 편집 닫기", exact: true })
+        .click();
+  };
+  const showTeacher = async () => {
+    await closeStoryEditor();
+    await nav("질문함").click();
+    const toggle = page.getByRole("button", {
+      name: "교사로 돌아가기",
+      exact: true,
+    });
+    if (await toggle.isVisible()) await toggle.click();
+    await teacher().waitFor();
+  };
+  const showStudent = async () => {
+    await closeStoryEditor();
+    await nav("질문함").click();
+    const toggle = page.getByRole("button", {
+      name: "학생으로 체험",
+      exact: true,
+    });
+    if (await toggle.isVisible()) await toggle.click();
+    await student().waitFor();
+  };
+  const teacherComposer = () =>
+    teacher().getByRole("textbox", { name: "학생에게 답변", exact: true });
+  const selectedTeacherQuestion = () =>
+    teacher().locator('.gsp-message-pair[aria-current="true"]');
   const warning = () =>
     page.getByRole("dialog", {
       name: "질문하기 전에 확인해 주세요",
@@ -434,6 +476,7 @@ try {
   const settingsPanel = () =>
     page.getByRole("region", { name: "초안 설정", exact: true });
   const openSettings = async (label) => {
+    await closeStoryEditor();
     await nav("운영·연결").click();
     await settingsNav(label).click();
   };
@@ -447,9 +490,11 @@ try {
   const studentBell = () =>
     student().getByRole("button", { name: /^알림, 읽지 않은 답변/ });
   const save = () =>
-    page.getByRole("button", { name: "답변 저장 (미리보기)", exact: true });
-  const editor = () =>
-    page.getByRole("region", { name: "질문 답변 편집", exact: true });
+    teacher().getByRole("button", {
+      name: "답변 보내기 (미리보기)",
+      exact: true,
+    });
+  const editor = () => teacher();
   const composer = () =>
     student().getByRole("textbox", { name: "선생님께 질문", exact: true });
   const send = () =>
@@ -541,11 +586,36 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(origin);
     await page.locator("[data-gongsin-draft]").waitFor();
+    await teacher().waitFor();
+    assert.equal(
+      await page
+        .getByRole("navigation", { name: "공신문고 초안 보기" })
+        .getByRole("button")
+        .count(),
+      2,
+      "Top navigation must contain only the unified inbox and settings",
+    );
+    assert.equal(
+      await page
+        .getByRole("region", { name: "질문 답변 편집", exact: true })
+        .count(),
+      0,
+      "The former editor-style inbox must be removed",
+    );
+    assert.equal(
+      await page.getByRole("textbox", { name: /^개별 답변/ }).count(),
+      0,
+    );
+    assert.equal(
+      await teacher().locator(".gsp-message-pair").count(),
+      2,
+      "Default teacher conversation must show only the selected student A",
+    );
     await noOverflow(`inbox-${width}`);
     if (width >= 768) {
       const [sideBox, detailBox] = await Promise.all([
         sidebar().boundingBox(),
-        page.locator(".gongsin-question-detail").boundingBox(),
+        teacher().boundingBox(),
       ]);
       assert(
         sideBox.x >= (width >= 1024 ? 231 : 0) &&
@@ -567,11 +637,11 @@ try {
       await selectQuestionRow(formativeQuestion);
       assert.equal(await toggle.getAttribute("aria-expanded"), "false");
       await assertFocused(
-        toggle,
-        "Selecting a mobile question must restore disclosure focus",
+        selectedTeacherQuestion(),
+        "Selecting a mobile question must focus its message in the unified conversation",
       );
-      await editor()
-        .getByRole("heading", { name: formativeQuestion, exact: true })
+      await selectedTeacherQuestion()
+        .getByText(formativeQuestion, { exact: true })
         .waitFor();
       await toggle.click();
       await page.keyboard.press("Escape");
@@ -586,7 +656,7 @@ try {
       0,
       "First-use warning must not open while teacher view is active",
     );
-    await nav("학생 화면").click();
+    await showStudent();
     await warning().waitFor();
     assert(
       await student().locator(".gsp-send").isDisabled(),
@@ -701,6 +771,55 @@ try {
     "320/390/768/1280/1440: actual primary 232px + separate question sidebar; mobile disclosure/selection/focus; default own-only DM; stories; upward tools; no horizontal overflow",
   );
 
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.reload();
+  await showTeacher();
+  await teacher()
+    .getByRole("button", {
+      name: "이 질문에 답변하기: " + formativeQuestion,
+      exact: true,
+    })
+    .click();
+  assert.equal(
+    await selectedTeacherQuestion().getAttribute("data-question-id"),
+    "example-3",
+  );
+  const unifiedReplyDraft =
+    "통합답변초안검증: 교류 상대와 방식을 각각 비교해 보세요.";
+  await teacherComposer().fill(unifiedReplyDraft);
+  await selectQuestionRow(privateOtherQuestion);
+  assert.equal(
+    await teacher().locator(".gsp-message-pair").count(),
+    1,
+    "Teacher DM must contain only selected student B",
+  );
+  assert.equal(
+    await teacher().getByText(formativeQuestion, { exact: true }).count(),
+    0,
+    "Another student must not enter the selected teacher conversation",
+  );
+  await teacherComposer().fill("학생 B에게 작성 중인 별도 답변");
+  await selectQuestionRow(formativeQuestion);
+  assert.equal(
+    await teacherComposer().inputValue(),
+    unifiedReplyDraft,
+    "Changing students must retain separate unsent reply drafts",
+  );
+  assert.equal(await teacher().locator(".gsp-message-pair").count(), 2);
+  await showStudent();
+  await acknowledgeWarning();
+  const unifiedStudentDraft = "체험전환초안검증: 학생이 작성 중인 질문입니다.";
+  await composer().fill(unifiedStudentDraft);
+  await showTeacher();
+  assert.equal(await teacherComposer().inputValue(), unifiedReplyDraft);
+  await screenshot("unified-teacher-dm");
+  await showStudent();
+  assert.equal(await composer().inputValue(), unifiedStudentDraft);
+  await assertStudentPrivacy();
+  checks.push(
+    "One unified DM replaces the old editor and third tab; message selection, per-student conversation isolation, and independent unsent teacher/student drafts survive perspective changes",
+  );
+
   for (const [width, height] of [
     [1280, 720],
     [1366, 768],
@@ -710,13 +829,44 @@ try {
     await page.setViewportSize({ width, height });
     await page.goto(origin);
     await page.locator("[data-gongsin-draft]").waitFor();
-    await desktopGeometry(`inbox-${width}x${height}`);
+    await desktopGeometry(`inbox-${width}x${height}`, true);
     await screenshot(`desktop-inbox-${width}x${height}`);
     await page
       .getByRole("button", { name: "공개용 문구 편집", exact: true })
       .click();
     await desktopGeometry(`public-editor-${width}x${height}`);
-    await nav("학생 화면").click();
+    const publicDialog = page.getByRole("dialog", {
+      name: "공개용 문구 편집",
+      exact: true,
+    });
+    assert(
+      await publicDialog.evaluate(
+        (element) => element instanceof HTMLDialogElement && element.open,
+      ),
+      "Public editing must use a native modal dialog",
+    );
+    await screenshot(`desktop-public-story-editor-${width}x${height}`);
+    for (let step = 0; step < 12; step++) {
+      await page.keyboard.press("Tab");
+      assert(
+        await publicDialog.evaluate(
+          (element) =>
+            element.contains(document.activeElement) ||
+            (document.activeElement === document.body && !document.hasFocus()),
+        ),
+        "Native dialog focus must not enter background application controls",
+      );
+    }
+    // Edge retains browser-chrome keyboard navigation between native-dialog cycles.
+    await publicDialog
+      .getByRole("button", { name: "공개용 문구 편집 닫기", exact: true })
+      .focus();
+    await page.keyboard.press("Escape");
+    await assertFocused(
+      teacher().getByRole("button", { name: "공개용 문구 편집", exact: true }),
+      "Closing public editing must restore its DM header trigger",
+    );
+    await showStudent();
     await acknowledgeWarning();
     await desktopGeometry(`dm-${width}x${height}`, true);
     await screenshot(`desktop-dm-${width}x${height}`);
@@ -743,7 +893,7 @@ try {
   );
 
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   await studentNav("내 질문").click();
   for (const [sourceId, label] of [
@@ -796,7 +946,7 @@ try {
   );
 
   await page.reload();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert(
     await send().isDisabled(),
@@ -843,12 +993,12 @@ try {
   let teacherPopup = await openTeacherNotifications();
   assert.equal(await teacherPopup.getByRole("button").count(), 1);
   await teacherPopup.getByRole("button").first().click();
-  await editor()
-    .getByRole("heading", { name: question, exact: true })
+  await selectedTeacherQuestion()
+    .getByText(question, { exact: true })
     .waitFor();
   await assertFocused(
-    page.locator(".gongsin-question-detail"),
-    "Teacher notification must focus the exact question detail",
+    selectedTeacherQuestion(),
+    "Teacher notification must focus the exact question message",
   );
   assert.equal(await row(question).getAttribute("aria-pressed"), "true");
   assert.equal(
@@ -857,29 +1007,29 @@ try {
   );
   const privateReply =
     "개별답변전용검증: 교과서에서 교류 상대와 교류 방식이 드러나는 근거를 찾아 비교하세요.";
-  await page.getByLabel(/^개별 답변/).fill(privateReply);
+  await teacherComposer().fill(privateReply);
   await selectQuestionRow(privateDiagnosticQuestion);
   await selectQuestionRow(question);
   assert.equal(
-    await page.getByLabel(/^개별 답변/).inputValue(),
+    await teacherComposer().inputValue(),
     privateReply,
     "Unsaved reply must survive question changes",
   );
   await nav("운영·연결").click();
-  await nav("질문함").click();
+  await showTeacher();
   assert.equal(
-    await page.getByLabel(/^개별 답변/).inputValue(),
+    await teacherComposer().inputValue(),
     privateReply,
     "Unsaved reply must survive view changes",
   );
   await save().click();
   assert(await save().isDisabled(), "Unchanged reply must be a no-op");
-  await page.getByLabel(/^개별 답변/).fill(privateReply + "   ");
+  await teacherComposer().fill(privateReply + "   ");
   assert(
     await save().isDisabled(),
     "Whitespace-only change must remain a no-op",
   );
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert.equal(
     await studentBell().getAttribute("aria-label"),
@@ -912,13 +1062,13 @@ try {
     studentBell(),
     "Student notification Escape restores focus",
   );
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(privateOtherQuestion);
-  await page
-    .getByLabel(/^개별 답변/)
-    .fill("학생B개별답변검증: 자료 속 교류 방식을 먼저 확인해 보세요.");
+  await teacherComposer().fill(
+    "학생B개별답변검증: 자료 속 교류 방식을 먼저 확인해 보세요.",
+  );
   await save().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert.equal(
     await studentBell().getAttribute("aria-label"),
@@ -944,7 +1094,7 @@ try {
     "Local question → one teacher unread notification → exact selected question; reply → exactly one recipient-only student notification → read/focus target; unchanged/whitespace replies are no-ops",
   );
 
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(question);
   await page
     .getByRole("button", { name: "공개용 문구 편집", exact: true })
@@ -970,7 +1120,7 @@ try {
   assert.equal(await privacy.isChecked(), false);
   await privacy.check();
   await selectStory.click();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert.deepEqual(
     await student()
@@ -1002,7 +1152,7 @@ try {
   assert(!(await story.innerText()).includes(privateReply));
   assert(!/예시 학생|preview-student/.test(await story.innerText()));
   await screenshot("curated-story");
-  await nav("질문함").click();
+  await showTeacher();
   if (
     await page
       .getByRole("button", { name: "공개용 문구 편집", exact: true })
@@ -1012,7 +1162,8 @@ try {
       .getByRole("button", { name: "공개용 문구 편집", exact: true })
       .click();
   await page.getByRole("button", { name: "선정 해제", exact: true }).click();
-  await nav("학생 화면").click();
+  await closeStoryEditor();
+  await showStudent();
   await acknowledgeWarning();
   assert.equal(
     await student()
@@ -1027,7 +1178,7 @@ try {
   await studentNav("내 질문").click();
   await composer().fill("탭전환중미전송질문");
   await nav("운영·연결").click();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert.equal(
     await composer().inputValue(),
@@ -1066,8 +1217,8 @@ try {
   await submit(mockQuestion);
   teacherPopup = await openTeacherNotifications();
   await teacherPopup.getByRole("button").first().click();
-  await editor()
-    .getByRole("heading", { name: mockQuestion, exact: true })
+  await selectedTeacherQuestion()
+    .getByText(mockQuestion, { exact: true })
     .waitFor();
   assert.match(await row(mockQuestion).innerText(), /모의고사/);
   assert.equal(
@@ -1077,7 +1228,7 @@ try {
     0,
     "Private prototype must never start a mock attempt",
   );
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   await student()
     .getByRole("button", { name: "모의고사 문항 연결 해제", exact: true })
@@ -1100,7 +1251,7 @@ try {
     await submit(
       `목록스크롤검증 ${i + 1}: 교류 상대를 구분하는 근거를 어떻게 찾을까요?`,
     );
-  await nav("질문함").click();
+  await showTeacher();
   const previousPage = sidebar().getByRole("button", {
     name: "질문 목록 이전 페이지",
     exact: true,
@@ -1169,7 +1320,7 @@ try {
     .uncheck();
   await page.getByText("초안 · 학생 비공개", { exact: true }).waitFor();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await studentNav("내 질문").click();
   assert(await composer().isDisabled());
   assert(await send().isDisabled());
@@ -1180,7 +1331,7 @@ try {
   await screenshot("operation-stopped-preview");
   await auditPersistence("operation-toggles");
   await page.reload();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   assert.equal(await student().locator(".gsp-message-pair").count(), 2);
   assert.equal(await student().getByText(question, { exact: true }).count(), 0);
@@ -1194,27 +1345,28 @@ try {
     "Operation remains stopped/student-private; preview switches show disabled/empty states, and reload clears all local messages, replies, notifications and switches",
   );
 
-  await nav("질문함").click();
+  await showTeacher();
   await sidebar().locator("select").selectOption("waiting");
   const filteredSelection = await sidebar()
     .locator('.gongsin-question-row[aria-pressed="true"] strong')
     .innerText();
-  await editor()
-    .getByRole("heading", { name: filteredSelection, exact: true })
+  await selectedTeacherQuestion()
+    .getByText(filteredSelection, { exact: true })
     .waitFor();
-  assert.equal(await page.getByLabel(/^개별 답변/).inputValue(), "");
+  assert.equal(await teacherComposer().inputValue(), "");
   await sidebar().locator("select").selectOption("selected");
   for (let i = 0; i < 2; i++) {
     await page
       .getByRole("button", { name: "공개용 문구 편집", exact: true })
       .click();
     await page.getByRole("button", { name: "선정 해제", exact: true }).click();
+    await closeStoryEditor();
   }
   await sidebar()
     .getByText("해당하는 질문이 없습니다.", { exact: true })
     .waitFor();
-  assert.equal(await editor().count(), 0);
-  await nav("학생 화면").click();
+  assert.equal(await selectedTeacherQuestion().count(), 0);
+  await showStudent();
   await acknowledgeWarning();
   await studentNav("선정 스토리").click();
   await student()
@@ -1227,7 +1379,9 @@ try {
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
-  await nav("학생 화면").click();
+  await showTeacher();
+  await screenshot("teacher-dm", teacher());
+  await showStudent();
   await acknowledgeWarning();
   const settingsQuestion =
     "알림설정검증: 교과서에서 교류 방식의 근거를 어떻게 찾나요?";
@@ -1269,7 +1423,7 @@ try {
     await applySettings().isDisabled(),
     "Applying settings must clear the dirty state",
   );
-  await nav("학생 화면").click();
+  await showStudent();
   assert.equal(
     await warning().count(),
     0,
@@ -1283,12 +1437,12 @@ try {
     "교사 알림 미리보기",
     "Disabled teacher notifications must suppress only the notification",
   );
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(settingsQuestion);
   const silentReply = "알림이 꺼져 있어도 이 개별 답변은 대화에 저장됩니다.";
-  await page.getByLabel(/^개별 답변/).fill(silentReply);
+  await teacherComposer().fill(silentReply);
   await save().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await student().getByText(silentReply, { exact: true }).waitFor();
   assert.equal(
     await studentBell().getAttribute("aria-label"),
@@ -1302,7 +1456,7 @@ try {
     .getByRole("checkbox", { name: "학생 답변 알림", exact: true })
     .check();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await submit("알림재개검증: 사료의 표현을 비교하려면 무엇을 보나요?");
   assert.equal(
     await teacherBell().getAttribute("aria-label"),
@@ -1310,11 +1464,9 @@ try {
   );
   teacherPopup = await openTeacherNotifications();
   await teacherPopup.getByRole("button").first().click();
-  await page
-    .getByLabel(/^개별 답변/)
-    .fill("다시 켠 알림과 함께 전달되는 답변입니다.");
+  await teacherComposer().fill("다시 켠 알림과 함께 전달되는 답변입니다.");
   await save().click();
-  await nav("학생 화면").click();
+  await showStudent();
   assert.equal(
     await studentBell().getAttribute("aria-label"),
     "알림, 읽지 않은 답변 1개",
@@ -1334,7 +1486,7 @@ try {
     .getByLabel(/^안내 내용/)
     .fill(customBody);
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   const changedWarning = student().getByRole("dialog", {
     name: customTitle,
     exact: true,
@@ -1364,14 +1516,14 @@ try {
     .getByRole("checkbox", { name: "첫 사용 안내", exact: true })
     .uncheck();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   assert.equal(await student().getByRole("dialog").count(), 0);
   await openSettings("이용안내");
   await settingsPanel()
     .getByRole("checkbox", { name: "첫 사용 안내", exact: true })
     .check();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await changedWarning.waitFor();
   await acknowledgeWarning();
   checks.push(
@@ -1390,7 +1542,7 @@ try {
     .getByRole("checkbox", { name: "수업자료", exact: true })
     .uncheck();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   assert.equal(await composer().inputValue(), preservedSourceQuestion);
   assert(
     await send().isDisabled(),
@@ -1407,7 +1559,7 @@ try {
     .getByRole("checkbox", { name: "모의고사", exact: true })
     .uncheck();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await student()
     .getByRole("button", { name: "오답 노트", exact: true })
     .click();
@@ -1432,7 +1584,7 @@ try {
       .getByRole("checkbox", { name: label, exact: true })
       .uncheck();
   await applySettings().click();
-  await nav("학생 화면").click();
+  await showStudent();
   await studentNav("내 질문").click();
   assert(await send().isDisabled());
   await openSettings("학습연결");
@@ -1468,7 +1620,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.clock.install({ time: new Date("2026-11-10T10:00:00+09:00") });
   await page.reload();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   const heldQuestion =
     "제한해제보존검증: 교류 상대를 구분하는 학습 질문을 작성 중입니다.";
@@ -1490,10 +1642,10 @@ try {
       .getByRole("button", { name: "제한 적용 (미리보기)", exact: true })
       .click();
   };
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(privateOtherQuestion);
   await applyHourRestriction("학생 B 제한 범위 검증");
-  await nav("학생 화면").click();
+  await showStudent();
   assert(
     await composer().isEnabled(),
     "Student B restriction must not block student A",
@@ -1503,7 +1655,7 @@ try {
     "Another student restriction must not disable A sending",
   );
   assert.equal(await composer().inputValue(), heldQuestion);
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(formativeQuestion);
   await applyHourRestriction("학습과 무관한 대화");
   const sharedStudentDeadline = await restrictionPanel()
@@ -1523,7 +1675,7 @@ try {
     await page.getByLabel("제한 사유", { exact: true }).inputValue(),
     "학습과 무관한 대화",
   );
-  await nav("학생 화면").click();
+  await showStudent();
   assert(await composer().isDisabled());
   assert(await send().isDisabled());
   assert.equal(
@@ -1562,10 +1714,10 @@ try {
     .click();
   await studentNav("내 질문").click();
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await nav("질문함").click();
+  await showTeacher();
   await openRestriction();
   await page.getByRole("button", { name: "제한 해제", exact: true }).click();
-  await nav("학생 화면").click();
+  await showStudent();
   assert(await composer().isEnabled());
   assert(await send().isEnabled());
   assert.equal(await composer().inputValue(), heldQuestion);
@@ -1578,7 +1730,7 @@ try {
   await composer().fill(
     "자동만료보존검증: 제한이 끝난 뒤 이어서 보낼 질문입니다.",
   );
-  await nav("질문함").click();
+  await showTeacher();
   await selectQuestionRow(formativeQuestion);
   await applyHourRestriction("자동 만료 검증");
   const restrictionEnds = await restrictionPanel()
@@ -1604,7 +1756,7 @@ try {
     restrictionEnds,
     "Editing only the reason must preserve the original deadline",
   );
-  await nav("학생 화면").click();
+  await showStudent();
   assert(await send().isDisabled());
   const remaining =
     Date.parse(restrictionEnds) - (await page.evaluate(() => Date.now()));
@@ -1645,7 +1797,7 @@ try {
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.reload();
-  await nav("학생 화면").click();
+  await showStudent();
   await acknowledgeWarning();
   await student()
     .locator(".gsp-conversation")
