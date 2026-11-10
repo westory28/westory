@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  getGongsinQuestionUrl,
+  useGongsinAvailability,
+} from "../../../lib/gongsinmoongo";
 import {
   loadMyQuizHistory,
   loadMyQuizHistoryDetail,
@@ -45,6 +50,7 @@ export default function MyQuizHistory({
   onClose,
   onStart,
 }: Props) {
+  const gongsinAvailability = useGongsinAvailability(active);
   const contentProtectionRef = useRef<HTMLElement>(null);
   useQuizContentProtection(contentProtectionRef);
   const [category, setCategory] = useState("all");
@@ -300,6 +306,12 @@ export default function MyQuizHistory({
   const currentNote = detail?.reviewNotes?.items.find(
     (note) => note.questionId === current?.snapshot.id,
   );
+  const resultCategory = detail?.row?.category || detail?.record.category || "";
+  const gongsinSourceKind = isMockExamCategory(resultCategory)
+    ? "mock"
+    : resultCategory === "formative" || resultCategory === "diagnostic"
+      ? resultCategory
+      : null;
   const incorrectCount = questions.filter(
     (item) => item.correct === false,
   ).length;
@@ -309,6 +321,28 @@ export default function MyQuizHistory({
     const title =
       detail?.row?.title ||
       String(detail?.record.title || detail?.record.unitTitle || "평가 결과");
+    const renderQuestionAction = (questionId: string) =>
+      gongsinAvailability.enabled &&
+      gongsinAvailability.semesterId === semesterId &&
+      gongsinSourceKind &&
+      detail ? (
+        <Link
+          className="inline-flex min-h-11 w-fit items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+          to={getGongsinQuestionUrl({
+            kind: gongsinSourceKind,
+            resultKey: detail.key,
+            questionId,
+            ...(gongsinSourceKind === "mock"
+              ? { origin: "wrong-note" as const }
+              : {}),
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="이 문항 질문하기 (새 탭)"
+        >
+          이 문항 질문하기 ↗
+        </Link>
+      ) : null;
     return (
       <section
         ref={contentProtectionRef}
@@ -397,6 +431,7 @@ export default function MyQuizHistory({
                     ]),
                   )}
                   closeLabel="오답 노트 목록"
+                  renderQuestionAction={renderQuestionAction}
                   onShowAnswers={() => setPracticing(false)}
                   reviewNotes={detail.reviewNotes}
                   onReload={async () => {
@@ -656,6 +691,8 @@ export default function MyQuizHistory({
                                   연결된 학습지 열기 ↗
                                 </a>
                               )}
+                              {current.saved.questionAvailable &&
+                                renderQuestionAction(current.snapshot.id)}
                             </div>
                           </div>
                         </article>

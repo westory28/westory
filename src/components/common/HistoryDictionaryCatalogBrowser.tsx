@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { HistoryDictionaryCatalogTerm } from "../../lib/historyDictionaryCatalog";
 import { useAuth } from "../../contexts/AuthContext";
 import { loadHistoryDictionaryCatalog } from "../../lib/historyDictionary";
@@ -30,6 +37,8 @@ interface Props {
   onChoose?: (entry: HistoryDictionaryCatalogTerm) => void;
   chooseLabel?: string;
   disabled?: boolean;
+  renderEntryAction?: (entry: HistoryDictionaryCatalogTerm) => ReactNode;
+  initialTermId?: string;
 }
 
 const facetGroups: { group: HistoryDictionaryFacetGroup; label: string }[] = [
@@ -84,6 +93,8 @@ export default function HistoryDictionaryCatalogBrowser({
   onChoose,
   chooseLabel = "내 말로 정리하기",
   disabled = false,
+  renderEntryAction,
+  initialTermId = "",
 }: Props) {
   const { currentUser, config, configReady } = useAuth();
   const [catalog, setCatalog] = useState<HistoryDictionaryCatalogTerm[]>([]);
@@ -97,6 +108,7 @@ export default function HistoryDictionaryCatalogBrowser({
   const id = useId();
   const resultsRef = useRef<HTMLDivElement>(null);
   const selectedFacetsRef = useRef<HTMLDivElement>(null);
+  const appliedInitialTerm = useRef("");
   const facetById = useMemo(
     () => new Map(facets.map((facet) => [facet.id, facet])),
     [facets],
@@ -128,6 +140,16 @@ export default function HistoryDictionaryCatalogBrowser({
       active = false;
     };
   }, [retry, configReady, config?.year, config?.semester, currentUser]);
+
+  useEffect(() => {
+    if (!initialTermId || appliedInitialTerm.current === initialTermId) return;
+    const term = catalog.find((entry) => entry.id === initialTermId);
+    if (!term) return;
+    setQuery(term.word);
+    setFilters(emptyHistoryDictionaryFilters());
+    setVisibleCount(12);
+    appliedInitialTerm.current = initialTermId;
+  }, [catalog, initialTermId]);
 
   const searched = useMemo(() => {
     const entries = searchHistoryDictionaryCatalog(
@@ -448,6 +470,7 @@ export default function HistoryDictionaryCatalogBrowser({
                           {chooseLabel}
                         </button>
                       )}
+                      {renderEntryAction?.(entry)}
                       <HistoryDictionaryAttribution entry={entry} />
                     </div>
                   </article>

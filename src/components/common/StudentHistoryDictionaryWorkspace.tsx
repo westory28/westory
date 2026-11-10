@@ -1,5 +1,6 @@
 import { useAppToast } from "./AppToastProvider";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   canSaveHistoryDictionaryTermToNotebook,
@@ -22,12 +23,18 @@ import HistoryDictionaryCatalogBrowser, {
 } from "./HistoryDictionaryCatalogBrowser";
 import HistoryDictionaryInitialFilter from "./HistoryDictionaryInitialFilter";
 import {
+  getGongsinQuestionUrl,
+  useGongsinAvailability,
+} from "../../lib/gongsinmoongo";
+import {
   getHistoryDictionaryInitialCounts,
   matchesHistoryDictionaryInitial,
 } from "../../lib/historyDictionaryInitials";
 
 export default function StudentHistoryDictionaryWorkspace() {
   const { currentUser, config, configReady } = useAuth();
+  const gongsinAvailability = useGongsinAvailability();
+  const [searchParams] = useSearchParams();
   const { showToast } = useAppToast();
   const [view, setView] = useState<"catalog" | "notebook">("catalog");
   const [words, setWords] = useState<StudentHistoryDictionaryWord[]>([]);
@@ -374,6 +381,25 @@ export default function StudentHistoryDictionaryWorkspace() {
       <div hidden={view !== "catalog"}>
         <HistoryDictionaryCatalogBrowser
           disabled={Boolean(busy)}
+          initialTermId={searchParams.get("term") || ""}
+          renderEntryAction={
+            gongsinAvailability.enabled
+              ? (entry) => (
+                  <Link
+                    className="history-dictionary-button"
+                    to={getGongsinQuestionUrl({
+                      kind: "dictionary",
+                      termId: entry.id,
+                    })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${entry.word} 질문하기 (새 탭)`}
+                  >
+                    질문하기 ↗
+                  </Link>
+                )
+              : undefined
+          }
           onChoose={(entry) => {
             const existing = words.find(
               (item) =>

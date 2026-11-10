@@ -51,6 +51,10 @@ const forbidden =
   "const forbidden=()=>{throw new Error('Unexpected data operation in offline fixture')};";
 const adapters = new Map([
   [
+    "gongsinmoongo",
+    "export const useGongsinAvailability=()=>({enabled:false,loading:false,semesterId:'2026-2'});export const getGongsinQuestionUrl=()=>{throw Error('Q&A is closed in the lesson regression fixture')};",
+  ],
+  [
     "AuthContext",
     "const config={year:2026,semester:2};export const useAuth=()=>({config,currentUser:null});",
   ],
@@ -88,6 +92,7 @@ const bundle = await build({
   outdir: "fixture",
   format: "esm",
   platform: "browser",
+  loader: { ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {

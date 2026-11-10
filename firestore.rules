@@ -1259,6 +1259,19 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
+      // Q&A content is served only by session-guarded callables. The single
+      // non-personal signal lets open pages immediately hide a closed service.
+      match /gongsinmoongo_config/{configId} {
+        allow get: if configId == 'public' && canUseWestory()
+          && get(/databases/$(database)/documents/site_settings/semester_active).data.semesterId == year + '-' + semester;
+        allow list, write: if false;
+      }
+      match /gongsinmoongo_questions/{questionId} { allow read, write: if false; }
+      match /gongsinmoongo_stories/{storyId} { allow read, write: if false; }
+      match /gongsinmoongo_restrictions/{studentId} { allow read, write: if false; }
+      match /gongsinmoongo_acknowledgments/{studentId} { allow read, write: if false; }
+      match /gongsinmoongo_submission_rates/{studentId} { allow read, write: if false; }
+      match /gongsinmoongo_receipts/{receiptId} { allow read, write: if false; }
       function currentYutMaintenance() {
         let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
         // One document read preserves the absent-config default without the

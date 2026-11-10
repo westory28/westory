@@ -1,4 +1,11 @@
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { lazyWithRetry } from "../../../lib/lazyWithRetry";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { MockExamQuestionContent } from "../../../components/common/MockExamPaper";
@@ -59,6 +66,7 @@ export default function QuizRelearning({
   questionNumbers,
   updatedItems,
   closeLabel = "결과로",
+  renderQuestionAction,
 }: {
   items: QuizRelearningItem[];
   onClose: () => void;
@@ -73,6 +81,7 @@ export default function QuizRelearning({
     saveId: string,
   ) => Promise<QuizReviewNotes>;
   onReload?: () => Promise<QuizReviewNotes>;
+  renderQuestionAction?: (questionId: string) => ReactNode;
 }) {
   const contentProtectionRef = useRef<HTMLElement>(null);
   useQuizContentProtection(contentProtectionRef);
@@ -581,6 +590,7 @@ export default function QuizRelearning({
               연결된 학습지 열기
             </button>
           )}
+          {renderQuestionAction?.(item.id)}
           {checked && (
             <p className="student-quiz-relearning-feedback" role="status">
               {results[item.id]

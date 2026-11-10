@@ -19,7 +19,7 @@ import { InlineLoading, PageLoading } from "./components/common/LoadingState";
 import { SensitiveOperationController } from "./components/common/SensitiveOperationController";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
-import { getDefaultTeacherRoute, isDeveloperUser } from "./lib/permissions";
+import { getDefaultTeacherRoute, isAdminUser } from "./lib/permissions";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
 const StudentWeplay = lazyWithRetry(loadStudentWeplay, "student-weplay");
@@ -27,6 +27,10 @@ const StudentWeplay = lazyWithRetry(loadStudentWeplay, "student-weplay");
 const StudentDashboard = lazyWithRetry(
   () => import("./pages/student/Dashboard"),
   "student-dashboard",
+);
+const StudentGongsinmoongo = lazyWithRetry(
+  () => import("./pages/student/Gongsinmoongo"),
+  "student-gongsinmoongo",
 );
 const StudentNote = lazyWithRetry(
   () => import("./pages/student/lesson/Note"),
@@ -178,7 +182,7 @@ const RouteContentFallback: React.FC = () => (
 
 const GongsinmoongoRoute: React.FC = () => {
   const { currentUser, userData } = useAuth();
-  if (!isDeveloperUser(currentUser?.email))
+  if (!isAdminUser(userData, currentUser?.email))
     return (
       <Navigate
         to={getDefaultTeacherRoute(userData, currentUser?.email)}
@@ -233,6 +237,10 @@ const App: React.FC = () => {
                     <StudentDashboard />,
                     "학생 첫 화면을 준비하는 중입니다.",
                   )}
+                />
+                <Route
+                  path="/student/gongsinmoongo"
+                  element={renderWithLayout(<StudentGongsinmoongo />)}
                 />
                 <Route
                   path="/student/lesson/note"
@@ -386,7 +394,7 @@ const App: React.FC = () => {
                   path="/teacher/gongsinmoongo"
                   element={renderWithLayout(
                     <GongsinmoongoRoute />,
-                    "공神문고 초안을 준비하는 중입니다.",
+                    "공부의 神문고를 준비하는 중입니다.",
                   )}
                 />
                 <Route

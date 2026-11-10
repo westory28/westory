@@ -34,6 +34,7 @@ function LessonWorkspace({
 
   const unitId = searchParams.get("id");
   const title = searchParams.get("title");
+  const requestedPage = Number(searchParams.get("page"));
 
   useEffect(() => {
     let active = true;
@@ -95,7 +96,15 @@ function LessonWorkspace({
                 <InlineLoading message="수업 자료를 준비하는 중입니다." />
               }
             >
-              <LessonContent unitId={unitId} fallbackTitle={title} />
+              <LessonContent
+                unitId={unitId}
+                fallbackTitle={title}
+                initialWorksheetPage={
+                  Number.isInteger(requestedPage) && requestedPage > 0
+                    ? requestedPage
+                    : undefined
+                }
+              />
             </React.Suspense>
           ) : (
             <div className="student-lesson-selection">

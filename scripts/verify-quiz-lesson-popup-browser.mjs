@@ -22,6 +22,8 @@ const service = `
 export const qa=window.popupQa={reads:[],saves:[],toasts:[],config:{year:'2026',semester:'2'},user:{uid:'student-a'},failTree:false};
 export const useAuth=()=>({config:qa.config,currentUser:qa.user});
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
+export const useGongsinAvailability=()=>({enabled:false,loading:false,semesterId:'2026-2'});
+export const getGongsinQuestionUrl=()=>{throw Error('Q&A is closed in the lesson regression fixture')};
 export const db={};export const doc=(_db,...paths)=>({path:paths.join('/')});export const collection=doc;
 export const getDoc=async ref=>{qa.reads.push(ref.path);if(qa.failProgress){qa.failProgress=false;throw Error('Progress offline')}return{exists:()=>true,data:()=>({answerRevision:4,answers:{blank:{value:qa.user.uid==='student-a'?'고조선':'조선',status:'correct'}},corePointFinds:['point']})}};
 const forbidden=()=>{throw Error('Unexpected bulk read or command')};
@@ -52,6 +54,7 @@ const adapters = new Set([
   "studentLessonReadCache",
   "points",
   "learningCommands",
+  "gongsinmoongo",
 ]);
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: process.cwd() },
@@ -61,7 +64,12 @@ const built = await build({
   format: "esm",
   platform: "browser",
   define: { "process.env.NODE_ENV": '"production"' },
-  loader: { ".woff2": "dataurl", ".woff": "dataurl", ".svg": "dataurl" },
+  loader: {
+    ".woff2": "dataurl",
+    ".woff": "dataurl",
+    ".svg": "dataurl",
+    ".webp": "dataurl",
+  },
   plugins: [
     {
       name: "offline",

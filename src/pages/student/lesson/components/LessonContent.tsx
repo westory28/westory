@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Link } from "react-router-dom";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import { sanitizeRichHtml } from "../../../../lib/sanitizeRichHtml";
 import LessonAnswerFeedback from "../../../../components/common/LessonAnswerFeedback";
@@ -40,6 +41,10 @@ import {
   readStudentLessonProgressCatalog,
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
+import {
+  getGongsinQuestionUrl,
+  useGongsinAvailability,
+} from "../../../../lib/gongsinmoongo";
 import "../lessonImageProtection.css";
 
 const LessonWorksheetStage = lazyWithRetry(
@@ -70,6 +75,7 @@ interface LessonContentProps {
   /** Embedded review keeps answer saving, without loading whole-semester rewards. */
   reviewPopup?: boolean;
   onDraftStateChange?: (dirty: boolean, saving: boolean) => void;
+  initialWorksheetPage?: number;
 }
 
 const EMPTY_BLANK_LABEL = "빈칸";
@@ -115,8 +121,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
   allowHiddenAccess = false,
   reviewPopup = false,
   onDraftStateChange,
+  initialWorksheetPage,
 }) => {
   const { config, currentUser } = useAuth();
+  const gongsinAvailability = useGongsinAvailability(
+    !disablePersistence && !allowHiddenAccess && !fullscreenPreview,
+  );
   const { showToast } = useAppToast();
   const [lesson, setLesson] = useState<LessonData | null>(
     lessonOverride ? normalizeLessonData(lessonOverride) : null,
@@ -278,8 +288,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [corePointOverview]);
 
   useEffect(() => {
-    setActiveWorksheetPage(worksheetPageImagesForNav[0]?.page ?? null);
-  }, [worksheetPageImagesForNav]);
+    const requestedPage = worksheetPageImagesForNav.find(
+      (page) => page.page === initialWorksheetPage,
+    );
+    setActiveWorksheetPage(
+      requestedPage?.page ?? worksheetPageImagesForNav[0]?.page ?? null,
+    );
+  }, [worksheetPageImagesForNav, initialWorksheetPage]);
 
   useEffect(() => {
     setAnswerFeedback(null);
@@ -1621,6 +1636,23 @@ const LessonContent: React.FC<LessonContentProps> = ({
           <h1 className="min-w-0 flex-1 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
             {normalizedLesson.title || fallbackTitle || "제목 없음"}
           </h1>
+          {gongsinAvailability.enabled && unitId && (
+            <Link
+              className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+              to={getGongsinQuestionUrl({
+                kind: "lesson",
+                unitId,
+                ...(resolvedWorksheetPage
+                  ? { page: resolvedWorksheetPage }
+                  : {}),
+              })}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="이 자료 질문하기 (새 탭)"
+            >
+              이 자료 질문하기 ↗
+            </Link>
+          )}
           {fullscreenPreview && onClosePreview && (
             <button
               type="button"

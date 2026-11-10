@@ -16,6 +16,9 @@ Object.assign(exports, require('./lessonPdfBeta'));
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';
+const gongsinmoongoHandlers = require('./gongsinmoongo').createGongsinmoongoHandlers({ db });
+exports.getGongsinmoongo = onCall({ region: REGION, timeoutSeconds: 60, memory: '256MiB', maxInstances: 10 }, gongsinmoongoHandlers.getGongsinmoongo);
+exports.manageGongsinmoongo = onCall({ region: REGION, timeoutSeconds: 60, memory: '256MiB', maxInstances: 10 }, gongsinmoongoHandlers.manageGongsinmoongo);
 const registrationPolicyHandlers = require('./studentRegistrationPolicy').createStudentRegistrationPolicyHandlers({ db });
 exports.getStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.getStudentRegistrationPolicy);
 exports.saveStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.saveStudentRegistrationPolicy);
@@ -2875,6 +2878,7 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
 
   const queryResults = await Promise.all([
     require('./studentQuizReviewNotes').collectQuizReviewNoteRefs(db, `${year}-${semester}`, uid),
+    require('./gongsinmoongo').collectGongsinmoongoStudentRefs(db, `${year}-${semester}`, uid),
     ...uidCollections.map((collectionName) =>
       collectQueryRefsByUid(`${semesterRoot}/${collectionName}`, uid),
     ),

@@ -1,11 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStudentMenuLabel } from "../../constants/menus";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import StudentHistoryDictionaryWorkspace from "./StudentHistoryDictionaryWorkspace";
 import { useFloatingLauncherVisibility } from "./useFloatingLauncherVisibility";
 import "./studentLearningTools.css";
+import {
+  getGongsinQuestionUrl,
+  useGongsinAvailability,
+} from "../../lib/gongsinmoongo";
+import { isSemesterArchive } from "../../lib/semesterArchive";
 
 const getFloatingOffsetClassName = (pathname: string, search: string) => {
   if (pathname.startsWith("/student/lesson/history-dictionary"))
@@ -27,6 +32,15 @@ export default function StudentHistoryDictionaryController() {
     "역사 사전",
   );
   const location = useLocation();
+  const navigate = useNavigate();
+  const isAssessmentRunning =
+    location.pathname === "/student/quiz/run" ||
+    location.pathname === "/student/history-classroom/run";
+  const gongsin = useGongsinAvailability(
+    location.pathname.startsWith("/student") &&
+      !isAssessmentRunning &&
+      !isSemesterArchive,
+  );
   const [saveAnchor, setSaveAnchor] = useState<{
     bottom: number;
     right: number;
@@ -269,6 +283,44 @@ export default function StudentHistoryDictionaryController() {
               </svg>
             </span>
           </button>
+          {gongsin.enabled &&
+            !isAssessmentRunning &&
+            location.pathname !== "/student/gongsinmoongo" && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  const unitId =
+                    location.pathname === "/student/lesson/note"
+                      ? new URLSearchParams(location.search).get("id")
+                      : null;
+                  navigate(
+                    getGongsinQuestionUrl(
+                      unitId ? { kind: "lesson", unitId } : { kind: "general" },
+                    ),
+                  );
+                }}
+              >
+                <span className="student-learning-tools-label">
+                  공부의 神문고
+                </span>
+                <span className="student-learning-tools-icon">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 15a3 3 0 0 1-3 3H9l-5 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3Z" />
+                    <path d="M9.5 8a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 3M12 14h.01" />
+                  </svg>
+                </span>
+              </button>
+            )}
         </div>
       )}
       <dialog

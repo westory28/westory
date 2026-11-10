@@ -138,7 +138,7 @@ export const canAccessTeacherPath = (
     pathname === "/teacher/gongsinmoongo" ||
     pathname.startsWith("/teacher/gongsinmoongo/")
   )
-    return isDeveloperUser(email);
+    return isAdminUser(userData, email);
   if (pathname.startsWith("/teacher/settings"))
     return canManageSettings(userData, email);
   if (pathname.startsWith("/teacher/dashboard"))
