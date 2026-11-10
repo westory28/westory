@@ -427,6 +427,23 @@
   margin: 0 auto;
   padding: 16px 0;
 }
+.qaa-question-dialog {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #111827);
+  overflow: auto;
+}
+.qaa-question-dialog::backdrop { background: rgb(15 23 42 / 45%); }
+.qaa-question-dialog .qaa-question { padding: 0; }
+.qaa-question-dialog .qca-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.qaa-question-dialog .qca-secondary { min-height: 40px; }
+@media (max-width: 480px) {
+  .qaa-question-dialog { padding: 16px; }
+}
 .qaa-question .mock-exam-question-ink {
   margin: 24px 0;
   font-size: 16px;

@@ -254,6 +254,11 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "quiz_achievement_result_views",
+      "fieldPath": "rawCompact",
+      "indexes": []
+    },
+    {
       "collectionGroup": "performance_scores",
       "fieldPath": "rosterId",
       "indexes": [

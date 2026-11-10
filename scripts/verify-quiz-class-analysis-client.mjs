@@ -87,6 +87,7 @@ const request = exports.getQuizClassAchievement({...gradeScope,keyword:'무시',
 assert.equal(calls.at(-1).input.grade,'3');
 assert.equal(Object.hasOwn(calls.at(-1).input,'compactEvidence'),false,'Retired evidence negotiation is removed');
 assert.equal(Object.hasOwn(calls.at(-1).input,'snapshotDictionary'),false,'Achievement keeps its existing wire contract');
+assert.equal(calls.at(-1).input.analysisProjection, 'compact-v1');
 assert.equal(calls.at(-1).input.responseEncoding, 'gzip-base64', 'Only achievement opts into lossless compressed transport');
 assert.equal(Object.hasOwn(calls.at(-1).input,'keyword'),false);
 assert.equal(Object.hasOwn(calls.at(-1).input,'comparisonGrade'),false);
@@ -269,4 +270,38 @@ assert.equal(calls.length, manualRetryCount + 1);
 assert.equal(calls.at(-1).input.forceRefresh, true);
 resolveRequest({ data: envelope });
 assert.equal((await manualRetry).rawRows.length, originalRows.length, 'Manual retry recovers after decode and server failures');
+const compactChanges = exports.getQuizClassChanges({...gradeScope, keyword:'omit', comparisonGrade:'2'}, 'teacher-a:1', 'achievement', live);
+assert.equal(calls.at(-1).input.analysisProjection, 'compact-v1');
+assert.equal(Object.hasOwn(calls.at(-1).input,'keyword'),false);
+assert.equal(Object.hasOwn(calls.at(-1).input,'comparisonGrade'),false);
+resolveRequest({data:{rawRows:[],live}});await compactChanges;
+const selection = {resultId:'first', resultSource:'canonical', questionId:'q', sourceVersion:'000000001793920000000000000'};
+const questionCount = calls.length;
+const questionRequest = exports.getQuizClassQuestion({...gradeScope, keyword:'omit', comparisonGrade:'2'}, 'teacher-a:1', selection);
+const sharedQuestion = exports.getQuizClassQuestion({...gradeScope, keyword:'omit', comparisonGrade:'2'}, 'teacher-a:1', selection);
+assert.equal(calls.length, questionCount+1,'Concurrent identical original requests share one scoped server call');
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).input)), {...gradeScope,...selection,mode:'question'});
+resolveRequest({data:{semesterId:gradeScope.semesterId,sourceVersion:selection.sourceVersion,question:frozenQuestion}});
+assert.deepEqual((await questionRequest).question,frozenQuestion);
+await sharedQuestion;
+for (const invalid of [
+  {semesterId:'2026-1',sourceVersion:selection.sourceVersion,question:frozenQuestion},
+  {semesterId:gradeScope.semesterId,sourceVersion:'old',question:frozenQuestion},
+  {semesterId:gradeScope.semesterId,sourceVersion:selection.sourceVersion,question:{...frozenQuestion,id:'other'}},
+  {semesterId:gradeScope.semesterId,sourceVersion:selection.sourceVersion,question:{id:'q',answer:'나'}},
+]) {
+  const pending=exports.getQuizClassQuestion(gradeScope,'teacher-a:1',selection);
+  resolveRequest({data:invalid});await assert.rejects(pending,/응시 당시 문항/);
+}
+const missingQuestion = exports.getQuizClassQuestion(gradeScope,'teacher-a:1',selection);
+resolveRequest({data:{semesterId:gradeScope.semesterId,sourceVersion:selection.sourceVersion,question:null,missingReason:'not-preserved'}});
+assert.equal((await missingQuestion).question,null);
+const studentExports = {};
+vm.runInNewContext(ts.transpileModule(readFileSync('src/pages/teacher/components/QuizAnalysisStudents.tsx','utf8'),{
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX},
+}).outputText,{exports:studentExports,require:()=>({})});
+assert.equal(studentExports.analysisStudentLabel({name:'학생',grade:'3',classNumber:'9',number:'22'},[]),'학생(30922)');
+assert.equal(studentExports.analysisStudentLabel({name:'학생',classId:'opaque',number:'22'},[{id:'opaque',label:'3학년 9반'}]),'학생(30922)');
+assert.equal(studentExports.analysisStudentLabel({name:'학생',classId:'3-9',number:'22'},[]),'학생(22번)','Unknown class identifiers never create an invented grade/class number');
+assert.equal(studentExports.analysisStudentLabel({name:'학생',grade:'3',classNumber:'9'},[]),'학생(3학년 9반)','No fabricated roster number');
 console.log(`PASS class analysis client: scoped concurrent reads, inline and gzip round-trips, ${largeEnvelope.uncompressedBytes} expanded bytes across 300 rows, bounded malformed-payload rejection, unchanged live cursors and manual retry.`);

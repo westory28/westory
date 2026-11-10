@@ -5,6 +5,7 @@ import type {
   QuizBehaviorCategory,
 } from "./quizAnalysis";
 import type { AchievementRawRecord } from "./achievementAnalysis";
+import type { MockExamPaperQuestion } from "../components/common/MockExamPaper";
 import type {
   Question,
   TreeUnit,
@@ -124,7 +125,13 @@ export interface QuizClassDetail {
   search?: QuizClassSearch;
   basis?: string;
   complete?: boolean;
-  students: Array<QuizAnalysisStudent & { email?: string }>;
+  students: Array<
+    QuizAnalysisStudent & {
+      email?: string;
+      grade?: string;
+      classNumber?: string;
+    }
+  >;
   rawRows: Array<{
     id: string;
     source: "canonical" | "legacy";
@@ -139,6 +146,7 @@ export interface QuizClassDetail {
 }
 
 export interface QuizClassAchievement extends QuizClassDetail {
+  analysisProjection?: "compact-v1";
   mockExamScoreRows: AchievementRawRecord[];
 }
 
@@ -274,6 +282,9 @@ export function getQuizClassChanges(
       ...(liveMode !== "achievement" && keyword ? { keyword } : {}),
       mode: "changes",
       liveMode,
+      ...(liveMode === "achievement"
+        ? { analysisProjection: "compact-v1" }
+        : {}),
       contextVersion: live.contextVersion,
       contentCursor: live.contentCursor,
       cursors: live.classes.map(({ classId, cursor }) => ({ classId, cursor })),
@@ -399,6 +410,7 @@ export const getQuizClassAchievement = (
     {
       ...analysisScope,
       mode: "achievement",
+      analysisProjection: "compact-v1",
       responseEncoding: "gzip-base64",
       forceRefresh,
       live: true,
@@ -417,6 +429,50 @@ export const getQuizClassAchievement = (
       return restoreHistoricalQuestionSnapshots(result);
     })
     .then(identifyLive);
+};
+
+export interface QuizClassQuestionRequest {
+  resultId: string;
+  resultSource: "canonical" | "legacy";
+  questionId: string;
+  sourceVersion: string;
+}
+
+export interface QuizClassQuestionResponse {
+  semesterId: string;
+  sourceVersion: string;
+  question: MockExamPaperQuestion | null;
+  missingReason?: "not-preserved";
+}
+
+export const getQuizClassQuestion = (
+  scope: QuizClassScope,
+  identityKey: string,
+  selection: QuizClassQuestionRequest,
+) => {
+  const {
+    keyword: _keyword,
+    comparisonGrade: _comparisonGrade,
+    ...questionScope
+  } = scope;
+  return read<QuizClassQuestionResponse>(
+    { ...questionScope, ...selection, mode: "question" },
+    identityKey,
+  ).then((result) => {
+    if (
+      !result ||
+      result.semesterId !== scope.semesterId ||
+      result.sourceVersion !== selection.sourceVersion ||
+      (result.question !== null &&
+        (!result.question ||
+          String(result.question.id) !== selection.questionId ||
+          typeof result.question.question !== "string"))
+    )
+      throw new Error(
+        "응시 당시 문항을 확인하지 못했습니다. 다시 시도해 주세요.",
+      );
+    return result;
+  });
 };
 
 export function quizClassAnalysisError(error: unknown) {

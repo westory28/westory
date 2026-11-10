@@ -2,6 +2,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { FieldValue } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
+const { SCOPE_FIELDS, sourceVersionOf, readAchievementProjections, updateAchievementProjection } = require('./quizAchievementProjection');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const text = value => String(value ?? '').trim();
@@ -93,6 +94,10 @@ function createLiveRecorder({ db }) {
         scopes: scopes.get(target.semesterId) || [],
       }, event, { ...target, ...(target.classId ? { generation: randomUUID() } : { contentGeneration: randomUUID() }) }, extraWrites);
     }
+    // Derived acceleration must never prevent the existing live cursor/history
+    // invalidation. A failed/stale view is ignored by version-checked readers.
+    try { await updateAchievementProjection(db, event); }
+    catch { console.warn('Quiz achievement projection refresh failed; exact-source fallback remains available.'); }
   };
   const question = async event => {
     const semesterId = `${event.params.year}-${event.params.semester}`;
@@ -117,6 +122,7 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
       })) };
   };
   const changes = async query => {
+    const compactAchievement = query.liveMode === 'achievement' && query.analysisProjection === 'compact-v1';
     const refs = query.cursors.map(item => db.doc(`semester_classes/${item.classId}`));
     const classes = (await db.getAll(...refs)).map((snapshot, index) => ({ ...data(snapshot), id: query.cursors[index].classId }));
     if (classes.some(item => item.semesterId !== query.semesterId || item.status !== 'ACTIVE'
@@ -169,7 +175,10 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
         else if (['canonical', 'legacy'].includes(event.source)) removedKeys.add(`${event.source}:${event.id}`);
         if ((event.scopes || []).some(item => matches(item, query, query.liveMode === 'achievement'))) {
           if (event.kind === 'question') {
-            const current = await db.doc(`${root(query.semesterId)}/quiz_questions/${event.id}`).get();
+            const questionRef = db.doc(`${root(query.semesterId)}/quiz_questions/${event.id}`);
+            const current = compactAchievement
+              ? (await db.getAll(questionRef, { fieldMask: [...questionFields, 'answer'] }))[0]
+              : await questionRef.get();
             const raw = data(current);
             if (current.exists && matches(raw, query)) {
               const fields = query.liveMode === 'summary' ? questionFields.filter(field => field !== 'question') : Object.keys(raw);
@@ -183,10 +192,21 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
             seenResults.add(key);
             const path = event.source === 'canonical' ? `semester_assessment_results/${event.id}` : `${root(query.semesterId)}/quiz_results/${event.id}`;
             const priorOnly = query.liveMode === 'achievement' && !(event.scopes || []).some(item => matches(item, query));
-            const fields = priorOnly ? scoreFields : query.liveMode === 'summary' ? resultFields.filter(field => field !== 'questionSnapshots') : resultFields;
+            const compact = compactAchievement;
+            const fields = compact ? SCOPE_FIELDS : priorOnly ? scoreFields : query.liveMode === 'summary' ? resultFields.filter(field => field !== 'questionSnapshots') : resultFields;
             let [current] = await db.getAll(db.doc(path), { fieldMask: fields });
-            let raw = current.exists ? effectiveQuizResult(current.data()) : null;
-            if (priorOnly && raw && matches(raw, query)) {
+            let raw = current.exists ? compact ? json(current.data()) : effectiveQuizResult(current.data()) : null;
+            if (compact && raw) {
+              if ((!raw.semesterId || raw.semesterId === query.semesterId)
+                && (event.source !== 'canonical' || raw.semesterId === query.semesterId && raw.assessmentKind === 'QUIZ')
+                && matches(raw, query, true) && await owner(raw)) {
+                const [projected] = await readAchievementProjections({ db, json, entries: [{
+                  id: event.id, source: event.source, path, scope: raw, sourceVersion: sourceVersionOf(current),
+                }] });
+                raw = projected.raw;
+              } else raw = null;
+            }
+            if (!compact && priorOnly && raw && matches(raw, query)) {
               [current] = await db.getAll(db.doc(path), { fieldMask: resultFields });
               raw = current.exists ? effectiveQuizResult(current.data()) : null;
             }
@@ -194,12 +214,16 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
               && (event.source !== 'canonical' || raw.semesterId === query.semesterId && raw.assessmentKind === 'QUIZ')
               && matches(raw, query, query.liveMode === 'achievement') && await owner(raw)) {
               const value = json(raw);
+              if (compact && !text(value.studentUid || value.uid || value.studentId || value.userId))
+                value.studentUid = (await owner(raw)).uid;
               value.behaviorAnswersAvailable = event.source === 'canonical' && !!raw.answers && typeof raw.answers === 'object';
               if (query.liveMode !== 'summary' && matches(raw, query) && event.source === 'canonical'
                 && (!value.answers || typeof value.answers !== 'object' || Array.isArray(value.answers))) {
                 const id = text(value.submissionRef).match(/^semester_assessment_submissions\/([^/]+)$/)?.[1] || text(value.attemptId || event.id);
                 if (/^[^/\x00-\x1f]{1,180}$/.test(id)) {
-                  const submission = data(await db.doc(`semester_assessment_submissions/${id}`).get());
+                  const [submissionDoc] = await db.getAll(db.doc(`semester_assessment_submissions/${id}`),
+                    { fieldMask: ['studentUid', 'semesterId', 'attemptId', 'definitionId', 'answers'] });
+                  const submission = data(submissionDoc);
                   if (submission.studentUid === raw.studentUid && submission.semesterId === query.semesterId
                     && (!submission.attemptId || submission.attemptId === (raw.attemptId || event.id))
                     && (!submission.definitionId || submission.definitionId === raw.definitionId)
@@ -222,7 +246,7 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
     }
     if ((await state(query.semesterId, classes)).contextVersion !== query.contextVersion) fail('QUIZ_ANALYSIS_LIVE_SCOPE_CHANGED');
     const students = [...owners.values()].filter(Boolean);
-    if (query.liveMode === 'achievement') prepareAchievementRows(rawRows);
+    if (query.liveMode === 'achievement' && query.analysisProjection !== 'compact-v1') prepareAchievementRows(rawRows);
     const scoreRows = query.liveMode === 'achievement' ? await buildMockExamScoreRows(allRows, students, query, { documents: 0, bytes: 0 }) : [];
     return { semesterId: query.semesterId, rawRows: query.liveMode === 'summary' ? [] : rawRows,
       records: query.liveMode === 'summary' ? adaptRecords(rawRows, students, query.semesterId) : [],

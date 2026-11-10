@@ -1,3 +1,8 @@
+import {
+  analysisStudentLabel,
+  AnalysisStudentsMore,
+  useAnalysisStudentWindow,
+} from "./QuizAnalysisStudents";
 import InfoHelp from "../../../components/common/InfoHelp";
 import type {
   AchievementAnalysis,
@@ -20,11 +25,13 @@ export default function QuizAchievementEstimates({
   analysis,
   examRound,
   showPaper,
+  resetKey,
 }: {
   data: QuizClassAchievement;
   analysis: AchievementAnalysis;
   examRound: string;
   showPaper: boolean;
+  resetKey: string;
 }) {
   const sorting = useAnalysisTableSort({
     key: "student",
@@ -36,17 +43,15 @@ export default function QuizAchievementEstimates({
     (_, index) => `round_${index + 1}`,
   );
   const studentName = (row: CumulativeAchievementScore) =>
-    [
-      data.grade || data.configuredClasses.length > 1
-        ? data.configuredClasses.find(
-            (entry) => entry.id === row.student.classId,
-          )?.label
-        : "",
-      row.student.number ? `${row.student.number}번` : "",
-      row.student.name || "이름 미등록",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    analysisStudentLabel(row.student, data.configuredClasses);
+  const windowKey = JSON.stringify([
+    resetKey,
+    examRound,
+    showPaper,
+    sorting.sort,
+  ]);
+  const cumulativeWindow = useAnalysisStudentWindow(windowKey);
+  const paperWindow = useAnalysisStudentWindow(windowKey);
   const students = sortAnalysisRows(
     analysis.cumulativeScores,
     sorting.sort,
@@ -146,7 +151,7 @@ export default function QuizAchievementEstimates({
             </tr>
           </thead>
           <tbody>
-            {students.map((row) => (
+            {students.slice(0, cumulativeWindow.count).map((row) => (
               <tr key={row.student.uid}>
                 <th scope="row">{studentName(row)}</th>
                 {!showPaper &&
@@ -192,6 +197,7 @@ export default function QuizAchievementEstimates({
           </tbody>
         </table>
       </div>
+      <AnalysisStudentsMore {...cumulativeWindow} total={students.length} />
       {showPaper && (
         <>
           <div className="qca-section-heading qaa-estimate-heading">
@@ -239,7 +245,7 @@ export default function QuizAchievementEstimates({
                 </tr>
               </thead>
               <tbody>
-                {students.flatMap((row) =>
+                {students.slice(0, paperWindow.count).flatMap((row) =>
                   row.rounds.map((round) => (
                     <tr key={`${row.student.uid}:${round.examRound}`}>
                       <th scope="row">{studentName(row)}</th>
@@ -256,6 +262,7 @@ export default function QuizAchievementEstimates({
               </tbody>
             </table>
           </div>
+          <AnalysisStudentsMore {...paperWindow} total={students.length} />
         </>
       )}
     </div>

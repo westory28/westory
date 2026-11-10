@@ -4,11 +4,14 @@ const { gunzipSync } = require('node:zlib');
 const { randomBytes } = require('node:crypto');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('../quizClassAnalysisCore.cjs');
+const { sourceVersionOf, projectionRef, buildAchievementProjection } = require('../quizAchievementProjection');
+const { buildCorrection } = require('../quizQuestionCorrections');
 const { normalizeQuery, createQuizClassAnalysisService, createQuizClassAnalysisHandler,
   createQuizAnalysisInvalidation, createQuizAnalysisTriggers, summarizeClass, adaptRecords, readBounded, hash } = require('../quizClassAnalysis');
 
 const SCOPE = '2026-2';
 const ROOT = 'years/2026/semesters/2';
+const TEST_UPDATE_TIME = { seconds: 1793575200, nanoseconds: 123456789 };
 const q = { semesterId: SCOPE, mode: 'summary', unitId: 'unit-a', category: 'formative', examRound: '', classIds: ['class_a'], forceRefresh: false };
 const fixture = () => ({
   'users/teacher': { role: 'teacher' },
@@ -36,8 +39,10 @@ const fixture = () => ({
 
 function memory(initial = fixture()) {
   const data = new Map(Object.entries(initial));
+  const versions = new Map();
   const reads = [], queries = [], writes = [], bodyReads = [];
-  const snapshot = path => ({ id: path.split('/').at(-1), ref: ref(path), exists: data.has(path), data: () => data.get(path) });
+  const snapshot = path => ({ id: path.split('/').at(-1), ref: ref(path), exists: data.has(path),
+    updateTime: data.has(path) ? { ...(versions.get(path) || TEST_UPDATE_TIME) } : undefined, data: () => data.get(path) });
   const ref = path => ({ path, get: async () => { reads.push(path); return snapshot(path); },
     set: async (value, options) => { writes.push(path); data.set(path, options?.merge ? { ...data.get(path), ...value } : value); } });
   const collection = path => {
@@ -68,7 +73,7 @@ function memory(initial = fixture()) {
       }));
     },
     runTransaction: async callback => callback({ getAll: async (...refs) => Promise.all(refs.map(r => r.get())), set: (r, value) => { writes.push(r.path); data.set(r.path, value); } }) };
-  return { db, data, reads, queries, writes, bodyReads };
+  return { db, data, reads, queries, writes, bodyReads, versions };
 }
 
 test('query validates class bounds, scope and detail restriction', () => {
@@ -272,6 +277,260 @@ const gradeExamFixture = () => {
   return initial;
 };
 const gradeExamQuery = () => gradeQuery({ mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' });
+
+const compactExamQuery = () => normalizeQuery({ ...gradeExamQuery(), analysisProjection: 'compact-v1' });
+const fixtureVersion = (f, path) => sourceVersionOf({ updateTime: f.versions.get(path) || TEST_UPDATE_TIME });
+const originalQuestion = (id = 91) => ({ id, type: 'choice', question: `보관 발문 ${id}`, answer: '가',
+  options: ['가', '나'], points: 3, image: `PRIVATE_ORIGINAL_IMAGE_${id}_${'x'.repeat(16000)}`,
+  passageSegments: [{ type: 'text', text: `PRIVATE_ORIGINAL_PASSAGE_${id}` }], explanation: `보관 해설 ${id}`,
+  curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'], contentRevision: 1 });
+function projectionFixture() {
+  const initial = gradeExamFixture();
+  for (const uid of ['a', 'b']) Object.assign(initial[`semester_assessment_results/exam_${uid}`], {
+    questionSnapshots: [originalQuestion(), originalQuestion(92)], sourceHash: 'same-paper-source-hash',
+    earnedPoints: 3, maxPoints: 3, learningSnapshot: [{ id: 91, sourceRevision: '1',
+      curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'] }],
+  });
+  return initial;
+}
+function seedProjections(f, paths = ['semester_assessment_results/exam_a', 'semester_assessment_results/exam_b']) {
+  for (const path of paths) f.data.set(projectionRef(f.db, path).path, buildAchievementProjection({
+    sourcePath: path, source: path.startsWith('semester_assessment_results/') ? 'canonical' : 'legacy',
+    sourceVersion: fixtureVersion(f, path), semesterId: SCOPE, raw: f.data.get(path),
+  }));
+}
+const questionQuery = (f, overrides = {}) => ({ semesterId: SCOPE, mode: 'question', unitId: 'exam_prep',
+  category: 'exam_prep', examRound: 'round_1', grade: '3', classIds: [], resultId: 'exam_a',
+  resultSource: 'canonical', questionId: '91', sourceVersion: fixtureVersion(f, 'semester_assessment_results/exam_a'), ...overrides });
+
+test('compact projection is negotiated only for initial or live achievement analysis', () => {
+  const request = { ...gradeExamQuery(), analysisProjection: 'compact-v1' };
+  assert.equal(normalizeQuery(request).analysisProjection, 'compact-v1');
+  assert.equal(Object.hasOwn(gradeExamQuery(), 'analysisProjection'), false);
+  for (const analysisProjection of [undefined, null, false, true, '', 'compact', 'COMPACT-V1', {}, []])
+    assert.throws(() => normalizeQuery({ ...request, analysisProjection }), error => error.code === 'invalid-argument');
+  for (const mode of ['catalog', 'summary', 'detail'])
+    assert.throws(() => normalizeQuery({ ...request, mode }), error => error.code === 'invalid-argument');
+  const changes = { ...q, unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', mode: 'changes',
+    liveMode: 'achievement', analysisProjection: 'compact-v1', contextVersion: 'a'.repeat(64),
+    contentCursor: 0, cursors: [{ classId: 'class_a', cursor: 0 }] };
+  assert.equal(normalizeQuery(changes).analysisProjection, 'compact-v1');
+  assert.throws(() => normalizeQuery({ ...changes, liveMode: 'detail' }), error => error.code === 'invalid-argument');
+});
+
+test('whole-grade compact cache hits preserve every student and score without reading original bodies', async context => {
+  const f = memory(projectionFixture()); seedProjections(f);
+  const result = await createQuizClassAnalysisService({ db: f.db }).query(compactExamQuery());
+  assert.equal(result.analysisProjection, 'compact-v1');
+  assert.deepEqual(result.rawRows.map(row => row.id).sort(), ['exam_a', 'exam_b']);
+  assert.equal(result.students.length, 3);
+  assert.equal(result.mockExamScoreRows.length, 2);
+  for (const row of result.rawRows) {
+    assert.equal(row.raw.analysisSourceVersion, fixtureVersion(f, `semester_assessment_results/${row.id}`));
+    assert.deepEqual(row.raw.answerChecks, [{ id: 91, correct: true }]);
+    assert.deepEqual(row.raw.answers, { 91: '합성 답안' });
+    assert.equal(row.raw.percent, 100);
+  }
+  assert.equal(f.bodyReads.filter(read => /^semester_assessment_results\//.test(read.path)).length, 0);
+  assert.equal(f.bodyReads.filter(read => /^quiz_achievement_result_views\//.test(read.path)).length, 2);
+  assert.equal(JSON.stringify(result).includes('PRIVATE_ORIGINAL_'), false);
+  assert.deepEqual(f.writes, []);
+  context.diagnostic(`compact response ${Buffer.byteLength(JSON.stringify(result))} bytes; original body reads 0; projection reads 2; writes 0`);
+});
+
+test('compact queries recover only a missing, stale or corrupt projection without writing on read', async () => {
+  for (const state of ['missing', 'stale', 'corrupt']) {
+    const f = memory(projectionFixture()); seedProjections(f);
+    const path = 'semester_assessment_results/exam_a', viewPath = projectionRef(f.db, path).path;
+    if (state === 'missing') f.data.delete(viewPath);
+    else if (state === 'stale') f.versions.set(path, { ...TEST_UPDATE_TIME, nanoseconds: TEST_UPDATE_TIME.nanoseconds + 1 });
+    else f.data.get(viewPath).rawCompact.percent = 999;
+    const result = await createQuizClassAnalysisService({ db: f.db }).query(compactExamQuery());
+    assert.deepEqual(result.rawRows.map(row => row.id).sort(), ['exam_a', 'exam_b'], state);
+    assert.equal(result.rawRows.find(row => row.id === 'exam_a').raw.percent, 100, state);
+    assert.equal(result.rawRows.find(row => row.id === 'exam_a').raw.analysisSourceVersion, fixtureVersion(f, path), state);
+    assert.deepEqual(f.bodyReads.filter(read => /^semester_assessment_results\//.test(read.path)).map(read => read.path), [path], state);
+    assert.deepEqual(f.writes, [], state);
+  }
+});
+
+test('compact fallback rejects a result changed after its metadata version was read', async () => {
+  const f = memory(projectionFixture()); seedProjections(f, ['semester_assessment_results/exam_b']);
+  const getAll = f.db.getAll;
+  f.db.getAll = async (...refs) => {
+    if (refs.some(ref => ref.path === 'semester_assessment_results/exam_a'))
+      f.versions.set('semester_assessment_results/exam_a', { ...TEST_UPDATE_TIME, nanoseconds: TEST_UPDATE_TIME.nanoseconds + 1 });
+    return getAll(...refs);
+  };
+  await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(compactExamQuery()), error => error.code === 'aborted');
+  assert.deepEqual(f.writes, []);
+});
+
+test('compact empty legacy probe skips per-student aliases and preserves populated legacy scopes', async () => {
+  const f = memory(projectionFixture()); seedProjections(f);
+  await createQuizClassAnalysisService({ db: f.db }).query(compactExamQuery());
+  const emptyQueries = f.queries.filter(query => query.path === `${ROOT}/quiz_results`);
+  assert.equal(emptyQueries.length, 1);
+  assert.equal(emptyQueries[0].limit, 1);
+  assert.ok(Array.isArray(emptyQueries[0].projection));
+  assert.equal(emptyQueries[0].filters.some(([field]) => ['uid', 'studentUid', 'studentId', 'userId', 'email', 'studentEmail'].includes(field)), false);
+  const populated = memory(projectionFixture());
+  const path = `${ROOT}/quiz_results/legacy_exam`;
+  populated.data.set(path, { uid: 'c', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    score: 75, timestamp: '2026-11-01T02:00:00.000Z', details: [{ id: 91, correct: false, u: '나' }], questionSnapshots: [originalQuestion()] });
+  seedProjections(populated, ['semester_assessment_results/exam_a', 'semester_assessment_results/exam_b', path]);
+  const result = await createQuizClassAnalysisService({ db: populated.db }).query(compactExamQuery());
+  assert.ok(result.rawRows.some(row => row.source === 'legacy' && row.id === 'legacy_exam'));
+  assert.equal(populated.bodyReads.some(read => read.path === path), false);
+  assert.deepEqual(populated.writes, []);
+});
+
+test('question preview requires an exact result identity, source version and supported exam scope', () => {
+  const f = memory(), request = questionQuery(f);
+  assert.equal(normalizeQuery(request).mode, 'question');
+  for (const patch of [{ resultId: '' }, { resultId: '../exam_a' }, { resultSource: 'other' }, { questionId: '' },
+    { sourceVersion: '' }, { sourceVersion: null }, { sourceVersion: undefined }, { category: 'formative' },
+    { analysisProjection: 'compact-v1' }, { responseEncoding: 'gzip-base64' }, { snapshotDictionary: true }, { live: true }])
+    assert.throws(() => normalizeQuery({ ...request, ...patch }), error => error.code === 'invalid-argument', JSON.stringify(patch));
+});
+
+test('question preview returns just the selected preserved original and is read-only', async () => {
+  const f = memory(projectionFixture());
+  const handler = createQuizClassAnalysisHandler({ db: f.db, assertSession: async () => ({ uid: 'teacher' }) });
+  const result = await handler({ auth: { uid: 'teacher' }, data: questionQuery(f) });
+  assert.deepEqual(result, { semesterId: SCOPE, sourceVersion: fixtureVersion(f, 'semester_assessment_results/exam_a'), question: originalQuestion() });
+  assert.equal(JSON.stringify(result).includes('PRIVATE_ORIGINAL_IMAGE_92_'), false);
+  assert.equal(JSON.stringify(result).includes('합성 답안'), false);
+  assert.equal(f.reads.filter(path => path === 'semester_assessment_results/exam_a').length, 2);
+  const resultReads = f.bodyReads.filter(read => read.path === 'semester_assessment_results/exam_a');
+  assert.equal(resultReads[0].projection.includes('questionSnapshots'), false);
+  assert.deepEqual(resultReads[1].projection, ['questionSnapshots', 'answers', 'answerChecks',
+    'learningSnapshot', 'gradingCorrections', 'gradingCorrectionSummary']);
+  assert.equal(f.reads.some(path => path === 'semester_assessment_results/exam_b'), false);
+  assert.equal(f.queries.some(query => /quiz_questions$/.test(query.path)), false);
+  assert.deepEqual(f.writes, []);
+});
+
+test('question preview applies compatible grading corrections without mutating frozen originals', async () => {
+  for (const answersAvailable of [true, false]) {
+    const f = memory(projectionFixture()), path = 'semester_assessment_results/exam_a', raw = f.data.get(path);
+    const original = { ...originalQuestion(), unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' };
+    const correction = buildCorrection(SCOPE, '91', original, { ...original, answer: '나', contentRevision: 2 });
+    assert.ok(correction);
+    Object.assign(raw, { definitionId: correction.definitionId, questionSnapshots: [original, originalQuestion(92)],
+      answers: { 91: '나' }, answerChecks: [{ id: 91, correct: false }], percent: 0, earnedPoints: 0,
+      gradingCorrections: { [hash('91')]: correction },
+      gradingCorrectionSummary: { score: 1, percent: 100, earnedPoints: 3, answerChecks: [{ id: 91, correct: true }] },
+    });
+    if (!answersAvailable) delete raw.answers;
+    const saved = structuredClone(raw);
+    const result = await createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(questionQuery(f)));
+    assert.deepEqual(result.question, { ...original, answer: '나' });
+    assert.deepEqual(f.data.get(path), saved, 'preview cannot rewrite the original paper, answers or score');
+    assert.equal(JSON.stringify(result).includes('gradingCorrections'), false);
+    assert.equal(JSON.stringify(result).includes('answerChecks'), false);
+    assert.equal(f.reads.some(value => value.startsWith('semester_assessment_submissions/')), false);
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('question preview ignores corrections for another semester, exam or material fingerprint', async () => {
+  for (const state of ['semester', 'definition', 'material']) {
+    const f = memory(projectionFixture()), path = 'semester_assessment_results/exam_a', raw = f.data.get(path);
+    const original = { ...originalQuestion(), unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' };
+    const correction = buildCorrection(SCOPE, '91', original, { ...original, answer: '나', contentRevision: 2 });
+    Object.assign(raw, { definitionId: correction.definitionId, questionSnapshots: [original],
+      answers: { 91: '나' }, answerChecks: [{ id: 91, correct: false }],
+      gradingCorrections: { [hash('91')]: correction },
+    });
+    if (state === 'semester') correction.semesterId = '2026-1';
+    if (state === 'definition') correction.definitionId = 'quiz:2026-2:exam_prep:exam_prep:round_2';
+    if (state === 'material') raw.questionSnapshots = [{ ...original, question: '원문이 다른 발문' }];
+    const saved = structuredClone(raw);
+    const result = await createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(questionQuery(f)));
+    assert.deepEqual(result.question, saved.questionSnapshots[0], state);
+    assert.equal(result.question.answer, '가', state);
+    assert.deepEqual(f.data.get(path), saved, state);
+    assert.deepEqual(f.writes, [], state);
+  }
+});
+
+test('question preview forbids students, foreign classes, other scopes and changed result versions', async () => {
+  const student = memory(projectionFixture());
+  const handler = createQuizClassAnalysisHandler({ db: student.db, assertSession: async () => ({ uid: 'a' }) });
+  await assert.rejects(handler({ auth: { uid: 'a' }, data: questionQuery(student) }), error => error.code === 'permission-denied');
+  assert.equal(student.reads.some(path => path.startsWith('semester_assessment_results/')), false);
+  for (const patch of [
+    { request: { resultId: 'exam_foreign' } }, { request: { resultId: 'exam_inactive' } },
+    { request: { grade: undefined, classIds: ['class_b'] } },
+    { result: { semesterId: '2026-1' } }, { result: { sourceId: 'other-unit' } },
+    { result: { examRound: 'round_2' } }, { result: { assessmentKind: 'PERFORMANCE' } },
+  ]) {
+    const f = memory(projectionFixture());
+    if (patch.result) Object.assign(f.data.get('semester_assessment_results/exam_a'), patch.result);
+    const request = questionQuery(f, patch.request);
+    if (patch.request && Object.hasOwn(patch.request, 'grade') && patch.request.grade === undefined) delete request.grade;
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(request)),
+      error => ['permission-denied', 'not-found', 'failed-precondition'].includes(error.code), JSON.stringify(patch));
+    assert.equal(f.bodyReads.some(read => read.projection?.includes('questionSnapshots')), false);
+    assert.deepEqual(f.writes, []);
+  }
+  const changed = memory(projectionFixture()), request = questionQuery(changed);
+  changed.versions.set('semester_assessment_results/exam_a', { ...TEST_UPDATE_TIME, nanoseconds: TEST_UPDATE_TIME.nanoseconds + 1 });
+  await assert.rejects(createQuizClassAnalysisService({ db: changed.db }).query(normalizeQuery(request)), error => error.code === 'aborted');
+  assert.deepEqual(changed.writes, []);
+});
+
+test('question preview follows the current enrollment instead of the result original class', async () => {
+  const f = memory(projectionFixture());
+  f.data.get('semester_assessment_results/exam_a').classId = 'class_a';
+  f.data.get('semester_enrollments/en_a').classId = 'class_b';
+  const request = questionQuery(f, { classIds: ['class_a'] }); delete request.grade;
+  const service = createQuizClassAnalysisService({ db: f.db });
+  await assert.rejects(service.query(normalizeQuery(request)), error => error.code === 'permission-denied');
+  assert.equal(f.bodyReads.some(read => read.projection?.includes('questionSnapshots')), false);
+  const result = await service.query(normalizeQuery({ ...request, classIds: ['class_b'] }));
+  assert.deepEqual(result.question, originalQuestion());
+  assert.deepEqual(f.writes, []);
+});
+
+test('question preview rejects changes or deletion between scope validation and original reading', async () => {
+  for (const state of ['changed', 'deleted']) {
+    const f = memory(projectionFixture()), path = 'semester_assessment_results/exam_a', getAll = f.db.getAll;
+    f.db.getAll = async (...refs) => {
+      if (refs.at(-1)?.fieldMask?.includes('questionSnapshots')) {
+        if (state === 'deleted') f.data.delete(path);
+        else f.versions.set(path, { ...TEST_UPDATE_TIME, nanoseconds: TEST_UPDATE_TIME.nanoseconds + 1 });
+      }
+      return getAll(...refs);
+    };
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(questionQuery(f))),
+      error => error.code === 'aborted', state);
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('question preview never substitutes a current bank question for a missing preserved original', async () => {
+  const f = memory(projectionFixture());
+  delete f.data.get('semester_assessment_results/exam_a').questionSnapshots;
+  const result = await createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(questionQuery(f)));
+  assert.deepEqual(result, { semesterId: SCOPE, sourceVersion: fixtureVersion(f, 'semester_assessment_results/exam_a'), question: null, missingReason: 'not-preserved' });
+  assert.equal(f.queries.some(query => /quiz_questions$/.test(query.path)), false);
+  assert.deepEqual(f.writes, []);
+});
+
+test('question preview reads legacy originals only from the requested semester path', async () => {
+  const f = memory(projectionFixture()), path = `${ROOT}/quiz_results/legacy_exam`;
+  f.data.set(path, { uid: 'a', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1',
+    score: 100, details: [{ id: 91, correct: true }], questionSnapshots: [originalQuestion()] });
+  const result = await createQuizClassAnalysisService({ db: f.db }).query(normalizeQuery(questionQuery(f, {
+    resultId: 'legacy_exam', resultSource: 'legacy', sourceVersion: fixtureVersion(f, path),
+  })));
+  assert.deepEqual(result.question, originalQuestion());
+  assert.equal(f.reads.filter(value => value === path).length, 2);
+  assert.equal(f.reads.some(value => value === 'semester_assessment_results/legacy_exam'), false);
+  assert.deepEqual(f.writes, []);
+});
 
 function decodeAchievementResponse(envelope) {
   assert.deepEqual(Object.keys(envelope).sort(), ['encoding', 'payload', 'uncompressedBytes']);

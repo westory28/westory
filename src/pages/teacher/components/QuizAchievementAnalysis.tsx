@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import InfoHelp from "../../../components/common/InfoHelp";
-import {
-  MockExamQuestionContent,
-  type MockExamPaperQuestion,
-} from "../../../components/common/MockExamPaper";
-import QuizPassage from "../../../components/common/QuizPassage";
+import { type MockExamPaperQuestion } from "../../../components/common/MockExamPaper";
 import {
   ACHIEVEMENT_LEVELS,
   adaptAchievementAttempts,
@@ -29,6 +25,12 @@ import {
 import "./QuizAchievementAnalysis.css";
 import "./QuizAnalysisMotion.css";
 import QuizAchievementEstimates from "./QuizAchievementEstimates";
+import QuizAnalysisQuestionDialog from "./QuizAnalysisQuestionDialog";
+import {
+  analysisStudentLabel,
+  AnalysisStudentsMore,
+  useAnalysisStudentWindow,
+} from "./QuizAnalysisStudents";
 import { useQuizClassUpdates } from "./useQuizClassUpdates";
 import { applyQuizClassChanges } from "../../../lib/quizClassLiveState";
 import {
@@ -72,17 +74,7 @@ const statisticReason = (reason: string | null) =>
 const studentLabel = (
   student: QuizClassAchievement["students"][number] | undefined,
   data: QuizClassAchievement,
-) =>
-  [
-    data.grade || data.configuredClasses.length > 1
-      ? data.configuredClasses.find((entry) => entry.id === student?.classId)
-          ?.label
-      : "",
-    student?.number ? `${student.number}번` : "",
-    student?.name || "이름 미등록",
-  ]
-    .filter(Boolean)
-    .join(" ");
+) => analysisStudentLabel(student, data.configuredClasses);
 
 export default function QuizAchievementAnalysis({
   scope,
@@ -123,7 +115,7 @@ export default function QuizAchievementAnalysis({
   });
   const currentIdentity = useRef(identityKey);
   currentIdentity.current = identityKey;
-  const previewRef = useRef<HTMLDivElement>(null);
+  const questionContext = useRef("");
   const requestKey = JSON.stringify([
     identityKey,
     scope.semesterId,
@@ -206,7 +198,7 @@ export default function QuizAchievementAnalysis({
         return { codes: [] as string[], source: "none" };
       return resolveQuestionAchievement(metadata, data?.treeData || []);
     },
-    [data],
+    [data?.treeData],
   );
   const attempts = useMemo(
     () =>
@@ -219,7 +211,13 @@ export default function QuizAchievementAnalysis({
             resolveCodes,
           })
         : [],
-    [data, scope.semesterId, resolveCodes],
+    [
+      data?.students,
+      data?.questions,
+      data?.rawRows,
+      scope.semesterId,
+      resolveCodes,
+    ],
   );
   const full = useMemo(
     () =>
@@ -234,7 +232,15 @@ export default function QuizAchievementAnalysis({
             resolveCodes,
           })
         : null,
-    [data, attempts, resolveCodes, scope.semesterId],
+    [
+      data?.students,
+      data?.questions,
+      data?.mockExamScoreRows,
+      attempts,
+      resolveCodes,
+      scope.semesterId,
+      scope.examRound,
+    ],
   );
   const analysis = useMemo(
     () =>
@@ -252,7 +258,17 @@ export default function QuizAchievementAnalysis({
             })
           : full
         : null,
-    [data, full, standardCode, attempts, resolveCodes, scope.semesterId],
+    [
+      data?.students,
+      data?.questions,
+      data?.mockExamScoreRows,
+      full,
+      standardCode,
+      attempts,
+      resolveCodes,
+      scope.semesterId,
+      scope.examRound,
+    ],
   );
   const form =
     analysis?.forms.find((value) => value.key === formKey) ||
@@ -266,36 +282,109 @@ export default function QuizAchievementAnalysis({
   ].sort();
   const selectedItem =
     form?.items.find((item) => item.id === choiceQuestionId) || form?.items[0];
-  const currentQuestion = data?.questions.find(
-    (question) => String(question.id) === questionId,
-  ) as MockExamPaperQuestion | undefined;
-  const savedQuestion = useMemo(() => {
+  const questionSource = useMemo(() => {
     if (!questionId || !data) return null;
-    const selectedAttempt = attempts.find(
-      (attempt) =>
-        attempt.complete &&
-        (!form ||
+    const emailOwners = new Map(
+      data.students
+        .filter((student) => student.email)
+        .map((student) => [student.email!.trim().toLowerCase(), student.uid]),
+    );
+    let fallback: QuizClassAchievement["rawRows"][number] | null = null;
+    for (const selectedAttempt of attempts) {
+      if (
+        !selectedAttempt.complete ||
+        (form &&
           JSON.stringify(
-            attempt.items
+            selectedAttempt.items
               .map((item) => [item.id, item.sourceRevision])
               .sort(([a], [b]) => a.localeCompare(b)),
-          ) === form.key),
-    );
-    const raw = data.rawRows.find((row) => row.id === selectedAttempt?.id)?.raw;
-    return (
-      Array.isArray(raw?.questionSnapshots) ? raw.questionSnapshots : []
-    ).find((question: any) => String(question.id) === questionId) as
-      | MockExamPaperQuestion
-      | undefined;
-  }, [questionId, data, attempts, form]);
-  const displayedQuestion = savedQuestion || currentQuestion;
+          ) !== form.key)
+      )
+        continue;
+      const candidates = data.rawRows.filter(
+        (row) =>
+          row.id === selectedAttempt.id &&
+          String(
+            row.raw.studentUid ||
+              row.raw.uid ||
+              row.raw.studentId ||
+              row.raw.userId ||
+              emailOwners.get(
+                String(row.raw.email || row.raw.studentEmail || "")
+                  .trim()
+                  .toLowerCase(),
+              ) ||
+              "",
+          ) === selectedAttempt.studentUid,
+      );
+      // Same IDs in canonical/legacy collections must resolve to the actual
+      // selected attempt, with the adapter's canonical precedence on a tie.
+      const source =
+        candidates.length === 1
+          ? candidates[0]
+          : candidates
+              .sort(
+                (a, b) =>
+                  Number(b.source === "canonical") -
+                  Number(a.source === "canonical"),
+              )
+              .find((row) => {
+                const [candidate] = adaptAchievementAttempts({
+                  semesterId: scope.semesterId,
+                  students: data.students,
+                  questions: data.questions,
+                  rawRows: [row],
+                  resolveCodes,
+                });
+                return (
+                  candidate &&
+                  JSON.stringify(candidate) === JSON.stringify(selectedAttempt)
+                );
+              });
+      if (!source) continue;
+      fallback ||= source;
+      const omitted =
+        Array.isArray(source.raw.questionSnapshotOmittedIds) &&
+        source.raw.questionSnapshotOmittedIds.some(
+          (id: unknown) => String(id) === questionId,
+        );
+      if (
+        !omitted &&
+        Array.isArray(source.raw.questionSnapshots) &&
+        source.raw.questionSnapshots.some(
+          (question: any) => String(question.id) === questionId,
+        )
+      )
+        return source;
+    }
+    // Let the server report missing evidence only after checking other
+    // attempts of this exact form for a preserved copy of the question.
+    return fallback;
+  }, [
+    questionId,
+    data?.rawRows,
+    data?.students,
+    data?.questions,
+    attempts,
+    form,
+    scope.semesterId,
+    resolveCodes,
+  ]);
+  const inlineQuestion =
+    data?.analysisProjection === "compact-v1"
+      ? undefined
+      : ((Array.isArray(questionSource?.raw.questionSnapshots)
+          ? questionSource.raw.questionSnapshots
+          : []
+        ).find(
+          (question: any) =>
+            String(question.id) === questionId &&
+            typeof question.question === "string",
+        ) as MockExamPaperQuestion | undefined);
   useEffect(() => {
     setQuestionId("");
     setProfileId("");
-  }, [view]);
-  useEffect(() => {
-    if (questionId) requestAnimationFrame(() => previewRef.current?.focus());
-  }, [questionId]);
+  }, [view, standardCode, formKey]);
   const analysisHelp = (
     <InfoHelp
       label="성취 분석 집계 기준"
@@ -409,56 +498,9 @@ export default function QuizAchievementAnalysis({
     );
 
   const inspect = (id: string) => {
+    questionContext.current = requestKey;
     setQuestionId(id);
   };
-  if (questionId && displayedQuestion)
-    return (
-      <div
-        className="qaa-question"
-        ref={previewRef}
-        tabIndex={-1}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            setQuestionId("");
-          }
-        }}
-      >
-        <div className="qca-section-heading">
-          <h3>{displayedQuestion.paperOrder || ""}번 문항</h3>
-          <button
-            type="button"
-            className="qca-secondary"
-            onClick={() => setQuestionId("")}
-          >
-            분석으로 돌아가기
-          </button>
-        </div>
-        <span className="qca-muted">
-          {savedQuestion
-            ? "응시 당시 문항"
-            : "현재 문제은행 문항 · 과거 원문 미보관"}
-        </span>
-        <MockExamQuestionContent
-          question={displayedQuestion as MockExamPaperQuestion}
-          index={Math.max(0, (displayedQuestion.paperOrder || 1) - 1)}
-          answer={String(displayedQuestion.answer || "")}
-        />
-        <dl className="qaa-answer">
-          <dt>정답</dt>
-          <dd>{String(displayedQuestion.answer || "미보관")}</dd>
-          <dt>해설</dt>
-          <dd>
-            {displayedQuestion.explanation ? (
-              <QuizPassage value={displayedQuestion.explanation} />
-            ) : (
-              "해설 미등록"
-            )}
-          </dd>
-        </dl>
-      </div>
-    );
-
   return (
     <section className={sectionClass} aria-label="성취기준 분석">
       {toolbar}
@@ -902,6 +944,7 @@ export default function QuizAchievementAnalysis({
           analysis={analysis}
           examRound={scope.examRound}
           showPaper={view === 5}
+          resetKey={`${requestKey}:${standardCode}:${view}`}
         />
       )}
       {view === 4 && (
@@ -912,13 +955,33 @@ export default function QuizAchievementAnalysis({
             setFormKey={setFormKey}
           />
           <SpTable
-            key={form?.key}
+            key={`${requestKey}:${standardCode}:${form?.key}`}
             analysis={analysis}
             formKey={form?.key}
             data={data}
             onInspect={inspect}
           />
         </>
+      )}
+      {questionId && questionContext.current === requestKey && (
+        <QuizAnalysisQuestionDialog
+          key={`${requestKey}:${questionId}`}
+          scope={scope}
+          identityKey={identityKey}
+          selection={
+            questionSource &&
+            typeof questionSource.raw.analysisSourceVersion === "string"
+              ? {
+                  resultId: questionSource.id,
+                  resultSource: questionSource.source,
+                  questionId,
+                  sourceVersion: questionSource.raw.analysisSourceVersion,
+                }
+              : null
+          }
+          inlineQuestion={inlineQuestion}
+          onClose={() => setQuestionId("")}
+        />
       )}
     </section>
   );
@@ -1573,6 +1636,9 @@ function SpTable({
     key: "correctRate",
     direction: "ascending",
   });
+  const window = useAnalysisStudentWindow(
+    JSON.stringify([formKey, studentSort.sort, itemSort.sort]),
+  );
   const metrics = analysis.forms.find(
     (form) => form.key === formKey,
   )?.psychometrics;
@@ -1691,7 +1757,7 @@ function SpTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, rowIndex) => {
+          {rows.slice(0, window.count).map((row, rowIndex) => {
             const student = studentById.get(row.studentId);
             return (
               <tr key={row.studentId}>
@@ -1725,6 +1791,7 @@ function SpTable({
           })}
         </tbody>
       </Table>
+      <AnalysisStudentsMore {...window} total={rows.length} />
     </>
   );
 }

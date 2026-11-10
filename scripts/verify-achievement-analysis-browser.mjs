@@ -46,6 +46,7 @@ const questions = Array.from({ length: 6 }, (_, i) => ({
   question: `조선의 정치 변화에 대한 설명으로 옳은 것은? (${i + 1})`,
   answer: "사림",
   options: ["훈구", "사림", "권문세족", "신진 사대부", "호족"],
+  image: "data:image/svg+xml;base64," + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="40"><rect width="240" height="40" fill="#e2e8f0"/><text x="12" y="26">Frozen original image</text></svg>').toString('base64'),
   passage: "제시문 원문 보존 검증: 향촌 사회를 기반으로 성장하였다.",
   examplePassage: "ㄱ. 서원\nㄴ. 향약",
   explanation: "해설 원문 보존 검증: 사림은 향촌 사회에 기반을 두었다.",
@@ -80,6 +81,7 @@ const makeRows = (round) =>
       id: `exam-${round}-${index}`,
       source: "canonical",
       raw: {
+        analysisSourceVersion: "000000001793920000000000000",
         assessmentKind: "QUIZ",
         semesterId: "2026-2",
         studentUid: student.uid,
@@ -120,7 +122,7 @@ const mockExamScoreRows = [1, 2, 3].flatMap(makeRows);
 const fixture = {
   semesterId: "2026-2",
   students,
-  questions,
+  questions: questions.map(question => ({...question, question: "현재 문제은행에서 변경된 발문"})),
   rawRows,
   historicalQuestionSnapshots: Object.fromEntries(
     questions.map((q) => [q.id, q]),
@@ -144,9 +146,22 @@ const fixture = {
   complete: true,
   mockExamScoreRows,
 };
+const fixtures = {};
 const encodedFixtures = {};
-for (const round of [1, 2, 3]) for (const grade of [false, true]) {
+for (const round of [1, 2, 3]) for (const grade of [false, true]) for (const large of [false, true]) for (const inline of [false, true]) {
   const data = structuredClone(fixture);
+  if (large) {
+    for (let i = 24; i < 65; i++) {
+      data.students.push({ ...data.students[i % 24], uid: `s${i}`, name: `합성학생${i + 1}`, number: String(i + 1) });
+      for (const previous of mockExamScoreRows.filter(row => row.raw.studentUid === `s${i % 24}`)) {
+        const row = structuredClone(previous);
+        row.id = `exam-${row.raw.examRound.slice(6)}-${i}`;
+        row.raw.studentUid = `s${i}`;
+        row.raw.attemptId = row.id;
+        data.mockExamScoreRows.push(row);
+      }
+    }
+  }
   data.rawRows = data.mockExamScoreRows.filter((row) => row.raw.examRound === `round_${round}`);
   data.mockExamScoreRows = data.mockExamScoreRows.filter((row) => Number(row.raw.examRound.slice(6)) <= round);
   if (grade) {
@@ -154,15 +169,31 @@ for (const round of [1, 2, 3]) for (const grade of [false, true]) {
     data.configuredClasses.push({ id: "class_2", label: "3학년 2반" });
     data.students.slice(12).forEach((student) => { student.classId = "class_2"; });
   }
+  if (!inline) {
+    data.analysisProjection = 'compact-v1';
+    for (const row of [...data.rawRows, ...data.mockExamScoreRows]) {
+      row.raw.questionSnapshots = questions.map(({ id, options, answer, points }) => ({ id, options, answer, points }));
+      delete row.raw.questionSnapshotRefs;
+    }
+    delete data.historicalQuestionSnapshots;
+    const original = data.rawRows[0];
+    original.raw.questionSnapshotOmittedIds = ['q1'];
+    data.rawRows.unshift({ id: original.id, source: 'legacy', raw: {
+      uid: original.raw.studentUid, attemptId: original.raw.attemptId,
+      analysisSourceVersion: 'legacy-older-version', semesterId: '2026-2', total: 1,
+      details: [{id:'q1',correct:false}],
+    }});
+
+  }
+  const key = `${round}:${grade}:${large}:${inline}`;
+  fixtures[key] = data;
   const json = JSON.stringify(data);
-  encodedFixtures[`${round}:${grade}`] = {
-    encoding: "gzip-base64",
-    uncompressedBytes: Buffer.byteLength(json),
-    payload: gzipSync(json).toString("base64"),
+  encodedFixtures[key] = {
+    encoding: "gzip-base64", uncompressedBytes: Buffer.byteLength(json), payload: gzipSync(json).toString("base64"),
   };
 }
-const service = `const data=window.fixture=${JSON.stringify(fixture)};const encoded=${JSON.stringify(encodedFixtures)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);data.rawRows=data.mockExamScoreRows.filter(row=>row.raw.examRound==='round_'+round);data.mockExamScoreRows=data.mockExamScoreRows.filter(row=>Number(row.raw.examRound.slice(6))<=round);if(query.get('grade')){data.grade='3';data.configuredClasses.push({id:'class_2',label:'3학년 2반'});data.students.slice(12).forEach(student=>student.classId='class_2');}window.qa={calls:[],saves:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);return {data:structuredClone(request.responseEncoding==='gzip-base64'?encoded[round+':'+Boolean(query.get('grade'))]:data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
-const entry = `import React,{useEffect,useRef}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const query=new URLSearchParams(location.search);const grade=query.get('grade');const round=query.get('round')||'1';function App(){const ref=useRef(null);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_'+round,classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey="fixture" canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
+const service = `const fixtures=${JSON.stringify(fixtures)};const originals=${JSON.stringify(questions)};const encoded=${JSON.stringify(encodedFixtures)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);const key=[round,Boolean(query.get('grade')),Boolean(query.get('large')),Boolean(query.get('inline'))].join(':');const data=window.fixture=fixtures[key];window.qa={calls:[],saves:[],questionMode:'ok',pending:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);if(request.mode==='question'){const result={semesterId:request.semesterId,sourceVersion:request.sourceVersion,question:originals.find(q=>q.id===request.questionId)||null};if(window.qa.questionMode==='error')throw new Error('문항 조회 실패');if(window.qa.questionMode==='missing'||data.rawRows.find(row=>row.id===request.resultId&&row.source===request.resultSource)?.raw.questionSnapshotOmittedIds?.includes(request.questionId)){result.question=null;result.missingReason='not-preserved';}if(window.qa.questionMode==='defer')await new Promise(resolve=>window.qa.pending.push(resolve));return {data:structuredClone(result)};}return {data:structuredClone(request.responseEncoding==='gzip-base64'?encoded[key]:data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
+const entry = `import React,{useEffect,useRef,useState}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const query=new URLSearchParams(location.search);const grade=query.get('grade');const round=query.get('round')||'1';function App(){const ref=useRef(null);const[identity,setIdentity]=useState('fixture');const[scopeRound,setScopeRound]=useState(round);const[tick,setTick]=useState(0);window.changeIdentity=setIdentity;window.changeScope=setScopeRound;window.redraw=()=>setTick(tick+1);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_'+scopeRound,classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey={identity} canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -170,7 +201,7 @@ const bundle = await build({
   format: "esm",
   platform: "browser",
   outfile: path.join(evidence, "fixture.js"),
-  loader: { ".woff2": "dataurl", ".woff": "dataurl" },
+  loader: { ".woff2": "dataurl", ".woff": "dataurl", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -426,7 +457,7 @@ try {
   await page.keyboard.press("Enter");
   assert.match(
     await sp.locator("tbody tr").first().locator("th").innerText(),
-    /^1번 /,
+    /^합성학생1\(30101\)$/,
   );
   assert.equal(await page.evaluate(() => window.qa.calls.length), initialReads);
   await page
@@ -474,7 +505,7 @@ try {
     fullPage: true,
   });
   await page
-    .getByRole("button", { name: "분석으로 돌아가기", exact: true })
+    .getByRole("button", { name: "닫기", exact: true })
     .click();
   await page
     .getByRole("button", { name: "1번 수준 프로필 그래프", exact: true })
@@ -487,7 +518,7 @@ try {
   assert.equal(await choices.locator("tbody tr").count(), 7);
   assert.equal(
     await page.evaluate(() => window.qa.calls.length),
-    initialReads,
+    initialReads + 1,
     "Sorting and report views do not fetch more student records",
   );
   assert.equal(
@@ -508,7 +539,7 @@ try {
     assert.equal(await cumulative.locator("tbody tr").count(), students.length);
     const firstStudent = cumulative.locator("tbody tr").filter({
       has: page.getByRole("rowheader", {
-        name: "3학년 1반 1번 합성학생1",
+        name: "합성학생1(30101)",
         exact: true,
       }),
     });
@@ -602,6 +633,100 @@ try {
     ]);
     assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
   }
+  // Only student rendering is windowed: all statistics and curves use all 65.
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/?round=3&grade=3&large=1`);
+    const chooser = page.getByRole("combobox", { name: "분석 보기", exact: true });
+    await chooser.selectOption("4");
+    const grid = page.getByRole("region", { name: "학생과 문항별 정오 S-P표", exact: true });
+    await grid.locator("tbody tr").first().waitFor();
+    assert.equal(await grid.locator("tbody tr").count(), 30);
+    assert.match(await page.locator('.qaa-scope').innerText(), /첫 제출 65명/);
+    const allRates = await grid.locator('thead tr').nth(1).innerText();
+    await page.getByRole('button', { name: '학생 30명 더 보기', exact: true }).click();
+    assert.equal(await grid.locator('tbody tr').count(), 60);
+    assert.equal(await grid.locator('thead tr').nth(1).innerText(), allRates);
+    await page.getByRole('button', { name: '학생 5명 더 보기', exact: true }).click();
+    assert.equal(await grid.locator('tbody tr').count(), 65);
+    await grid.getByRole('button', { name: '학생 오름차순 정렬', exact: true }).click();
+    assert.equal(await grid.locator('tbody tr').count(), 30);
+    await chooser.selectOption('3');
+    let cumulative = page.getByRole('table', { name:'학생별 모의고사 누적 성취수준', exact:true });
+    assert.equal(await cumulative.locator('tbody tr').count(), 30);
+    await page.getByRole('button', { name:'학생 30명 더 보기', exact:true }).click();
+    assert.equal(await cumulative.locator('tbody tr').count(), 60);
+    await cumulative.getByRole('button', { name:'누적 점수 내림차순 정렬', exact:true }).click();
+    assert.equal(await cumulative.locator('tbody tr').count(), 30);
+    await chooser.selectOption('5');
+    const papers = page.getByRole('table', { name:'응시 당시 시험지별 추정 분할점수', exact:true });
+    assert.equal(await cumulative.locator('tbody tr').count(), 30);
+    assert.equal(await papers.locator('tbody tr').count(), 90, 'Three rounds remain grouped for each of the first 30 students');
+    await page.getByRole('button', { name:'학생 30명 더 보기', exact:true }).last().click();
+    assert.equal(await papers.locator('tbody tr').count(), 180);
+    assert.equal(await cumulative.locator('tbody tr').count(), 30, 'Independent student lists have independent windows');
+    assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
+    await chooser.selectOption('1');
+    const trigger = page.getByRole('button', { name:'1번', exact:true }).first();
+    await trigger.click();
+    const popup = page.getByRole('dialog', { name:'응시 당시 문항', exact:true });
+    await popup.getByText('공통 지문 원문 보존 검증', {exact:true}).waitFor();
+    assert.equal(await page.locator('.quiz-achievement-analysis').count(), 1, 'Popup retains the analysis screen');
+    assert.equal(await page.evaluate(() => window.qa.calls.filter(x => x.mode==='question').length), 1);
+    assert.equal(await page.evaluate(() => window.qa.calls.find(x=>x.mode==='question').resultId), 'exam-3-1', 'Use a preserved copy in the same form when the first attempt omitted this original');
+    assert.equal(await page.evaluate(() => window.qa.calls.find(x=>x.mode==='question').resultSource), 'canonical', 'Colliding legacy ID cannot select the wrong original source');
+    assert.equal(await page.evaluate(() => window.qa.calls.find(x=>x.mode==='question').sourceVersion), '000000001793920000000000000');
+    await page.evaluate(() => window.redraw());
+    assert.equal(await page.evaluate(() => window.qa.calls.filter(x => x.mode==='question').length), 1, 'Open-popup rerender never refetches original');
+    assert.equal(await popup.getByText('현재 문제은행에서 변경된 발문',{exact:true}).count(), 0);
+    assert.ok(await popup.locator('img').evaluateAll(images=>images.length>0 && images.every(image=>image.complete && image.naturalWidth>0)), 'Frozen image is rendered');
+    assert.ok(await popup.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'Original question fits dialog width');
+    await page.screenshot({path:path.join(evidence, `${width}-question-dialog.png`), fullPage:true});
+    await page.keyboard.press('Escape');
+    assert.equal(await popup.count(), 0);
+    assert.equal(await trigger.evaluate(el => el === document.activeElement), true, 'Escape returns focus to original question button');
+  }
+  // Error/retry, absent frozen evidence and dismissed/account-stale responses.
+  await page.evaluate(() => { window.qa.questionMode='error'; });
+  const questionTrigger = page.getByRole('button', {name:'1번', exact:true}).first();
+  await questionTrigger.click();
+  let popup = page.getByRole('dialog', {name:'응시 당시 문항',exact:true});
+  await popup.getByRole('alert').waitFor();
+  await page.evaluate(() => { window.qa.questionMode='ok'; });
+  await popup.getByRole('button',{name:'다시 시도',exact:true}).click();
+  await popup.getByText('공통 지문 원문 보존 검증',{exact:true}).waitFor();
+  await page.mouse.click(1,1);
+  assert.equal(await popup.count(),0,'Backdrop dismisses only outside dialog bounds');
+  await page.evaluate(() => { window.qa.questionMode='missing'; });
+  await questionTrigger.click();
+  await popup.getByText('응시 당시 문항 원문이 보관되어 있지 않습니다.',{exact:true}).waitFor();
+  assert.equal(await popup.locator('.mock-exam-question-ink').count(),0,'Never replace missing original with current bank');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { window.qa.questionMode='defer'; });
+  await questionTrigger.click();
+  await popup.getByRole('status').waitFor();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { window.qa.pending.splice(0).forEach(resolve=>resolve()); });
+  assert.equal(await popup.count(),0,'Dismissed response cannot reopen original');
+  await questionTrigger.click();
+  await popup.getByRole('status').waitFor();
+  await page.evaluate(() => window.changeIdentity('other-account'));
+  await page.waitForFunction(() => !document.querySelector('.qaa-question-dialog'));
+  await page.evaluate(() => { window.qa.pending.splice(0).forEach(resolve=>resolve()); });
+  assert.equal(await popup.count(),0,'Account transition discards old original response');
+  await page.getByRole('combobox',{name:'분석 보기',exact:true}).selectOption('1');
+  await questionTrigger.click();
+  await popup.getByRole('status').waitFor();
+  await page.evaluate(() => window.changeScope('2'));
+  await page.waitForFunction(() => !document.querySelector('.qaa-question-dialog'));
+  await page.evaluate(() => { window.qa.pending.splice(0).forEach(resolve=>resolve()); });
+  assert.equal(await popup.count(),0,'Scope transition discards old original response');
+  await page.goto(`${origin}/?inline=1`);
+  await page.getByRole('combobox',{name:'분석 보기',exact:true}).selectOption('1');
+  await page.getByRole('button',{name:'1번',exact:true}).first().click();
+  await page.getByRole('dialog',{name:'응시 당시 문항',exact:true}).getByText('공통 지문 원문 보존 검증',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(() => window.qa.calls.filter(x=>x.mode==='question').length),0,'Old full frozen snapshots still work without an extra read');
+  await page.keyboard.press('Escape');
   // Hold only this entrance animation so start/midpoint/end geometry can be
   // inspected deterministically without slowing production motion.
   await page.addInitScript(() => {
@@ -690,6 +815,8 @@ try {
           "no document overflow",
           "compact toolbar",
           "snapshot passage and explanation",
+          "student windows 30/60/65; independent paper groups and sorting reset, full denominators unchanged",
+          "on-demand original dialog: no fetch before click, Escape/focus, retry/missing/stale account/dismissal, old inline compatibility",
           "level choices",
           "profile graph",
           "correct-answer fill and atypical outline",

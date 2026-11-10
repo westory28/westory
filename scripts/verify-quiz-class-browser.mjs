@@ -45,11 +45,11 @@ export const callWithApplicationSession=async(name,data)=>{
  if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes:[1,2,3,4,5].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)})),assessments:[{id:'assessment-a',unitId:'unit-a',unitTitle:'사림 세력과 정치 변화',category:'formative',examRound:'',title:'형성평가',questionCount:100}],treeData:tree,generatedAt:'2026-10-25T10:00:00Z'}};
  const search=data.keyword?{keyword:data.keyword,matchedQuestionCount:data.keyword==='없는검색'?0:25,unitCount:2,questionIds:data.keyword==='없는검색'?[]:detailQuestions.map(q=>String(q.id)),generatedAt:'2026-10-25T10:00:00Z'}:undefined;
  if(data.mode==='summary')return {data:{...data,live:undefined,classes:data.classIds.map(summary),...(search?{search}:{}),...(data.comparisonGrade?{gradeComparison:{...summary('class_1'),classId:'grade:3',label:'3학년 전체',grade:'3',classCount:5,respondingClassCount:5,rosterCount:150,scoredCount:96,submittedCount:96,unsubmittedCount:54,averageScore:66,weighting:'scored_students',...(qa.behavior?{rosterCount:25,submittedCount:qa.behaviorNoAttempt?0:20,scoredCount:qa.behaviorNoAttempt?0:20,unsubmittedCount:qa.behaviorNoAttempt?25:5,behaviorCounts:Object.fromEntries(Object.entries(behaviorSummary().behaviorCounts).map(([key,value])=>[key,value*5]))}:{})}}:{}),generatedAt:'2026-10-25T10:00:00Z'}};
- return {data:{semesterId:data.semesterId,...(search?{keyword:data.keyword,search,basis:'latest_current_revision_keyword_items'}:{}),students:[{uid:'pupil-a',name:'가상학생',classId:data.classIds[0],number:'1'}],rawRows:[{id:'attempt',source:'canonical',raw:{assessmentKind:'QUIZ',studentUid:'pupil-a',semesterId:data.semesterId,sourceId:'unit-a',category:'formative',submittedAtIso:'2026-10-25T10:00:00Z',percent:0,total:25,answerChecks:detailQuestions.map(q=>({id:q.id,correct:false})),answers:Object.fromEntries(detailQuestions.map(q=>[q.id,'오답'])),learningSnapshot:detailQuestions.map(q=>({id:q.id,sourceRevision:'1',concepts:q.concepts})),questionSnapshots:detailQuestions}}],...(qa.behavior?behaviorData(data.classIds[0]):{}),questions:detailQuestions,treeData:tree,configuredClasses:[{id:data.classIds[0],label:'3학년 1반'}],generatedAt:'2026-10-25T10:00:00Z',version:'v1'}};
+ return {data:{semesterId:data.semesterId,...(search?{keyword:data.keyword,search,basis:'latest_current_revision_keyword_items'}:{}),students:[{uid:'pupil-a',name:'가상학생',classId:data.classIds[0],number:'1'}],rawRows:[{id:'attempt',source:'canonical',raw:{assessmentKind:'QUIZ',studentUid:'pupil-a',semesterId:data.semesterId,sourceId:'unit-a',category:'formative',submittedAtIso:'2026-10-25T10:00:00Z',percent:0,total:25,answerChecks:detailQuestions.map(q=>({id:q.id,correct:false})),answers:Object.fromEntries(detailQuestions.map(q=>[q.id,'오답'])),learningSnapshot:detailQuestions.map(q=>({id:q.id,sourceRevision:'1',concepts:q.concepts})),questionSnapshots:detailQuestions}}],...(qa.behavior?behaviorData(data.classIds[0]):{}),...(qa.large?{students:Array.from({length:65},(_,i)=>({uid:i===0?'pupil-a':'large-'+i,name:'가상학생'+(i+1),classId:data.classIds[0],number:String(i+1)}))}:{}),questions:detailQuestions,treeData:tree,configuredClasses:[{id:data.classIds[0],label:'3학년 1반'}],generatedAt:'2026-10-25T10:00:00Z',version:'v1'}};
 };`;
 const entry=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import View from ${imp('src/pages/teacher/components/QuizClassAnalysis.tsx')};import ${imp('src/assets/index.css')};import ${imp('src/components/common/portalPage.css')};
 function App(){const[questions,setQuestions]=useState([]);return <main className="ws-page"><h1>평가 분석</h1><View canEdit={false} onEdit={()=>{}} onDetailData={q=>setQuestions(q)} editedQuestions={questions} refreshVersion={0}/></main>;}createRoot(document.getElementById('root')).render(<App/>);`;
-const bundle=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'browser',loader:{'.svg':'dataurl','.woff':'dataurl','.woff2':'dataurl'},outfile:path.join(evidence,'fixture.js'),define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-boundaries',setup(p){p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession|learningCommands|AppToastProvider)$/},()=>({path:'service',namespace:'fixture'}));p.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
+const bundle=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'browser',loader:{'.webp':'dataurl','.svg':'dataurl','.woff':'dataurl','.woff2':'dataurl'},outfile:path.join(evidence,'fixture.js'),define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-boundaries',setup(p){p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession|learningCommands|AppToastProvider)$/},()=>({path:'service',namespace:'fixture'}));p.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=bundle.outputFiles.find(f=>f.path.endsWith('.css')).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,'');
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
@@ -132,8 +132,30 @@ try{
  const detail=page.getByRole('dialog',{name:'3학년 1반 · 문항·학생 상세',exact:true});
  assert.equal(await page.evaluate(()=>document.querySelector('dialog[open]').contains(document.activeElement)),true,'modal takes focus');
  for(const width of [390,768,1280]){await page.setViewportSize({width,height:768});await page.screenshot({path:path.join(evidence,`detail-${width}.png`),fullPage:true});screenshots.push(`detail-${width}.png`);assert.equal(await detail.getByRole('columnheader',{name:'핵심 개념 오름차순 정렬',exact:true}).isVisible(),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`detail overflow ${width}`);}
- await detail.getByRole('button',{name:'학생',exact:true}).click();await detail.getByRole('button',{name:'3학년 1반 1번 가상학생',exact:true}).waitFor();
+ await detail.getByRole('button',{name:'학생',exact:true}).click();await detail.getByRole('button',{name:'가상학생(30101)',exact:true}).waitFor();
  await page.getByRole('button',{name:'상세 닫기',exact:true}).click();
+ await page.evaluate(()=>window.quizClassQa.large=true);
+ await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
+ await detail.getByRole('button',{name:'학생',exact:true}).click();
+ const largeTable=detail.getByRole('region',{name:'학생 분석 목록',exact:true});
+ const beforeMore=await page.evaluate(()=>window.quizClassQa.calls.length);
+ for(const width of [390,768,1280]) {
+   await page.setViewportSize({width,height:900});
+   assert.equal(await largeTable.locator('tbody tr').count(),30);
+   await detail.getByRole('button',{name:'학생 30명 더 보기',exact:true}).click();
+   assert.equal(await largeTable.locator('tbody tr').count(),60);
+   await detail.getByRole('button',{name:'학생 5명 더 보기',exact:true}).click();
+   assert.equal(await largeTable.locator('tbody tr').count(),65);
+   assert.equal(await detail.getByRole('navigation',{name:'분석 목록 페이지',exact:true}).count(),0);
+   await detail.getByRole('combobox',{name:'학생 풀이 분류',exact:true}).selectOption('no_attempt');
+   assert.equal(await largeTable.locator('tbody tr').count(),30,'Filter resets student window');
+   await detail.getByRole('combobox',{name:'학생 풀이 분류',exact:true}).selectOption('all');
+   assert.equal(await largeTable.locator('tbody tr').count(),30);
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ }
+ assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),beforeMore,'More students and filters are local');
+ await page.getByRole('button',{name:'상세 닫기',exact:true}).click();
+ await page.evaluate(()=>window.quizClassQa.large=false);
  const beforeSearch=await page.evaluate(()=>window.quizClassQa.calls.length);
  await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('  광해군  ');
@@ -202,7 +224,7 @@ try{
  assert.equal(await detail.getByRole('button',{name:'학생',exact:true}).getAttribute('aria-pressed'),'true');
  assert.equal(await detail.getByRole('combobox',{name:'학생 풀이 분류',exact:true}).inputValue(),'suspected_guessing');
  const studentTable=detail.getByRole('region',{name:'학생 분석 목록',exact:true});
- await studentTable.getByRole('button',{name:'3학년 1반 1번 빠른학생',exact:true}).click();
+ await studentTable.getByRole('button',{name:'빠른학생(30101)',exact:true}).click();
  const evidencePanel=detail.getByRole('region',{name:'풀이 분류 근거',exact:true});
  await evidencePanel.waitFor();
  assert.ok((await evidencePanel.innerText()).includes('2초'));
@@ -213,7 +235,7 @@ try{
    await page.screenshot({path:path.join(evidence,`behavior-${width}.png`),fullPage:true});screenshots.push(`behavior-${width}.png`);
  }
  const beforeFilters=await page.evaluate(()=>window.quizClassQa.calls.length);
- for(const [category,name] of [['repeated_choice','3학년 1반 2번 반복학생'],['unflagged','3학년 1반 3번 확인학생'],['insufficient','3학년 1반 4번 부족학생'],['no_attempt','3학년 1반 5번 미응시학생']]){
+ for(const [category,name] of [['repeated_choice','반복학생(30102)'],['unflagged','확인학생(30103)'],['insufficient','부족학생(30104)'],['no_attempt','미응시학생(30105)']]){
    await detail.getByRole('combobox',{name:'학생 풀이 분류',exact:true}).selectOption(category);
    assert.equal(await studentTable.locator('tbody').getByRole('button').count(),1);
    await studentTable.getByRole('button',{name,exact:true}).click();
@@ -232,6 +254,7 @@ try{
  await page.evaluate(()=>window.quizClassQa.behaviorNoAttempt=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();
  await behaviorTable.getByRole('rowheader',{name:'3학년 1반미응시',exact:true}).waitFor();
  assert.equal(await behaviorTable.getByRole('button').count(),0,'all no-attempt values are zero without personal links');
+ if(!process.argv.includes('--students-only')) {
  // Reset is a local return to the pre-query waiting screen, never an all-class query.
  await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('광해군');
@@ -279,7 +302,8 @@ try{
    assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingCalls,'no automatic reload after reset');
  }
  await page.screenshot({path:path.join(evidence,'reset-waiting-1280.png'),fullPage:true});screenshots.push('reset-waiting-1280.png');
+ }
  assert.deepEqual(errors,[]);
- console.log('PASS catalog-only entry, class/grade comparison, explicit search, modal/focus/Escape, errors/retry, stale response discard, 320–1440px layouts, behavior filters, all-query reset without reads, cleared units/search/comparison and late summary/detail discard');
+ console.log(process.argv.includes('--students-only') ? 'PASS 30/60/65 student rendering at 390/768/1280px, filters reset, exact student identities, local-only more; existing query, detail, search and behavior regression' : 'PASS catalog-only entry, class/grade comparison, explicit search, modal/focus/Escape, errors/retry, stale response discard, 320–1440px layouts, behavior filters, all-query reset without reads, cleared units/search/comparison and late summary/detail discard');
 }
 }finally{await browser.close();server.close();await fs.writeFile(path.join(evidence,'result.json'),JSON.stringify({errors,screenshots},null,2));console.log(evidence);}

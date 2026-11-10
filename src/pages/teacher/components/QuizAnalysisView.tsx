@@ -1,3 +1,8 @@
+import {
+  analysisStudentLabel,
+  AnalysisStudentsMore,
+  useAnalysisStudentWindow,
+} from "./QuizAnalysisStudents";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildQuizAnalysis,
@@ -566,6 +571,20 @@ export default function QuizAnalysisView({
         return submissionDataAvailable ? student.attemptCount : null;
       return `${student.classId || ""} ${student.number || ""} ${student.name || ""}`;
     },
+  );
+  const studentWindow = useAnalysisStudentWindow(
+    JSON.stringify([
+      semesterId,
+      assessmentKey,
+      subUnitId,
+      classId,
+      submissionFilter,
+      behaviorFilter,
+      view,
+      search,
+      sort,
+      keyword,
+    ]),
   );
   const size = 20,
     total =
@@ -1233,7 +1252,7 @@ export default function QuizAnalysisView({
                 </thead>
                 <tbody>
                   {visibleStudents
-                    .slice((page - 1) * size, page * size)
+                    .slice(0, studentWindow.count)
                     .map((student) => (
                       <tr
                         key={student.uid}
@@ -1245,14 +1264,13 @@ export default function QuizAnalysisView({
                           <button
                             type="button"
                             className="qa-text-button qa-ellipsis"
-                            title={`${configuredClasses.find((entry) => entry.id === student.classId)?.label || classLabel(student.classId || "")} ${student.number || ""}번 ${student.name || "이름 미등록"}`}
+                            title={analysisStudentLabel(
+                              student,
+                              configuredClasses,
+                            )}
                             onClick={() => openStudent(student.uid)}
                           >
-                            {student.classId
-                              ? `${configuredClasses.find((entry) => entry.id === student.classId)?.label || classLabel(student.classId)} `
-                              : ""}
-                            {student.number ? `${student.number}번 ` : ""}
-                            {student.name || "이름 미등록"}
+                            {analysisStudentLabel(student, configuredClasses)}
                           </button>
                         </td>
                         <td className="qa-numeric">
@@ -1301,7 +1319,13 @@ export default function QuizAnalysisView({
               </p>
             )}
           </div>
-          {pageCount > 1 && (
+          {view === "students" && (
+            <AnalysisStudentsMore
+              {...studentWindow}
+              total={visibleStudents.length}
+            />
+          )}
+          {view === "questions" && pageCount > 1 && (
             <nav className="qa-pagination" aria-label="분석 목록 페이지">
               <button
                 type="button"
@@ -1334,7 +1358,7 @@ export default function QuizAnalysisView({
                 <h3>
                   {selectedQuestion
                     ? "문항 상세"
-                    : `${selectedStudent?.name || "학생"} · ${isKeywordScope ? "검색 문항 결과" : "최근 제출"}`}
+                    : `${analysisStudentLabel(selectedStudent, configuredClasses)} · ${isKeywordScope ? "검색 문항 결과" : "최근 제출"}`}
                 </h3>
                 <button
                   type="button"
