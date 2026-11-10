@@ -181,6 +181,15 @@
   background: white;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
+.gsm-teacher :is(.gsm-page-header, .gsm-chat-header) {
+  position: static;
+  min-height: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.gsm-teacher .gsm-page-header {
+  border: 0;
+}
 .gsm-avatar {
   display: grid;
   place-items: center;
@@ -479,14 +488,42 @@
   padding-top: 8px;
   border-top: 1px solid var(--ws-border, #e5e7eb);
 }
-.gsm-toggle {
+.gsm-settings-options {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 64px;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
-  padding: 8px 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gsm-toggle,
+.gsm-setting-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 100%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.gsm-toggle {
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.gsm-toggle:has(input:checked) {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+  border-color: var(--ws-primary, #2563eb);
+}
+.gsm-setting-duration {
+  padding-left: 4px;
+  white-space: nowrap;
+}
+.gsm-setting-duration select {
+  min-width: 80px;
+}
+.gsm-warning-toggle {
+  margin-bottom: 16px;
 }
 .gsm-restriction-row {
   display: flex;

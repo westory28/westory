@@ -749,7 +749,11 @@ export default function GongsinmoongoWorkspace({
         </PortalSubNavigation>
       )}
       <div className="teacher-sub-content gsm-content">
-        <header className="gsm-page-header">
+        <header
+          className={
+            teacher ? "ws-page-header gsm-page-header" : "gsm-page-header"
+          }
+        >
           <h1>
             <GongsinBrand />
           </h1>
@@ -1448,11 +1452,11 @@ function SettingsEditor({
       </nav>
       <div className="gsm-settings-body">
         {tab === "general" && (
-          <>
+          <div className="gsm-settings-options">
             {toggle("enabled", "학생 공개")}
             {toggle("acceptingQuestions", "질문 접수")}
             {toggle("storiesVisible", "선정 스토리 공개")}
-            <label className="gsm-toggle">
+            <label className="gsm-setting-duration">
               기본 제한 기간
               <select
                 value={draft.defaultRestrictionMs}
@@ -1470,10 +1474,10 @@ function SettingsEditor({
                 ))}
               </select>
             </label>
-          </>
+          </div>
         )}
         {tab === "notifications" && (
-          <>
+          <div className="gsm-settings-options">
             {toggle(
               "teacherQuestionNotifications",
               "새 질문을 기존 교사 알림으로 받기",
@@ -1482,11 +1486,11 @@ function SettingsEditor({
               "studentReplyNotifications",
               "답변을 기존 학생 알림으로 보내기",
             )}
-          </>
+          </div>
         )}
         {tab === "warning" && (
           <>
-            <label className="gsm-toggle">
+            <label className="gsm-toggle gsm-warning-toggle">
               첫 사용 안내
               <input
                 type="checkbox"
@@ -1528,31 +1532,38 @@ function SettingsEditor({
             </label>
           </>
         )}
-        {tab === "sources" &&
-          (Object.keys(GONGSIN_SOURCE_LABELS) as Array<GongsinSource["kind"]>)
-            .filter((kind) => kind !== "general")
-            .map((kind) => (
-              <label className="gsm-toggle" key={kind}>
-                {GONGSIN_SOURCE_LABELS[kind]}
-                <input
-                  type="checkbox"
-                  checked={draft.allowedSources.includes(
-                    kind as Exclude<typeof kind, "general">,
-                  )}
-                  onChange={(e) =>
-                    setDraft((value) => ({
-                      ...value,
-                      allowedSources: e.target.checked
-                        ? [
-                            ...value.allowedSources,
-                            kind as Exclude<typeof kind, "general">,
-                          ]
-                        : value.allowedSources.filter((item) => item !== kind),
-                    }))
-                  }
-                />
-              </label>
-            ))}
+        {tab === "sources" && (
+          <div className="gsm-settings-options">
+            {(
+              Object.keys(GONGSIN_SOURCE_LABELS) as Array<GongsinSource["kind"]>
+            )
+              .filter((kind) => kind !== "general")
+              .map((kind) => (
+                <label className="gsm-toggle" key={kind}>
+                  {GONGSIN_SOURCE_LABELS[kind]}
+                  <input
+                    type="checkbox"
+                    checked={draft.allowedSources.includes(
+                      kind as Exclude<typeof kind, "general">,
+                    )}
+                    onChange={(e) =>
+                      setDraft((value) => ({
+                        ...value,
+                        allowedSources: e.target.checked
+                          ? [
+                              ...value.allowedSources,
+                              kind as Exclude<typeof kind, "general">,
+                            ]
+                          : value.allowedSources.filter(
+                              (item) => item !== kind,
+                            ),
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+          </div>
+        )}
         {tab === "students" && (
           <>
             {error && <p role="alert">{error}</p>}

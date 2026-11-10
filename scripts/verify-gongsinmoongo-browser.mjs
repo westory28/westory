@@ -367,10 +367,71 @@ try {
         writes: 0,
       });
       requestCounts.push({ role, width, phase: "initial", ...readCounts });
+      if (role === "teacher") {
+        for (const selector of [".gsm-page-header", ".gsm-chat-header"]) {
+          const headerStyle = await page
+            .locator(selector)
+            .evaluate((element) => {
+              const style = getComputedStyle(element);
+              return {
+                background: style.backgroundColor,
+                position: style.position,
+              };
+            });
+          assert.equal(headerStyle.background, "rgba(0, 0, 0, 0)");
+          assert.equal(headerStyle.position, "static");
+        }
+      }
       await page.screenshot({
         path: path.join(evidence, `${role}-${width}x${height}.png`),
         fullPage: true,
       });
+      if (role === "teacher") {
+        await page
+          .getByRole("button", { name: "운영 설정", exact: true })
+          .click();
+        const controls = await page
+          .locator(".gsm-settings-options > label")
+          .evaluateAll((labels) =>
+            labels.map((label) => {
+              const box = label.getBoundingClientRect();
+              return { y: box.y, height: box.height };
+            }),
+          );
+        assert.equal(controls.length, 4);
+        assert(controls.every((control) => control.height >= 44));
+        if (width >= 1280)
+          assert(
+            controls.every(
+              (control) => Math.abs(control.y - controls[0].y) <= 1,
+            ),
+            "All four basic settings share one desktop row",
+          );
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+        );
+        await page.screenshot({
+          path: path.join(evidence, `settings-${width}x${height}.png`),
+          fullPage: true,
+        });
+        const checkbox = page.getByRole("checkbox", {
+          name: "학생 공개",
+          exact: true,
+        });
+        await checkbox.focus();
+        await page.keyboard.press("Space");
+        assert.equal(await checkbox.isChecked(), false);
+        await page
+          .getByRole("button", { name: "되돌리기", exact: true })
+          .click();
+        assert.equal(await checkbox.isChecked(), true);
+        assert.equal(
+          await page.evaluate(() => window.gongsinLiveQa.writes.length),
+          0,
+        );
+      }
       await page.close();
     }
   }
