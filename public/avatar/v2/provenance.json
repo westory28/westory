@@ -1,7 +1,7 @@
 {
   "compilerSha256": "c585b3e7e95bc560a898e65c3f2db00c762653c2ee5c10b4dec816d052ff9ecd",
-  "registrySha256": "87964bdcd052f5b564419ffec7341d4d8f7eaa382ba703c7fd96ef5ff160d7e7",
-  "manifestSha256": "40e21baa33a42630c391c95346b92662cc195805849836a08a342d9ecddc0d6b",
+  "registrySha256": "8c0de966642dcb2a2f67e199919f81ed8099d683dae6922195e987dd40b4b4e7",
+  "manifestSha256": "ed5faeebd36c7405c53916ac95f2c58cd8dd05f153b44d074a4ce4ed3153c0af",
   "sourceHashes": {
     "body": {
       "sha256": "db6bc4a1c071db7588f6340db24fbc6823dec171d3745a4059610b33d78f3fcb",
@@ -62,6 +62,21 @@
       "sha256": "3258ddfb3dea25030f1ec5b966de72062d23eaaaf2766efc9e839e6fa11f35d0",
       "width": 2048,
       "height": 1360
+    },
+    "v3-winter-hoodie-source": {
+      "sha256": "7af9edc8c101d612e33d947fed1be892d4707181da522e6b30cbeb09988b0a47",
+      "width": 3504,
+      "height": 2336
+    },
+    "v3-winter-halfzip-source": {
+      "sha256": "502d069466da1672347f7d33f4e22d8a1c769703255af89ca9439d77b79ce159",
+      "width": 3504,
+      "height": 2336
+    },
+    "v3-winter-joggers-source": {
+      "sha256": "78ada41bacd0fe07bfce3e49893ccc1c4dc892b2e65375fdaf77b05e62c1e279",
+      "width": 2048,
+      "height": 2048
     }
   },
   "assets": [
@@ -5893,6 +5908,922 @@
       }
     },
     {
+      "id": "v3-winter-hoodie-idle-tint-mask",
+      "file": "layers/v3-winter-hoodie-idle-tint-mask.webp",
+      "sha256": "50141eda3b0729acd31d73ff5d15e2f05fba56ddc136a80adb47baac2a238e21",
+      "rawSha256": "a0cccd9ff2eae5dcb15de1cdc1907235926d1de394486d2a9962cd9df0b53a46",
+      "width": 527,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          0,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 256,
+          "top": 225,
+          "width": 684,
+          "height": 831,
+          "pixels": 391423
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.2,
+            0.74,
+            0.15,
+            0.2
+          ],
+          [
+            0.68,
+            0.74,
+            0.15,
+            0.2
+          ]
+        ],
+        "maskFor": "v3-winter-hoodie-idle",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-idle",
+      "file": "layers/v3-winter-hoodie-idle.webp",
+      "sha256": "95aac2fbb987d7350c0c8c3947e1098d44088c5d81c52ccf6f5b248382c44004",
+      "rawSha256": "538b5b111db88f954ef24b67e069fff1b3dbd1eb377495b7d8d042bc10b9f335",
+      "width": 527,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          0,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 256,
+          "top": 225,
+          "width": 684,
+          "height": 831,
+          "pixels": 391423
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.2,
+            0.74,
+            0.15,
+            0.2
+          ],
+          [
+            0.68,
+            0.74,
+            0.15,
+            0.2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-wave-tint-mask",
+      "file": "layers/v3-winter-hoodie-wave-tint-mask.webp",
+      "sha256": "ee3435a29f88e32658e8e861ab515185cec15cf5b6656e7ea415b8f46663bd68",
+      "rawSha256": "80fdcebb6c3ce766c3384555aa30ca7e2897f9a775791ee78cf123b06c8cfce8",
+      "width": 619,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          1168,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 121,
+          "top": 225,
+          "width": 803,
+          "height": 830,
+          "pixels": 393852
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.08,
+            0.2,
+            0.23,
+            0.23
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ],
+        "maskFor": "v3-winter-hoodie-wave",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-wave",
+      "file": "layers/v3-winter-hoodie-wave.webp",
+      "sha256": "8b58d06d10a28c267b6c68d3251be74f874ab966d697d7db91e5e6a427878767",
+      "rawSha256": "d21ca6b88e5078fbcda2b2512c373d789953abe3991ace2ad5101316a217c99d",
+      "width": 619,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          1168,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 121,
+          "top": 225,
+          "width": 803,
+          "height": 830,
+          "pixels": 393852
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.08,
+            0.2,
+            0.23,
+            0.23
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-cheer-tint-mask",
+      "file": "layers/v3-winter-hoodie-cheer-tint-mask.webp",
+      "sha256": "2810fd85ae1c2b29b744ff91f50cb31eb4de3dc68fb9edc1693372b5cf1d757f",
+      "rawSha256": "dd85195bf2b62ac44c476ea8d294c266fe7274514d5a42c50c4c47caade8893a",
+      "width": 640,
+      "height": 593,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          2336,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 192,
+          "top": 225,
+          "width": 743,
+          "height": 688,
+          "pixels": 362330
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.16,
+            0.24,
+            0.14,
+            0.19
+          ],
+          [
+            0.68,
+            0.24,
+            0.15,
+            0.19
+          ]
+        ],
+        "maskFor": "v3-winter-hoodie-cheer",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-cheer",
+      "file": "layers/v3-winter-hoodie-cheer.webp",
+      "sha256": "058dead8b25e710555af00d5b3dc8d9042e8aa6a65f692a9f75b8ffd8cd1fb7d",
+      "rawSha256": "ece6f79bdfa515fbc5fd1a89732fc08dba394ea6c4e430770f10420f59c62a99",
+      "width": 640,
+      "height": 593,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          2336,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 192,
+          "top": 225,
+          "width": 743,
+          "height": 688,
+          "pixels": 362330
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.16,
+            0.24,
+            0.14,
+            0.19
+          ],
+          [
+            0.68,
+            0.24,
+            0.15,
+            0.19
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-think-tint-mask",
+      "file": "layers/v3-winter-hoodie-think-tint-mask.webp",
+      "sha256": "a28053fc6188e2afb447716249a69da6b8e26a0a55e1d3da37ffce5affd9500b",
+      "rawSha256": "f45f7c2b1236c2c606cdd0dbc1d654ebf72556cdb218d63322ba1a9a14c5b674",
+      "width": 485,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          0,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 310,
+          "top": 197,
+          "width": 631,
+          "height": 833,
+          "pixels": 347964
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.37,
+            0.18,
+            0.18,
+            0.22
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ],
+        "maskFor": "v3-winter-hoodie-think",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-think",
+      "file": "layers/v3-winter-hoodie-think.webp",
+      "sha256": "056e9a0f3b17d4e1b00b9fd051e0563fde0507ace30c971ab165a1693b5457af",
+      "rawSha256": "6e60ef16fff9f0530a6387523ee9537e32e8e5454669a8343cac43628a6ad6db",
+      "width": 485,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          0,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 310,
+          "top": 197,
+          "width": 631,
+          "height": 833,
+          "pixels": 347964
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.37,
+            0.18,
+            0.18,
+            0.22
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-heart-tint-mask",
+      "file": "layers/v3-winter-hoodie-heart-tint-mask.webp",
+      "sha256": "2a85ddd6b3c0b8338c6767a15f804d0e61ec533ff3184ea03ae65e2925ea384e",
+      "rawSha256": "2e5922fe6239c94617b196343b853901decc1a0838c7e953cb704076b48dc6ea",
+      "width": 640,
+      "height": 601,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          1168,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 211,
+          "top": 197,
+          "width": 731,
+          "height": 686,
+          "pixels": 339587
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.33,
+            0.28,
+            0.34,
+            0.19
+          ]
+        ],
+        "maskFor": "v3-winter-hoodie-heart",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-heart",
+      "file": "layers/v3-winter-hoodie-heart.webp",
+      "sha256": "6ed4464e9ce8cf2f73a048352b8c0cb004317e43defc04e53e36e8873cd695d7",
+      "rawSha256": "5c405a5be4673a4a1503628439c8342d9b9021a8c499941ffea1e0061af0136b",
+      "width": 640,
+      "height": 601,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-hoodie-source",
+        "crop": [
+          1168,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 211,
+          "top": 197,
+          "width": 731,
+          "height": 686,
+          "pixels": 339587
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.33,
+            0.28,
+            0.34,
+            0.19
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-idle-tint-mask",
+      "file": "layers/v3-winter-halfzip-idle-tint-mask.webp",
+      "sha256": "492be07f70c7512d310d2c363f61415a3107a7fd6c0810cf262a0b770f398084",
+      "rawSha256": "40edd3681cfdcc1792c156583842030660e1f095fc3cbadf67da6ac71b9e85e2",
+      "width": 526,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          0,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 267,
+          "top": 236,
+          "width": 663,
+          "height": 807,
+          "pixels": 345844
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.2,
+            0.74,
+            0.15,
+            0.2
+          ],
+          [
+            0.68,
+            0.74,
+            0.15,
+            0.2
+          ]
+        ],
+        "maskFor": "v3-winter-halfzip-idle",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-idle",
+      "file": "layers/v3-winter-halfzip-idle.webp",
+      "sha256": "cbd377231680ed2dd3733cda21694d5e2f55ad8ffc14ff258eeb9cdd17ff067f",
+      "rawSha256": "7eefb792e3b9e1b82977c320910bd457c98364cde3bfcd95b608be0ba8190a8c",
+      "width": 526,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          0,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 267,
+          "top": 236,
+          "width": 663,
+          "height": 807,
+          "pixels": 345844
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.2,
+            0.74,
+            0.15,
+            0.2
+          ],
+          [
+            0.68,
+            0.74,
+            0.15,
+            0.2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-wave-tint-mask",
+      "file": "layers/v3-winter-halfzip-wave-tint-mask.webp",
+      "sha256": "46782809d463ae967ef426ad57b3b2be6476f689875d694416cc7b6fb3b969e9",
+      "rawSha256": "312f7798a77fe1fc09142ac078a99c44640bc954bdc893268e011b7e4bf4acd6",
+      "width": 621,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          1168,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 123,
+          "top": 236,
+          "width": 782,
+          "height": 806,
+          "pixels": 345806
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.08,
+            0.2,
+            0.23,
+            0.23
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ],
+        "maskFor": "v3-winter-halfzip-wave",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-wave",
+      "file": "layers/v3-winter-halfzip-wave.webp",
+      "sha256": "ec82fa38d9c626130d5d6964658035fdc4e74fbcfb86b35fbd5c9d56940d0f2a",
+      "rawSha256": "f02875751a2a4b4b4c4edd372516580cb20cc6646587fc693f61b1b53570298f",
+      "width": 621,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          1168,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 123,
+          "top": 236,
+          "width": 782,
+          "height": 806,
+          "pixels": 345806
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.08,
+            0.2,
+            0.23,
+            0.23
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-cheer-tint-mask",
+      "file": "layers/v3-winter-halfzip-cheer-tint-mask.webp",
+      "sha256": "61527900a099b023ffdc6978054ce70726ab5aeda4d3868a95bf72c66f563f58",
+      "rawSha256": "b7b23c1aab2c81b7e15cee1d3632807180edd0f7638d8702366f7d505ebbf1d2",
+      "width": 640,
+      "height": 572,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          2336,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 192,
+          "top": 236,
+          "width": 711,
+          "height": 635,
+          "pixels": 317464
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.16,
+            0.24,
+            0.14,
+            0.19
+          ],
+          [
+            0.68,
+            0.24,
+            0.15,
+            0.19
+          ]
+        ],
+        "maskFor": "v3-winter-halfzip-cheer",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-cheer",
+      "file": "layers/v3-winter-halfzip-cheer.webp",
+      "sha256": "ae3083934ba7941df4e495339b85355b4fc93a1e213cabaa11aaf9a04255d73b",
+      "rawSha256": "9fb88764878ef639243a5b648e35f3f8ea5604810e036140c070ef0ac2481321",
+      "width": 640,
+      "height": 572,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          2336,
+          0,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 192,
+          "top": 236,
+          "width": 711,
+          "height": 635,
+          "pixels": 317464
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.16,
+            0.24,
+            0.14,
+            0.19
+          ],
+          [
+            0.68,
+            0.24,
+            0.15,
+            0.19
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-think-tint-mask",
+      "file": "layers/v3-winter-halfzip-think-tint-mask.webp",
+      "sha256": "c555354c916ba3ea15013dc3e22a213dd67b0ca116d956d974d97a6cc5fa28d6",
+      "rawSha256": "0661a3ceec0c6b33eb147ac15a4d13dc29717c1e268756fa99e16b7f24890c07",
+      "width": 475,
+      "height": 640,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          0,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 332,
+          "top": 210,
+          "width": 601,
+          "height": 809,
+          "pixels": 306790
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.37,
+            0.18,
+            0.18,
+            0.22
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ],
+        "maskFor": "v3-winter-halfzip-think",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-think",
+      "file": "layers/v3-winter-halfzip-think.webp",
+      "sha256": "22684c8b4a6cc7c96e5d923f6105da67cdf1dbd61459db194db869834fb554a4",
+      "rawSha256": "4593c4b15a2f2f6c7c0048425128985ca3d0e19083945a4a725bd108e2c7d8c7",
+      "width": 475,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          0,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 332,
+          "top": 210,
+          "width": 601,
+          "height": 809,
+          "pixels": 306790
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.37,
+            0.18,
+            0.18,
+            0.22
+          ],
+          [
+            0.68,
+            0.73,
+            0.15,
+            0.21
+          ]
+        ]
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-heart-tint-mask",
+      "file": "layers/v3-winter-halfzip-heart-tint-mask.webp",
+      "sha256": "986fcacb457bb52fb79ce18793ab842f0d0193ef50fe58f3bb18233569bdb015",
+      "rawSha256": "f1be25107729d1e2bdd3f1263888d43b24f58f675bc958ec993687454709a765",
+      "width": 640,
+      "height": 580,
+      "encoding": "lossless-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          1168,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 222,
+          "top": 209,
+          "width": 709,
+          "height": 643,
+          "pixels": 299095
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.33,
+            0.28,
+            0.34,
+            0.19
+          ]
+        ],
+        "maskFor": "v3-winter-halfzip-heart",
+        "tintMask": {
+          "includeSkin": true
+        }
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-heart",
+      "file": "layers/v3-winter-halfzip-heart.webp",
+      "sha256": "9471093eb1fc2e7c84f80a48612bdfe2502451fb92a9113a10a804d2c379c424",
+      "rawSha256": "f46099dbda7bad8f887421afbf42380b2bd1c95d822ae3db5f40f6b406dc1a8b",
+      "width": 640,
+      "height": 580,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-halfzip-source",
+        "crop": [
+          1168,
+          1168,
+          1168,
+          1168
+        ],
+        "bounds": {
+          "left": 222,
+          "top": 209,
+          "width": 709,
+          "height": 643,
+          "pixels": 299095
+        },
+        "skinRegions": [
+          [
+            0.4,
+            0.15,
+            0.22,
+            0.19
+          ],
+          [
+            0.33,
+            0.28,
+            0.34,
+            0.19
+          ]
+        ]
+      }
+    },
+    {
       "id": "v3-trousers",
       "file": "layers/v3-trousers.webp",
       "sha256": "979a7af67602a2c915fe670dc979bbb60c0a4089703bada238c9ce62b67633c5",
@@ -6014,6 +6945,31 @@
           "width": 605,
           "height": 605,
           "pixels": 315710
+        }
+      }
+    },
+    {
+      "id": "v3-winter-joggers",
+      "file": "layers/v3-winter-joggers.webp",
+      "sha256": "2ce0215dea0ff4d81e137655d29520a039c438158090386e5b15fe3c19c4495d",
+      "rawSha256": "e4158466d307b90b819b5fe24565a1cec848449fc39306ebdd1d02c7413856eb",
+      "width": 262,
+      "height": 640,
+      "encoding": "webp-q90-640-v1",
+      "source": {
+        "sheet": "v3-winter-joggers-source",
+        "crop": [
+          0,
+          0,
+          2048,
+          2048
+        ],
+        "bounds": {
+          "left": 639,
+          "top": 84,
+          "width": 769,
+          "height": 1876,
+          "pixels": 1195742
         }
       }
     },

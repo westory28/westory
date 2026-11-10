@@ -90,7 +90,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       || !Array.isArray(value.ownedItemIds) || value.ownedItemIds.length > 500
       || value.ownedItemIds.some(id => typeof id !== 'string' || id.length > 100)
       || new Set(value.ownedItemIds).size !== value.ownedItemIds.length
-      || !validateLook(value.look, value.ownedItemIds) || value.lookHash !== lookHash(value.look)) {
+      || !validateLook(value.look) || value.lookHash !== lookHash(value.look)) {
       fail('failed-precondition', '아바타 보관함을 확인하지 못했습니다.', 'AVATAR_STATE_INVALID');
     }
     // Items legitimately saved while free remain owned after a price increase.
@@ -172,7 +172,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
 
   const purchaseStudentAvatarItem = async request => {
     const identity = await authenticate(request), uid = identity.uid, data = request.data || {};
-    if (teacher || !keysOnly(data, ['_session', 'year', 'semester', 'itemId', 'requestId', 'expectedPrice', 'expectedPricingRevision'])) invalid();
+    if (teacher || !keysOnly(data, ['_session', 'year', 'semester', 'itemId', 'requestId', 'expectedPrice', 'expectedPricingRevision', 'expectedPricingPolicyVersion'])) invalid();
     const hasQuote = data.expectedPrice !== undefined || data.expectedPricingRevision !== undefined;
     if (hasQuote && (!safe(data.expectedPrice) || !safe(data.expectedPricingRevision))) invalid();
     const scope = scopeOf(data), key = requestKey(data.requestId), item = items.get(data.itemId);
@@ -187,7 +187,10 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       const state = await readState(tx, uid);
       const pricing = await readAvatarPricing(tx, db), price = pricing.prices[item.id];
       const alreadyOwned = price === 0 || state.ownedItemIds.includes(item.id);
-      if (!alreadyOwned && ((hasQuote && (data.expectedPrice !== price || data.expectedPricingRevision !== pricing.revision)) || (!hasQuote && pricing.revision !== 0))) {
+      if (!alreadyOwned && (data.expectedPricingPolicyVersion !== pricing.policyVersion
+        || !hasQuote
+        || (hasQuote && (data.expectedPrice !== price || data.expectedPricingRevision !== pricing.revision))
+      )) {
         fail('failed-precondition', '아바타 가격이 변경되었습니다. 새 가격을 확인한 뒤 다시 구매해 주세요.', 'AVATAR_PRICE_CHANGED', { currentPrice: price, pricing });
       }
       const { wallet, economy } = await canonicalWallet.read(tx, scope, uid);

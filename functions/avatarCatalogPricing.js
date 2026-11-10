@@ -1,7 +1,7 @@
 const { Timestamp } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
-const { catalog, items, SLOTS } = require('./studentAvatarCatalog');
+const { catalog, items, SLOTS, effectiveAvatarPrice } = require('./studentAvatarCatalog');
 
 const PRICING_PATH = 'avatar_catalog_settings/current';
 const MAX_AVATAR_PRICE = 1000000;
@@ -12,8 +12,9 @@ const fail = (code, message, reason, extra = {}) => { throw new HttpsError(code,
 const invalid = () => fail('invalid-argument', '아바타 가격 입력을 확인해 주세요.', 'AVATAR_PRICING_INPUT_INVALID');
 const publicPricing = (revision, overrides = {}) => ({
   catalogVersion: catalog.version,
+  policyVersion: catalog.pricingPolicyVersion,
   revision,
-  prices: Object.fromEntries(catalog.items.map(item => [item.id, overrides[item.id] ?? item.price])),
+  prices: Object.fromEntries(catalog.items.map(item => [item.id, effectiveAvatarPrice(item, overrides[item.id])])),
 });
 const readAvatarPricing = async (tx, db) => {
   const snapshot = await tx.get(db.doc(PRICING_PATH));
@@ -59,7 +60,8 @@ const createAvatarCatalogPricingHandlers = ({ db, assertSession = assertScoreWor
     if (!record(data) || Object.keys(data).some(key => !['_session', 'expectedRevision', 'prices'].includes(key))
       || !Number.isSafeInteger(data.expectedRevision) || data.expectedRevision < 0 || !record(data.prices)
       || Object.keys(data.prices).length > catalog.items.length
-      || Object.entries(data.prices).some(([id, price]) => !items.has(id) || !safePrice(price))) invalid();
+      || Object.entries(data.prices).some(([id, price]) => !items.has(id) || !safePrice(price)
+        || effectiveAvatarPrice(items.get(id), price) !== price)) invalid();
     return db.runTransaction(async tx => {
       await readAvatarTeacher(tx, db, identity);
       const current = await readAvatarPricing(tx, db);

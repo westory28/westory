@@ -307,3 +307,116 @@ for (const [pose, skinPoints] of Object.entries(exposedSkin)) {
 console.log(
   "PASS reviewed robe atlas: all 5 poses retain neck/hand tint and exclude crest, belt and collar pixels.",
 );
+
+// The school crest contains orange pixels close to skin hues. Check actual
+// opaque source pixels rather than accepting the existence of a mask file.
+const schoolSkinAnchors = {
+  idle: [
+    [0.513, 0.245],
+    [0.267, 0.835],
+    [0.75, 0.835],
+  ],
+  wave: [
+    [0.51, 0.245],
+    [0.19, 0.31],
+    [0.735, 0.835],
+  ],
+  cheer: [
+    [0.49, 0.245],
+    [0.22, 0.34],
+    [0.746, 0.34],
+  ],
+  think: [
+    [0.511, 0.21],
+    [0.453, 0.29],
+    [0.745, 0.83],
+  ],
+  heart: [
+    [0.5, 0.21],
+    [0.431, 0.369],
+    [0.575, 0.369],
+  ],
+};
+for (const family of ["winter-hoodie", "winter-halfzip"]) {
+  const source = await sharp(
+    path.join(root, "assets/avatar-source/school-20261110", `${family}.png`),
+  )
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  for (const [pose, skinPoints] of Object.entries(schoolSkinAnchors)) {
+    const asset = provenance.assets.find(
+      (entry) => entry.id === `v3-${family}-${pose}-tint-mask`,
+    );
+    assert(asset, `${family}/${pose}: compiled skin mask exists`);
+    const mask = await sharp(path.join(root, "public/avatar/v2", asset.file))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const { crop, bounds } = asset.source;
+    const maskAlpha = (x, y) => {
+      const mx = Math.round(
+        ((x - bounds.left) * mask.info.width) / bounds.width,
+      );
+      const my = Math.round(
+        ((y - bounds.top) * mask.info.height) / bounds.height,
+      );
+      if (mx < 0 || my < 0 || mx >= mask.info.width || my >= mask.info.height)
+        return 0;
+      return mask.data[(my * mask.info.width + mx) * 4 + 3];
+    };
+    assert(
+      skinPoints.every(([u, v]) => maskAlpha(u * crop[2], v * crop[3]) > 200),
+      `${family}/${pose}: neck and both hands remain tintable`,
+    );
+    let mintPixels = 0;
+    let crestPixels = 0;
+    for (let y = 0; y < crop[3]; y += 2) {
+      for (let x = 0; x < crop[2]; x += 2) {
+        const index = ((crop[1] + y) * source.info.width + crop[0] + x) * 4;
+        const [r, g, b, a] = source.data.subarray(index, index + 4);
+        if (a < 230) continue;
+        const mint =
+          r >= 70 &&
+          r < 200 &&
+          g >= r + 25 &&
+          b >= r + 10 &&
+          g >= b &&
+          g - b < 45;
+        // Heart hands naturally cover the left-chest badge in the source art.
+        const crest =
+          pose !== "heart" &&
+          x / crop[2] > 0.55 &&
+          x / crop[2] < 0.67 &&
+          y / crop[3] > 0.34 &&
+          y / crop[3] < 0.47 &&
+          r > 160 &&
+          g > 70 &&
+          g < 150 &&
+          b < 90 &&
+          r > g * 1.3 &&
+          g > b * 1.3;
+        if (!mint && !crest) continue;
+        assert.equal(
+          maskAlpha(x, y),
+          0,
+          `${family}/${pose}: ${crest ? "orange school crest" : "mint stripe"} must not receive skin tint at ${x},${y}`,
+        );
+        if (mint) mintPixels++;
+        if (crest) crestPixels++;
+      }
+    }
+    assert(
+      mintPixels > 100,
+      `${family}/${pose}: verified opaque mint stripe samples`,
+    );
+    if (pose !== "heart")
+      assert(
+        crestPixels > 20,
+        `${family}/${pose}: verified actual orange crest samples`,
+      );
+  }
+}
+console.log(
+  "PASS school sportswear: both tops in all 5 poses retain neck/hand tint and exclude actual orange crest and mint stripe pixels.",
+);

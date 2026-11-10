@@ -18,7 +18,50 @@ assert.equal(
   "Unique catalog IDs",
 );
 const slots = [...new Set(catalog.items.map((item) => item.slot))];
+const clientBundle = await build({
+  entryPoints: [path.join(root, "src/features/avatar/catalog.ts")],
+  bundle: true,
+  write: false,
+  platform: "node",
+  format: "esm",
+});
+const clientCatalog = await import(
+  `data:text/javascript;base64,${Buffer.from(clientBundle.outputFiles[0].text).toString("base64")}`
+);
+const serverCatalog = createRequire(import.meta.url)(
+  "../functions/studentAvatarCatalog.js",
+);
+assert.equal(clientCatalog.AVATAR_PRICING_POLICY_VERSION, 2);
+assert.deepEqual(
+  catalog.freeClothingItemIds.slice().sort(),
+  [
+    "top:summer-white",
+    "top:summer-navy",
+    "bottom:summer-shorts",
+    "top:winter-hoodie",
+    "top:winter-halfzip",
+    "bottom:winter-joggers",
+  ].sort(),
+);
+for (const item of catalog.items) {
+  assert.equal(
+    clientCatalog.avatarItemPricePolicy(item),
+    serverCatalog.itemPricePolicy(item),
+  );
+  for (const override of [undefined, 0, 1, 345, 1_000_000]) {
+    assert.equal(
+      clientCatalog.effectiveAvatarItemPrice(item, override),
+      serverCatalog.effectiveAvatarPrice(item, override),
+      item.id,
+    );
+  }
+}
 for (const character of ["girl", "boy"]) {
+  const look = clientCatalog.defaultAvatarLook(character);
+  assert.deepEqual(look, serverCatalog.defaultLook(character));
+  assert.equal(look.top, "summer-white");
+  assert.equal(look.bottom, "summer-shorts");
+  assert.equal(clientCatalog.unownedAvatarItems(look, []).length, 0);
   for (const slot of slots)
     assert(
       catalog.items.some(

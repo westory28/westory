@@ -3,7 +3,11 @@ import { getHistoryDictionaryCallable } from "../../lib/historyDictionarySession
 import { notifyPointsUpdated } from "../../lib/appEvents";
 import { getYearSemester } from "../../lib/semesterScope";
 import type { SystemConfig } from "../../types";
-import type { AvatarLook, AvatarState } from "./catalog";
+import {
+  AVATAR_PRICING_POLICY_VERSION,
+  type AvatarLook,
+  type AvatarState,
+} from "./catalog";
 import { notifyAvatarUpdated } from "./events";
 
 type Scope = Pick<SystemConfig, "year" | "semester">;
@@ -11,6 +15,7 @@ export interface AvatarCatalogPricingState {
   revision: number;
   prices: Record<string, number>;
   catalogVersion?: number;
+  policyVersion?: number;
 }
 export interface AvatarStudioState {
   avatar: AvatarState;
@@ -227,6 +232,7 @@ export const purchaseAvatarItem = async (
         itemId,
         expectedPrice,
         expectedPricingRevision,
+        expectedPricingPolicyVersion: AVATAR_PRICING_POLICY_VERSION,
         requestId: requestIdFor(key),
       },
     );

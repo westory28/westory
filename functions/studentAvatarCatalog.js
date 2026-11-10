@@ -3,17 +3,29 @@ const catalog = require('./avatarCatalog.json');
 
 const SLOTS = Object.freeze(['character', 'skinTone', 'faceShape', 'expression', 'hairStyle', 'hairTone', 'pose', 'top', 'bottom', 'shoes', 'accessory']);
 const items = new Map();
+const freeClothingItemIds = new Set(catalog.freeClothingItemIds);
+const itemPricePolicy = item => ['top', 'bottom'].includes(item.slot)
+  ? (freeClothingItemIds.has(item.id) ? 'free' : 'paid') : null;
+const effectiveAvatarPrice = (item, override) => {
+  const policy = itemPricePolicy(item);
+  if (policy === 'free') return 0;
+  if (policy === 'paid' && override === 0) return item.price;
+  return override ?? item.price;
+};
 for (const item of catalog.items) {
   if (!SLOTS.includes(item.slot) || item.id !== `${item.slot}:${item.value}` || items.has(item.id)
     || !Number.isSafeInteger(item.price) || item.price < 0 || !Array.isArray(item.characters)
+    || (itemPricePolicy(item) === 'free' ? item.price !== 0 : itemPricePolicy(item) === 'paid' && item.price === 0)
     || !item.characters.length || item.characters.some(value => !['girl', 'boy'].includes(value))) {
     throw new Error('Invalid server avatar catalog');
   }
   items.set(item.id, Object.freeze(item));
 }
 const defaultLook = (character = 'girl') => Object.fromEntries(SLOTS.map(slot => {
+  const preferred = catalog.defaultClothing[slot];
   const item = catalog.items.find(entry => entry.slot === slot && entry.price === 0
-    && entry.characters.includes(character) && (slot !== 'character' || entry.value === character));
+    && entry.characters.includes(character) && (slot !== 'character' || entry.value === character)
+    && (!preferred || entry.value === preferred));
   if (!item) throw new Error(`Missing free avatar slot: ${slot}`);
   return [slot, item.value];
 }));
@@ -46,4 +58,4 @@ const sanitizePublicAvatar = value => {
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, defaultLook, validateLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, catalog, items, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, lookHash, sanitizePublicAvatar };

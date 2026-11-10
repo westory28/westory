@@ -209,7 +209,11 @@ try {
       const { defaultAvatarLook } =
         await import("/src/features/avatar/catalog.ts");
       const valid = validateManifest(manifest);
-      const look = defaultAvatarLook("boy");
+      const look = {
+        ...defaultAvatarLook("boy"),
+        top: "plain-top",
+        bottom: "plain-bottom",
+      };
       const ids = (pose) =>
         resolveArt(valid, { ...look, pose }).layers.map((layer) => layer.id);
       const robe = structuredClone(valid);
@@ -287,7 +291,7 @@ try {
     window.engine2d = await import("/src/features/avatar/renderer2d/engine.ts");
     window.stage2d = await window.engine2d.createAvatarStage(
       document.querySelector("#stage"),
-      { character: "boy" },
+      { character: "boy", top: "plain-top", bottom: "plain-bottom" },
       { assetBaseUrl: "/art/", deferPreparation: true },
     );
   });

@@ -173,6 +173,7 @@ await assert.rejects(
 assert.equal(calls.length, 1);
 assert.equal(calls[0].payload.expectedPrice, 500);
 assert.equal(calls[0].payload.expectedPricingRevision, 2);
+assert.equal(calls[0].payload.expectedPricingPolicyVersion, 2);
 const declinedRequestId = calls[0].payload.requestId;
 assert.equal(service.avatarPricingFromError(changed).prices["top:test"], 700);
 assert.match(service.avatarErrorMessage(changed), /가격이 변경/);

@@ -112,6 +112,36 @@
       "cleanup": {
         "minArea": 32
       }
+    },
+    {
+      "id": "v3-winter-hoodie-source",
+      "src": "assets/avatar-source/school-20261110/winter-hoodie.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "7af9edc8c101d612e33d947fed1be892d4707181da522e6b30cbeb09988b0a47",
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-source",
+      "src": "assets/avatar-source/school-20261110/winter-halfzip.png",
+      "columns": 3,
+      "rows": 2,
+      "sha256": "502d069466da1672347f7d33f4e22d8a1c769703255af89ca9439d77b79ce159",
+      "cleanup": {
+        "minArea": 32
+      }
+    },
+    {
+      "id": "v3-winter-joggers-source",
+      "src": "assets/avatar-source/school-20261110/winter-joggers.png",
+      "columns": 1,
+      "rows": 1,
+      "sha256": "78ada41bacd0fe07bfce3e49893ccc1c4dc892b2e65375fdaf77b05e62c1e279",
+      "cleanup": {
+        "minArea": 32
+      }
     }
   ],
   "cells": [
@@ -3312,6 +3342,484 @@
       }
     },
     {
+      "id": "v3-winter-hoodie-idle",
+      "sheet": "v3-winter-hoodie-source",
+      "cell": [
+        0,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.2,
+          0.74,
+          0.15,
+          0.2
+        ],
+        [
+          0.68,
+          0.74,
+          0.15,
+          0.2
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-wave",
+      "sheet": "v3-winter-hoodie-source",
+      "cell": [
+        1,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.08,
+          0.2,
+          0.23,
+          0.23
+        ],
+        [
+          0.68,
+          0.73,
+          0.15,
+          0.21
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-cheer",
+      "sheet": "v3-winter-hoodie-source",
+      "cell": [
+        2,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.16,
+          0.24,
+          0.14,
+          0.19
+        ],
+        [
+          0.68,
+          0.24,
+          0.15,
+          0.19
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-think",
+      "sheet": "v3-winter-hoodie-source",
+      "cell": [
+        0,
+        1
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.37,
+          0.18,
+          0.18,
+          0.22
+        ],
+        [
+          0.68,
+          0.73,
+          0.15,
+          0.21
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-hoodie-heart",
+      "sheet": "v3-winter-hoodie-source",
+      "cell": [
+        1,
+        1
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.33,
+          0.28,
+          0.34,
+          0.19
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-idle",
+      "sheet": "v3-winter-halfzip-source",
+      "cell": [
+        0,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.2,
+          0.74,
+          0.15,
+          0.2
+        ],
+        [
+          0.68,
+          0.74,
+          0.15,
+          0.2
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-wave",
+      "sheet": "v3-winter-halfzip-source",
+      "cell": [
+        1,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.08,
+          0.2,
+          0.23,
+          0.23
+        ],
+        [
+          0.68,
+          0.73,
+          0.15,
+          0.21
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-cheer",
+      "sheet": "v3-winter-halfzip-source",
+      "cell": [
+        2,
+        0
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.16,
+          0.24,
+          0.14,
+          0.19
+        ],
+        [
+          0.68,
+          0.24,
+          0.15,
+          0.19
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-think",
+      "sheet": "v3-winter-halfzip-source",
+      "cell": [
+        0,
+        1
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.37,
+          0.18,
+          0.18,
+          0.22
+        ],
+        [
+          0.68,
+          0.73,
+          0.15,
+          0.21
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
+      "id": "v3-winter-halfzip-heart",
+      "sheet": "v3-winter-halfzip-source",
+      "cell": [
+        1,
+        1
+      ],
+      "rect": [
+        0.2106,
+        0.278,
+        0.5788,
+        0.463
+      ],
+      "z": 30,
+      "fit": "frame",
+      "tint": {
+        "slot": "skinTone",
+        "sourceColor": "#f7cfa8",
+        "mode": "color"
+      },
+      "tintMask": {
+        "includeSkin": true
+      },
+      "skinRegions": [
+        [
+          0.4,
+          0.15,
+          0.22,
+          0.19
+        ],
+        [
+          0.33,
+          0.28,
+          0.34,
+          0.19
+        ]
+      ],
+      "recolor": {
+        "color": "#f7cfa8",
+        "sourceColor": "#eab38d",
+        "mode": "skin"
+      }
+    },
+    {
       "id": "v3-trousers",
       "sheet": "v3-bottoms",
       "cell": [
@@ -3387,6 +3895,22 @@
         0.605,
         0.236,
         0.17
+      ],
+      "z": 18,
+      "fit": "stretch"
+    },
+    {
+      "id": "v3-winter-joggers",
+      "sheet": "v3-winter-joggers-source",
+      "cell": [
+        0,
+        0
+      ],
+      "rect": [
+        0.37,
+        0.605,
+        0.26,
+        0.31
       ],
       "z": 18,
       "fit": "stretch"
@@ -5268,6 +5792,100 @@
                 ]
               }
             }
+          },
+          "winter-hoodie": {
+            "layers": [
+              {
+                "ref": "v3-winter-hoodie-idle",
+                "id": "outfit",
+                "z": 30
+              }
+            ],
+            "poses": {
+              "wave": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-wave",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "cheer": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-cheer",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "think": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-think",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "heart": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-heart",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              }
+            }
+          },
+          "winter-halfzip": {
+            "layers": [
+              {
+                "ref": "v3-winter-halfzip-idle",
+                "id": "outfit",
+                "z": 30
+              }
+            ],
+            "poses": {
+              "wave": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-wave",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "cheer": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-cheer",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "think": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-think",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "heart": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-heart",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              }
+            }
           }
         },
         "bottom": {
@@ -5318,6 +5936,11 @@
           "summer-shorts": {
             "layers": [
               "v3-summer-shorts"
+            ]
+          },
+          "winter-joggers": {
+            "layers": [
+              "v3-winter-joggers"
             ]
           }
         },
@@ -6313,6 +6936,100 @@
                 ]
               }
             }
+          },
+          "winter-hoodie": {
+            "layers": [
+              {
+                "ref": "v3-winter-hoodie-idle",
+                "id": "outfit",
+                "z": 30
+              }
+            ],
+            "poses": {
+              "wave": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-wave",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "cheer": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-cheer",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "think": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-think",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "heart": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-hoodie-heart",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              }
+            }
+          },
+          "winter-halfzip": {
+            "layers": [
+              {
+                "ref": "v3-winter-halfzip-idle",
+                "id": "outfit",
+                "z": 30
+              }
+            ],
+            "poses": {
+              "wave": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-wave",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "cheer": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-cheer",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "think": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-think",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              },
+              "heart": {
+                "layers": [
+                  {
+                    "ref": "v3-winter-halfzip-heart",
+                    "id": "outfit",
+                    "z": 30
+                  }
+                ]
+              }
+            }
           }
         },
         "bottom": {
@@ -6363,6 +7080,11 @@
           "summer-shorts": {
             "layers": [
               "v3-summer-shorts"
+            ]
+          },
+          "winter-joggers": {
+            "layers": [
+              "v3-winter-joggers"
             ]
           }
         },

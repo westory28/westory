@@ -188,11 +188,14 @@ export default function SettingsMyPage() {
       <div hidden={tab !== "emoji"}>
         <section className="teacher-my-page-emoji" aria-label="프로필 이모지">
           <div className="teacher-my-page-emoji-heading">
-            <div className="teacher-my-page-emoji-preview">
+            <div
+              className="teacher-my-page-emoji-preview"
+              role="img"
+              aria-label={`선택한 프로필 이모지: ${selected?.label || "프로필 이모지"}`}
+            >
               <span aria-hidden="true">
                 {selected?.emoji || data.profileIcon}
               </span>
-              <strong>{selected?.label || "프로필 이모지"}</strong>
             </div>
             <button
               type="button"
@@ -215,12 +218,12 @@ export default function SettingsMyPage() {
                 <button
                   type="button"
                   key={entry.id}
+                  aria-label={entry.label}
                   aria-pressed={selectedEmojiId === entry.id}
                   disabled={busy}
                   onClick={() => setSelectedEmojiId(entry.id)}
                 >
                   <span aria-hidden="true">{entry.emoji}</span>
-                  <span>{entry.label}</span>
                 </button>
               ))}
           </div>

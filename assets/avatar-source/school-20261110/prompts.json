@@ -1,0 +1,64 @@
+[
+  {
+    "index": 1,
+    "params": {
+      "model": "gpt_image_2_6",
+      "quality": "high",
+      "resolution": "4k",
+      "background": "transparent",
+      "output_format": "png",
+      "aspect_ratio": "3:2",
+      "medias": [
+        {
+          "role": "image",
+          "value": "18f8261b-18b9-41dd-94d7-dc99b33b91de"
+        },
+        {
+          "role": "image",
+          "value": "5a08f21e-f227-4a0c-a5b7-268da60ec8bc"
+        }
+      ],
+      "prompt": "Create a production-ready transparent sprite atlas for the existing Korean 2D dress-up avatar. Reference 1 is the exact STYLE, SCALE, anatomy, registration, composition and five poses to follow. Six equal square cells in a 3-column by 2-row grid, no drawn grid. Reading order: 1 relaxed arms down, 2 wave with one raised open hand, 3 cheering with both fists raised, 4 thoughtful with one hand near chin, 5 both hands forming a small heart at upper chest, 6 repeat relaxed. Front view in every cell. Continuous naturally connected shoulders, sleeves, wrists and warm peach hands; short neck stub; ABSOLUTELY NO HEAD, FACE, HAIR, legs, lower garments, shoes, floor, text, scene or background. Keep the torso centered and the same size and same neck/waist height in all cells, same matching pose envelope as the reference. Warm peach hands and neck match reference. Soft dark tapered outlines, restrained cel shading, understated soft fabric folds, compact youthful chibi body proportions. Generous transparent margins around each pose, nothing overlaps a neighboring cell. Real alpha transparency. GARMENT: light heather-gray winter school PE full-zip hoodie, zip closed, natural lowered hood resting behind the neck/shoulders (not covering a head), gray drawcords, ribbed cuffs and waist, divided kangaroo pockets. Exactly three narrow parallel soft MINT/TURQUOISE stripes run from the shoulders down the outside of both sleeves, following each bent arm. Sewn small school crest on wearer's LEFT CHEST (viewer right): faithfully use reference 2 silver shield with orange ring, green angular chevron figure and tiny YONG SHIN lettering. Crest should look like a modest embroidered school badge, not a large decoration, and remain at the same location on the garment across poses. No other emblem or brand name."
+    }
+  },
+  {
+    "index": 2,
+    "params": {
+      "model": "gpt_image_2_6",
+      "quality": "high",
+      "resolution": "4k",
+      "background": "transparent",
+      "output_format": "png",
+      "aspect_ratio": "3:2",
+      "medias": [
+        {
+          "role": "image",
+          "value": "18f8261b-18b9-41dd-94d7-dc99b33b91de"
+        },
+        {
+          "role": "image",
+          "value": "5a08f21e-f227-4a0c-a5b7-268da60ec8bc"
+        }
+      ],
+      "prompt": "Create a production-ready transparent sprite atlas for the existing Korean 2D dress-up avatar. Reference 1 is the exact STYLE, SCALE, anatomy, registration, composition and five poses to follow. Six equal square cells in a 3-column by 2-row grid, no drawn grid. Reading order: 1 relaxed arms down, 2 wave with one raised open hand, 3 cheering with both fists raised, 4 thoughtful with one hand near chin, 5 both hands forming a small heart at upper chest, 6 repeat relaxed. Front view in every cell. Continuous naturally connected shoulders, sleeves, wrists and warm peach hands; short neck stub; ABSOLUTELY NO HEAD, FACE, HAIR, legs, lower garments, shoes, floor, text, scene or background. Keep the torso centered and the same size and same neck/waist height in all cells, same matching pose envelope as the reference. Warm peach hands and neck match reference. Soft dark tapered outlines, restrained cel shading, understated soft fabric folds, compact youthful chibi body proportions. Generous transparent margins around each pose, nothing overlaps a neighboring cell. Real alpha transparency. GARMENT: light heather-gray winter school PE half-zip long-sleeve pullover top, short front zipper from a flat polo collar to upper chest, no hood, no drawstrings, no full-length zipper, subtle ribbed cuffs and waist. Exactly three narrow parallel soft MINT/TURQUOISE stripes run from the shoulders down the outside of both sleeves, following each bent arm. Sewn small school crest on wearer's LEFT CHEST (viewer right): faithfully use reference 2 silver shield with orange ring, green angular chevron figure and tiny YONG SHIN lettering. Crest should look like a modest embroidered school badge, not a large decoration, and remain at the same location on the garment across poses. No other emblem or brand name."
+    }
+  },
+  {
+    "index": 3,
+    "params": {
+      "model": "gpt_image_2_6",
+      "quality": "high",
+      "resolution": "2k",
+      "background": "transparent",
+      "output_format": "png",
+      "aspect_ratio": "1:1",
+      "medias": [
+        {
+          "role": "image",
+          "value": "7e65373a-5b51-4f15-8eaf-fb75af66ee68"
+        }
+      ],
+      "prompt": "One isolated front-view pair of winter school PE jogger sweatpants, designed as a transparent 2D dress-up sprite matching the reference's charcoal trousers proportions, line style and stance. Light heather-gray fabric, relaxed but neat straight-tapered legs with subtle knees, gray elastic waist with minimal drawstring and small side pockets, gathered RIBBED ELASTIC ANKLE CUFFS (clearly closed narrow cuffs, NOT open straight hems). Exactly THREE narrow parallel mint/turquoise stripes run down the OUTER SIDE of EACH leg from hip to cuff, follow folds and continue to cuff edge. Show both legs naturally slightly separated, symmetrical front-facing stance. Full trousers from waist to ankle cuffs centered with transparent margin. NO feet, shoes, skin, body, hands, head, logo, hanger, background, shadow or text. Soft tapered dark outlines, restrained cel shading, same original Korean casual-game chibi illustration style as reference. Not a realistic photo. Real alpha-transparent background, one garment only, not an atlas."
+    }
+  }
+]

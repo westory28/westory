@@ -3,7 +3,12 @@ import InfoHelp from "../../../components/common/InfoHelp";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import WisIcon from "../../../components/common/WisIcon";
 import { useAuth } from "../../../contexts/AuthContext";
-import { AVATAR_ITEMS, AVATAR_SLOTS } from "../../../features/avatar/catalog";
+import {
+  AVATAR_ITEMS,
+  AVATAR_SLOTS,
+  avatarItemPricePolicy,
+  effectiveAvatarItemPrice,
+} from "../../../features/avatar/catalog";
 import AvatarItemPreview from "../../../features/avatar/AvatarItemPreview";
 import {
   avatarItemTypeLabel,
@@ -33,6 +38,19 @@ const adapter: AvatarPricingAdapter = {
   load: getAvatarCatalogPricing,
   save: updateAvatarCatalogPricing,
 };
+const normalizePricing = (
+  state: AvatarCatalogPricingState,
+): AvatarCatalogPricingState => ({
+  ...state,
+  prices: Object.fromEntries(
+    AVATAR_ITEMS.map((item) => {
+      const price = state.prices[item.id];
+      if (!Number.isSafeInteger(price) || price < 0 || price > MAX_PRICE)
+        throw new Error("가격표 형식을 확인하지 못했습니다.");
+      return [item.id, effectiveAvatarItemPrice(item, price)];
+    }),
+  ),
+});
 const draftsFrom = (state: AvatarCatalogPricingState): Drafts =>
   Object.fromEntries(
     AVATAR_ITEMS.map((item) => {
@@ -81,7 +99,7 @@ export function AvatarPricingManager({
     setError("");
     setSaved(false);
     try {
-      const next = await pricingAdapter.load();
+      const next = normalizePricing(await pricingAdapter.load());
       const nextDrafts = draftsFrom(next);
       if (request !== sequence.current) return;
       setState(next);
@@ -166,12 +184,14 @@ export function AvatarPricingManager({
     setError("");
     setSaved(false);
     try {
-      const next = await pricingAdapter.save({
-        expectedRevision: state.revision,
-        prices: Object.fromEntries(
-          AVATAR_ITEMS.map((item) => [item.id, priceOf(drafts[item.id])!]),
-        ),
-      });
+      const next = normalizePricing(
+        await pricingAdapter.save({
+          expectedRevision: state.revision,
+          prices: Object.fromEntries(
+            AVATAR_ITEMS.map((item) => [item.id, priceOf(drafts[item.id])!]),
+          ),
+        }),
+      );
       const nextDrafts = draftsFrom(next);
       if (request !== sequence.current) return;
       setState(next);
@@ -191,9 +211,9 @@ export function AvatarPricingManager({
         <div className="avatar-pricing-title">
           <h2>아바타 가격 관리</h2>
           <InfoHelp label="아바타 가격 적용 안내">
-            학생에게 적용할 무료·유료와 위스 가격을 설정합니다. 이미 보유한
-            아이템은 다시 구매하지 않으며, 교사는 가격과 관계없이 모든 항목을
-            사용할 수 있습니다. 변경 사항은 저장할 때 함께 반영됩니다.
+            학교 하복·동복 체육복은 무료이며 다른 상하의는 유료입니다. 이미
+            보유한 아이템은 다시 구매하지 않으며, 교사는 가격과 관계없이 모든
+            항목을 사용할 수 있습니다. 변경 사항은 저장할 때 함께 반영됩니다.
           </InfoHelp>
         </div>
         <div className="avatar-pricing-actions">
@@ -402,7 +422,9 @@ export function AvatarPricingManager({
                                   paid: event.target.value === "paid",
                                 })
                               }
-                              disabled={saving}
+                              disabled={
+                                saving || avatarItemPricePolicy(item) !== null
+                              }
                             >
                               <option value="free">무료</option>
                               <option value="paid">유료</option>

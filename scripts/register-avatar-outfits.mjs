@@ -48,17 +48,30 @@ for (const name of sources) {
     cleanup: { minArea: 32 },
   });
 }
+for (const name of ["winter-hoodie", "winter-halfzip", "winter-joggers"]) {
+  const src = `assets/avatar-source/school-20261110/${name}.png`;
+  spec.sheets.push({
+    id: `v3-${name}-source`,
+    src,
+    columns: name === "winter-joggers" ? 1 : 3,
+    rows: name === "winter-joggers" ? 1 : 2,
+    sha256: hash(await fs.readFile(src)),
+    cleanup: { minArea: 32 },
+  });
+}
 const poses = ["idle", "wave", "cheer", "think", "heart"];
 const family = (value) =>
-  value.startsWith("jacket-")
-    ? "jacket"
-    : value.startsWith("hanbok-")
-      ? "jeogori"
-      : value.startsWith("official-")
-        ? "robe"
-        : value.startsWith("summer-")
-          ? "polo"
-          : "plain";
+  value.startsWith("winter-")
+    ? value
+    : value.startsWith("jacket-")
+      ? "jacket"
+      : value.startsWith("hanbok-")
+        ? "jeogori"
+        : value.startsWith("official-")
+          ? "robe"
+          : value.startsWith("summer-")
+            ? "polo"
+            : "plain";
 const sourceColors = {
   jacket: "#363e59",
   plain: "#c2c2c6",
@@ -576,7 +589,42 @@ const robeSkinPolygons = {
   ],
 };
 const topCells = {};
-for (const f of ["jacket", "plain", "jeogori", "polo", "robe"]) {
+// Source-cell regions include exposed neck/hands and keep the orange school crest out of skin tint.
+const schoolSkinRegions = {
+  idle: [
+    [0.4, 0.15, 0.22, 0.19],
+    [0.2, 0.74, 0.15, 0.2],
+    [0.68, 0.74, 0.15, 0.2],
+  ],
+  wave: [
+    [0.4, 0.15, 0.22, 0.19],
+    [0.08, 0.2, 0.23, 0.23],
+    [0.68, 0.73, 0.15, 0.21],
+  ],
+  cheer: [
+    [0.4, 0.15, 0.22, 0.19],
+    [0.16, 0.24, 0.14, 0.19],
+    [0.68, 0.24, 0.15, 0.19],
+  ],
+  think: [
+    [0.4, 0.15, 0.22, 0.19],
+    [0.37, 0.18, 0.18, 0.22],
+    [0.68, 0.73, 0.15, 0.21],
+  ],
+  heart: [
+    [0.4, 0.15, 0.22, 0.19],
+    [0.33, 0.28, 0.34, 0.19],
+  ],
+};
+for (const f of [
+  "jacket",
+  "plain",
+  "jeogori",
+  "polo",
+  "robe",
+  "winter-hoodie",
+  "winter-halfzip",
+]) {
   topCells[f] = {};
   for (const [index, pose] of poses.entries()) {
     const id = `v3-${f}-${pose}`;
@@ -584,7 +632,7 @@ for (const f of ["jacket", "plain", "jeogori", "polo", "robe"]) {
     const y = f === "robe" ? 0.232 : f === "jeogori" ? 0.257 : 0.278;
     spec.cells.push({
       id,
-      sheet: `v3-${f}-poses`,
+      sheet: f.startsWith("winter-") ? `v3-${f}-source` : `v3-${f}-poses`,
       cell: [index % 3, Math.floor(index / 3)],
       rect: [0.2106, y, 0.5788, height],
       z: 30,
@@ -592,6 +640,9 @@ for (const f of ["jacket", "plain", "jeogori", "polo", "robe"]) {
       tint: { slot: "skinTone", sourceColor: "#f7cfa8", mode: "color" },
       tintMask: { includeSkin: true },
       ...(f === "robe" ? { skinPolygons: robeSkinPolygons[pose] } : {}),
+      ...(f.startsWith("winter-")
+        ? { skinRegions: schoolSkinRegions[pose] }
+        : {}),
       recolor: { color: "#f7cfa8", sourceColor: "#eab38d", mode: "skin" },
     });
     topCells[f][pose] = id;
@@ -616,11 +667,16 @@ const lowerFamilies = {
     rect: [0.382, 0.605, 0.236, 0.17],
     source: "#353a50",
   },
+  "winter-joggers": {
+    cell: [0, 0],
+    rect: [0.37, 0.605, 0.26, 0.31],
+    sheet: "v3-winter-joggers-source",
+  },
 };
 for (const [name, v] of Object.entries(lowerFamilies))
   spec.cells.push({
     id: `v3-${name}`,
-    sheet: "v3-bottoms",
+    sheet: v.sheet || "v3-bottoms",
     cell: v.cell,
     rect: v.rect,
     z: 18,
@@ -653,6 +709,8 @@ for (const character of ["girl", "boy"]) {
   for (const item of catalog.filter((i) => i.slot === "top")) {
     const f = family(item.value);
     const layerFor = (pose) => {
+      if (f.startsWith("winter-"))
+        return [{ ref: topCells[f][pose], id: "outfit", z: 30 }];
       const id = `v3-${item.value}-${pose}`;
       if (!spec.variants.some((v) => v.id === id))
         spec.variants.push({
@@ -681,17 +739,20 @@ for (const character of ["girl", "boy"]) {
   for (const item of catalog.filter(
     (i) => i.slot === "bottom" && i.characters.includes(character),
   )) {
-    const f = item.value.startsWith("pleated")
-      ? "pleated"
-      : item.value.startsWith("chima")
-        ? "chima"
-        : item.value.startsWith("baji")
-          ? "baji"
-          : item.value === "summer-shorts"
-            ? "shorts"
-            : "trousers";
+    const f =
+      item.value === "winter-joggers"
+        ? "winter-joggers"
+        : item.value.startsWith("pleated")
+          ? "pleated"
+          : item.value.startsWith("chima")
+            ? "chima"
+            : item.value.startsWith("baji")
+              ? "baji"
+              : item.value === "summer-shorts"
+                ? "shorts"
+                : "trousers";
     const id = `v3-${item.value}`;
-    if (!spec.variants.some((v) => v.id === id))
+    if (f !== "winter-joggers" && !spec.variants.some((v) => v.id === id))
       spec.variants.push({
         id,
         ref: `v3-${f}`,
@@ -733,5 +794,5 @@ for (const cell of spec.cells.filter((c) => c.id.startsWith("head-")))
   cell.group = "face";
 await fs.writeFile(file, JSON.stringify(spec, null, 2) + "\n");
 console.log(
-  "Registered 15 tops with 5 complete body poses, 12 bottoms, 5 shoes, rear/front hair and hat masks.",
+  `Registered ${catalog.filter((item) => item.slot === "top").length} tops with 5 complete body poses, ${catalog.filter((item) => item.slot === "bottom").length} bottoms, ${shoeItems.length} shoes, rear/front hair and hat masks.`,
 );

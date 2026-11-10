@@ -11,7 +11,8 @@ const uid = 'avatar-student', semesterId = '2026-2', accountId = accountIdFor(se
 const accountPath = `semester_wis_accounts/${accountId}`, avatarPath = `student_avatars/${uid}`;
 const paid = catalog.items.filter(item => item.price > 0);
 const req = data => ({ auth: { uid }, data: { _session: {}, ...data } });
-const purchase = (item = paid[0], requestId = 'purchase-0001') => req({ year: '2026', semester: '2', itemId: item.id, requestId });
+const purchase = (item = paid[0], requestId = 'purchase-0001') => req({ year: '2026', semester: '2', itemId: item.id, requestId,
+  expectedPrice: item.price, expectedPricingRevision: 0, expectedPricingPolicyVersion: catalog.pricingPolicyVersion });
 const initialDocuments = (balance = 1000) => ({
   'site_settings/semester_active': { semesterId, revision: 1 },
   [`semester_manifests/${semesterId}`]: { semesterId, status: 'ACTIVE', revision: 1 },
@@ -98,7 +99,9 @@ if (require.main === module) {
 test('default, free catalog choices and private state never return another identity', async () => {
   const state = fixture(); const result = await state.api.getStudentAvatar(req({}));
   assert.deepEqual(result.look, defaultLook()); assert.equal(result.revision, 0); assert.deepEqual(result.ownedItemIds, []);
-  assert.equal(catalog.items.filter(item => item.price === 0).length, 44);
+  assert.equal(result.look.top, 'summer-white'); assert.equal(result.look.bottom, 'summer-shorts');
+  assert.deepEqual(catalog.items.filter(item => ['top', 'bottom'].includes(item.slot) && item.price === 0)
+    .map(item => item.id).sort(), [...catalog.freeClothingItemIds].sort());
   await assert.rejects(state.api.getStudentAvatar(req({ uid: 'foreign' })), reason('AVATAR_INPUT_INVALID'));
   assert.equal(state.writes.length, 0);
 });

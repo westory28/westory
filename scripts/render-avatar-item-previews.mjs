@@ -138,6 +138,8 @@ const bundle = await build({
       if(item.slot==='bottom' && /^(chima|baji)-/.test(item.value)) look.top='hanbok-ivory';
       if(item.slot==='top' && item.value.startsWith('summer-')) look.bottom='summer-shorts';
       if(item.value==='summer-shorts') look.top='summer-white';
+      if(item.slot==='top' && item.value.startsWith('winter-')) look.bottom='winter-joggers';
+      if(item.value==='winter-joggers') look.top='winter-hoodie';
       if(!stage||character!==nextCharacter){
         stage?.dispose(); character=nextCharacter;
         stage=await createAvatarStage(document.getElementById('stage'),look,{assetBaseUrl:'/avatar/v2/',maxPixelRatio:1});
@@ -193,7 +195,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, {
       "Content-Type": pathname.endsWith(".png")
         ? "image/png"
-        : pathname.endsWith(".webp") ? "image/webp" : "application/json",
+        : pathname.endsWith(".webp")
+          ? "image/webp"
+          : "application/json",
     });
     res.end(await fs.readFile(target));
   } catch {

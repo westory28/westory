@@ -81,9 +81,11 @@ for (const character of ["girl", "boy"]) {
       ? character === "girl"
         ? "chima-navy"
         : "baji-cream"
-      : top.value.startsWith("summer-")
-        ? "summer-shorts"
-        : "plain-bottom";
+      : top.value.startsWith("winter-")
+        ? "winter-joggers"
+        : top.value.startsWith("summer-")
+          ? "summer-shorts"
+          : "plain-bottom";
     for (const pose of choices(character, "pose"))
       addCase("outfits", `${character}-${top.value}`, {
         character,
@@ -109,9 +111,11 @@ for (const character of ["girl", "boy"]) {
         character,
         top: /^(chima|baji)-/.test(bottom.value)
           ? "hanbok-ivory"
-          : bottom.value === "summer-shorts"
-            ? "summer-white"
-            : "plain-top",
+          : bottom.value === "winter-joggers"
+            ? "winter-hoodie"
+            : bottom.value === "summer-shorts"
+              ? "summer-white"
+              : "plain-top",
         bottom: bottom.value,
         pose: pose.value,
       });

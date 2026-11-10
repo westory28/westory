@@ -37,7 +37,30 @@ export interface AvatarState extends AvatarPublic {
   ownedItemIds: string[];
 }
 export const AVATAR_CATALOG_VERSION = catalog.version;
+export const AVATAR_PRICING_POLICY_VERSION = catalog.pricingPolicyVersion;
 export const AVATAR_ITEMS = catalog.items as AvatarItem[];
+const freeClothingItemIds = new Set(catalog.freeClothingItemIds);
+export const avatarItemPricePolicy = (
+  item: AvatarItem,
+): "free" | "paid" | null =>
+  item.slot === "top" || item.slot === "bottom"
+    ? freeClothingItemIds.has(item.id)
+      ? "free"
+      : "paid"
+    : null;
+export const effectiveAvatarItemPrice = (
+  item: AvatarItem,
+  override?: number,
+): number => {
+  const policy = avatarItemPricePolicy(item);
+  if (policy === "free") return 0;
+  if (policy === "paid" && override === 0) return item.price;
+  return Number.isSafeInteger(override) &&
+    override! >= 0 &&
+    override! <= 1_000_000
+    ? override!
+    : item.price;
+};
 export const AVATAR_SLOTS: { key: AvatarSlot; label: string; icon: string }[] =
   [
     { key: "character", label: "캐릭터", icon: "fa-user" },
@@ -62,8 +85,8 @@ export const defaultAvatarLook = (
   hairStyle: character === "boy" ? "curtain" : "bob",
   hairTone: "original",
   pose: "idle",
-  top: "plain-top",
-  bottom: "plain-bottom",
+  top: catalog.defaultClothing.top,
+  bottom: catalog.defaultClothing.bottom,
   shoes: "plain-shoes",
   accessory: "none",
 });

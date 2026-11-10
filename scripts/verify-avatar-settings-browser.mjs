@@ -21,6 +21,7 @@ import MainLayout from './src/components/layout/MainLayout';
 import Settings from './src/pages/teacher/Settings';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
 const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
+qa.prices['top:official-black']=0;qa.prices['top:summer-white']=999;qa.prices['top:winter-hoodie']=999;
 qa.avatar={schemaVersion:1,catalogVersion:1,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
 window.addEventListener('error',e=>qa.errors.push(e.message));
 window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
@@ -255,6 +256,29 @@ try {
       assert.equal(await nav.isVisible(), false);
     }
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
+    for (const label of ["용신중 흰색 하복", "용신중 동복 후드 집업"]) {
+      const mode = page.getByLabel(label + " 무료·유료", { exact: true });
+      assert.equal(await mode.inputValue(), "free");
+      assert.equal(await mode.isDisabled(), true);
+      assert.equal(
+        await page
+          .getByLabel(label + " 위스 가격", { exact: true })
+          .isDisabled(),
+        true,
+      );
+    }
+    assert.equal(
+      await page
+        .getByRole("button", { name: "가격 저장", exact: true })
+        .isDisabled(),
+      true,
+      "Policy-normalized prices do not create an unsolicited settings write",
+    );
+    await page
+      .getByLabel("유형", { exact: true })
+      .selectOption("학교 동복 체육복");
+    assert.equal(await page.locator(".avatar-pricing-item").count(), 2);
+    await page.getByLabel("유형", { exact: true }).selectOption("all");
     await page
       .getByLabel("꾸미기 종류", { exact: true })
       .selectOption("character");
@@ -287,9 +311,18 @@ try {
     await page.getByLabel("아이템 검색", { exact: true }).fill("흑색");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
     const name = await page.locator(".avatar-pricing-item h4").innerText();
-    await page
-      .getByLabel(name + " 무료·유료", { exact: true })
-      .selectOption("paid");
+    assert.equal(
+      await page.getByLabel(name + " 무료·유료", { exact: true }).inputValue(),
+      "paid",
+    );
+    assert.equal(
+      await page.getByLabel(name + " 무료·유료", { exact: true }).isDisabled(),
+      true,
+    );
+    assert.equal(
+      await page.locator(".avatar-pricing-current").innerText(),
+      "현재 160 위스",
+    );
     const price = page.getByLabel(name + " 위스 가격", { exact: true });
     await price.fill("");
     assert.equal(await price.getAttribute("aria-invalid"), "true");

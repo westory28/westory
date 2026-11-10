@@ -13,7 +13,7 @@ const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
 const { createAvatarCatalogPricingHandlers, PRICING_PATH } = require('../avatarCatalogPricing');
-const { catalog } = require('../studentAvatarCatalog');
+const { catalog, defaultLook, lookHash } = require('../studentAvatarCatalog');
 const fixture = require('./verify-student-avatar.cjs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, updateDoc, getDoc } = require('firebase/firestore');
@@ -104,6 +104,34 @@ let rules;
       expectedPricingRevision: 1, expectedPrice: current.prices[fixture.paid[0].id] })));
     assert.equal(result.charged, current.prices[fixture.paid[0].id]);
     assert.equal((await get(fixture.accountPath)).balance, 1000 - result.charged);
+  });
+  await check('school uniform policy preserves legacy saved clothing while rejecting stale and zero-price purchases', async () => {
+    await seed(); await seedTeacher();
+    await db.doc(PRICING_PATH).set({ schemaVersion: 1, revision: 1, prices: { 'top:plain-top': 0, 'bottom:plain-bottom': 0, 'top:winter-hoodie': 999 } });
+    const pricing = await pricingApi.getAvatarCatalogPricing(teacherRequest({}));
+    assert.equal(pricing.prices['top:plain-top'], 160); assert.equal(pricing.prices['bottom:plain-bottom'], 100);
+    assert.equal(pricing.prices['top:winter-hoodie'], 0); assert.equal(pricing.policyVersion, 2);
+    await assert.rejects(pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { 'top:plain-top': 0 } })),
+      error => error.details?.reason === 'AVATAR_PRICING_INPUT_INVALID');
+    const plain = catalog.items.find(item => item.id === 'top:plain-top');
+    const stale = authenticated(fixture.purchase(plain)); delete stale.data.expectedPricingPolicyVersion;
+    await assert.rejects(api.purchaseStudentAvatarItem(stale), error => error.details?.reason === 'AVATAR_PRICE_CHANGED');
+    const unownedLook = { ...defaultLook(), top: 'plain-top', bottom: 'plain-bottom' };
+    await assert.rejects(api.saveStudentAvatar(authenticated(await fixture.save({ look: unownedLook }))), error => error.details?.reason === 'AVATAR_ITEM_NOT_OWNED');
+    assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+    assert.equal((await db.doc(fixture.avatarPath).get()).exists, false);
+    const uniformLook = { ...defaultLook(), top: 'winter-hoodie', bottom: 'winter-joggers' };
+    await api.saveStudentAvatar(authenticated(await fixture.save({ look: uniformLook })));
+    const saved = await get(fixture.avatarPath);
+    await db.doc(fixture.avatarPath).set({ ...saved, look: unownedLook, lookHash: lookHash(unownedLook),
+      ownedItemIds: ['top:jacket-navy'], lastSavedAtMs: 1 });
+    const recovered = await api.getStudentAvatar(authenticated(fixture.req({})));
+    assert.deepEqual(recovered.look, unownedLook);
+    for (const id of ['top:plain-top', 'bottom:plain-bottom', 'top:jacket-navy']) assert.ok(recovered.ownedItemIds.includes(id));
+    const result = await api.saveStudentAvatar(authenticated(await fixture.save({ look: unownedLook, expectedRevision: 1, requestId: 'legacy-uniform-save' })));
+    assert.equal(result.revision, 2);
+    assert.equal((await get(fixture.accountPath)).balance, 1000);
+    assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
   });
   await check('teacher all-item save and emoji use real sessions without a teacher wallet and reject role downgrade during save', async () => {
     await seed(); await seedTeacher();

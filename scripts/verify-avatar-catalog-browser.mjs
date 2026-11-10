@@ -60,7 +60,15 @@ try {
     () =>
       !document.querySelector(".avatar-studio-save .avatar-primary")?.disabled,
   );
-  await page.getByRole("button", { name: /아이보리 저고리/ }).click();
+  await page.getByRole("button", { name: /용신중 동복 후드 집업/ }).click();
+  await page.getByRole("button", { name: "하의", exact: true }).click();
+  await page.getByRole("button", { name: /용신중 동복 체육복 바지/ }).click();
+  await page.getByRole("button", { name: "상의", exact: true }).click();
+  assert.equal(
+    await page.locator(".avatar-studio-pending").count(),
+    0,
+    "School sportswear is available without a purchase",
+  );
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page
@@ -68,7 +76,7 @@ try {
       .click();
     await page
       .locator(".avatar-studio-item")
-      .filter({ hasText: "아이보리 저고리" })
+      .filter({ hasText: "용신중 동복 후드 집업" })
       .scrollIntoViewIfNeeded();
     await page.waitForFunction(() =>
       [

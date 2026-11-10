@@ -1,5 +1,18 @@
 {
   "version": 1,
+  "pricingPolicyVersion": 2,
+  "defaultClothing": {
+    "top": "summer-white",
+    "bottom": "summer-shorts"
+  },
+  "freeClothingItemIds": [
+    "top:summer-white",
+    "top:summer-navy",
+    "bottom:summer-shorts",
+    "top:winter-hoodie",
+    "top:winter-halfzip",
+    "bottom:winter-joggers"
+  ],
   "items": [
     {
       "id": "character:girl",
@@ -312,7 +325,9 @@
       "label": "토벤 스타일",
       "price": 0,
       "tier": "basic",
-      "characters": ["boy"]
+      "characters": [
+        "boy"
+      ]
     },
     {
       "id": "hairStyle:twin-tail",
@@ -321,7 +336,9 @@
       "label": "물결 트윈테일",
       "price": 0,
       "tier": "basic",
-      "characters": ["girl"]
+      "characters": [
+        "girl"
+      ]
     },
     {
       "id": "hairStyle:half-up",
@@ -330,7 +347,9 @@
       "label": "볼륨 반묶음",
       "price": 0,
       "tier": "basic",
-      "characters": ["girl"]
+      "characters": [
+        "girl"
+      ]
     },
     {
       "id": "hairTone:original",
@@ -565,8 +584,8 @@
       "slot": "top",
       "value": "plain-top",
       "label": "기본 상의",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -656,8 +675,8 @@
       "slot": "bottom",
       "value": "plain-bottom",
       "label": "기본 하의",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -834,8 +853,8 @@
       "slot": "top",
       "value": "hanbok-ivory",
       "label": "아이보리 저고리",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -847,8 +866,8 @@
       "slot": "top",
       "value": "hanbok-sky",
       "label": "하늘빛 저고리",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -860,8 +879,8 @@
       "slot": "top",
       "value": "hanbok-peach",
       "label": "복숭아빛 저고리",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -873,8 +892,8 @@
       "slot": "top",
       "value": "official-navy",
       "label": "남색 흉배 관복",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -886,8 +905,8 @@
       "slot": "top",
       "value": "official-red",
       "label": "홍색 관복",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -899,8 +918,8 @@
       "slot": "top",
       "value": "official-black",
       "label": "흑색 흉배 관복",
-      "price": 0,
-      "tier": "basic",
+      "price": 160,
+      "tier": "premium",
       "characters": [
         "girl",
         "boy"
@@ -938,8 +957,8 @@
       "slot": "bottom",
       "value": "chima-rose",
       "label": "장미빛 한복 치마",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "girl"
       ],
@@ -950,8 +969,8 @@
       "slot": "bottom",
       "value": "chima-navy",
       "label": "남색 한복 치마",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "girl"
       ],
@@ -962,8 +981,8 @@
       "slot": "bottom",
       "value": "chima-jade",
       "label": "옥빛 한복 치마",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "girl"
       ],
@@ -974,8 +993,8 @@
       "slot": "bottom",
       "value": "baji-navy",
       "label": "남색 한복 바지",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "boy"
       ],
@@ -986,8 +1005,8 @@
       "slot": "bottom",
       "value": "baji-cream",
       "label": "미색 한복 바지",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "boy"
       ],
@@ -998,8 +1017,8 @@
       "slot": "bottom",
       "value": "baji-charcoal",
       "label": "먹색 한복 바지",
-      "price": 0,
-      "tier": "basic",
+      "price": 100,
+      "tier": "premium",
       "characters": [
         "boy"
       ],
@@ -1043,6 +1062,45 @@
         "boy"
       ],
       "color": "#20232a"
+    },
+    {
+      "id": "top:winter-hoodie",
+      "slot": "top",
+      "value": "winter-hoodie",
+      "label": "용신중 동복 후드 집업",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#202c42"
+    },
+    {
+      "id": "top:winter-halfzip",
+      "slot": "top",
+      "value": "winter-halfzip",
+      "label": "용신중 동복 반집업",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#202c42"
+    },
+    {
+      "id": "bottom:winter-joggers",
+      "slot": "bottom",
+      "value": "winter-joggers",
+      "label": "용신중 동복 체육복 바지",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "color": "#202c42"
     }
   ]
 }

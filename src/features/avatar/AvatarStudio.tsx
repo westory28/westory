@@ -12,6 +12,7 @@ import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
   defaultAvatarLook,
+  effectiveAvatarItemPrice,
   ownsAvatarItem,
   selectAvatarItem,
   type AvatarItem,
@@ -166,12 +167,10 @@ export function AvatarStudio({
   const owned = saved?.ownedItemIds || [];
   const pricedItems = useMemo(
     () =>
-      AVATAR_ITEMS.map((item) => {
-        const price = pricing.prices[item.id];
-        return Number.isSafeInteger(price) && price >= 0 && price <= 1_000_000
-          ? { ...item, price }
-          : item;
-      }),
+      AVATAR_ITEMS.map((item) => ({
+        ...item,
+        price: effectiveAvatarItemPrice(item, pricing.prices[item.id]),
+      })),
     [pricing],
   );
   const available = (item: AvatarItem) =>

@@ -6,12 +6,14 @@ export function getAvatarItemGroup(item: AvatarItem): string {
     if (item.value.startsWith("hanbok-")) return "한복 저고리";
     if (item.value.startsWith("official-")) return "관복";
     if (item.value.startsWith("summer-")) return "학교 하복";
+    if (item.value.startsWith("winter-")) return "학교 동복 체육복";
     return "재킷·기본복";
   }
   if (item.slot === "bottom") {
     if (item.value.startsWith("chima-")) return "한복 치마";
     if (item.value.startsWith("baji-")) return "한복 바지";
     if (item.value.startsWith("summer-")) return "학교 하복";
+    if (item.value.startsWith("winter-")) return "학교 동복 체육복";
     return "일상 하의";
   }
   if (item.slot === "accessory") {
