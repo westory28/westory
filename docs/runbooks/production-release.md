@@ -6,6 +6,8 @@ HTML 표시 경계·호환 의존성·브라우저 헤더를 보완하고 SVG가
 
 수업자료 업로드 등 운영 원본과 저장소에 기존 차이가 있으므로 `scripts/prepare-security-image-release.mjs`로 함수별 원본에 최소 패치만 이식한다. 변경 없는 exports·의존성·권한·런타임의 SHA를 확인하고 `node functions/scripts/verify-raster-image-safety.cjs --release`를 통과한 준비본만 대상 함수별 `--only`로 배포한다. 대상은 서울 `uploadMapAssetContent`, `uploadSourceArchiveAsset`, `registerSchoolBanner`, `processSourceArchiveIncomingUpload`, `processLessonAssetUpload`, `uploadLessonAssetContent`다. 전체 Functions·rules를 재배포하지 않는다. 프런트엔드는 최신 main 통합·빌드 후 해당 Vercel 배포를 운영 도메인에 승격한다.
 
+**운영 원본 코드 보존만으로 외부 자원 설정까지 보존되지는 않는다.** 위 배포에서 앞의 세 callable과 `processSourceArchiveIncomingUpload`의 기존 최대 인스턴스 20이 소스에 선언돼 있지 않아 배포 직후 상한이 빠졌다. Cloud Functions v2의 `serviceConfig.maxInstanceCount` 필드만 PATCH하여 20으로 복원했고, 6개 함수 모두 배포 전 메모리·CPU·동시성·시간 제한·최대 인스턴스·서비스 계정·인바운드 설정과 일치함을 다시 확인했다. 향후 원본 기반 선택 배포에도 배포 전 실제 설정 스냅샷과 배포 후 대조를 포함하며, 차이를 코드 원본의 의도라고 추측해 두지 않는다.
+
 ## 학생 시험 시작 경합과 재진입 복구 (2026-11-10)
 
 13:35–13:37 KST의 운영 START 오류는 본인 응시 이력 조회에서 발생한 트랜잭션 경합이다. `semester_assessment_attempts`에 `studentUid ASC, definitionId ASC` 복합 색인을 한 개만 추가한다. 기존 쿼리의 운영 Explain이 단일 복합 색인을 선택하는 것을 확인했으므로 Functions 코드·런타임·규칙은 변경하지 않는다. 다른 색인을 삭제하는 전체 동기화는 사용하지 않는다.
