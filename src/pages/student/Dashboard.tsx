@@ -59,6 +59,10 @@ const DashboardCalendarFallback: React.FC = () => (
 
 const StudentDashboard: React.FC = () => {
   const { user, userData, config, interfaceConfig, menuConfig } = useAuth();
+  const showNotice = interfaceConfig?.dashboard?.notice !== false;
+  const showCalendar = interfaceConfig?.dashboard?.calendar !== false;
+  const showRanking = interfaceConfig?.dashboard?.ranking !== false;
+  const fullDashboard = showNotice && showCalendar && showRanking;
   const hallOfFameTitle = getStudentMenuLabel(
     menuConfig,
     "/student/points?tab=hall-of-fame",
@@ -97,7 +101,10 @@ const StudentDashboard: React.FC = () => {
     confirmedDates,
     error: attendanceHistoryError,
     retry: retryAttendanceHistory,
-  } = useAttendanceDates(user?.uid, config ? { year, semester } : null);
+  } = useAttendanceDates(
+    showCalendar ? user?.uid : undefined,
+    config ? { year, semester } : null,
+  );
   const attendanceChecked =
     confirmedDates.includes(todayDate) ||
     (confirmedAttendance.identity === attendanceIdentity &&
@@ -160,6 +167,12 @@ const StudentDashboard: React.FC = () => {
   }, [todayAttendanceSourceId, visibleAttendanceDates]);
 
   useEffect(() => {
+    if (!showCalendar) {
+      setEvents([]);
+      setDetailEvent(null);
+      setEventsLoading(false);
+      return;
+    }
     const { year: currentYear, semester: currentSemester } =
       getYearSemester(config);
     const path = `years/${currentYear}/semesters/${currentSemester}/calendar`;
@@ -203,14 +216,20 @@ const StudentDashboard: React.FC = () => {
       active = false;
       unsubscribe();
     };
-  }, [config?.year, config?.semester, userData?.class, userData?.grade]);
+  }, [
+    showCalendar,
+    config?.year,
+    config?.semester,
+    userData?.class,
+    userData?.grade,
+  ]);
 
   useEffect(() => {
     setAttendanceMessage("");
   }, [attendanceIdentity]);
 
   useEffect(() => {
-    if (!userData?.uid) {
+    if (!userData?.uid || !showRanking) {
       setHallOfFameRecognition(null);
       return;
     }
@@ -238,7 +257,7 @@ const StudentDashboard: React.FC = () => {
       cancelled = true;
       cancel();
     };
-  }, [config, interfaceConfig?.hallOfFame, userData]);
+  }, [config, interfaceConfig?.hallOfFame, userData, showRanking]);
 
   const handleDateClick = (dateStr: string) => {
     setSelectedDate(dateStr);
@@ -310,93 +329,103 @@ const StudentDashboard: React.FC = () => {
       <h1 className="sr-only">
         {getStudentMenuLabel(menuConfig, "/student/dashboard", "학생 홈")}
       </h1>
-      <div className="student-portal-dashboard__grid">
-        <div className="student-portal-dashboard__notice">
-          {secondaryPanelsReady ? (
-            <Suspense
-              fallback={
-                <div className="student-dashboard-placeholder" role="status">
-                  알림장을 불러오는 중입니다.
-                </div>
-              }
-            >
-              <NoticeBoard />
+      <div
+        className={`student-portal-dashboard__grid${fullDashboard ? "" : " student-portal-dashboard__grid--compact"}`}
+      >
+        {showNotice && (
+          <div className="student-portal-dashboard__notice">
+            {secondaryPanelsReady ? (
+              <Suspense
+                fallback={
+                  <div className="student-dashboard-placeholder" role="status">
+                    알림장을 불러오는 중입니다.
+                  </div>
+                }
+              >
+                <NoticeBoard />
+              </Suspense>
+            ) : (
+              <div className="student-dashboard-placeholder" role="status">
+                알림장을 불러오는 중입니다.
+              </div>
+            )}
+          </div>
+        )}
+
+        {showCalendar && (
+          <div className="student-portal-dashboard__calendar">
+            {attendanceHistoryError && (
+              <div className="student-attendance-history-error" role="alert">
+                출석 기록을 불러오지 못했습니다.
+                <button type="button" onClick={retryAttendanceHistory}>
+                  다시 시도
+                </button>
+              </div>
+            )}
+            <Suspense fallback={<DashboardCalendarFallback />}>
+              <StudentWeekSchedule
+                calendarLabel={getStudentMenuLabel(
+                  menuConfig,
+                  "/student/calendar",
+                  "캘린더",
+                )}
+                categories={categories}
+                events={events}
+                onDateClick={handleDateClick}
+                onEventClick={handleEventClick}
+                weekStart={weekStart}
+                loading={eventsLoading}
+                error={eventsError}
+                onWeekChange={setWeekStart}
+                onSearchSelect={handleSelectSearchResults}
+                onAttendanceCheck={() => void handleAttendanceCheck()}
+                selectedDate={selectedDate}
+                attendanceLoading={attendanceLoading}
+                attendanceChecked={attendanceChecked}
+                attendanceMessage={attendanceMessage}
+                attendanceDates={visibleAttendanceDates}
+                attendanceGoalText={attendanceGoalText}
+              />
             </Suspense>
-          ) : (
-            <div className="student-dashboard-placeholder" role="status">
-              알림장을 불러오는 중입니다.
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="student-portal-dashboard__calendar">
-          {attendanceHistoryError && (
-            <div className="student-attendance-history-error" role="alert">
-              출석 기록을 불러오지 못했습니다.
-              <button type="button" onClick={retryAttendanceHistory}>
-                다시 시도
-              </button>
-            </div>
-          )}
-          <Suspense fallback={<DashboardCalendarFallback />}>
-            <StudentWeekSchedule
-              calendarLabel={getStudentMenuLabel(
-                menuConfig,
-                "/student/calendar",
-                "캘린더",
-              )}
-              categories={categories}
-              events={events}
-              onDateClick={handleDateClick}
-              onEventClick={handleEventClick}
-              weekStart={weekStart}
-              loading={eventsLoading}
-              error={eventsError}
-              onWeekChange={setWeekStart}
-              onSearchSelect={handleSelectSearchResults}
-              onAttendanceCheck={() => void handleAttendanceCheck()}
-              selectedDate={selectedDate}
-              attendanceLoading={attendanceLoading}
-              attendanceChecked={attendanceChecked}
-              attendanceMessage={attendanceMessage}
-              attendanceDates={visibleAttendanceDates}
-              attendanceGoalText={attendanceGoalText}
-            />
-          </Suspense>
-        </div>
-
-        <div className="student-portal-dashboard__ranking">
-          {secondaryPanelsReady ? (
-            <WisRankingPanel
-              config={config}
-              hallOfFamePath="/student/points?tab=hall-of-fame"
-              hallOfFameTitle={hallOfFameTitle}
-            />
-          ) : (
-            <div className="student-dashboard-placeholder" role="status">
-              위스 순위를 불러오는 중입니다.
-            </div>
-          )}
-        </div>
+        {showRanking && (
+          <div className="student-portal-dashboard__ranking">
+            {secondaryPanelsReady ? (
+              <WisRankingPanel
+                config={config}
+                hallOfFamePath="/student/points?tab=hall-of-fame"
+                hallOfFameTitle={hallOfFameTitle}
+              />
+            ) : (
+              <div className="student-dashboard-placeholder" role="status">
+                위스 순위를 불러오는 중입니다.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <WisHallOfFameRecognitionModal
-        hallOfFameTitle={hallOfFameTitle}
-        recognition={hallOfFameRecognition}
-        onClose={() => {
-          if (hallOfFameRecognition) {
-            markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
-          }
-          setHallOfFameRecognition(null);
-        }}
-        onOpenHallOfFame={() => {
-          if (hallOfFameRecognition) {
-            markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
-          }
-          setHallOfFameRecognition(null);
-          navigate("/student/points?tab=hall-of-fame");
-        }}
-      />
+      {showRanking && (
+        <WisHallOfFameRecognitionModal
+          hallOfFameTitle={hallOfFameTitle}
+          recognition={hallOfFameRecognition}
+          onClose={() => {
+            if (hallOfFameRecognition) {
+              markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
+            }
+            setHallOfFameRecognition(null);
+          }}
+          onOpenHallOfFame={() => {
+            if (hallOfFameRecognition) {
+              markHallOfFameRecognitionSeen(hallOfFameRecognition.seenKey);
+            }
+            setHallOfFameRecognition(null);
+            navigate("/student/points?tab=hall-of-fame");
+          }}
+        />
+      )}
 
       <ScheduleEventDetailModal
         event={detailEvent}

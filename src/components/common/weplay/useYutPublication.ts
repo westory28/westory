@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
+import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
 import {
   getYutLobby,
   type YutSettings,
@@ -10,7 +11,14 @@ type Status = "checking" | "open" | "closed" | "error";
 
 /** Missing settings and failed checks never unlock student games, including local play. */
 export default function useYutPublication(portal: "student" | "teacher") {
-  const { config, currentUser } = useAuth();
+  const { config, currentUser, menuConfig } = useAuth();
+  const menuAllowed =
+    portal === "teacher" ||
+    getStudentRouteAccess(
+      { pathname: "/student/weplay", search: "?game=joseon-yut" },
+      config,
+      menuConfig,
+    ).allowed;
   const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
@@ -26,6 +34,10 @@ export default function useYutPublication(portal: "student" | "teacher") {
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (portal === "teacher") return;
+    if (!menuAllowed) {
+      setAccess({ scope, status: "closed" });
+      return;
+    }
     let active = true;
     let pending = false;
     let requestTimeout: number | undefined;
@@ -85,13 +97,15 @@ export default function useYutPublication(portal: "student" | "teacher") {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [portal, scope, revision]);
+  }, [portal, scope, revision, menuAllowed]);
   const status: Status =
     portal === "teacher"
       ? "open"
-      : access.scope === scope
-        ? access.status
-        : "checking";
+      : !menuAllowed
+        ? "closed"
+        : access.scope === scope
+          ? access.status
+          : "checking";
   return {
     status,
     scope,

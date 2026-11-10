@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   doc,
-  getDoc,
+  getDocFromServer,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -16,39 +16,24 @@ import {
   type PortalType,
 } from "../../../constants/menus";
 import { useAuth } from "../../../contexts/AuthContext";
-import { notifyMenuConfigUpdated } from "../../../lib/appEvents";
+import {
+  notifyMenuConfigUpdated,
+  notifySystemConfigUpdated,
+} from "../../../lib/appEvents";
+import { buildStudentMenuVisibility } from "../../../lib/studentMenuAccess";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
 import { normalizeInstagramUrl } from "../../../lib/socialLinks";
 import { WEPLAY_STUDENT_URL } from "../../../lib/weplayTitle";
 import "../settingsPanels.css";
-import {
-  DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
-  DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
-  resolveHallOfFameInterfaceConfig,
-} from "../../../lib/wisHallOfFame";
+import "../../../components/common/portalPage.css";
 
 type InterfaceTab = "landing" | "sitemap";
 
 const createDefaultInterfaceConfig = () => ({
-  mainEmoji: "📚",
-  mainSubtitle: "우리가 써 내려가는 이야기",
-  ddayEnabled: false,
-  ddayTitle: "",
-  ddayDate: "",
+  dashboard: { notice: true, calendar: true, ranking: true },
   footerText: "",
   instagramUrl: "",
-  hallOfFame: {
-    podiumImageUrl: "",
-    podiumStoragePath: "",
-    positionPreset: DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
-    positions: {
-      desktop: { ...DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS.desktop },
-      mobile: { ...DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS.mobile },
-    },
-  },
 });
-
-const DEFAULT_INTERFACE_CONFIG = createDefaultInterfaceConfig();
 
 const DEFAULT_PARENT_ICON =
   "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253";
@@ -87,6 +72,8 @@ const SettingsInterface: React.FC = () => {
   );
   const loadedMenus = useRef<MenuConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [savingInterface, setSavingInterface] = useState(false);
   const [savingMenu, setSavingMenu] = useState(false);
   const [parentDraft, setParentDraft] = useState<
@@ -103,42 +90,39 @@ const SettingsInterface: React.FC = () => {
     SITEMAP_HEADER_COLORS[index % SITEMAP_HEADER_COLORS.length];
 
   const getPortalLabel = (portal: PortalType) =>
-    portal === "student" ? "학생 대시보드" : "교사 대시보드";
+    portal === "student" ? "학생 포털" : "교사 포털";
 
   const getPortalMenuStats = (portal: PortalType) => {
     const children = menuConfig[portal].flatMap((item) => item.children || []);
     return {
       parentCount: menuConfig[portal].length,
       childCount: children.length,
-      hiddenCount: children.filter((child) => child.hidden).length,
+      hiddenCount:
+        menuConfig[portal].filter((item) => item.hidden).length +
+        children.filter((child) => child.hidden).length,
     };
   };
 
   useEffect(() => {
     const loadSettings = async () => {
+      setLoading(true);
+      setLoadError(false);
       try {
         const [interfaceSnap, menuSnap] = await Promise.all([
-          getDoc(doc(db, "site_settings", "interface_config")),
-          getDoc(doc(db, "site_settings", "menu_config")),
+          getDocFromServer(doc(db, "site_settings", "interface_config")),
+          getDocFromServer(doc(db, "site_settings", "menu_config")),
         ]);
 
         if (interfaceSnap.exists()) {
           const data = interfaceSnap.data();
-          const resolvedHallOfFameConfig =
-            resolveHallOfFameInterfaceConfig(data);
           setConfig({
-            mainEmoji: (
-              data.mainEmoji || DEFAULT_INTERFACE_CONFIG.mainEmoji
-            ).trim(),
-            mainSubtitle: (
-              data.mainSubtitle || DEFAULT_INTERFACE_CONFIG.mainSubtitle
-            ).trim(),
-            ddayEnabled: Boolean(data.ddayEnabled),
-            ddayTitle: data.ddayTitle || "",
-            ddayDate: data.ddayDate || "",
+            dashboard: {
+              notice: data.dashboard?.notice !== false,
+              calendar: data.dashboard?.calendar !== false,
+              ranking: data.dashboard?.ranking !== false,
+            },
             footerText: data.footerText || "",
             instagramUrl: data.instagramUrl || "",
-            hallOfFame: resolvedHallOfFameConfig,
           });
         } else {
           setConfig(createDefaultInterfaceConfig());
@@ -149,14 +133,15 @@ const SettingsInterface: React.FC = () => {
         setMenuConfig(loaded);
       } catch (error) {
         console.error("Failed to load interface settings:", error);
-        setMenuConfig(cloneDefaultMenus());
+        loadedMenus.current = null;
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     };
 
     void loadSettings();
-  }, []);
+  }, [loadAttempt]);
 
   const handleConfigChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -197,6 +182,14 @@ const SettingsInterface: React.FC = () => {
   const deleteParent = (portal: PortalType, index: number) => {
     updatePortalMenus(portal, (menus) =>
       menus.filter((_, idx) => idx !== index),
+    );
+  };
+
+  const toggleParentHidden = (portal: PortalType, index: number) => {
+    updatePortalMenus(portal, (menus) =>
+      menus.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, hidden: !item.hidden } : item,
+      ),
     );
   };
 
@@ -388,14 +381,7 @@ const SettingsInterface: React.FC = () => {
   };
 
   const saveInterfaceConfig = async () => {
-    if (config.ddayEnabled && (!config.ddayTitle.trim() || !config.ddayDate)) {
-      showToast({
-        tone: "warning",
-        title: "D-Day 입력을 확인해 주세요.",
-        message: "D-Day 제목과 날짜를 모두 입력해야 합니다.",
-      });
-      return;
-    }
+    if (loadError || loading || savingInterface) return;
 
     const instagramUrl = normalizeInstagramUrl(config.instagramUrl);
     if (config.instagramUrl.trim() && !instagramUrl) {
@@ -413,13 +399,7 @@ const SettingsInterface: React.FC = () => {
       await setDoc(
         doc(db, "site_settings", "interface_config"),
         {
-          mainEmoji:
-            config.mainEmoji.trim() || DEFAULT_INTERFACE_CONFIG.mainEmoji,
-          mainSubtitle:
-            config.mainSubtitle.trim() || DEFAULT_INTERFACE_CONFIG.mainSubtitle,
-          ddayEnabled: config.ddayEnabled,
-          ddayTitle: config.ddayTitle.trim(),
-          ddayDate: config.ddayDate,
+          dashboard: config.dashboard,
           footerText: config.footerText.trim(),
           instagramUrl,
           updatedAt: serverTimestamp(),
@@ -432,7 +412,6 @@ const SettingsInterface: React.FC = () => {
       showToast({
         tone: "success",
         title: "인터페이스 설정이 저장되었습니다.",
-        message: "메인 화면과 일반 인터페이스 설정에 최신 내용을 반영했습니다.",
       });
     } catch (error: any) {
       console.error("Failed to save interface config:", error);
@@ -447,7 +426,7 @@ const SettingsInterface: React.FC = () => {
   };
 
   const saveMenuConfig = async () => {
-    if (savingMenu) return;
+    if (savingMenu || loading || loadError) return;
     setSavingMenu(true);
     try {
       const normalized = sanitizeMenuConfig(menuConfig);
@@ -469,10 +448,20 @@ const SettingsInterface: React.FC = () => {
           { ...normalized, updatedAt: serverTimestamp() },
           { merge: true },
         );
+        transaction.set(
+          doc(db, "site_settings", "config"),
+          {
+            studentMenuVisibility: buildStudentMenuVisibility(normalized),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
       });
       loadedMenus.current = normalized;
       setMenuConfig(normalized);
       invalidateSiteSettingDocCache("menu_config");
+      invalidateSiteSettingDocCache("config");
+      notifySystemConfigUpdated();
       notifyMenuConfigUpdated();
       showToast({
         tone: "success",
@@ -496,90 +485,86 @@ const SettingsInterface: React.FC = () => {
       <InlineLoading message="화면 설정을 불러오는 중입니다." showWarning />
     );
 
-  return (
-    <div className="teacher-settings-interface bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="border-b border-gray-100 p-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab("landing")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "landing" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            메인 화면
-          </button>
-          <button
-            onClick={() => setActiveTab("sitemap")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "sitemap" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            사이트맵 메뉴
-          </button>
-        </div>
+  if (loadError)
+    return (
+      <div role="alert" className="space-y-3">
+        <p>화면 설정을 불러오지 못했습니다.</p>
+        <button
+          type="button"
+          onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+          className="rounded-lg border border-gray-300 px-4 py-3 font-bold"
+        >
+          다시 시도
+        </button>
       </div>
+    );
 
+  return (
+    <div className="teacher-settings-interface">
+      <div className="ws-page-tabs" role="tablist" aria-label="인터페이스 설정">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "landing"}
+          onClick={() => setActiveTab("landing")}
+        >
+          대시보드
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "sitemap"}
+          onClick={() => setActiveTab("sitemap")}
+        >
+          사이트맵 메뉴
+        </button>
+      </div>
       <div className="teacher-settings-interface-body">
         {activeTab === "landing" && (
           <div className="teacher-settings-panel-grid">
-            <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-              <div className="border-b border-gray-100 pb-4 mb-6">
-                <h3 className="text-lg font-bold text-gray-900">
-                  <i className="fas fa-home text-blue-500 mr-2"></i>메인 화면
-                  설정
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  로그인(메인) 화면의 문구와 이모지를 설정합니다.
-                </p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    메인 이모지
+            <section className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                학생 대시보드
+              </h3>
+              <div className="divide-y divide-gray-100">
+                {(
+                  [
+                    ["notice", "알림장"],
+                    ["calendar", "주간 일정·출석 체크"],
+                    ["ranking", "위스 순위"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex min-h-14 items-center justify-between gap-4 py-3 cursor-pointer"
+                  >
+                    <span className="font-medium text-gray-800">{label}</span>
+                    <span className="flex items-center gap-2 shrink-0 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={config.dashboard[key]}
+                        onChange={(event) =>
+                          setConfig((previous) => ({
+                            ...previous,
+                            dashboard: {
+                              ...previous.dashboard,
+                              [key]: event.target.checked,
+                            },
+                          }))
+                        }
+                        className="h-5 w-5 accent-blue-600"
+                      />
+                      표시
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    name="mainEmoji"
-                    value={config.mainEmoji}
-                    onChange={handleConfigChange}
-                    placeholder="예: 📚"
-                    className="w-24 text-center text-2xl border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    이모지 1개를 입력하세요.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    서브 타이틀
-                  </label>
-                  <input
-                    lang="ko"
-                    inputMode="text"
-                    type="text"
-                    name="mainSubtitle"
-                    value={config.mainSubtitle}
-                    onChange={handleConfigChange}
-                    placeholder="예: 우리가 써 내려가는 이야기"
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
+                ))}
               </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-              <div className="border-b border-gray-100 pb-4 mb-6">
-                <h3 className="text-lg font-bold text-gray-900">
-                  <i className="fas fa-copyright text-gray-500 mr-2"></i>푸터
-                  설정
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  사이트 하단의 저작권 문구를 설정합니다.
-                </p>
-              </div>
-
+            </section>
+            <section className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">푸터</h3>
               <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    저작권 문구
-                  </label>
+                <label className="block text-sm font-bold text-gray-700">
+                  저작권 문구
                   <input
                     lang="ko"
                     inputMode="text"
@@ -587,104 +572,31 @@ const SettingsInterface: React.FC = () => {
                     name="footerText"
                     value={config.footerText}
                     onChange={handleConfigChange}
-                    placeholder="예: Copyright © 2026 ..."
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    placeholder="Copyright © 2026 ..."
+                    className="mt-2 w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-normal"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    공식 인스타그램 링크
-                  </label>
-                  <div className="relative">
-                    <i
-                      className="fa-brands fa-instagram pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pink-500"
-                      aria-hidden="true"
-                    ></i>
-                    <input
-                      type="text"
-                      name="instagramUrl"
-                      value={config.instagramUrl}
-                      onChange={handleConfigChange}
-                      placeholder="@westory 또는 https://www.instagram.com/westory/"
-                      className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-gray-400">
-                    비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-gray-200 p-6 lg:p-8 shadow-sm">
-              <div className="border-b border-gray-100 pb-4 mb-6">
-                <div className="teacher-settings-panel-heading flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">
-                      <i className="fas fa-hourglass-half text-orange-500 mr-2"></i>
-                      D-Day 표시
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      메인 화면에 D-Day 카운트를 표시합니다.
-                    </p>
-                  </div>
-                  <label className="relative inline-flex shrink-0 items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="ddayEnabled"
-                      checked={config.ddayEnabled}
-                      onChange={handleConfigChange}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                    <span className="ml-3 text-sm font-medium text-gray-900">
-                      사용
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              <div
-                className={`space-y-6 transition-opacity duration-200 ${config.ddayEnabled ? "" : "opacity-50 pointer-events-none"}`}
-              >
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    제목
-                  </label>
+                </label>
+                <label className="block text-sm font-bold text-gray-700">
+                  공식 인스타그램 링크
                   <input
-                    lang="ko"
-                    inputMode="text"
                     type="text"
-                    name="ddayTitle"
-                    value={config.ddayTitle}
+                    name="instagramUrl"
+                    value={config.instagramUrl}
                     onChange={handleConfigChange}
-                    placeholder="예: 수능, 중간고사"
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="@westory"
+                    className="mt-2 w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-normal"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    목표 날짜
-                  </label>
-                  <input
-                    type="date"
-                    name="ddayDate"
-                    value={config.ddayDate}
-                    onChange={handleConfigChange}
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
+                </label>
               </div>
-            </div>
-
+            </section>
             <div className="teacher-settings-panel-save text-right pb-2">
               <button
+                type="button"
                 onClick={() => void saveInterfaceConfig()}
                 disabled={savingInterface}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-10 rounded-xl shadow-lg transition transform active:scale-95 text-base"
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-6 rounded-lg"
               >
-                <i className="fas fa-save mr-2"></i>
-                {savingInterface ? "저장 중..." : "전체 저장"}
+                {savingInterface ? "저장 중..." : "대시보드·푸터 저장"}
               </button>
             </div>
           </div>
@@ -692,21 +604,18 @@ const SettingsInterface: React.FC = () => {
 
         {activeTab === "sitemap" && (
           <div className="teacher-floating-action-space space-y-5 pb-24">
-            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <section>
               <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <h3 className="flex items-center gap-2 text-base font-extrabold text-gray-900">
                     <i className="fas fa-sitemap text-blue-500"></i>
                     사이트맵 메뉴 관리
                   </h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    선택한 대시보드의 상위/하위 메뉴를 확인하고 바로 편집합니다.
-                  </p>
                 </div>
                 <div
                   role="tablist"
                   aria-label="사이트맵 미리보기 대상"
-                  className="teacher-settings-sitemap-tabs inline-flex rounded-xl bg-gray-100 p-1"
+                  className="teacher-settings-sitemap-tabs ws-page-tabs"
                 >
                   {(["student", "teacher"] as PortalType[]).map((portal) => {
                     const stats = getPortalMenuStats(portal);
@@ -761,21 +670,12 @@ const SettingsInterface: React.FC = () => {
               </div>
             </section>
 
-            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              <i className="fas fa-info-circle mr-1"></i>
-              이름 변경, 순서 이동, 삭제, 숨김 설정 후 우측 하단 저장 버튼을
-              눌러 반영합니다.
-            </div>
-
             <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 className="text-sm font-extrabold text-gray-900">
                     {getPortalLabel(activePortal)} 미리보기
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    현재 편집 상태 기준으로 선택한 대시보드만 표시합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
                   상위 {getPortalMenuStats(activePortal).parentCount}개
@@ -801,9 +701,22 @@ const SettingsInterface: React.FC = () => {
                     <div
                       className={`px-3 py-2.5 text-sm font-bold text-white ${getSitemapHeaderClass(idx)}`}
                     >
-                      {item.name}
+                      <span className={item.hidden ? "line-through" : ""}>
+                        {item.name}
+                      </span>
                     </div>
-                    <div className="min-h-[118px] bg-white p-3">
+                    <div className="bg-white p-3">
+                      {activePortal === "student" && (
+                        <button
+                          type="button"
+                          aria-label={`${item.name} 전체 ${item.hidden ? "숨김 해제" : "숨기기"}`}
+                          aria-pressed={item.hidden === true}
+                          onClick={() => toggleParentHidden(activePortal, idx)}
+                          className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
+                        >
+                          {item.hidden ? "전체 숨김 해제" : "전체 숨기기"}
+                        </button>
+                      )}
                       {item.children && item.children.length > 0 ? (
                         <ul className="space-y-1.5">
                           {item.children.map((child, childIdx) => (
@@ -812,7 +725,7 @@ const SettingsInterface: React.FC = () => {
                               className="teacher-settings-sitemap-child flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
                             >
                               <span
-                                className={`min-w-0 flex-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
+                                className={`min-w-0 flex-1 ${child.hidden || item.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
                               >
                                 • {child.name}
                               </span>
@@ -856,9 +769,6 @@ const SettingsInterface: React.FC = () => {
                   <h4 className="text-sm font-extrabold text-gray-900">
                     상위 메뉴 추가
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {getPortalLabel(activePortal)}에 새 상위 메뉴를 추가합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">
                   {getPortalLabel(activePortal)}
@@ -901,9 +811,6 @@ const SettingsInterface: React.FC = () => {
                   <h4 className="text-sm font-extrabold text-gray-900">
                     {getPortalLabel(activePortal)} 메뉴 편집
                   </h4>
-                  <p className="mt-1 text-xs text-gray-500">
-                    순서, 이름, 하위 메뉴를 조정합니다.
-                  </p>
                 </div>
                 <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
                   상위 {getPortalMenuStats(activePortal).parentCount}개
@@ -942,6 +849,18 @@ const SettingsInterface: React.FC = () => {
                       >
                         아래로
                       </button>
+                      {activePortal === "student" && (
+                        <button
+                          type="button"
+                          aria-pressed={item.hidden === true}
+                          onClick={() =>
+                            toggleParentHidden(activePortal, parentIndex)
+                          }
+                          className="px-3 py-2 text-xs rounded-md border border-gray-300 text-gray-700"
+                        >
+                          {item.hidden ? "전체 숨김 해제" : "전체 숨기기"}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => deleteParent(activePortal, parentIndex)}
@@ -1129,7 +1048,7 @@ const SettingsInterface: React.FC = () => {
                 type="button"
                 onClick={() => void saveMenuConfig()}
                 disabled={savingMenu}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-3 px-8 rounded-xl shadow-xl transition sm:w-auto"
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-8 rounded-xl shadow-xl transition sm:w-auto"
               >
                 <i className="fas fa-save mr-2"></i>
                 {savingMenu ? "저장 중..." : "사이트맵 저장"}

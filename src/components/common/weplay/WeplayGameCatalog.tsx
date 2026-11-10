@@ -1,5 +1,9 @@
 import { Link } from "react-router-dom";
-import { WEPLAY_GAMES } from "../../../lib/weplay";
+import { useEffect, useState } from "react";
+import { WEPLAY_GAMES, getWeplayLobby } from "../../../lib/weplay";
+import { withWeplayRequestTimeout } from "./requestTimeout";
+import { useAuth } from "../../../contexts/AuthContext";
+import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
 import useYutPublication from "./useYutPublication";
 import { prepareWeplayIntroAudio } from "./weplayIntroAudio";
 import "./weplay-catalog.css";
@@ -14,6 +18,53 @@ export default function WeplayGameCatalog({
   portal: "student" | "teacher";
 }) {
   const publication = useYutPublication(portal);
+  const { currentUser, config, menuConfig, configReady, menuConfigReady } =
+    useAuth();
+  const navalAllowed =
+    configReady &&
+    menuConfigReady &&
+    getStudentRouteAccess(
+      { pathname: "/student/weplay", search: "?game=history-rain" },
+      config,
+      menuConfig,
+    ).allowed;
+  const scope = `${currentUser?.uid}/${config?.year}/${config?.semester}/${navalAllowed}`;
+  const [naval, setNaval] = useState({ scope: "", status: "checking" });
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (portal === "teacher" || !navalAllowed) return;
+    let active = true;
+    setNaval({ scope, status: "checking" });
+    void withWeplayRequestTimeout(getWeplayLobby(config))
+      .then((lobby) => {
+        if (active)
+          setNaval({
+            scope,
+            status: lobby.gameEnabled === true ? "open" : "closed",
+          });
+      })
+      .catch(() => {
+        if (active) setNaval({ scope, status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [portal, scope, revision]);
+  const navalStatus = naval.scope === scope ? naval.status : "checking";
+  const games = WEPLAY_GAMES.filter(
+    (game) =>
+      portal === "teacher" ||
+      (configReady &&
+        menuConfigReady &&
+        getStudentRouteAccess(
+          { pathname: "/student/weplay", search: `?game=${game.id}` },
+          config,
+          menuConfig,
+        ).allowed &&
+        (game.id === "joseon-yut"
+          ? publication.status === "open"
+          : navalStatus === "open")),
+  );
   return (
     <section
       className="weplay-catalog"
@@ -24,10 +75,32 @@ export default function WeplayGameCatalog({
         <h1 id="weplay-catalog-title" tabIndex={-1}>
           {groupTitle ?? (portal === "teacher" ? "위플레이 관리" : "위플레이")}
         </h1>
-        <span>전체 게임 {WEPLAY_GAMES.length}</span>
+        <span>전체 게임 {games.length}</span>
       </div>
+      {portal === "student" &&
+        ((navalAllowed && navalStatus === "checking") ||
+          publication.status === "checking") && (
+          <p role="status">게임을 확인하는 중입니다.</p>
+        )}
+      {portal === "student" &&
+        ((navalAllowed && navalStatus === "error") ||
+          publication.status === "error") && (
+          <div role="alert">
+            게임을 확인하지 못했습니다.{" "}
+            <button
+              type="button"
+              className="weplay-catalog-retry"
+              onClick={() => {
+                setRevision((value) => value + 1);
+                publication.retry();
+              }}
+            >
+              다시 확인
+            </button>
+          </div>
+        )}
       <ul className="weplay-catalog-grid">
-        {WEPLAY_GAMES.map((game) => {
+        {games.map((game) => {
           const available =
             game.id !== "joseon-yut" || publication.status === "open";
           const content = (

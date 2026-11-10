@@ -4,6 +4,7 @@ import WeplayGameCatalog from "../../components/common/weplay/WeplayGameCatalog"
 import WeplayLaunchPanel from "../../components/common/weplay/WeplayLaunchPanel";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStudentMenuLabel } from "../../constants/menus";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import {
   WEPLAY_GAMES,
   getWeplayLobby,
@@ -40,13 +41,36 @@ const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 
 export default function Weplay() {
   const [params] = useSearchParams();
-  const { menuConfig } = useAuth();
+  const { config, menuConfig } = useAuth();
   const groupTitle = getStudentMenuLabel(
     menuConfig,
     "/student/weplay",
     "위플레이",
     "group",
   );
+  if (
+    !params.get("game") &&
+    !getStudentRouteAccess(
+      { pathname: "/student/weplay", search: "?game=history-rain" },
+      config,
+      menuConfig,
+    ).allowed
+  )
+    return (
+      <WeplayGameCatalog
+        portal="student"
+        groupTitle={groupTitle}
+        gameTitle={getWeplayGameTitle(menuConfig)}
+      />
+    );
+  if (
+    !getStudentRouteAccess(
+      { pathname: "/student/weplay", search: `?${params}` },
+      config,
+      menuConfig,
+    ).allowed
+  )
+    return null;
   return params.get("game") === "joseon-yut" ? (
     <YutGameEntry portal="student" groupTitle={groupTitle} />
   ) : (
@@ -338,6 +362,34 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
       </main>
     );
   }
+  if (!lobby || loadedScope !== scope) {
+    return (
+      <main className="weplay-page">
+        <p role={error ? "alert" : "status"}>
+          {error || "게임을 확인하는 중입니다."}
+        </p>
+        {error && (
+          <button
+            type="button"
+            className="weplay-primary"
+            onClick={() => void load()}
+          >
+            다시 확인
+          </button>
+        )}
+      </main>
+    );
+  }
+  if (lobby.gameEnabled !== true) {
+    return (
+      <main className="weplay-page">
+        <p>지금은 게임이 열려 있지 않습니다.</p>
+        <Link className="weplay-catalog-back" to="/student/weplay">
+          전체 게임
+        </Link>
+      </main>
+    );
+  }
   return (
     <main className="weplay-page weplay-game-page" tabIndex={-1}>
       <header className="weplay-heading">
@@ -492,7 +544,6 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
                 starting={starting}
                 disabled={
                   loading ||
-                  lobby.gameEnabled === false ||
                   availableCount < 3 ||
                   (mode === "challenge" && cannotChallenge)
                 }

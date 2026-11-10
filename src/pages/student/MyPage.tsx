@@ -1,4 +1,5 @@
 import { getStudentMenuLabel } from "../../constants/menus";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
@@ -254,7 +255,12 @@ const MyPage: React.FC = () => {
   const canUseQuiz = config?.showQuiz !== false;
   const canUseScore = config?.showScore !== false;
 
-  const [menu, setMenu] = useState<MainMenu>("profile");
+  const menu: MainMenu =
+    requestedMenu === "avatar" ||
+    requestedMenu === "score" ||
+    requestedMenu === "wrong_note"
+      ? requestedMenu
+      : "profile";
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfileDoc | null>(null);
   const [profileIcon, setProfileIcon] = useState("😀");
@@ -332,29 +338,22 @@ const MyPage: React.FC = () => {
   );
 
   const isMenuAvailable = (nextMenu: MainMenu) => {
-    if (nextMenu === "score") return canUseScore;
-    if (nextMenu === "wrong_note") return canUseQuiz;
-    return true;
+    if (nextMenu === "score" && !canUseScore) return false;
+    if (nextMenu === "wrong_note" && !canUseQuiz) return false;
+    return getStudentRouteAccess(
+      {
+        pathname: "/student/mypage",
+        search: nextMenu === "profile" ? "" : `?menu=${nextMenu}`,
+      },
+      config,
+      menuConfig,
+    ).allowed;
   };
 
   const selectMenu = (nextMenu: MainMenu) => {
     const safeMenu = isMenuAvailable(nextMenu) ? nextMenu : "profile";
-    setMenu(safeMenu);
     setSearchParams(safeMenu === "profile" ? {} : { menu: safeMenu });
   };
-
-  useEffect(() => {
-    if (
-      requestedMenu === "profile" ||
-      requestedMenu === "avatar" ||
-      requestedMenu === "score" ||
-      requestedMenu === "wrong_note"
-    ) {
-      setMenu(isMenuAvailable(requestedMenu) ? requestedMenu : "profile");
-    } else if (!isMenuAvailable(menu)) {
-      setMenu("profile");
-    }
-  }, [requestedMenu, canUseQuiz, canUseScore, menu]);
 
   const loadMyPage = async () => {
     if (!user || !config) {
@@ -1051,7 +1050,7 @@ const MyPage: React.FC = () => {
           },
         ]
       : []),
-    ...(canUseQuiz
+    ...(canUseQuiz && isMenuAvailable("wrong_note")
       ? [
           {
             title: "오답 노트",

@@ -3,6 +3,38 @@ import type { SystemConfig } from "../types";
 
 export const STUDENT_HIDDEN_MENU_REDIRECT = "/student/dashboard";
 
+/** The rules and callable functions read this projection from the same atomic save. */
+export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
+  const parentVisible = (url: string) =>
+    !menuConfig.student.some(
+      (item) => item.url === url && item.hidden === true,
+    );
+  const childVisible = (url: string) =>
+    !menuConfig.student.some((item) =>
+      item.children?.some(
+        (child) => child.url === url && child.hidden === true,
+      ),
+    );
+  const weplay = parentVisible("/student/weplay");
+  const mypage = parentVisible("/student/mypage");
+  return {
+    weplay,
+    naval:
+      weplay &&
+      childVisible("/student/weplay") &&
+      childVisible("/student/weplay?game=history-rain"),
+    yut: weplay && childVisible("/student/weplay?game=joseon-yut"),
+    mypage,
+    profile:
+      mypage &&
+      childVisible("/student/mypage") &&
+      childVisible("/student/mypage?menu=profile"),
+    avatar: mypage && childVisible("/student/mypage?menu=avatar"),
+    score: mypage && childVisible("/student/mypage?menu=score"),
+    wrong_note: mypage && childVisible("/student/mypage?menu=wrong_note"),
+  };
+};
+
 type StudentRouteTarget = {
   pathname: string;
   search?: string;
@@ -45,13 +77,13 @@ const STUDENT_SYSTEM_MENU_RULES: StudentSystemMenuRule[] = [
 
 const ALWAYS_ALLOWED_STUDENT_PREFIXES = [
   "/student/dashboard",
-  "/student/mypage",
   "/student/calendar",
 ];
 
 const MENU_CONFIG_CONTROLLED_STUDENT_PREFIXES = [
   "/student/points",
   "/student/weplay",
+  "/student/mypage",
 ];
 
 const HIDDEN_CHILD_DESCENDANT_PATHS: Record<string, string[]> = {
@@ -258,12 +290,44 @@ export const getStudentVisibleMenuItems = (
   if (!config) return [];
 
   return menuItems.flatMap((item) => {
+    if (item.hidden === true) return [];
+    const visibility = config.studentMenuVisibility;
+    if (item.url === "/student/mypage" && visibility?.mypage === false)
+      return [];
+    if (item.url === "/student/weplay" && visibility?.weplay === false)
+      return [];
     if (isMenuUrlBlockedBySystemConfig(item.url, config)) return [];
 
     const originalChildren = item.children || [];
     const visibleChildren = originalChildren.filter(
       (child) =>
         child.hidden !== true &&
+        !(child.url === "/student/weplay" && visibility?.naval === false) &&
+        !(
+          child.url === "/student/weplay?game=joseon-yut" &&
+          visibility?.yut === false
+        ) &&
+        !(child.url === "/student/mypage" && visibility?.profile === false) &&
+        !(
+          child.url === "/student/mypage?menu=avatar" &&
+          visibility?.avatar === false
+        ) &&
+        !(
+          child.url === "/student/mypage?menu=score" &&
+          visibility?.score === false
+        ) &&
+        !(
+          child.url === "/student/mypage?menu=wrong_note" &&
+          visibility?.wrong_note === false
+        ) &&
+        !(
+          child.url === "/student/mypage?menu=score" &&
+          config.showScore === false
+        ) &&
+        !(
+          child.url === "/student/mypage?menu=wrong_note" &&
+          config.showQuiz === false
+        ) &&
         !isMenuUrlBlockedBySystemConfig(child.url, config),
     );
 
@@ -272,7 +336,9 @@ export const getStudentVisibleMenuItems = (
     }
 
     const shouldMoveParentTarget =
-      originalChildren.length > 0 && isParentUrlHiddenByChild(item);
+      item.url !== "/student/weplay" &&
+      originalChildren.length > 0 &&
+      isParentUrlHiddenByChild(item);
     const nextUrl = shouldMoveParentTarget
       ? visibleChildren[0]?.url || item.url
       : item.url;
@@ -331,6 +397,60 @@ export const getStudentRouteAccess = (
       allowed: false,
       redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
       reason: "system-config",
+    };
+  }
+
+  if (pathname === "/student/mypage" || pathname === "/student/weplay") {
+    const visibility = buildStudentMenuVisibility(menuConfig);
+    const visible = (key: keyof typeof visibility) =>
+      visibility[key] && config.studentMenuVisibility?.[key] !== false;
+    const params = new URLSearchParams(normalizeSearch(target.search));
+    let allowed = false;
+    if (pathname === "/student/mypage") {
+      const requested = params.get("menu") || "profile";
+      const key = ["profile", "avatar", "score", "wrong_note"].includes(
+        requested,
+      )
+        ? (requested as "profile" | "avatar" | "score" | "wrong_note")
+        : "profile";
+      allowed =
+        visible("mypage") &&
+        visible(key) &&
+        (key !== "score" || config.showScore !== false) &&
+        (key !== "wrong_note" || config.showQuiz !== false);
+    } else {
+      const game = params.get("game");
+      allowed =
+        visible("weplay") &&
+        (!game
+          ? visible("naval") || visible("yut")
+          : game === "history-rain"
+            ? visible("naval")
+            : game === "joseon-yut" && visible("yut"));
+    }
+    return allowed
+      ? { allowed: true }
+      : {
+          allowed: false,
+          redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
+          reason: "menu-config",
+        };
+  }
+
+  if (
+    menuConfig.student.some(
+      (item) =>
+        item.hidden === true &&
+        (isPathUnderPrefix(pathname, parseMenuUrl(item.url).pathname) ||
+          item.children?.some((child) =>
+            menuTargetMatchesRoute(child.url, target, item.children),
+          )),
+    )
+  ) {
+    return {
+      allowed: false,
+      redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
+      reason: "menu-config",
     };
   }
 

@@ -1266,6 +1266,10 @@ service cloud.firestore {
       // Participants and authorized teacher observers may subscribe to one room.
       // Mutations, join-code lookups and room discovery stay server commands.
       match /yut_rooms/{roomId} {
+        function currentYutMenuVisible() {
+          let visibility = get(/databases/$(database)/documents/site_settings/config).data.get('studentMenuVisibility', {});
+          return visibility is map && visibility.get('weplay', true) == true && visibility.get('yut', true) == true;
+        }
         function currentYutStudentMember() {
           let settings = get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/weplay_games/joseon-yut).data;
           let enrollmentId = resource.data.enrollmentIds.get(request.auth.uid, 'none');
@@ -1273,7 +1277,8 @@ service cloud.firestore {
           let slotId = resource.data.enrollmentSlotIds.get(request.auth.uid, 'none');
           let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
           let classroom = get(/databases/$(database)/documents/semester_classes/$(enrollment.classId)).data;
-          return settings.enabled == true && settings.version is int && settings.version >= 0 && settings.version <= 9007199254740991
+          return currentYutMenuVisible()
+            && settings.enabled == true && settings.version is int && settings.version >= 0 && settings.version <= 9007199254740991
             && settings.get('allowMultiplayer', true) == true
             && (resource.data.get('visibility', 'private') == 'public' || settings.get('allowPrivateRooms', true) == true)
             && [enrollment.studentUid, enrollment.semesterId, enrollment.enrollmentStatus,

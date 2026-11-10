@@ -6,9 +6,27 @@ export interface SystemConfig {
   showQuiz: boolean;
   showScore: boolean;
   showLesson: boolean;
+  studentMenuVisibility?: Partial<
+    Record<
+      | "weplay"
+      | "naval"
+      | "yut"
+      | "mypage"
+      | "avatar"
+      | "profile"
+      | "score"
+      | "wrong_note",
+      boolean
+    >
+  >;
 }
 
 export interface InterfaceConfig {
+  dashboard?: {
+    notice?: boolean;
+    calendar?: boolean;
+    ranking?: boolean;
+  };
   mainEmoji: string;
   mainSubtitle: string;
   ddayEnabled: boolean;

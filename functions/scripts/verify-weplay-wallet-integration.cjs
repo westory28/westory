@@ -200,6 +200,30 @@ async function test(name, run, options) {
     assert.equal(lobby.records[0].sessionId, session.id); assert.equal(lobby.records[0].netWis, 3);
     await assertAccounting('a', 30, [-2, 5]);
   });
+  await test('menu hiding revokes lobby, fresh and replayed starts and answers while preserving paid settlement', async () => {
+    const requestKey = 'menu-visibility-session';
+    const session = await start('a', { requestKey });
+    const sessionBefore = await get(`${base}/weplay_sessions/${session.id}`);
+    for (const visibility of [{ naval: false }, { weplay: false, naval: true }]) {
+      await db.doc('site_settings/config').update({ studentMenuVisibility: visibility });
+      await denied(call('getWeplayLobby'), ['permission-denied']);
+      await denied(start('b'), ['permission-denied']);
+      await denied(start('a', { requestKey }), ['permission-denied']);
+      await denied(call('submitWeplayAnswer', 'a', { sessionId: session.id, eventId: 'hidden-answer', wordId: session.words[0].id, answer: session.words[0].text }), ['permission-denied']);
+      assert.deepEqual(await get(`${base}/weplay_sessions/${session.id}`), sessionBefore);
+      await assertAccounting('a', 30, [-2]);
+    }
+    await expire(session);
+    const result = await finish(session);
+    assert.equal(result.cost, 2);
+    await assertAccounting('a', 30, [-2, 5]);
+    await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: true, naval: true } });
+    await patch(`${base}/weplay_games/history-rain`, { enabled: false });
+    await denied(start('b'), ['failed-precondition']);
+    await denied(start('a', { requestKey }), ['failed-precondition']);
+    await denied(call('submitWeplayAnswer', 'a', { sessionId: session.id, eventId: 'closed-answer', wordId: session.words[0].id, answer: session.words[0].text }), ['failed-precondition']);
+    await assertAccounting('b', 30, []);
+  });
   await test('scheduled ranking payout is atomic and repeated settlement cannot grant twice', async () => {
     const session = await start(); await expire(session); await finish(session);
     const stored = await get(`${base}/weplay_sessions/${session.id}`);

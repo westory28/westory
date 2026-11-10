@@ -33,7 +33,6 @@ import {
 import {
   invalidateSiteSettingDocCache,
   readFreshSiteSettingDoc,
-  readSiteSettingDoc,
 } from "../lib/siteSettings";
 import {
   subscribeMenuConfigUpdated,
@@ -53,6 +52,7 @@ interface AuthContextType {
   menuConfigReady: boolean;
   settingsLoadedAt: number;
   interfaceConfig: InterfaceConfig | null;
+  interfaceConfigReady: boolean;
   loading: boolean;
   authPhase: AuthPhase;
   authError: AuthStartupError | null;
@@ -98,6 +98,9 @@ const normalizeSystemConfig = (raw: SystemConfig | null): SystemConfig => {
     showQuiz: raw?.showQuiz !== false,
     showScore: raw?.showScore !== false,
     showLesson: raw?.showLesson !== false,
+    ...(raw?.studentMenuVisibility
+      ? { studentMenuVisibility: raw.studentMenuVisibility }
+      : {}),
   };
 };
 
@@ -129,18 +132,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [menuConfigLoadedAt, setMenuConfigLoadedAt] = useState(0);
   const [interfaceConfig, setInterfaceConfig] =
     useState<InterfaceConfig | null>(null);
+  const [interfaceConfigReady, setInterfaceConfigReady] = useState(false);
+  const interfaceRequestRef = useRef(0);
 
   const systemConfigLoadRef = useRef<Promise<void> | null>(null);
   const menuConfigLoadRef = useRef<Promise<void> | null>(null);
+  const systemRequestRef = useRef(0);
+  const menuRequestRef = useRef(0);
+  const [settingsSubscriptionRevision, setSettingsSubscriptionRevision] =
+    useState(0);
 
   const loadPublicInterfaceConfig = useCallback(async () => {
+    const request = ++interfaceRequestRef.current;
+    setInterfaceConfigReady(false);
     try {
       const data =
-        await readSiteSettingDoc<InterfaceConfig>("interface_config");
-      setInterfaceConfig(data);
+        await readFreshSiteSettingDoc<InterfaceConfig>("interface_config");
+      if (request !== interfaceRequestRef.current) return;
+      setInterfaceConfig(data || ({} as InterfaceConfig));
+      setInterfaceConfigReady(true);
       markLoginPerf("westory-interface-config-ready");
     } catch (e) {
+      if (request !== interfaceRequestRef.current) return;
       console.error("Failed to load interface config");
+      setInterfaceConfig(null);
+      setInterfaceConfigReady(true);
     }
   }, []);
 
@@ -159,10 +175,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return systemConfigLoadRef.current;
       }
 
+      const request = ++systemRequestRef.current;
       const promise = (async () => {
         try {
           const data = await readFreshSiteSettingDoc<SystemConfig>("config");
           if (
+            request !== systemRequestRef.current ||
             auth.currentUser !== user ||
             authGenerationRef.current !== generation ||
             authPhaseRef.current !== "ready"
@@ -174,6 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           markLoginPerf("westory-auth-config-ready");
         } catch (e) {
           if (
+            request !== systemRequestRef.current ||
             auth.currentUser !== user ||
             authGenerationRef.current !== generation ||
             authPhaseRef.current !== "ready"
@@ -212,10 +231,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return menuConfigLoadRef.current;
       }
 
+      const request = ++menuRequestRef.current;
       const promise = (async () => {
         try {
           const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
           if (
+            request !== menuRequestRef.current ||
             auth.currentUser !== user ||
             authGenerationRef.current !== generation ||
             authPhaseRef.current !== "ready"
@@ -226,6 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setMenuConfigLoadedAt(Date.now());
         } catch (e) {
           if (
+            request !== menuRequestRef.current ||
             auth.currentUser !== user ||
             authGenerationRef.current !== generation ||
             authPhaseRef.current !== "ready"
@@ -305,6 +327,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           void Promise.all([
             loadAuthedSystemConfig(user, generation),
             loadAuthedMenuConfig(user, generation),
+            loadPublicInterfaceConfig(),
           ]);
         },
         mark: (phase, generation) => {
@@ -374,7 +397,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         startupControllerRef.current = null;
       unsubscribe();
     };
-  }, [loadAuthedMenuConfig, loadAuthedSystemConfig]);
+  }, [loadAuthedMenuConfig, loadAuthedSystemConfig, loadPublicInterfaceConfig]);
 
   useEffect(() => {
     if (!loading && currentUser && !configReady) {
@@ -383,16 +406,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!loading && currentUser && !menuConfigReady) {
       void loadAuthedMenuConfig(currentUser);
     }
-    if (!interfaceConfig) {
-      void loadPublicInterfaceConfig();
-    }
   }, [
     configReady,
     currentUser,
-    interfaceConfig,
     loadAuthedMenuConfig,
     loadAuthedSystemConfig,
-    loadPublicInterfaceConfig,
     menuConfigReady,
     loading,
   ]);
@@ -407,6 +425,99 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }),
     [],
   );
+
+  // Only server-confirmed settings may open student surfaces. Listen for the
+  // teacher's changes even while a student stays on the same page.
+  useEffect(() => {
+    if (
+      startup.phase !== "ready" ||
+      !currentUser ||
+      !configReady ||
+      !menuConfigReady
+    )
+      return;
+    let active = true;
+    const subscriptions = [
+      onSnapshot(
+        doc(db, "site_settings", "config"),
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (
+            !active ||
+            snapshot.metadata.fromCache ||
+            snapshot.metadata.hasPendingWrites
+          )
+            return;
+          systemRequestRef.current += 1;
+          setConfig(
+            normalizeSystemConfig(
+              snapshot.exists() ? (snapshot.data() as SystemConfig) : null,
+            ),
+          );
+          setConfigLoadedAt(Date.now());
+        },
+        () => {
+          if (active) {
+            systemRequestRef.current += 1;
+            setConfig(null);
+          }
+        },
+      ),
+      onSnapshot(
+        doc(db, "site_settings", "menu_config"),
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (
+            !active ||
+            snapshot.metadata.fromCache ||
+            snapshot.metadata.hasPendingWrites
+          )
+            return;
+          menuRequestRef.current += 1;
+          setMenuConfig(sanitizeMenuConfig(snapshot.data()));
+          setMenuConfigLoadedAt(Date.now());
+        },
+        () => {
+          if (active) {
+            menuRequestRef.current += 1;
+            setMenuConfig(null);
+          }
+        },
+      ),
+      onSnapshot(
+        doc(db, "site_settings", "interface_config"),
+        { includeMetadataChanges: true },
+        (snapshot) => {
+          if (
+            !active ||
+            snapshot.metadata.fromCache ||
+            snapshot.metadata.hasPendingWrites
+          )
+            return;
+          interfaceRequestRef.current += 1;
+          setInterfaceConfig((snapshot.data() || {}) as InterfaceConfig);
+          setInterfaceConfigReady(true);
+        },
+        () => {
+          if (active) {
+            interfaceRequestRef.current += 1;
+            setInterfaceConfig(null);
+            setInterfaceConfigReady(true);
+          }
+        },
+      ),
+    ];
+    return () => {
+      active = false;
+      subscriptions.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [
+    startup.phase,
+    currentUser,
+    configReady,
+    menuConfigReady,
+    settingsSubscriptionRevision,
+  ]);
 
   useEffect(
     () =>
@@ -490,6 +601,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const refreshConfig = useCallback(async () => {
+    setSettingsSubscriptionRevision((value) => value + 1);
     invalidateSiteSettingDocCache("config");
     systemConfigLoadRef.current = null;
     await loadAuthedSystemConfig(currentUser);
@@ -529,6 +641,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     menuConfigReady,
     settingsLoadedAt,
     interfaceConfig,
+    interfaceConfigReady,
     loading,
     authPhase: startup.phase,
     authError: startup.error,

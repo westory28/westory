@@ -664,17 +664,30 @@ async function sidebarChecks(page, portal, width) {
   await checkMobileReturn();
   await expanded(currentGroup, true, "Forward restores the selected group");
 
-  await navigateLink(portal === "teacher" ? "캘린더" : "마이페이지");
+  if (portal === "teacher") {
+    await navigateLink("캘린더");
+  } else {
+    const myPageGroup = sidebar.getByRole("button", {
+      name: "마이페이지",
+      exact: true,
+    });
+    await myPageGroup.press("Enter");
+    await expanded(myPageGroup, true, "MyPage exposes its controlled children");
+    for (const name of ["내 정보", "아바타 꾸미기", "내 성적", "오답 노트"])
+      assert.equal(await sidebar.getByRole("link", { name, exact: true }).count(), 1);
+    await navigateLink("내 정보");
+    await expanded(myPageGroup, true, "MyPage child navigation keeps its group open");
+  }
   await expanded(
     currentGroup,
     false,
-    "A standalone destination closes the previous group",
+    "A different destination closes the previous group",
   );
   assert.equal(
     await sidebar
       .locator('.teacher-sidebar-submenu[aria-hidden="false"]')
       .count(),
-    0,
+    portal === "teacher" ? 0 : 1,
   );
   assert.equal(
     await sidebar
@@ -691,7 +704,7 @@ async function sidebarChecks(page, portal, width) {
   await expanded(
     currentGroup,
     true,
-    "Back from a standalone destination restores its group",
+    "Back from a different destination restores its group",
   );
   await page.screenshot({
     path: path.join(evidence, `${portal}-sidebar-${width}.png`),

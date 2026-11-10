@@ -89,6 +89,13 @@ const rejected = async (state, input, code = 'failed-precondition') => {
 };
 
 (async () => {
+  await test('hidden profile or my page denies emoji edits before any write', async () => {
+    for (const key of ['mypage', 'profile']) {
+      const state = fixture();
+      state.documents.set('site_settings/config', { studentMenuVisibility: { [key]: false } });
+      await rejected(state, request(), 'permission-denied');
+    }
+  });
   await test('previous semester request cannot unlock emoji with old points', async () => {
     const state = fixture({ rank: 500 });
     await rejected(state, request({ semester: '1', emojiId: 'fox' }));

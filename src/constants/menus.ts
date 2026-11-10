@@ -17,6 +17,7 @@ export interface MenuItem {
   nameCustomized?: boolean;
   url: string;
   icon: string;
+  hidden?: boolean;
   children?: MenuChild[];
 }
 
@@ -75,12 +76,21 @@ export const MENUS: MenuConfig = {
       name: "마이페이지",
       url: "/student/mypage",
       icon: "M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z",
+      children: [
+        { name: "내 정보", url: "/student/mypage" },
+        { name: "아바타 꾸미기", url: "/student/mypage?menu=avatar" },
+        { name: "내 성적", url: "/student/mypage?menu=score" },
+        { name: "오답 노트", url: "/student/mypage?menu=wrong_note" },
+      ],
     },
     {
       name: "위플레이",
       url: "/student/weplay",
       icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
-      children: [{ name: DEFAULT_WEPLAY_GAME_TITLE, url: WEPLAY_STUDENT_URL }],
+      children: [
+        { name: DEFAULT_WEPLAY_GAME_TITLE, url: WEPLAY_STUDENT_URL },
+        { name: "마우저구 윷놀이", url: "/student/weplay?game=joseon-yut" },
+      ],
     },
   ],
   teacher: [
@@ -359,6 +369,7 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
           : {}),
         url: normalizeMenuUrl((item as MenuItem)?.url),
         icon: toSafeText((item as MenuItem)?.icon),
+        ...((item as MenuItem)?.hidden === true ? { hidden: true } : {}),
         children: sanitizeChildren((item as MenuItem)?.children),
       }))
       .filter((item) => item.name && item.url && !isLegacyRemovedUrl(item.url))

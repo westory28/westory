@@ -62,9 +62,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     configReady,
     menuConfig,
     menuConfigReady,
+    interfaceConfig,
+    interfaceConfigReady,
     settingsLoadedAt,
     refreshConfig,
     refreshMenuConfig,
+    refreshInterfaceConfig,
   } = useAuth();
   const { showToast } = useAppToast();
   const navigate = useNavigate();
@@ -170,9 +173,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     studentVisibilityCheckedRouteKey === studentVisibilityRouteKey;
   const studentAccessReady =
     !isStudentRoute ||
-    !isVisibilityControlledStudentRoute ||
     (configReady &&
       menuConfigReady &&
+      interfaceConfigReady &&
       studentVisibilityRouteVerified &&
       !studentVisibilityRefreshing);
   const studentRouteAccess = React.useMemo(
@@ -252,6 +255,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       !portalAllowed ||
       !isStudentRoute ||
       !studentAccessReady ||
+      !config ||
+      !menuConfig ||
+      !interfaceConfig ||
       studentRouteAccess.allowed
     ) {
       return;
@@ -265,6 +271,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     navigate(studentRouteAccess.redirectTo, { replace: true });
   }, [
     currentUser,
+    config,
+    menuConfig,
+    interfaceConfig,
     isStudentRoute,
     loading,
     navigate,
@@ -348,6 +357,33 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (!profileReady) return <Navigate to="/" replace />;
   if (permissionRedirect) return <Navigate to={permissionRedirect} replace />;
+
+  if (
+    isStudentRoute &&
+    configReady &&
+    menuConfigReady &&
+    interfaceConfigReady &&
+    (!config || !menuConfig || !interfaceConfig)
+  ) {
+    return (
+      <div className="ws-page" role="alert">
+        <p>화면 설정을 확인하지 못했습니다.</p>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => {
+            void Promise.all([
+              refreshConfig(),
+              refreshMenuConfig(),
+              refreshInterfaceConfig(),
+            ]);
+          }}
+        >
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   if (currentUser && isStudentRoute && !studentAccessReady) {
     return <PageLoading message="학생 공개 설정을 확인하는 중입니다." />;

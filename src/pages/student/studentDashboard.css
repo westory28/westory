@@ -38,6 +38,18 @@
   min-height: 0;
 }
 
+.student-portal-dashboard__grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 384px), 1fr));
+  grid-template-rows: auto;
+  min-height: 0;
+}
+
+.student-portal-dashboard__grid--compact > * {
+  grid-column: auto;
+  grid-row: auto;
+  contain: none;
+}
+
 .student-portal-dashboard .student-notice-board,
 .student-portal-dashboard .wis-ranking-panel,
 .student-portal-dashboard .student-dashboard-placeholder {

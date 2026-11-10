@@ -1,6 +1,7 @@
 const { FieldValue } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
+const { readStudentMenuAccess } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
 const {
   resolveRankPolicy, getProfileEmojiEntryById, getCurrentTierCodeForRankTotal,
@@ -32,6 +33,7 @@ const createStudentProfileEmojiHandler = ({
     }
 
     return db.runTransaction(async (transaction) => {
+      await readStudentMenuAccess(transaction, db, ['mypage', 'profile']);
       // This read verifies the active semester, enrollment and canonical account.
       // Legacy wallets and a previously selected emoji never grant access.
       const { wallet } = await canonicalWallet.read(transaction, { year, semester }, uid);

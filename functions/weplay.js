@@ -7,6 +7,7 @@ const {
 } = require('./weplayCore');
 const { simulateWeplayBattle } = require('./weplayBattle');
 const { randomUUID } = require('node:crypto');
+const { readStudentMenuAccess } = require('./studentMenuVisibility');
 
 // The existing point wallet, transaction, permission, and rank helpers are injected
 // so games use exactly the same semester ledger as the rest of Westory.
@@ -385,6 +386,7 @@ function createWeplayFunctions(deps) {
     const { uid, profile } = await student(request);
     const scope = scopeFrom(request.data);
     await assertCurrentScope(scope);
+    await readStudentMenuAccess(null, db, ['weplay', 'naval']);
     const key = classKey(profile);
     const recovery = recoverActive(scope, uid);
     const [policySnap, playerState, catalogResult, periodState] = await Promise.all([
@@ -426,6 +428,7 @@ function createWeplayFunctions(deps) {
     const { uid, profile } = await student(request);
     const scope = scopeFrom(request.data);
     await assertCurrentScope(scope);
+    await readStudentMenuAccess(null, db, ['weplay', 'naval']);
     const mode = request.data?.mode;
     if (!['practice', 'challenge'].includes(mode)) invalid('게임 모드를 확인해 주세요.');
     const difficulty = request.data?.difficulty;
@@ -433,7 +436,12 @@ function createWeplayFunctions(deps) {
     const requestKey = identifier(request.data?.requestKey, '요청 번호');
     const sessionId = hash(`${scope.year}:${scope.semester}:${uid}:${requestKey}`);
     const existing = await ref(scope, 'weplay_sessions', sessionId).get();
-    if (existing.exists) return publicSession(existing.data());
+    if (existing.exists) {
+      if (!settingsFromSnap(await ref(scope, 'weplay_games', GAME_ID).get()).enabled) {
+        throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
+      }
+      return publicSession(existing.data());
+    }
     const [, catalogResult, period] = await Promise.all([
       recoverActive(scope, uid), readCatalog(scope), mode === 'challenge' ? ensurePeriod(scope) : null,
     ]);
@@ -449,14 +457,15 @@ function createWeplayFunctions(deps) {
     try { words = buildWords(catalog, mode === 'challenge' ? `${scope.year}:${scope.semester}:${period.id}:${key}:${difficulty}` : sessionId, difficulty, difficultySettings, catalogSettings); }
     catch (error) { throw new HttpsError('failed-precondition', error.message); }
     const output = await db.runTransaction(async (transaction) => {
+      await readStudentMenuAccess(transaction, db, ['weplay', 'naval']);
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
       const playerRef = ref(scope, 'weplay_players', uid);
       const [repeated, gameSettingsSnap, profileSnap, policySnap, playerSnap] = await transaction.getAll(
         sessionRef, ref(scope, 'weplay_games', GAME_ID), db.doc(`users/${uid}`), ref(scope, 'weplay_policies', 'current'), playerRef,
       );
-      if (repeated.exists) return { session: repeated.data(), charged: false };
       const gameSettings = settingsFromSnap(gameSettingsSnap);
       if (!gameSettings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
+      if (repeated.exists) return { session: repeated.data(), charged: false };
       if (JSON.stringify(gameSettings) !== JSON.stringify(catalogSettings)) {
         throw new HttpsError('aborted', '출제 자료 설정이 변경되었습니다. 다시 시작해 주세요.');
       }
@@ -517,6 +526,9 @@ function createWeplayFunctions(deps) {
     // Time is measured on receipt, never supplied by the client. Retries retain the
     // original event verdict and a transaction serializes simultaneous answers.
     return db.runTransaction(async (transaction) => {
+      await readStudentMenuAccess(transaction, db, ['weplay', 'naval']);
+      const settings = settingsFromSnap(await transaction.get(ref(scope, 'weplay_games', GAME_ID)));
+      if (!settings.enabled) throw new HttpsError('failed-precondition', '현재 학생 게임 이용을 허용하지 않습니다.');
       const sessionRef = ref(scope, 'weplay_sessions', sessionId);
       const session = (await transaction.get(sessionRef)).data();
       if (!session) throw new HttpsError('not-found', '게임 기록을 찾을 수 없습니다.');

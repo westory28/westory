@@ -3,6 +3,7 @@ const { Timestamp } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
+const { readStudentMenuAccess } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
 const { catalog, items, defaultLook, validateLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
@@ -127,6 +128,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     if (teacher || !keysOnly(data, ['_session', 'year', 'semester'])) invalid();
     const scope = scopeOf(data);
     return db.runTransaction(async tx => {
+      await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
       // Wallet validation already reads the student profile and identity. Avoid
       // a second copy of those reads on this combined studio load.
       const { wallet } = await canonicalWallet.read(tx, scope, uid);
@@ -179,6 +181,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const receiptRef = db.doc(`${collection}/${uid}/requests/${key}`);
     return db.runTransaction(async tx => {
       await readStudent(tx, uid, identity);
+      await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
       const previous = await readReceipt(tx, receiptRef, uid, digest);
       if (previous) return previous;
       const state = await readState(tx, uid);
@@ -243,6 +246,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const receiptRef = db.doc(`${collection}/${uid}/requests/${key}`);
     const validateSave = async tx => {
       await readStudent(tx, uid, identity);
+      if (!teacher) await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
       const previous = await readReceipt(tx, receiptRef, uid, digest);
       if (previous) return { previous };
       const state = await readState(tx, uid);

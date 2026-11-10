@@ -1,6 +1,7 @@
 const { createHash, randomInt, randomUUID } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
+const { assertStudentMenuVisible } = require('./studentMenuVisibility');
 
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -82,6 +83,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     const settings = settingsFrom(settingsSnap.data());
     if (manager) return { uid, manager, canWrite, settings, name: '선생님', classId: '', enrollmentId: '', slotId: '' };
     if (profile.role !== 'student') fail('permission-denied', '게임을 이용할 권한이 없습니다.');
+    assertStudentMenuVisible(config, ['weplay', 'yut']);
     if (!settings.enabled) fail('permission-denied', '지금은 윷놀이가 열려 있지 않습니다.');
     const slot = slotSnap.data() || {};
     if (slot.studentUid !== uid || slot.semesterId !== scope.id || !identifier(slot.activeEnrollmentId) || (slot.status !== undefined && slot.status !== 'ACTIVE')) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');

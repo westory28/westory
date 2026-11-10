@@ -261,6 +261,19 @@ async function verifySpectatorRules(roomRef) {
     assert.equal(room.players.find(player => player.uid === uid('outsider')).name, '방재석(3학년 2반)');
     const crossClassRead = await rest('outsider', `${base}/yut_rooms/${room.id}`);
     assert.equal(crossClassRead.status, 200, `cross-class participant read: ${await crossClassRead.text()}`);
+    for (const visibility of [{ yut: false }, { weplay: false, yut: true }, { yut: 'true' }, null]) {
+      await db.doc('site_settings/config').update({ studentMenuVisibility: visibility });
+      await denied(deployed.getYutLobby.run(request('a')));
+      await denied(deployed.commandYutRoom.run(creation));
+      await denied(command('outsider', 'ready', { roomId: room.id, expectedRevision: room.revision, ready: true }));
+      assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 403, 'menu close revokes an already-subscribed participant');
+      assert.equal((await rest('teacher', `${base}/yut_rooms/${room.id}`)).status, 200, 'student menu restrictions preserve teacher observation');
+      assert.equal((await deployed.getYutLobby.run(request('teacher'))).enabled, true);
+    }
+    await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: true, yut: true } });
+    assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 200, 'existing config read is reused within the ten-document rules budget');
+    assert.equal((await deployed.getYutLobby.run(request('a'))).enabled, true);
+    await db.doc('site_settings/config').set(seed['site_settings/config']);
     const maintenanceRef = db.doc('site_settings/student_maintenance');
     await maintenanceRef.update({ enabled: true, startedAt: Timestamp.now(), bypassUids: [uid('outsider')] });
     assert.equal((await rest('outsider', `${base}/yut_rooms/${room.id}`)).status, 200, 'explicit maintenance bypass retains participant read');
