@@ -1,0 +1,145 @@
+{
+  "date": "2026-11-10",
+  "region": "asia-northeast3",
+  "method": "Per-function original production source plus raster preflight only",
+  "releases": [
+    {
+      "target": "uploadMapAssetContent",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "ab775b669da3de08d2773053f036bb90b928a7331290893ec852bdc52a647643",
+      "changes": [
+        {
+          "path": "mapManagement.js",
+          "beforeSha256": "60cb839a13717c36bc5a70668748102db0c5968cc8435e5783284f086b35aca7",
+          "afterSha256": "4ce9cbf798ca8f4e4a0f864063d55ce6b4d7f73a44bb549c7a16c42c1daa5dde"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    },
+    {
+      "target": "uploadSourceArchiveAsset",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "ab775b669da3de08d2773053f036bb90b928a7331290893ec852bdc52a647643",
+      "changes": [
+        {
+          "path": "sourceArchiveManagement.js",
+          "beforeSha256": "54cdcb06bb6b4f2b49e73b78caf3d02fba5e93e5eaf1e9ee8ee72b630dc71c48",
+          "afterSha256": "b36a1ff850b4ae9094bcfe510ba23ee1d1fdb028006363bfc3783ecf213b98d1"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    },
+    {
+      "target": "registerSchoolBanner",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "ab775b669da3de08d2773053f036bb90b928a7331290893ec852bdc52a647643",
+      "changes": [
+        {
+          "path": "schoolBanners.js",
+          "beforeSha256": "04d17758ee28b9524e774d291e8dea54c906a8aa2d8d23c5306271b28416e3bb",
+          "afterSha256": "af2c4a0c9a2291d95637b9fcc105f3fd64c80c0712c588db8ccc05ba4aa7f1ac"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    },
+    {
+      "target": "processSourceArchiveIncomingUpload",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "cd8bd1b7e57a44faa2dcf0f333c86e20ad429dd06ecee62c60656af0c2ea787a",
+      "changes": [
+        {
+          "path": "sourceArchiveProcessor.js",
+          "beforeSha256": "7f7cd66ade782e4c18a3daf8373c8b2abf79488403bdde26bf82fa1a63b2fee6",
+          "afterSha256": "d3b45e7b87e47a3eef1c51b6a02851d7ff7d092a59f3dddacd4eda8d54511ba2"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    },
+    {
+      "target": "processLessonAssetUpload",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "f661589b1955c90ad77b9be5c2cfbf130d9fb552e187893b6ece1658bc1159b9",
+      "changes": [
+        {
+          "path": "lessonAssetVerification.js",
+          "beforeSha256": "647f46bad673ddac9da015c3cf34eccc5199f66efc900a354e8b3cccf1cc1bae",
+          "afterSha256": "570e5cfc0864323e7d1863ee6510bf2edb81e3e1a3d9e30a6f4170c06419f8f2"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    },
+    {
+      "target": "uploadLessonAssetContent",
+      "project": "history-quiz-yongsin",
+      "originalArchiveSha256": "f661589b1955c90ad77b9be5c2cfbf130d9fb552e187893b6ece1658bc1159b9",
+      "changes": [
+        {
+          "path": "lessonAssetVerification.js",
+          "beforeSha256": "647f46bad673ddac9da015c3cf34eccc5199f66efc900a354e8b3cccf1cc1bae",
+          "afterSha256": "570e5cfc0864323e7d1863ee6510bf2edb81e3e1a3d9e30a6f4170c06419f8f2"
+        },
+        {
+          "path": "rasterImageSafety.js",
+          "beforeSha256": null,
+          "afterSha256": "ee8be28ab750f5adb54b93f07e5e7f8069115f8c233f900e65f6ab0f11e1062e"
+        }
+      ],
+      "preserved": [
+        "index.js and exports",
+        "package.json and runtime",
+        "package-lock.json",
+        "authorization and session policy"
+      ]
+    }
+  ]
+}

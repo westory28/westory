@@ -3,6 +3,7 @@ const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { HttpsError } = require("firebase-functions/v2/https");
 const sharp = require("sharp");
+const { assertRasterImageBytes } = require("../rasterImageSafety");
 const {
   onCallWithStudentMaintenance: onCall,
 } = require("./studentMaintenance");
@@ -283,6 +284,7 @@ const normalize = (data) => {
       bytes.toString("base64") !== data.contentBase64)
   )
     fail("invalid-argument", "배너 이미지 용량이나 파일 형식을 확인해 주세요.");
+  if (bytes) assertRasterImageBytes(bytes);
   return {
     semesterId: data.semesterId,
     requestId: data.requestId,

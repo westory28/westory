@@ -1,3 +1,5 @@
+import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
+import { getSafeNotificationTargetUrl } from "../../lib/notificationTargetUrl";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -215,6 +217,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
   const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
   const [privacyPolicyHtml, setPrivacyPolicyHtml] = useState("");
+  const safePrivacyPolicyHtml = useMemo(
+    () => sanitizeRichHtml(privacyPolicyHtml),
+    [privacyPolicyHtml],
+  );
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [panelPosition, setPanelPosition] = useState<React.CSSProperties>({});
@@ -702,7 +708,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             {notifications.map((notification) => {
               const unread = !notification.readAt;
               const bodyText = getNotificationBodyText(notification);
-              const targetUrl = getNotificationTargetUrl(notification);
+              const targetUrl = getSafeNotificationTargetUrl(
+                getNotificationTargetUrl(notification),
+              );
               const opensPrivacyPolicy =
                 notification.type === "privacy_policy_updated";
               const rowClassName = `flex w-full items-start gap-3 px-4 py-3 text-left ${
@@ -821,7 +829,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               ) : (
                 <div
                   className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: privacyPolicyHtml }}
+                  dangerouslySetInnerHTML={{ __html: safePrivacyPolicyHtml }}
                 />
               )}
             </div>

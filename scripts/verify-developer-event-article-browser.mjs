@@ -109,6 +109,7 @@ const imageRoutes = new Map([
   ),
 ]);
 const entry = `
+import {sanitizeRichHtml} from './src/lib/sanitizeRichHtml';
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import NoticeImageArticle,{hasNoticeImageArticleMarkup} from './src/components/common/NoticeImageArticle';

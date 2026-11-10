@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
+import { sanitizeRichHtml } from "../../../../lib/sanitizeRichHtml";
 import LessonAnswerFeedback from "../../../../components/common/LessonAnswerFeedback";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { InlineLoading } from "../../../../components/common/LoadingState";
@@ -119,6 +120,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const { showToast } = useAppToast();
   const [lesson, setLesson] = useState<LessonData | null>(
     lessonOverride ? normalizeLessonData(lessonOverride) : null,
+  );
+  const safeBodyHtml = useMemo(
+    () =>
+      sanitizeRichHtml(lesson ? getLessonContentSections(lesson).bodyHtml : ""),
+    [lesson],
   );
   const worksheetAnswersById = useMemo(
     () =>
@@ -1718,7 +1724,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
             <section
               className="note-content prose prose-blue max-w-none rounded-3xl border border-slate-200 bg-white p-6 leading-loose text-slate-700 shadow-sm md:p-10"
               dangerouslySetInnerHTML={{
-                __html: renderContent(bodyHtml, footnoteNumberMap, footnoteMap),
+                __html: renderContent(
+                  safeBodyHtml,
+                  footnoteNumberMap,
+                  footnoteMap,
+                ),
               }}
             />
           )}

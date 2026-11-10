@@ -4,6 +4,7 @@ const { getStorage } = require("firebase-admin/storage");
 const { storageBucket } = require("firebase-functions/params");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const sharp = require("sharp");
+const { assertRasterImageBytes } = require("../rasterImageSafety");
 const { ASSET_COLLECTION } = require("./lessonManagement");
 const {
   buildPdfRevisionPathsForBasePath,
@@ -87,6 +88,7 @@ exports.processLessonAssetUpload = onObjectFinalized(
           },
         };
       } else {
+        assertRasterImageBytes(buffer, ticket.contentType);
         const info = await sharp(buffer, {
           limitInputPixels: 50000000,
         }).metadata();

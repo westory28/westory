@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { sanitizeRichHtml } from "../../../lib/sanitizeRichHtml";
 import LessonFootnoteDialog from "../../../components/common/LessonFootnoteDialog";
 import LessonWorksheetStage from "../../../components/common/LessonWorksheetStage";
 import {
@@ -38,6 +39,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
     () => getLessonContentSections(lesson),
     [lesson],
   );
+  const safeBodyHtml = useMemo(() => sanitizeRichHtml(bodyHtml), [bodyHtml]);
   const [currentPage, setCurrentPage] = useState<number | null>(null);
   const [activeWorksheetFootnote, setActiveWorksheetFootnote] =
     useState<LessonFootnote | null>(null);
@@ -186,7 +188,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
         {!!bodyHtml && (
           <div
             className="note-content mt-6 rounded-3xl border border-slate-200 bg-white p-6 leading-loose text-slate-700 shadow-sm md:p-10"
-            dangerouslySetInnerHTML={{ __html: bodyHtml }}
+            dangerouslySetInnerHTML={{ __html: safeBodyHtml }}
           />
         )}
         <LessonFootnoteDialog

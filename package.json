@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis",
+    "prebuild": "npm run security:check-supply-chain && node scripts/verify-security-config.mjs && npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
@@ -58,6 +58,7 @@
     "@fullcalendar/react": "^6.1.20",
     "chart.js": "^4.5.1",
     "d3-geo": "^3.1.1",
+    "dompurify": "3.4.17",
     "exceljs": "^4.4.0",
     "firebase": "^12.9.0",
     "jszip": "^3.10.2",

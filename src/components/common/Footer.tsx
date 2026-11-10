@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
 import { Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { InlineLoading } from "./LoadingState";
@@ -21,6 +22,10 @@ const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
   const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
   const [loading, setLoading] = useState(false);
   const [policyHtml, setPolicyHtml] = useState("");
+  const safePolicyHtml = useMemo(
+    () => sanitizeRichHtml(policyHtml),
+    [policyHtml],
+  );
 
   const footerText =
     String(interfaceConfig?.footerText || "").trim() || FALLBACK_FOOTER_TEXT;
@@ -136,7 +141,7 @@ const Footer: React.FC<{ teacher?: boolean }> = ({ teacher = false }) => {
               ) : (
                 <div
                   className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: policyHtml }}
+                  dangerouslySetInnerHTML={{ __html: safePolicyHtml }}
                 />
               )}
             </div>

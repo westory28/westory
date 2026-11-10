@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { sanitizeRichHtml } from "../lib/sanitizeRichHtml";
 import {
   AuthError,
   getRedirectResult,
@@ -766,6 +767,10 @@ const Login: React.FC = () => {
   const [policyOpen, setPolicyOpen] = useState(false);
   const [policyTitle, setPolicyTitle] = useState("");
   const [policyHtml, setPolicyHtml] = useState("");
+  const safePolicyHtml = useMemo(
+    () => sanitizeRichHtml(policyHtml),
+    [policyHtml],
+  );
   const [policyLoading, setPolicyLoading] = useState(false);
 
   const [gradeOptions, setGradeOptions] =
@@ -2348,7 +2353,7 @@ const Login: React.FC = () => {
               ) : (
                 <div
                   className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: policyHtml }}
+                  dangerouslySetInnerHTML={{ __html: safePolicyHtml }}
                 />
               )}
             </div>
@@ -2625,7 +2630,7 @@ const Login: React.FC = () => {
                           <div
                             className="policy-rich-text"
                             dangerouslySetInnerHTML={{
-                              __html: item.text || "",
+                              __html: sanitizeRichHtml(item.text || ""),
                             }}
                           />
                         </div>

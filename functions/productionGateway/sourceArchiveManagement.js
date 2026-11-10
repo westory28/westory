@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { FieldValue } = require("firebase-admin/firestore");
+const { assertRasterImageBytes } = require("../rasterImageSafety");
 
 const SOURCE_ARCHIVE_COMMAND_TYPES = Object.freeze({
   PREPARE_SOURCE_ARCHIVE_UPLOAD: "prepareSourceArchiveUpload",
@@ -439,6 +440,7 @@ const createSourceArchiveUploadHandler =
       createHash("sha256").update(bytes).digest("hex") !== ticket.sha256
     )
       invalid();
+    if (ticket.mediaKind !== "pdf") assertRasterImageBytes(bytes, ticket.contentType);
     const assetRef = db.doc(`source_archive/${ticket.assetId}`);
     const writeLeaseId = randomUUID();
     const state = await db.runTransaction(async (transaction) => {

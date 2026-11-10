@@ -53,6 +53,7 @@ const entries = {
   ordinary: "<p>일반 개발자 일지 본문</p>",
 };
 const entry = `
+import {sanitizeRichHtml} from './src/lib/sanitizeRichHtml';
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import NoticeImageArticle,{hasNoticeImageArticleMarkup} from './src/components/common/NoticeImageArticle';

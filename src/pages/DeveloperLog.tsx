@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./developerEventArticles.css";
+import { sanitizeRichHtml } from "../lib/sanitizeRichHtml";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   addDoc,
@@ -149,7 +150,8 @@ export const EventArticleEditor: React.FC<{
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (editor && editor.innerHTML !== value) editor.innerHTML = value;
+    const safeHtml = sanitizeRichHtml(value);
+    if (editor && editor.innerHTML !== safeHtml) editor.innerHTML = safeHtml;
   }, [value]);
 
   return (
@@ -772,7 +774,9 @@ const DeveloperLog: React.FC = () => {
           ) : (
             <div
               className="developer-log-rich-text min-w-0"
-              dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
+              dangerouslySetInnerHTML={{
+                __html: sanitizeRichHtml(post.bodyHtml),
+              }}
             />
           )}
           {!eventArticle && (

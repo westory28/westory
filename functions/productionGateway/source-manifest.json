@@ -252,8 +252,10 @@
       "sourceFile": "lessonAssetUploads.js",
       "file": "lessonAssetUploads.js",
       "originalSha256": "c86f50445f73d68ad4bdc57f813c74aca683d7d9c5abecca2df151fe97be0d77",
-      "sha256": "b4248c5921c157c90b13f2abcb9a807d0f7bf589c87374e53c539b6722f3cd9c",
-      "changes": []
+      "sha256": "a92197d44002743b4085b99deda27c8c54dc2dbb3205029fcfc2e114004e7a97",
+      "changes": [
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
+      ]
     },
     {
       "sourceFile": "lessonHtml.js",
@@ -282,9 +284,10 @@
       "sourceFile": "mapManagement.js",
       "file": "mapManagement.js",
       "originalSha256": "60cb839a13717c36bc5a70668748102db0c5968cc8435e5783284f086b35aca7",
-      "sha256": "d481037e72ae1cb2c931ef881a343c1b5271a1d82218ea219105127f5b2e2b39",
+      "sha256": "fc0be33336620953292f8aba5dbfceaef8ad047065fc7b78f72c5d688f8f839f",
       "changes": [
-        "Validate logical PDF page dimensions against uploaded image aspect ratio while preserving original region coordinates."
+        "Validate logical PDF page dimensions against uploaded image aspect ratio while preserving original region coordinates.",
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
       ]
     },
     {
@@ -318,8 +321,10 @@
       "sourceFile": "schoolBanners.js",
       "file": "schoolBanners.js",
       "originalSha256": "04d17758ee28b9524e774d291e8dea54c906a8aa2d8d23c5306271b28416e3bb",
-      "sha256": "ece57729ed5618397d6c6bc684cc85c8096ac76999f9d801f6c01757b41c0e02",
-      "changes": []
+      "sha256": "ad19b96fd71297f30e1f3cda424080e3ae39ad730fc32bf8a5c53573b101f1d9",
+      "changes": [
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
+      ]
     },
     {
       "sourceFile": "semesterCore.js",
@@ -357,8 +362,10 @@
       "sourceFile": "sourceArchiveManagement.js",
       "file": "sourceArchiveManagement.js",
       "originalSha256": "54cdcb06bb6b4f2b49e73b78caf3d02fba5e93e5eaf1e9ee8ee72b630dc71c48",
-      "sha256": "346e2ec5c359249b284781bdb7dc02ad795ec642b80b0e09d0bf4df0567849bf",
-      "changes": []
+      "sha256": "21396979b7b40e7d86ab7bb9fcb036714f141cd3e538bf2434d6d96678f4a02e",
+      "changes": [
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
+      ]
     },
     {
       "sourceFile": "sourceArchivePdfAdapter.js",
@@ -378,8 +385,10 @@
       "sourceFile": "sourceArchiveProcessor.js",
       "file": "sourceArchiveProcessor.js",
       "originalSha256": "7f7cd66ade782e4c18a3daf8373c8b2abf79488403bdde26bf82fa1a63b2fee6",
-      "sha256": "3c16887a31077bf6cce448713c335220b15cf281df9e6f84df590100df6df924",
-      "changes": []
+      "sha256": "b61cdb2b28202574dbb02c40e5bf387ed54c3bfdeacd99ea9d7739778b5a87ef",
+      "changes": [
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
+      ]
     },
     {
       "sourceFile": "studentEnrollmentProfile.js",

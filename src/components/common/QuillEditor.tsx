@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
+import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
+
 declare global {
   interface Window {
     Quill?: any;
@@ -218,7 +220,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
 
         quillRef.current = quill;
         syncingRef.current = true;
-        quill.clipboard.dangerouslyPasteHTML(value || "");
+        quill.clipboard.dangerouslyPasteHTML(sanitizeRichHtml(value || ""));
         syncingRef.current = false;
 
         changeHandler = () => {
@@ -277,7 +279,9 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     if (normalize(currentHtml) === normalize(value || "")) return;
 
     syncingRef.current = true;
-    quillRef.current.clipboard.dangerouslyPasteHTML(value || "");
+    quillRef.current.clipboard.dangerouslyPasteHTML(
+      sanitizeRichHtml(value || ""),
+    );
     syncingRef.current = false;
   }, [value]);
 

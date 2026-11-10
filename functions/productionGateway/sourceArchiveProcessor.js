@@ -1,4 +1,5 @@
 const sharp = require("sharp");
+const { assertRasterImageBytes } = require("../rasterImageSafety");
 
 const SOURCE_ARCHIVE_DISPLAY_EDGE = 1920;
 const SOURCE_ARCHIVE_THUMB_EDGE = 480;
@@ -99,6 +100,8 @@ const saveOriginalSourceArchiveFile = async ({
 const saveOriginalBinaryFile = saveOriginalSourceArchiveFile;
 
 const renderSourceArchiveVariants = async ({ inputBuffer }) => {
+  // Keep legacy GIF/AVIF/TIFF/HEIF assets while never invoking an SVG loader.
+  assertRasterImageBytes(inputBuffer, undefined, { legacyArchive: true });
   const sourceImage = sharp(inputBuffer, {
     failOn: "error",
     limitInputPixels: SOURCE_ARCHIVE_MAX_PIXELS,

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
 
 import {
   getLessonFootnoteDisplayTitle,
@@ -21,6 +22,10 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
   badgeLabel,
   onClose,
 }) => {
+  const safeBodyHtml = useMemo(
+    () => sanitizeRichHtml(String(footnote?.bodyHtml || "")),
+    [footnote?.bodyHtml],
+  );
   if (!open || !footnote) return null;
 
   const title = getLessonFootnoteDisplayTitle(footnote) || "각주";
@@ -97,7 +102,7 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
               <div
                 className="prose prose-slate max-w-none text-slate-700"
                 dangerouslySetInnerHTML={{
-                  __html: String(footnote.bodyHtml || ""),
+                  __html: safeBodyHtml,
                 }}
               />
             ) : null}

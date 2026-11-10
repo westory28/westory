@@ -16,6 +16,13 @@ const source = ts.transpileModule(
     },
   },
 ).outputText;
+const targetModule = { exports: {} };
+vm.runInNewContext(
+  ts.transpileModule(readFileSync("src/lib/notificationTargetUrl.ts", "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText,
+  { exports: targetModule.exports, URL },
+);
 const stamp = (value) => ({ toMillis: () => value });
 const notification = (id, extra = {}) => ({
   id,
@@ -207,6 +214,12 @@ const fixture = async (role = "teacher") => {
       if (name === "react/jsx-runtime")
         return { jsx, jsxs: jsx, Fragment: "fragment" };
       if (name === "react-router-dom") return { useNavigate: () => navigate };
+      if (name.endsWith("/notificationTargetUrl")) return targetModule.exports;
+      // Rich text rendering is covered by the browser security fixture.
+      if (name.endsWith("/sanitizeRichHtml")) return { sanitizeRichHtml: (html) => {
+        assert.equal(html, "", "This DOM-less test does not open policy content");
+        return "";
+      } };
       if (name.endsWith("/AuthContext")) return { useAuth: () => auth };
       if (name.endsWith("/notifications")) return service;
       if (name.endsWith("/AppToastProvider"))
@@ -288,6 +301,23 @@ const fixture = async (role = "teacher") => {
     },
   };
 };
+
+{
+  const f = await fixture();
+  f.setRows([
+    notification("unsafe-target", { type: "system_notice", targetUrl: "/\\external.invalid", title: "차단할 주소" }),
+    notification("safe-target", { type: "system_notice", targetUrl: "/teacher/exam?tab=performance#review", title: "정상 내부 주소" }),
+  ]);
+  await f.emit({ unreadCount: 2 });
+  await f.toggle();
+  assert.match(f.text(), /차단할 주소/, "Unsafe destination does not discard the notification");
+  assert.equal(f.button(/차단할 주소/), undefined, "Unsafe destination has no clickable navigation");
+  assert.deepEqual(f.calls.routes, []);
+  f.button(/정상 내부 주소/).props.onClick();
+  await f.render();
+  assert.deepEqual(f.calls.routes, ["/teacher/exam?tab=performance#review"]);
+  assert.equal(f.calls.reads.length, 1, "Destination filtering adds no read receipt");
+}
 
 {
   const f = await fixture();

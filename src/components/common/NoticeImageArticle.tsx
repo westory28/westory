@@ -1,5 +1,7 @@
 import React, { useId, useMemo, useRef, useState } from "react";
 
+import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
+
 export const hasNoticeImageArticleMarkup = (bodyHtml: string) =>
   /<article\b[^>]*\bclass\s*=\s*(["'])[^"']*\bwe-notice-images\b[^"']*\1/i.test(
     bodyHtml,
@@ -18,7 +20,7 @@ interface NoticeImage {
 // srcset inert until the reader explicitly expands the detail panels.
 const readNoticeImages = (bodyHtml: string) => {
   const template = document.createElement("template");
-  template.innerHTML = bodyHtml;
+  template.innerHTML = sanitizeRichHtml(bodyHtml);
   const article = template.content.querySelector("article.we-notice-images");
   const readImage = (image: HTMLImageElement): NoticeImage => ({
     src: image.getAttribute("src") || "",

@@ -15,6 +15,8 @@ source = source
   .replace(
     "const stubs = {",
     `const stubs = {
+      // This DOM-less shell fixture does not open rich text; browser security QA covers it.
+      dompurify: { default: {} },
       firebase: { auth: { currentUser: null }, db: {} },
       firestore: { doc() {}, getDoc() { throw new Error("Read disabled"); } },
       loginPerf: { markLoginPerf() {}, measureLoginPerf() {} },

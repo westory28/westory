@@ -2,6 +2,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { FieldValue } = require("firebase-admin/firestore");
 const semesterCore = require("./semesterCore");
+const { assertRasterImageBytes } = require("../rasterImageSafety");
 
 const MAP_COMMAND_TYPES = Object.freeze({
   SAVE_MAP_RESOURCES: "saveMapResources",
@@ -678,6 +679,7 @@ const createMapUploadHandler =
       createHash("sha256").update(bytes).digest("hex") !== ticket.sha256
     )
       invalid();
+    if (ticket.kind !== "PDF") assertRasterImageBytes(bytes, ticket.contentType);
     const checkActive = async (transaction) => {
       const [pointer, manifest, source] = await transaction.getAll(
         db.doc(semesterCore.ACTIVE_SEMESTER_POINTER_PATH),
