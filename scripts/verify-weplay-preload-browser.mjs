@@ -24,6 +24,10 @@ import Sidebar from ${source('src/components/layout/TeacherSidebar.tsx')};
 import {loadStudentWeplay,preloadStudentWeplay} from ${source('src/lib/weplayPreload.ts')};
 import {preloadWeplayAssets} from ${source('src/lib/weplayAssets.ts')};
 import {lazyWithRetry} from ${source('src/lib/lazyWithRetry.ts')};
+import ErrorBoundary from ${source('src/components/common/ErrorBoundary.tsx')};
+import {LoadingProvider} from ${source('src/components/common/LoadingState.tsx')};
+import {installAssetRecovery} from ${source('src/lib/assetRecovery.ts')};
+installAssetRecovery();
 window.preloadQa={moduleLoads:0,mounts:0,rpcCalls:[],privateReads:[],images:[],loadStudentWeplay,preloadStudentWeplay,preloadWeplayAssets};
 const StudentPage=lazyWithRetry(loadStudentWeplay,'student-weplay');
 const NativeImage=window.Image;
@@ -41,11 +45,12 @@ function Fixture(){
   <Routes><Route path='/student/weplay' element={<Suspense fallback={<p>게임 로딩 중</p>}><StudentPage/></Suspense>}/><Route path='*' element={null}/></Routes></main></>;
 }
 if(!window.location.hash)window.location.hash='/student';
-createRoot(document.getElementById('root')).render(<HashRouter><Fixture/></HashRouter>);`;
+createRoot(document.getElementById('root')).render(<LoadingProvider><ErrorBoundary><HashRouter><Fixture/></HashRouter></ErrorBoundary></LoadingProvider>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: 'tsx', resolveDir: root, sourcefile: 'qa.tsx' },
   bundle: true, write: false, splitting: true, format: 'esm', platform: 'browser', target: 'es2022',
   outdir: path.join(evidence, 'bundle'), entryNames: 'qa', chunkNames: '[name]-[hash]',
+  loader: { '.webp': 'dataurl' },
   define: { 'import.meta.env.BASE_URL': '"/"', 'import.meta.env': '{"BASE_URL":"/"}', 'process.env.NODE_ENV': '"production"' },
   plugins: [{ name: 'preload-page-boundary', setup(plugin) {
     plugin.onResolve({ filter: /pages\/student\/Weplay$/ }, args => {
@@ -60,11 +65,11 @@ const bundle = await build({
 const files = new Map(bundle.outputFiles.map(file => ['/' + path.basename(file.path), file.text]));
 const pageChunk = [...files.keys()].find(name => name.startsWith('/student-page-boundary-'));
 assert.ok(pageChunk, 'The fixture must preserve a real network-loaded dynamic import.');
-const html = '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{font:16px sans-serif}button,a{display:block;min-height:44px;padding:8px}svg{width:20px;height:20px}.teacher-sidebar-close,.teacher-sidebar-compact-label{display:none}main{margin-top:24px}</style><div id="root"></div><script type="module" src="/qa.js"></script></html>';
+const html = '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/qa.css"><style>body{font:16px sans-serif}button,a{display:block;min-height:44px;padding:8px}svg{width:20px;height:20px}.teacher-sidebar-close,.teacher-sidebar-compact-label{display:none}main{margin-top:24px}</style><div id="root"></div><script type="module" src="/qa.js"></script></html>';
 const server = http.createServer((request, response) => {
   const name = new URL(request.url, 'http://127.0.0.1').pathname;
   response.setHeader('Cache-Control', 'no-store');
-  response.setHeader('Content-Type', files.has(name) ? 'text/javascript' : 'text/html; charset=utf-8');
+  response.setHeader('Content-Type', name.endsWith('.css') ? 'text/css' : files.has(name) ? 'text/javascript' : 'text/html; charset=utf-8');
   response.end(files.get(name) || html);
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -79,14 +84,16 @@ const imageFiles = ['sea-battle.webp', 'allied-ship.webp', 'enemy-ship.webp', 'r
 async function fixture({ portal = 'student', touch = false, failChunk = false } = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 900 }, hasTouch: touch });
   const page = await context.newPage();
-  const state = { chunkRequests: 0, assetRequests: [], heldImages: [], holdImages: false, failImage: null };
+  const state = { chunkRequests: 0, documentRequests: 0, versionChecks: 0, recoverChunk: false, assetRequests: [], heldImages: [], holdImages: false, failImage: null };
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) { privateRequests.push(url.href); return route.abort(); }
+    if (route.request().resourceType() === 'document') state.documentRequests++;
+    if (url.pathname === '/' && route.request().resourceType() === 'fetch') state.versionChecks++;
     if (url.pathname === pageChunk) {
       state.chunkRequests++;
-      if (failChunk && state.chunkRequests === 1) return route.fulfill({ status: 503, body: 'Temporary code outage', headers: { 'Cache-Control': 'no-store' } });
+      if ((failChunk === true && state.chunkRequests === 1) || (failChunk === 'until-retry' && !state.recoverChunk)) return route.fulfill({ status: 503, body: 'Temporary code outage', headers: { 'Cache-Control': 'no-store' } });
     }
     if (url.pathname.startsWith('/assets/')) {
       state.assetRequests.push(url.pathname);
@@ -156,12 +163,32 @@ try {
   await failed.page.getByRole('button', { name: '위플레이', exact: true }).click();
   await failed.page.getByRole('link', { name: '내가 충무공이라고?!', exact: true }).click();
   await failed.page.waitForFunction(() => window.preloadQa?.moduleLoads === 1 && window.preloadQa.mounts === 1);
-  assert.equal(await failed.page.evaluate(() => window.sessionStorage.getItem('westory-lazy-retry:student-weplay')), null);
+  assert.equal(await failed.page.evaluate(() => window.sessionStorage.getItem('westory:asset-recovery:v1')), null);
   assert.equal(await failed.page.locator('output').getAttribute('data-route'), '/student/weplay');
   assert.deepEqual(await failed.page.evaluate(() => window.preloadQa.rpcCalls), ['getWeplayLobby']);
   assert.equal(failed.state.chunkRequests, 2);
-  checks.push({ name: 'native import failure stays quiet on intent; actual lazyWithRetry route reloads once and recovers the game', passed: true });
+  assert.equal(failed.state.documentRequests, 1);
+  assert.equal(failed.state.versionChecks, 0);
+  checks.push({ name: 'native import failure stays quiet on intent; the next import succeeds without a document reload', passed: true });
   await failed.context.close();
+
+  const unavailable = await fixture({ failChunk: 'until-retry' });
+  await unavailable.page.getByRole('button', { name: '위플레이', exact: true }).click();
+  await unavailable.page.getByRole('link', { name: '내가 충무공이라고?!', exact: true }).click();
+  await unavailable.page.getByRole('heading', { name: '페이지를 불러오지 못했습니다.' }).waitFor();
+  assert.equal(unavailable.state.documentRequests, 1, 'A same-build outage never reloads automatically.');
+  assert.equal(unavailable.state.versionChecks, 1);
+  assert.deepEqual(await unavailable.page.evaluate(() => window.preloadQa.rpcCalls), []);
+  const failedRequests = unavailable.state.chunkRequests;
+  unavailable.state.recoverChunk = true;
+  await unavailable.page.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await unavailable.page.waitForFunction(() => window.preloadQa?.moduleLoads === 1 && window.preloadQa.mounts === 1);
+  assert.equal(unavailable.state.documentRequests, 2);
+  assert.equal(unavailable.state.versionChecks, 1);
+  assert.equal(unavailable.state.chunkRequests, failedRequests + 1);
+  assert.deepEqual(await unavailable.page.evaluate(() => window.preloadQa.rpcCalls), ['getWeplayLobby']);
+  checks.push({ name: 'persistent same-build import failure waits for explicit retry, then enters once without duplicate game requests', passed: true });
+  await unavailable.context.close();
 
   const assets = await fixture();
   assets.state.holdImages = true;

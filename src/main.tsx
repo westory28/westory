@@ -5,6 +5,7 @@ import "./assets/index.css";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { LoadingProvider } from "./components/common/LoadingState";
 import { markLoginPerf } from "./lib/loginPerf";
+import { installAssetRecovery } from "./lib/assetRecovery";
 
 if (
   typeof window !== "undefined" &&
@@ -18,6 +19,7 @@ if (
 }
 
 markLoginPerf("westory-app-load-start");
+installAssetRecovery();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
