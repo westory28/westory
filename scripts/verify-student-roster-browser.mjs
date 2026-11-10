@@ -36,12 +36,12 @@ if(new URLSearchParams(location.search).has('legacy321'))data.splice(0,data.leng
 ].map((student,index)=>({role:'student',grade:'3',class:'1',number:String(index+28),email:student.id+'@example.test',...student})));
 export const events=[];
 if(new URLSearchParams(location.search).has('registration'))data.push({id:'qa-pending',role:'student',grade:'3',class:'1',number:'5',name:'가입대기예시',studentName:'가입대기예시',email:'qa-pending@example.test',registrationApprovalStatus:'PENDING'});
-window.rosterQa={data,events,toasts:[],fail:false,popupStarts:0,popupFailed:false,reauthenticated:false,dialogResults:[]};
+window.rosterQa={data,events,toasts:[],fail:false,loadFail:new URLSearchParams(location.search).has('loaderror'),listReads:0,popupStarts:0,popupFailed:false,reauthenticated:false,dialogResults:[]};
 `;
 const mocks = {
   "qa-state": state,
   "qa-auth": `export const useAuth=()=>({userData:{role:new URLSearchParams(location.search).has('readonly')?'staff':'teacher'},currentUser:{email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
-  "qa-firestore": `import{data}from'qa-state';export const collection=(db,name)=>({name});export const doc=(db,...names)=>({names});export const getDoc=async(ref)=>ref.names.join('/').endsWith('/assessment_config/enrollment_movement')&&!location.search.includes('noPeriod')?{exists:()=>true,data:()=>({startDate:'2026-08-14'})}:{exists:()=>false};export const getDocs=async()=>{if(new URLSearchParams(location.search).has('loaderror'))throw new Error('synthetic read failure');const docs=data.map(({id,...value})=>({id,data:()=>value}));return{docs,forEach:fn=>docs.forEach(fn)};};`,
+  "qa-firestore": `import{data}from'qa-state';export const collection=(db,name)=>({name});export const doc=(db,...names)=>({names});export const getDoc=async(ref)=>ref.names.join('/').endsWith('/assessment_config/enrollment_movement')&&!location.search.includes('noPeriod')?{exists:()=>true,data:()=>({startDate:'2026-08-14'})}:{exists:()=>false};export const getDocs=async()=>{window.rosterQa.listReads++;await new Promise(resolve=>setTimeout(resolve,100));if(window.rosterQa.loadFail)throw new Error('synthetic read failure');const docs=data.map(({id,...value})=>({id,data:()=>value}));return{docs,forEach:fn=>docs.forEach(fn)};};`,
   "qa-firebase": `import{data,events}from'qa-state';
 export const db={};export const auth={currentUser:{uid:'qa-teacher',getIdTokenResult:async()=>({claims:{auth_time:10}})}};
 export const getHttpsCallable=async(name)=>async(input)=>{
@@ -79,10 +79,10 @@ const moduleFor = (request) => {
 };
 const result = await build({
   stdin: {
-    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter,useNavigate}from'react-router-dom';import StudentList from'${root}/src/pages/teacher/StudentList';import{AppDialogProvider,useAppDialog}from'${root}/src/components/common/AppDialogProvider';import{SensitiveOperationController}from'${root}/src/components/common/SensitiveOperationController';import'qa-state';
+    contents: `import React from'react';import{createRoot}from'react-dom/client';import{BrowserRouter,useNavigate}from'react-router-dom';import StudentList from'${root}/src/pages/teacher/StudentList';import{AppDialogProvider,useAppDialog}from'${root}/src/components/common/AppDialogProvider';import{SensitiveOperationController}from'${root}/src/components/common/SensitiveOperationController';import{LoadingProvider}from'${root}/src/components/common/LoadingState';import'qa-state';
 function DialogProbe(){const{confirm,prompt}=useAppDialog();if(!new URLSearchParams(location.search).has('dialogs'))return null;return <div><button onClick={async()=>window.rosterQa.dialogResults.push(await confirm({title:'합성 확인',message:'확인 키보드 회귀',confirmLabel:'진행'}))}>확인 대화상자 열기</button><button onClick={async()=>window.rosterQa.dialogResults.push(await prompt({title:'합성 입력',inputLabel:'검증 입력',required:true,confirmLabel:'입력 저장'}))}>입력 대화상자 열기</button></div>}
 function Fixture(){window.rosterQa.navigate=useNavigate();return <><DialogProbe/><StudentList/></>}
-createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProvider><SensitiveOperationController/><Fixture/></AppDialogProvider></BrowserRouter>);`,
+createRoot(document.getElementById('root')).render(<LoadingProvider><BrowserRouter><AppDialogProvider><SensitiveOperationController/><Fixture/></AppDialogProvider></BrowserRouter></LoadingProvider>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -91,7 +91,7 @@ createRoot(document.getElementById('root')).render(<BrowserRouter><AppDialogProv
   metafile: true,
   format: "esm",
   platform: "browser",
-  loader: { ".css": "empty" },
+  loader: { ".css": "empty", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -125,6 +125,7 @@ const css = (
     [
       "assets/css/style.css",
       "src/assets/index.css",
+      "src/components/common/loadingState.css",
       "src/pages/teacher/components/teacher-list-controls.css",
     ].map((name) => fs.readFile(root + "/" + name, "utf8")),
   )
@@ -747,7 +748,32 @@ try {
     .filter({ hasText: "불러오지 못했습니다" })
     .waitFor();
   await page.getByRole("button", { name: "다시 시도", exact: true }).waitFor();
-  report.checks.push("Load error exposes retry.");
+  assert.equal(await page.evaluate(() => window.rosterQa.listReads), 1);
+  assert.deepEqual(await page.evaluate(() => window.rosterQa.events), []);
+  await page.evaluate(() => {
+    window.rosterQa.loadFail = false;
+  });
+  await page.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await page.getByRole("button", { name: "가나다", exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.rosterQa.listReads), 2);
+  assert.deepEqual(await page.evaluate(() => window.rosterQa.events), []);
+  await page.evaluate(() => {
+    window.rosterQa.data.splice(0);
+  });
+  await page
+    .getByRole("button", { name: "명단 새로고침 및 필터 초기화", exact: true })
+    .click();
+  await page.getByText("학생 데이터가 없습니다.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.rosterQa.listReads), 3);
+  await page
+    .getByRole("button", { name: "명단 새로고침 및 필터 초기화", exact: true })
+    .click();
+  await page.getByText("학생 데이터가 없습니다.", { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.rosterQa.listReads), 4);
+  assert.deepEqual(await page.evaluate(() => window.rosterQa.events), []);
+  report.checks.push(
+    "Real LoadingProvider with delayed reads: load error → retry → roster → empty roster → empty refresh stays mounted; one list read per attempt, no writes.",
+  );
   await page.goto(origin + "?legacy321");
   await page.getByText("(321명)", { exact: true }).waitFor();
   await page

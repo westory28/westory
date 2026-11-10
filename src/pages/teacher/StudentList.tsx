@@ -890,13 +890,13 @@ const StudentList: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
                 {loading ? (
-                  <tr>
+                  <tr key="loading">
                     <td colSpan={8} className="p-10 text-center text-gray-400">
                       <LoadingOverlay />
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
-                  <tr>
+                  <tr key="empty">
                     <td colSpan={8} className="p-10 text-center text-gray-400">
                       학생 데이터가 없습니다.
                     </td>
