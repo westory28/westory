@@ -302,6 +302,12 @@ export async function createAvatarStage(
         ctx.scale(transform.scale?.[0] ?? 1, transform.scale?.[1] ?? 1);
         ctx.translate(-pivot[0] * artWidth, -pivot[1] * artHeight);
       }
+      if (layer.clip) {
+        const [x, y, w, h] = layer.clip;
+        ctx.beginPath();
+        ctx.rect(x * artWidth, y * artHeight, w * artWidth, h * artHeight);
+        ctx.clip();
+      }
       const [x, y, w, h] = layer.rect;
       if (layer.flipX) {
         ctx.translate((2 * x + w) * artWidth, 0);

@@ -46,8 +46,8 @@ const slots = Object.fromEntries(
     top: ["plain-top"],
     bottom: ["plain-bottom"],
     shoes: ["plain-shoes"],
-    accessory: ["none"],
-    hairStyle: ["bob", "curtain", "crop", "toben", "failure"],
+    accessory: ["none", "hat"],
+    hairStyle: ["bob", "curtain", "crop", "toben", "failure", "clipped"],
     faceShape: ["natural"],
     expression: ["natural"],
   }).map(([slot, values]) => [
@@ -62,7 +62,8 @@ const slots = Object.fromEntries(
                 src: `${value === "crop" ? "green" : value === "toben" ? "blue" : value === "failure" ? "failure" : "red"}.png`,
                 rect: [0.35, 0.1, 0.3, 0.25],
                 z: 2,
-                group: "head",
+                group: "hair",
+                ...(value === "clipped" ? { clip: [0.38, 0, 0.24, 1] } : {}),
               },
             ]
           : [],
@@ -70,6 +71,45 @@ const slots = Object.fromEntries(
     ),
   ]),
 );
+slots.accessory.hat = {
+  layers: [],
+  clipGroups: { hair: [0, 0.2, 1, 0.8] },
+};
+slots.top["plain-top"] = {
+  layers: [
+    { id: "default-top", src: "red.png", rect: [0.4, 0.4, 0.2, 0.45], z: 2 },
+  ],
+  hideIds: ["body"],
+  hideSlots: ["bottom"],
+  poses: {
+    wave: {
+      layers: [
+        { id: "posed-top", src: "blue.png", rect: [0.3, 0.4, 0.4, 0.3], z: 2 },
+      ],
+      hideIds: ["body", "pose-hand"],
+    },
+    cheer: {
+      layers: [
+        { id: "posed-top", src: "blue.png", rect: [0.3, 0.4, 0.4, 0.3], z: 2 },
+      ],
+      hideIds: [],
+      hideSlots: [],
+    },
+    think: {
+      layers: [
+        {
+          id: "posed-top",
+          src: "failure.png",
+          rect: [0.3, 0.4, 0.4, 0.3],
+          z: 2,
+        },
+      ],
+    },
+  },
+};
+slots.bottom["plain-bottom"] = [
+  { id: "bottom", src: "blue.png", rect: [0.4, 0.75, 0.2, 0.05], z: 3 },
+];
 const art = {
   base: [
     { id: "body", src: "red.png", rect: [0.4, 0.4, 0.2, 0.45], z: 1 },
@@ -82,11 +122,24 @@ const art = {
       flipY: true,
     },
   ],
-  groups: { head: { pivot: [0.5, 0.35] } },
+  groups: {
+    head: { pivot: [0.5, 0.35] },
+    hair: { parent: "head", pivot: [0.5, 0.35] },
+  },
   slots,
   poses: {
     idle: {},
-    wave: { transforms: { head: { rotation: 0.15 } } },
+    wave: {
+      transforms: { head: { rotation: 0.15 } },
+      layers: [
+        {
+          id: "pose-hand",
+          src: "red.png",
+          rect: [0.75, 0.4, 0.05, 0.05],
+          z: 3,
+        },
+      ],
+    },
     cheer: {},
     think: {},
     heart: {},
@@ -149,6 +202,81 @@ try {
     return route.continue();
   });
   await page.goto(new URL("__2d-test", origin).href);
+  assert.deepEqual(
+    await page.evaluate(async (manifest) => {
+      const { validateManifest, resolveArt } =
+        await import("/src/features/avatar/renderer2d/manifest.ts");
+      const { defaultAvatarLook } =
+        await import("/src/features/avatar/catalog.ts");
+      const valid = validateManifest(manifest);
+      const look = defaultAvatarLook("boy");
+      const ids = (pose) =>
+        resolveArt(valid, { ...look, pose }).layers.map((layer) => layer.id);
+      const robe = structuredClone(valid);
+      robe.characters.boy.slots.top["plain-top"].hideIds = [];
+      robe.characters.boy.slots.bottom["plain-bottom"] = {
+        layers: [],
+        hideIds: ["body"],
+      };
+      const robeKeepsAnkles = resolveArt(robe, look).layers.some(
+        (layer) => layer.id === "body",
+      );
+      const rejects = [];
+      for (const mutation of [
+        (choice) => {
+          choice.poses.unknown = { layers: [] };
+        },
+        (choice) => {
+          choice.poses.wave.poses = {};
+        },
+        (choice) => {
+          choice.poses.wave.layers[0].src = "../outside.png";
+        },
+        (choice) => {
+          choice.poses.wave.hideIds = [42];
+        },
+        (choice) => {
+          choice.poses.wave.layers = undefined;
+        },
+        (choice) => {
+          choice.clipGroups = { missing: [0, 0, 1, 1] };
+        },
+        (choice) => {
+          choice.poses.wave.clipGroups = { hair: [0, 0.8, 1, 0.8] };
+        },
+        (choice) => {
+          choice.poses.wave.layers[0].clip = [-0.1, 0, 1, 1];
+        },
+        (choice) => {
+          choice.poses.wave.layers[0].clip = [0, 0, 0, 1];
+        },
+      ]) {
+        const invalid = structuredClone(manifest);
+        mutation(invalid.characters.boy.slots.top["plain-top"]);
+        try {
+          validateManifest(invalid);
+          rejects.push(false);
+        } catch {
+          rejects.push(true);
+        }
+      }
+      return {
+        idle: ids("idle"),
+        wave: ids("wave"),
+        cheer: ids("cheer"),
+        robeKeepsAnkles,
+        rejects,
+      };
+    }, manifest),
+    {
+      idle: ["orientation", "default-top", "hair"],
+      wave: ["orientation", "posed-top", "hair"],
+      cheer: ["body", "orientation", "posed-top", "hair", "bottom"],
+      robeKeepsAnkles: true,
+      rejects: [true, true, true, true, true, true, true, true, true],
+    },
+    "pose artwork replaces default layers, inherits or replaces hide rules, and rejects malformed variants",
+  );
   await page.evaluate(async () => {
     window.webglRequests = 0;
     const original = HTMLCanvasElement.prototype.getContext;
@@ -235,6 +363,161 @@ try {
     ],
     "hand source orientation flips within its authored rectangle",
   );
+  assert(
+    !requests.includes("/art/blue.png"),
+    "idle does not fetch unused pose artwork or hidden bottoms",
+  );
+  assert.equal(
+    await page.evaluate(
+      () => window.stage2d.setPose("wave").requiresPreparation,
+    ),
+    true,
+    "new pose cannot display until its complete artwork is ready",
+  );
+  assert.deepEqual(
+    await page.evaluate(async () => {
+      await window.stage2d.prepareLook({ pose: "wave" });
+      const applied = window.stage2d.setPose("wave").applied;
+      const image = await createImageBitmap(
+        await (await fetch(window.stage2d.capture())).blob(),
+      );
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0);
+      const pixels = [
+        [0.5, 0.5],
+        [0.5, 0.8],
+        [0.775, 0.425],
+      ].map(([x, y]) =>
+        Array.from(
+          ctx.getImageData(
+            Math.round(x * image.width),
+            Math.round(y * image.height),
+            1,
+            1,
+          ).data,
+        ),
+      );
+      image.close();
+      window.posedCapture = window.stage2d.capture();
+      let failure;
+      try {
+        await window.stage2d.prepareLook({ pose: "think" });
+        failure = false;
+      } catch {
+        failure = true;
+      }
+      return {
+        applied,
+        pixels,
+        failure,
+        unchanged: window.stage2d.capture() === window.posedCapture,
+        unavailable: window.stage2d.setPose("think").requiresPreparation,
+      };
+    }),
+    {
+      applied: true,
+      pixels: [
+        [0, 0, 255, 255],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+      ],
+      failure: true,
+      unchanged: true,
+      unavailable: true,
+    },
+    "pose-specific garment is drawn without idle body, bottom or generic hands; failed pose art preserves the last ready frame",
+  );
+  assert.equal(
+    await page.evaluate(() => {
+      window.stage2d.setPose("idle");
+      return window.stage2d.capture() === window.saved;
+    }),
+    true,
+    "returning to idle restores the original complete composition",
+  );
+  assert.deepEqual(
+    await page.evaluate(async () => {
+      const sample = async (points) => {
+        const image = await createImageBitmap(
+          await (await fetch(window.stage2d.capture())).blob(),
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0);
+        const values = points.map(([x, y]) =>
+          Array.from(
+            ctx.getImageData(
+              Math.round(x * image.width),
+              Math.round(y * image.height),
+              1,
+              1,
+            ).data,
+          ),
+        );
+        image.close();
+        return values;
+      };
+      window.stage2d.setLook({ accessory: "hat" });
+      const idle = await sample([
+        [0.5, 0.15],
+        [0.5, 0.25],
+        [0.5, 0.5],
+      ]);
+      window.stage2d.setLook({ pose: "tilt" });
+      const rotateWithHead = ([x, y]) => {
+        const dx = (x - 0.5) * 512,
+          dy = (y - 0.35) * 640;
+        const cosine = Math.cos(-0.15),
+          sine = Math.sin(-0.15);
+        return [
+          0.5 + (dx * cosine - dy * sine) / 512,
+          0.35 + (dx * sine + dy * cosine) / 640,
+        ];
+      };
+      const tilted = await sample(
+        [
+          [0.6, 0.205],
+          [0.4, 0.195],
+        ].map(rotateWithHead),
+      );
+      window.stage2d.setLook({ pose: "idle", hairStyle: "clipped" });
+      const intersected = await sample([
+        [0.36, 0.25],
+        [0.5, 0.15],
+        [0.5, 0.25],
+      ]);
+      window.stage2d.setLook({ accessory: "none", hairStyle: "curtain" });
+      return {
+        idle,
+        tilted,
+        intersected,
+        restored: window.stage2d.capture() === window.saved,
+      };
+    }),
+    {
+      idle: [
+        [0, 0, 0, 0],
+        [255, 0, 0, 255],
+        [255, 0, 0, 255],
+      ],
+      tilted: [
+        [255, 0, 0, 255],
+        [0, 0, 0, 0],
+      ],
+      intersected: [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [255, 0, 0, 255],
+      ],
+      restored: true,
+    },
+    "hat clipping follows head tilt, intersects the hair's own clip, leaves clothes intact, and clears on removal",
+  );
   assert.equal(
     await page.evaluate(
       () =>
@@ -299,7 +582,7 @@ try {
   );
   assert.deepEqual(errors, [], "no uncaught render errors");
   console.log(
-    "PASS 2D avatar: deferred outfit, transparent canonical capture, framed previews, failed image blocking, rapid-selection cancellation, disposal and zero WebGL/models.",
+    "PASS 2D avatar: pose-specific garments and hide rules, headwear clipping through tilt/removal, malformed pose/clip rejection, unused-art requests, failed-pose recovery, deferred outfit, transparent capture, framed previews, rapid-selection cancellation, disposal and zero WebGL/models.",
   );
 } finally {
   await browser?.close();

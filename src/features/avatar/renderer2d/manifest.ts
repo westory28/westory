@@ -8,6 +8,8 @@ export interface ArtLayer {
   rect: Rect;
   z: number;
   group?: string;
+  /** Visible canvas rectangle in the layer's transformed group coordinates. */
+  clip?: Rect;
   flipX?: boolean;
   flipY?: boolean;
   tint?: {
@@ -17,10 +19,15 @@ export interface ArtLayer {
     sourceColor?: string;
   };
 }
-export interface ArtSelection {
+export interface ArtSelectionVariant {
   layers: ArtLayer[];
   hideIds?: string[];
   hideSlots?: string[];
+  clipGroups?: Record<string, Rect>;
+}
+export interface ArtSelection extends ArtSelectionVariant {
+  /** Complete pose artwork; omitted hide rules inherit the default selection. */
+  poses?: Record<string, ArtSelectionVariant>;
 }
 export interface ArtTransform {
   rotation?: number;
@@ -61,6 +68,27 @@ const pair = (value: unknown): value is Pair =>
   Array.isArray(value) &&
   value.length === 2 &&
   value.every((n) => typeof n === "number" && Number.isFinite(n));
+const clipRect = (value: unknown): value is Rect =>
+  Array.isArray(value) &&
+  value.length === 4 &&
+  value.every(
+    (n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1,
+  ) &&
+  value[2] > 0 &&
+  value[3] > 0 &&
+  value[0] + value[2] <= 1 + 1e-9 &&
+  value[1] + value[3] <= 1 + 1e-9;
+
+function intersectClips(first: Rect, second: Rect): Rect {
+  const x = Math.max(first[0], second[0]);
+  const y = Math.max(first[1], second[1]);
+  return [
+    x,
+    y,
+    Math.max(0, Math.min(first[0] + first[2], second[0] + second[2]) - x),
+    Math.max(0, Math.min(first[1] + first[3], second[1] + second[3]) - y),
+  ];
+}
 
 export function assertAssetPath(value: unknown): asserts value is string {
   if (
@@ -152,6 +180,7 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
           return fail();
         if (item.flipY !== undefined && typeof item.flipY !== "boolean")
           return fail();
+        if (item.clip !== undefined && !clipRect(item.clip)) return fail();
         if (
           item.group !== undefined &&
           (typeof item.group !== "string" || !own(groups, item.group))
@@ -184,6 +213,12 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
         )
           return fail();
     };
+    const clips = (selection: Record<string, unknown>) => {
+      if (selection.clipGroups === undefined) return;
+      if (!dictionary(selection.clipGroups)) return fail();
+      for (const [group, clip] of Object.entries(selection.clipGroups))
+        if (!own(groups, group) || !clipRect(clip)) return fail();
+    };
     layers(art.base);
     for (const slot of DRAWN_SLOTS) {
       const values = art.slots[slot];
@@ -194,6 +229,21 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
           if (!dictionary(choice)) return fail();
           layers(choice.layers);
           hides(choice);
+          clips(choice);
+          if (choice.poses !== undefined) {
+            if (!dictionary(choice.poses)) return fail();
+            for (const [poseName, variant] of Object.entries(choice.poses)) {
+              if (
+                !own(art.poses, poseName) ||
+                !dictionary(variant) ||
+                own(variant, "poses")
+              )
+                return fail();
+              layers(variant.layers);
+              hides(variant);
+              clips(variant);
+            }
+          }
         }
       }
     }
@@ -243,25 +293,52 @@ export function resolveArt(manifest: AvatarArtManifest, look: AvatarLook) {
     if (!own(values, look[slot]))
       throw new Error("지원하지 않는 아바타 아이템입니다.");
     const value = values[look[slot]];
-    return { slot, choice: Array.isArray(value) ? { layers: value } : value };
+    const choice: ArtSelection = Array.isArray(value)
+      ? { layers: value }
+      : value;
+    const variant =
+      choice.poses && own(choice.poses, look.pose)
+        ? choice.poses[look.pose]
+        : undefined;
+    return { slot, choice: variant ? { ...choice, ...variant } : choice };
   });
   const pose = art.poses[look.pose];
   const hiddenSlots = new Set(
     selections.flatMap(({ choice }) => choice.hideSlots || []),
   );
+  const visibleSelections = selections.filter(
+    ({ slot }) => !hiddenSlots.has(slot),
+  );
   const hiddenIds = new Set([
-    ...selections.flatMap(({ choice }) => choice.hideIds || []),
+    ...visibleSelections.flatMap(({ choice }) => choice.hideIds || []),
     ...(pose.hideIds || []),
   ]);
+  const groupClips = new Map<string, Rect>();
+  for (const { choice } of visibleSelections)
+    for (const [group, clip] of Object.entries(choice.clipGroups || {})) {
+      const previous = groupClips.get(group);
+      groupClips.set(group, previous ? intersectClips(previous, clip) : clip);
+    }
   const byId = new Map<string, ArtLayer>();
   for (const layer of [
     ...art.base,
-    ...selections
-      .filter(({ slot }) => !hiddenSlots.has(slot))
-      .flatMap(({ choice }) => choice.layers),
+    ...visibleSelections.flatMap(({ choice }) => choice.layers),
     ...(pose.layers || []),
-  ])
-    if (!hiddenIds.has(layer.id)) byId.set(layer.id, layer);
+  ]) {
+    if (hiddenIds.has(layer.id)) continue;
+    const groupClip = layer.group && groupClips.get(layer.group);
+    byId.set(
+      layer.id,
+      groupClip
+        ? {
+            ...layer,
+            clip: layer.clip
+              ? intersectClips(layer.clip, groupClip)
+              : groupClip,
+          }
+        : layer,
+    );
+  }
   const layers = [...byId.values()].sort((a, b) => a.z - b.z);
   if (layers.length > 64) throw new Error("아바타 이미지 수가 너무 많습니다.");
   return { art, pose, layers };

@@ -248,6 +248,16 @@ function validRect(rect, name) {
   );
   assert(rect[2] > 0 && rect[3] > 0, `${name}: empty rect`);
 }
+function inPolygon(x, y, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const [xi, yi] = points[i],
+      [xj, yj] = points[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+      inside = !inside;
+  }
+  return inside;
+}
 // Authored paper-doll garments can taper from the shoulder to the waist.
 // Resample each source row around its centre; both endpoint scales are explicit
 // registration data so a wide hem never determines the shoulder placement.
@@ -291,6 +301,16 @@ const srgb = (v) =>
 const luma = (v) => v[0] * 0.2126 + v[1] * 0.7152 + v[2] * 0.0722;
 function colorMask(pixel, reference, mode) {
   if (mode === "all") return 1;
+  if (mode === "skin") {
+    const [r, g, b] = pixel.map((v) => v * 255);
+    const yellowRatio = (g - b) / Math.max(1, r - g);
+    return (
+      Math.min(1, Math.max(0, (r - g - 16) / 12)) *
+      Math.min(1, Math.max(0, (g - b - 8) / 10)) *
+      Math.min(1, Math.max(0, (r - 85) / 25)) *
+      Math.min(1, Math.max(0, (1.55 - yellowRatio) / 0.3))
+    );
+  }
   if (mode === "neutral") {
     const magnitude = Math.max(...pixel),
       minimum = Math.min(...pixel);
@@ -308,7 +328,7 @@ function colorMask(pixel, reference, mode) {
   const distance = Math.sqrt(p.reduce((sum, v, i) => sum + (v - r[i]) ** 2, 0));
   return Math.max(0, Math.min(1, (0.35 - distance) / 0.15));
 }
-function recolor(data, options) {
+function recolor(data, options, skinWeights) {
   const target = rgb(options.color).map(linear),
     reference = rgb(options.sourceColor);
   const baseLuma = luma(reference.map(linear));
@@ -320,7 +340,12 @@ function recolor(data, options) {
   for (let i = 0; i < result.length; i += 4) {
     if (!result[i + 3]) continue;
     const original = [data[i], data[i + 1], data[i + 2]].map((v) => v / 255);
-    const amount = colorMask(original, reference, options.mode || "chroma");
+    const skin = skinWeights?.[i / 4] ?? colorMask(original, reference, "skin");
+    const amount =
+      (options.mode === "skin"
+        ? skin
+        : colorMask(original, reference, options.mode || "chroma")) *
+      (options.excludeSkin ? 1 - skin : 1);
     const shade = luma(original.map(linear)) / baseLuma;
     for (let channel = 0; channel < 3; channel++) {
       const colored = srgb(Math.min(1, target[channel] * shade));
@@ -335,18 +360,44 @@ function recolor(data, options) {
 async function writeLayer(id, data, width, height, layer, source) {
   assert(safeId(id) && !assets.has(id), `Duplicate/invalid layer ${id}`);
   const file = `layers/${id}.webp`;
+  const outfit = source.sheet.startsWith("v3-");
+  const encoding =
+    outfit && !source.maskFor
+      ? "webp-q90-640-v1"
+      : outfit
+        ? "lossless-640-v1"
+        : "lossless-v1";
+  if (outfit && Math.max(width, height) > 640) {
+    const resized = await sharp(data, { raw: { width, height, channels: 4 } })
+      .resize({
+        width: 640,
+        height: 640,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    data = resized.data;
+    width = resized.info.width;
+    height = resized.info.height;
+  }
   const rawSha256 = hash(data),
     old = previousAssets.get(id);
   let bytes;
   if (
     old?.rawSha256 === rawSha256 &&
     old.width === width &&
-    old.height === height
+    old.height === height &&
+    (old.encoding || "lossless-v1") === encoding
   )
     bytes = await fs.readFile(path.join(out, file)).catch(() => undefined);
   if (!bytes || hash(bytes) !== old?.sha256) {
     bytes = await sharp(data, { raw: { width, height, channels: 4 } })
-      .webp({ lossless: true })
+      .webp(
+        outfit && !source.maskFor
+          ? { quality: 90, alphaQuality: 100, effort: 4 }
+          : { lossless: true },
+      )
       .toBuffer();
     await fs.writeFile(path.join(out, file), bytes);
   }
@@ -361,6 +412,8 @@ async function writeLayer(id, data, width, height, layer, source) {
     sourceColor,
     rowScale,
     tintMask,
+    skinRegions,
+    skinPolygons,
     recolor: colorOptions,
     ...metadata
   } = layer;
@@ -380,6 +433,7 @@ async function writeLayer(id, data, width, height, layer, source) {
     rawSha256,
     width,
     height,
+    encoding,
     source,
   });
 }
@@ -440,7 +494,17 @@ for (const cell of spec.cells) {
     warnings.push(
       `${cell.id}: visible art touches cell edge; inspect for clipping/adjacent parts`,
     );
-  const source = { sheet: cell.sheet, crop, bounds };
+  const source = {
+    sheet: cell.sheet,
+    crop,
+    bounds,
+    ...(cell.skinRegions !== undefined
+      ? { skinRegions: cell.skinRegions }
+      : {}),
+    ...(cell.skinPolygons !== undefined
+      ? { skinPolygons: cell.skinPolygons }
+      : {}),
+  };
   let pixels = await sharp(extracted, {
     raw: { width: crop[2], height: crop[3], channels: 4 },
   })
@@ -477,17 +541,92 @@ for (const cell of spec.cells) {
   delete layer.align;
   if (cell.rowScale)
     pixels = taperRows(pixels, bounds.width, bounds.height, cell.rowScale);
-  if (cell.recolor) pixels = recolor(pixels, cell.recolor);
+  if (cell.skinRegions !== undefined) {
+    assert(Array.isArray(cell.skinRegions), `${cell.id}: skin regions`);
+    for (const region of cell.skinRegions) {
+      validRect(region, `${cell.id}: skin region`);
+      assert(
+        region.every((v) => v >= 0 && v <= 1) &&
+          region[0] + region[2] <= 1 + 1e-9 &&
+          region[1] + region[3] <= 1 + 1e-9,
+        `${cell.id}: skin region outside source cell`,
+      );
+    }
+  }
+  if (cell.skinPolygons !== undefined) {
+    assert(Array.isArray(cell.skinPolygons), `${cell.id}: skin polygons`);
+    for (const polygon of cell.skinPolygons)
+      assert(
+        Array.isArray(polygon) &&
+          polygon.length >= 3 &&
+          polygon.length <= 256 &&
+          polygon.every(
+            (point) =>
+              Array.isArray(point) &&
+              point.length === 2 &&
+              point.every((v) => Number.isFinite(v) && v >= 0 && v <= 1),
+          ),
+        `${cell.id}: invalid skin polygon`,
+      );
+  }
+  // The same authored skin coverage must drive normalization, runtime tinting
+  // and garment recoloring. Reclassifying after normalization can turn a
+  // warm collar/crest into skin, or recolor a hand as part of the garment.
+  let skinWeights;
+  if (
+    cell.skinRegions !== undefined ||
+    cell.skinPolygons !== undefined ||
+    cell.tintMask?.includeSkin ||
+    cell.recolor?.mode === "skin"
+  ) {
+    skinWeights = new Float32Array(pixels.length / 4);
+    for (let y = 0; y < bounds.height; y++)
+      for (let x = 0; x < bounds.width; x++) {
+        const index = y * bounds.width + x;
+        const sourceX = (bounds.left + x + 0.5) / crop[2];
+        const sourceY = (bounds.top + y + 0.5) / crop[3];
+        const inRegion =
+          cell.skinRegions === undefined ||
+          cell.skinRegions.some(
+            ([left, top, width, height]) =>
+              sourceX >= left &&
+              sourceX < left + width &&
+              sourceY >= top &&
+              sourceY < top + height,
+          );
+        const allowed =
+          inRegion &&
+          (cell.skinPolygons === undefined ||
+            cell.skinPolygons.some((polygon) =>
+              inPolygon(sourceX, sourceY, polygon),
+            ));
+        if (allowed)
+          skinWeights[index] = colorMask(
+            [
+              pixels[index * 4],
+              pixels[index * 4 + 1],
+              pixels[index * 4 + 2],
+            ].map((v) => v / 255),
+            [],
+            "skin",
+          );
+      }
+  }
+  if (cell.recolor) pixels = recolor(pixels, cell.recolor, skinWeights);
   if (cell.tintMask) {
     // Red ribbon accents belong to the original hair artwork, but are not dye.
     // The registered thresholds leave neutral hair fully tintable and feather
     // the mask along the ribbon's antialiased edge.
-    const [low, high] = cell.tintMask.excludeRed;
-    assert(low >= 0 && high > low && high <= 255);
+    const [low, high] = cell.tintMask.excludeRed || [0, 1];
+    assert(
+      cell.tintMask.includeSkin || (low >= 0 && high > low && high <= 255),
+    );
     const mask = Buffer.alloc(pixels.length);
     for (let i = 0; i < pixels.length; i += 4) {
       const red = pixels[i] - Math.max(pixels[i + 1], pixels[i + 2]);
-      const amount = 1 - Math.max(0, Math.min(1, (red - low) / (high - low)));
+      const amount = cell.tintMask.includeSkin
+        ? skinWeights[i / 4]
+        : 1 - Math.max(0, Math.min(1, (red - low) / (high - low)));
       mask[i] = mask[i + 1] = mask[i + 2] = 255;
       mask[i + 3] = Math.round(pixels[i + 3] * amount);
     }
@@ -508,6 +647,7 @@ for (const cell of spec.cells) {
     height: bounds.height,
     layer,
     source,
+    skinWeights,
   });
   await writeLayer(cell.id, pixels, bounds.width, bounds.height, layer, source);
 }
@@ -515,7 +655,7 @@ for (const variant of spec.variants || []) {
   const base = cells.get(variant.ref);
   assert(base, `Unknown variant base ${variant.ref}`);
   const pixels = variant.recolor
-    ? recolor(base.data, variant.recolor)
+    ? recolor(base.data, variant.recolor, base.skinWeights)
     : base.data;
   await writeLayer(
     variant.id,
@@ -546,7 +686,20 @@ function expandLayers(list) {
 function expandDefinition(value) {
   return Array.isArray(value)
     ? expandLayers(value)
-    : { ...value, layers: expandLayers(value.layers || []) };
+    : {
+        ...value,
+        layers: expandLayers(value.layers || []),
+        ...(value.poses
+          ? {
+              poses: Object.fromEntries(
+                Object.entries(value.poses).map(([pose, choice]) => [
+                  pose,
+                  expandDefinition(choice),
+                ]),
+              ),
+            }
+          : {}),
+      };
 }
 const characters = {};
 for (const character of ["girl", "boy"]) {

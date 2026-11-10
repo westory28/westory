@@ -238,7 +238,7 @@ try {
     const source = Buffer.from(capture.image.split(",")[1], "base64");
     const bytes = await sharp(source)
       .resize(256, 256)
-      .webp({ quality: 88, effort: 6 })
+      .webp({ quality: 88, effort: 4 })
       .toBuffer();
     const target = path.join(destination, entry.file);
     await fs.mkdir(path.dirname(target), { recursive: true });
