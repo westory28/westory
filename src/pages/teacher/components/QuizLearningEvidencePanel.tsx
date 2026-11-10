@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import InfoHelp from "../../../components/common/InfoHelp";
@@ -151,9 +152,7 @@ const QuizLearningEvidencePanel: React.FC<Props> = ({
         </label>
       </div>
       {loading ? (
-        <p className="py-4 text-sm text-gray-500" role="status">
-          학습 기록을 불러오는 중입니다.
-        </p>
+        <LoadingOverlay />
       ) : !selectedStudent ? (
         <p className="py-4 text-sm text-gray-500">
           확인할 학생을 선택해 주세요.

@@ -3,6 +3,7 @@ import type FullCalendar from "@fullcalendar/react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { useAuth } from "../../contexts/AuthContext";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import type { CalendarEvent } from "../../types";
 import { getYearSemester } from "../../lib/semesterScope";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
@@ -179,11 +180,7 @@ const ManageSchedule = () => {
           </span>
         )}
       </div>
-      {loading && (
-        <p className="mb-3 text-sm text-gray-500" role="status">
-          학사 일정을 불러오는 중입니다.
-        </p>
-      )}
+      {loading && <LoadingOverlay />}
       {loadError && (
         <p className="mb-3 text-sm text-red-700" role="alert">
           학사 일정을 불러오지 못했습니다. 화면을 새로고침해 주세요.

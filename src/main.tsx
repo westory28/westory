@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./assets/index.css";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import { LoadingProvider } from "./components/common/LoadingState";
 import { markLoginPerf } from "./lib/loginPerf";
 
 if (
@@ -20,8 +21,10 @@ markLoginPerf("westory-app-load-start");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
+    <LoadingProvider>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </LoadingProvider>
   </React.StrictMode>,
 );

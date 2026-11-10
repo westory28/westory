@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { collection, getDocs, query, limit, orderBy } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -69,11 +70,7 @@ const HistoryClassroomResultsPanel: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-        {loading && (
-          <div className="py-8 text-center text-sm text-gray-400">
-            불러오는 중...
-          </div>
-        )}
+        {loading && <LoadingOverlay />}
         {!loading && results.length === 0 && (
           <div className="py-8 text-center text-sm text-gray-400">
             표시할 결과가 없습니다.

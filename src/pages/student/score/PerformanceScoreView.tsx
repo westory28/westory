@@ -17,7 +17,10 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
-import { PageLoading } from "../../../components/common/LoadingState";
+import {
+  PageLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import InfoHelp from "../../../components/common/InfoHelp";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
@@ -2426,6 +2429,7 @@ const ScopedScoreConfirmationView: React.FC<
   if (!warningConsentCurrent) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-10">
+        {warningConsentSaving && <LoadingOverlay />}
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
           <div className="break-keep">
             <p className="text-sm font-black text-blue-700">
@@ -3009,6 +3013,7 @@ const ScopedScoreConfirmationView: React.FC<
 
   return (
     <>
+      {signatureActionPending && <LoadingOverlay />}
       {scoreKind === PERFORMANCE_SCORE_KIND ? (
         <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--tabs performance-score-workspace">
           <div className="teacher-sub-content">

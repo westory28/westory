@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { isQuizAnswerCorrect } from "../../../lib/quizAnswerMatching";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { formatMockExamRoundShortLabel } from "../../../lib/mockExamRounds";
 import type { QuizQuestionDraft } from "./QuizEditor";
 import {
@@ -233,6 +234,7 @@ export default function MockExamPreview({
 
   return (
     <>
+      {busy && <LoadingOverlay />}
       <button
         ref={previewButton}
         type="button"
@@ -309,9 +311,9 @@ export default function MockExamPreview({
             </div>
             <div ref={body} className="quiz-composer-body">
               {loadPaperHeader && !paperHeaders[previewRound] ? (
-                <div role={headerError ? "alert" : "status"}>
-                  {headerError || "시험지 상단 문구를 불러오는 중입니다."}
-                  {headerError && (
+                headerError ? (
+                  <div role="alert">
+                    {headerError}
                     <button
                       type="button"
                       className="quiz-authoring-button"
@@ -319,8 +321,10 @@ export default function MockExamPreview({
                     >
                       다시 불러오기
                     </button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <LoadingOverlay />
+                )
               ) : (
                 <div hidden={questionIndex != null}>
                   <MockExamPaper

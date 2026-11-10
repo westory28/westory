@@ -3,6 +3,10 @@ import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../components/common/LoadingState";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -307,6 +311,8 @@ const MyPage: React.FC = () => {
   );
 
   const myPageRequestRef = useRef(0);
+  const [myPageLoading, setMyPageLoading] = useState(true);
+  const [myPageError, setMyPageError] = useState("");
 
   useEffect(() => {
     void loadMyPage();
@@ -358,15 +364,23 @@ const MyPage: React.FC = () => {
   const loadMyPage = async () => {
     if (!user || !config) {
       setProgressSummary(null);
+      setMyPageLoading(false);
       return;
     }
     const requestId = ++myPageRequestRef.current;
-    await Promise.all([
+    setMyPageLoading(true);
+    setMyPageError("");
+    const outcomes = await Promise.allSettled([
       loadProfileAndEmoji(requestId),
       canUseScore ? loadScoreData(requestId) : resetScoreData(),
       !canUseScore ? resetPerformanceScoreData() : Promise.resolve(),
       loadProgressSummary(requestId),
     ]);
+    if (requestId !== myPageRequestRef.current) return;
+    setMyPageLoading(false);
+    if (outcomes.some((outcome) => outcome.status === "rejected")) {
+      setMyPageError("내 정보를 불러오지 못했습니다. 다시 시도해 주세요.");
+    }
   };
 
   const resetScoreData = async () => {
@@ -1064,6 +1078,7 @@ const MyPage: React.FC = () => {
   ];
   return (
     <div className="student-my-page min-h-screen bg-slate-50 flex flex-col">
+      {(myPageLoading || savingIcon || savingGoal) && <LoadingOverlay />}
       <PortalWorkspace
         as="main"
         className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs ws-page--reading flex-1"
@@ -1103,13 +1118,21 @@ const MyPage: React.FC = () => {
         </PortalSubNavigation>
 
         <section className="teacher-sub-content">
+          {myPageError && (
+            <div role="alert">
+              <p>{myPageError}</p>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void loadMyPage()}
+              >
+                다시 시도
+              </button>
+            </div>
+          )}
           <div className="space-y-8">
             {menu === "avatar" && (
-              <React.Suspense
-                fallback={
-                  <div role="status">아바타 꾸미기를 불러오는 중입니다.</div>
-                }
-              >
+              <React.Suspense fallback={<InlineLoading />}>
                 <StudentAvatarStudio />
               </React.Suspense>
             )}
@@ -1389,12 +1412,7 @@ const MyPage: React.FC = () => {
                   </div>
                   <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {performanceScoresLoading ? (
-                      <div
-                        role="status"
-                        className="py-4 text-sm text-slate-500 md:col-span-2"
-                      >
-                        수행평가 점수를 불러오는 중입니다.
-                      </div>
+                      <InlineLoading />
                     ) : performanceScores.length === 0 ? (
                       <div className="py-4 text-sm text-slate-500 md:col-span-2">
                         아직 확인할 수행평가 점수가 없습니다.

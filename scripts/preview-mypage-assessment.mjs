@@ -99,15 +99,18 @@ const summaryRows = Array.from({ length: 23 }, (_, index) => ({
   wrongCount: 2,
 }));
 const stubs = `
+export const useGongsinAvailability=()=>({enabled:false});export const getGongsinQuestionUrl=()=>'';
+export const watchQuizResultCorrections=()=>()=>{};
 export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};
 import { DEFAULT_POINT_RANK_POLICY, resolvePointRankPolicy } from '${root.replaceAll("\\", "/")}/src/lib/pointRanks.ts';
+import { MENUS as menuConfig } from '${root.replaceAll("\\", "/")}/src/constants/menus.ts';
 const rows=${JSON.stringify(results)};const summaryRows=${JSON.stringify(summaryRows)};window.myHistoryQa={list:[],detail:[]};
 let listFailed=false, detailFailed=false;
 export const loadMyQuizHistory=async(input)=>{window.myHistoryQa.list.push(input);await new Promise(resolve=>setTimeout(resolve,80));if(input.category==='all')throw Error('all must be omitted');if(new URLSearchParams(location.search).has('error')&&!listFailed){listFailed=true;throw Error('응시 기록을 불러오지 못했습니다.')};if(location.search.includes('cursor-error')&&input.cursor){throw Error('기록이 갱신되었습니다. 처음부터 새로고침해 주세요.')};const filtered=location.search.includes('empty')?[]:summaryRows.filter(row=>!input.category||row.category===input.category);const offset=Number(input.cursor||0);return {semesterId:input.semesterId,rows:filtered.slice(offset,offset+20),totalCount:filtered.length,nextCursor:offset+20<filtered.length?String(offset+20):null,generatedAt:Date.now(),version:'v1'}};
 export const loadMyQuizHistoryDetail=async(semesterId,key)=>{window.myHistoryQa.detail.push(key);await new Promise(resolve=>setTimeout(resolve,80));if(location.search.includes('detail-error')&&!detailFailed){detailFailed=true;throw Error('평가 결과를 불러오지 못했습니다.')};if(key==='canonical:old-legacy'){const error=Error('없음');error.code='functions/not-found';throw error};const index=Number(key.split('-').pop());const record=rows[Number.isFinite(index)&&index<7?index:0];return {semesterId,key,record:{...record,title:'조선의 통치 체제',...(location.search.includes('word')?{details:[{id:'word',correct:false,u:'',questionSnapshot:{type:'word',question:'조선을 건국한 사람은 누구인가요?',answer:'이성계',explanation:'이성계는 조선을 건국하였습니다.'}}]}:{})}}};
 const config={year:'2026',semester:'2',showLesson:false,showQuiz:true,showScore:true};const user={uid:'fixture-student'};const userData={name:'가상 학생',grade:'3',class:'1',number:'1'};
-export const useAuth=()=>({config,user,userData});
-export const db={};export const collection=(...args)=>args;export const doc=(...args)=>args;export const query=(...args)=>args;export const where=(...args)=>args;export const serverTimestamp=()=>null;export const setDoc=async()=>{throw Error('Fixture writes disabled')};
+export const useAuth=()=>({config,user,userData,menuConfig});
+export const db={};export const auth={currentUser:null};export const collection=(...args)=>args;export const doc=(...args)=>args;export const query=(...args)=>args;export const where=(...args)=>args;export const serverTimestamp=()=>null;export const setDoc=async()=>{throw Error('Fixture writes disabled')};
 export const getDoc=async(ref)=>{const key=ref.join('/');const data=key.includes('curriculum')?{tree:[{id:'big',title:'조선의 성립과 발전',children:[{id:'mid',title:'조선의 정치·사회와 문화의 발전을 자세히 살펴보는 긴 단원명',children:[{id:'leaf',title:'조선의 중앙 정치 기구와 지방 통치 제도'}]}]}]}:key==='[object Object]/users/fixture-student'?userData:null;return{exists:()=>!!data,data:()=>data}};
 export const getDocs=async()=>({forEach:()=>{},docs:[],empty:true});
 export const POINT_POLICY_FALLBACK={rankPolicy:resolvePointRankPolicy(DEFAULT_POINT_RANK_POLICY)};export const getPointPolicy=async()=>POINT_POLICY_FALLBACK;export const getPointRankManualAdjustEarnedPointsByUid=async()=>0;export const updateStudentProfileIcon=async()=>{throw Error('Fixture writes disabled')};export const getStudentPointWallet=async()=>null;
@@ -115,10 +118,11 @@ export const loadUserPerformanceScoreRecords=async()=>[];export const formatPerf
 let failed=false;export const loadStudentQuizResults=async()=>{await new Promise(resolve=>setTimeout(resolve,80));if(location.search.includes('error')&&!failed){failed=true;throw Error('Fixture load failure')};return location.search.includes('empty')?[]:rows};
 export const loadStudentProgressSummary=async()=>({lesson:{unavailable:false,completedUnits:0,totalLessons:0,worksheetUnits:0,units:[]},quiz:{totalAttempts:7,latestScore:0,averageScore:50},historyClassroom:{totalAttempts:0,passedCount:0,averagePercent:null}});
 `;
-const entry = `import React from 'react';import './src/components/layout/studentLayout.css';import './src/components/common/portalPage.css';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><AppDialogProvider><div className="student-layout"><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></div></AppDialogProvider></AppToastProvider></MemoryRouter>);`;
+const entry = `import React from 'react';import './src/components/layout/studentLayout.css';import './src/components/common/portalPage.css';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import MyPage from './src/pages/student/MyPage';import {LoadingProvider} from './src/components/common/LoadingState';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';createRoot(document.getElementById('root')).render(<LoadingProvider><MemoryRouter initialEntries={['/student/mypage'+(new URLSearchParams(location.search).get('attemptId')?'?menu=wrong_note&attemptId='+encodeURIComponent(new URLSearchParams(location.search).get('attemptId')):'')]}><AppToastProvider><AppDialogProvider><div className="student-layout"><header style={{padding:'16px',background:'white',borderBottom:'1px solid #e2e8f0'}}>위스토리 · 마이페이지 가상 기록 검증</header><MyPage/></div></AppDialogProvider></AppToastProvider></MemoryRouter></LoadingProvider>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,
+  loader: { ".webp": "dataurl", ".woff": "dataurl", ".woff2": "dataurl" },
   write: false,
   metafile: true,
   outdir: "fixture",
@@ -133,7 +137,7 @@ const built = await build({
         build.onResolve(
           {
             filter:
-              /firebase\/firestore$|lib\/firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$|lib\/myQuizHistory$|lib\/quizReviewNotes$/,
+              /firebase\/firestore$|(?:lib\/|^\.\/)firebase$|contexts\/AuthContext$|lib\/points$|lib\/studentWis$|lib\/performanceScores$|lib\/studentProgressSummary$|lib\/myQuizHistory$|lib\/quizReviewNotes$|lib\/quizResultCorrections$|lib\/gongsinmoongo$/,
           },
           () => ({ path: "fixture-stubs", namespace: "fixture" }),
         );
@@ -141,6 +145,17 @@ const built = await build({
           contents: stubs,
           loader: "js",
           resolveDir: root,
+        }));
+        build.onResolve(
+          { filter: /(?:AvatarStudio|QuizLessonPopup)$/ },
+          () => ({
+            path: "unvisited-dialog",
+            namespace: "fixture-dialog",
+          }),
+        );
+        build.onLoad({ filter: /.*/, namespace: "fixture-dialog" }, () => ({
+          contents: "export default function UnvisitedDialog(){return null}",
+          loader: "js",
         }));
       },
     },

@@ -8,6 +8,7 @@ import React, {
 import { Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import type { CalendarEvent } from "../../../types";
 import {
   getScheduleCategoryMeta,
@@ -514,11 +515,7 @@ const TeacherWeekSchedule: React.FC<Props> = ({
           </div>
           <div className="teacher-week-events" aria-busy={loading}>
             <div ref={eventListRef} className="teacher-week-events__list">
-              {loading && (
-                <p className="teacher-week-events__status" role="status">
-                  일정을 불러오는 중입니다.
-                </p>
-              )}
+              {loading && <LoadingOverlay />}
               {!loading && error && (
                 <p className="teacher-week-events__status" role="alert">
                   일정을 불러오지 못했습니다.{" "}

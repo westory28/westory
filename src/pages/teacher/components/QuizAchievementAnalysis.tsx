@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { type MockExamPaperQuestion } from "../../../components/common/MockExamPaper";
 import {
@@ -486,11 +487,13 @@ export default function QuizAchievementAnalysis({
               다시 조회
             </button>
           </div>
+        ) : enabled && loading ? (
+          <LoadingOverlay />
         ) : (
           <p role="status" className="qca-muted">
             {!enabled
               ? "학년 또는 학급을 선택하고 결과를 조회해 주세요."
-              : "모의고사 점수와 문항을 불러오는 중입니다."}
+              : "조회할 분석 자료가 없습니다."}
           </p>
         )}
         <PendingAchievementView view={view} showHeading={!inlineReport} />

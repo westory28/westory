@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import { CalendarEvent } from "../../types";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
@@ -271,13 +272,7 @@ const TeacherDashboard: React.FC = () => {
         </div>
       </div>
 
-      <React.Suspense
-        fallback={
-          <div className="teacher-dashboard-dialog-loading" role="status">
-            창을 여는 중입니다.
-          </div>
-        }
-      >
+      <React.Suspense fallback={<LoadingOverlay />}>
         {isEventModalOpen && (
           <EventModal
             isOpen={isEventModalOpen}

@@ -23,6 +23,7 @@ import {
 import { useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import { useAppToast } from "../../components/common/AppToastProvider";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
@@ -4625,6 +4626,10 @@ const ManageHistoryClassroom: React.FC = () => {
 
   return (
     <div className="history-classroom ws-page">
+      {(refreshingDashboard ||
+        (exemptionPanelOpen && loadingExemptions) ||
+        ((isCreateModalOpen || Boolean(editingAssignment)) &&
+          loadingLessonSources)) && <LoadingOverlay />}
       {resultLoadError && (
         <p role="alert" className="mb-4 text-sm text-red-600">
           {resultLoadError}
@@ -7428,9 +7433,7 @@ const ManageHistoryClassroom: React.FC = () => {
                       {reviewSubmissionError}
                     </p>
                   ) : loadingReviewSubmission ? (
-                    <p role="status" className="p-4 text-sm text-gray-600">
-                      제출 답안을 불러오는 중입니다.
-                    </p>
+                    <LoadingOverlay />
                   ) : (
                     <HistoryClassroomAssignmentView
                       assignment={editingPreviewAssignment}

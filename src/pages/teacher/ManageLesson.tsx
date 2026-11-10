@@ -722,6 +722,8 @@ const ManageLesson: React.FC = () => {
   const [sourceArchiveAssets, setSourceArchiveAssets] = useState<
     SourceArchiveAsset[]
   >([]);
+  const [sourceArchiveLoading, setSourceArchiveLoading] = useState(false);
+  const [sourceArchiveError, setSourceArchiveError] = useState("");
   const [sourceArchiveSearch, setSourceArchiveSearch] = useState("");
   const [sourceArchivePickerFootnoteId, setSourceArchivePickerFootnoteId] =
     useState<string | null>(null);
@@ -1465,9 +1467,17 @@ const ManageLesson: React.FC = () => {
     };
   }, [config?.year, config?.semester, currentUser?.uid]);
   useEffect(() => {
-    if (!sourceArchivePickerFootnoteId || !currentUser?.uid) return;
+    if (!sourceArchivePickerFootnoteId || !currentUser?.uid) {
+      setSourceArchiveLoading(false);
+      return;
+    }
+    let active = true;
+    setSourceArchiveLoading(true);
+    setSourceArchiveError("");
     const unsubscribe = subscribeSourceArchiveAssets(
       (items) => {
+        if (!active) return;
+        setSourceArchiveLoading(false);
         setSourceArchiveAssets(
           items.filter(
             (item) =>
@@ -1476,11 +1486,19 @@ const ManageLesson: React.FC = () => {
         );
       },
       (error) => {
+        if (!active) return;
         console.error("Failed to load source archive assets:", error);
+        setSourceArchiveLoading(false);
+        setSourceArchiveError(
+          "사료 목록을 불러오지 못했습니다. 창을 닫은 뒤 다시 열어 주세요.",
+        );
         setSourceArchiveAssets([]);
       },
     );
-    return unsubscribe;
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [sourceArchivePickerFootnoteId, currentUser?.uid]);
   useEffect(() => {
     if (
@@ -3731,10 +3749,8 @@ const ManageLesson: React.FC = () => {
       <LessonSourceArchivePickerModal
         open={Boolean(sourceArchivePickerFootnoteId)}
         assets={filteredSourceArchiveAssets}
-        loading={
-          Boolean(sourceArchivePickerFootnoteId) &&
-          sourceArchiveAssets.length === 0
-        }
+        loading={sourceArchiveLoading}
+        error={sourceArchiveError}
         searchValue={sourceArchiveSearch}
         onSearchChange={setSourceArchiveSearch}
         onClose={() => setSourceArchivePickerFootnoteId(null)}

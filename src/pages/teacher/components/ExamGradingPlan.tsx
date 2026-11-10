@@ -1,4 +1,5 @@
 import NumericInput from "../../../components/common/NumericInput";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import React, { useEffect, useState } from "react";
 import "./examGradingPlan.css";
 import KoreanTextInput from "./KoreanTextInput";
@@ -967,9 +968,7 @@ const ExamGradingPlan: React.FC = () => {
           tabIndex={0}
         >
           {loading ? (
-            <div className="text-center p-10 text-gray-400">
-              데이터를 불러오는 중...
-            </div>
+            <LoadingOverlay />
           ) : filteredPlans.length === 0 ? (
             <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
               등록된 평가 기준이 없습니다.

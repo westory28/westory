@@ -31,6 +31,7 @@ import {
 import { getHistoryDictionaryInitialCounts } from "../../lib/historyDictionaryInitials";
 import HistoryDictionaryInitialFilter from "./HistoryDictionaryInitialFilter";
 import InfoHelp from "./InfoHelp";
+import { InlineLoading } from "./LoadingState";
 import "./historyDictionary.css";
 
 interface Props {
@@ -351,9 +352,7 @@ export default function HistoryDictionaryCatalogBrowser({
         ))}
       </div>
       {loading ? (
-        <p className="history-dictionary-empty" role="status">
-          사전을 불러오는 중입니다.
-        </p>
+        <InlineLoading />
       ) : failed ? (
         <div className="history-dictionary-error" role="alert">
           <p>사전을 불러오지 못했습니다.</p>

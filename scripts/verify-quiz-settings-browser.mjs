@@ -81,6 +81,7 @@ import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import Modal from ${source("src/pages/teacher/components/QuizSettingsModal.tsx")};
 import {AppToastProvider} from ${source("src/components/common/AppToastProvider.tsx")};
+import {LoadingProvider} from ${source("src/components/common/LoadingState.tsx")};
 import {getAssessmentConfigKey} from ${source("src/lib/assessmentConfig.ts")};
 import {buildAssessmentDefinitionId} from ${source("src/lib/assessmentLifecycle.ts")};
 import ${source("src/assets/index.css")};
@@ -101,7 +102,7 @@ function Fixture(){
   const [open,setOpen]=useState(true);
   return <main><h1>평가 관리 검증</h1><button onClick={()=>setOpen(true)}>평가 설정 다시 열기</button><Modal isOpen={open} onClose={()=>{qa.closes++;setOpen(false);}} nodeId={nodeId} nodeTitle='긴 한글 단원명으로 확인하는 우리 역사의 전개와 변화' category={category} canEdit={!params.has('readonly')}/></main>;
 }
-createRoot(document.getElementById('root')).render(<AppToastProvider><Fixture/></AppToastProvider>);
+createRoot(document.getElementById('root')).render(<LoadingProvider><AppToastProvider><Fixture/></AppToastProvider></LoadingProvider>);
 `;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },

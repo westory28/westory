@@ -11121,6 +11121,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   return (
     <div className="space-y-6" aria-busy={savingScoreEdits || undefined}>
+      {(scoreListLoading ||
+        (classSheetModalOpen && classSheetPreviewLoading)) && (
+        <LoadingOverlay />
+      )}
       {savingScoreEdits && (
         <LoadingOverlay
           message={managerCopy.savingOverlayMessage}
@@ -11548,9 +11552,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </span>
                 </div>
                 {rostersLoading ? (
-                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
-                    업로드 기록을 불러오는 중입니다.
-                  </div>
+                  <LoadingOverlay />
                 ) : rosters.length === 0 ? (
                   <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
                     아직 저장된 업로드 기록이 없습니다.
@@ -11755,12 +11757,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       </div>
                     </div>
 
-                    {scoreStatsLoading && (
-                      <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
-                        통계용 점수 데이터를 불러오는 중입니다. 불러오기 전에는
-                        업로드 기록에 남은 범위에서 먼저 계산됩니다.
-                      </div>
-                    )}
+                    {scoreStatsLoading && <LoadingOverlay />}
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-lg bg-slate-50 px-4 py-3">

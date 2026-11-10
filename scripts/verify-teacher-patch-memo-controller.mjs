@@ -173,6 +173,7 @@ const harness = async (operations = {}, options = {}) => {
       },
     },
     "./AppToastProvider": { useAppToast: () => ({ showToast }) },
+    "./LoadingState": { LoadingOverlay: "LoadingOverlay" },
     "./useFloatingLauncherVisibility": {
       useFloatingLauncherVisibility: () => () => {},
     },

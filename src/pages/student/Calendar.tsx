@@ -13,16 +13,26 @@ import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
 import StudentCalendarSection from "./components/StudentCalendarSection";
 import type { CalendarEvent } from "../../types";
 import { useAttendanceDates } from "./hooks/useAttendanceDates";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 
 const Calendar = () => {
   const { user, menuConfig } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [userClass, setUserClass] = useState<string | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [classLoading, setClassLoading] = useState(true);
+  const [loadedEventScope, setLoadedEventScope] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [retryVersion, setRetryVersion] = useState(0);
   const [currentConfig, setCurrentConfig] = useState<{
     year: string;
     semester: string;
   } | null>(null);
   const attendance = useAttendanceDates(user?.uid, currentConfig);
+  const eventScope =
+    currentConfig && userClass
+      ? `${currentConfig.year}/${currentConfig.semester}/${userClass}`
+      : "";
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
@@ -38,41 +48,79 @@ const Calendar = () => {
   };
 
   useEffect(() => {
+    let active = true;
+    setConfigLoading(true);
+    setLoadError("");
     const fetchConfig = async () => {
       try {
         const configDoc = await getDoc(doc(db, "site_settings", "config"));
+        if (!active) return;
         if (configDoc.exists()) {
           setCurrentConfig(
             configDoc.data() as { year: string; semester: string },
           );
+        } else {
+          setCurrentConfig(null);
+          setLoadError("학기 정보를 확인하지 못했습니다. 다시 시도해 주세요.");
         }
       } catch (error) {
         console.error("Error fetching config:", error);
+        if (active) {
+          setCurrentConfig(null);
+          setLoadError("학기 정보를 불러오지 못했습니다. 다시 시도해 주세요.");
+        }
+      } finally {
+        if (active) setConfigLoading(false);
       }
     };
     fetchConfig();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [retryVersion]);
 
   useEffect(() => {
-    if (!user) return;
+    let active = true;
+    setUserClass(null);
+    if (!user) {
+      setClassLoading(false);
+      return;
+    }
+    setClassLoading(true);
     const loadUserClass = async () => {
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (!active) return;
         if (userDoc.exists()) {
           const d = userDoc.data();
           if (d.grade && d.class) {
             setUserClass(`${d.grade}-${d.class}`);
+          } else {
+            setLoadError(
+              "학급 정보를 확인하지 못했습니다. 선생님께 문의해 주세요.",
+            );
           }
+        } else {
+          setLoadError("학생 정보를 확인하지 못했습니다. 다시 시도해 주세요.");
         }
       } catch (error) {
         console.error("Error loading user class:", error);
+        if (active)
+          setLoadError("학급 정보를 불러오지 못했습니다. 다시 시도해 주세요.");
+      } finally {
+        if (active) setClassLoading(false);
       }
     };
     loadUserClass();
-  }, [user]);
+    return () => {
+      active = false;
+    };
+  }, [user?.uid, retryVersion]);
 
   useEffect(() => {
-    if (!currentConfig || !userClass) return;
+    if (configLoading || classLoading || !currentConfig || !userClass) return;
+    let active = true;
+    setLoadedEventScope("");
 
     const fetchEvents = async () => {
       // Path: years/{year}/semesters/{semester}/calendar
@@ -87,14 +135,21 @@ const Calendar = () => {
           visibleEvents,
           holidays,
         );
-        setEvents(loadedEvents);
+        if (active) setEvents(loadedEvents);
       } catch (e) {
         console.error("Error fetching events:", e);
+        if (active)
+          setLoadError("일정을 불러오지 못했습니다. 다시 시도해 주세요.");
+      } finally {
+        if (active) setLoadedEventScope(eventScope);
       }
     };
 
     fetchEvents();
-  }, [currentConfig, userClass]);
+    return () => {
+      active = false;
+    };
+  }, [currentConfig, userClass, configLoading, classLoading]);
 
   const handleEventClick = (event: CalendarEvent) => {
     if (event.eventType === "holiday") return;
@@ -104,6 +159,10 @@ const Calendar = () => {
 
   return (
     <div className="student-calendar-page ws-page">
+      {(configLoading ||
+        classLoading ||
+        (!!eventScope && loadedEventScope !== eventScope) ||
+        attendance.loading) && <LoadingOverlay />}
       <div className="ws-page-header mb-4">
         <h1 className="text-xl font-extrabold text-gray-900">
           {getStudentMenuLabel(menuConfig, "/student/calendar", "학사 일정")}
@@ -114,6 +173,17 @@ const Calendar = () => {
           </span>
         )}
       </div>
+      {loadError && (
+        <div className="student-calendar-attendance-error" role="alert">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => setRetryVersion((value) => value + 1)}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
       {attendance.error && (
         <div className="student-calendar-attendance-error" role="status">
           <span>출석 기록을 불러오지 못했습니다.</span>

@@ -2,6 +2,7 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import NumericInput from "../../../components/common/NumericInput";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -739,7 +740,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         </header>
         <div className="quiz-settings-body">
           {loading ? (
-            <p role="status">설정을 불러오는 중…</p>
+            <LoadingOverlay />
           ) : loadError ? (
             <div className="quiz-settings-error" role="alert">
               <p>{loadError}</p>
@@ -752,7 +753,9 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               </button>
             </div>
           ) : !ready ? (
-            <p role="status">학생 공개 상태를 불러오는 중…</p>
+            definitionLoading ? (
+              <LoadingOverlay />
+            ) : null
           ) : (
             settingsLoaded && (
               <>

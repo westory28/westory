@@ -1,5 +1,6 @@
 import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import { InfoHelpIcon } from "../../components/common/InfoHelp";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -412,7 +413,7 @@ function NavalWeplayManagement() {
                 </WeplayGameFrame>
               </div>
             ) : (
-              <p role="status">게임 정보를 불러오는 중입니다.</p>
+              <LoadingOverlay />
             )
           ) : !data || !draft ? (
             <>

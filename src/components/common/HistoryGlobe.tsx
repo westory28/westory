@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import React, {
   useCallback,
   useEffect,
@@ -2736,11 +2737,7 @@ export default function HistoryGlobe({
             </div>
           </div>
           <AtlasCompass ref={compassRef} />
-          {!land && !landError && (
-            <div className="history-globe__loading" role="status">
-              지형을 불러오는 중이다.
-            </div>
-          )}
+          {!land && !landError && <InlineLoading />}
           {(landError || (needsTerrain && terrainError)) && (
             <div className="history-globe__loading" role="alert">
               <span>지형을 불러오지 못했다.</span>

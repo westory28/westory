@@ -10,7 +10,10 @@ import { useAppToast } from "../../../../components/common/AppToastProvider";
 import { sanitizeRichHtml } from "../../../../lib/sanitizeRichHtml";
 import LessonAnswerFeedback from "../../../../components/common/LessonAnswerFeedback";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
-import { InlineLoading } from "../../../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../../../components/common/LoadingState";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
@@ -1623,6 +1626,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       }
     >
       {floatingSaveControls}
+      {isSaving && <LoadingOverlay />}
       <div
         className={
           fullscreenPreview

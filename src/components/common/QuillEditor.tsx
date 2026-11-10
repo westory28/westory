@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import React, { useEffect, useRef, useState } from "react";
 
 import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
@@ -313,11 +314,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
       style={editorFrameStyle}
     >
       <div ref={hostRef} style={{ minHeight }} />
-      {!ready && (
-        <div className="px-4 py-3 text-sm font-semibold text-gray-500">
-          편집기를 준비하는 중입니다.
-        </div>
-      )}
+      {!ready && <InlineLoading />}
       <style>{`
                 .westory-quill .ql-toolbar .ql-start-number {
                     width: auto;

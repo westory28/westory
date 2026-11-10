@@ -1,4 +1,5 @@
 import NumericInput from "../../../components/common/NumericInput";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -168,9 +169,7 @@ const ExamOmrConfig: React.FC = () => {
             </button>
           </div>
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-            {loading && (
-              <div className="text-center text-gray-400">로딩 중...</div>
-            )}
+            {loading && <LoadingOverlay />}
             {objective.map((item, i) => (
               <div
                 key={i}

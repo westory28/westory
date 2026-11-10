@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import "../teacher-list-controls.css";
@@ -441,11 +442,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                     {transactionsError}
                   </div>
                 )}
-                {transactionsLoading && (
-                  <div role="status" className="p-4 text-sm text-gray-500">
-                    불러오는 중…
-                  </div>
-                )}
+                {transactionsLoading && <LoadingOverlay />}
                 {!transactionsLoading &&
                   !transactionsError &&
                   transactions.length === 0 && (

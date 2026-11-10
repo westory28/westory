@@ -31,6 +31,11 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
   )
     return;
   const copy = svg.cloneNode(true) as SVGSVGElement;
+  const surface = svg.closest<HTMLElement>(".ws-loading-screen");
+  const surfaceBox = surface?.getBoundingClientRect();
+  const surfaceStyle = surface ? getComputedStyle(surface) : null;
+  const background = surfaceStyle?.backgroundColor || "rgb(255 255 255 / 60%)";
+  const backdrop = surfaceStyle?.backdropFilter || "blur(4px)";
   const fill = svg.querySelector<SVGRectElement>("[data-loading-fill]")!;
   const initialFill = getComputedStyle(fill).transform;
   const letters = svg.querySelectorAll<SVGGElement>("[data-loading-letter]");
@@ -61,12 +66,45 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
       maxWidth: "none",
       margin: "0",
       pointerEvents: "none",
-      zIndex: "90",
+      zIndex: "20000",
     });
     const copyFill = copy.querySelector<SVGRectElement>("[data-loading-fill]")!;
     copyFill.style.animation = "none";
     copyFill.style.transform = "scaleX(1)";
     document.body.append(copy);
+    // Fade the same loading surface with the logo so it never floats over the
+    // newly revealed content without its blur. This layer does not block input.
+    const exitLayer = document.createElement("div");
+    exitLayer.className = "ws-loading-exit-surface";
+    exitLayer.setAttribute("aria-hidden", "true");
+    Object.assign(exitLayer.style, {
+      position: "fixed",
+      left: `${surfaceBox?.x ?? box.x}px`,
+      top: `${surfaceBox?.y ?? box.y}px`,
+      width: `${surfaceBox?.width ?? box.width}px`,
+      height: `${surfaceBox?.height ?? box.height}px`,
+      maxWidth: "none",
+      maxHeight: "none",
+      margin: "0",
+      padding: "0",
+      border: "0",
+      background,
+      backdropFilter: backdrop,
+      webkitBackdropFilter: backdrop,
+      overflow: "visible",
+      pointerEvents: "none",
+      zIndex: "20000",
+    });
+    const topLayer = typeof HTMLElement.prototype.showPopover === "function";
+    if (topLayer) exitLayer.setAttribute("popover", "manual");
+    document.body.append(exitLayer);
+    exitLayer.append(copy);
+    Object.assign(copy.style, {
+      position: "absolute",
+      left: `${box.x - (surfaceBox?.x ?? box.x)}px`,
+      top: `${box.y - (surfaceBox?.y ?? box.y)}px`,
+    });
+    if (topLayer) exitLayer.showPopover();
     const color = copyFill.animate(
       [{ transform: initialFill }, { transform: "scaleX(1)" }],
       { duration: 180, easing: "ease-out" },
@@ -78,10 +116,16 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
         fill: "forwards",
       },
     );
+    const surfaceFade = exitLayer.animate(
+      [{ opacity: 1 }, { opacity: 1, offset: 0.65 }, { opacity: 0 }],
+      { duration: 240, fill: "forwards" },
+    );
     const remove = () => {
       copy.remove();
+      exitLayer.remove();
       color.cancel();
       fade.cancel();
+      surfaceFade.cancel();
       document.removeEventListener("visibilitychange", remove);
       window.removeEventListener("pagehide", remove);
     };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { Link } from "react-router-dom";
 import {
   getGongsinQuestionUrl,
@@ -368,7 +369,7 @@ export default function MyQuizHistory({
           </h3>
         </header>
         {detailLoading ? (
-          <p role="status">평가 결과를 불러오는 중입니다.</p>
+          <InlineLoading />
         ) : detailError ? (
           <div role="alert">
             <p>{detailError}</p>
@@ -814,7 +815,7 @@ export default function MyQuizHistory({
           </div>
         )
       )}
-      {loading && <p role="status">오답 노트를 불러오는 중입니다.</p>}
+      {loading && <InlineLoading />}
       {page?.nextCursor && (
         <button
           type="button"

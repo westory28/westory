@@ -186,6 +186,7 @@ const bundle = await build({
     resolveDir: root,
   },
   bundle: true,
+  loader: { ".webp": "dataurl" },
   write: false,
   outfile: path.join(evidence, "student-runner-fixture.js"),
   platform: "browser",

@@ -601,6 +601,8 @@ function component(runtime) {
       if (name === "./EntryMotionContext")
         return { useEntryMotionEnabled: () => enabled };
       if (name === "./entryMapMotionRenderer") return runtime;
+      if (name === "../common/LoadingState")
+        return { InlineLoading: "InlineLoading" };
       if (name.endsWith(".css")) return {};
       throw new Error(`Unexpected component dependency: ${name}`);
     },
@@ -658,6 +660,11 @@ function component(runtime) {
   assert.ok(
     view.find((node) => node.props.role === "alert"),
     "Failed map assets must show retry UI",
+  );
+  assert.equal(
+    view.find((node) => node.type === "InlineLoading"),
+    null,
+    "Failed assets release the screen loading state",
   );
   const retry = view.find(
     (node) => node.type === "button" && node.props.children === "다시 불러오기",
@@ -717,6 +724,11 @@ console.log(
     0,
     "Supported browsers retain lazy loading",
   );
+  assert.equal(
+    view.find((node) => node.type === "InlineLoading"),
+    null,
+    "Offscreen lazy map must not lock scrolling before its request starts",
+  );
   runtime.intersect(true);
   await view.flush();
   runtime.intersect(true);
@@ -737,6 +749,10 @@ console.log(
   runtime.loadEntryMapMotion = () => pending;
   const abandoned = component(runtime);
   await abandoned.flush();
+  assert.ok(
+    abandoned.find((node) => node.type === "InlineLoading"),
+    "The actual pending asset request registers screen loading",
+  );
   abandoned.dispose();
   finish(data);
   await abandoned.flush();

@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "./LoadingState";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -692,6 +693,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
   return (
     <>
+      {(saving || busyNoteIds.size > 0) && <LoadingOverlay />}
       {selectingTarget && (
         <div
           className="pointer-events-none fixed inset-0 z-[118]"

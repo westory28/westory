@@ -1,5 +1,6 @@
 import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +59,7 @@ const ManageThinkCloud: React.FC = () => {
     Array<ThinkCloudResponse & { id: string }>
   >([]);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
@@ -97,12 +99,19 @@ const ManageThinkCloud: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setInitialLoading(false);
+      return;
+    }
+    let active = true;
+    setInitialLoading(true);
     const subscription = subscribeThinkCloudState(
       config,
       "teacher",
       selectedSessionId,
       (state) => {
+        if (!active) return;
+        setInitialLoading(false);
         setSessions(state.thinkCloudSessions);
         setResponses(state.thinkCloudResponses);
         setClassStudents(state.thinkCloudRoster);
@@ -114,6 +123,8 @@ const ManageThinkCloud: React.FC = () => {
         );
       },
       (error) => {
+        if (!active) return;
+        setInitialLoading(false);
         setSessions([]);
         setResponses([]);
         setClassStudents([]);
@@ -128,6 +139,7 @@ const ManageThinkCloud: React.FC = () => {
     );
     subscriptionRef.current = subscription;
     return () => {
+      active = false;
       subscription();
       if (subscriptionRef.current === subscription)
         subscriptionRef.current = null;
@@ -768,6 +780,7 @@ const ManageThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {initialLoading && <LoadingOverlay />}
       <PortalWorkspace
         as="main"
         className="teacher-sub-workspace teacher-sub-workspace--page flex-1"

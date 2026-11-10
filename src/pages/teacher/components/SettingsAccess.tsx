@@ -7,6 +7,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import SettingsStudentAccess from "./SettingsStudentAccess";
 import {
@@ -219,7 +220,7 @@ const SettingsAccess: React.FC = () => {
                     colSpan={TABLE_COLUMN_COUNT}
                     className="px-4 py-10 text-center text-gray-400"
                   >
-                    사용자 목록을 불러오는 중입니다.
+                    <LoadingOverlay />
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (

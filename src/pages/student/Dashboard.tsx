@@ -40,6 +40,10 @@ import {
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
 import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../components/common/LoadingState";
+import {
   calendarDateKey,
   getKoreanDateKey,
   getWeekStart,
@@ -51,11 +55,7 @@ const StudentWeekSchedule = lazy(
 );
 const NoticeBoard = lazy(() => import("./components/NoticeBoard"));
 
-const DashboardCalendarFallback: React.FC = () => (
-  <div className="student-dashboard-placeholder" role="status">
-    학사 일정을 불러오는 중입니다.
-  </div>
-);
+const DashboardCalendarFallback: React.FC = () => <InlineLoading />;
 
 const StudentDashboard: React.FC = () => {
   const { user, userData, config, interfaceConfig, menuConfig } = useAuth();
@@ -326,6 +326,7 @@ const StudentDashboard: React.FC = () => {
 
   return (
     <div className="student-portal-dashboard">
+      {attendanceLoading && <LoadingOverlay />}
       <h1 className="sr-only">
         {getStudentMenuLabel(menuConfig, "/student/dashboard", "학생 홈")}
       </h1>
@@ -335,19 +336,11 @@ const StudentDashboard: React.FC = () => {
         {showNotice && (
           <div className="student-portal-dashboard__notice">
             {secondaryPanelsReady ? (
-              <Suspense
-                fallback={
-                  <div className="student-dashboard-placeholder" role="status">
-                    알림장을 불러오는 중입니다.
-                  </div>
-                }
-              >
+              <Suspense fallback={<InlineLoading />}>
                 <NoticeBoard />
               </Suspense>
             ) : (
-              <div className="student-dashboard-placeholder" role="status">
-                알림장을 불러오는 중입니다.
-              </div>
+              <InlineLoading />
             )}
           </div>
         )}
@@ -399,9 +392,7 @@ const StudentDashboard: React.FC = () => {
                 hallOfFameTitle={hallOfFameTitle}
               />
             ) : (
-              <div className="student-dashboard-placeholder" role="status">
-                위스 순위를 불러오는 중입니다.
-              </div>
+              <InlineLoading />
             )}
           </div>
         )}

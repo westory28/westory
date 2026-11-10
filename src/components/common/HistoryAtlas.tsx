@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import React, {
   memo,
   useCallback,
@@ -3046,7 +3047,7 @@ export default function HistoryAtlas({
                     </button>
                   </>
                 ) : (
-                  "지도를 불러오는 중…"
+                  <InlineLoading />
                 )}
               </div>
             )}

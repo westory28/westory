@@ -42,7 +42,7 @@ export const executeStudentAssessmentCommand=async(commandType,input)=>{window._
 export const executeAssessmentManagementCommand=executeStudentAssessmentCommand;
 export const lockHistoryClassroomAttempt=async(input)=>{window.__lockCalls=(window.__lockCalls||[]).concat([input]);if(window.__holdLockOnce){window.__holdLockOnce=false;await new Promise(resolve=>{window.__resolveLock=resolve;});}return {attemptId:input.attemptId,status:window.__lockStatus||'LOCKED',revision:2};};
 const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
-export const getDocs=async(ref)=>{if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+export const getDocs=async(ref)=>{(window.__readCalls||=[]).push(ref.path);if(window.__holdReads)await new Promise(resolve=>(window.__readResolvers||=[]).push(resolve));if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
 window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
@@ -60,6 +60,7 @@ const output = await build({
     resolveDir: root,
   },
   bundle: true,
+  loader: { ".webp": "dataurl" },
   write: false,
   outfile: path.join(evidence, "student-index-fixture.js"),
   format: "esm",
@@ -94,7 +95,10 @@ const css = (
   .join("\n")
   .replaceAll(/@import[^;]+;/g, "")
   .replaceAll(/@tailwind[^;]+;/g, "");
-const importedCss = output.outputFiles.filter(file => file.path.endsWith(".css")).map(file => file.text).join("\n");
+const importedCss = output.outputFiles
+  .filter((file) => file.path.endsWith(".css"))
+  .map((file) => file.text)
+  .join("\n");
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}\n${importedCss}body{margin:0}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((req, res) => {
   res.setHeader(
@@ -105,7 +109,7 @@ const server = http.createServer((req, res) => {
   );
   res.end(
     req.url === "/fixture.js"
-      ? output.outputFiles.find(file => file.path.endsWith(".js")).text
+      ? output.outputFiles.find((file) => file.path.endsWith(".js")).text
       : req.url === "/tailwind.js"
         ? tailwind
         : html,
@@ -1098,6 +1102,86 @@ try {
     );
     reports.push({
       scenario: "submitted-response-survives-assignment-refresh",
+      passed: true,
+    });
+    await page.close();
+  }
+  {
+    const page = await browser.newPage({
+      viewport: { width: 768, height: 1024 },
+    });
+    await page.addInitScript(
+      ({ assignment }) => {
+        window.__data = {
+          assignments: [{ ...assignment, dueAt: null }],
+          results: [],
+        };
+        window.__holdReads = true;
+      },
+      { assignment },
+    );
+    const url = `http://127.0.0.1:${server.address().port}`;
+    await page.route("**/*", (route) =>
+      route.request().url().startsWith(url) ? route.continue() : route.abort(),
+    );
+    await page.goto(url);
+    await page.waitForFunction(() => window.__readResolvers?.length === 2);
+    assert.equal(
+      await page.locator(".ws-loading-screen").count(),
+      1,
+      "initial reads block until ready",
+    );
+    const releaseReads = () =>
+      page.evaluate(() => {
+        window.__holdReads = false;
+        window.__readResolvers.splice(0).forEach((resolve) => resolve());
+      });
+    await releaseReads();
+    await page.getByRole("button", { name: "새로고침", exact: true }).waitFor();
+    const readsPerLoad = await page.evaluate(() => window.__readCalls.length);
+    for (const mode of ["online", "explicit"]) {
+      const previousReads = await page.evaluate(
+        () => window.__readCalls.length,
+      );
+      await page.evaluate((mode) => {
+        window.__holdReads = true;
+        window.__data.assignments[0].title = `갱신 ${mode}`;
+        if (mode === "online") window.dispatchEvent(new Event("online"));
+      }, mode);
+      if (mode === "explicit")
+        await page
+          .getByRole("button", { name: "새로고침", exact: true })
+          .click();
+      await page.waitForFunction(() => window.__readResolvers?.length === 2);
+      if (mode === "explicit")
+        await page.locator(".ws-loading-screen").waitFor();
+      assert.equal(
+        await page.locator(".ws-loading-screen").count(),
+        mode === "explicit" ? 1 : 0,
+        mode + " loading boundary",
+      );
+      await releaseReads();
+      await page
+        .getByRole("heading", { name: `갱신 ${mode}`, exact: true })
+        .waitFor();
+      await page.waitForFunction(
+        (expected) => window.__readCalls.length === expected,
+        previousReads + readsPerLoad,
+      );
+      await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
+      assert.equal(
+        await page.evaluate(() => document.getElementById("root").inert),
+        false,
+      );
+      assert.equal(
+        await page.evaluate(() => window.__readCalls.length),
+        previousReads + readsPerLoad,
+        "presentation adds no reads",
+      );
+    }
+    reports.push({
+      scenario: "initial-explicit-loading-and-nonblocking-online-refresh",
+      readsPerLoad,
       passed: true,
     });
     await page.close();

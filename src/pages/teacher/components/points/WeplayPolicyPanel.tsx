@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import NumericInput from "../../../../components/common/NumericInput";
@@ -399,11 +400,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
         )}
       </header>
 
-      {loading && (
-        <p className="weplay-policy__status" role="status">
-          위플레이 정책을 불러오는 중입니다.
-        </p>
-      )}
+      {loading && <LoadingOverlay />}
       {loadError && (
         <div className="weplay-policy__feedback is-error" role="alert">
           <p>{loadError}</p>

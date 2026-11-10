@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import {
   AvatarStudio,
   type AvatarStudioAdapter,
@@ -137,12 +138,7 @@ export default function SettingsMyPage() {
     }
   };
 
-  if (loading)
-    return (
-      <div className="avatar-studio-status" role="status">
-        마이페이지를 불러오는 중입니다.
-      </div>
-    );
+  if (loading) return <LoadingOverlay />;
   if (!data)
     return (
       <div className="avatar-studio-status" role="alert">

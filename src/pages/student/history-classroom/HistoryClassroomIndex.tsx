@@ -9,7 +9,10 @@ import {
   where,
 } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
@@ -285,6 +288,13 @@ const HistoryClassroomIndex: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const loadedScope = useRef("");
+  const explicitRefresh = useRef(false);
+  const requestScope = `${getSemesterCollectionPath(config, "history_classrooms")}/${studentUid}`;
+  const refreshWithLoading = () => {
+    explicitRefresh.current = true;
+    setRefreshVersion((value) => value + 1);
+  };
   const [nowMs, setNowMs] = useState(Date.now());
   const syncedViolations = useRef(new Set<string>());
   const syncingViolations = useRef(new Set<string>());
@@ -341,7 +351,10 @@ const HistoryClassroomIndex: React.FC = () => {
         setLoading(false);
         return;
       }
-      setLoading(true);
+      setLoading(
+        loadedScope.current !== requestScope || explicitRefresh.current,
+      );
+      explicitRefresh.current = false;
       setLoadError("");
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
@@ -557,6 +570,7 @@ const HistoryClassroomIndex: React.FC = () => {
             )
             .filter((item) => item.uid === studentUid),
         );
+        loadedScope.current = requestScope;
       } catch (error) {
         console.error("Failed to load history classroom assignments:", error);
         if (!cancelled) {
@@ -906,7 +920,7 @@ const HistoryClassroomIndex: React.FC = () => {
         </p>
         <button
           type="button"
-          onClick={() => setRefreshVersion((value) => value + 1)}
+          onClick={refreshWithLoading}
           className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
         >
           다시 불러오기
@@ -917,6 +931,7 @@ const HistoryClassroomIndex: React.FC = () => {
 
   return (
     <div className="ws-page ws-page--reading">
+      {requestingAssignmentId && <LoadingOverlay />}
       <section className="ws-flat-section mb-4">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
@@ -959,7 +974,7 @@ const HistoryClassroomIndex: React.FC = () => {
       <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
         <button
           type="button"
-          onClick={() => setRefreshVersion((value) => value + 1)}
+          onClick={refreshWithLoading}
           className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
         >
           새로고침

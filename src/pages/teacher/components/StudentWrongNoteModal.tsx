@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
@@ -307,7 +308,7 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
-            <div className="text-center py-12 text-gray-500">{loadingText}</div>
+            <LoadingOverlay message={loadingText} />
           ) : groupedItems.length === 0 ? (
             <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
               <div className="text-sm font-bold text-gray-500">

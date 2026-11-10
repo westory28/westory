@@ -6,6 +6,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
 import useYutPublication from "./useYutPublication";
 import { prepareWeplayIntroAudio } from "./weplayIntroAudio";
+import { InlineLoading } from "../LoadingState";
 import "./weplay-catalog.css";
 
 export default function WeplayGameCatalog({
@@ -79,9 +80,7 @@ export default function WeplayGameCatalog({
       </div>
       {portal === "student" &&
         ((navalAllowed && navalStatus === "checking") ||
-          publication.status === "checking") && (
-          <p role="status">게임을 확인하는 중입니다.</p>
-        )}
+          publication.status === "checking") && <InlineLoading />}
       {portal === "student" &&
         ((navalAllowed && navalStatus === "error") ||
           publication.status === "error") && (

@@ -1,12 +1,14 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import StorageImage from "../../../components/common/StorageImage";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import type { SourceArchiveAsset } from "../../../types";
 
 type LessonSourceArchivePickerModalProps = {
   open: boolean;
   assets: SourceArchiveAsset[];
   loading: boolean;
+  error?: string;
   searchValue: string;
   onSearchChange: (value: string) => void;
   onClose: () => void;
@@ -19,6 +21,7 @@ const LessonSourceArchivePickerModal: React.FC<
   open,
   assets,
   loading,
+  error,
   searchValue,
   onSearchChange,
   onClose,
@@ -104,9 +107,11 @@ const LessonSourceArchivePickerModal: React.FC<
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
             {loading ? (
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-                사료창고 목록을 불러오는 중입니다.
-              </div>
+              <LoadingOverlay />
+            ) : error ? (
+              <p role="alert" className="px-6 py-10 text-sm text-red-700">
+                {error}
+              </p>
             ) : assets.length === 0 ? (
               <div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
                 선택할 수 있는 이미지 사료가 없습니다.

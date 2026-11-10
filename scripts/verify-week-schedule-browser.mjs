@@ -20,6 +20,7 @@ const bundle = await build({
 import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
+import {LoadingProvider} from './src/components/common/LoadingState';
 import TeacherWeekSchedule from './src/pages/teacher/components/TeacherWeekSchedule';
 import StudentWeekSchedule from './src/pages/student/components/StudentWeekSchedule';
 import StudentCalendarSection from './src/pages/student/components/StudentCalendarSection';
@@ -69,7 +70,7 @@ function Calendar({role}) {
  return <><output data-clicked={role} data-week={weekStart} data-selected={selectedDate||''} data-week-changes={weekChanges} data-date-clicks={dateClicks}>{clicked}</output>{role==='teacher'?<main className="teacher-layout"><div className="teacher-weekly-dashboard"><div className="teacher-weekly-dashboard__grid">{panels}<div className="teacher-weekly-dashboard__schedule"><TeacherWeekSchedule {...shared} filterClass={filterClass} availableClassTargets={['3-10']} onDateDoubleClick={()=>{}} onAddEvent={()=>{}} onFilterChange={setFilterClass}/></div></div></div></main>:<main className="student-portal-dashboard"><div className="student-portal-dashboard__grid">{panels}<div className="student-portal-dashboard__calendar"><StudentWeekSchedule {...shared} attendanceLoading={false} attendanceChecked={true} attendanceMessage="" attendanceDates={markers?['2026-10-19','2026-10-21']:[]} attendanceGoalText="" onAttendanceCheck={()=>{}}/></div></div></main>}</>;
 }
 const fullCalendar=new URLSearchParams(location.search).get('scenario')==='calendar';
-createRoot(document.getElementById('root')).render(<MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter>);`,
+createRoot(document.getElementById('root')).render(<LoadingProvider><MemoryRouter>{fullCalendar?<div className="fixture"><main className="student-calendar-page ws-page"><header className="ws-page-header"><h1>학사 일정</h1></header><div className="student-calendar-page__canvas"><StudentCalendarSection events={calendarEvents} attendanceDates={['2026-10-19','2026-10-21']} onEventClick={()=>{}}/></div></main></div>:<div className="fixture"><Calendar role="teacher"/><Calendar role="student"/></div>}</MemoryRouter></LoadingProvider>);`,
   },
   bundle: true,
   write: false,
@@ -1054,7 +1055,6 @@ try {
       });
       for (const [state, text] of [
         ["empty", "이번 주에 등록된 일정이 없습니다."],
-        ["loading", "일정을 불러오는 중입니다."],
         ["error", "일정을 불러오지 못했습니다."],
       ]) {
         await page.goto(`${origin}/?state=${state}`);
@@ -1063,6 +1063,13 @@ try {
           2,
         );
       }
+      await page.goto(`${origin}/?state=loading`);
+      await page.getByRole("status", { name: "처리 중" }).waitFor();
+      assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+      assert.equal(
+        await page.getByText("일정을 불러오는 중입니다.").count(),
+        0,
+      );
     }
     await page.goto(`${origin}/?scenario=calendar`);
     const fullCalendar = page.getByRole("region", { name: "학사 일정 달력" });

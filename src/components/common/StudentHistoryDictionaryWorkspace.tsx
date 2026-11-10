@@ -1,4 +1,5 @@
 import { useAppToast } from "./AppToastProvider";
+import { InlineLoading, LoadingOverlay } from "./LoadingState";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -360,6 +361,7 @@ export default function StudentHistoryDictionaryWorkspace() {
 
   return (
     <div className="history-dictionary-workspace">
+      {busy && <LoadingOverlay />}
       <div className="ws-page-tabs" role="group" aria-label="사전 보기">
         <button
           type="button"
@@ -461,9 +463,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                   </div>
                 )}
                 {wordsLoading ? (
-                  <p className="history-dictionary-empty" role="status">
-                    내 단어장을 불러오는 중입니다.
-                  </p>
+                  <InlineLoading />
                 ) : !wordsError && !visibleWords.length ? (
                   <p className="history-dictionary-empty">
                     {search || initial

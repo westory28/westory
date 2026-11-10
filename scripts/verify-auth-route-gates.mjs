@@ -170,6 +170,8 @@ function layoutHarness({
     configReady: true,
     menuConfig: { student: [], teacher: [] },
     menuConfigReady: true,
+    interfaceConfig: {},
+    interfaceConfigReady: true,
     settingsLoadedAt: Date.now(),
     refreshConfig: async () => events.refreshes.push("config"),
     refreshMenuConfig: async () => events.refreshes.push("menu"),
@@ -481,7 +483,10 @@ for (const [pathname, userData] of [
 // disabled while awaiting it, and raw rejection text is never rendered.
 {
   const h = hooks();
-  const { default: Recovery } = load(recoveryCode, { react: h.react });
+  const { default: Recovery } = load(recoveryCode, {
+    react: h.react,
+    "./LoadingState": { LoadingOverlay: "LoadingOverlay" },
+  });
   let resolveRetry;
   let calls = 0;
   const retry = new Promise((resolve) => (resolveRetry = resolve));
@@ -506,6 +511,11 @@ for (const [pathname, userData] of [
   buttons[1].props.onClick();
   assert.equal(calls, 1);
   assert.equal(
+    hasType(h.flush(), "LoadingOverlay"),
+    true,
+    "Explicit recovery action registers loading",
+  );
+  assert.equal(
     nodes(h.flush())
       .filter((node) => node.type === "button")
       .every((node) => node.props.disabled),
@@ -513,6 +523,11 @@ for (const [pathname, userData] of [
   );
   resolveRetry();
   await new Promise(setImmediate);
+  assert.equal(
+    hasType(h.flush(), "LoadingOverlay"),
+    false,
+    "Completed recovery releases loading",
+  );
   assert.equal(
     nodes(h.flush())
       .filter((node) => node.type === "button")
@@ -523,7 +538,10 @@ for (const [pathname, userData] of [
 
 {
   const h = hooks();
-  const { default: Recovery } = load(recoveryCode, { react: h.react });
+  const { default: Recovery } = load(recoveryCode, {
+    react: h.react,
+    "./LoadingState": { LoadingOverlay: "LoadingOverlay" },
+  });
   h.initialize(() =>
     Recovery({
       error: { message: "다시 로그인해 주세요.", retryable: false },
@@ -539,6 +557,11 @@ for (const [pathname, userData] of [
   buttons[0].props.onClick();
   await new Promise(setImmediate);
   const tree = h.flush();
+  assert.equal(
+    hasType(tree, "LoadingOverlay"),
+    false,
+    "Failed recovery releases loading",
+  );
   assert.equal(JSON.stringify(tree).includes("private-account"), false);
   assert.equal(JSON.stringify(tree).includes("secret-token"), false);
   assert.equal(
@@ -549,7 +572,10 @@ for (const [pathname, userData] of [
 
 {
   const h = hooks();
-  const { default: Recovery } = load(recoveryCode, { react: h.react });
+  const { default: Recovery } = load(recoveryCode, {
+    react: h.react,
+    "./LoadingState": { LoadingOverlay: "LoadingOverlay" },
+  });
   h.initialize(() =>
     Recovery({
       registrationPending: true,
@@ -559,6 +585,11 @@ for (const [pathname, userData] of [
     }),
   );
   const tree = h.render();
+  assert.equal(
+    hasType(tree, "LoadingOverlay"),
+    false,
+    "Waiting for registration approval must remain actionable",
+  );
   assert.equal(
     nodes(tree).some((node) => node.props?.role === "status"),
     true,

@@ -1,4 +1,5 @@
-﻿import { acquirePageScrollLock } from "../../lib/pageScrollLock";
+import { InlineLoading } from "./LoadingState";
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { createPortal } from "react-dom";
@@ -1033,11 +1034,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
         } ${interactive ? "cursor-zoom-in overflow-auto" : "overflow-visible"}`}
         onClick={interactive ? openModal : undefined}
       >
-        {loadingPdf && (
-          <div className="rounded-xl bg-white px-4 py-6 text-sm text-gray-500">
-            PDF 파일을 준비하고 있습니다.
-          </div>
-        )}
+        {loadingPdf && <InlineLoading />}
         {!loadingPdf && loadError && !nativeViewerFallback && (
           <div className="rounded-xl bg-white px-4 py-6 text-sm text-red-600">
             PDF 파일을 불러오지 못했습니다.
@@ -1119,7 +1116,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
               onLoadError={(error) =>
                 setLoadError(error.message || "pdf-render-failed")
               }
-              loading="PDF를 불러오는 중입니다."
+              loading={<InlineLoading />}
             >
               <div
                 ref={interactive ? undefined : modalPageFrameRef}
@@ -1130,7 +1127,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
                   scale={zoom}
                   renderTextLayer
                   renderAnnotationLayer
-                  loading="페이지를 불러오는 중입니다."
+                  loading={<InlineLoading />}
                 />
                 {selectedRegion && selectedRegion.page === currentPage && (
                   <div

@@ -10,6 +10,7 @@ import { buildStudentPagination } from "./components/studentPagination";
 import "./components/teacher-list-controls.css";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppToast } from "../../components/common/AppToastProvider";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import { canEditStudentList } from "../../lib/permissions";
 import {
   resetLessonCorePointProgress,
@@ -891,7 +892,7 @@ const StudentList: React.FC = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={8} className="p-10 text-center text-gray-400">
-                      데이터를 불러오는 중...
+                      <LoadingOverlay />
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (

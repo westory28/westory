@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import React, { useEffect, useRef, useState } from "react";
 import QuizVisualPassageEditor from "./QuizVisualPassageEditor";
 import QuizTextField from "./QuizTextField";
@@ -130,7 +131,7 @@ export default function MockExamMaterialFields({
       {chooseExisting && !passageSet && (
         <div className="mock-exam-set-picker">
           {busy ? (
-            <p role="status">세트 지문을 불러오는 중…</p>
+            <LoadingOverlay />
           ) : choices.length ? (
             <label className="quiz-composer-field">
               <span>연결할 세트 지문</span>

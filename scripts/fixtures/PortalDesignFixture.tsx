@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter, useLocation } from "react-router-dom";
+import { LoadingProvider } from "../../src/components/common/LoadingState";
 import Header from "../../src/components/common/Header";
 import PortalSubNavigation from "../../src/components/common/PortalSubNavigation";
 import PortalWorkspace, {
@@ -141,7 +142,9 @@ function Fixture() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <HashRouter>
-    <Fixture />
-  </HashRouter>,
+  <LoadingProvider>
+    <HashRouter>
+      <Fixture />
+    </HashRouter>
+  </LoadingProvider>,
 );

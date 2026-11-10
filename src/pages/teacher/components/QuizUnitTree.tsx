@@ -1,4 +1,5 @@
 import React from "react";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 
 interface TreeUnit {
   id: string;
@@ -48,11 +49,7 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({
         <i className="fas fa-file-contract" aria-hidden="true" />
         <span>모의고사</span>
       </button>
-      {loading && (
-        <p className="p-3 text-sm text-gray-500" role="status">
-          단원을 불러오는 중입니다.
-        </p>
-      )}
+      {loading && <LoadingOverlay />}
       {loadError && (
         <div className="p-3 text-sm text-red-700" role="alert">
           단원을 불러오지 못했습니다.

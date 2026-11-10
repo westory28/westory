@@ -1,24 +1,31 @@
-.ws-loading-page,
-.ws-loading-overlay,
-.ws-loading-inline {
+.ws-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-}
-.ws-loading-page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: var(--ws-bg, #f9fafb);
-}
-.ws-loading-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(255 255 255 / 96%);
+  background: rgb(255 255 255 / 60%);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
+  isolation: isolate;
 }
-.ws-loading-inline {
-  padding-block: 40px;
+.ws-loading-screen::backdrop {
+  background: transparent;
+}
+.ws-loading-exit-surface::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+.ws-loading-screen:not([open]) {
+  display: none;
 }
 .ws-loading {
   display: flex;
@@ -43,9 +50,6 @@
 .ws-loading__fill {
   transform-origin: 0 0;
   animation: ws-loading-fill 30000ms linear both;
-}
-.ws-loading-inline .ws-loading__logo {
-  width: 192px;
 }
 .ws-loading--paused .ws-loading__letter,
 .ws-loading--paused .ws-loading__fill {

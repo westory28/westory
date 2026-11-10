@@ -2485,9 +2485,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               searching ||
               (filteredQuestions.length > 0 &&
                 loadedPageKey !== activePageKey) ? (
-              <div className="text-center p-10 text-gray-400">
-                문제를 불러오는 중...
-              </div>
+              searching ? (
+                <span className="sr-only" role="status">
+                  검색 중
+                </span>
+              ) : (
+                <LoadingOverlay />
+              )
             ) : filteredQuestions.length === 0 ? (
               <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
                 {questionSearch.trim() || normalSubUnitFilter

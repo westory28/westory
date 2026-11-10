@@ -1,6 +1,7 @@
 import { useAppToast } from "../../components/common/AppToastProvider";
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import StorageImage from "../../components/common/StorageImage";
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   canReadLessonManagement,
@@ -707,20 +708,7 @@ const ManageSourceArchive: React.FC = () => {
           </div>
 
           {loading ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="overflow-hidden rounded-3xl border border-gray-200"
-                >
-                  <div className="aspect-[4/3] animate-pulse bg-gray-100" />
-                  <div className="space-y-2 p-4">
-                    <div className="h-5 animate-pulse rounded bg-gray-100" />
-                    <div className="h-4 animate-pulse rounded bg-gray-100" />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <LoadingOverlay />
           ) : visibleAssets.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
               {UI.emptyList}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useEntryMotionEnabled } from "./EntryMotionContext";
 import type { EntryMapMotionController } from "./entryMapMotionRenderer";
+import { InlineLoading } from "../common/LoadingState";
 import "../common/atlasPlaceDetails.css";
 import "./entry-map-motion.css";
 
@@ -11,6 +12,7 @@ export default function EntryMapMotion() {
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const id = useId().replace(/:/g, "");
@@ -22,9 +24,11 @@ export default function EntryMapMotion() {
     let started = false;
     setError(false);
     setReady(false);
+    setLoading(false);
     const load = async () => {
       if (started) return;
       started = true;
+      setLoading(true);
       try {
         const { loadEntryMapMotion, mountEntryMapMotion } =
           await import("./entryMapMotionRenderer");
@@ -38,6 +42,8 @@ export default function EntryMapMotion() {
         setReady(true);
       } catch {
         if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     const observer =
@@ -66,7 +72,8 @@ export default function EntryMapMotion() {
 
   return (
     <div ref={root} className="entry-map-motion" aria-label="역사 지도 체험">
-      <div className="entry-map-motion__stage" aria-busy={!ready && !error}>
+      <div className="entry-map-motion__stage" aria-busy={loading}>
+        {loading && <InlineLoading />}
         <svg
           className="entry-map-motion__map"
           role="img"
@@ -140,24 +147,15 @@ export default function EntryMapMotion() {
         <span className="entry-map-motion__attribution">
           Natural Earth · 현재 지형·경계
         </span>
-        {!ready && (
-          <div
-            className="entry-map-motion__status"
-            role={error ? "alert" : "status"}
-          >
-            {error ? (
-              <>
-                <span>지도를 불러오지 못했습니다.</span>
-                <button
-                  type="button"
-                  onClick={() => setAttempt((value) => value + 1)}
-                >
-                  다시 불러오기
-                </button>
-              </>
-            ) : (
-              "지도 불러오는 중"
-            )}
+        {error && (
+          <div className="entry-map-motion__status" role="alert">
+            <span>지도를 불러오지 못했습니다.</span>
+            <button
+              type="button"
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              다시 불러오기
+            </button>
           </div>
         )}
       </div>

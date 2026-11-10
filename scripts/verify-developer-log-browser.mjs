@@ -24,7 +24,7 @@ const email=identity==='developer'?'westoria28@gmail.com':'fixture@example.inval
 const user={uid:'fixture-user',email,getIdTokenResult:async()=>({claims:{auth_time:Math.floor(Date.now()/1000)}})};
 const userData={uid:user.uid,email,name:'화면 검증',role:identity==='student'||identity==='staff'?'student':'teacher',teacherPortalEnabled:identity==='staff',staffPermissions:identity==='staff'?['lesson_read']:[]};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
-const state={currentUser:user,userData,config,loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,settingsLoadedAt:Date.now(),menuConfig:MENUS,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}};
+const state={currentUser:user,userData,config,loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,interfaceConfigReady:true,settingsLoadedAt:Date.now(),menuConfig:MENUS,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}};
 export const useAuth=()=>state;export const auth={currentUser:user};
 export const preloadStudentWeplay=()=>{};
 export const resolveStudentProfileEmoji=()=>({rank:null,allowedEmojiIds:['smile'],entry:{id:'smile',emoji:'😀'}});
@@ -35,15 +35,17 @@ const post={title:'개발자 일지 화면 개선',category:'feature',summary:'�
 export const onSnapshot=(ref,callback)=>{callback({docs:[{id:'fixture-post',data:()=>post}]});return()=>{}};
 export const getDoc=async(ref)=>({id:'fixture-post',exists:()=>ref.path.endsWith('/fixture-post'),data:()=>post});export const getDocFromServer=getDoc;
 window.developerLogQa={writes:[]};const forbidWrite=async()=>{window.developerLogQa.writes.push('blocked');throw Error('Fixture writes disabled')};
-export const setDoc=forbidWrite,updateDoc=forbidWrite,deleteDoc=forbidWrite,addDoc=forbidWrite,runTransaction=forbidWrite,uploadDeveloperLogImage=forbidWrite,tryDeleteDeveloperLogImage=forbidWrite;
+export const setDoc=forbidWrite,updateDoc=forbidWrite,deleteDoc=forbidWrite,addDoc=forbidWrite,uploadDeveloperLogImage=forbidWrite,tryDeleteDeveloperLogImage=forbidWrite;
+export const runTransaction=async()=>{if(!window.developerLogQa.deferWrites)return forbidWrite();window.developerLogQa.writes.push('local-transaction');await new Promise((resolve,reject)=>Object.assign(window.developerLogQa,{resolve,reject}));};
 `;
 const entry = `
 import React from 'react';import {createRoot} from 'react-dom/client';
 import {HashRouter,Routes,Route} from 'react-router-dom';
 import MainLayout from './src/components/layout/MainLayout';import DeveloperLog from './src/pages/DeveloperLog';
+import {LoadingProvider} from './src/components/common/LoadingState';
 import './src/assets/index.css';import './src/components/common/portalPage.css';
 localStorage.setItem('developerLogViewed:fixture-post','1');
-createRoot(document.getElementById('root')).render(<HashRouter><MainLayout><Routes><Route path="/developer-log" element={<DeveloperLog/>}/><Route path="/developer-log/:postId" element={<DeveloperLog/>}/></Routes></MainLayout></HashRouter>);
+createRoot(document.getElementById('root')).render(<LoadingProvider><HashRouter><MainLayout><Routes><Route path="/developer-log" element={<DeveloperLog/>}/><Route path="/developer-log/:postId" element={<DeveloperLog/>}/></Routes></MainLayout></HashRouter></LoadingProvider>);
 `;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -170,8 +172,15 @@ try {
         );
         assert.equal(await page.locator(".teacher-layout-footer").count(), 1);
         assert.equal(
-          await page.locator(".ws-page.ws-page--reading").count(),
+          await page.locator(".ws-page.developer-log-page").count(),
           1,
+        );
+        assert.equal(
+          await page
+            .locator(".developer-log-page")
+            .evaluate((node) => getComputedStyle(node).maxWidth),
+          "1536px",
+          "Current shared page width contract",
         );
         assert.equal(
           await page
@@ -213,6 +222,57 @@ try {
           [],
         );
         assert.deepEqual(errors, []);
+        if (identity === "student" && width === 390 && mode === "detail") {
+          await page.evaluate(() => {
+            window.developerLogQa.deferWrites = true;
+          });
+          await page
+            .getByRole("button", { name: "좋아요", exact: true })
+            .click();
+          await page
+            .getByRole("status", { name: "처리 중", exact: true })
+            .waitFor();
+          assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+          assert.equal(
+            await page.locator("#root").evaluate((node) => node.inert),
+            true,
+          );
+          assert.equal(
+            await page.locator(".developer-log-page").count(),
+            1,
+            "Pending mutation preserves the current article DOM",
+          );
+          await page.evaluate(() => window.developerLogQa.resolve());
+          await page
+            .locator(".ws-loading-screen")
+            .waitFor({ state: "detached" });
+          await page
+            .getByRole("button", { name: "좋아요", exact: true })
+            .click();
+          await page.locator(".ws-loading-screen").waitFor();
+          await page.evaluate(() =>
+            window.developerLogQa.reject(new Error("synthetic-write-failure")),
+          );
+          await page
+            .locator(".ws-loading-screen")
+            .waitFor({ state: "detached" });
+          assert.equal(
+            await page.locator("#root").evaluate((node) => node.inert),
+            false,
+          );
+          assert.deepEqual(
+            await page.evaluate(() => window.developerLogQa.writes),
+            ["local-transaction", "local-transaction"],
+            "One existing command per click; no polling or extra writes",
+          );
+          checks.push({
+            mutation: "like",
+            pending: true,
+            successReleased: true,
+            errorReleased: true,
+            calls: 2,
+          });
+        }
         checks.push({
           identity,
           mode,

@@ -400,7 +400,7 @@ const component = JSON.stringify(
 );
 const bundle = await build({
   stdin: {
-    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import {AppToastProvider} from './src/components/common/AppToastProvider';import Manage from ${component};const root=createRoot(document.getElementById('root'));let revision=0;window.__remount=(route='/')=>root.render(<MemoryRouter key={++revision} initialEntries={[route]}><AppToastProvider><Manage/></AppToastProvider></MemoryRouter>);window.__remount();`,
+    contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';import {AppToastProvider} from './src/components/common/AppToastProvider';import {LoadingProvider} from './src/components/common/LoadingState';import Manage from ${component};const root=createRoot(document.getElementById('root'));let revision=0;window.__remount=(route='/')=>root.render(<LoadingProvider><MemoryRouter key={++revision} initialEntries={[route]}><AppToastProvider><Manage/></AppToastProvider></MemoryRouter></LoadingProvider>);window.__remount();`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -409,6 +409,7 @@ const bundle = await build({
   write: false,
   format: "esm",
   platform: "browser",
+  loader: { ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"', "import.meta.env": "{}" },
   plugins: [
     {

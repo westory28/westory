@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { InlineLoading } from "./LoadingState";
 import { sanitizeRichHtml } from "../../lib/sanitizeRichHtml";
 
 import {
@@ -89,9 +90,10 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
                   path={footnote.sourceArchiveImagePath}
                   alt={title}
                   className="max-h-[60vh] w-full object-contain"
+                  loadingFallback={<InlineLoading />}
                   fallback={
                     <div className="flex min-h-[18rem] items-center justify-center bg-slate-100 text-sm text-slate-500">
-                      사료창고 이미지를 불러오는 중입니다.
+                      사료창고 이미지를 불러오지 못했습니다.
                     </div>
                   }
                 />

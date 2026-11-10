@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import NumericInput from "../../../../components/common/NumericInput";
 import React, { useMemo, useState } from "react";
 import "../teacher-list-controls.css";
@@ -180,11 +181,13 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                 학년과 반을 먼저 선택하거나 이름으로 전역 검색해 주세요.
               </div>
             ) : loading ? (
-              <div className="px-5 py-12 text-center text-sm text-gray-400">
-                {isGlobalSearchActive
-                  ? "전체 학생 후보를 불러오는 중입니다."
-                  : "선택한 학급 학생을 불러오는 중입니다."}
-              </div>
+              isGlobalSearchActive ? (
+                <span className="sr-only" role="status">
+                  검색 중
+                </span>
+              ) : (
+                <LoadingOverlay />
+              )
             ) : students.length === 0 ? (
               <div className="px-5 py-12 text-center text-sm text-gray-400">
                 선택한 조건에 맞는 학생이 없습니다.

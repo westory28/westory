@@ -4,6 +4,7 @@ import {
   useAnalysisStudentWindow,
 } from "./QuizAnalysisStudents";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import {
   buildQuizAnalysis,
   buildQuizItemStatistics,
@@ -772,9 +773,7 @@ export default function QuizAnalysisView({
         </div>
       )}
       {loading ? (
-        <div role="status" className="qa-empty">
-          평가 자료를 불러오는 중입니다.
-        </div>
+        <LoadingOverlay />
       ) : !isKeywordScope && !assessment ? (
         <p className="qa-empty">이 중단원에는 등록된 평가가 없습니다.</p>
       ) : (

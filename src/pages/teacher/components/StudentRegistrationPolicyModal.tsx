@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -148,11 +149,7 @@ export default function StudentRegistrationPolicyModal({
           새 가입과 승인 대기 계정에 적용됩니다. 이미 승인된 학생의 계정과
           기록은 유지됩니다.
         </p>
-        {loading && (
-          <p className="mt-4" role="status">
-            가입 기준을 불러오는 중…
-          </p>
-        )}
+        {loading && <LoadingOverlay />}
         {policy && (
           <>
             <p className="mt-4 break-all text-sm text-gray-600">

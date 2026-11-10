@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import NumericInput from "../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useState } from "react";
 import PointRankBadge from "../../../components/common/PointRankBadge";
@@ -381,9 +382,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     "rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-8 text-center text-sm font-bold text-gray-400";
 
   const renderLoading = (label: string) => (
-    <div className="rounded-xl border border-gray-200 bg-white px-4 py-10 text-center text-sm font-bold text-gray-400">
-      {label} 불러오는 중...
-    </div>
+    <LoadingOverlay message={`${label} 불러오는 중`} />
   );
 
   const usesFullWorkspace = activeTab === "quiz";
@@ -825,9 +824,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           {activeTab === "performance" && (
             <div className="space-y-4">
               {performanceScoresLoading ? (
-                <div className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-sm font-bold text-gray-400">
-                  수행평가 점수를 불러오는 중...
-                </div>
+                <LoadingOverlay />
               ) : performanceScores.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm font-bold text-gray-400">
                   저장된 수행평가 점수가 없습니다.

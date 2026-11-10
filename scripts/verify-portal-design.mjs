@@ -34,6 +34,7 @@ export const auth={currentUser:fixtureUser};
 export const useAuth=()=>{const student=location.hash.startsWith("#/student");const teacherName=new URLSearchParams(location.search).get("teacherName")||"검증교사";return {currentUser:fixtureUser,authGeneration:1,userData:{uid:"portal-design-fixture",email:"fixture@example.invalid",role:student?"student":"teacher",name:student?"검증학생":teacherName,staffPermissions:[]},config,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}}};
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
+export const onSnapshot=(ref,success)=>{let active=true;queueMicrotask(()=>{if(active)success({exists:()=>false,data:()=>({}),docs:[]});});return()=>{active=false;};};
 export const getDoc=async(ref)=>window.corePointQa?.getProgress(ref) ?? ({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
 export const getDocFromServer=getDoc;export const getDocs=async()=>({docs:[],empty:true,size:0});
 export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>({});export const serverTimestamp=()=>({});
@@ -875,6 +876,7 @@ try {
               path: path.join(evidence, `${label}.png`),
               fullPage: true,
             });
+            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
             const view = page.getByRole("group", {
               name: "지도 보기",
               exact: true,
@@ -888,6 +890,7 @@ try {
                 .getAttribute("aria-pressed"),
               "true",
             );
+            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
             await noOverflow(page, `${label}-world`);
             const worldLayout = await mapLayout(
               page,
@@ -899,6 +902,7 @@ try {
               .getByRole("button", { name: "지구본", exact: true })
               .press("Enter");
             await page.locator(".history-globe canvas").waitFor();
+            await page.locator(".ws-loading-screen").waitFor({ state: "hidden" });
             await noOverflow(page, `${label}-globe`);
             const globeLayout = await mapLayout(
               page,

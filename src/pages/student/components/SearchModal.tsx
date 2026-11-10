@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import {
   getScheduleCategoryMeta,
@@ -30,7 +31,6 @@ const LABELS = {
     '"\uC640 \uC77C\uCE58\uD558\uB294 \uC77C\uC815\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
   placeholder: "\uC77C\uC815 \uAC80\uC0C9\uC5B4 \uC785\uB825",
   search: "\uAC80\uC0C9",
-  searchLoading: "\uAC80\uC0C9 \uC911...",
   title: "\uC77C\uC815 \uAC80\uC0C9",
 } as const;
 
@@ -69,7 +69,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
   if (!isOpen) return null;
 
   const handleSearch = async () => {
-    if (!q.trim() || !config || !userData) return;
+    if (loading || !q.trim() || !config || !userData) return;
     setLoading(true);
     setSearched(true);
     setResults([]);
@@ -165,12 +165,7 @@ const SearchModal: React.FC<SearchModalProps> = ({
         </div>
 
         <div className="custom-scroll min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4 sm:px-6">
-          {loading && (
-            <div className="py-10 text-center text-gray-400">
-              <i className="fas fa-spinner mr-2 fa-spin"></i>
-              {LABELS.searchLoading}
-            </div>
-          )}
+          {loading && <LoadingOverlay />}
 
           {!loading && !searched && (
             <div className="py-10 text-center text-gray-400">

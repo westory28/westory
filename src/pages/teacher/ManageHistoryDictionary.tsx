@@ -1180,9 +1180,7 @@ const ManageHistoryDictionary: React.FC = () => {
             </div>
           ) : (
             !loadedPanels[activePanel === "upload" ? "terms" : activePanel] && (
-              <p role="status" className="mb-4 text-sm text-slate-600">
-                단어를 불러오는 중입니다.
-              </p>
+              <LoadingOverlay />
             )
           ))}
         <div

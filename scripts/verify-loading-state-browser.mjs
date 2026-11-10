@@ -42,16 +42,23 @@ const fixture = `
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
-import {PageLoading, InlineLoading, LoadingOverlay} from './src/components/common/LoadingState';
+import {PageLoading, InlineLoading, LoadingOverlay, LoadingProvider} from './src/components/common/LoadingState';
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') || 'page';
 const root = createRoot(document.getElementById('root'));
 let key = 0;
 const component = mode === 'inline' ? InlineLoading : mode === 'overlay' ? LoadingOverlay : PageLoading;
-const render = (node) => flushSync(() => root.render(params.has('strict') ? React.createElement(React.StrictMode, null, node) : node));
+const render = (node) => flushSync(() => {
+ const content = React.createElement(LoadingProvider, null,
+   React.createElement('section', {id:'source-container', style:params.has('nested') ? {transform:'translateZ(0)', filter:'opacity(1)', overflow:'hidden', width:240, height:120} : {}}, node));
+ root.render(params.has('strict') ? React.createElement(React.StrictMode, null, content) : content);
+});
 const loading = () => mode === 'multiple' ? React.createElement(React.Fragment, null, React.createElement(InlineLoading, {key:'a'+key}), React.createElement(InlineLoading, {key:'b'+key})) : React.createElement(component, {key, message:'OLD MESSAGE', detail:'OLD DETAIL', warning:'OLD WARNING'});
 window.startLoading = () => render(loading());
 window.replaceLoading = () => { key++; render(loading()); };
+window.finishFirstLoading = () => render(React.createElement(InlineLoading, {key:'b'+key}));
+window.showHiddenLoading = () => render(React.createElement('div', {id:'hidden-panel', hidden:true}, React.createElement(InlineLoading)));
+window.nativeLoading = (pending=true) => render(React.createElement('dialog',{id:'native-dialog'}, React.createElement('input',{id:'native-draft',defaultValue:'보존할 초안'}), pending ? React.createElement(InlineLoading) : null));
 window.finishLoading = (error=false) => render(React.createElement('main', null, React.createElement('h1', null, error ? '연결 오류' : '준비 완료'), React.createElement('button', {onClick: error ? window.startLoading : () => { window.clicked = true; }}, error ? '다시 시도' : '계속')));
 window.instantLoading = () => { window.startLoading(); window.finishLoading(); };
 window.unmountLoading = () => root.unmount();
@@ -198,9 +205,25 @@ async function makePage(browser, scenario = "normal", options = {}) {
           )
             continue;
           const animations = node.getAnimations({ subtree: true });
+          const surface = node.closest(".ws-loading-exit-surface");
+          const surfaceStyle = surface && getComputedStyle(surface);
+          const surfaceBox = surface?.getBoundingClientRect();
           exits.push({
             ariaHidden: node.getAttribute("aria-hidden"),
             pointerEvents: getComputedStyle(node).pointerEvents,
+            surface: surface && {
+              blur: surfaceStyle.backdropFilter,
+              background: surfaceStyle.backgroundColor,
+              pointerEvents: surfaceStyle.pointerEvents,
+              coversViewport:
+                surfaceBox.x === 0 &&
+                surfaceBox.y === 0 &&
+                surfaceBox.width === innerWidth &&
+                surfaceBox.height === innerHeight,
+              durations: surface
+                .getAnimations()
+                .map((animation) => animation.effect.getTiming().duration),
+            },
             animations: animations.map((animation) => ({
               duration: animation.effect.getTiming().duration,
               frames: animation.effect
@@ -358,6 +381,39 @@ async function checkLayout(page, width, label, directory) {
     Math.abs(box.x + box.width / 2 - width / 2) < 1,
     label + ": centered",
   );
+  const screen = await page.locator(".ws-loading-screen").evaluate((node) => {
+    const box = node.getBoundingClientRect(),
+      css = getComputedStyle(node);
+    return {
+      body: node.parentElement === document.body,
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+      blur: css.backdropFilter || css.webkitBackdropFilter,
+      background: css.backgroundColor,
+      z: css.zIndex,
+    };
+  });
+  assert.deepEqual(
+    screen,
+    {
+      body: true,
+      x: 0,
+      y: 0,
+      width,
+      height: 900,
+      blur: "blur(4px)",
+      background: "rgba(255, 255, 255, 0.6)",
+      z: "20000",
+    },
+    label + ": one consistent full viewport backdrop",
+  );
+  assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+  assert.equal(
+    await page.locator("#root").evaluate((node) => node.inert),
+    true,
+  );
   await page.screenshot({ path: path.join(directory, label + ".png") });
 }
 async function seekFill(page, ms) {
@@ -386,6 +442,11 @@ async function checkExit(page, error = false) {
   const exit = await page.evaluate(() => window.loadingQA.state().exits.at(-1));
   assert.equal(exit.ariaHidden, "true");
   assert.equal(exit.pointerEvents, "none");
+  assert.equal(exit.surface.blur, "blur(4px)");
+  assert.equal(exit.surface.background, "rgba(255, 255, 255, 0.6)");
+  assert.equal(exit.surface.pointerEvents, "none");
+  assert.equal(exit.surface.coversViewport, true);
+  assert.deepEqual(exit.surface.durations, [240]);
   assert.deepEqual(
     exit.animations
       .map((animation) => animation.duration)
@@ -403,6 +464,7 @@ async function checkExit(page, error = false) {
     null,
     { polling: 25 },
   );
+  assert.equal(await page.locator(".ws-loading-exit-surface").count(), 0);
   return exit;
 }
 
@@ -484,11 +546,12 @@ async function runEngine(engine) {
     await waitRunning(page);
     result.motion.push(await assertMotion(page, "visible resumes"));
     await page.evaluate(() => {
-      document.querySelector(".ws-loading-page").style.marginTop = "2000px";
+      document.querySelector(".ws-loading").style.transform =
+        "translateY(2000px)";
     });
     await assertPaused(page, "offscreen");
     await page.evaluate(() => {
-      document.querySelector(".ws-loading-page").style.marginTop = "0";
+      document.querySelector(".ws-loading").style.transform = "";
       window.scrollTo(0, 0);
     });
     await waitRunning(page);
@@ -616,7 +679,7 @@ async function runEngine(engine) {
         ids.length,
         "multiple instances have unique clips",
       );
-      const expected = mode === "multiple" ? 2 : 1;
+      const expected = 1;
       assert.equal(
         await sp.evaluate(
           () => window.loadingQA.state().listeners.visibilitychange,
@@ -624,12 +687,151 @@ async function runEngine(engine) {
         expected,
         "StrictMode keeps one listener per loader",
       );
+      assert.equal(
+        await sp.locator(".ws-loading-screen").count(),
+        1,
+        "concurrent requests share one screen",
+      );
+      if (mode === "multiple") {
+        const clip = await sp.locator("clipPath").first().getAttribute("id");
+        await sp.evaluate(() => window.finishFirstLoading());
+        assert.equal(
+          await sp.locator(".ws-loading-screen").count(),
+          1,
+          "partial completion keeps overlay",
+        );
+        assert.equal(
+          await sp.locator("clipPath").first().getAttribute("id"),
+          clip,
+          "partial completion keeps original animation",
+        );
+      }
       await assertCleanup(sp);
       assert.deepEqual(strict.errors, []);
       await sp.close();
     }
     result.checks.push(
       "Development StrictMode cleanup and multiple-instance unique IDs/lifecycle listeners",
+    );
+    const nested = await makePage(browser);
+    await nested.page.goto(url + "?mode=inline&nested=1");
+    await waitRunning(nested.page);
+    await checkLayout(nested.page, 1280, "nested-container-1280", directory);
+    await nested.page.evaluate(() => {
+      const button = document.createElement("button");
+      button.id = "late-modal";
+      button.textContent = "추가 모달";
+      document.body.append(button);
+    });
+    await nested.page.waitForFunction(
+      () => document.querySelector("#late-modal").inert,
+    );
+    await nested.page.evaluate(() => window.finishLoading());
+    await nested.page.getByRole("button", { name: "계속" }).waitFor();
+    assert.equal(
+      await nested.page.locator("#root").evaluate((n) => n.inert),
+      false,
+    );
+    assert.equal(
+      await nested.page.locator("#late-modal").evaluate((n) => n.inert),
+      false,
+    );
+    assert.equal(
+      await nested.page.evaluate(() => document.body.style.overflowY),
+      "",
+    );
+    assert.deepEqual(nested.errors, []);
+    await nested.page.close();
+    result.checks.push(
+      "Shared body portal escapes transformed/clipped parents and existing/new modal backgrounds; restores inert and scroll after last request",
+    );
+    const hiddenPanel = await makePage(browser);
+    await hiddenPanel.page.goto(url);
+    await hiddenPanel.page.evaluate(() => window.showHiddenLoading());
+    await hiddenPanel.page.waitForFunction(
+      () => !document.querySelector(".ws-loading-screen"),
+    );
+    assert.equal(
+      await hiddenPanel.page.locator("#root").evaluate((n) => n.inert),
+      false,
+      "hidden panel never blocks current screen",
+    );
+    await hiddenPanel.page.evaluate(
+      () => (document.querySelector("#hidden-panel").hidden = false),
+    );
+    await waitRunning(hiddenPanel.page);
+    await hiddenPanel.page.evaluate(
+      () => (document.querySelector("#hidden-panel").style.display = "none"),
+    );
+    await hiddenPanel.page.waitForFunction(
+      () => !document.querySelector(".ws-loading-screen"),
+    );
+    await hiddenPanel.page.evaluate(
+      () => (document.querySelector("#hidden-panel").style.display = ""),
+    );
+    await waitRunning(hiddenPanel.page);
+    await assertCleanup(hiddenPanel.page);
+    assert.deepEqual(hiddenPanel.errors, []);
+    await hiddenPanel.page.close();
+    result.checks.push(
+      "Hidden mounted tabs stay nonblocking; hidden/style changes register only the visible pending request and clean up",
+    );
+    const native = await makePage(browser),
+      nd = native.page;
+    await nd.goto(url);
+    await nd.evaluate(() => window.nativeLoading());
+    await nd.waitForFunction(
+      () => !document.querySelector(".ws-loading-screen"),
+    );
+    await nd.evaluate(() =>
+      document.querySelector("#native-dialog").showModal(),
+    );
+    await waitRunning(nd);
+    assert.equal(
+      await nd
+        .locator(".ws-loading-screen")
+        .evaluate((n) => n.matches(":modal")),
+      true,
+      "loading enters the native top layer",
+    );
+    await nd.evaluate(() => document.querySelector("#native-draft").focus());
+    assert.notEqual(
+      await nd.evaluate(() => document.activeElement?.id),
+      "native-draft",
+      "underlying native modal remains blocked",
+    );
+    await nd.keyboard.press("Escape");
+    assert.equal(
+      await nd.locator(".ws-loading-screen").evaluate((n) => n.open),
+      true,
+      "Escape cannot hide a pending loader",
+    );
+    await nd.evaluate(() => document.querySelector("#native-dialog").close());
+    await nd.waitForFunction(
+      () => !document.querySelector(".ws-loading-screen"),
+    );
+    await nd.evaluate(() =>
+      document.querySelector("#native-dialog").showModal(),
+    );
+    await waitRunning(nd);
+    await nd.waitForTimeout(160);
+    await nd.evaluate(() => window.nativeLoading(false));
+    await nd.waitForFunction(
+      () => !document.querySelector(".ws-loading-screen"),
+    );
+    assert.equal(await nd.locator("#native-draft").inputValue(), "보존할 초안");
+    assert.equal(
+      await nd.evaluate(() => document.activeElement?.id),
+      "native-draft",
+      "native dialog draft focus restored",
+    );
+    await nd.waitForFunction(
+      () => !document.querySelector(".ws-loading-exit-surface"),
+    );
+    assert.deepEqual(native.errors, []);
+    await nd.close();
+    result.checks.push(
+      "Native modal requests open/close with their source, cover the browser top layer, block background keys and restore the draft/focus",
     );
     const network = await makePage(browser),
       np = network.page;

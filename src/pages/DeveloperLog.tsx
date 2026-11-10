@@ -19,7 +19,11 @@ import {
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useAppToast } from "../components/common/AppToastProvider";
-import { InlineLoading, PageLoading } from "../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+  PageLoading,
+} from "../components/common/LoadingState";
 import QuillEditor from "../components/common/QuillEditor";
 import NoticeImageArticle, {
   hasNoticeImageArticleMarkup,
@@ -196,6 +200,8 @@ const DeveloperLog: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [liked, setLiked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingMutation, setPendingMutation] = useState(false);
+  const mutationLock = useRef(false);
   const [mode, setMode] = useState<"list" | "detail" | "write" | "edit">(
     "list",
   );
@@ -434,7 +440,7 @@ const DeveloperLog: React.FC = () => {
   };
 
   const savePost = async () => {
-    if (!canManage || saving) return;
+    if (!canManage || saving || mutationLock.current) return;
     const title = form.title.trim();
     const bodyText = stripHtml(form.bodyHtml);
     if (!title) {
@@ -549,7 +555,7 @@ const DeveloperLog: React.FC = () => {
   };
 
   const deletePost = async () => {
-    if (!canManage || !selectedPost) return;
+    if (!canManage || !selectedPost || saving || mutationLock.current) return;
     if (
       !window.confirm(
         "이 개발자 일지를 삭제할까요? 첨부 이미지도 함께 정리됩니다.",
@@ -557,6 +563,8 @@ const DeveloperLog: React.FC = () => {
     )
       return;
 
+    mutationLock.current = true;
+    setPendingMutation(true);
     try {
       await deleteDoc(getDeveloperLogPostRef(selectedPost.id));
       await Promise.all(
@@ -574,10 +582,14 @@ const DeveloperLog: React.FC = () => {
         title: "개발자 일지 삭제에 실패했습니다.",
         message: error?.message,
       });
+    } finally {
+      mutationLock.current = false;
+      setPendingMutation(false);
     }
   };
 
   const toggleLike = async () => {
+    if (saving || mutationLock.current) return;
     if (!currentUser || !selectedPost || !canLike) {
       showToast({
         tone: "info",
@@ -589,6 +601,8 @@ const DeveloperLog: React.FC = () => {
     const postRef = getDeveloperLogPostRef(selectedPost.id);
     const likeRef = doc(postRef, "likes", currentUser.uid);
 
+    mutationLock.current = true;
+    setPendingMutation(true);
     try {
       await runTransaction(db, async (transaction) => {
         const [postSnap, likeSnap] = await Promise.all([
@@ -634,6 +648,9 @@ const DeveloperLog: React.FC = () => {
         title: "좋아요 처리에 실패했습니다.",
         message: error?.message,
       });
+    } finally {
+      mutationLock.current = false;
+      setPendingMutation(false);
     }
   };
 
@@ -1286,6 +1303,7 @@ const DeveloperLog: React.FC = () => {
 
   return (
     <div className="ws-page developer-log-page">
+      {(saving || pendingMutation) && <LoadingOverlay />}
       <header className="ws-page-header mb-5">
         <h1>개발자 일지</h1>
         {canManage && mode !== "write" && mode !== "edit" && (

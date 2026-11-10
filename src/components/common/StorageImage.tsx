@@ -11,6 +11,7 @@ interface StorageImageProps {
   width?: number;
   height?: number;
   fallback?: React.ReactNode;
+  loadingFallback?: React.ReactNode;
 }
 
 const storageUrlCache = new Map<string, string>();
@@ -24,6 +25,7 @@ const StorageImage: React.FC<StorageImageProps> = ({
   width,
   height,
   fallback = <div className="h-full w-full animate-pulse bg-gray-100" />,
+  loadingFallback = fallback,
 }) => {
   const [url, setUrl] = useState(() =>
     path ? storageUrlCache.get(path) || "" : "",
@@ -65,9 +67,10 @@ const StorageImage: React.FC<StorageImageProps> = ({
     };
   }, [path]);
 
-  if (!path || failed || !url) {
+  if (!path || failed) {
     return <>{fallback}</>;
   }
+  if (!url) return <>{loadingFallback}</>;
 
   return (
     <img

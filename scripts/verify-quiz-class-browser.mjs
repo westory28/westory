@@ -10,7 +10,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.
 const root = process.cwd(), imp = file => JSON.stringify(path.join(root, file).replaceAll('\\', '/'));
 const evidence = await fs.mkdtemp(path.join(os.tmpdir(), 'westory-class-analysis-'));
 const service = `
-export const qa=window.quizClassQa={calls:[],fail:false,hold:false};
+export const qa=window.quizClassQa={calls:[],settled:0,fail:false,hold:false};
 export const config={year:'2026',semester:'2'}, currentUser={uid:'teacher-fixture'};
 export const useAuth=()=>({config,currentUser,authGeneration:1});
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
@@ -40,19 +40,22 @@ export const callWithApplicationSession=async(name,data)=>{
  data=JSON.parse(JSON.stringify(data,(_key,value)=>value===undefined?null:value));
  if(data.mode==='detail'&&Object.hasOwn(data,'comparisonGrade'))throw new Error('Summary-only field sent to detail');
  if(name!=='getQuizClassAnalysis')throw new Error('Unexpected callable');qa.calls.push(structuredClone(data));
+ try{
  if(qa.hold)await new Promise(resolve=>qa.release=resolve);
  if(qa.fail){qa.fail=false;throw new Error('Synthetic outage');}
  if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes:[1,2,3,4,5].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)})),assessments:[{id:'assessment-a',unitId:'unit-a',unitTitle:'사림 세력과 정치 변화',category:'formative',examRound:'',title:'형성평가',questionCount:100}],treeData:tree,generatedAt:'2026-10-25T10:00:00Z'}};
  const search=data.keyword?{keyword:data.keyword,matchedQuestionCount:data.keyword==='없는검색'?0:25,unitCount:2,questionIds:data.keyword==='없는검색'?[]:detailQuestions.map(q=>String(q.id)),generatedAt:'2026-10-25T10:00:00Z'}:undefined;
  if(data.mode==='summary')return {data:{...data,live:undefined,classes:data.classIds.map(summary),...(search?{search}:{}),...(data.comparisonGrade?{gradeComparison:{...summary('class_1'),classId:'grade:3',label:'3학년 전체',grade:'3',classCount:5,respondingClassCount:5,rosterCount:150,scoredCount:96,submittedCount:96,unsubmittedCount:54,averageScore:66,weighting:'scored_students',...(qa.behavior?{rosterCount:25,submittedCount:qa.behaviorNoAttempt?0:20,scoredCount:qa.behaviorNoAttempt?0:20,unsubmittedCount:qa.behaviorNoAttempt?25:5,behaviorCounts:Object.fromEntries(Object.entries(behaviorSummary().behaviorCounts).map(([key,value])=>[key,value*5]))}:{})}}:{}),generatedAt:'2026-10-25T10:00:00Z'}};
  return {data:{semesterId:data.semesterId,...(search?{keyword:data.keyword,search,basis:'latest_current_revision_keyword_items'}:{}),students:[{uid:'pupil-a',name:'가상학생',classId:data.classIds[0],number:'1'}],rawRows:[{id:'attempt',source:'canonical',raw:{assessmentKind:'QUIZ',studentUid:'pupil-a',semesterId:data.semesterId,sourceId:'unit-a',category:'formative',submittedAtIso:'2026-10-25T10:00:00Z',percent:0,total:25,answerChecks:detailQuestions.map(q=>({id:q.id,correct:false})),answers:Object.fromEntries(detailQuestions.map(q=>[q.id,'오답'])),learningSnapshot:detailQuestions.map(q=>({id:q.id,sourceRevision:'1',concepts:q.concepts})),questionSnapshots:detailQuestions}}],...(qa.behavior?behaviorData(data.classIds[0]):{}),...(qa.large?{students:Array.from({length:65},(_,i)=>({uid:i===0?'pupil-a':'large-'+i,name:'가상학생'+(i+1),classId:data.classIds[0],number:String(i+1)}))}:{}),questions:detailQuestions,treeData:tree,configuredClasses:[{id:data.classIds[0],label:'3학년 1반'}],generatedAt:'2026-10-25T10:00:00Z',version:'v1'}};
+ }finally{qa.settled++;}
 };`;
-const entry=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import View from ${imp('src/pages/teacher/components/QuizClassAnalysis.tsx')};import ${imp('src/assets/index.css')};import ${imp('src/components/common/portalPage.css')};
-function App(){const[questions,setQuestions]=useState([]);return <main className="ws-page"><h1>평가 분석</h1><View canEdit={false} onEdit={()=>{}} onDetailData={q=>setQuestions(q)} editedQuestions={questions} refreshVersion={0}/></main>;}createRoot(document.getElementById('root')).render(<App/>);`;
+const entry=`import React,{useState} from 'react';import{createRoot}from'react-dom/client';import View from ${imp('src/pages/teacher/components/QuizClassAnalysis.tsx')};import {LoadingProvider} from ${imp('src/components/common/LoadingState.tsx')};import ${imp('src/assets/index.css')};import ${imp('src/components/common/portalPage.css')};
+function App(){const[questions,setQuestions]=useState([]);return <main className="ws-page"><h1>평가 분석</h1><View canEdit={false} onEdit={()=>{}} onDetailData={q=>setQuestions(q)} editedQuestions={questions} refreshVersion={0}/></main>;}createRoot(document.getElementById('root')).render(<LoadingProvider><App/></LoadingProvider>);`;
 const bundle=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'esm',platform:'browser',loader:{'.webp':'dataurl','.svg':'dataurl','.woff':'dataurl','.woff2':'dataurl'},outfile:path.join(evidence,'fixture.js'),define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-boundaries',setup(p){p.onResolve({filter:/^firebase\/firestore$|(?:^|\/)contexts\/AuthContext$|(?:^|\/)(firebase|assessmentRelease|applicationSession|learningCommands|AppToastProvider)$/},()=>({path:'service',namespace:'fixture'}));p.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));}}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=bundle.outputFiles.find(f=>f.path.endsWith('.css')).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,'');
-const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+// esbuild does not expand Tailwind preflight; preserve its production box model.
+const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*,::before,::after{box-sizing:border-box}</style><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
 const server=http.createServer((req,res)=>{const route=new URL(req.url,'http://localhost').pathname;res.setHeader('Content-Type',route.endsWith('.js')?'text/javascript':route.endsWith('.css')?'text/css':'text/html');res.end(route.endsWith('.js')?js:route.endsWith('.css')?css:html);});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -60,6 +63,32 @@ const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHAN
 const errors=[],screenshots=[];
 try{
  const page=await browser.newPage();page.on('pageerror',e=>errors.push(e.message));
+ const loadingStatus=page.getByRole('status',{name:'처리 중',exact:true});
+ const assertBlockingLoading=async(target,label)=>{
+   await loadingStatus.waitFor();
+   await page.waitForFunction(()=>document.getElementById('root').inert&&document.querySelector('.ws-loading-screen')?.matches(':modal'));
+   const layout=await loadingStatus.evaluate(node=>{
+     const screen=node.closest('.ws-loading-screen'),rect=screen.getBoundingClientRect();
+     return {count:document.querySelectorAll('.ws-loading-screen').length,bodyPortal:screen.parentElement===document.body,x:rect.x,y:rect.y,width:rect.width,height:rect.height,viewportWidth:innerWidth,viewportHeight:innerHeight,blur:getComputedStyle(screen).backdropFilter};
+   });
+   assert.equal(layout.count,1,`${label}: one shared loading screen`);
+   assert.equal(layout.bodyPortal,true,`${label}: status lives in the body portal`);
+   assert.equal(layout.blur,'blur(4px)',`${label}: consistent background blur`);
+   assert.ok(Math.abs(layout.x)<1&&Math.abs(layout.y)<1&&Math.abs(layout.width-layout.viewportWidth)<1&&Math.abs(layout.height-layout.viewportHeight)<1,`${label}: full viewport coverage ${JSON.stringify(layout)}`);
+   assert.equal(await target.evaluate(node=>{node.focus();return document.activeElement===node;}),false,`${label}: inert background rejects focus`);
+   const calls=await page.evaluate(()=>window.quizClassQa.calls.length);
+   await assert.rejects(target.click({timeout:350}),/Timeout/,`${label}: pending blocks real pointer interaction`);
+   assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),calls,`${label}: blocked input sends no requests`);
+ };
+ const releasePending=async()=>{
+   await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
+   await page.waitForFunction(()=>window.quizClassQa.settled===window.quizClassQa.calls.length);
+   // Let the real component consume the resolved promise and commit any stale response.
+   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ };
+ // A route/controller may reset state while its background controls are inert.
+ // Programmatic dispatch preserves cancellation coverage without claiming user access.
+ const programmaticClick=target=>target.evaluate(node=>node.click());
  await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
  await page.goto(origin);await page.locator('optgroup[label="Ⅳ. 조선의 성립과 발전"]').waitFor({state:'attached'});
  assert.deepEqual(await page.evaluate(()=>window.quizClassQa.calls.map(c=>c.mode)),['catalog']);
@@ -68,29 +97,40 @@ try{
      await page.getByRole('combobox',{name:'분석할 평가',exact:true}).selectOption('assessment-a');
      await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
    };
-   const release=()=>page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
    await select();await page.evaluate(()=>window.quizClassQa.hold=true);
    await page.getByRole('button',{name:'결과 조회',exact:true}).click();
-   await page.getByRole('status',{name:'처리 중',exact:true}).waitFor();
-   await release();await page.getByRole('heading',{name:'학급 결과',exact:true}).waitFor();
+   await assertBlockingLoading(page.locator('.qca-reset'),'summary');
+   await releasePending();await page.getByRole('heading',{name:'학급 결과',exact:true}).waitFor();
    await page.evaluate(()=>window.quizClassQa.hold=true);
    await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
-   const status=page.getByRole('status',{name:'처리 중',exact:true});await status.waitFor();
+   const status=loadingStatus;await status.waitFor();
    for(const width of [390,768,1280]){
-     await page.setViewportSize({width,height:900});await status.scrollIntoViewIfNeeded();
-     assert(await status.isVisible());assert(await page.getByRole('button',{name:'조회 전체 초기화',exact:true}).isEnabled());
+     await page.setViewportSize({width,height:900});
+     await assertBlockingLoading(page.locator('.qca-reset'),`detail ${width}`);
      await page.screenshot({path:path.join(evidence,`detail-loading-${width}.png`),fullPage:true});screenshots.push(`detail-loading-${width}.png`);
    }
-   await page.getByRole('button',{name:'조회 전체 초기화',exact:true}).click();
+   const pendingDetailCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
+   await programmaticClick(page.locator('.qca-reset'));
    await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
-   await release();assert.equal(await page.getByRole('dialog').count(),0);
+   await releasePending();
+   assert.equal(await page.locator('.qca-detail-dialog').count(),0,'late detail must not reopen after reset');
+   assert.equal(await page.locator('.qca-table').count(),0,'late detail must not restore reset results');
+   assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingDetailCalls,'reset does not refetch');
    await select();await page.getByRole('button',{name:'결과 조회',exact:true}).click();
    await page.getByRole('button',{name:'문항·학생 상세 3학년 1반',exact:true}).click();
    const dialog=page.getByRole('dialog',{name:'3학년 1반 · 문항·학생 상세',exact:true});await dialog.waitFor();
    await page.evaluate(()=>window.quizClassQa.hold=true);
-   await dialog.getByRole('button',{name:'새로고침',exact:true}).click();await dialog.getByRole('status',{name:'처리 중',exact:true}).first().waitFor();
-   await dialog.getByRole('button',{name:'상세 닫기',exact:true}).click();await release();assert.equal(await page.getByRole('dialog').count(),0);
-   assert.deepEqual(errors,[]);console.log('PASS focused class loading: summary/detail progress, visible row loading at 390/768/1280, reset while pending, modal refresh/close and late response discard');
+   await dialog.getByRole('button',{name:'새로고침',exact:true}).click();
+   const close=page.locator('.qca-detail-dialog [aria-label="상세 닫기"]');
+   await assertBlockingLoading(close,'modal refresh');
+   assert.equal(await page.locator('.qca-detail-dialog').evaluate(node=>node.inert),true,'open detail dialog is inert below loading');
+   const pendingRefreshCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
+   await programmaticClick(close);await releasePending();
+   assert.equal(await page.locator('.qca-detail-dialog').count(),0,'late refresh must not reopen closed detail');
+   assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingRefreshCalls,'closing does not refetch');
+   await loadingStatus.waitFor({state:'hidden'});
+   assert.equal(await page.locator('#root').evaluate(node=>node.inert),false,'completion restores background access');
+   assert.deepEqual(errors,[]);console.log('PASS focused class loading: summary/detail full viewport blur at 390/768/1280, inert pointer/focus blocking, body portal status, programmatic reset/modal close and late response discard');
  } else {
 
 
@@ -174,9 +214,16 @@ try{
  await page.getByRole('button',{name:'검색 해제',exact:true}).click();
  await page.evaluate(()=>window.quizClassQa.fail=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('alert').waitFor();
  await page.getByRole('button',{name:'다시 조회',exact:true}).click();await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).waitFor();
- await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_3');await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
+ await page.evaluate(()=>window.quizClassQa.hold=true);await page.getByRole('button',{name:'결과 조회',exact:true}).click();
+ const pendingClass=page.locator('select[aria-label="분석할 학급"]');
+ await assertBlockingLoading(pendingClass,'class context change');
+ const beforeContextChange=await page.evaluate(()=>window.quizClassQa.calls.length);
+ await pendingClass.evaluate(node=>{node.value='class_3';node.dispatchEvent(new Event('change',{bubbles:true}));});
+ await releasePending();
  await page.getByText('평가와 학년 또는 학급을 선택한 뒤 결과를 조회해 주세요.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'학급별 결과 비교',exact:true}).count(),0);
+ assert.equal(await pendingClass.inputValue(),'class_3','late response cannot restore the old class context');
+ assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),beforeContextChange,'context change does not refetch');
  await page.reload();await page.getByRole('combobox',{name:'분석할 학급',exact:true}).selectOption('class_1');
  await page.getByRole('button',{name:'전체 단원 검색',exact:true}).click();
  await page.getByRole('searchbox',{name:'전체 단원 문항 검색',exact:true}).fill('사화');
@@ -287,18 +334,17 @@ try{
    await page.getByRole('button',{name:mode==='summary'?'결과 조회':'문항·학생 상세 3학년 1반',exact:true}).click();
    await page.waitForFunction(expected=>window.quizClassQa.calls.at(-1).mode===expected,mode);
    const pendingCalls=await page.evaluate(()=>window.quizClassQa.calls.length);
-   await page.getByRole('status',{name:'처리 중',exact:true}).waitFor();
+   await assertBlockingLoading(page.locator('.qca-reset'),`${mode} reset`);
    if(mode==='detail'){
-     const status=page.getByRole('status',{name:'처리 중',exact:true});
-     await status.scrollIntoViewIfNeeded();
-     assert(await status.isVisible(),'Detail loading stays beside its selected row without blocking reset');
+     assert(await loadingStatus.isVisible(),'Detail loading covers the viewport and blocks background reset');
      await page.screenshot({path:path.join(evidence,'detail-loading-1280.png'),fullPage:true});screenshots.push('detail-loading-1280.png');
    }
-   await resetButton.click();await waiting.waitFor();
-   await page.evaluate(()=>{window.quizClassQa.hold=false;window.quizClassQa.release();});
-   await page.waitForTimeout(100);
+   await programmaticClick(page.locator('.qca-reset'));await waiting.waitFor();
+   await releasePending();
    assert.equal(await page.locator('.qca-table').count(),0,`late ${mode} must not restore data`);
-   assert.equal(await page.getByRole('dialog').count(),0,`late ${mode} must not reopen detail`);
+   assert.equal(await page.locator('.qca-detail-dialog').count(),0,`late ${mode} must not reopen detail`);
+   await loadingStatus.waitFor({state:'hidden'});
+   assert.equal(await page.locator('#root').evaluate(node=>node.inert),false,`${mode} reset restores background access`);
    assert.equal(await page.evaluate(()=>window.quizClassQa.calls.length),pendingCalls,'no automatic reload after reset');
  }
  await page.screenshot({path:path.join(evidence,'reset-waiting-1280.png'),fullPage:true});screenshots.push('reset-waiting-1280.png');

@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   useCallback,
@@ -436,7 +437,7 @@ export default function YutManagement() {
       )}
       {!current || !draft ? (
         <>
-          {!readError && <p role="status">관리 정보를 불러오고 있습니다.</p>}
+          {!readError && refreshing && <LoadingOverlay />}
           <button
             className="yut-management-button"
             disabled={refreshing}

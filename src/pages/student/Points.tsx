@@ -5,7 +5,10 @@ import { cancelCanonicalPurchase } from "../../lib/pointEconomyAdapter";
 import { latestWisWallet } from "../../lib/wisEconomyClient";
 import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { useAppToast } from "../../components/common/AppToastProvider";
-import { InlineLoading } from "../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../components/common/LoadingState";
 import {
   POINT_HISTORY_FILTER_LABELS,
   STUDENT_POINT_TAB_LABELS,
@@ -51,7 +54,7 @@ import StudentPointSummaryTab from "./components/points/StudentPointSummaryTab";
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
 type HistoryFilter = keyof typeof POINT_HISTORY_FILTER_LABELS;
 type OrderFilter = "all" | PointOrderStatus;
-type DeferredLoadOptions = { force?: boolean };
+type DeferredLoadOptions = { force?: boolean; showLoading?: boolean };
 type CoreLoadOptions = {
   showLoading?: boolean;
   setTransactionsFromCore?: boolean;
@@ -208,7 +211,9 @@ const Points: React.FC = () => {
     };
   };
 
-  const loadHallOfFameData = async () => {
+  const loadHallOfFameData = async ({
+    showLoading = true,
+  }: DeferredLoadOptions = {}) => {
     if (
       !scopeReady ||
       !isCurrentScope() ||
@@ -216,7 +221,7 @@ const Points: React.FC = () => {
     )
       return;
     hallLoadInFlightRef.current = requestScope;
-    setHallLoading(true);
+    if (showLoading) setHallLoading(true);
     setHallErrorMessage("");
     setHallLoadMs(null);
     const started = performance.now();
@@ -363,6 +368,7 @@ const Points: React.FC = () => {
 
   const loadOrdersData = async ({
     force = false,
+    showLoading = true,
   }: DeferredLoadOptions = {}) => {
     if (
       !scopeReady ||
@@ -373,7 +379,7 @@ const Points: React.FC = () => {
       return;
 
     ordersLoadInFlightRef.current = requestScope;
-    setOrdersLoading(true);
+    if (showLoading) setOrdersLoading(true);
     setOrdersErrorMessage("");
     try {
       const loadedOrders = await listPointOrders(config, {
@@ -396,7 +402,10 @@ const Points: React.FC = () => {
     }
   };
 
-  const loadShopData = async ({ force = false }: DeferredLoadOptions = {}) => {
+  const loadShopData = async ({
+    force = false,
+    showLoading = true,
+  }: DeferredLoadOptions = {}) => {
     if (
       !scopeReady ||
       !isCurrentScope() ||
@@ -406,7 +415,7 @@ const Points: React.FC = () => {
       return;
 
     shopLoadInFlightRef.current = requestScope;
-    setShopLoading(true);
+    if (showLoading) setShopLoading(true);
     setShopErrorMessage("");
     try {
       const loadedProducts = await listPointProducts(config, true);
@@ -433,8 +442,12 @@ const Points: React.FC = () => {
         setTransactionsFromCore: true,
         force: true,
       }),
-      ordersLoaded ? loadOrdersData({ force: true }) : Promise.resolve(),
-      shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
+      ordersLoaded
+        ? loadOrdersData({ force: true, showLoading: false })
+        : Promise.resolve(),
+      shopLoaded
+        ? loadShopData({ force: true, showLoading: false })
+        : Promise.resolve(),
     ]);
   };
 
@@ -491,7 +504,8 @@ const Points: React.FC = () => {
   useEffect(() => {
     if (!scopeReady) return undefined;
     return subscribePointsUpdated(() => {
-      if (activeTab === "hall-of-fame") void loadHallOfFameData();
+      if (activeTab === "hall-of-fame")
+        void loadHallOfFameData({ showLoading: false });
       else void refreshLoadedPointData();
     });
   }, [requestScope, activeTab, historyLoaded, ordersLoaded, shopLoaded]);
@@ -698,6 +712,7 @@ const Points: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
+      {(purchaseSubmitting || !!cancellingOrderId) && <LoadingOverlay />}
       <main
         data-hall-load-ms={
           isHallOfFameTab && hallOwner === requestScope

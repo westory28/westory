@@ -12,7 +12,10 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { PageLoading } from "../../../components/common/LoadingState";
+import {
+  PageLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import { InfoHelp } from "../../../components/common/InfoHelp";
 import { useAuth } from "../../../contexts/AuthContext";
 import ScoreCard from "./components/ScoreCard";
@@ -597,6 +600,7 @@ const ScoreDashboard: React.FC = () => {
 
   return (
     <div className="ws-page score-calculator animate-fadeIn">
+      {(saving || warningSaving) && <LoadingOverlay />}
       <header className="ws-page-header mb-4">
         <div className="flex items-center gap-2">
           <h1>{pageTitle}</h1>

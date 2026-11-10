@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import React, { useEffect, useState } from "react";
 import type { MapResource } from "../../lib/mapResources";
@@ -156,13 +157,7 @@ const MapViewer: React.FC<MapViewerProps> = ({
       )}
 
       {item.type === "pdf" && item.fileUrl && (
-        <React.Suspense
-          fallback={
-            <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm font-semibold text-gray-500">
-              PDF 지도를 준비하는 중입니다.
-            </div>
-          }
-        >
+        <React.Suspense fallback={<InlineLoading />}>
           <PdfMapViewer
             fileUrl={item.fileUrl}
             storagePath={item.storagePath}
