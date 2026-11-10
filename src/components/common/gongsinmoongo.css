@@ -348,6 +348,16 @@
   border: 0;
   line-height: 24px;
 }
+.gsm-teacher .gsm-composer,
+.gsm-teacher .gsm-compose-row,
+.gsm-teacher .gsm-compose-row textarea {
+  background: transparent;
+}
+.gsm-teacher .gsm-compose-row textarea {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
 .gsm-send {
   display: grid;
   place-items: center;
@@ -474,14 +484,80 @@
   flex-direction: column;
   min-height: 0;
 }
-.gsm-settings > .ws-page-tabs {
-  flex: none;
-  margin-bottom: 12px;
-}
 .gsm-settings-body {
   min-height: 0;
   overflow: auto;
   flex: 1;
+}
+.gsm-settings-section {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.gsm-settings-section:last-child {
+  border-bottom: 0;
+}
+.gsm-settings-section h2 {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.gsm-settings-section > div {
+  min-width: 0;
+}
+.gsm-warning-heading,
+.gsm-warning-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gsm-warning-heading {
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.gsm-warning-title {
+  flex: 1;
+  min-width: 180px;
+  font-size: 14px;
+}
+.gsm-warning-title > span {
+  flex: none;
+}
+.gsm-warning-title input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.gsm-warning-body {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 14px;
+}
+.gsm-warning-body > span {
+  padding-top: 8px;
+}
+.gsm-warning-body textarea {
+  width: 100%;
+  min-width: 0;
+  height: 88px;
+  resize: none;
+  line-height: 1.5;
+}
+.gsm-restriction-empty {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
 }
 .gsm-settings-actions {
   flex: none;
@@ -521,9 +597,6 @@
 }
 .gsm-setting-duration select {
   min-width: 80px;
-}
-.gsm-warning-toggle {
-  margin-bottom: 16px;
 }
 .gsm-restriction-row {
   display: flex;
@@ -670,7 +743,8 @@
     max-height: calc(100dvh - 300px);
   }
   .gsm-settings-body {
-    max-height: calc(100dvh - 300px);
+    overflow: visible;
+    flex: none;
   }
   .gsm-sidebar .gsm-question-list {
     max-height: 360px;
@@ -678,6 +752,16 @@
   }
 }
 @media (max-width: 600px) {
+  .gsm-settings-section {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .gsm-settings-section h2 {
+    min-height: 0;
+  }
+  .gsm-warning-title {
+    flex-basis: 100%;
+  }
   .gsm-content {
     padding: 8px 12px;
   }

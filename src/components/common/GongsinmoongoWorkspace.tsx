@@ -1370,7 +1370,6 @@ function SettingsEditor({
   ) => Promise<boolean>;
   semesterId: string;
 }) {
-  const [tab, setTab] = useState("general");
   const [draft, setDraft] = useState(settings);
   const [restrictions, setRestrictions] = useState<
     GongsinPage<
@@ -1378,7 +1377,7 @@ function SettingsEditor({
     >
   >({ items: [], nextCursor: null });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const loadRequest = useRef(0);
   useEffect(() => setDraft(settings), [settings]);
   const load = async (more = false) => {
@@ -1406,11 +1405,11 @@ function SettingsEditor({
     }
   };
   useEffect(() => {
-    if (tab === "students") void load();
+    void load();
     return () => {
       loadRequest.current++;
     };
-  }, [tab, semesterId]);
+  }, [semesterId]);
   const toggle = (
     key:
       | "enabled"
@@ -1433,25 +1432,9 @@ function SettingsEditor({
   );
   return (
     <section className="gsm-settings" aria-label="운영 설정">
-      <nav className="ws-page-tabs" aria-label="운영 설정 항목">
-        {[
-          ["general", "기본"],
-          ["notifications", "알림"],
-          ["warning", "이용 안내"],
-          ["sources", "학습 연결"],
-          ["students", "학생 제한"],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            aria-pressed={tab === key}
-            onClick={() => setTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
       <div className="gsm-settings-body">
-        {tab === "general" && (
+        <section className="gsm-settings-section" aria-label="기본 운영">
+          <h2>기본</h2>
           <div className="gsm-settings-options">
             {toggle("enabled", "학생 공개")}
             {toggle("acceptingQuestions", "질문 접수")}
@@ -1475,8 +1458,9 @@ function SettingsEditor({
               </select>
             </label>
           </div>
-        )}
-        {tab === "notifications" && (
+        </section>
+        <section className="gsm-settings-section" aria-label="알림 설정">
+          <h2>알림</h2>
           <div className="gsm-settings-options">
             {toggle(
               "teacherQuestionNotifications",
@@ -1487,52 +1471,9 @@ function SettingsEditor({
               "답변을 기존 학생 알림으로 보내기",
             )}
           </div>
-        )}
-        {tab === "warning" && (
-          <>
-            <label className="gsm-toggle gsm-warning-toggle">
-              첫 사용 안내
-              <input
-                type="checkbox"
-                checked={draft.warning.enabled}
-                onChange={(e) =>
-                  setDraft((value) => ({
-                    ...value,
-                    warning: { ...value.warning, enabled: e.target.checked },
-                  }))
-                }
-              />
-            </label>
-            <label className="gsm-field">
-              안내 제목
-              <input
-                value={draft.warning.title}
-                maxLength={60}
-                onChange={(e) =>
-                  setDraft((value) => ({
-                    ...value,
-                    warning: { ...value.warning, title: e.target.value },
-                  }))
-                }
-              />
-            </label>
-            <label className="gsm-field">
-              안내 문구
-              <textarea
-                rows={5}
-                value={draft.warning.body}
-                maxLength={600}
-                onChange={(e) =>
-                  setDraft((value) => ({
-                    ...value,
-                    warning: { ...value.warning, body: e.target.value },
-                  }))
-                }
-              />
-            </label>
-          </>
-        )}
-        {tab === "sources" && (
+        </section>
+        <section className="gsm-settings-section" aria-label="학습 연결 설정">
+          <h2>학습 연결</h2>
           <div className="gsm-settings-options">
             {(
               Object.keys(GONGSIN_SOURCE_LABELS) as Array<GongsinSource["kind"]>
@@ -1540,9 +1481,10 @@ function SettingsEditor({
               .filter((kind) => kind !== "general")
               .map((kind) => (
                 <label className="gsm-toggle" key={kind}>
-                  {GONGSIN_SOURCE_LABELS[kind]}
+                  {kind === "mock" ? "모의고사" : GONGSIN_SOURCE_LABELS[kind]}
                   <input
                     type="checkbox"
+                    aria-label={GONGSIN_SOURCE_LABELS[kind]}
                     checked={draft.allowedSources.includes(
                       kind as Exclude<typeof kind, "general">,
                     )}
@@ -1563,13 +1505,75 @@ function SettingsEditor({
                 </label>
               ))}
           </div>
-        )}
-        {tab === "students" && (
-          <>
-            {error && <p role="alert">{error}</p>}
+        </section>
+        <section className="gsm-settings-section" aria-label="이용 안내 설정">
+          <h2>이용 안내</h2>
+          <div>
+            <div className="gsm-warning-heading">
+              <label className="gsm-toggle">
+                첫 사용 안내
+                <input
+                  type="checkbox"
+                  checked={draft.warning.enabled}
+                  onChange={(e) =>
+                    setDraft((value) => ({
+                      ...value,
+                      warning: { ...value.warning, enabled: e.target.checked },
+                    }))
+                  }
+                />
+              </label>
+              <label className="gsm-warning-title">
+                <span>제목</span>
+                <input
+                  aria-label="안내 제목"
+                  value={draft.warning.title}
+                  maxLength={60}
+                  onChange={(e) =>
+                    setDraft((value) => ({
+                      ...value,
+                      warning: { ...value.warning, title: e.target.value },
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <label className="gsm-warning-body">
+              <span>안내 문구</span>
+              <textarea
+                rows={3}
+                value={draft.warning.body}
+                maxLength={600}
+                onChange={(e) =>
+                  setDraft((value) => ({
+                    ...value,
+                    warning: { ...value.warning, body: e.target.value },
+                  }))
+                }
+              />
+            </label>
+          </div>
+        </section>
+        <section className="gsm-settings-section" aria-label="학생 제한 관리">
+          <h2>학생 제한</h2>
+          <div>
+            {error && (
+              <div role="alert">
+                {error}{" "}
+                <button
+                  className="gsm-button"
+                  disabled={loading}
+                  onClick={() => void load()}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            )}
             {loading && <InlineLoading />}
-            {!loading && !restrictions.items.length && (
-              <p>현재 질문이 제한된 학생이 없습니다.</p>
+            {!loading && !error && !restrictions.items.length && (
+              <p className="gsm-restriction-empty">
+                현재 질문이 제한된 학생이 없습니다.
+              </p>
             )}
             {restrictions.items.map((item) => (
               <div key={item.studentId} className="gsm-restriction-row">
@@ -1597,34 +1601,30 @@ function SettingsEditor({
                 더 보기
               </button>
             )}
-          </>
-        )}
+          </div>
+        </section>
       </div>
-      {tab !== "students" && (
-        <div className="gsm-settings-actions">
-          <button
-            className="gsm-button"
-            disabled={
-              busy || JSON.stringify(draft) === JSON.stringify(settings)
-            }
-            onClick={() => setDraft(settings)}
-          >
-            되돌리기
-          </button>
-          <button
-            className="gsm-primary"
-            disabled={
-              busy ||
-              JSON.stringify(draft) === JSON.stringify(settings) ||
-              (draft.warning.enabled &&
-                (!draft.warning.title.trim() || !draft.warning.body.trim()))
-            }
-            onClick={() => onSave(draft)}
-          >
-            변경사항 저장
-          </button>
-        </div>
-      )}
+      <div className="gsm-settings-actions">
+        <button
+          className="gsm-button"
+          disabled={busy || JSON.stringify(draft) === JSON.stringify(settings)}
+          onClick={() => setDraft(settings)}
+        >
+          되돌리기
+        </button>
+        <button
+          className="gsm-primary"
+          disabled={
+            busy ||
+            JSON.stringify(draft) === JSON.stringify(settings) ||
+            (draft.warning.enabled &&
+              (!draft.warning.title.trim() || !draft.warning.body.trim()))
+          }
+          onClick={() => onSave(draft)}
+        >
+          변경사항 저장
+        </button>
+      </div>
     </section>
   );
 }

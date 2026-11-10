@@ -368,6 +368,17 @@ try {
       });
       requestCounts.push({ role, width, phase: "initial", ...readCounts });
       if (role === "teacher") {
+        for (const selector of [
+          ".gsm-composer",
+          ".gsm-compose-row",
+          ".gsm-compose-row textarea",
+        ])
+          assert.equal(
+            await page
+              .locator(selector)
+              .evaluate((el) => getComputedStyle(el).backgroundColor),
+            "rgba(0, 0, 0, 0)",
+          );
         for (const selector of [".gsm-page-header", ".gsm-chat-header"]) {
           const headerStyle = await page
             .locator(selector)
@@ -391,7 +402,7 @@ try {
           .getByRole("button", { name: "운영 설정", exact: true })
           .click();
         const controls = await page
-          .locator(".gsm-settings-options > label")
+          .locator('[aria-label="기본 운영"] .gsm-settings-options > label')
           .evaluateAll((labels) =>
             labels.map((label) => {
               const box = label.getBoundingClientRect();
@@ -399,6 +410,23 @@ try {
             }),
           );
         assert.equal(controls.length, 4);
+        assert.equal(
+          await page.locator(".gsm-settings .ws-page-tabs").count(),
+          0,
+        );
+        assert.equal(await page.locator(".gsm-settings-section").count(), 5);
+        await page
+          .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
+          .waitFor();
+        assert.equal(
+          await page.evaluate(
+            () =>
+              window.gongsinLiveQa.reads.filter(
+                (x) => x.mode === "restrictions",
+              ).length,
+          ),
+          1,
+        );
         assert(controls.every((control) => control.height >= 44));
         if (width >= 1280)
           assert(
@@ -412,6 +440,22 @@ try {
             () => document.documentElement.scrollWidth <= innerWidth + 1,
           ),
         );
+        if (width >= 1280) {
+          const settingsFit = await page.evaluate(() => {
+            const body = document.querySelector(".gsm-settings-body");
+            const save = document
+              .querySelector(".gsm-settings-actions")
+              .getBoundingClientRect();
+            return (
+              body.scrollHeight <= body.clientHeight + 1 &&
+              save.bottom <= innerHeight
+            );
+          });
+          assert(
+            settingsFit,
+            "All five sections and save fit the desktop viewport",
+          );
+        }
         await page.screenshot({
           path: path.join(evidence, `settings-${width}x${height}.png`),
           fullPage: true,
@@ -600,7 +644,6 @@ try {
     .getByRole("button", { name: "제한 적용", exact: true })
     .click();
   await discipline.waitFor({ state: "hidden" });
-  await teacher.getByRole("button", { name: "운영 설정", exact: true }).click();
   assert.equal(
     await teacher.evaluate(
       () =>
@@ -609,19 +652,7 @@ try {
     ),
     0,
   );
-  await teacher.getByRole("button", { name: "알림", exact: true }).click();
-  await teacher.getByLabel("새 질문을 기존 교사 알림으로 받기").uncheck();
-  await teacher
-    .getByRole("button", { name: "변경사항 저장", exact: true })
-    .click();
-  await teacher.waitForFunction(() =>
-    window.gongsinLiveQa.writes.some(
-      (x) =>
-        x.action === "settings" &&
-        x.settings.teacherQuestionNotifications === false,
-    ),
-  );
-  await teacher.getByRole("button", { name: "학생 제한", exact: true }).click();
+  await teacher.getByRole("button", { name: "운영 설정", exact: true }).click();
   await teacher
     .getByText("학습 질문과 관계없는 대화 반복", { exact: false })
     .waitFor();
@@ -633,9 +664,80 @@ try {
     ),
     1,
   );
+  await teacher.getByLabel("새 질문을 기존 교사 알림으로 받기").uncheck();
+  await teacher
+    .getByRole("button", { name: "변경사항 저장", exact: true })
+    .click();
+  await teacher.waitForFunction(() =>
+    window.gongsinLiveQa.writes.some(
+      (x) =>
+        x.action === "settings" &&
+        x.settings.teacherQuestionNotifications === false,
+    ),
+  );
+  await teacher
+    .getByText("학습 질문과 관계없는 대화 반복", { exact: false })
+    .waitFor();
+  assert.equal(
+    await teacher.evaluate(
+      () =>
+        window.gongsinLiveQa.reads.filter((x) => x.mode === "restrictions")
+          .length,
+    ),
+    1,
+  );
+  await teacher.getByRole("button", { name: "해제", exact: true }).click();
+  await teacher
+    .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await teacher.evaluate(
+      () =>
+        window.gongsinLiveQa.reads.filter((x) => x.mode === "restrictions")
+          .length,
+    ),
+    2,
+  );
   await teacher.close();
+  const restrictionRetry = await pageAt("?role=teacher&ack");
+  await restrictionRetry.locator(".gsm-thread").first().waitFor();
+  await restrictionRetry.evaluate(
+    () => (window.gongsinLiveQa.failRead = "restrictions"),
+  );
+  await restrictionRetry
+    .getByRole("button", { name: "운영 설정", exact: true })
+    .click();
+  const restrictionRegion = restrictionRetry.getByRole("region", {
+    name: "학생 제한 관리",
+  });
+  await restrictionRegion.getByRole("alert").waitFor();
+  assert.equal(
+    await restrictionRegion
+      .getByText("현재 질문이 제한된 학생이 없습니다.")
+      .count(),
+    0,
+  );
+  await restrictionRegion
+    .getByRole("button", { name: "다시 불러오기", exact: true })
+    .click();
+  await restrictionRegion
+    .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await restrictionRetry.evaluate(
+      () =>
+        window.gongsinLiveQa.reads.filter((x) => x.mode === "restrictions")
+          .length,
+    ),
+    2,
+  );
+  assert.equal(
+    await restrictionRetry.evaluate(() => window.gongsinLiveQa.writes.length),
+    0,
+  );
+  await restrictionRetry.close();
   checks.push(
-    "teacher reply, curated text, time restriction, existing notification toggle persistence, unopened-tab read avoidance",
+    "teacher reply, curated text, time restriction, unified settings, one restriction read per settings entry, save without reread, release refresh, failed-read retry without false empty state",
   );
   const race = await pageAt("?role=student&ack");
   await race.locator("#gongsin-question").waitFor();
