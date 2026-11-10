@@ -100,11 +100,30 @@ function createWeplayFunctions(deps) {
     ...(data.battleVersion === 1 ? { battleVersion: 1, acceptedEvents: data.acceptedEvents || [], battle: simulateWeplayBattle(data, Date.now() - data.startsAtMs) } : {}),
   });
 
-  async function readLessons(scope, includeHidden = false) {
+  async function readLessons(scope, includeHidden = false, unitIds = null) {
     // OCR, PDF source data and presentation assets can dominate lesson documents.
     // Keep the authored blanks and every field used to resolve visibility and
     // scoped/legacy precedence; always read fresh data for a new game.
     const fields = ['unitId', 'title', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt', 'worksheetPageImages', 'worksheetBlanks', 'contentHtml'];
+    if (unitIds !== null) {
+      const selected = [...new Set(unitIds)];
+      const readSelected = async (collectionPath, ids) => {
+        const queries = [];
+        for (let offset = 0; offset < ids.length; offset += 30) {
+          queries.push(db.collection(collectionPath).where('unitId', 'in', ids.slice(offset, offset + 30)).select(...fields).get());
+        }
+        const snapshots = await Promise.all(queries);
+        // Preserve the unfiltered query's document-name order across chunks.
+        // Duplicate answers must retain the same lesson/title provenance.
+        return snapshots.flatMap(snapshot => snapshot.docs).sort((left, right) =>
+          Buffer.compare(Buffer.from(left.ref.path), Buffer.from(right.ref.path)));
+      };
+      const scoped = await readSelected(path(scope, 'lessons'), selected);
+      const scopedUnits = new Set(scoped.map(doc => String(doc.data().unitId || '').trim()));
+      // Even hidden/deleted scoped revisions suppress their older legacy copy.
+      const legacy = await readSelected('lessons', selected.filter(id => !scopedUnits.has(id)));
+      return effectiveLessons(scoped.map(doc => doc.data()), legacy.map(doc => doc.data()), { includeHidden });
+    }
     const [scoped, legacy] = await Promise.all([
       db.collection(path(scope, 'lessons')).select(...fields).get(), db.collection('lessons').select(...fields).get(),
     ]);
@@ -112,10 +131,8 @@ function createWeplayFunctions(deps) {
   }
 
   async function readCatalog(scope) {
-    const [settingsSnap, lessons] = await Promise.all([
-      ref(scope, 'weplay_games', GAME_ID).get(), readLessons(scope),
-    ]);
-    const settings = settingsFromSnap(settingsSnap);
+    const settings = settingsFromSnap(await ref(scope, 'weplay_games', GAME_ID).get());
+    const lessons = await readLessons(scope, false, settings.sourceMode === 'selected' ? settings.unitIds : null);
     return { settings, catalog: gameCatalog(lessons, settings) };
   }
 
@@ -177,21 +194,22 @@ function createWeplayFunctions(deps) {
     assertGameId(request.data);
     const difficulty = request.data?.difficulty;
     if (!DIFFICULTIES.includes(difficulty)) invalid('게임 난이도를 선택해 주세요.');
-    const [settingsSnap, policySnap, lessons] = await Promise.all([
-      ref(scope, 'weplay_games', GAME_ID).get(), ref(scope, 'weplay_policies', 'current').get(), readLessons(scope, true),
+    const [settingsSnap, policySnap] = await Promise.all([
+      ref(scope, 'weplay_games', GAME_ID).get(), ref(scope, 'weplay_policies', 'current').get(),
     ]);
     let previewSettings = settingsFromSnap(settingsSnap);
+    const checkKnownUnits = request.data?.settings !== undefined || request.data?.unitIds !== undefined;
     if (request.data?.settings !== undefined) {
       try { previewSettings = validateGameSettings(request.data.settings); }
       catch (error) { invalid(error.message); }
-      assertKnownUnits(previewSettings.unitIds, lessons);
     } else if (request.data?.unitIds !== undefined) {
       let unitIds;
       try { unitIds = validateUnitIds(request.data.unitIds); }
       catch (error) { invalid(error.message); }
-      assertKnownUnits(unitIds, lessons);
       previewSettings = { ...previewSettings, sourceMode: 'selected', unitIds };
     }
+    const lessons = await readLessons(scope, true, previewSettings.sourceMode === 'selected' ? previewSettings.unitIds : null);
+    if (checkKnownUnits) assertKnownUnits(previewSettings.unitIds, lessons);
     const id = `preview_${randomUUID()}`;
     let words;
     const difficultySettings = previewSettings.difficulties[difficulty];

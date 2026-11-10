@@ -35,6 +35,7 @@ export interface ThinkCloudState {
   >;
   thinkCloudRoster: Array<{ uid: string; name: string; number: string }>;
   thinkCloudManagedClasses: ThinkCloudManagedClass[];
+  thinkCloudSelectedSessionId?: string;
   thinkCloudState: { activeSessionId: string; activeSessionIds: string[] };
 }
 const semesterId = (config: ConfigLike) => {
@@ -49,18 +50,20 @@ export const readThinkCloudState = async (
   config: ConfigLike,
   audience: "student" | "teacher",
   sessionId = "",
+  metadataOnly = false,
 ): Promise<ThinkCloudState> => {
   const owner = auth.currentUser;
   const callable = await getHistoryDictionaryCallable<
     Record<string, unknown>,
     ThinkCloudState
-  >("getW8DomainState", { reuseSessionProof: true });
+  >("getThinkCloudState", { reuseSessionProof: true });
   const result = (
     await callable({
       semesterId: semesterId(config),
       domain: "LEARNING",
       audience,
       source: "CURRENT",
+      projection: metadataOnly ? "think-cloud-command" : "think-cloud",
       ...(sessionId ? { sessionId } : {}),
     })
   ).data;
@@ -104,28 +107,55 @@ export const subscribeThinkCloudState = (
 ) => {
   let stopped = false,
     running = false;
+  let selectedSessionId = sessionId;
+  let readingSessionId = sessionId;
+  let refreshQueued = false;
   const refresh = async () => {
-    if (stopped || running || document.visibilityState === "hidden") return;
+    if (stopped || document.visibilityState === "hidden") return;
+    if (running) {
+      if (readingSessionId !== selectedSessionId) refreshQueued = true;
+      return;
+    }
     running = true;
+    refreshQueued = false;
+    const requestedSessionId = selectedSessionId;
+    readingSessionId = requestedSessionId;
     try {
-      const state = await readThinkCloudState(config, audience, sessionId);
-      if (!stopped) onData(state);
+      const state = await readThinkCloudState(
+        config,
+        audience,
+        requestedSessionId,
+      );
+      if (!stopped && requestedSessionId === selectedSessionId) {
+        selectedSessionId =
+          state.thinkCloudSelectedSessionId ?? requestedSessionId;
+        onData(state);
+      }
     } catch (error) {
-      if (!stopped) onError(error);
+      if (!stopped && requestedSessionId === selectedSessionId) onError(error);
     } finally {
       running = false;
+      if (refreshQueued && readingSessionId !== selectedSessionId && !stopped)
+        void refresh();
     }
   };
   void refresh();
   const timer = window.setInterval(() => void refresh(), 10000);
   window.addEventListener("focus", refresh);
   document.addEventListener("visibilitychange", refresh);
-  return () => {
+  const unsubscribe = () => {
     stopped = true;
     window.clearInterval(timer);
     window.removeEventListener("focus", refresh);
     document.removeEventListener("visibilitychange", refresh);
   };
+  return Object.assign(unsubscribe, {
+    selectSession: (nextSessionId: string) => {
+      if (stopped || selectedSessionId === nextSessionId) return;
+      selectedSessionId = nextSessionId;
+      void refresh();
+    },
+  });
 };
 const scope = (state: ThinkCloudState) => {
   if (
@@ -156,7 +186,7 @@ export const createThinkCloudSession = async (
     true,
     async (step) => {
       const result = await step("create", async () => {
-        const state = await readThinkCloudState(config, "teacher");
+        const state = await readThinkCloudState(config, "teacher", "", true);
         const target = state.thinkCloudManagedClasses.find(
           (item) =>
             item.grade === input.targetGrade &&
@@ -193,7 +223,12 @@ export const transitionThinkCloudSession = async (
     true,
     async (step) =>
       step("transition", async () => {
-        const state = await readThinkCloudState(config, "teacher", session.id);
+        const state = await readThinkCloudState(
+          config,
+          "teacher",
+          session.id,
+          true,
+        );
         return {
           commandType: "transitionThinkCloudSession",
           payload: {
@@ -217,7 +252,12 @@ export const deleteThinkCloudSession = async (
     true,
     async (step) =>
       step("delete", async () => {
-        const state = await readThinkCloudState(config, "teacher", session.id);
+        const state = await readThinkCloudState(
+          config,
+          "teacher",
+          session.id,
+          true,
+        );
         return {
           commandType: "deleteThinkCloudSession",
           payload: {
@@ -250,7 +290,12 @@ export const submitThinkCloudResponse = async (
     false,
     async (step) => {
       const result = await step("submit", async () => {
-        const state = await readThinkCloudState(config, "student", session.id);
+        const state = await readThinkCloudState(
+          config,
+          "student",
+          session.id,
+          true,
+        );
         return {
           commandType: "submitThinkCloudResponse",
           payload: {

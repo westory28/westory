@@ -3523,12 +3523,19 @@ const normalizeQuery = (raw) => {
       "noticeId",
       "studentUid",
       "classId",
+      "projection",
       "_session",
     ],
     "getW8DomainState payload",
   );
   const source = value.provenance || value.source;
+  const projection = value.projection
+    ? enumValue(value.projection, ["think-cloud", "think-cloud-command"], "projection")
+    : "";
+  if (projection && value.domain !== "LEARNING")
+    fail("invalid-argument", "Think Cloud projection requires LEARNING.", "W8_QUERY_PROJECTION_INVALID");
   return {
+    projection,
     domain: enumValue(
       value.domain,
       ["LEARNING", "SCHEDULE", "ATTENDANCE", "COMMUNICATION", "DASHBOARD"],
@@ -3578,6 +3585,8 @@ const createW8QueryCore = ({
         "COMMAND_ACTOR_MISMATCH",
       );
     const query = normalizeQuery(request.data || {});
+    const thinkCloudOnly = query.projection.startsWith("think-cloud");
+    const thinkCloudMetadataOnly = query.projection === "think-cloud-command";
     if (
       query.audience === "student" &&
       query.studentUid &&
@@ -3643,6 +3652,7 @@ const createW8QueryCore = ({
       thinkCloudResponses: [],
       thinkCloudRoster: [],
       thinkCloudManagedClasses: [],
+      thinkCloudSelectedSessionId: "",
       dashboard: {
         todaySchedule: [],
         upcomingLearning: [],
@@ -3737,14 +3747,19 @@ const createW8QueryCore = ({
       if (
         !suppressArchiveStudentState &&
         (query.audience === "student" ||
-          query.domain === "LEARNING" ||
+          (query.domain === "LEARNING" && !thinkCloudOnly) ||
           query.domain === "ATTENDANCE" ||
           query.domain === "DASHBOARD")
       ) {
         enrollmentRows = await transaction.query(
           archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION,
           query.audience === "student"
-            ? { field: "studentUid", operator: "==", value: uid }
+            ? thinkCloudOnly
+              ? { filters: [
+                  { field: "studentUid", operator: "==", value: uid },
+                  { field: "semesterId", operator: "==", value: query.semesterId },
+                ] }
+              : { field: "studentUid", operator: "==", value: uid }
             : { field: "semesterId", operator: "==", value: query.semesterId },
         );
         const own = enrollmentRows.find(
@@ -3782,6 +3797,7 @@ const createW8QueryCore = ({
       let thinkCloudResponses = [];
       let thinkCloudRoster = [];
       let thinkCloudManagedClasses = [];
+      let thinkCloudSelectedSessionId = "";
       const currentIso = now();
       const activeWindow = (row, fromKey, untilKey) =>
         (!row[fromKey] || row[fromKey] <= currentIso) &&
@@ -3828,10 +3844,12 @@ const createW8QueryCore = ({
       };
       const loadThinkCloud = async () => {
         if (suppressArchiveStudentState) return;
-        const [classRows, sessionRows] = await Promise.all([
-          getSemesterClassRows(),
-          transaction.query(thinkCloudSessionsPath(query.semesterId)),
-        ]);
+        const classRows = thinkCloudOnly && query.audience === "student"
+          ? enrollment?.classId
+            ? [await transaction.get(classPath(enrollment.classId))].filter((row) =>
+                row.exists && row.data?.semesterId === query.semesterId)
+            : []
+          : await getSemesterClassRows();
         const activeClasses = classRows.filter(
           (row) => row.data?.status === "ACTIVE",
         );
@@ -3870,11 +3888,36 @@ const createW8QueryCore = ({
             displayName: String(row.data?.displayName || "").trim(),
           }))
           .filter((row) => row.classId && row.grade && row.classNumber);
-        const classStateRows = await transaction.getAll(
-          thinkCloudManagedClasses.map((row) =>
-            thinkCloudStatePath(query.semesterId, row.classId),
+        // The list needs topics for the permitted classes, never every class's
+        // topics. Include the older numeric class representation; the existing
+        // grade/target authorization below remains the final boundary.
+        const classValues = [...new Set(thinkCloudManagedClasses.flatMap((row) => {
+          const value = row.classNumber;
+          const numeric = Number(value);
+          return value && Number.isFinite(numeric) && String(numeric) === value
+            ? [value, numeric] : [value];
+        }))];
+        const readSessions = async () => {
+          if (!thinkCloudOnly) return transaction.query(thinkCloudSessionsPath(query.semesterId));
+          if (thinkCloudMetadataOnly) return query.sessionId
+            ? [await transaction.get(thinkCloudSessionPath(query.semesterId, query.sessionId))].filter((row) => row.exists)
+            : [];
+          const pages = [];
+          for (let offset = 0; offset < classValues.length; offset += 30) {
+            pages.push(transaction.query(thinkCloudSessionsPath(query.semesterId), {
+              field: "targetClass", operator: "in", value: classValues.slice(offset, offset + 30),
+            }));
+          }
+          return (await Promise.all(pages)).flat();
+        };
+        const [sessionRows, classStateRows] = await Promise.all([
+          readSessions(),
+          transaction.getAll(
+            thinkCloudManagedClasses.map((row) =>
+              thinkCloudStatePath(query.semesterId, row.classId),
+            ),
           ),
-        );
+        ]);
         thinkCloudManagedClasses = thinkCloudManagedClasses.map(
           (row, index) => {
             const state = classStateRows[index];
@@ -3933,8 +3976,16 @@ const createW8QueryCore = ({
           .filter((id) =>
             thinkCloudSessions.some((session) => session.id === id),
           );
-        const selectedForState = query.sessionId
-          ? thinkCloudSessions.find((row) => row.id === query.sessionId)
+        // A first visit returns the same default topic the UI selects, together
+        // with its responses, so selecting it does not immediately read again.
+        const latestSessions = thinkCloudOnly ? [...thinkCloudSessions].sort((a, b) =>
+          Number(b.createdAt?.seconds ?? b.createdAt?._seconds ?? 0) -
+          Number(a.createdAt?.seconds ?? a.createdAt?._seconds ?? 0)) : [];
+        thinkCloudSelectedSessionId = query.sessionId || (thinkCloudOnly && !thinkCloudMetadataOnly
+          ? (query.audience === "student" ? activeSessionIds[0] : "") || latestSessions[0]?.id || ""
+          : "");
+        const selectedForState = thinkCloudSelectedSessionId
+          ? thinkCloudSessions.find((row) => row.id === thinkCloudSelectedSessionId)
           : null;
         const selectedManagedClass = selectedForState
           ? thinkCloudManagedClasses.find(
@@ -3951,9 +4002,9 @@ const createW8QueryCore = ({
           revision: Number(selectedManagedClass?.stateRevision || 0),
           exists: selectedManagedClass?.stateExists === true,
         };
-        if (!query.sessionId) return;
+        if (!thinkCloudSelectedSessionId) return;
         const selectedSession = thinkCloudSessions.find(
-          (row) => row.id === query.sessionId,
+          (row) => row.id === thinkCloudSelectedSessionId,
         );
         if (!selectedSession)
           fail(
@@ -3961,8 +4012,9 @@ const createW8QueryCore = ({
             "Think Cloud session is outside the assigned class.",
             "W8_THINK_CLOUD_TARGET_FORBIDDEN",
           );
+        if (thinkCloudMetadataOnly) return;
         const responseRows = await transaction.query(
-          thinkCloudResponsesPath(query.semesterId, query.sessionId),
+          thinkCloudResponsesPath(query.semesterId, thinkCloudSelectedSessionId),
         );
         const anonymousStudent =
           query.audience === "student" &&
@@ -3989,11 +4041,18 @@ const createW8QueryCore = ({
               row.classNumber ===
                 String(selectedSession.targetClass || "").trim(),
           );
+          if (thinkCloudOnly && selectedClass) {
+            enrollmentRows = await transaction.query(
+              archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION,
+              { field: "classId", operator: "==", value: selectedClass.classId },
+            );
+          }
           thinkCloudRoster = selectedClass
             ? enrollmentRows
                 .filter(
                   (row) =>
                     row.data?.enrollmentStatus === "ACTIVE" &&
+                    row.data?.semesterId === query.semesterId &&
                     row.data?.classId === selectedClass.classId,
                 )
                 .map((row) => ({
@@ -4160,7 +4219,7 @@ const createW8QueryCore = ({
       // The historical dashboard keeps schedule/attendance/communication data,
       // but academic material is available only through the administrator archive.
       await Promise.all([
-        ["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE"
+        !thinkCloudOnly && ["LEARNING", "DASHBOARD"].includes(query.domain) && lifecycleProvenance !== "ARCHIVE"
           ? loadLearning() : undefined,
         ["SCHEDULE", "DASHBOARD"].includes(query.domain) ? loadSchedule() : undefined,
         ["ATTENDANCE", "DASHBOARD"].includes(query.domain) ? loadAttendance() : undefined,
@@ -4266,6 +4325,7 @@ const createW8QueryCore = ({
         thinkCloudResponses: expose(thinkCloudResponses),
         thinkCloudRoster,
         thinkCloudManagedClasses,
+        thinkCloudSelectedSessionId,
         dashboard,
         reason: "",
         writeCount: 0,

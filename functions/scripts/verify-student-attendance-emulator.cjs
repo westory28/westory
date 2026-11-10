@@ -81,11 +81,59 @@ async function seed(uid, history = false) {
   const attendance = (await db.doc('users/' + uid + '/attendance/2026_2_2026-09-30').get()).data();
   assert.equal(attendance.rewardProcessed, true);
   assert.equal(attendance.rewardLedgerIds.length, 2);
+
+  const budgetUid = uid + '-read-budget', budgetRequest = await seed(budgetUid, true);
+  const budgetAccountId = accountIdFor(scope, budgetUid);
+  const noise = db.batch();
+  for (let index = 0; index < 125; index++) {
+    noise.set(db.doc(`years/2026/semesters/2/point_transactions/${budgetUid}-noise-${index}`), {
+      uid: budgetUid, type: 'quiz', sourceId: `quiz-${index}`,
+    });
+    const common = { studentUid: budgetUid, semesterId: scope, accountId: budgetAccountId,
+      type: 'GRANT', activityType: 'lesson', sourceId: `lesson-${index}` };
+    noise.set(db.doc(`semester_wis_ledger/${budgetUid}-activity-${index}`), common);
+    noise.set(db.doc(`semester_wis_ledger/${budgetUid}-scope-${index}`), { ...common, semesterId: '2026-1', activityType: 'attendance' });
+    noise.set(db.doc(`semester_wis_ledger/${budgetUid}-type-${index}`), { ...common, type: 'DEDUCT', activityType: 'attendance' });
+  }
+  await noise.commit();
+  const historyReads = [];
+  const measuredDb = {
+    doc: (...args) => db.doc(...args), collection: (...args) => db.collection(...args),
+    runTransaction: callback => db.runTransaction(tx => callback({
+      get: async ref => {
+        const snapshot = await tx.get(ref);
+        if (Array.isArray(snapshot.docs)) historyReads.push(snapshot.docs.map(doc => doc.ref.path));
+        return snapshot;
+      },
+      getAll: (...refs) => tx.getAll(...refs), set: (...args) => tx.set(...args), create: (...args) => tx.create(...args),
+    })),
+  };
+  const budgetResult = await createStudentAttendanceHandler({ db: measuredDb, now: () => now })(budgetRequest);
+  assert.equal(budgetResult.totalAwarded, 1075); assert.equal(budgetResult.claimCount, 30);
+  assert.equal(historyReads.length, 5);
+  assert.equal(historyReads.flat().length, 29, 'Actual Firestore queries read only confirmed dates, excluding all 500 unrelated trades');
+  assert.ok(historyReads.flat().every(path => path.startsWith(`users/${budgetUid}/attendance/`)));
+  assert.equal((await db.doc(`semester_wis_accounts/${budgetAccountId}`).get()).data().balance, 1075);
+
+  const historicalUid = uid + '-missing-metadata', historicalRequest = await seed(historicalUid, true);
+  const historicalAccountId = accountIdFor(scope, historicalUid), historicalBatch = db.batch();
+  for (const [index, sourceId] of ['attendance:2026-09-30', 'attendance-monthly:2026-09'].entries()) {
+    historicalBatch.set(db.doc(`semester_wis_ledger/${historicalUid}-legacy-id-${index}`), {
+      studentUid: historicalUid, semesterId: scope, accountId: historicalAccountId, type: 'GRANT', sourceId,
+    });
+  }
+  await historicalBatch.commit();
+  const repaired = await handler(historicalRequest);
+  assert.equal(repaired.totalAwarded, 0, 'Arbitrary historical grant IDs without activityType still suppress repayment');
+  assert.equal(repaired.claimCount, 30);
+  assert.equal((await db.doc(`semester_wis_accounts/${historicalAccountId}`).get()).data().revision, 1);
+  assert.equal((await db.doc(`users/${historicalUid}/attendance/2026_2_2026-09-30`).get()).data().rewardProcessed, true);
+
   // A revoked session must leave both attendance and financial state untouched.
   await db.doc('application_sessions/' + uid + '/sessions/' + authTime).update({ status: 'revoked' });
   await assert.rejects(handler(request), (error) => error.code === 'unauthenticated');
   assert.equal((await db.doc('semester_wis_accounts/' + accountId).get()).data().revision, 2);
-  console.log('PASS real Firestore transactions: concurrent 75+1000 awarded once, atomic projections/record, revoked-session rejection');
+  console.log('PASS real Firestore transactions: concurrent 75+1000 awarded once, atomic projections/record, revoked-session rejection; 529 to 29 history reads; missing historical activity metadata preserved');
 })().finally(() => deleteApp(app)).catch((error) => {
   console.error(error);
   process.exitCode = 1;

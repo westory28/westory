@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 서버 조회·기록량 최적화 (2026-11-10)
+
+현재 화면에 필요한 정보만 읽고 같은 정보를 반복 기록하지 않는다. 윷 공개 확인·생각모아에 전용 읽기를 추가하고, 수업자료/선택 단원 출제/출석 이력의 범위를 줄인다. 역사교실의 이미 확인된 답안 재저장과 분석/이모지 trigger의 중복 작업도 생략한다. 전체 분석·집계, 공개 차단·세션·학기·보상/답안의 복구 경계는 보존한다. 병행 시험 진입·학생 화면 공개 패치를 통합한다.
+
+대상은 서울 `getYutPublication,getThinkCloudState,getStudentVisibleLessons,checkStudentAttendance,getWeplayLobby,startWeplayGame,previewWeplayGame,invalidateQuizClassCanonicalResult,invalidateQuizClassLegacyResult,reconcileStudentProfileEmojiOnAccountWrite`다. 과거학기 차이가 있는 기존 `getW8DomainState`와 다른 함수·rules·최소 인스턴스를 일괄 배포하지 않는다. 앱/Functions 검사, 실제 출석·윷 에뮬레이터, 점수 요청 권한·브라우저 회귀 후 선택 배포하고 같은 커밋의 Vercel main을 운영 도메인으로 승격한다. 검증·비용 기준과 CUD 판단은 [서버 사용량 검토](../reviews/server-usage-20261110.md)를 따른다. 외부 AI·개인정보 항목·공개 범위 확대는 없다.
+
 ## 시험 진입 지연과 복습 자료 팝업 (2026-11-10)
 
 기준 `94325681eb71b71298644abeb1e8bc777ba672c0`은 운영 도메인 소스와 일치했다. 중간 응시 화면을 제거하고 직접 링크·새로고침의 복구를 자동화한다. 동일 시험지의 글꼴 재준비를 생략하며 이미지·글꼴 준비 후 서버 타이머 시작은 유지한다. 모의고사 START는 과거 응시의 메타데이터만 읽고 이어 풀 시험지 한 건만 복원한다. 고정 시험지가 아닌 구형 문제은행은 기존 학습 이력 기반 출제 방식을 유지한다.

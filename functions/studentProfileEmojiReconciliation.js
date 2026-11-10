@@ -8,7 +8,7 @@ const PROFILE_FIELDS = ['profileEmojiId', 'profileIcon'];
 const USER_EVENT_FIELDS = [...PROFILE_FIELDS, 'role', 'deletedAt', 'isDeleted'];
 const ACCOUNT_EVENT_FIELDS = [
   'accountId', 'studentUid', 'semesterId', 'rankEarnedTotal', 'status',
-  'readOnly', 'schemaVersion', 'policyVersion', 'revision',
+  'readOnly', 'schemaVersion', 'policyVersion',
 ];
 const safeInteger = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
 const validUid = (uid) => typeof uid === 'string' && uid.length > 0 && uid.length <= 128
@@ -127,7 +127,11 @@ const createStudentProfileEmojiReconciliationService = ({
 
   const handleAccountWritten = async (event) => {
     const before = eventData(event.data?.before), after = eventData(event.data?.after);
-    if (!fieldsChanged(before, after, ACCOUNT_EVENT_FIELDS)) return null;
+    // A purchase advances the ledger revision without changing emoji access.
+    // Keep invalid/repaired revision transitions authoritative, but avoid five
+    // fresh document reads for an otherwise unchanged, valid account revision.
+    if (!fieldsChanged(before, after, ACCOUNT_EVENT_FIELDS)
+      && safeInteger(before?.revision, 1) === safeInteger(after?.revision, 1)) return null;
     // Re-check both owners after reassignment/deletion using their current account.
     const uids = [...new Set([before?.studentUid, after?.studentUid].filter(validUid))];
     return Promise.all(uids.map((uid) => reconcileStudent(uid)));

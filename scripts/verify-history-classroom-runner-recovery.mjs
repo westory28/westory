@@ -154,7 +154,8 @@ export const saveAssessmentProgress=async(input)=>{
  if(input.expectedRevision!==fixture.attempt.revision)throw Object.assign(failure('functions/aborted'),{details:{reason:'ASSESSMENT_ATTEMPT_REVISION_CONFLICT'}});
  fixture.attempt={...fixture.attempt,status:'IN_PROGRESS',revision:fixture.attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,lastSavedAtIso:new Date().toISOString()};
  const result=fixture.saves[key]={...fixture.attempt,savedAtIso:fixture.attempt.lastSavedAtIso};persist();
- if(fixture.loseSaveResponse){fixture.loseSaveResponse=false;persist();throw failure();}return result;
+ if(fixture.loseSaveResponse){fixture.loseSaveResponse=false;persist();throw failure();}
+ if(fixture.holdSaveResponse){fixture.holdSaveResponse=false;return new Promise(resolve=>{window.__releaseSave=()=>resolve(result);});}return result;
 };
 export const submitAssessmentAttempt=async(input)=>{
  online();record('submit',input);const existing=fixture.results[input.attemptId];if(existing)return {...existing,replayedSubmission:true};
@@ -347,6 +348,84 @@ const visibility = (page, state) =>
     document.dispatchEvent(new Event("visibilitychange"));
   }, state);
 try {
+  {
+    const t = await open("unchanged-progress-no-server-save");
+    await advance(t.page, 1100);
+    assert.equal((await callsOf(t.page, "save")).length, 0, "starting with the confirmed empty page needs no save");
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1100);
+    assert.equal((await callsOf(t.page, "save")).length, 1);
+    await t.context.setOffline(true);
+    await advance(t.page, 100);
+    await t.context.setOffline(false);
+    await advance(t.page, 1100);
+    assert.equal((await callsOf(t.page, "save")).length, 1, "reconnecting unchanged input needs no new save");
+    await t.page.reload();
+    await t.page.getByRole("button", { name: "제출하기", exact: true }).waitFor();
+    await advance(t.page, 1100);
+    assert.equal(await firstInput(t.page).inputValue(), "고조선");
+    assert.equal((await callsOf(t.page, "save")).length, 1, "fresh server recovery does not rewrite confirmed input");
+    await t.page.getByRole("button", { name: "다음", exact: true }).click();
+    await advance(t.page, 1100);
+    const saves = await callsOf(t.page, "save");
+    assert.equal(saves.length, 2, "changing only the page must still save");
+    assert.equal(saves[1].currentItemId, "3");
+    await finish(t);
+  }
+  {
+    const t = await open("lost-save-ack-no-second-write");
+    await t.page.evaluate(() => { window.__fixture.loseSaveResponse = true; });
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1100);
+    assert((await draft(t.page)).pendingProgress);
+    await t.context.setOffline(true);
+    await advance(t.page, 100);
+    await t.context.setOffline(false);
+    await advance(t.page, 1100);
+    const saves = await callsOf(t.page, "save");
+    assert.equal(saves.length, 2, "only the original request and its ambiguous replay are sent");
+    assert.deepEqual(saves[1], saves[0], "the original revision and payload are replayed first");
+    assert.equal((await draft(t.page)).pendingProgress, null);
+    assert.equal(await t.page.evaluate(() => window.__fixture.attempt.revision), 2);
+    await finish(t);
+  }
+  {
+    const t = await open("queued-identical-save-coalesces");
+    await t.page.evaluate(() => { window.__fixture.holdSaveResponse = true; });
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1100);
+    await t.page.waitForFunction(() => Boolean(window.__releaseSave));
+    await t.context.setOffline(true);
+    await advance(t.page, 100);
+    await t.context.setOffline(false);
+    await advance(t.page, 1100);
+    await t.page.evaluate(() => window.__releaseSave());
+    await advance(t.page, 100);
+    assert.equal((await callsOf(t.page, "save")).length, 1, "the queued identical snapshot uses the first acknowledgement");
+    assert.equal((await draft(t.page)).pendingProgress, null);
+    await firstInput(t.page).fill("");
+    await advance(t.page, 1100);
+    assert.equal((await callsOf(t.page, "save")).length, 2, "clearing a confirmed answer remains a real save");
+    assert.equal(await t.page.evaluate(() => window.__fixture.attempt.answers["blank-a"]), "");
+    await finish(t);
+  }
+  {
+    const t = await open("progress-conflict-preserves-local-draft");
+    await firstInput(t.page).fill("고조선");
+    await advance(t.page, 1100);
+    await t.page.evaluate(() => {
+      window.__fixture.attempt = { ...window.__fixture.attempt, revision: 3, answers: { "blank-a": "다른 탭 답안" } };
+      window.__persistBackend();
+    });
+    await firstInput(t.page).fill("내 수정 답안");
+    await advance(t.page, 1100);
+    assert.equal((await callsOf(t.page, "save")).length, 2);
+    assert.equal((await draft(t.page)).answers["blank-a"], "내 수정 답안");
+    assert.equal((await draft(t.page)).pendingProgress.expectedRevision, 2);
+    assert.equal(await t.page.evaluate(() => window.__fixture.attempt.answers["blank-a"]), "다른 탭 답안");
+    await t.page.getByText("답안을 자동 저장하지 못했습니다. 입력 내용은 이 기기에 보관했습니다.", { exact: true }).waitFor();
+    await finish(t);
+  }
   for (const [width, height] of [[390, 844], [768, 1024], [1280, 800]]) {
     const t = await open(`large-input-${width}`, width, height, "?smallBlanks=1", false);
     const toggle = t.page.getByRole("button", {name: "큰 입력칸"});
@@ -782,6 +861,11 @@ try {
     assert((await draft(t.page)).pendingProgress);
     await firstInput(t.page).fill("고조선 수정");
     await advance(t.page, 1000);
+    const saves = await callsOf(t.page, "save");
+    assert.equal(saves.length, 3, "newer input follows the original ambiguous replay with one necessary save");
+    assert.deepEqual(saves[1], saves[0]);
+    assert.equal(saves[2].expectedRevision, saves[0].expectedRevision + 1);
+    assert.equal(saves[2].answers["blank-a"], "고조선 수정");
     await submit(t.page);
     await t.page.getByRole("dialog", { name: "미통과", exact: true }).waitFor();
     assert.equal(

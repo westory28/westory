@@ -27,7 +27,7 @@ const selected = { role: 'student', profileEmojiId: 'rocket', profileIcon: '🚀
 // Firestore-shaped transactional store with version checks, retries, paginated
 // queries and real handlers. No Firebase network calls or production data.
 function fixture(extra = {}) {
-  const values = new Map(), versions = new Map(), writes = [], queries = [];
+  const values = new Map(), versions = new Map(), writes = [], queries = [], documentReads = [];
   let beforeCommit, attempts = 0, activeTransactions = 0, maximumConcurrency = 0;
   const put = (path, data) => { values.set(path, clone(data)); versions.set(path, (versions.get(path) || 0) + 1); };
   const remove = (path) => { values.delete(path); versions.set(path, (versions.get(path) || 0) + 1); };
@@ -35,7 +35,7 @@ function fixture(extra = {}) {
     id: path.split('/').at(-1), ref: reference(path), exists: values.has(path),
     data: () => clone(values.get(path)),
   });
-  const reference = (path) => ({ path, get: async () => snapshot(path) });
+  const reference = (path) => ({ path, get: async () => { documentReads.push(path); return snapshot(path); } });
   const query = (path, state = {}) => ({
     where: (field, operator, value) => { assert.equal(operator, '=='); return query(path, { ...state, field, value }); },
     orderBy: () => query(path, state),
@@ -59,7 +59,7 @@ function fixture(extra = {}) {
         for (let retry = 0; retry < 5; retry += 1) {
           attempts += 1;
           const reads = new Map(), pending = [];
-          const get = async (ref) => { assert.equal(pending.length, 0, 'All reads precede writes'); reads.set(ref.path, versions.get(ref.path) || 0); return snapshot(ref.path); };
+          const get = async (ref) => { assert.equal(pending.length, 0, 'All reads precede writes'); documentReads.push(ref.path); reads.set(ref.path, versions.get(ref.path) || 0); return snapshot(ref.path); };
           const result = await run({
             get, getAll: (...refs) => Promise.all(refs.map(get)),
             set: (ref, data, options) => { assert.deepEqual(options, { merge: true }); pending.push([ref.path, data]); },
@@ -86,7 +86,7 @@ function fixture(extra = {}) {
   };
   for (const [path, data] of Object.entries(seed)) if (data !== undefined) put(path, data);
   return {
-    db, values, writes, queries, put, remove,
+    db, values, writes, queries, documentReads, put, remove,
     service: createStudentProfileEmojiReconciliationService({ db, serverTimestamp: () => 'server-timestamp' }),
     conflictOnce: (hook) => { beforeCommit = hook; },
     get attempts() { return attempts; },
@@ -102,6 +102,46 @@ const event = (before, after, params = {}) => ({
 const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`;
 
 (async () => {
+  const spend = fixture(), previous = account('student');
+  const spent = { ...previous, revision: 2, balance: previous.balance - 10, updatedAt: 'later' };
+  spend.put(accountPath, spent);
+  assert.equal(await spend.service.handleAccountWritten(event(previous, spent)), null);
+  assert.deepEqual(spend.documentReads, [], 'A valid revision-only purchase performs zero document reads');
+  assert.deepEqual(spend.writes, [], 'A valid revision-only purchase performs zero writes');
+  assert.equal(spend.attempts, 0, 'Irrelevant account changes do not open a transaction');
+
+  for (const invalidRevision of [0, -1, '2', null, undefined, Number.MAX_SAFE_INTEGER + 1]) {
+    for (const [beforeRevision, afterRevision] of [[1, invalidRevision], [invalidRevision, 2]]) {
+      const f = fixture(), before = { ...account('student'), revision: beforeRevision };
+      const after = { ...account('student'), revision: afterRevision };
+      f.put(accountPath, after);
+      await f.service.handleAccountWritten(event(before, after));
+      assert.equal(f.documentReads.length, 5, 'Crossing the revision validity boundary still rechecks authority');
+      assert.equal(f.values.get('users/student').profileIcon, afterRevision === 2 ? '🚀' : '😀');
+      assert.deepEqual(f.values.get(accountPath), after, 'Reconciliation never changes the source account');
+    }
+  }
+  for (const [before, after] of [[undefined, previous], [previous, undefined]]) {
+    const f = fixture();
+    if (!after) f.remove(accountPath);
+    await f.service.handleAccountWritten(event(before, after));
+    assert.equal(f.documentReads.length, 5, 'Account creation and deletion retain reconciliation');
+    assert.equal(f.values.get('users/student').profileIcon, after ? '🚀' : '😀');
+  }
+  const reassigned = fixture({ 'users/other': selected });
+  const reassignedAccount = { ...previous, studentUid: 'other', revision: 2 };
+  reassigned.put(accountPath, reassignedAccount);
+  await reassigned.service.handleAccountWritten(event(previous, reassignedAccount));
+  assert.ok(reassigned.documentReads.includes('users/student'));
+  assert.ok(reassigned.documentReads.includes('users/other'), 'Both owners are rechecked after reassignment');
+  assert.equal(reassigned.documentReads.length, 10);
+  const moved = fixture();
+  const movedAccount = { ...previous, semesterId: '2026-1', revision: 2 };
+  moved.put(accountPath, movedAccount);
+  await moved.service.handleAccountWritten(event(previous, movedAccount));
+  assert.equal(moved.documentReads.length, 5, 'A semester change is never treated as a revision-only update');
+  assert.equal(moved.values.get('users/student').profileIcon, '😀');
+
   const scoreDown = fixture();
   const originalAccount = clone(scoreDown.values.get(accountPath));
   scoreDown.put(accountPath, { ...originalAccount, rankEarnedTotal: 0 });

@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store.",
     "2026-11-10: Live Seoul executeCommand source matches baseline 94325681 for assessmentLifecycle, productionSource, commandGateway and session dependencies. Project mock START history without frozen bodies; deploy executeCommand only. No runtime configuration, session, permission, rule or external AI changes.",
     "2026-11-09: Performance source audit against 7a9da91f: live getAssessmentState revision 00014-quk matches all 113 compared runtime files, including its 31-file static relative dependency closure. The getQuizClassAnalysis core files match; older indirectly imported assessment modules are not used by its pure buildEnrollmentSlotId helper. Existing roster class/studentClass IN and unit+round/category question query shapes with document-ID order returned HTTP 200 using limit-1 name-only projections; no student fields or identifiers were retained.",
     "2026-11-09: Parallelize only the assessment reward adapter's independent enrollment/class/policy reads for canonical server-owned IDs. Preserve enrollment/class/economy/account/policy validation and error order, legacy sequential fallback, all financial writes and receipt/result atomicity. Deploy executeCommand for this behavior; coordinated retired achievement-profile command enforcement also requires getCommandStatus, while teacher analysis uses its isolated getQuizClassAnalysis export.",
@@ -434,8 +435,10 @@
       "sourceFile": "w8Domains.js",
       "file": "w8Domains.js",
       "originalSha256": "63312120ced4e2cbaba0361bfb24030e0d1999c133c3fb530a208e78369f9b01",
-      "sha256": "00e5ea53ca4df872a4a0549a760ea876abf35640042a075c40810c8ed3fa809f",
-      "changes": []
+      "sha256": "2c02c254cca47b98c347d9751e6d61586456a9be59b6bcedb1c7a5f0285a7ac8",
+      "changes": [
+        "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store."
+      ]
     },
     {
       "sourceFile": "wisEconomy.js",

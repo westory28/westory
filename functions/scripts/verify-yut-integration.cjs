@@ -167,6 +167,7 @@ async function verifySpectatorRules(roomRef) {
 (async () => {
   assert.deepEqual(deployed.commandYutRoom.__endpoint.region, ['asia-northeast3']);
   assert.deepEqual(deployed.getYutLobby.__endpoint.region, ['asia-northeast3']);
+  assert.deepEqual(deployed.getYutPublication.__endpoint.region, ['asia-northeast3']);
   assert.deepEqual(deployed.getYutManagement.__endpoint.region, ['asia-northeast3']);
   assert.deepEqual(deployed.saveYutSettings.__endpoint.region, ['asia-northeast3']);
   const seed = {
@@ -209,6 +210,10 @@ async function verifySpectatorRules(roomRef) {
     await denied(deployed.getYutLobby.run(request('a', { _session: null })), ['unauthenticated']);
     await denied(deployed.getYutLobby.run(request('staff')));
     await denied(deployed.getYutLobby.run(request('a')));
+    await denied(deployed.getYutPublication.run({ data: request('a').data }), ['unauthenticated']);
+    await denied(deployed.getYutPublication.run(request('a', { _session: null })), ['unauthenticated']);
+    await denied(deployed.getYutPublication.run(request('staff')));
+    await denied(deployed.getYutPublication.run(request('a')));
     await denied(command('a', 'create'));
     const defaultManagement = await deployed.getYutManagement.run(request('teacher'));
     assert.deepEqual(defaultManagement.settings, { enabled: false, version: 0, allowSolo: true, allowMultiplayer: true, allowPrivateRooms: true, defaultPlayerCount: 4, throwSeconds: 5, moveSeconds: 25 });
@@ -219,6 +224,7 @@ async function verifySpectatorRules(roomRef) {
     await denied(deployed.saveYutSettings.run(request('a', { enabled: true, expectedVersion: 0 })));
     await db.doc(`${base}/weplay_games/joseon-yut`).set({ enabled: 'true', version: 0 });
     await denied(deployed.getYutLobby.run(request('a')));
+    await denied(deployed.getYutPublication.run(request('a')));
     const initialSave = await deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: 0 }));
     assert.equal(initialSave.settings.version, 1);
     const initialSignal = await assertSignalChanged(undefined, 'settings changes initialize the live management signal');
@@ -226,6 +232,7 @@ async function verifySpectatorRules(roomRef) {
     await denied(deployed.saveYutSettings.run(request('teacher', { enabled: 'true', expectedVersion: 1 })), ['invalid-argument']);
     await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: true, staffPermissions: ['lesson_read'] });
     assert.equal((await deployed.getYutManagement.run(request('staff'))).settings.enabled, true);
+    assert.equal((await deployed.getYutPublication.run(request('staff'))).enabled, true);
     await denied(deployed.saveYutSettings.run(request('staff', { enabled: false, expectedVersion: 1 })));
     await db.doc(`users/${uid('staff')}`).update({ teacherPortalEnabled: false });
     const teacherLobby = await deployed.getYutLobby.run(request('teacher'));
@@ -302,13 +309,14 @@ async function verifySpectatorRules(roomRef) {
     assert.equal((await roomPath.get()).data().playerNamesVersion, 1);
     assert.equal((await deployed.getYutLobby.run(request('a'))).room.syncRevision, restored.syncRevision, 'unchanged names do not create repeated writes');
     assert.deepEqual(await readSignal(), afterRestoreSignal, 'unchanged lobby reads cannot cause a refresh loop');
-    const identityReads = [];
+    const identityReads = [], identityWrites = [];
     const countedHandlers = require('../yut').createYutHandlers({
       db: {
         doc: db.doc.bind(db), collection: db.collection.bind(db),
         runTransaction: callback => db.runTransaction(transaction => callback(new Proxy(transaction, {
           get(target, property) {
             if (property === 'get') return reference => { identityReads.push(reference.path); return target.get(reference); };
+            if (['set', 'update', 'create', 'delete'].includes(property)) return (...args) => { identityWrites.push(args[0].path); return target[property](...args); };
             const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value;
           },
         }))),
@@ -320,6 +328,19 @@ async function verifySpectatorRules(roomRef) {
     assert.equal(identityReads.includes('semester_enrollments/enrollment_outsider'), false, 'migrated room never rereads other participant enrollments');
     assert.equal(identityReads.filter(path => path === 'semester_classes/class_one').length, 1, 'only actor authority reads the current classroom');
     await roomPath.update({ playerNamesVersion: FieldValue.delete() });
+    identityReads.length = 0;
+    identityWrites.length = 0;
+    const publicationRoomBefore = (await roomPath.get()).data();
+    const publicationSignalBefore = await readSignal();
+    const publication = await countedHandlers.getYutPublication(request('a'));
+    assert.deepEqual(Object.keys(publication).sort(), ['enabled', 'settings'], 'publication never returns rooms, players, names or quotas');
+    assert.equal(publication.enabled, true);
+    assert.equal(identityReads.length, 8, 'publication uses only the eight canonical authority documents; shared session guard reads remain separate');
+    assert.equal(identityReads.some(path => /\/yut_(players|rooms)\//.test(path)), false, 'publication never reads player pointers or room state');
+    assert.equal(identityReads.includes(`users/${uid('outsider')}`), false, 'publication never reads other participants even in an unmigrated room');
+    assert.deepEqual(identityWrites, [], 'publication cannot synchronize names, signal monitors or write player activity');
+    assert.deepEqual((await roomPath.get()).data(), publicationRoomBefore);
+    assert.deepEqual(await readSignal(), publicationSignalBefore);
     const unchangedUpgrade = (await deployed.getYutLobby.run(request('a'))).room;
     assert.equal(unchangedUpgrade.syncRevision, restored.syncRevision, 'version-only upgrade does not change synchronization revision');
     assert.equal(unchangedUpgrade.revision, restored.revision);
@@ -464,17 +485,20 @@ async function verifySpectatorRules(roomRef) {
     await db.doc(`${base}/weplay_games/joseon-yut`).update({ version: 'malformed' });
     assert.equal((await rest('a', path)).status, 403, 'malformed publication fails closed for existing rooms');
     await denied(deployed.getYutLobby.run(request('a')));
+    await denied(deployed.getYutPublication.run(request('a')));
     await db.doc(`${base}/weplay_games/joseon-yut`).set(publicationBeforeMalformed);
     const competingSettings = await Promise.allSettled([true, false].map((enabled) => deployed.saveYutSettings.run(request('teacher', { enabled, expectedVersion: 1 }))));
     assert.equal(competingSettings.filter((result) => result.status === 'fulfilled').length, 1, 'publication CAS serializes simultaneous saves');
     const currentSettings = (await deployed.getYutManagement.run(request('teacher'))).settings;
     const closedSettings = await deployed.saveYutSettings.run(request('teacher', { enabled: false, expectedVersion: currentSettings.version }));
     await denied(deployed.getYutLobby.run(request('a')));
+    await denied(deployed.getYutPublication.run(request('a')));
     await denied(deployed.commandYutRoom.run(creation));
     await denied(roomCommand('a', room, 'emote', { kind: 'hello' }));
     await denied(roomCommand('a', room, 'leave'));
     assert.equal((await rest('a', path)).status, 403, 'closed publication denies cached participant reads');
     assert.equal((await deployed.getYutLobby.run(request('teacher'))).enabled, false);
+    assert.equal((await deployed.getYutPublication.run(request('teacher'))).enabled, false, 'teacher access stays independent of student publication');
     await deployed.saveYutSettings.run(request('teacher', { enabled: true, expectedVersion: closedSettings.settings.version }));
     assert.equal((await rest('a', path)).status, 200, 'member room read');
     assert.equal((await rest('outsider', path)).status, 403, 'nonparticipant read');
@@ -488,25 +512,30 @@ async function verifySpectatorRules(roomRef) {
     await db.doc(`semester_enrollment_slots/${bSlot}`).update({ activeEnrollmentId: 'replaced_enrollment' });
     assert.equal((await rest('b', path)).status, 403, 'replaced canonical slot while old enrollment remains active');
     await denied(deployed.getYutLobby.run(request('b')));
+    await denied(deployed.getYutPublication.run(request('b')));
     await db.doc(`semester_enrollment_slots/${bSlot}`).update({ activeEnrollmentId: 'enrollment_b' });
     await db.doc('semester_enrollments/enrollment_b').update({ classId: 'class_two' });
     assert.equal((await rest('b', path)).status, 200, 'active transfer to another class retains current match');
     assert.equal((await deployed.getYutLobby.run(request('b'))).room.id, room.id);
     await db.doc('semester_enrollments/enrollment_b').update({ enrollmentStatus: 'INACTIVE' });
+    await denied(deployed.getYutPublication.run(request('b')));
     assert.equal((await rest('b', path)).status, 403, 'inactive participant enrollment read');
     await denied(roomCommand('b', room, 'emote', { kind: 'thanks' }));
     await db.doc('semester_enrollments/enrollment_b').update({ enrollmentStatus: 'ACTIVE' });
     await db.doc('semester_classes/class_two').update({ readOnly: true });
     assert.equal((await rest('b', path)).status, 403, 'participant own class must remain active and writable');
     await denied(deployed.getYutLobby.run(request('b')));
+    await denied(deployed.getYutPublication.run(request('b')));
     await db.doc('semester_classes/class_two').update({ readOnly: false });
     await db.doc('semester_enrollments/enrollment_b').update({ classId: 'class_one' });
     await db.doc(sessionPath('b')).update({ status: 'revoked' });
     await denied(deployed.getYutLobby.run(request('b')), ['unauthenticated']);
+    await denied(deployed.getYutPublication.run(request('b')), ['unauthenticated']);
     assert.equal((await rest('b', path)).status, 403, 'revoked session read');
     await db.doc(sessionPath('b')).update({ status: 'active' });
     await db.doc('site_settings/student_maintenance').set({ enabled: true, blockedRoles: ['student'], bypassUids: [], title: '점검', message: '점검 중', startedAt: Timestamp.now(), updatedAt: Timestamp.now(), updatedBy: uid('teacher'), revision: 1 });
     await denied(deployed.getYutLobby.run(request('b')));
+    await denied(deployed.getYutPublication.run(request('b')));
     assert.equal((await rest('b', path)).status, 403, 'maintenance read');
     await db.doc('site_settings/student_maintenance').delete();
     await db.doc(path).update({ turnDeadlineMs: Date.now() - 1 });
@@ -515,6 +544,7 @@ async function verifySpectatorRules(roomRef) {
     await denied(roomCommand('a', room, 'throw', { expectedRevision: room.revision - 1 }), ['aborted']);
     await db.doc('site_settings/config').update({ semester: '1' });
     await denied(deployed.getYutLobby.run(request('b')), ['failed-precondition']);
+    await denied(deployed.getYutPublication.run(request('b')), ['failed-precondition']);
     assert.equal((await rest('b', path)).status, 403, 'old semester read');
     await db.doc('site_settings/config').update({ semester: '2' });
     const closed = await roomCommand('teacher', room, 'close'); assert.equal(closed.room, null);

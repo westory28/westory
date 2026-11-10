@@ -29,6 +29,8 @@ assert.match(source, /exports\.executeCommand = require\('\.\/productionGateway\
 assert.match(source, /exports\.getCommandStatus = require\('\.\/productionGateway\/productionSource'\)\.getCommandStatus/);
 assert.match(source, /exports\.getAssessmentState = require\('\.\/productionGateway\/productionSource'\)\.getAssessmentState/);
 assert.match(source, /exports\.saveAssessmentProgress = require\('\.\/productionGateway\/productionSource'\)\.saveAssessmentProgress/);
+assert.match(source, /exports\.getThinkCloudState = require\('\.\/thinkCloudQuery'\)\.getThinkCloudState/);
+assert.doesNotMatch(source, /exports\.getW8DomainState\s*=/, 'Do not redeploy unrelated W8/archived query domains');
 assert.match(source, /exports\.executeLessonCorePointCommand = require\('\.\/productionGateway\/productionSource'\)\.executeLessonCorePointCommand/);
 assert.match(source, /exports\.getWisEconomyState = require\('\.\/studentWisQuery'\)\.getWisEconomyState/);
 const querySource = fs.readFileSync(path.resolve(__dirname, '../studentWisQuery.js'), 'utf8');
@@ -42,6 +44,9 @@ process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:18192';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:19192';
 const deployedFunctions = require('../index');
 const canonicalFunctions = require('../productionGateway/productionSource');
+assert.equal(deployedFunctions.getThinkCloudState, require('../thinkCloudQuery').getThinkCloudState);
+assert.deepEqual(deployedFunctions.getThinkCloudState.__endpoint?.region, ['asia-northeast3']);
+assert.ok(Object.hasOwn(deployedFunctions.getThinkCloudState.__endpoint, 'callableTrigger'));
 for (const name of [...manifest.rootExports, 'getAssessmentState', 'saveAssessmentProgress']) {
   assert.equal(typeof deployedFunctions[name], 'function', `${name} must be a deployed callable`);
   assert.equal(deployedFunctions[name], canonicalFunctions[name], `${name} must share the canonical command closure`);

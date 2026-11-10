@@ -2,7 +2,7 @@ import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import NumericInput from "../../components/common/NumericInput";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
@@ -51,6 +51,9 @@ const ManageThinkCloud: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState("");
+  const subscriptionRef = useRef<ReturnType<
+    typeof subscribeThinkCloudState
+  > | null>(null);
   const [responses, setResponses] = useState<
     Array<ThinkCloudResponse & { id: string }>
   >([]);
@@ -95,7 +98,7 @@ const ManageThinkCloud: React.FC = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    return subscribeThinkCloudState(
+    const subscription = subscribeThinkCloudState(
       config,
       "teacher",
       selectedSessionId,
@@ -123,7 +126,17 @@ const ManageThinkCloud: React.FC = () => {
         );
       },
     );
-  }, [config, currentUser, selectedSessionId, refreshKey]);
+    subscriptionRef.current = subscription;
+    return () => {
+      subscription();
+      if (subscriptionRef.current === subscription)
+        subscriptionRef.current = null;
+    };
+  }, [config?.year, config?.semester, currentUser?.uid, refreshKey]);
+
+  useEffect(() => {
+    subscriptionRef.current?.selectSession(selectedSessionId);
+  }, [selectedSessionId]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<

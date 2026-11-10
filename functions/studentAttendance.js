@@ -154,14 +154,28 @@ const createStudentAttendanceHandler = ({ db, now = () => new Date() }) => async
 
     // Client-written dates cannot establish reward history. Only server-confirmed
     // attendance and either generation of trusted reward ledgers count.
-    const [recordSnapshot, legacySnapshot, ledgerSnapshot] = await Promise.all([
+    const legacyQuery = db.collection(root + '/point_transactions').where('uid', '==', uid);
+    const ledgerQuery = db.collection('semester_wis_ledger').where('studentUid', '==', uid)
+      .where('semesterId', '==', scope).where('type', '==', 'GRANT');
+    const possibleRewardSources = ['attendance:' + attendanceDate, 'attendance-monthly:' + month,
+      ...[50, 100, 200, 300].map((count) => 'attendance-milestone:' + count)];
+    const [recordSnapshot, ...historySnapshots] = await Promise.all([
       transaction.get(db.collection('users/' + uid + '/attendance').where('scope', '==', attendanceScope).limit(HISTORY_LIMIT + 1)),
-      transaction.get(db.collection(root + '/point_transactions').where('uid', '==', uid).limit(HISTORY_LIMIT + 1)),
-      transaction.get(db.collection('semester_wis_ledger').where('studentUid', '==', uid).limit(HISTORY_LIMIT + 1)),
+      transaction.get(legacyQuery.where('type', 'in', ['attendance', 'attendance_monthly_bonus', 'attendance_milestone_bonus']).limit(HISTORY_LIMIT + 1)),
+      transaction.get(legacyQuery.where('activityType', '==', 'attendance').limit(HISTORY_LIMIT + 1)),
+      transaction.get(ledgerQuery.where('activityType', '==', 'attendance').limit(HISTORY_LIMIT + 1)),
+      // Historical grants may omit activityType. Source/account identity still
+      // prevents paying a previously recorded daily/monthly/milestone reward.
+      transaction.get(ledgerQuery.where('accountId', '==', accountId).where('sourceId', 'in', possibleRewardSources).limit(HISTORY_LIMIT + 1)),
     ]);
-    if ([recordSnapshot, legacySnapshot, ledgerSnapshot].some((snapshot) => snapshot.size > HISTORY_LIMIT)) fail('HISTORY_LIMIT_EXCEEDED');
-    const legacy = legacySnapshot.docs.map((doc) => doc.data());
-    const ledgers = ledgerSnapshot.docs.map((doc) => doc.data()).filter((row) => row.semesterId === scope && row.type === 'GRANT');
+    if ([recordSnapshot, ...historySnapshots].some((snapshot) => snapshot.size > HISTORY_LIMIT)) fail('HISTORY_LIMIT_EXCEEDED');
+    const mergeHistory = (snapshots) => [...new Map(snapshots.flatMap((snapshot) => snapshot.docs)
+      .map((doc) => [doc.ref.path, doc.data()])).values()];
+    // Union both historical field conventions, preserving one row per document.
+    // The cap fails explicitly; it never turns a partial history into a reward.
+    const legacy = mergeHistory(historySnapshots.slice(0, 2));
+    const ledgers = mergeHistory(historySnapshots.slice(2));
+    if ([legacy, ledgers].some((rows) => rows.length > HISTORY_LIMIT)) fail('HISTORY_LIMIT_EXCEEDED');
     const dates = new Set(recordSnapshot.docs.map((doc) => doc.data())
       .filter((row) => row.rewardProcessed === true).map((row) => row.date));
     for (const row of [...legacy, ...ledgers]) {

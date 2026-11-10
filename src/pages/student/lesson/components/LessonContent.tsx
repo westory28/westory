@@ -36,7 +36,7 @@ import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 import {
   readStudentLesson,
-  readStudentVisibleLessons,
+  readStudentLessonProgressCatalog,
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import "../lessonImageProtection.css";
@@ -418,7 +418,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
     const [visibleLessons, progressRootSnap, progressUnitsSnap] =
       await Promise.all([
-        readStudentVisibleLessons(config),
+        readStudentLessonProgressCatalog(config),
         getDoc(getProgressRootRef()!),
         getDocs(
           collection(

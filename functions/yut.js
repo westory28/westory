@@ -136,6 +136,16 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (expired(room, now())) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
     if (room.participantUids.includes(actor.uid) && !matchesMembership(room, actor)) fail('permission-denied', '수강 정보가 변경되었습니다. 새 방에 참가해 주세요.');
   };
+  const getYutPublication = async (request) => {
+    await assertSession(request);
+    const scope = scopeFrom(request.data);
+    return db.runTransaction(async (transaction) => {
+      const actor = await authority(transaction, request, scope);
+      // Publication checks must never load a player/room or synchronize names.
+      // Keep the same account, semester and enrollment gates as admission.
+      return { enabled: actor.settings.enabled, settings: actor.settings };
+    });
+  };
   const getYutLobby = async (request) => {
     await assertSession(request);
     const scope = scopeFrom(request.data);
@@ -523,7 +533,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     }
     return { deleted };
   };
-  return { getYutLobby, commandYutRoom, getYutManagement, saveYutSettings, cleanupWaitingYutRooms };
+  return { getYutPublication, getYutLobby, commandYutRoom, getYutManagement, saveYutSettings, cleanupWaitingYutRooms };
 }
 
 module.exports = { createYutHandlers };

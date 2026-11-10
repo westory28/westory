@@ -22,7 +22,7 @@ export default function YutGameEntry({
   groupTitle?: string;
   initialSettings?: YutSettings;
 }) {
-  const access = useYutPublication(portal);
+  const access = useYutPublication(portal, true);
   const [introduced, setIntroduced] = useState(false);
   const [params, setParams] = useSearchParams();
   const [musicActive, setMusicActive] = useState(true);

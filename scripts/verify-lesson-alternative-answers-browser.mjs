@@ -92,7 +92,7 @@ export const saveLessonAnswers=async(_config,input)=>{window.__savedCalls.push(i
   [
     "studentLessonReadCache",
     forbidden +
-      "export const readStudentLesson=forbidden;export const readStudentVisibleLessons=async()=>[];",
+      "export const readStudentLesson=forbidden;export const readStudentLessonProgressCatalog=async()=>[];",
   ],
 ]);
 const bundle = await build({

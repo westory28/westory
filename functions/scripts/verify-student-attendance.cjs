@@ -39,7 +39,7 @@ function memoryFirestore(initial) {
   let revision = 0;
   let writeCount = 0;
   let retryCount = 0;
-  const reads = [];
+  const reads = [], queries = [];
   const ref = (path) => ({ path, id: path.split('/').pop(), get: async () => snapshot(ref(path), documents) });
   const snapshot = (item, source) => ({ id: item.id, ref: item, exists: source.has(item.path), data: () => clone(source.get(item.path)) });
   const field = (value, key) => key.split('.').reduce((entry, part) => entry?.[part], value);
@@ -84,6 +84,8 @@ function memoryFirestore(initial) {
                 if (operator === 'in') return value.includes(actual);
                 throw new Error(`Unsupported test query operator ${operator}`);
               })).slice(0, item.maximum).map((path) => snapshot(ref(path), source));
+            queries.push({ path: item.path, constraints: clone(item.constraints), limit: item.maximum,
+              returnedPaths: docs.map((doc) => doc.ref.path) });
             return { docs, size: docs.length, empty: docs.length === 0, forEach: (handler) => docs.forEach(handler) };
           },
           getAll(...items) { return Promise.all(items.map((item) => transaction.get(item))); },
@@ -109,7 +111,7 @@ function memoryFirestore(initial) {
       throw new Error('Test transaction exceeded retry limit');
     },
   };
-  return { db, documents, reads, get writes() { return writeCount; }, get retries() { return retryCount; } };
+  return { db, documents, reads, queries, get writes() { return writeCount; }, get retries() { return retryCount; } };
 }
 
 const request = (data = {}) => ({
@@ -265,6 +267,106 @@ test('legacy monthly/milestone rewards are not paid again', async () => {
   f.documents.set(`${SCOPE_PATH}/point_transactions/milestone`, { uid: UID, type: 'attendance_milestone_bonus', sourceId: 'attendance-milestone-50' });
   const result = await f.handler(request());
   assert.equal(result.totalAwarded, 75); assert.equal(result.monthlyBonusAmount, 0); assert.equal(result.milestoneBonusAmount, 0);
+});
+
+test('attendance reads only relevant history while unrelated trades preserve every financial result', async (t) => {
+  const clean = fixture({ date: new Date('2026-09-30T03:00:00Z') });
+  const noisy = fixture({ date: new Date('2026-09-30T03:00:00Z') });
+  const historicalPaths = [];
+  previousDates(29, '2026-09-30').forEach((date, index) => {
+    const legacy = index % 2 === 0;
+    const path = legacy ? `${SCOPE_PATH}/point_transactions/history-${index}` : `semester_wis_ledger/history-${index}`;
+    const row = legacy ? { uid: UID, type: 'attendance', sourceId: `attendance-${date}` }
+      : { studentUid: UID, semesterId: SCOPE, accountId: ACCOUNT_ID, type: 'GRANT', activityType: 'attendance', sourceId: `attendance:${date}` };
+    historicalPaths.push(path);
+    for (const f of [clean, noisy]) f.documents.set(path, row);
+  });
+  for (let index = 0; index < 500; index++) {
+    noisy.documents.set(`${SCOPE_PATH}/point_transactions/noise-${index}`, { uid: UID, type: 'quiz', sourceId: `quiz-${index}` });
+    const common = { studentUid: UID, semesterId: SCOPE, accountId: ACCOUNT_ID, type: 'GRANT', activityType: 'lesson', sourceId: `lesson-${index}` };
+    noisy.documents.set(`semester_wis_ledger/noise-other-activity-${index}`, common);
+    noisy.documents.set(`semester_wis_ledger/noise-other-scope-${index}`, { ...common, semesterId: '2026-1', activityType: 'attendance' });
+    noisy.documents.set(`semester_wis_ledger/noise-other-type-${index}`, { ...common, type: 'DEDUCT', activityType: 'attendance' });
+  }
+  const expected = await clean.handler(request()), actual = await noisy.handler(request());
+  assert.deepEqual(actual, expected);
+  assert.equal(actual.totalAwarded, 1075); assert.equal(actual.claimCount, 30);
+  for (const [path, value] of clean.documents) assert.deepEqual(noisy.documents.get(path), value, path);
+  const returned = noisy.queries.flatMap(query => query.returnedPaths);
+  assert.deepEqual(returned.sort(), historicalPaths.sort());
+  assert.equal(noisy.queries.length, 5);
+  assert.ok(noisy.queries.every(query => query.limit === 4001), 'Every history branch retains the fail-closed boundary');
+  t.diagnostic(`History document reads: 2029 before, ${returned.length} after; identical 75 daily + 1000 monthly and all projections.`);
+  const queriesBeforeRetry = noisy.queries.length;
+  assert.equal((await noisy.handler(request())).totalAwarded, 0);
+  assert.equal(noisy.queries.length, queriesBeforeRetry, 'Confirmed attendance retry performs no history query');
+});
+
+test('legacy activity aliases and missing fields retain all valid attendance dates', async () => {
+  const f = fixture({ policy: { attendanceMilestoneBonusEnabled: true, attendanceMilestone50: 500 } });
+  previousDates(49).forEach((date, index) => {
+    const variants = [{ type: 'attendance' }, { type: 'migration', activityType: 'attendance' },
+      { activityType: 'attendance' }, { type: 'attendance', activityType: '' },
+      { type: 'attendance', activityType: null }, { type: 'attendance', activityType: false },
+      { type: 'attendance', activityType: 0 }, { type: 'attendance', activityType: 'attendance' }];
+    f.documents.set(`${SCOPE_PATH}/point_transactions/alias-${index}`, { uid: UID, sourceId: `attendance-${date}`, ...variants[index % variants.length] });
+  });
+  const result = await f.handler(request());
+  assert.equal(result.claimCount, 50); assert.equal(result.totalAwarded, 575);
+  assert.equal(result.milestoneBonusAmount, 500);
+  assert.equal(new Set(f.queries.flatMap(query => query.returnedPaths)).size, 49, 'Overlapping legacy queries do not create extra dates');
+});
+
+test('historical canonical source IDs prevent repayment even without matching activity metadata', async () => {
+  for (const activityType of [undefined, null, '', 'legacy-reward']) {
+    const f = fixture({ date: new Date('2026-09-30T03:00:00Z'),
+      policy: { attendanceMilestoneBonusEnabled: true, attendanceMilestone50: 500 } });
+    seedAttendance(f, previousDates(49, '2026-09-30'));
+    const sources = ['attendance:2026-09-30', 'attendance-monthly:2026-09', 'attendance-milestone:50'];
+    sources.forEach((sourceId, index) => f.documents.set(`semester_wis_ledger/historical-random-id-${index}`, {
+      studentUid: UID, semesterId: SCOPE, accountId: ACCOUNT_ID, type: 'GRANT', sourceId,
+      ...(activityType === undefined ? {} : { activityType }),
+    }));
+    const result = await f.handler(request());
+    assert.equal(result.claimCount, 50); assert.equal(result.totalAwarded, 0);
+    assert.equal(result.balance, 100); assert.equal(f.writes, 1, 'Only the missing attendance record is repaired');
+    assert.equal(ledgerRows(f).length, 3, 'Arbitrary historical IDs still prevent duplicate grants');
+  }
+});
+
+test('canonical attendance history preserves missing account IDs without accepting foreign duplicate rewards', async () => {
+  const f = fixture({ policy: { attendanceMilestoneBonusEnabled: true, attendanceMilestone50: 500 } });
+  previousDates(49).forEach((date, index) => f.documents.set(`semester_wis_ledger/history-${index}`, {
+    studentUid: UID, semesterId: SCOPE, type: 'GRANT', activityType: 'attendance', sourceId: `attendance:${date}`,
+  }));
+  for (const [id, change] of [['account', { accountId: 'another-account' }], ['uid', { studentUid: 'another-student' }],
+    ['scope', { semesterId: '2026-1' }], ['type', { type: 'DEDUCT' }], ['missing-scope', { semesterId: undefined }]]) {
+    f.documents.set(`semester_wis_ledger/foreign-${id}`, {
+      studentUid: UID, semesterId: SCOPE, accountId: ACCOUNT_ID, type: 'GRANT', sourceId: `attendance:${TODAY}`, ...change,
+    });
+  }
+  const result = await f.handler(request());
+  assert.equal(result.claimCount, 50); assert.equal(result.amount, 75); assert.equal(result.totalAwarded, 575);
+  assert.ok(f.queries.flatMap(query => query.returnedPaths).every(path => !path.includes('/foreign-')));
+});
+
+test('combined relevant history bounds reject before any financial write without truncating a branch', async () => {
+  for (const collection of ['legacy', 'canonical']) {
+    const f = fixture();
+    for (let index = 0; index < 4001; index++) {
+      const firstBranch = index < 2000;
+      const row = collection === 'legacy'
+        ? { uid: UID, type: firstBranch ? 'attendance' : 'migration',
+          ...(firstBranch ? {} : { activityType: 'attendance' }), sourceId: 'attendance-2026-09-01' }
+        : { studentUid: UID, semesterId: SCOPE, accountId: ACCOUNT_ID, type: 'GRANT',
+          ...(firstBranch ? { activityType: 'attendance', sourceId: 'attendance:2026-09-01' } : { sourceId: `attendance:${TODAY}` }) };
+      f.documents.set(collection === 'legacy' ? `${SCOPE_PATH}/point_transactions/relevant-${index}` : `semester_wis_ledger/relevant-${index}`, row);
+    }
+    await assert.rejects(() => f.handler(request()), error => error.details?.reason === 'ATTENDANCE_HISTORY_LIMIT_EXCEEDED');
+    assert.equal(f.writes, 0); assert.equal(f.documents.get(ACCOUNT_PATH).balance, 100);
+    assert.equal(f.documents.has(ATTENDANCE_PATH), false);
+    assert.ok(f.queries.every(query => query.returnedPaths.length < 4001), 'The union cap also applies when neither query is individually full');
+  }
 });
 
 test('disabled automatic rewards still record attendance with no money changes', async () => {

@@ -919,6 +919,64 @@ test('result invalidation rebuilds only stale class snapshot and advances studen
   assert.ok(f.data.get(`quiz_analysis_student_revisions/${hash(`${SCOPE}\na`)}`).generation);
 });
 
+const resultEvent = (before, after, params = {}) => ({ params, data: {
+  before: { exists: before !== undefined, data: () => before },
+  after: { exists: after !== undefined, data: () => after },
+} });
+const classRevisionPath = (scope, classId) => `quiz_class_analysis_state/${scope}/classes/${hash(classId)}`;
+const studentRevisionPath = (scope, uid) => `quiz_analysis_student_revisions/${hash(`${scope}\n${uid}`)}`;
+
+test('result update invalidates its unchanged target once with two reads and two writes', async () => {
+  const f = memory(), before = f.data.get('semester_assessment_results/r2');
+  const after = { ...before, percent: 50 };
+  f.data.set('semester_assessment_results/r2', after);
+  await createQuizAnalysisInvalidation({ db: f.db }).onResult(resultEvent(before, after));
+  assert.deepEqual(f.reads, [`semester_enrollment_slots/${buildEnrollmentSlotId(SCOPE, 'a')}`, 'semester_enrollments/en_a']);
+  assert.deepEqual(f.writes, [studentRevisionPath(SCOPE, 'a'), classRevisionPath(SCOPE, 'class_a')]);
+  assert.equal(f.queries.length, 0, 'invalidation must never scan results or the roster');
+  assert.deepEqual(f.data.get('semester_assessment_results/r2'), after, 'result scores remain untouched');
+  assert.equal((await createQuizClassAnalysisService({ db: f.db }).query(q)).classes[0].averageScore, 50);
+});
+
+test('result invalidation retains create, delete, legacy and missing-owner behavior', async () => {
+  const canonical = fixture()['semester_assessment_results/r2'];
+  for (const [before, after, params] of [
+    [undefined, canonical, {}], [canonical, undefined, {}],
+    [{ uid: 'a', classId: 'class_a' }, { uid: 'a', classId: 'class_a', score: 50 }, { year: '2026', semester: '2' }],
+  ]) {
+    const f = memory();
+    await createQuizAnalysisInvalidation({ db: f.db }).onResult(resultEvent(before, after, params));
+    assert.equal(f.reads.length, 2);
+    assert.deepEqual(f.writes, [studentRevisionPath(SCOPE, 'a'), classRevisionPath(SCOPE, 'class_a')]);
+  }
+  const f = memory();
+  const unknown = { assessmentKind: 'QUIZ', semesterId: SCOPE };
+  await createQuizAnalysisInvalidation({ db: f.db }).onResult(resultEvent(unknown, { ...unknown, percent: 50 }));
+  assert.deepEqual(f.reads, []);
+  assert.deepEqual(f.writes, [`quiz_class_analysis_state/${SCOPE}`]);
+});
+
+test('result moves invalidate both student, class and semester targets', async () => {
+  const original = fixture()['semester_assessment_results/r2'];
+  for (const change of [
+    { studentUid: 'b', classId: 'class_b' }, { classId: 'class_b' }, { semesterId: '2026-1' },
+  ]) {
+    const f = memory();
+    await createQuizAnalysisInvalidation({ db: f.db }).onResult(resultEvent(original, { ...original, ...change }));
+    assert.ok(f.writes.includes(studentRevisionPath(SCOPE, 'a')));
+    assert.ok(f.writes.includes(classRevisionPath(SCOPE, 'class_a')));
+    assert.ok(f.writes.includes(studentRevisionPath(change.semesterId || SCOPE, change.studentUid || 'a')));
+    assert.ok(f.writes.includes(classRevisionPath(change.semesterId || SCOPE, change.classId || 'class_a')));
+  }
+  for (const [before, after] of [[original, { ...original, assessmentKind: 'OTHER' }],
+    [{ ...original, assessmentKind: 'OTHER' }, original]]) {
+    const f = memory();
+    await createQuizAnalysisInvalidation({ db: f.db }).onResult(resultEvent(before, after));
+    assert.equal(f.reads.length, 2);
+    assert.equal(f.writes.length, 2, 'entering or leaving QUIZ still invalidates its quiz target');
+  }
+});
+
 test('current roster excludes stale old-class profile and includes transferred student history in new class', async () => {
   const initial = fixture();
   initial['semester_enrollments/en_a'].classId = 'class_b';

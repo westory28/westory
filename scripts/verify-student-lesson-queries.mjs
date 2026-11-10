@@ -112,7 +112,10 @@ assert.equal(
   calls.some((call) => !call.unitId && call.view !== "catalog"),
   false,
 );
-const full = await api.readStudentVisibleLessons(scope);
+const full = await api.readStudentLessonProgressCatalog(scope);
+assert.equal(calls.at(-1).view, "progress");
+await api.readStudentLessonProgressCatalog(scope);
+assert.equal(calls.filter((call) => call.view === "progress").length, 1);
 assert.equal(
   full.length,
   2,

@@ -22,7 +22,7 @@ import { normalizeBlankText } from "./lessonWorksheet";
 import { normalizeMockExamCategory } from "./mockExamRounds";
 import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 import type { PointWallet, SystemConfig } from "../types";
-import { readStudentVisibleLessons } from "./studentLessonReadCache";
+import { readStudentLessonProgressCatalog } from "./studentLessonReadCache";
 import {
   readCanonicalQuizResults,
   readCanonicalHistoryResults,
@@ -413,7 +413,7 @@ const readLessons = async (config: ConfigLike) => {
     console.warn("Failed to load lesson tree order:", error);
     return new Map<string, LessonTreeMeta>();
   });
-  const lessons = await readStudentVisibleLessons(config);
+  const lessons = await readStudentLessonProgressCatalog(config);
   return lessons
     .map((item) => {
       const unitId = String(item.unitId || "").trim();

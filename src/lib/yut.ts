@@ -194,6 +194,8 @@ async function call<T>(
 }
 export const getYutLobby = (config: WeplayConfig) =>
   call<YutLobby>("getYutLobby", config);
+export const getYutPublication = (config: WeplayConfig) =>
+  call<Pick<YutLobby, "enabled" | "settings">>("getYutPublication", config);
 export const getYutManagement = (config: WeplayConfig) =>
   call<YutManagement>("getYutManagement", config).then((response) => ({
     ...response,

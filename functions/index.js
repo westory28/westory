@@ -5482,6 +5482,7 @@ Object.assign(exports, require('./weplay').createWeplayFunctions({
 }));
 
 const yutHandlers = require('./yut').createYutHandlers({ db });
+exports.getYutPublication = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutPublication);
 exports.getYutLobby = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutLobby);
 exports.commandYutRoom = onCall({ region: REGION, maxInstances: 20 }, yutHandlers.commandYutRoom);
 // Keep gameplay transactions beside Firestore nam5 and avoid idle cold starts.
@@ -8208,6 +8209,7 @@ exports.executeCommand = require('./productionGateway/productionSource').execute
 exports.getCommandStatus = require('./productionGateway/productionSource').getCommandStatus;
 exports.getAssessmentState = require('./productionGateway/productionSource').getAssessmentState;
 exports.saveAssessmentProgress = require('./productionGateway/productionSource').saveAssessmentProgress;
+exports.getThinkCloudState = require('./thinkCloudQuery').getThinkCloudState;
 exports.executeLessonCorePointCommand = require('./productionGateway/productionSource').executeLessonCorePointCommand;
 exports.getWisEconomyState = require('./studentWisQuery').getWisEconomyState;
 exports.getWisEconomyStateFast = require('./studentWisQuery').getWisEconomyStateFast;

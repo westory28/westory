@@ -809,12 +809,36 @@ const HistoryClassroomRunner: React.FC = () => {
         if (pendingProgressRef.current?.attemptId === target)
           await flush(pendingProgressRef.current);
         if (violationRef.current || pendingSubmissionRef.current) return;
+        const confirmed = canonicalAttemptRef.current;
+        if (
+          !confirmed ||
+          confirmed.attemptId !== target ||
+          !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(confirmed.status)
+        )
+          return;
+        const nextAnswers = sanitizeHistoryClassroomAnswersForWrite(
+          snapshot.answers,
+        );
+        const nextItemId = String(snapshot.currentPage);
+        const confirmedAnswers = confirmed.answers || {};
+        // Resolve any ambiguous save first. Once acknowledged, replay/reconnect
+        // and queued identical snapshots need no new revision or server write.
+        if (
+          confirmed.currentItemId === nextItemId &&
+          Object.keys(confirmedAnswers).length ===
+            Object.keys(nextAnswers).length &&
+          Object.entries(nextAnswers).every(
+            ([id, answer]) =>
+              Object.prototype.hasOwnProperty.call(confirmedAnswers, id) &&
+              confirmedAnswers[id] === answer,
+          )
+        )
+          return;
         return flush({
-          attemptId: active.attemptId,
-          expectedRevision:
-            canonicalAttemptRef.current?.revision ?? active.revision,
-          answers: sanitizeHistoryClassroomAnswersForWrite(snapshot.answers),
-          currentItemId: String(snapshot.currentPage),
+          attemptId: confirmed.attemptId,
+          expectedRevision: confirmed.revision,
+          answers: nextAnswers,
+          currentItemId: nextItemId,
         });
       });
     progressSaveTailRef.current = task.then(

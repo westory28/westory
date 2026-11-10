@@ -1,7 +1,7 @@
 import { getStudentMenuLabel } from "../../../constants/menus";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -39,6 +39,9 @@ const ThinkCloud: React.FC = () => {
     "loading",
   );
   const [selectedSessionId, setSelectedSessionId] = useState("");
+  const subscriptionRef = useRef<ReturnType<
+    typeof subscribeThinkCloudState
+  > | null>(null);
   const [responses, setResponses] = useState<
     Array<ThinkCloudResponse & { id: string }>
   >([]);
@@ -62,7 +65,7 @@ const ThinkCloud: React.FC = () => {
     selectedSession?.options || DEFAULT_THINK_CLOUD_OPTIONS;
   useEffect(() => {
     if (!currentUser) return;
-    return subscribeThinkCloudState(
+    const subscription = subscribeThinkCloudState(
       config,
       "student",
       selectedSessionId,
@@ -90,7 +93,17 @@ const ThinkCloud: React.FC = () => {
         setActiveSessionId("");
       },
     );
-  }, [config, currentUser, selectedSessionId, refreshKey]);
+    subscriptionRef.current = subscription;
+    return () => {
+      subscription();
+      if (subscriptionRef.current === subscription)
+        subscriptionRef.current = null;
+    };
+  }, [config?.year, config?.semester, currentUser?.uid, refreshKey]);
+
+  useEffect(() => {
+    subscriptionRef.current?.selectSession(selectedSessionId);
+  }, [selectedSessionId]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<

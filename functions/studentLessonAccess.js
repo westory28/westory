@@ -14,6 +14,9 @@ const CATALOG_FIELDS = [
   'unitId', 'title', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt',
   'contentRevision', 'assignedClassIds',
 ];
+// Progress totals need blanks and core-point IDs, never PDFs, OCR regions,
+// page images, processing details or footnote bodies from every lesson.
+const PROGRESS_FIELDS = [...CATALOG_FIELDS, 'contentHtml', 'worksheetBlanks', 'worksheetExamHighlights'];
 const timestampMs = (value) => {
   if (typeof value?.toMillis === 'function') return value.toMillis();
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -49,7 +52,8 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
   if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester)) {
     throw new HttpsError('invalid-argument', '학기 정보를 확인해 주세요.');
   }
-  const catalogOnly = request.data?.view === 'catalog';
+  const fields = request.data?.view === 'catalog' ? CATALOG_FIELDS
+    : request.data?.view === 'progress' ? PROGRESS_FIELDS : LESSON_FIELDS;
   const unitId = String(request.data?.unitId || '').trim();
   if (unitId.length > 200 || unitId.includes('/')) {
     throw new HttpsError('invalid-argument', '단원 정보를 확인해 주세요.');
@@ -86,12 +90,19 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
   const readLessons = (path) => {
     let source = db.collection(path);
     if (unitId) source = source.where('unitId', '==', unitId);
-    return source.select(...(catalogOnly ? CATALOG_FIELDS : LESSON_FIELDS)).get();
+    return source.select(...fields).get();
   };
-  const [scoped, legacy] = await Promise.all([
-    readLessons(`years/${year}/semesters/${semester}/lessons`),
-    readLessons('lessons'),
-  ]);
+  const scopedPath = `years/${year}/semesters/${semester}/lessons`;
+  let scoped, legacy;
+  if (unitId) {
+    scoped = await readLessons(scopedPath);
+    // Any scoped revision, even hidden/deleted/unassigned, supersedes legacy.
+    // Read fallback only when this exact unit has no semester document.
+    legacy = scoped.docs.length ? { docs: [] } : await readLessons('lessons');
+  } else {
+    // A catalogue must still include legacy-only units; do not truncate totals.
+    [scoped, legacy] = await Promise.all([readLessons(scopedPath), readLessons('lessons')]);
+  }
   const result = selectVisibleLessons(scoped.docs.map((doc) => doc.data()), legacy.docs.map((doc) => doc.data()), classId);
   return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,
     lessons.map(({ assignedClassIds, ...lesson }) => ({ ...lesson, semesterRevision }))]));

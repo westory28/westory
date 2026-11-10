@@ -967,11 +967,18 @@ function createQuizAnalysisInvalidation({ db }) {
     await Promise.all([...ids].map(id => classStateRef(db, scope, id).set({ generation: randomUUID(), updatedAt: FieldValue.serverTimestamp() })));
   };
   const onResult = async event => {
+    const invalidated = new Set();
     for (const snapshot of [event.data?.before, event.data?.after]) {
       if (!snapshot?.exists) continue;
       const value = snapshot.data();
-      if (event.params?.year || value.assessmentKind === 'QUIZ') await invalidateResult(event.params?.year
-        ? `${event.params.year}-${event.params.semester}` : value.semesterId, value);
+      if (!event.params?.year && value.assessmentKind !== 'QUIZ') continue;
+      const scope = event.params?.year ? `${event.params.year}-${event.params.semester}` : value.semesterId;
+      // A result edit normally keeps its owner and class. Invalidate that target
+      // once, while still refreshing both sides of ownership or scope changes.
+      const target = JSON.stringify([scope, text(value.studentUid || value.uid || value.studentId || value.userId), text(value.classId)]);
+      if (invalidated.has(target)) continue;
+      invalidated.add(target);
+      await invalidateResult(scope, value);
     }
   };
   const onScope = fields => async event => {

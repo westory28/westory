@@ -28,7 +28,7 @@ const forbidden=()=>{throw Error('Unexpected bulk read or command')};
 export const getDocs=forbidden,getHttpsCallable=forbidden,recordLessonCorePointFind=forbidden,claimLessonCorePointReward=forbidden;
 export const getFirebaseStorage=async()=>({});export const ref=(_storage,path)=>({path});export const getDownloadURL=async()=>'/worksheet.svg';
 export const readStudentVisibleCurriculumTree=async()=>{qa.reads.push('tree');if(qa.failTree){qa.failTree=false;throw Error('Tree offline')}return[{id:'big',title:'대단원',children:[{id:'middle',title:'중단원',children:[{id:'a',title:'첫 번째 학습지'},{id:'b',title:'두 번째 학습지'}]}]}]};
-export const readStudentVisibleLessons=forbidden;
+export const readStudentLessonProgressCatalog=forbidden;
 export const readStudentLesson=async(_config,unitId)=>{qa.reads.push('lesson:'+unitId);return {unitId,title:unitId==='a'?'첫 번째 학습지':'두 번째 학습지',contentRevision:2,semesterRevision:1,worksheetPageImages:[1,2].map(page=>({page,width:1000,height:1400,imageUrl:'/worksheet.svg'})),worksheetBlanks:[{id:'blank',page:1,leftRatio:.1,topRatio:.1,widthRatio:.3,heightRatio:.05,answer:'고조선',source:'manual'}],worksheetExamHighlights:[{id:'point',page:1,leftRatio:.1,topRatio:.3,widthRatio:.3,heightRatio:.05}],isVisibleToStudents:true}};
 export const claimPointActivityReward=async()=>({awarded:false});
 export const saveLessonAnswers=async(_config,input)=>{qa.saves.push(input);return {answerRevision:5,answers:Object.fromEntries(Object.entries(input.answers).map(([id,value])=>[id,{value,status:'correct'}])),totalCount:1,correctCount:1}};

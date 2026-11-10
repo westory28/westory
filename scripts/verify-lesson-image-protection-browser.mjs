@@ -78,7 +78,7 @@ const adapters = new Map([
   [
     "studentLessonReadCache",
     forbidden +
-      "export const readStudentLesson=forbidden,readStudentVisibleLessons=forbidden;",
+      "export const readStudentLesson=forbidden,readStudentLessonProgressCatalog=forbidden;",
   ],
 ]);
 const bundle = await build({

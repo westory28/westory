@@ -172,7 +172,7 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
 
 const readEffectiveStudentLessons = (
   config: ConfigLike,
-  view: "full" | "catalog" = "full",
+  view: "full" | "catalog" | "progress" = "full",
 ) =>
   readCached(
     effectiveLessonsCache,
@@ -192,7 +192,11 @@ const readEffectiveStudentLessons = (
           };
         }
         const read = await getHistoryDictionaryCallable<
-          { year: string; semester: string; view: "full" | "catalog" },
+          {
+            year: string;
+            semester: string;
+            view: "full" | "catalog" | "progress";
+          },
           {
             scopedLessons: Partial<LessonData>[];
             legacyLessons: Partial<LessonData>[];
@@ -221,6 +225,11 @@ const readEffectiveStudentLessons = (
 
 export const readStudentVisibleLessons = (config: ConfigLike) =>
   readEffectiveStudentLessons(config).then(
+    ({ visibleLessons }) => visibleLessons,
+  );
+
+export const readStudentLessonProgressCatalog = (config: ConfigLike) =>
+  readEffectiveStudentLessons(config, "progress").then(
     ({ visibleLessons }) => visibleLessons,
   );
 

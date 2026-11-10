@@ -3,6 +3,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
 import {
   getYutLobby,
+  getYutPublication,
   type YutSettings,
   type YutLobbySnapshot,
 } from "../../../lib/yut";
@@ -10,7 +11,10 @@ import {
 type Status = "checking" | "open" | "closed" | "error";
 
 /** Missing settings and failed checks never unlock student games, including local play. */
-export default function useYutPublication(portal: "student" | "teacher") {
+export default function useYutPublication(
+  portal: "student" | "teacher",
+  includeInitialLobby = false,
+) {
   const { config, currentUser, menuConfig } = useAuth();
   const menuAllowed =
     portal === "teacher" ||
@@ -40,6 +44,7 @@ export default function useYutPublication(portal: "student" | "teacher") {
     }
     let active = true;
     let pending = false;
+    let lobbyLoaded = false;
     let requestTimeout: number | undefined;
     setAccess({ scope, status: "checking" });
     const check = async () => {
@@ -51,8 +56,16 @@ export default function useYutPublication(portal: "student" | "teacher") {
       pending = true;
       try {
         const sentAtMs = Date.now();
-        const lobby = await Promise.race([
-          getYutLobby(config),
+        const { publication, lobby } = await Promise.race([
+          includeInitialLobby && !lobbyLoaded
+            ? getYutLobby(config).then((lobby) => ({
+                publication: lobby,
+                lobby,
+              }))
+            : getYutPublication(config).then((publication) => ({
+                publication,
+                lobby: undefined,
+              })),
           new Promise<never>((_resolve, reject) => {
             requestTimeout = window.setTimeout(
               () => reject(new Error("게임 확인 시간이 초과되었습니다.")),
@@ -60,18 +73,27 @@ export default function useYutPublication(portal: "student" | "teacher") {
             );
           }),
         ]);
-        if (active && scopeRef.current === scope)
-          setAccess({
+        if (active && scopeRef.current === scope) {
+          if (lobby) lobbyLoaded = true;
+          setAccess((previous) => ({
             scope,
-            status: lobby.enabled === true ? "open" : "closed",
-            settings: lobby.enabled === true ? lobby.settings : undefined,
-            lobby: {
-              scope: `${currentUser.uid}:${config.year}:${config.semester}`,
-              data: lobby,
-              sentAtMs,
-              receivedAtMs: Date.now(),
-            },
-          });
+            status: publication.enabled === true ? "open" : "closed",
+            settings:
+              publication.enabled === true ? publication.settings : undefined,
+            // Admission consumes this once. Later visibility checks need only
+            // publication settings, not another room read or name sync write.
+            lobby: lobby
+              ? {
+                  scope: `${currentUser.uid}:${config.year}:${config.semester}`,
+                  data: lobby,
+                  sentAtMs,
+                  receivedAtMs: Date.now(),
+                }
+              : previous.scope === scope
+                ? previous.lobby
+                : undefined,
+          }));
+        }
       } catch (error) {
         if (active && scopeRef.current === scope) {
           const denied = String(
@@ -97,7 +119,7 @@ export default function useYutPublication(portal: "student" | "teacher") {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [portal, scope, revision, menuAllowed]);
+  }, [portal, scope, revision, includeInitialLobby, menuAllowed]);
   const status: Status =
     portal === "teacher"
       ? "open"
