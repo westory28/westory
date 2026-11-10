@@ -112,7 +112,7 @@ import Navigation from ${imp("src/pages/teacher/components/TeacherSubNavigation.
 import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};
 import ${imp("src/components/common/portalPage.css")};
 import ${imp("src/components/layout/teacherLayout.css")};
-function App(){const[collapsed,setCollapsed]=useState(false),[open,setOpen]=useState(false),[view,setView]=useState(4);return <div className={'teacher-layout density-shell'+(collapsed?' is-sidebar-collapsed':'')}><aside className={"density-primary teacher-sidebar"+(collapsed?" is-collapsed":"")}><button type="button" onClick={()=>setCollapsed(!collapsed)} aria-expanded={!collapsed}>주 메뉴 {collapsed?'펼치기':'접기'}</button></aside><div className="density-main"><div className="teacher-sub-workspace teacher-sub-workspace--page"><Navigation title="평가 목차" activeLabel="모의고사" open={open} onOpenChange={setOpen}><button type="button">모의고사</button>{['통치 체제와 대외 관계','사림 세력과 정치 변화','문화의 발달과 사회 변동','왜란·호란의 발발과 영향','조선 후기의 정치 변동'].map(label=><p key={label}>{label}</p>)}</Navigation><main className="teacher-sub-content"><h1>평가 관리</h1><section className="quiz-class-analysis"><label>분석 항목<select aria-label="분석 항목" value={view} onChange={event=>setView(Number(event.target.value))}><option value="1">문항별 분석</option><option value="3">회차별 점수·수준</option><option value="4">S–P표</option></select></label><Analysis scope={{semesterId:'2026-2',unitId:'exam_prep',category:'exam_prep',examRound:'round_1',...(new URLSearchParams(location.search).has('grade')?{grade:'3',classIds:[]}:{classIds:['class_1']})}} identityKey="density" canEdit={false} reportView={view}/></section></main></div></div></div>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[collapsed,setCollapsed]=useState(false),[open,setOpen]=useState(false),[view,setView]=useState(4);return <div className={'teacher-layout density-shell'+(collapsed?' is-sidebar-collapsed':'')}><aside className={"density-primary teacher-sidebar"+(collapsed?" is-collapsed":"")}><button type="button" onClick={()=>setCollapsed(!collapsed)} aria-expanded={!collapsed}>주 메뉴 {collapsed?'펼치기':'접기'}</button></aside><div className="density-main"><div className="teacher-sub-workspace teacher-sub-workspace--page"><Navigation title="평가 목차" activeLabel="모의고사" open={open} onOpenChange={setOpen}><button type="button">모의고사</button>{['통치 체제와 대외 관계','사림 세력과 정치 변화','문화의 발달과 사회 변동','왜란·호란의 발발과 영향','조선 후기의 정치 변동'].map(label=><p key={label}>{label}</p>)}</Navigation><main className="teacher-sub-content"><h1>평가 관리</h1><section className="quiz-class-analysis"><label>분석 항목<select aria-label="분석 항목" value={view} onChange={event=>setView(Number(event.target.value))}><option value="0">전체 분포</option><option value="1">문항별 분석</option><option value="3">회차별 점수·수준</option><option value="4">S–P표</option></select></label><Analysis scope={{semesterId:'2026-2',unitId:'exam_prep',category:'exam_prep',examRound:'round_1',...(new URLSearchParams(location.search).has('grade')?{grade:'3',classIds:[]}:{classIds:['class_1']})}} identityKey="density" canEdit={false} reportView={view}/></section></main></div></div></div>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
@@ -126,6 +126,14 @@ const bundle = await build({
     {
       name: "read-only-fixture",
       setup(plugin) {
+        plugin.onResolve({ filter: /\/useQuizClassUpdates$/ }, () => ({
+          path: "live-updates",
+          namespace: "fixture-live",
+        }));
+        plugin.onLoad({ filter: /.*/, namespace: "fixture-live" }, () => ({
+          contents: "export const useQuizClassUpdates=()=>{};",
+          loader: "ts",
+        }));
         plugin.onResolve(
           {
             filter:
@@ -286,11 +294,68 @@ try {
     "Existing InfoHelp keeps its default i icon",
   );
   await defaultHelp.focus();
-  await page.getByRole("tooltip").filter({ hasText: "변별도는" }).waitFor();
+  await page.getByRole("tooltip").filter({ hasText: "변별도 =" }).waitFor();
   await page.keyboard.press("Escape");
   await page.getByRole("tooltip").waitFor({ state: "hidden" });
   checks.push(
     "numeric sample details support hover, keyboard focus, click, Escape and outside dismissal without inline sample clutter",
+  );
+  await select().selectOption("0");
+  for (const width of [390, 768, 1280, 1366]) {
+    await page.setViewportSize({ width, height: 768 });
+    for (const name of ["신뢰도 계산", "측정 표준오차 계산"]) {
+      const metricHelp = page.getByRole("button", { name, exact: true });
+      await metricHelp.scrollIntoViewIfNeeded();
+      const placement = await metricHelp.evaluate((button) => {
+        const label = button.closest(".qaa-metric-label");
+        if (!label) return null;
+        const range = document.createRange();
+        range.selectNodeContents(label.firstChild);
+        const text = range.getBoundingClientRect();
+        const icon = button.getBoundingClientRect();
+        return {
+          gap: icon.left - text.right,
+          centerOffset: Math.abs(
+            icon.y + icon.height / 2 - text.y - text.height / 2,
+          ),
+          width: label.clientWidth,
+          scrollWidth: label.scrollWidth,
+        };
+      });
+      assert.ok(placement, `${name} belongs to its metric label`);
+      assert.ok(
+        placement.gap >= 0 && placement.gap <= 8,
+        `${name} stays adjacent at ${width}px`,
+      );
+      assert.ok(
+        placement.centerOffset < 5,
+        `${name} aligns with its label at ${width}px`,
+      );
+      assert.ok(placement.scrollWidth <= placement.width + 1);
+      await metricHelp.focus();
+      const popup = page.getByRole("tooltip");
+      await popup.waitFor();
+      assert.ok((await popup.getByRole("listitem").count()) >= 5);
+      assert.match(await popup.textContent(), /의미와 활용/);
+      assert.match(await popup.textContent(), /계산 기준/);
+      const bounds = await popup.boundingBox();
+      assert.ok(bounds.x >= 15 && bounds.x + bounds.width <= width - 15);
+      assert.ok(bounds.y >= 15 && bounds.y + bounds.height <= 753);
+      await page.screenshot({
+        path: path.join(evidence, `${width}-${name}-help.png`),
+      });
+      await page.keyboard.press("Escape");
+      await popup.waitFor({ state: "hidden" });
+      await page.mouse.move(0, 0);
+    }
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    );
+  }
+  checks.push(
+    "reliability and SEM help stay beside their labels with readable bullet lists and bounded popovers at 390/768/1280/1366px",
   );
   const touch = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -313,6 +378,21 @@ try {
     .waitFor();
   const touchBox = await touchHelp.boundingBox();
   assert.ok(touchBox.width >= 44 && touchBox.height >= 44);
+  await touchPage
+    .getByRole("heading", { name: "평가 관리", exact: true })
+    .tap();
+  await touchPage.getByRole("tooltip").waitFor({ state: "hidden" });
+  await touchPage
+    .getByRole("combobox", { name: "분석 항목", exact: true })
+    .selectOption("0");
+  const metricTouch = touchPage.getByRole("button", {
+    name: "측정 표준오차 계산",
+    exact: true,
+  });
+  await metricTouch.tap();
+  await touchPage.getByRole("tooltip").filter({ hasText: "√(1−α)" }).waitFor();
+  const metricTouchBox = await metricTouch.boundingBox();
+  assert.ok(metricTouchBox.width >= 44 && metricTouchBox.height >= 44);
   await touchPage
     .getByRole("heading", { name: "평가 관리", exact: true })
     .tap();

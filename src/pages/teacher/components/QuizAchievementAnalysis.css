@@ -196,6 +196,12 @@
   margin-left: 8px;
   color: var(--ws-text-strong, #111827);
 }
+.qaa-metric-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
 .qaa-table-scroll {
   margin: 16px 0 24px;
   max-width: 100%;
@@ -517,6 +523,9 @@
   outline-offset: 2px;
 }
 @media (max-width: 767px) {
+  .qaa-inline-report .qaa-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .qaa-inline-report .qaa-report-heading > label {
     flex-basis: 100%;
   }
