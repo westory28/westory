@@ -242,6 +242,8 @@ const Header: React.FC<{
             return canReadPoints(userData, currentUser?.email || "");
           if (item.url === "/teacher/exam")
             return canManageSettings(userData, currentUser?.email || "");
+          if (item.url === "/teacher/gongsinmoongo")
+            return canAccessTeacherPath(item.url, userData, currentUser?.email);
           return false;
         })
       : baseMenuItems;
@@ -391,8 +393,9 @@ const Header: React.FC<{
         return { ...item, resolvedChildren };
       })
     : [];
-  const teacherSidebarGroups: TeacherSidebarGroup[] = resolvedTeacherMenus.map(
-    (item) => {
+  const teacherSidebarGroups: TeacherSidebarGroup[] = resolvedTeacherMenus
+    .filter((item) => item.url !== "/teacher/gongsinmoongo")
+    .map((item) => {
       const children = item.resolvedChildren.filter(
         (child) =>
           !getShopTab(child.resolvedUrl) && child.resolvedUrl !== dictionaryUrl,
@@ -419,8 +422,7 @@ const Header: React.FC<{
               },
             ],
       };
-    },
-  );
+    });
   if (
     useTeacherSidebar &&
     canAccessTeacherPath("/teacher/schedule", userData, currentUser?.email)
@@ -481,6 +483,23 @@ const Header: React.FC<{
         name: panel.name,
         resolvedUrl: `${dictionaryUrl}?panel=${panel.id}`,
       })),
+    });
+  const gongsinmoongoMenu = resolvedTeacherMenus.find(
+    (item) => item.url === "/teacher/gongsinmoongo",
+  );
+  if (gongsinmoongoMenu)
+    teacherSidebarGroups.push({
+      id: "gongsinmoongo",
+      name: gongsinmoongoMenu.name,
+      icon: "question",
+      secondary: true,
+      directUrl: "/teacher/gongsinmoongo",
+      children: [
+        {
+          name: gongsinmoongoMenu.name,
+          resolvedUrl: "/teacher/gongsinmoongo",
+        },
+      ],
     });
 
   const studentIcons: Record<string, TeacherIconName> = {

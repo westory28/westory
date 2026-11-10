@@ -11,7 +11,7 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
@@ -19,6 +19,7 @@ import { InlineLoading, PageLoading } from "./components/common/LoadingState";
 import { SensitiveOperationController } from "./components/common/SensitiveOperationController";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
+import { getDefaultTeacherRoute, isDeveloperUser } from "./lib/permissions";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
 const StudentWeplay = lazyWithRetry(loadStudentWeplay, "student-weplay");
@@ -99,6 +100,10 @@ const Settings = lazyWithRetry(
   () => import("./pages/teacher/Settings"),
   "settings",
 );
+const ManageGongsinmoongo = lazyWithRetry(
+  () => import("./pages/teacher/ManageGongsinmoongo"),
+  "manage-gongsinmoongo-draft",
+);
 const ManageSchedule = lazyWithRetry(
   () => import("./pages/teacher/ManageSchedule"),
   "manage-schedule",
@@ -170,6 +175,18 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
 const RouteContentFallback: React.FC = () => (
   <InlineLoading className="min-h-[12rem] items-center" />
 );
+
+const GongsinmoongoRoute: React.FC = () => {
+  const { currentUser, userData } = useAuth();
+  if (!isDeveloperUser(currentUser?.email))
+    return (
+      <Navigate
+        to={getDefaultTeacherRoute(userData, currentUser?.email)}
+        replace
+      />
+    );
+  return <ManageGongsinmoongo />;
+};
 
 const renderWithLayout = (children: React.ReactNode, _message?: string) => (
   <AppDialogProvider>
@@ -363,6 +380,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <Settings />,
                     "설정 화면을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/teacher/gongsinmoongo"
+                  element={renderWithLayout(
+                    <GongsinmoongoRoute />,
+                    "공神문고 초안을 준비하는 중입니다.",
                   )}
                 />
                 <Route

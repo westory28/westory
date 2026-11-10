@@ -13,6 +13,7 @@ export type TeacherIconName =
   | "notice"
   | "shop"
   | "dictionary"
+  | "question"
   | "settings"
   | "sliders"
   | "history"
@@ -79,6 +80,12 @@ const paths: Record<Exclude<TeacherIconName, "wis">, React.ReactNode> = {
   dictionary: (
     <>
       <path d="M12 5C9 3 5 3 2 4v16c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-1-10 1Zm0 0v16M6 8h3m-3 4h3m6-4h3m-3 4h3" />
+    </>
+  ),
+  question: (
+    <>
+      <path d="M20 15a3 3 0 0 1-3 3H9l-5 3V6a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3Z" />
+      <path d="M9.5 8a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 3M12 14h.01" />
     </>
   ),
   settings: (

@@ -137,6 +137,7 @@ export const isArchiveUnavailableRoute = (pathname: string) =>
   [
     "/teacher/students",
     "/teacher/settings",
+    "/teacher/gongsinmoongo",
     "/teacher/lesson/history-dictionary",
     "/teacher/lesson/source-archive",
     "/developer-log",

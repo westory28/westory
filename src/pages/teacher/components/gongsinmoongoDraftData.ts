@@ -13,11 +13,11 @@ export const DRAFT_SOURCES = [
   {
     id: "mock",
     label: "모의고사",
-    title: "조선 전기 · 7번",
-    detail: "모의고사 · 복습 문항",
-    flow: "제출·해설 공개 → 오답 복습 → 문항 질문",
+    title: "모의고사 1회 · 7번",
+    detail: "모의고사 · 오답 노트",
+    flow: "오답 노트 → 이 문항 질문하기 → 개별 답변",
     restriction:
-      "시험 중에는 질문을 받지 않고, 개인 답안·점수는 공개하지 않습니다.",
+      "제출한 모의고사의 오답 노트에서만 질문합니다. 시험 중에는 질문을 받지 않습니다.",
   },
   {
     id: "formative",
@@ -51,6 +51,7 @@ export interface DraftQuestion {
   studentId: string;
   studentLabel: string;
   source: DraftSourceId;
+  origin?: "wrong-note";
   question: string;
   reply: string;
   publicQuestion: string;
@@ -86,6 +87,7 @@ export const createDraftQuestions = (): DraftQuestion[] => [
     studentId: "preview-student-b",
     studentLabel: "예시 학생 B",
     source: "mock",
+    origin: "wrong-note",
     question:
       "7번에서 교린 관계를 묻는다는 건 알겠는데, 자료의 어떤 부분을 봐야 하나요?",
     reply:

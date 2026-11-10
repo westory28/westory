@@ -107,7 +107,7 @@ export default function StudentHistoryDictionaryController() {
       const rect = launcher.getBoundingClientRect();
       setMenuAnchor({
         bottom: document.documentElement.clientHeight - rect.top + 12,
-        right: document.documentElement.clientWidth - rect.right,
+        right: document.documentElement.clientWidth - rect.right + 4,
       });
     };
     const dismissOutside = (event: Event) => {
@@ -156,6 +156,9 @@ export default function StudentHistoryDictionaryController() {
 
   return (
     <>
+      {menuOpen && (
+        <div className="student-learning-tools-scrim" aria-hidden="true" />
+      )}
       <button
         ref={buttonRef}
         data-history-dictionary-launcher="true"
@@ -251,18 +254,20 @@ export default function StudentHistoryDictionaryController() {
               setOpen(true);
             }}
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              aria-hidden="true"
-            >
-              <path d="M12 20V6m0 0C9 3 5 3 3 4v14c3-1 6 0 9 2 3-2 6-3 9-2V4c-2-1-6-1-9 2Z" />
-            </svg>
-            <span>{title}</span>
+            <span className="student-learning-tools-label">{title}</span>
+            <span className="student-learning-tools-icon">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                aria-hidden="true"
+              >
+                <path d="M12 20V6m0 0C9 3 5 3 3 4v14c3-1 6 0 9 2 3-2 6-3 9-2V4c-2-1-6-1-9 2Z" />
+              </svg>
+            </span>
           </button>
         </div>
       )}

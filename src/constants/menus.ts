@@ -152,6 +152,11 @@ export const MENUS: MenuConfig = {
       url: "/teacher/students",
       icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
     },
+    {
+      name: "공神문고",
+      url: "/teacher/gongsinmoongo",
+      icon: "M20 15a3 3 0 01-3 3H9l-5 3V6a3 3 0 013-3h10a3 3 0 013 3v9M9.5 8a2.5 2.5 0 015 0c0 2-2.5 2-2.5 3M12 14h.01",
+    },
   ],
 };
 

@@ -134,6 +134,11 @@ export const canAccessTeacherPath = (
   userData?: Partial<UserData> | null,
   email?: string | null,
 ) => {
+  if (
+    pathname === "/teacher/gongsinmoongo" ||
+    pathname.startsWith("/teacher/gongsinmoongo/")
+  )
+    return isDeveloperUser(email);
   if (pathname.startsWith("/teacher/settings"))
     return canManageSettings(userData, email);
   if (pathname.startsWith("/teacher/dashboard"))

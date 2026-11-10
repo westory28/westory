@@ -1,14 +1,25 @@
+.student-learning-tools-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 79;
+  background: rgb(17 24 39 / 16%);
+  pointer-events: none;
+}
+
 .student-learning-tools-menu {
   position: fixed;
   z-index: 80;
-  display: grid;
-  width: 192px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  width: max-content;
   max-width: calc(100vw - 32px);
-  padding: 4px;
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 12px;
-  background: var(--ws-surface, #fff);
-  box-shadow: var(--shadow-md, 0 14px 28px rgb(15 23 42 / 10%));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  animation: student-learning-tools-rise 150ms ease-out;
 }
 
 [data-launcher-obscured] + .student-learning-tools-menu {
@@ -18,29 +29,63 @@
 .student-learning-tools-menu button {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 16px;
   width: 100%;
   min-height: 48px;
-  padding: 8px 12px;
+  padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9999px;
   background: transparent;
   color: var(--ws-text-strong, #111827);
   font: inherit;
-  text-align: left;
+  text-align: right;
   cursor: pointer;
 }
 
-.student-learning-tools-menu button svg {
-  flex-shrink: 0;
-  color: var(--ws-primary, #2563eb);
+.student-learning-tools-label {
+  max-width: calc(100vw - 128px);
+  overflow-wrap: anywhere;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgb(255 255 255 / 80%);
 }
 
-.student-learning-tools-menu button:hover {
+.student-learning-tools-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 9999px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary, #2563eb);
+  box-shadow: var(--shadow-md, 0 14px 28px rgb(15 23 42 / 10%));
+}
+
+.student-learning-tools-menu button:hover .student-learning-tools-icon {
   background: var(--ws-primary-soft, #eff6ff);
 }
 
 .student-learning-tools-menu button:focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);
-  outline-offset: -2px;
+  outline-offset: 4px;
+}
+
+@keyframes student-learning-tools-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-learning-tools-menu {
+    animation: none;
+  }
 }
