@@ -259,7 +259,12 @@
       ],
       "cleanup": {
         "minArea": 32
-      }
+      },
+      "sideTuck": [
+        0.67,
+        0.96,
+        0.8
+      ]
     },
     {
       "id": "hair-curtain",
@@ -340,7 +345,12 @@
       ],
       "cleanup": {
         "minArea": 32
-      }
+      },
+      "sideTuck": [
+        0.66,
+        0.93,
+        0.82
+      ]
     },
     {
       "id": "hair-long",
@@ -367,7 +377,12 @@
       ],
       "cleanup": {
         "minArea": 32
-      }
+      },
+      "sideTuck": [
+        0.5,
+        0.74,
+        0.85
+      ]
     },
     {
       "id": "hair-crop",
@@ -454,7 +469,12 @@
           7,
           16
         ]
-      }
+      },
+      "sideTuck": [
+        0.5,
+        0.74,
+        0.9
+      ]
     },
     {
       "id": "hair-half-up",
@@ -481,7 +501,12 @@
       ],
       "cleanup": {
         "minArea": 32
-      }
+      },
+      "sideTuck": [
+        0.55,
+        0.78,
+        0.85
+      ]
     },
     {
       "id": "plain-shoe-art",

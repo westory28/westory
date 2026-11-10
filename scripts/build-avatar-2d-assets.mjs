@@ -289,6 +289,55 @@ function taperRows(data, width, height, scales) {
   }
   return result;
 }
+// Sweep the lower side locks toward the outside while preserving the original
+// tapered tips and line art. The upper fringe and outer silhouette stay fixed.
+function tuckHairTips(data, width, height, placement) {
+  assert(
+    Array.isArray(placement) &&
+      placement.length === 3 &&
+      placement.every(Number.isFinite),
+  );
+  const [start, end, scaleAtEnd] = placement;
+  assert(start >= 0 && end > start && end <= 1);
+  assert(scaleAtEnd > 0 && scaleAtEnd <= 1);
+  const result = Buffer.alloc(data.length);
+  for (let y = 0; y < height; y++) {
+    const progress = Math.max(
+      0,
+      Math.min(1, (y / Math.max(1, height - 1) - start) / (end - start)),
+    );
+    const eased = progress * progress * (3 - 2 * progress);
+    const scale = 1 - (1 - scaleAtEnd) * eased;
+    for (let x = 0; x < width; x++) {
+      const leftHalf = x < width / 2;
+      const sourceX = leftHalf
+        ? x / scale
+        : width - 1 - (width - 1 - x) / scale;
+      if (
+        sourceX < 0 ||
+        sourceX > width - 1 ||
+        (leftHalf ? sourceX >= width / 2 : sourceX < width / 2)
+      )
+        continue;
+      const left = Math.floor(sourceX),
+        right = Math.min(width - 1, left + 1),
+        mix = sourceX - left;
+      const a = (y * width + left) * 4,
+        b = (y * width + right) * 4,
+        dest = (y * width + x) * 4;
+      const alpha = data[a + 3] * (1 - mix) + data[b + 3] * mix;
+      result[dest + 3] = Math.round(alpha);
+      if (alpha)
+        for (let c = 0; c < 3; c++)
+          result[dest + c] = Math.round(
+            (data[a + c] * data[a + 3] * (1 - mix) +
+              data[b + c] * data[b + 3] * mix) /
+              alpha,
+          );
+    }
+  }
+  return result;
+}
 function rgb(hex) {
   assert(/^#[0-9a-f]{6}$/i.test(hex), `Invalid color ${hex}`);
   return [1, 3, 5].map(
@@ -411,6 +460,7 @@ async function writeLayer(id, data, width, height, layer, source) {
     variants,
     sourceColor,
     rowScale,
+    sideTuck,
     tintMask,
     skinRegions,
     skinPolygons,
@@ -541,6 +591,8 @@ for (const cell of spec.cells) {
   delete layer.align;
   if (cell.rowScale)
     pixels = taperRows(pixels, bounds.width, bounds.height, cell.rowScale);
+  if (cell.sideTuck)
+    pixels = tuckHairTips(pixels, bounds.width, bounds.height, cell.sideTuck);
   if (cell.skinRegions !== undefined) {
     assert(Array.isArray(cell.skinRegions), `${cell.id}: skin regions`);
     for (const region of cell.skinRegions) {

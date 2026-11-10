@@ -1,6 +1,6 @@
 {
-  "compilerSha256": "c585b3e7e95bc560a898e65c3f2db00c762653c2ee5c10b4dec816d052ff9ecd",
-  "registrySha256": "104a7997fb8ed072c24f6cf77e0c880ca53864a454b412aa2c542ed3650ec896",
+  "compilerSha256": "6efa36ce763c9f56bb7d42597cfae0eb8cc55d44a93050294ec339883fe30bcc",
+  "registrySha256": "42d2c18452c77640ff532e7c84d579757d069585b2922884e8dbd86f8fa27100",
   "manifestSha256": "7db3449a38bf7d8ce59531993fd2f205c5e00ceccdc7e8077529bf90c69354f6",
   "sourceHashes": {
     "body": {
@@ -183,8 +183,8 @@
     {
       "id": "hair-bob",
       "file": "layers/hair-bob.webp",
-      "sha256": "317a6cc25875ef7052b9adcc34959969ce217aaa98919bcac7d3243a8e8dcdeb",
-      "rawSha256": "9aa7044c59d72cea5fcfc109e7d5cf60f1bf7e898cf3957d5a3f15014a45bd9f",
+      "sha256": "8a0ee74555d303f653c083cf7c451d4672c2cb1bdfd77397e605ed3180042337",
+      "rawSha256": "e8cb1fcbc16485be009c58dfa4d7bd0bce73aa55e3f767ef23c4e5ae5b5f8b6a",
       "width": 377,
       "height": 293,
       "encoding": "lossless-v1",
@@ -258,8 +258,8 @@
     {
       "id": "hair-wave",
       "file": "layers/hair-wave.webp",
-      "sha256": "6bb6fab92bb94071ca2a162faddd17219f38e2156a5cd05eb0d40b513356a38f",
-      "rawSha256": "c3ab905995eefe15119b5f5fe3e99507f4bc33c758037e9c8f47494930efb715",
+      "sha256": "9b1a1d60c0080edfa2c551e8ece56f344f89171c15954f2c091b555fbbe923e1",
+      "rawSha256": "a68fe16c054e733339d2702ed85f9c874b2d25b33be84e18d743d22ee7d345e2",
       "width": 384,
       "height": 306,
       "encoding": "lossless-v1",
@@ -283,8 +283,8 @@
     {
       "id": "hair-long",
       "file": "layers/hair-long.webp",
-      "sha256": "a9d6f205d7f6f8f27e43370912a28ad4581bd5c370d91a0a1a6eb1066d395eff",
-      "rawSha256": "e63dd6c4f2fe4c2aa990ac98f7813ea8f5f7435e6aabab83d7a20a99f60ff0b5",
+      "sha256": "22f0d59c765edbe0ff7a2810966b62739b883babb3b3192de8dbd6cc523c52d8",
+      "rawSha256": "29da14ba2d4a95a9afb6852f928312898f9a29db906a71671bb6ad211f1bd036",
       "width": 413,
       "height": 350,
       "encoding": "lossless-v1",
@@ -358,8 +358,8 @@
     {
       "id": "hair-twin-tail-tint-mask",
       "file": "layers/hair-twin-tail-tint-mask.webp",
-      "sha256": "a5aeb09ee8fa99adb7831fd7e718e25cc23ce3d0caef8f861eec027d878cc7bc",
-      "rawSha256": "3c82c8251e5d79dd8ae04d8725631010c5ae1e24130df9acde5143c100f001f2",
+      "sha256": "d406320241cb12258047a1c33723a3cf09bd22710bf8ef0c3633e0109aa68000",
+      "rawSha256": "dc9c80a1ce7286e0b067e66937451cfbdfed02a611136cd74a7c0a7a8126c637",
       "width": 471,
       "height": 310,
       "encoding": "lossless-v1",
@@ -390,8 +390,8 @@
     {
       "id": "hair-twin-tail",
       "file": "layers/hair-twin-tail.webp",
-      "sha256": "ca5a121b63c616e88f20947c63a74f56be0a746da5d8ee756344b538c0cd0cd6",
-      "rawSha256": "0e4af53d9f3b3c0a39d28d8047461e04b1743fd0ec452a37926e0ee026252fb7",
+      "sha256": "bd130e4f6e3f086b99b617e57284b39036569e65658302a6a0314598526c7036",
+      "rawSha256": "724bf1c0757c56054b77c719aa23124ff8509810056491281fa7c38312900d25",
       "width": 471,
       "height": 310,
       "encoding": "lossless-v1",
@@ -415,8 +415,8 @@
     {
       "id": "hair-half-up",
       "file": "layers/hair-half-up.webp",
-      "sha256": "62a218504d78bfbdffa8e36e360cf7e404e41aceb5794088e6590bc1c4ff7334",
-      "rawSha256": "688c90a42f321e3ccea8c0e696e046298c43562fd522d137668c81a2d1dbbd1a",
+      "sha256": "9503b6b15d330f9412a0f7418713ec6cbd0d6308ed7a527325b36b1e31472519",
+      "rawSha256": "539ac01609a5e983c5f5f0a02631343b5e6dafa33073217fb0be10faa9ba52a1",
       "width": 341,
       "height": 345,
       "encoding": "lossless-v1",

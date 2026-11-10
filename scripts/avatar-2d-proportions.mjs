@@ -73,6 +73,16 @@ export function applyAvatarProportions(spec) {
   };
   for (const [name, rect] of Object.entries(hairRects))
     set(`hair-${name}`, rect);
+  // Preserve the authored fringe and pointed ends, sweeping only the lower
+  // side locks away from the mouth. Each haircut has its own cheek baseline.
+  for (const [name, placement] of Object.entries({
+    bob: [0.67, 0.96, 0.8],
+    wave: [0.66, 0.93, 0.82],
+    long: [0.5, 0.74, 0.85],
+    "twin-tail": [0.5, 0.74, 0.9],
+    "half-up": [0.55, 0.78, 0.85],
+  }))
+    cell(`hair-${name}`).sideTuck = placement;
   set("glasses-round", [0.345, 0.238, 0.31, 0.09]);
   set("headphones", [0.245, 0.055, 0.51, 0.32]);
   set("star-clip", [0.62, 0.155, 0.085, 0.06]);
