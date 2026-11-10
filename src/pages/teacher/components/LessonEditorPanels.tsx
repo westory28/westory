@@ -51,8 +51,6 @@ type LessonTreePanelProps = {
   onOpenRootModal: () => void;
   onSaveTree: () => void;
   renderTreeNode: (node: LessonTreeNode, level: number) => React.ReactNode;
-  corePointOverview?: LessonCorePointOverview | null;
-  onRetryCorePointOverview?: () => void;
 };
 
 type LessonEditorHeaderProps = {
@@ -104,6 +102,9 @@ type LessonBodyEditorProps = {
 type LessonPdfTeacherTool = "pan" | "ocr" | "box" | "exam" | "footnote";
 
 type LessonPdfSectionProps = {
+  corePointOverview?: LessonCorePointOverview | null;
+  onRetryCorePointOverview?: () => void;
+  onOpenCorePointOverview?: () => void;
   pdfBusy: boolean;
   selectedPdfFile: File | null;
   teacherPdfSource?: File | string;
@@ -274,8 +275,6 @@ export function LessonTreePanel({
   onOpenRootModal,
   onSaveTree,
   renderTreeNode,
-  corePointOverview,
-  onRetryCorePointOverview,
 }: LessonTreePanelProps) {
   return (
     <TeacherSubNavigation
@@ -284,52 +283,22 @@ export function LessonTreePanel({
       open={sidebarOpen}
       onOpenChange={onSidebarOpenChange}
       actions={
-        canEdit || corePointOverview ? (
-          <div className="flex w-full flex-col gap-3">
-            {canEdit && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={onOpenRootModal}
-                  className="min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
-                >
-                  새 묶음
-                </button>
-                <button
-                  type="button"
-                  onClick={onSaveTree}
-                  className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700"
-                >
-                  트리 저장
-                </button>
-              </div>
-            )}
-            {corePointOverview && (
-              <div
-                className="flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-slate-600"
-                aria-live="polite"
-              >
-                <span>공개 자료 핵심포인트</span>
-                {corePointOverview.status === "ready" ? (
-                  <strong className="font-bold tabular-nums text-blue-700">
-                    총 {corePointOverview.total.toLocaleString("ko-KR")}개
-                  </strong>
-                ) : corePointOverview.status === "loading" ? (
-                  <span>확인 중…</span>
-                ) : (
-                  <>
-                    <span className="text-rose-700">확인 실패</span>
-                    <button
-                      type="button"
-                      onClick={onRetryCorePointOverview}
-                      className="min-h-11 min-w-11 rounded px-2 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
-                    >
-                      다시 확인
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+        canEdit ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onOpenRootModal}
+              className="min-h-10 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white"
+            >
+              새 묶음
+            </button>
+            <button
+              type="button"
+              onClick={onSaveTree}
+              className="min-h-10 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700"
+            >
+              트리 저장
+            </button>
           </div>
         ) : undefined
       }
@@ -938,6 +907,9 @@ export function LessonBodyEditor({
 }
 
 export function LessonPdfSection({
+  corePointOverview,
+  onRetryCorePointOverview,
+  onOpenCorePointOverview,
   pdfBusy,
   selectedPdfFile,
   teacherPdfSource,
@@ -1063,6 +1035,10 @@ export function LessonPdfSection({
     (blankEditorMode === "draft" && !!draftBlank) ||
     (blankEditorMode === "existing" && !!activeBlank);
   const isLibraryPanelOpen = activeFloatingPanel === "library";
+  React.useEffect(() => {
+    if (isLibraryPanelOpen && activeLibraryTab === "exam")
+      onOpenCorePointOverview?.();
+  }, [isLibraryPanelOpen, activeLibraryTab, onOpenCorePointOverview]);
   React.useEffect(() => {
     if (isLibraryPanelOpen)
       libraryCloseRef.current?.focus({ preventScroll: true });
@@ -1534,12 +1510,37 @@ export function LessonPdfSection({
                       시험 {worksheetExamHighlights.length}
                     </button>
                   </div>
+                  {activeLibraryTab === "exam" && corePointOverview && (
+                    <div
+                      className="mt-3 flex min-w-0 flex-wrap items-center gap-x-2 text-sm text-slate-600"
+                      aria-live="polite"
+                    >
+                      <span>공개 자료 핵심포인트</span>
+                      {corePointOverview.status === "ready" ? (
+                        <strong className="font-bold tabular-nums text-blue-700">
+                          총 {corePointOverview.total.toLocaleString("ko-KR")}개
+                        </strong>
+                      ) : corePointOverview.status === "loading" ? (
+                        <span>확인 중…</span>
+                      ) : (
+                        <>
+                          <span className="text-rose-700">확인 실패</span>
+                          <button
+                            type="button"
+                            onClick={onRetryCorePointOverview}
+                            className="min-h-11 min-w-11 rounded px-2 font-semibold text-blue-700 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                          >
+                            다시 확인
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
                     <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                      전체{" "}
-                      {sortedBlanks.length +
-                        footnotes.length +
-                        worksheetExamHighlights.length}
+                      {activeLibraryTab === "exam"
+                        ? `이 자료 ${worksheetExamHighlights.length}개`
+                        : `전체 ${sortedBlanks.length + footnotes.length + worksheetExamHighlights.length}`}
                     </span>
                     {teacherCurrentPage != null && (
                       <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">

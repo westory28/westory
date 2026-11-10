@@ -737,9 +737,18 @@ console.log(
   const store = makeStore({ [scopePath]: [lesson("A", 100), lesson("B", 90)] });
   const app = harness(store);
   app.render();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, null);
+  assert.equal(app.find("LessonTreePanel").corePointOverview, undefined);
   await app.settle();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 70);
+  assert.equal(app.corePointReads.length, 0, "Unopened exam list does not load totals");
+  assert.equal(app.find("LessonPdfSection").corePointOverview, null);
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, null);
+  await app.settle();
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
+  await app.settle();
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 70);
   assert.equal(
     JSON.stringify(app.corePointReads),
     JSON.stringify([{ year: "2026", semester: "2", view: "core-points" }]),
@@ -754,7 +763,7 @@ console.log(
   app.find("LessonEditorHeader").onToggleVisible(false);
   app.render();
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.total,
+    app.find("LessonPdfSection").corePointOverview.total,
     70,
     "Unsaved visibility does not change the published total",
   );
@@ -765,7 +774,7 @@ console.log(
   app.find("LessonEditorHeader").onSave();
   await app.settle();
   assert.equal(app.corePointReads.length, 2);
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 64);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 64);
   app.find("LessonEditorHeader").onLessonTitleChange("제목만 수정");
   app.render();
   app.find("LessonEditorHeader").onSave();
@@ -785,7 +794,7 @@ console.log(
     2,
     "Failed save preserves published counts without a redundant read",
   );
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 64);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 64);
 }
 {
   const highlight = {
@@ -804,6 +813,9 @@ console.log(
   const initial = deferred();
   app.setCorePointRead(() => initial.promise);
   app.render();
+  await app.settle();
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
   await app.settle();
   assert.equal(app.corePointReads.length, 1);
   app.find("LessonPdfSection").onDeleteExamHighlight("point");
@@ -825,14 +837,14 @@ console.log(
     2,
     "Successful point save supersedes an older in-flight count read",
   );
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 69);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 69);
   initial.resolve({
     scopedLessons: [{ unitId: "A", corePointCount: 70 }],
     legacyLessons: [],
   });
   await app.settle();
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.total,
+    app.find("LessonPdfSection").corePointOverview.total,
     69,
     "A pre-save response cannot restore the old count",
   );
@@ -844,16 +856,19 @@ console.log(
   });
   app.render();
   await app.settle();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.status, "error");
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
+  await app.settle();
+  assert.equal(app.find("LessonPdfSection").corePointOverview.status, "error");
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.total,
+    app.find("LessonPdfSection").corePointOverview.total,
     null,
     "Failure must never be presented as zero",
   );
   const retry = deferred();
   app.setCorePointRead(() => retry.promise);
-  app.find("LessonTreePanel").onRetryCorePointOverview();
-  app.find("LessonTreePanel").onRetryCorePointOverview();
+  app.find("LessonPdfSection").onRetryCorePointOverview();
+  app.find("LessonPdfSection").onRetryCorePointOverview();
   await app.settle();
   assert.equal(
     app.corePointReads.length,
@@ -863,7 +878,7 @@ console.log(
   retry.resolve({ scopedLessons: [], legacyLessons: [] });
   await app.settle();
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.total,
+    app.find("LessonPdfSection").corePointOverview.total,
     0,
     "A successful empty response can report zero",
   );
@@ -871,10 +886,10 @@ console.log(
     scopedLessons: [{ unitId: "A" }],
     legacyLessons: [],
   }));
-  app.find("LessonTreePanel").onRetryCorePointOverview();
+  app.find("LessonPdfSection").onRetryCorePointOverview();
   await app.settle();
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.status,
+    app.find("LessonPdfSection").corePointOverview.status,
     "error",
     "Old/deformed server response must not silently become zero",
   );
@@ -885,24 +900,27 @@ console.log(
   app.setCorePointRead(() => previous.promise);
   app.render();
   await app.settle();
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
+  await app.settle();
   app.authState.config = { year: "2027", semester: "1" };
   app.setCorePointRead(async () => ({
     scopedLessons: [{ unitId: "A", corePointCount: 12 }],
     legacyLessons: [{ unitId: "legacy", corePointCount: 3 }],
   }));
   app.rerender();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, null);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, null);
   await app.settle();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 15);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 15);
   previous.resolve({
     scopedLessons: [{ unitId: "A", corePointCount: 70 }],
     legacyLessons: [],
   });
   await app.settle();
-  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 15);
+  assert.equal(app.find("LessonPdfSection").corePointOverview.total, 15);
   const nextAccount = deferred();
   app.setCorePointRead(() => nextAccount.promise);
-  app.find("LessonTreePanel").onRetryCorePointOverview();
+  app.find("LessonPdfSection").onRetryCorePointOverview();
   await app.settle();
   app.auth.currentUser = { uid: "another-teacher" };
   app.authState.currentUser = app.auth.currentUser;
@@ -915,7 +933,7 @@ console.log(
   });
   await app.settle();
   assert.equal(
-    app.find("LessonTreePanel").corePointOverview.total,
+    app.find("LessonPdfSection").corePointOverview.total,
     0,
     "A previous account response is discarded",
   );
@@ -926,15 +944,18 @@ console.log(
   });
   app.render();
   await app.settle();
+  app.find("LessonPdfSection").onOpenCorePointOverview();
+  app.rerender();
+  await app.settle();
   assert.equal(
     app.corePointReads.length,
     0,
     "Static archives never create a callable session",
   );
-  assert.equal(app.find("LessonTreePanel").corePointOverview, null);
+  assert.equal(app.find("LessonPdfSection").corePointOverview, null);
 }
 console.log(
-  "PASS teacher core-point totals, compact reads, save refresh, no draft/title/selection reload, error/retry/empty states and account/semester race protection",
+  "PASS teacher exam-list core-point totals, no initial/tree query, compact reads, save refresh, no draft/title/selection reload, error/retry/empty states and account/semester race protection",
 );
 
 {

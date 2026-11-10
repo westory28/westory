@@ -615,12 +615,18 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
 const ManageLesson: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const { showToast } = useAppToast();
+  const [corePointOverviewRequested, setCorePointOverviewRequested] =
+    useState(false);
+  const openCorePointOverview = useCallback(
+    () => setCorePointOverviewRequested(true),
+    [],
+  );
   const { overview: corePointOverview, refresh: refreshCorePointOverview } =
     useLessonCorePointOverview({
       uid: currentUser?.uid,
       year: config?.year,
       semester: config?.semester,
-      enabled: !isSemesterArchive,
+      enabled: !isSemesterArchive && corePointOverviewRequested,
     });
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -3489,8 +3495,6 @@ const ManageLesson: React.FC = () => {
         canEdit={canEdit}
         onOpenRootModal={() => openModal("root")}
         onSaveTree={() => void saveTree(treeData, false)}
-        corePointOverview={corePointOverview}
-        onRetryCorePointOverview={() => void refreshCorePointOverview()}
         renderTreeNode={(node, level) => (
           <TreeCard key={node.id} node={node} level={level} />
         )}
@@ -3553,6 +3557,11 @@ const ManageLesson: React.FC = () => {
                   {editorTab === "pdf" && (
                     <div className="space-y-4">
                       <LessonPdfSection
+                        corePointOverview={corePointOverview}
+                        onOpenCorePointOverview={openCorePointOverview}
+                        onRetryCorePointOverview={() =>
+                          void refreshCorePointOverview()
+                        }
                         pdfBusy={pdfBusy}
                         selectedPdfFile={selectedPdfFile}
                         teacherPdfSource={teacherPdfSource}
