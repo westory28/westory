@@ -41,17 +41,14 @@ const getAllExpandedIndexes = (items: TreeItem[]) =>
 const examScenes = [
   {
     src: chosiScene,
-    place: "고을의 시험장",
     alt: "고을의 시험장에서 유생들이 한지에 붓과 먹으로 답안을 쓰는 초시 장면",
   },
   {
     src: boksiScene,
-    place: "한성의 시험장",
     alt: "한성의 시험장에서 시험관 아래 유생들이 한지에 붓으로 답안을 쓰는 복시 장면",
   },
   {
     src: jeonsiScene,
-    place: "국왕 앞, 궁궐 전정",
     alt: "곤룡포와 익선관을 갖춘 국왕을 향해 앉아 붓으로 답안을 쓰는 전시의 상징 장면",
   },
 ];
@@ -465,11 +462,6 @@ const QuizIndex: React.FC = () => {
                   </svg>
                 </button>
               </div>
-              <figcaption>
-                {getMockExamRoundNumber(selected.round) <= 3
-                  ? selectedScene.place
-                  : "과거 시험장"}
-              </figcaption>
             </figure>
             <div className="student-exam-lobby__entry">
               {mockOverviewError && selected.visible ? (

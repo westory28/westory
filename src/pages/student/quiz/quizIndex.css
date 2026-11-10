@@ -121,7 +121,7 @@
   content: "";
   position: absolute;
   z-index: -2;
-  inset: 16% 4% 32px;
+  inset: 16% 4% 8px;
   border: 1px solid var(--ws-border-blue, #dbeafe);
   border-radius: 12px;
   background: var(--ws-border-blue, #dbeafe);
@@ -130,7 +130,7 @@
   content: "";
   position: absolute;
   z-index: -1;
-  bottom: 24px;
+  bottom: 0;
   left: 12%;
   width: 76%;
   height: 16px;
@@ -156,12 +156,6 @@
   height: auto;
   aspect-ratio: 4 / 3;
   object-fit: contain;
-}
-.student-exam-lobby__art figcaption {
-  margin-top: 8px;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.5;
 }
 .student-exam-lobby__detail:has(
     .student-exam-lobby__enter:enabled:focus-visible
