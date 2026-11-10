@@ -60,7 +60,7 @@ export const readStudentLessonProgressCatalog=async()=>window.corePointQa ? [win
 export const subscribeThinkCloudState=(_config,_audience,_id,success,failure)=>{
   if(mode==='retry' && window.portalDesignQa.attempts++===0) failure(Error('synthetic outage'));
   else success({thinkCloudSessions:[], thinkCloudResponses:[], thinkCloudManagedClasses:[]});
-  return ()=>{};
+  return Object.assign(()=>{}, {selectSession:()=>{}});
 };
 export const saveLessonAnswers=forbidWrite, recordLessonCorePointFind=window.corePointQa?.find ?? forbidWrite, claimLessonCorePointReward=window.corePointQa?.claim ?? forbidWrite;
 export const buildThinkCloudRewardSourceId=forbidWrite, claimPointActivityReward=forbidWrite, submitThinkCloudResponse=forbidWrite;

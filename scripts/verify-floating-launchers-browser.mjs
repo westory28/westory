@@ -34,7 +34,8 @@ const teacher=location.pathname.startsWith("/teacher");
 createRoot(document.getElementById("root")).render(<BrowserRouter>{teacher?<Teacher/>:<Student/>}</BrowserRouter>);
 `;
 const services = `
-export const useAuth=()=>({currentUser:{uid:"synthetic",email:"fixture@example.invalid"},userData:{role:"admin"}});
+const auth={currentUser:{uid:"synthetic",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{}})},userData:{role:"admin"},authGeneration:1};
+export const useAuth=()=>auth;
 export const isAdminUser=()=>true;
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const prepareTeacherPatchNoteSession=async()=>{};
@@ -101,7 +102,7 @@ const browser = await playwright.chromium.launch({
   headless: true,
 });
 try {
-  for (const width of [390, 768, 1280])
+  for (const width of [320, 390, 768, 1280, 1440])
     for (const role of ["teacher", "student"]) {
       const page = await browser.newPage({ viewport: { width, height: 844 } });
       const errors = [];
@@ -206,6 +207,20 @@ try {
           .click();
       } else {
         await launcher.click();
+        const menu = page.getByRole("menu", { name: "학습 도구" });
+        await menu.waitFor();
+        const menuBox = await menu.boundingBox();
+        const launcherBox = await launcher.boundingBox();
+        assert(menuBox.y + menuBox.height < launcherBox.y, "menu expands above launcher");
+        assert.equal(await menu.getByRole("menuitem").count(), 1, "unreleased Q&A stays hidden");
+        await page.locator("#action").click();
+        assert.equal(await menu.count(), 0, "outside click dismisses menu");
+        await launcher.click();
+        await page.keyboard.press("Escape");
+        assert.equal(await menu.count(), 0);
+        assert(await launcher.evaluate(element => document.activeElement === element));
+        await launcher.press("ArrowUp");
+        await page.getByRole("menuitem", { name: "역사 사전" }).press("Enter");
         await page.waitForFunction(() => document.querySelector("dialog").open);
         assert.equal(await launcher.isVisible(), false);
         await page.getByRole("button", { name: "역사 사전 닫기" }).click();

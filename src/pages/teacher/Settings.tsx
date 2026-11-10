@@ -12,6 +12,8 @@ import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsSemesterArchive from "./components/SettingsSemesterArchive";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { useAuth } from "../../contexts/AuthContext";
+import { isDeveloperUser } from "../../lib/permissions";
 import "./teacherSettings.css";
 
 const SettingsMyPage = lazyWithRetry(
@@ -22,6 +24,10 @@ const SettingsAvatarPricing = lazyWithRetry(
   () => import("./components/SettingsAvatarPricing"),
   "teacher-avatar-pricing",
 );
+const SettingsGongsinmoongo = lazyWithRetry(
+  () => import("./components/SettingsGongsinmoongo"),
+  "teacher-gongsinmoongo-draft",
+);
 
 const settingSections = [
   { id: "my-page", label: "마이페이지", icon: "students" },
@@ -29,6 +35,7 @@ const settingSections = [
   { id: "archive", label: "이전 학기 조회", icon: "history" },
   { id: "school", label: "학교/학년/학기", icon: "school" },
   { id: "interface", label: "인터페이스 설정", icon: "palette" },
+  { id: "gongsinmoongo", label: "공神문고 초안", icon: "bell" },
   { id: "avatar-pricing", label: "아바타 가격 관리", icon: "wis" },
   { id: "access", label: "세부 권한 관리", icon: "access" },
   { id: "notifications", label: "알림 관리", icon: "bell" },
@@ -42,6 +49,8 @@ const settingSections = [
 type SettingSection = (typeof settingSections)[number]["id"];
 
 const Settings: React.FC = () => {
+  const { currentUser } = useAuth();
+  const canPreviewGongsinmoongo = isDeveloperUser(currentUser?.email);
   const [activeTab, setActiveTab] = useState<SettingSection>("general");
   const [menuOpen, setMenuOpen] = useState(false);
   const activeSection = settingSections.find(({ id }) => id === activeTab)!;
@@ -58,19 +67,21 @@ const Settings: React.FC = () => {
         open={menuOpen}
         onOpenChange={setMenuOpen}
       >
-        {settingSections.map(({ id, label, icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={`teacher-settings-section${activeTab === id ? " is-active" : ""}`}
-            aria-current={activeTab === id ? "page" : undefined}
-            aria-controls="teacher-settings-content"
-            onClick={() => selectSection(id)}
-          >
-            <TeacherNavigationIcon name={icon} />
-            <span title={label}>{label}</span>
-          </button>
-        ))}
+        {settingSections
+          .filter(({ id }) => id !== "gongsinmoongo" || canPreviewGongsinmoongo)
+          .map(({ id, label, icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`teacher-settings-section${activeTab === id ? " is-active" : ""}`}
+              aria-current={activeTab === id ? "page" : undefined}
+              aria-controls="teacher-settings-content"
+              onClick={() => selectSection(id)}
+            >
+              <TeacherNavigationIcon name={icon} />
+              <span title={label}>{label}</span>
+            </button>
+          ))}
       </TeacherSubNavigation>
 
       <section
@@ -79,14 +90,18 @@ const Settings: React.FC = () => {
         aria-label={activeSection.label}
       >
         <h1 className="sr-only">관리자 설정 · {activeSection.label}</h1>
-        {(activeTab === "my-page" || activeTab === "avatar-pricing") && (
+        {(activeTab === "my-page" ||
+          activeTab === "avatar-pricing" ||
+          (activeTab === "gongsinmoongo" && canPreviewGongsinmoongo)) && (
           <React.Suspense
             fallback={<div role="status">화면을 불러오는 중입니다.</div>}
           >
             {activeTab === "my-page" ? (
               <SettingsMyPage />
-            ) : (
+            ) : activeTab === "avatar-pricing" ? (
               <SettingsAvatarPricing />
+            ) : (
+              <SettingsGongsinmoongo key={currentUser?.uid} />
             )}
           </React.Suspense>
         )}
