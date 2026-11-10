@@ -142,6 +142,81 @@ export interface QuizClassAchievement extends QuizClassDetail {
   mockExamScoreRows: AchievementRawRecord[];
 }
 
+interface CompressedQuizClassAchievement {
+  encoding: "gzip-base64";
+  uncompressedBytes: number;
+  payload: string;
+}
+
+const achievementDecodings = new WeakMap<
+  object,
+  Promise<QuizClassAchievement>
+>();
+function decodeAchievementResponse(
+  result: QuizClassAchievement | CompressedQuizClassAchievement,
+): Promise<QuizClassAchievement> {
+  if (!result || !Object.prototype.hasOwnProperty.call(result, "encoding"))
+    return Promise.resolve(result as QuizClassAchievement);
+  const prior = achievementDecodings.get(result);
+  if (prior) return prior;
+  const decoding = (async () => {
+    const invalid = () =>
+      new Error("분석 자료를 모두 확인하지 못했습니다. 다시 조회해 주세요.");
+    const encoded = result as CompressedQuizClassAchievement;
+    const maximum = 32 * 1024 * 1024;
+    if (
+      encoded.encoding !== "gzip-base64" ||
+      Object.keys(encoded).some(
+        (key) => !["encoding", "uncompressedBytes", "payload"].includes(key),
+      ) ||
+      !Number.isSafeInteger(encoded.uncompressedBytes) ||
+      encoded.uncompressedBytes <= 0 ||
+      encoded.uncompressedBytes > maximum ||
+      typeof encoded.payload !== "string" ||
+      !encoded.payload.length ||
+      encoded.payload.length > 8 * 1024 * 1024 ||
+      encoded.payload.length % 4 !== 0 ||
+      /[^A-Za-z0-9+/=]/.test(encoded.payload)
+    )
+      throw invalid();
+    try {
+      const binary = atob(encoded.payload);
+      const compressed = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index++)
+        compressed[index] = binary.charCodeAt(index);
+      const reader = new Blob([compressed])
+        .stream()
+        .pipeThrough(new DecompressionStream("gzip"))
+        .getReader();
+      // Bound expansion while reading, before allocating a JSON string or
+      // exposing any partial results. Gzip's checksum and exact byte count
+      // must both validate before the normal snapshot checks run.
+      const restored = new Uint8Array(encoded.uncompressedBytes);
+      let offset = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (offset + value.byteLength > restored.byteLength) throw invalid();
+          restored.set(value, offset);
+          offset += value.byteLength;
+        }
+        if (offset !== restored.byteLength) throw invalid();
+      } finally {
+        await reader.cancel().catch(() => undefined);
+        reader.releaseLock();
+      }
+      return JSON.parse(
+        new TextDecoder("utf-8", { fatal: true }).decode(restored),
+      ) as QuizClassAchievement;
+    } catch {
+      throw invalid();
+    }
+  })();
+  achievementDecodings.set(result, decoding);
+  return decoding;
+}
+
 export interface QuizClassScope {
   semesterId: string;
   unitId: string;
@@ -320,19 +395,21 @@ export const getQuizClassAchievement = (
     keyword: _keyword,
     ...analysisScope
   } = scope;
-  return read<QuizClassAchievement>(
+  return read<QuizClassAchievement | CompressedQuizClassAchievement>(
     {
       ...analysisScope,
       mode: "achievement",
+      responseEncoding: "gzip-base64",
       forceRefresh,
       live: true,
     },
     identityKey,
   )
+    .then(decodeAchievementResponse)
     .then((result) => {
       if (
-        !Array.isArray(result.mockExamScoreRows) ||
-        !Array.isArray(result.rawRows)
+        !Array.isArray(result?.mockExamScoreRows) ||
+        !Array.isArray(result?.rawRows)
       )
         throw new Error(
           "모의고사 누적 점수 자료를 확인하지 못했습니다. 다시 조회해 주세요.",

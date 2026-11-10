@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { gzipSync } from "node:zlib";
 import ts from "typescript";
 
 const { packHistoricalQuestionSnapshots } = createRequire(import.meta.url)("../functions/quizAchievementEvidence.js");
@@ -15,6 +16,11 @@ const source = ts.transpileModule(readFileSync("src/lib/quizClassAnalysis.ts", "
 }).outputText;
 vm.runInNewContext(source, {
   exports,
+  DecompressionStream,
+  Blob,
+  TextDecoder,
+  Uint8Array,
+  atob,
   require: (name) => {
     assert.equal(name, "./applicationSession");
     return {
@@ -81,6 +87,7 @@ const request = exports.getQuizClassAchievement({...gradeScope,keyword:'무시',
 assert.equal(calls.at(-1).input.grade,'3');
 assert.equal(Object.hasOwn(calls.at(-1).input,'compactEvidence'),false,'Retired evidence negotiation is removed');
 assert.equal(Object.hasOwn(calls.at(-1).input,'snapshotDictionary'),false,'Achievement keeps its existing wire contract');
+assert.equal(calls.at(-1).input.responseEncoding, 'gzip-base64', 'Only achievement opts into lossless compressed transport');
 assert.equal(Object.hasOwn(calls.at(-1).input,'keyword'),false);
 assert.equal(Object.hasOwn(calls.at(-1).input,'comparisonGrade'),false);
 resolveRequest({data:response});
@@ -160,4 +167,106 @@ for (const load of [exports.getQuizClassDetail, exports.getQuizClassAchievement]
     await assert.rejects(pending, /문항 자료|누적 점수 자료/, 'Incomplete evidence rejects the whole response');
   }
 }
-console.log('PASS class analysis client: session-only reads, concurrent deduplication, identity isolation, detail-only dictionary opt-in, real server packing round-trip, frozen/legacy inline preservation, unchanged achievement wire and explicit incomplete-evidence rejection');
+
+function gzipEnvelope(value) {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value), 'utf8');
+  return { encoding: 'gzip-base64', uncompressedBytes: bytes.length, payload: gzipSync(bytes).toString('base64') };
+}
+
+const live = { contextVersion: 'c'.repeat(64), statePath: 'quiz_class_analysis_state/2026-2', contentCursor: 4,
+  classes: [{ classId: '3-1', statePath: `quiz_class_analysis_state/2026-2/classes/${'d'.repeat(64)}`, cursor: 7 }] };
+const achievement = { ...packedDetail, mockExamScoreRows: scoreRows, live };
+const envelope = gzipEnvelope(achievement), envelopeBefore = JSON.stringify(envelope);
+const compressedCallCount = calls.length;
+const compressedFirst = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+const compressedConcurrent = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+assert.equal(calls.length, compressedCallCount + 1, 'Simultaneous achievement requests share one server read');
+resolveRequest({ data: envelope });
+const [compressedDecoded, concurrentDecoded] = await Promise.all([compressedFirst, compressedConcurrent]);
+for (const value of [compressedDecoded, concurrentDecoded]) {
+  assert.deepEqual(JSON.parse(JSON.stringify(value.rawRows.map(row => {
+    const { questionSnapshotRefs, ...raw } = row.raw;
+    return { ...row, raw };
+  }))), originalRows, 'gzip preserves zero scores, Korean text, old revisions, legacy rows and every frozen question');
+  assert.deepEqual(JSON.parse(JSON.stringify(value.mockExamScoreRows)), scoreRows);
+  assert.deepEqual(JSON.parse(JSON.stringify(value.live)), live, 'Live cursor survives compressed initial loading');
+  assert.ok(Number.isSafeInteger(value.liveKey));
+  assert.equal(value.rawRows[0].raw.questionSnapshots[1], value.rawRows[1].raw.questionSnapshots[0]);
+}
+assert.equal(JSON.stringify(envelope), envelopeBefore, 'Concurrent decoders never mutate the shared wire envelope');
+
+const compressedLater = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+assert.equal(calls.length, compressedCallCount + 2, 'A later achievement visit rechecks server authorization');
+resolveRequest({ data: envelope });
+await compressedLater;
+
+const foreignIdentity = exports.getQuizClassAchievement(gradeScope, 'teacher-b:1');
+const resolveForeign = resolveRequest;
+const ownIdentity = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+assert.equal(calls.length, compressedCallCount + 4, 'Compressed responses are never shared across accounts');
+resolveForeign({ data: envelope });
+resolveRequest({ data: envelope });
+await Promise.all([foreignIdentity, ownIdentity]);
+
+const largeAchievement = { ...achievement, rawRows: Array.from({ length: 300 }, (_, index) => ({
+  id: `large-${index}`, source: 'canonical', raw: { ...packedDetail.rawRows[0].raw,
+    studentUid: `student-${index}`, learningSnapshot: Array.from({ length: 30 }, (_, question) => ({
+      id: `question-${question}`, sourceRevision: 'old', concepts: ['원문을 생략하지 않고 보존합니다. '.repeat(25)],
+    })),
+  },
+})) };
+const largeEnvelope = gzipEnvelope(largeAchievement);
+assert.ok(largeEnvelope.uncompressedBytes > 8 * 1024 * 1024);
+assert.ok(largeEnvelope.uncompressedBytes < 32 * 1024 * 1024);
+const largeRequest = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+resolveRequest({ data: largeEnvelope });
+const largeDecoded = await largeRequest;
+assert.equal(largeDecoded.rawRows.length, 300);
+for (let index = 0; index < 300; index++) {
+  assert.deepEqual(JSON.parse(JSON.stringify(largeDecoded.rawRows[index].raw.learningSnapshot)), largeAchievement.rawRows[index].raw.learningSnapshot);
+  assert.equal(largeDecoded.rawRows[index].raw.studentUid, `student-${index}`);
+}
+
+const invalidUtf8 = Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xc3, 0x28, 0x22, 0x7d]);
+const gzipBytes = Buffer.from(envelope.payload, 'base64');
+const corruptChecksum = Buffer.from(gzipBytes);
+corruptChecksum[corruptChecksum.length - 8] ^= 0xff;
+const oversized = gzipEnvelope(Buffer.from(' '.repeat(32 * 1024 * 1024 + 1)));
+const malformedEnvelopes = [
+  { ...envelope, encoding: 'gzip' },
+  { ...envelope, encoding: null },
+  { ...envelope, payload: undefined },
+  { ...envelope, payload: null },
+  { ...envelope, payload: '' },
+  { ...envelope, payload: '!invalid!' },
+  { ...envelope, payload: 'A'.repeat(8 * 1024 * 1024 + 4) },
+  ...[undefined, null, 0, -1, 1.5, '100', 32 * 1024 * 1024 + 1].map(uncompressedBytes => ({ ...envelope, uncompressedBytes })),
+  { ...envelope, uncompressedBytes: envelope.uncompressedBytes + 1 },
+  { ...envelope, uncompressedBytes: envelope.uncompressedBytes - 1 },
+  { ...envelope, payload: gzipBytes.subarray(0, -5).toString('base64') },
+  { ...envelope, payload: corruptChecksum.toString('base64') },
+  gzipEnvelope(invalidUtf8),
+  gzipEnvelope(Buffer.from('{"unfinished":', 'utf8')),
+  gzipEnvelope([]),
+  gzipEnvelope({ ...achievement, mockExamScoreRows: null }),
+  gzipEnvelope({ ...achievement, historicalQuestionSnapshots: {} }),
+  // A forged small declaration must stop streaming expansion, before JSON parsing.
+  { ...oversized, uncompressedBytes: 32 * 1024 * 1024 },
+];
+for (const malformed of malformedEnvelopes) {
+  const countBefore = calls.length;
+  const pending = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+  resolveRequest({ data: malformed });
+  await assert.rejects(pending, undefined, 'Malformed compressed evidence rejects the entire analysis');
+  assert.equal(calls.length, countBefore + 1, 'Decode failures never trigger an automatic request or a broad fallback');
+}
+const permissionFailure = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1');
+rejectRequest(denied);
+await assert.rejects(permissionFailure, failure => failure === denied);
+const manualRetryCount = calls.length;
+const manualRetry = exports.getQuizClassAchievement(gradeScope, 'teacher-a:1', true);
+assert.equal(calls.length, manualRetryCount + 1);
+assert.equal(calls.at(-1).input.forceRefresh, true);
+resolveRequest({ data: envelope });
+assert.equal((await manualRetry).rawRows.length, originalRows.length, 'Manual retry recovers after decode and server failures');
+console.log(`PASS class analysis client: scoped concurrent reads, inline and gzip round-trips, ${largeEnvelope.uncompressedBytes} expanded bytes across 300 rows, bounded malformed-payload rejection, unchanged live cursors and manual retry.`);

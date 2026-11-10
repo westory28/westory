@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { gunzipSync } = require('node:zlib');
+const { randomBytes } = require('node:crypto');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('../quizClassAnalysisCore.cjs');
 const { normalizeQuery, createQuizClassAnalysisService, createQuizClassAnalysisHandler,
@@ -97,6 +99,20 @@ test('retired compact evidence requests require a client refresh before analysis
   }
   for (const compactEvidence of [1, 'true', null, {}, []])
     assert.throws(() => normalizeQuery({ ...achievement, compactEvidence }), error => error.code === 'invalid-argument');
+});
+
+test('gzip response encoding is explicit and restricted to achievement requests', () => {
+  const request = { ...q, mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' };
+  assert.equal(normalizeQuery({ ...request, responseEncoding: 'gzip-base64' }).responseEncoding, 'gzip-base64');
+  assert.equal(Object.hasOwn(normalizeQuery(request), 'responseEncoding'), false);
+  for (const responseEncoding of [undefined, null, false, true, '', 'gzip', 'GZIP-BASE64', {}, []])
+    assert.throws(() => normalizeQuery({ ...request, responseEncoding }), error => error.code === 'invalid-argument');
+  for (const mode of ['catalog', 'summary', 'detail'])
+    assert.throws(() => normalizeQuery({ ...request, mode, responseEncoding: 'gzip-base64' }), error => error.code === 'invalid-argument');
+  const changes = { ...request, mode: 'changes', liveMode: 'achievement', contextVersion: 'a'.repeat(64),
+    contentCursor: 0, cursors: [{ classId: 'class_a', cursor: 0 }] };
+  assert.equal(normalizeQuery(changes).mode, 'changes');
+  assert.throws(() => normalizeQuery({ ...changes, responseEncoding: 'gzip-base64' }), error => error.code === 'invalid-argument');
 });
 
 test('snapshot dictionary is an explicit boolean accepted only by detail requests', () => {
@@ -256,6 +272,98 @@ const gradeExamFixture = () => {
   return initial;
 };
 const gradeExamQuery = () => gradeQuery({ mode: 'achievement', unitId: 'exam_prep', category: 'exam_prep', examRound: 'round_1' });
+
+function decodeAchievementResponse(envelope) {
+  assert.deepEqual(Object.keys(envelope).sort(), ['encoding', 'payload', 'uncompressedBytes']);
+  assert.equal(envelope.encoding, 'gzip-base64');
+  assert.ok(Buffer.byteLength(JSON.stringify(envelope)) <= 8 * 1024 * 1024);
+  const bytes = gunzipSync(Buffer.from(envelope.payload, 'base64'), { maxOutputLength: 32 * 1024 * 1024 });
+  assert.equal(bytes.length, envelope.uncompressedBytes, 'byte count describes UTF-8, not UTF-16 character length');
+  return JSON.parse(bytes.toString('utf8'));
+}
+
+test('achievement gzip keeps the exact inline data and identical read-only query cost', async () => {
+  const initial = gradeExamFixture();
+  initial['semester_assessment_results/exam_a'].percent = 0;
+  initial['semester_assessment_results/exam_a'].questionSnapshots = [{ id: 91, question: '당시 문항 🏫', answer: '가', type: 'choice' }];
+  const plain = memory(initial), compressed = memory(initial), now = () => Date.UTC(2026, 10, 10);
+  const query = { ...gradeExamQuery(), live: true };
+  const expected = await createQuizClassAnalysisService({ db: plain.db, now }).query(query);
+  const envelope = await createQuizClassAnalysisService({ db: compressed.db, now }).query({ ...query, responseEncoding: 'gzip-base64' });
+  assert.deepEqual(decodeAchievementResponse(envelope), expected);
+  assert.deepEqual(compressed.reads, plain.reads, 'encoding adds no document reads');
+  assert.deepEqual(compressed.queries, plain.queries, 'encoding adds no queries or changes projections');
+  assert.deepEqual(compressed.bodyReads, plain.bodyReads);
+  assert.deepEqual(compressed.writes, []);
+  assert.deepEqual(plain.writes, []);
+});
+
+test('whole-grade achievement transports all 300 pupils above 8 MiB without truncating evidence', async context => {
+  const initial = gradeExamFixture();
+  for (const path of Object.keys(initial)) if (path.startsWith('semester_assessment_results/')) delete initial[path];
+  const metadata = Array.from({ length: 30 }, (_, index) => ({
+    id: String(index + 91), sourceRevision: '1', unitId: 'exam_prep', points: 3,
+    curriculumVersion: '2018-162', achievementStandardCodes: ['9역07-01'], achievementMappingSource: 'manual',
+    targetAchievementLevel: 'C', intendedDifficulty: 'medium',
+    concepts: Array.from({ length: 5 }, (_, concept) => `${concept} 역사적 맥락과 원인 결과를 비교합니다. 역사 자료의 근거를 살펴봅니다.`),
+    misconceptionTags: Object.fromEntries(Array.from({ length: 4 }, (_, choice) => [String(choice),
+      '제도와 사건의 관련성을 자료 근거로 구분합니다. 시대적 배경과 사건의 전개 과정을 함께 살펴봅니다.'])),
+  }));
+  assert.ok(metadata.every(item => Buffer.byteLength(JSON.stringify(item)) < 2048), 'fixture respects each saved metadata row bound');
+  const questionSnapshots = metadata.map(item => ({ id: item.id, question: `응시 당시 ${item.id}번 문항`,
+    type: 'choice', answer: '가', options: ['가', '나'], points: 3 }));
+  for (let index = 0; index < 300; index++) {
+    const uid = `grade-pupil-${String(index).padStart(3, '0')}`, classId = `grade-class-${Math.floor(index / 30)}`;
+    initial[`semester_classes/${classId}`] = { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: String(4 + Math.floor(index / 30)) };
+    initial[`semester_enrollments/en_${uid}`] = { semesterId: SCOPE, studentUid: uid, classId,
+      enrollmentStatus: 'ACTIVE', studentNumber: String(index % 30 + 1), snapshot: { displayName: `합성 학생 ${index}` } };
+    initial[`semester_enrollment_slots/${buildEnrollmentSlotId(SCOPE, uid)}`] = { semesterId: SCOPE, studentUid: uid, activeEnrollmentId: `en_${uid}`, status: 'ACTIVE' };
+    initial[`semester_assessment_results/grade_${index}`] = { assessmentKind: 'QUIZ', semesterId: SCOPE, studentUid: uid,
+      sourceId: 'exam_prep', category: 'exam_prep', examRound: 'round_1', attemptId: `grade_${index}`,
+      total: 30, percent: index % 101, maxPoints: 90, earnedPoints: index % 91,
+      submittedAtIso: new Date(Date.UTC(2026, 10, 10, 0, index)).toISOString(), sourceHash: 'a'.repeat(64),
+      learningSnapshot: metadata, questionSnapshots, questionSnapshotOmittedIds: [],
+      answers: Object.fromEntries(metadata.map(item => [item.id, index % 2 ? '가' : ''])),
+      answerChecks: metadata.map(item => ({ id: item.id, correct: index % 2 === 1 })),
+    };
+  }
+  const f = memory(initial), service = createQuizClassAnalysisService({ db: f.db });
+  await assert.rejects(service.query(gradeExamQuery()), error => error.details?.reason === 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
+  f.reads.length = 0; f.queries.length = 0; f.bodyReads.length = 0;
+  const envelope = await service.query({ ...gradeExamQuery(), responseEncoding: 'gzip-base64' });
+  assert.ok(envelope.uncompressedBytes > 8 * 1024 * 1024);
+  const result = decodeAchievementResponse(envelope), restored = expandSnapshotDictionary(result);
+  assert.equal(result.complete, true);
+  assert.equal(result.rawRows.length, 300);
+  assert.equal(result.mockExamScoreRows.length, 300);
+  assert.equal(new Set(result.rawRows.map(row => row.raw.studentUid)).size, 300);
+  for (const row of restored.rawRows) {
+    const original = initial[`semester_assessment_results/${row.id}`];
+    assert.deepEqual(row.raw.learningSnapshot, original.learningSnapshot);
+    assert.deepEqual(row.raw.questionSnapshots, original.questionSnapshots);
+    assert.deepEqual(row.raw.answers, original.answers);
+    assert.equal(row.raw.percent, original.percent);
+  }
+  const resultBodyReads = f.bodyReads.filter(read => read.path.startsWith('semester_assessment_results/'));
+  assert.equal(resultBodyReads.length, 300, 'every selected result body is read exactly once');
+  assert.equal(new Set(resultBodyReads.map(read => read.path)).size, 300);
+  assert.deepEqual(f.writes, []);
+  context.diagnostic(`Whole-grade response: ${envelope.uncompressedBytes} UTF-8 bytes -> ${Buffer.byteLength(JSON.stringify(envelope))} wire bytes; 300 result bodies, 0 writes.`);
+});
+
+test('achievement gzip preserves decoded and wire response bounds without returning partial data', async () => {
+  for (const [label, value] of [
+    ['expanded', '가'.repeat(Math.ceil(32 * 1024 * 1024 / 3))],
+    ['wire', randomBytes(7 * 1024 * 1024).toString('base64')],
+  ]) {
+    const f = memory(gradeExamFixture());
+    // One injected reference value isolates transport bounds from source read budgets.
+    f.data.set(`${ROOT}/curriculum/tree`, { tree: [{ id: 'size-fixture', title: value }] });
+    await assert.rejects(createQuizClassAnalysisService({ db: f.db }).query({ ...gradeExamQuery(), responseEncoding: 'gzip-base64' }),
+      error => error.code === 'resource-exhausted', `${label} overflow cannot be presented as a complete result`);
+    assert.deepEqual(f.writes, []);
+  }
+});
 
 test('whole-grade achievement shares reference reads, preserves pupil class and remains read-only', async () => {
   const f = memory(gradeExamFixture()), service = createQuizClassAnalysisService({ db: f.db });

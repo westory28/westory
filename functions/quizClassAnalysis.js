@@ -18,6 +18,7 @@ const MAX_RESULTS = 10000;
 const MAX_QUESTIONS = 5000;
 const MAX_STUDENTS = 150;
 const MAX_BYTES = 8 * 1024 * 1024;
+const MAX_ACHIEVEMENT_JSON_BYTES = MAX_BYTES * 4;
 const MAX_RESULT_PROCESSING_BYTES = MAX_BYTES * 32; // 256 MiB serialized original bodies before interning.
 const MAX_GRADE_CLASSES = 30;
 const MAX_SEARCH_MATCHES = 500;
@@ -64,7 +65,7 @@ const dataOf = snap => snap?.exists ? snap.data() : {};
 function normalizeQuery(data) {
   if (data?.mode === 'changes') {
     const { liveMode, contextVersion, contentCursor, cursors, ...base } = data;
-    if (!['summary', 'detail', 'achievement'].includes(liveMode)
+    if (Object.hasOwn(data, 'responseEncoding') || !['summary', 'detail', 'achievement'].includes(liveMode)
       || !/^[a-f0-9]{64}$/.test(contextVersion) || !Number.isSafeInteger(contentCursor) || contentCursor < 0
       || !Array.isArray(cursors) || !cursors.length || cursors.length > MAX_GRADE_CLASSES + 4
       || cursors.some(item => !item || Object.keys(item).some(key => !['classId', 'cursor'].includes(key))
@@ -74,13 +75,14 @@ function normalizeQuery(data) {
     const normalized = normalizeQuery({ ...base, mode: liveMode });
     return { ...normalized, mode: 'changes', liveMode, contextVersion, contentCursor, cursors };
   }
-  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', 'snapshotDictionary', 'live', '_session'];
+  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', 'snapshotDictionary', 'responseEncoding', 'live', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
     || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
     || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')
     || (data.compactEvidence !== undefined && typeof data.compactEvidence !== 'boolean')
     || (data.live !== undefined && typeof data.live !== 'boolean')
     || (data.compactEvidence === true && data.mode !== 'achievement')
+    || (Object.hasOwn(data, 'responseEncoding') && (data.mode !== 'achievement' || data.responseEncoding !== 'gzip-base64'))
     || (Object.hasOwn(data, 'snapshotDictionary') && (data.mode !== 'detail' || typeof data.snapshotDictionary !== 'boolean'))) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
   }
@@ -118,6 +120,7 @@ function normalizeQuery(data) {
     examRound: keyword ? '' : roundOf(data.category, data.examRound), classIds: data.classIds,
     ...(keyword ? { keyword } : {}), ...(data.grade ? { grade: data.grade } : {}),
     ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}),
+    ...(data.responseEncoding ? { responseEncoding: data.responseEncoding } : {}),
     ...(data.snapshotDictionary === true ? { snapshotDictionary: true } : {}), ...(data.live === true ? { live: true } : {}) };
 }
 
@@ -820,12 +823,24 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
         version, complete: true, mockExamScoreRows, ...(live ? { live } : {}),
         ...(input.grade ? { grade: input.grade } : {}) };
-      if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
+      // Repeated pupil metadata can exceed the wire budget even after frozen
+      // papers are interned. Negotiate lossless transport without dropping any
+      // pupils, attempts, answers, or historical originals. Older tabs retain
+      // their existing inline response contract and limit.
+      const serialized = JSON.stringify(result);
+      const uncompressedBytes = Buffer.byteLength(serialized);
+      const compressed = input.responseEncoding === 'gzip-base64';
+      if (uncompressedBytes > (compressed ? MAX_ACHIEVEMENT_JSON_BYTES : MAX_BYTES))
+        fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
+      const response = compressed ? { encoding: 'gzip-base64', uncompressedBytes,
+        payload: gzipSync(serialized).toString('base64') } : result;
+      if (compressed && Buffer.byteLength(JSON.stringify(response)) > MAX_BYTES)
+        fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
       if (live) await verifyLiveState(live, input.semesterId, selectedClasses);
       else if (await scopeRevision(input.semesterId, selectedClasses) !== version
         || (gradeRevision && (await revision(input.semesterId, '')).version !== gradeRevision.version))
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
-      return result;
+      return response;
     }
     const requestRevision = gradeRevision || (input.keyword || input.comparisonGrade ? await revision(input.semesterId, '') : null);
     const catalog = await loadCatalog({ ...input, forceRefresh: input.mode === 'catalog' && input.forceRefresh });
