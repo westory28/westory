@@ -524,9 +524,6 @@ function DraftWorkspace() {
             초안 · 학생 비공개
           </span>
         </header>
-        <div className="gongsin-draft-note">
-          예시 자료 · 이 화면에서만 변경됩니다
-        </div>
         <div className="gongsin-toolbar">
           <nav className="ws-page-tabs" aria-label="공신문고 초안 보기">
             {VIEWS.map(([id, label]) => (

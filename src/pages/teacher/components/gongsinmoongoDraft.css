@@ -66,14 +66,16 @@
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .gongsin-toolbar > .ws-page-tabs {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   margin-bottom: 0;
+  border-bottom: 0;
 }
 .gongsin-notifications {
-  position: relative;
+  position: static;
   flex: 0 0 auto;
 }
 .gongsin-notifications > button {
@@ -92,7 +94,7 @@
 }
 .gongsin-notification-list {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 8px);
   z-index: 5;
   width: min(320px, calc(100vw - 32px));
@@ -147,6 +149,10 @@
 }
 .gongsin-brand {
   color: var(--ws-primary, #2563eb);
+}
+.gongsin-draft > .ws-page-header {
+  justify-content: flex-start;
+  gap: 12px 24px;
 }
 .gongsin-private,
 .gongsin-privacy-line {
@@ -957,5 +963,22 @@
   .gongsin-public-fields {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
+  }
+}
+@media (min-width: 1280px) {
+  .gongsin-workspace > .gongsin-draft {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px 24px;
+    padding-top: 8px;
+  }
+  .gongsin-draft > .ws-page-header,
+  .gongsin-draft > .gongsin-toolbar {
+    margin-bottom: 0;
+  }
+  .gongsin-draft > :is(.gongsin-student-stage, .gongsin-operation) {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }

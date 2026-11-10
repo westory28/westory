@@ -90,23 +90,73 @@
 .gsp-perspective-toggle:hover {
   background: var(--ws-primary-soft, #eff6ff);
 }
+.gsp-perspective-compact {
+  display: none;
+}
+.is-teacher .gsp-chat-pane > .gsp-header {
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
 .gsp-teacher-actions {
   display: flex;
-  flex: 0 0 auto;
+  order: 3;
+  flex: 0 0 100%;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 12px 8px;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  padding: 0;
 }
 .gsp-teacher-actions .gsp-secondary {
   padding-inline: 12px;
   font-size: 14px !important;
 }
 .gsp-story-selected {
-  margin-left: auto;
   font-size: 12px;
   color: var(--ws-primary-text, #1e3a8a);
+}
+@media (min-width: 1280px) {
+  .is-teacher .gsp-header {
+    flex-wrap: nowrap;
+  }
+  .is-teacher .gsp-heading {
+    flex: 0 0 auto;
+  }
+  .is-teacher .gsp-heading h3 {
+    white-space: nowrap;
+  }
+  .gsp-teacher-actions {
+    order: 0;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+  }
+  .is-teacher .gsp-perspective-toggle {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .gsp-story-selected {
+    white-space: nowrap;
+  }
+}
+@media (min-width: 1280px) and (max-width: 1439px) {
+  .is-teacher .gsp-header {
+    gap: 8px;
+    padding-inline: 8px;
+  }
+  .is-teacher .gsp-heading h3 {
+    font-size: 16px;
+  }
+  .is-teacher .gsp-header > .gsp-teacher-ring {
+    width: 40px;
+    height: 40px;
+  }
+  .gsp-teacher-actions .gsp-secondary {
+    padding-inline: 8px;
+  }
+  .is-teacher .gsp-perspective-full {
+    display: none;
+  }
+  .is-teacher .gsp-perspective-compact {
+    display: inline;
+  }
 }
 .gsp-private {
   display: inline-flex;
@@ -244,6 +294,11 @@
   color: var(--ws-primary-text, #1e3a8a);
   font-size: 14px;
   font-weight: 700;
+}
+.gsp-teacher-ring > .gsp-student-profile-emoji {
+  font-size: 24px;
+  line-height: 1;
+  background: transparent;
 }
 .gsp-story-rail-copy {
   display: grid;
@@ -1074,6 +1129,19 @@
   }
   .gsp-composer {
     flex: 0 0 auto;
+  }
+  .gsp-teacher-composer .gsp-answer-target {
+    margin-bottom: 4px;
+  }
+  .gsp-teacher-composer .gsp-compose-row {
+    padding: 4px;
+  }
+  .gongsin-student-preview .gsp-teacher-composer textarea {
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    padding-block: 0;
+    resize: none;
   }
   .gsp-stories,
   .gsp-wrong-note,

@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  getDefaultProfileEmojiValue,
+  getProfileEmojiValueById,
+} from "../../../lib/profileEmojis";
+import {
   DRAFT_SOURCES,
   PREVIEW_STUDENT,
   sourceById,
@@ -397,7 +401,11 @@ export default function GongsinStudentPreview({
         <header className="gsp-header">
           {isTeacher ? (
             <span className="gsp-teacher-ring" aria-hidden="true">
-              <span>학</span>
+              <span className="gsp-student-profile-emoji">
+                {getProfileEmojiValueById(
+                  selectedTeacherQuestion?.profileEmojiId ?? "",
+                ) || getDefaultProfileEmojiValue()}
+              </span>
             </span>
           ) : (
             <button
@@ -422,13 +430,43 @@ export default function GongsinStudentPreview({
               </span>
             )}
           </div>
+          {teacher && (
+            <div className="gsp-teacher-actions">
+              <button
+                className="gsp-secondary"
+                type="button"
+                onClick={teacher.onManageRestriction}
+              >
+                질문 제한
+              </button>
+              <button
+                className="gsp-secondary"
+                type="button"
+                onClick={teacher.onEditStory}
+                disabled={!selectedTeacherQuestion?.reply}
+              >
+                공개용 문구 편집
+              </button>
+              {teacher.storySelected && (
+                <span className="gsp-story-selected">스토리 선정</span>
+              )}
+            </div>
+          )}
           {onTogglePerspective && (
             <button
               className="gsp-perspective-toggle"
               type="button"
               onClick={onTogglePerspective}
+              aria-label={isTeacher ? "학생으로 체험" : "교사로 돌아가기"}
             >
-              {isTeacher ? "학생으로 체험" : "교사로 돌아가기"}
+              <span className="gsp-perspective-full">
+                {isTeacher ? "학생으로 체험" : "교사로 돌아가기"}
+              </span>
+              {isTeacher && (
+                <span className="gsp-perspective-compact" aria-hidden="true">
+                  학생 체험
+                </span>
+              )}
             </button>
           )}
           {!isTeacher && (
@@ -495,28 +533,7 @@ export default function GongsinStudentPreview({
           )}
         </header>
 
-        {teacher ? (
-          <div className="gsp-teacher-actions">
-            <button
-              className="gsp-secondary"
-              type="button"
-              onClick={teacher.onManageRestriction}
-            >
-              질문 제한
-            </button>
-            <button
-              className="gsp-secondary"
-              type="button"
-              onClick={teacher.onEditStory}
-              disabled={!selectedTeacherQuestion?.reply}
-            >
-              공개용 문구 편집
-            </button>
-            {teacher.storySelected && (
-              <span className="gsp-story-selected">스토리 선정</span>
-            )}
-          </div>
-        ) : (
+        {!teacher && (
           <div className="gsp-navigation">
             <nav
               className="ws-page-tabs gsp-view-tabs"

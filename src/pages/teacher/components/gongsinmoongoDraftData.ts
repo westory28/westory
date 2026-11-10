@@ -50,6 +50,7 @@ export interface DraftQuestion {
   id: string;
   studentId: string;
   studentLabel: string;
+  profileEmojiId?: string;
   source: DraftSourceId;
   origin?: "wrong-note";
   question: string;
@@ -86,6 +87,7 @@ export const createDraftQuestions = (): DraftQuestion[] => [
     id: "example-2",
     studentId: "preview-student-b",
     studentLabel: "예시 학생 B",
+    profileEmojiId: "book",
     source: "mock",
     origin: "wrong-note",
     question:
@@ -112,6 +114,7 @@ export const createDraftQuestions = (): DraftQuestion[] => [
     id: "example-4",
     studentId: "preview-student-c",
     studentLabel: "예시 학생 C",
+    profileEmojiId: "soft_smile",
     source: "diagnostic",
     question: "교린이라는 말이 낯설어요. 어떤 뜻인지부터 알고 싶어요.",
     reply: "",
