@@ -50,6 +50,9 @@
   font-weight: 800;
   white-space: nowrap;
 }
+.gsm-title-line {
+  display: contents;
+}
 .gsm-status,
 .gsm-private {
   font-size: 13px;
@@ -188,7 +191,40 @@
   box-shadow: none;
 }
 .gsm-teacher .gsm-page-header {
+  flex-wrap: wrap;
+  gap: 4px 12px;
   border: 0;
+}
+.gsm-teacher .gsm-title-line {
+  display: flex;
+  flex: 0 0 100%;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.gsm-teacher .gsm-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 999px;
+  background: var(--ws-surface-subtle, #f8fafc);
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.gsm-teacher .gsm-status.is-active {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+}
+.gsm-teacher .gsm-page-header .ws-page-tabs {
+  flex: 1;
+  order: 0;
+}
+.gsm-teacher .gsm-refresh {
+  flex: none;
+  margin-left: 0;
 }
 .gsm-avatar {
   display: grid;
@@ -494,7 +530,7 @@
   grid-template-columns: 72px minmax(0, 1fr);
   align-items: start;
   gap: 12px;
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .gsm-settings-section:last-child {
@@ -665,10 +701,24 @@
 }
 @media (min-width: 1024px) {
   .teacher-layout .teacher-sub-workspace.gsm-teacher {
+    --gsm-account-sidebar-width: var(--teacher-sidebar-width, 232px);
     grid-template-columns: 320px minmax(0, 1fr);
     height: calc(100dvh - var(--teacher-account-height, 56px));
     min-height: 0;
     grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .teacher-layout.is-sidebar-collapsed .gsm-teacher {
+    --gsm-account-sidebar-width: var(--teacher-sidebar-collapsed-width, 88px);
+  }
+  .teacher-layout .gsm-teacher > .gsm-content {
+    /* Match the centered 1536px account toolbar, then stay inside logout. */
+    padding-right: calc(
+      max(
+          24px,
+          (100vw - var(--gsm-account-sidebar-width) - 1536px) / 2 + 24px
+        ) +
+        12px
+    );
   }
   .teacher-layout .gsm-teacher > .gsm-sidebar {
     width: 320px;

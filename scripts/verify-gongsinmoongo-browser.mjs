@@ -247,9 +247,13 @@ try {
       [768, 900],
       [1280, 720],
       [1440, 900],
+      [1920, 900],
     ]) {
       const page = await pageAt(`?role=${role}&ack`, width, height);
       await page.locator(".gsm-conversation .gsm-thread").first().waitFor();
+      await page.waitForFunction(
+        () => !document.querySelector(".ws-loading__logo"),
+      );
       assert.equal(
         await page.locator('.gsm-workspace button[aria-label*="알림"]').count(),
         0,
@@ -368,6 +372,53 @@ try {
       });
       requestCounts.push({ role, width, phase: "initial", ...readCounts });
       if (role === "teacher") {
+        const headingLayout = await page.evaluate(() => {
+          const rect = (selector) =>
+            document.querySelector(selector).getBoundingClientRect();
+          const title = rect(".gsm-page-header h1");
+          const badge = rect(".gsm-status");
+          const tabs = rect(".gsm-page-header .ws-page-tabs");
+          const refresh = rect(".gsm-refresh");
+          const composer = rect(".gsm-composer");
+          const logout = rect(".teacher-account-header .btn-logout");
+          const badgeStyle = getComputedStyle(
+            document.querySelector(".gsm-status"),
+          );
+          return {
+            titleBottom: title.bottom,
+            badgeBottom: badge.bottom,
+            badgeY: badge.y,
+            titleY: title.y,
+            tabsY: tabs.y,
+            refreshRight: refresh.right,
+            composerRight: composer.right,
+            logoutRight: logout.right,
+            badgeBorder: badgeStyle.borderRadius,
+            badgeBackground: badgeStyle.backgroundColor,
+          };
+        });
+        assert(
+          headingLayout.tabsY >=
+            Math.max(headingLayout.titleBottom, headingLayout.badgeBottom),
+        );
+        assert(
+          headingLayout.badgeY >= headingLayout.titleY - 1 &&
+            headingLayout.badgeBottom <= headingLayout.titleBottom + 1,
+        );
+        assert.equal(headingLayout.badgeBorder, "999px");
+        assert.notEqual(headingLayout.badgeBackground, "rgba(0, 0, 0, 0)");
+        if (width >= 1280) {
+          assert(
+            headingLayout.refreshRight <= headingLayout.logoutRight - 11,
+            "Refresh stays inside the account toolbar",
+          );
+          assert(
+            Math.abs(
+              headingLayout.composerRight - headingLayout.refreshRight,
+            ) <= 1,
+            "Composer and refresh share the right edge",
+          );
+        }
         for (const selector of [
           ".gsm-composer",
           ".gsm-compose-row",
@@ -418,6 +469,9 @@ try {
         await page
           .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
           .waitFor();
+        await page.waitForFunction(
+          () => !document.querySelector(".ws-loading__logo"),
+        );
         assert.equal(
           await page.evaluate(
             () =>
@@ -479,8 +533,35 @@ try {
       await page.close();
     }
   }
+  const collapsed = await pageAt("?role=teacher&ack", 1920, 900);
+  await collapsed.locator(".gsm-conversation .gsm-thread").first().waitFor();
+  await collapsed.waitForFunction(
+    () => !document.querySelector(".ws-loading__logo"),
+  );
+  await collapsed.evaluate(() =>
+    document
+      .querySelector(".teacher-layout")
+      .classList.add("is-sidebar-collapsed"),
+  );
+  assert(
+    await collapsed.evaluate(() => {
+      const edge = (selector) =>
+        document.querySelector(selector).getBoundingClientRect().right;
+      return (
+        edge(".gsm-refresh") <=
+          edge(".teacher-account-header .btn-logout") - 11 &&
+        Math.abs(edge(".gsm-refresh") - edge(".gsm-composer")) <= 1
+      );
+    }),
+    "Collapsed sidebar preserves the account-aligned content edge",
+  );
+  await collapsed.screenshot({
+    path: path.join(evidence, "teacher-collapsed-1920x900.png"),
+    fullPage: true,
+  });
+  await collapsed.close();
   checks.push(
-    "teacher/student responsive layout, desktop viewport, compact header, private DOM, shared gate listener, existing bell only",
+    "teacher/student responsive layout through 1920px, status badge, tabs below title, account-aligned content with expanded/collapsed sidebar, desktop viewport, private DOM, shared gate listener, existing bell only",
   );
   const student = await pageAt("?role=student");
   await acknowledge(student);
@@ -819,6 +900,11 @@ try {
       ),
       true,
     );
+    await page
+      .locator(".we-notice-images img")
+      .evaluateAll((items) =>
+        Promise.all(items.map((image) => image.decode())),
+      );
     const images = await page
       .locator(".we-notice-images img")
       .evaluateAll((items) =>

@@ -754,14 +754,18 @@ export default function GongsinmoongoWorkspace({
             teacher ? "ws-page-header gsm-page-header" : "gsm-page-header"
           }
         >
-          <h1>
-            <GongsinBrand />
-          </h1>
-          {teacher && state && loadedIdentity.current === identity && (
-            <span className="gsm-status">
-              {state.settings.enabled ? "운영 중" : "학생 비공개"}
-            </span>
-          )}
+          <div className="gsm-title-line">
+            <h1>
+              <GongsinBrand />
+            </h1>
+            {teacher && state && loadedIdentity.current === identity && (
+              <span
+                className={`gsm-status${state.settings.enabled ? " is-active" : ""}`}
+              >
+                {state.settings.enabled ? "운영 중" : "학생 비공개"}
+              </span>
+            )}
+          </div>
           <nav className="ws-page-tabs" aria-label="공부의 신문고 보기">
             <button
               aria-pressed={view === "inbox"}
