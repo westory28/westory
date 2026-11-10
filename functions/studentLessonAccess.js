@@ -17,6 +17,16 @@ const CATALOG_FIELDS = [
 // Progress totals need blanks and core-point IDs, never PDFs, OCR regions,
 // page images, processing details or footnote bodies from every lesson.
 const PROGRESS_FIELDS = [...CATALOG_FIELDS, 'contentHtml', 'worksheetBlanks', 'worksheetExamHighlights'];
+// Teacher list totals only need visibility/revision selection and highlight bounds.
+// Return counts, not worksheet content or the highlight array itself.
+const CORE_POINT_FIELDS = [
+  'unitId', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt',
+  'assignedClassIds', 'worksheetExamHighlights',
+];
+const countCorePoints = (highlights) => Array.isArray(highlights)
+  ? highlights.filter((point) => point && typeof point === 'object'
+    && Number(point.widthRatio) > 0 && Number(point.heightRatio) > 0).length
+  : 0;
 const timestampMs = (value) => {
   if (typeof value?.toMillis === 'function') return value.toMillis();
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -52,7 +62,8 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
   if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester)) {
     throw new HttpsError('invalid-argument', '학기 정보를 확인해 주세요.');
   }
-  const fields = request.data?.view === 'catalog' ? CATALOG_FIELDS
+  const corePointsOnly = request.data?.view === 'core-points';
+  const fields = corePointsOnly ? CORE_POINT_FIELDS : request.data?.view === 'catalog' ? CATALOG_FIELDS
     : request.data?.view === 'progress' ? PROGRESS_FIELDS : LESSON_FIELDS;
   const unitId = String(request.data?.unitId || '').trim();
   if (unitId.length > 200 || unitId.includes('/')) {
@@ -104,6 +115,10 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
     [scoped, legacy] = await Promise.all([readLessons(scopedPath), readLessons('lessons')]);
   }
   const result = selectVisibleLessons(scoped.docs.map((doc) => doc.data()), legacy.docs.map((doc) => doc.data()), classId);
+  if (corePointsOnly) {
+    return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,
+      lessons.map((lesson) => ({ unitId: lesson.unitId, corePointCount: countCorePoints(lesson.worksheetExamHighlights) }))]));
+  }
   return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,
     lessons.map(({ assignedClassIds, ...lesson }) => ({ ...lesson, semesterRevision }))]));
 };

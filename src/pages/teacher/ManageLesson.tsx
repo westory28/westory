@@ -85,6 +85,7 @@ import {
   type LessonEditorTab,
   type LessonTreeNode,
 } from "./components/LessonEditorPanels";
+import { useLessonCorePointOverview } from "./components/useLessonCorePointOverview";
 
 type TreeNode = LessonTreeNode;
 
@@ -614,6 +615,13 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
 const ManageLesson: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const { showToast } = useAppToast();
+  const { overview: corePointOverview, refresh: refreshCorePointOverview } =
+    useLessonCorePointOverview({
+      uid: currentUser?.uid,
+      year: config?.year,
+      semester: config?.semester,
+      enabled: !isSemesterArchive,
+    });
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeTitle, setSelectedNodeTitle] = useState("");
@@ -3201,6 +3209,15 @@ const ManageLesson: React.FC = () => {
       )
         return;
       lessonRevisionRef.current = result.contentRevision;
+      if (
+        persistedMetaVisibleToStudents !==
+          savedLessonState.isVisibleToStudents ||
+        (savedDraft &&
+          savedDraft.worksheetExamHighlights.length !==
+            savedLessonState.worksheetExamHighlights.length)
+      ) {
+        void refreshCorePointOverview(true);
+      }
       if (nextTree && result.treeRevision !== null) {
         treeRevisionRef.current = result.treeRevision;
         setTreeData(nextTree);
@@ -3472,6 +3489,8 @@ const ManageLesson: React.FC = () => {
         canEdit={canEdit}
         onOpenRootModal={() => openModal("root")}
         onSaveTree={() => void saveTree(treeData, false)}
+        corePointOverview={corePointOverview}
+        onRetryCorePointOverview={() => void refreshCorePointOverview()}
         renderTreeNode={(node, level) => (
           <TreeCard key={node.id} node={node} level={level} />
         )}

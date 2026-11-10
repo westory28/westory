@@ -309,7 +309,7 @@ const walk = (node) =>
     : node && typeof node === "object"
       ? [node, ...walk(node.props?.children)]
       : [];
-const harness = (store, { processPdfMapFile } = {}) => {
+const harness = (store, { processPdfMapFile, archive = false } = {}) => {
   const slots = [],
     effects = [],
     saves = [],
@@ -323,6 +323,12 @@ const harness = (store, { processPdfMapFile } = {}) => {
     activeSubscriptions = 0,
     scopeReads = 0;
   let scopeWait;
+  const corePointReads = [];
+  let corePointRead = async () => ({
+    scopedLessons: [{ unitId: "A", corePointCount: 70 }],
+    legacyLessons: [],
+  });
+  let saveFailure = null;
   const auth = { currentUser: { uid: "teacher" } };
   const authState = {
     currentUser: auth.currentUser,
@@ -380,6 +386,22 @@ const harness = (store, { processPdfMapFile } = {}) => {
     },
   };
   react.useCallback = (callback, deps) => react.useMemo(() => callback, deps);
+  const corePoints = compile(
+    "src/pages/teacher/components/useLessonCorePointOverview.ts",
+    {
+      react,
+      "../../../lib/firebase": { auth },
+      "../../../lib/historyDictionarySession": {
+        async getHistoryDictionaryCallable(name) {
+          assert.equal(name, "getStudentVisibleLessons");
+          return async (request) => {
+            corePointReads.push(request);
+            return { data: await corePointRead(request) };
+          };
+        },
+      },
+    },
+  );
   const browser = {
     addEventListener() {},
     removeEventListener() {},
@@ -411,7 +433,7 @@ const harness = (store, { processPdfMapFile } = {}) => {
           showToast: (value) => alerts.push(value.message || value.title),
         }),
       },
-      "../../lib/semesterArchive": { isSemesterArchive: false },
+      "../../lib/semesterArchive": { isSemesterArchive: archive },
       "../../contexts/AuthContext": { useAuth: () => authState },
       "../../lib/firebase": { db: {}, auth },
       "../../lib/lessonManagement": {
@@ -422,6 +444,7 @@ const harness = (store, { processPdfMapFile } = {}) => {
         },
         async saveLessonDocument(config, input, context) {
           saves.push({ config, input, context });
+          if (saveFailure) throw saveFailure;
           return {
             contentRevision: input.expectedRevision + 1,
             treeRevision: 4,
@@ -466,6 +489,7 @@ const harness = (store, { processPdfMapFile } = {}) => {
       "./components/LessonSourceArchivePickerModal":
         "LessonSourceArchivePickerModal",
       "./components/LessonEditorPanels": panels,
+      "./components/useLessonCorePointOverview": corePoints,
     },
     {
       window: browser,
@@ -520,6 +544,13 @@ const harness = (store, { processPdfMapFile } = {}) => {
     uploads,
     alerts,
     errors,
+    corePointReads,
+    setCorePointRead: (read) => {
+      corePointRead = read;
+    },
+    setSaveFailure: (error) => {
+      saveFailure = error;
+    },
     setScopeWait: (promise) => {
       scopeWait = promise;
     },
@@ -700,6 +731,210 @@ console.log(
 }
 console.log(
   "PASS selected-document parallel reads, dirty-state protection and stale user/semester response rejection",
+);
+
+{
+  const store = makeStore({ [scopePath]: [lesson("A", 100), lesson("B", 90)] });
+  const app = harness(store);
+  app.render();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, null);
+  await app.settle();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 70);
+  assert.equal(
+    JSON.stringify(app.corePointReads),
+    JSON.stringify([{ year: "2026", semester: "2", view: "core-points" }]),
+  );
+  app.select("B");
+  await app.settle();
+  assert.equal(
+    app.corePointReads.length,
+    1,
+    "Selection reuses the semester total",
+  );
+  app.find("LessonEditorHeader").onToggleVisible(false);
+  app.render();
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.total,
+    70,
+    "Unsaved visibility does not change the published total",
+  );
+  app.setCorePointRead(async () => ({
+    scopedLessons: [{ unitId: "A", corePointCount: 64 }],
+    legacyLessons: [],
+  }));
+  app.find("LessonEditorHeader").onSave();
+  await app.settle();
+  assert.equal(app.corePointReads.length, 2);
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 64);
+  app.find("LessonEditorHeader").onLessonTitleChange("제목만 수정");
+  app.render();
+  app.find("LessonEditorHeader").onSave();
+  await app.settle();
+  assert.equal(
+    app.corePointReads.length,
+    2,
+    "Title-only save does not reload counts",
+  );
+  app.find("LessonEditorHeader").onToggleVisible(true);
+  app.render();
+  app.setSaveFailure(new Error("Simulated save failure"));
+  app.find("LessonEditorHeader").onSave();
+  await app.settle();
+  assert.equal(
+    app.corePointReads.length,
+    2,
+    "Failed save preserves published counts without a redundant read",
+  );
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 64);
+}
+{
+  const highlight = {
+    id: "point",
+    page: 1,
+    widthRatio: 0.2,
+    heightRatio: 0.1,
+    leftRatio: 0.1,
+    topRatio: 0.1,
+  };
+  const app = harness(
+    makeStore({
+      [scopePath]: [lesson("A", 100, { worksheetExamHighlights: [highlight] })],
+    }),
+  );
+  const initial = deferred();
+  app.setCorePointRead(() => initial.promise);
+  app.render();
+  await app.settle();
+  assert.equal(app.corePointReads.length, 1);
+  app.find("LessonPdfSection").onDeleteExamHighlight("point");
+  app.render();
+  assert.equal(
+    app.corePointReads.length,
+    1,
+    "Draft highlight changes do not trigger reads",
+  );
+  app.setCorePointRead(async () => ({
+    scopedLessons: [{ unitId: "A", corePointCount: 69 }],
+    legacyLessons: [],
+  }));
+  app.find("LessonPdfSection").onSavePdf();
+  await app.settle();
+  assert.equal(app.saves.length, 1);
+  assert.equal(
+    app.corePointReads.length,
+    2,
+    "Successful point save supersedes an older in-flight count read",
+  );
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 69);
+  initial.resolve({
+    scopedLessons: [{ unitId: "A", corePointCount: 70 }],
+    legacyLessons: [],
+  });
+  await app.settle();
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.total,
+    69,
+    "A pre-save response cannot restore the old count",
+  );
+}
+{
+  const app = harness(makeStore({ [scopePath]: [lesson("A", 100)] }));
+  app.setCorePointRead(async () => {
+    throw new Error("Simulated count permission failure");
+  });
+  app.render();
+  await app.settle();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.status, "error");
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.total,
+    null,
+    "Failure must never be presented as zero",
+  );
+  const retry = deferred();
+  app.setCorePointRead(() => retry.promise);
+  app.find("LessonTreePanel").onRetryCorePointOverview();
+  app.find("LessonTreePanel").onRetryCorePointOverview();
+  await app.settle();
+  assert.equal(
+    app.corePointReads.length,
+    2,
+    "Concurrent retry requests are deduplicated",
+  );
+  retry.resolve({ scopedLessons: [], legacyLessons: [] });
+  await app.settle();
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.total,
+    0,
+    "A successful empty response can report zero",
+  );
+  app.setCorePointRead(async () => ({
+    scopedLessons: [{ unitId: "A" }],
+    legacyLessons: [],
+  }));
+  app.find("LessonTreePanel").onRetryCorePointOverview();
+  await app.settle();
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.status,
+    "error",
+    "Old/deformed server response must not silently become zero",
+  );
+}
+{
+  const app = harness(makeStore({ [scopePath]: [lesson("A", 100)] }));
+  const previous = deferred();
+  app.setCorePointRead(() => previous.promise);
+  app.render();
+  await app.settle();
+  app.authState.config = { year: "2027", semester: "1" };
+  app.setCorePointRead(async () => ({
+    scopedLessons: [{ unitId: "A", corePointCount: 12 }],
+    legacyLessons: [{ unitId: "legacy", corePointCount: 3 }],
+  }));
+  app.rerender();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, null);
+  await app.settle();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 15);
+  previous.resolve({
+    scopedLessons: [{ unitId: "A", corePointCount: 70 }],
+    legacyLessons: [],
+  });
+  await app.settle();
+  assert.equal(app.find("LessonTreePanel").corePointOverview.total, 15);
+  const nextAccount = deferred();
+  app.setCorePointRead(() => nextAccount.promise);
+  app.find("LessonTreePanel").onRetryCorePointOverview();
+  await app.settle();
+  app.auth.currentUser = { uid: "another-teacher" };
+  app.authState.currentUser = app.auth.currentUser;
+  app.setCorePointRead(async () => ({ scopedLessons: [], legacyLessons: [] }));
+  app.rerender();
+  await app.settle();
+  nextAccount.resolve({
+    scopedLessons: [{ unitId: "A", corePointCount: 99 }],
+    legacyLessons: [],
+  });
+  await app.settle();
+  assert.equal(
+    app.find("LessonTreePanel").corePointOverview.total,
+    0,
+    "A previous account response is discarded",
+  );
+}
+{
+  const app = harness(makeStore({ [scopePath]: [lesson("A", 100)] }), {
+    archive: true,
+  });
+  app.render();
+  await app.settle();
+  assert.equal(
+    app.corePointReads.length,
+    0,
+    "Static archives never create a callable session",
+  );
+  assert.equal(app.find("LessonTreePanel").corePointOverview, null);
+}
+console.log(
+  "PASS teacher core-point totals, compact reads, save refresh, no draft/title/selection reload, error/retry/empty states and account/semester race protection",
 );
 
 {
