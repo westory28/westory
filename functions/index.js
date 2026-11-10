@@ -56,6 +56,7 @@ exports.getQuizClassAnalysis = onCall(
   require('./quizClassAnalysis').createQuizClassAnalysisHandler({ db }),
 );
 Object.assign(exports, require('./quizClassAnalysis').createQuizAnalysisTriggers({ db }));
+Object.assign(exports, require('./quizQuestionCorrections').createQuizQuestionCorrectionTriggers({ db }));
 exports.getMyQuizHistory = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
   require('./studentQuizHistory').createStudentQuizHistoryHandler({ db }),

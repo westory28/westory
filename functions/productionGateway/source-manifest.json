@@ -62,7 +62,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "fce7202bf7de1078983fe2d1fab4267b324d47d384711cbad953ef47a934afd1",
+      "sha256": "2aaf3d469439aced75077daa3e45aee6929581d5373b98ec7de8aeffc55c6900",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -90,7 +90,9 @@
         "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions.",
         "2026-11-09: Project mock attempt history for state queries, hydrate only selected paper snapshots, and reuse validated semester snapshots without changing response, authorization, source or mutation contracts.",
         "2026-11-09: Atomically update shared material for existing same-round set members, preserve individual questions and frozen attempts, increment revisions to reject stale editors; verified by memory, real Firestore rollback/concurrency and browser authoring tests.",
-        "2026-11-10: Project mock START history to attempt metadata, hydrate only a resumed paper, and retain full learning history for unassigned legacy banks; preserve authorization, immutable ordinals, attempt limits, receipts, answers and deadlines."
+        "2026-11-10: Project mock START history to attempt metadata, hydrate only a resumed paper, and retain full learning history for unassigned legacy banks; preserve authorization, immutable ordinals, attempt limits, receipts, answers and deadlines.",
+        "2026-11-10: Overlap independent START enrollment, prior-round prerequisite and own-attempt reads within the same transaction snapshot; settle all reads and retain original validation/error priority, source checks, transaction retry behavior, atomic writes and frozen resume. Barrier-based synthetic verification confirms actual overlap, zero denied writes, one new-paper source read and no source read on resume.",
+        "2026-11-10: Return the server-owned effective correction overlay when an already submitted attempt is submitted again; retain immutable attempt/result provenance, ownership, semester checks and reward records."
       ]
     },
     {

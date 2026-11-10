@@ -1,7 +1,6 @@
 import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
 import { getAcceptedQuizAnswers } from "../../../lib/quizAnswerMatching";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
@@ -23,7 +22,6 @@ import {
   QuizChoiceColumnHeaders,
 } from "../../../components/common/QuizChoiceColumns";
 import QuizRequiredMark from "./QuizRequiredMark";
-import { getYearSemester } from "../../../lib/semesterScope";
 import { isMockExamCategory } from "../../../lib/mockExamRounds";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
@@ -93,13 +91,6 @@ interface MatchingPair {
   rightImage?: string | null;
 }
 
-interface QuestionCorrectionResult {
-  scannedResultCount?: number;
-  updatedResultCount?: number;
-  improvedAnswerCount?: number;
-  bonusAwardedCount?: number;
-}
-
 type QuestionType = "choice" | "ox" | "word" | "order" | "matching";
 const supportsQuestionPassage = (type: string) =>
   type === "choice" || type === "word";
@@ -159,7 +150,6 @@ const QuizBankTab: React.FC<{
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [editMetadata, setEditMetadata] = useState<QuizLearningMetadata>({});
   const editMetadataBaseline = useRef<QuizLearningMetadata>({});
-  const pendingCorrectionsRef = useRef(new Set<string>());
   const [savingEdit, setSavingEdit] = useState(false);
   const [optimizingImageCount, setOptimizingImageCount] = useState(0);
   const optimizingImage = optimizingImageCount > 0;
@@ -948,19 +938,12 @@ const QuizBankTab: React.FC<{
         hintEnabled: editHintsAllowed && editHintEnabled,
         hint: editHintsAllowed && editHintEnabled ? editHintText.trim() : "",
       };
-      const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
-      const shouldRecalculateCorrections =
-        pendingCorrectionsRef.current.has(editingQuestion.docId) ||
-        originalSnapshot.type !== payload.type ||
-        String(originalSnapshot.answer || "") !== String(payload.answer || "");
       if (String(payload.id) !== editingQuestion.docId) {
         alert(
           "문항 ID와 저장 ID가 일치하지 않아 저장할 수 없습니다. 문항 데이터 확인이 필요합니다.",
         );
         return;
       }
-      if (shouldRecalculateCorrections)
-        pendingCorrectionsRef.current.add(editingQuestion.docId);
       const persistedPayload = {
         id: payload.id,
         unitId: payload.unitId,
@@ -1015,36 +998,8 @@ const QuizBankTab: React.FC<{
         );
         return;
       }
-      if (shouldRecalculateCorrections) {
-        try {
-          const { year, semester } = getYearSemester(config);
-          const recalculateCorrections = await getHttpsCallable<
-            {
-              year: string;
-              semester: string;
-              questionDocId: string;
-              questionId: number;
-            },
-            QuestionCorrectionResult
-          >("recalculateQuizResultsAfterQuestionCorrection");
-          await recalculateCorrections({
-            year,
-            semester,
-            questionDocId: String(editingQuestion.docId),
-            questionId: Number(editingQuestion.id),
-          });
-          pendingCorrectionsRef.current.delete(editingQuestion.docId);
-        } catch (correctionError) {
-          console.error(
-            "Failed to recalculate quiz results after answer correction",
-            correctionError,
-          );
-          alert(
-            "문항은 저장되었지만 이전 방식의 응시 기록과 위스 보너스를 다시 계산하지 못했습니다. 수정 저장을 다시 눌러 주세요. 새 평가의 제출 기록은 유지됩니다.",
-          );
-          return;
-        }
-      }
+      // The source-write trigger updates compatible canonical result projections.
+      // Do not invoke the retired semester-wide legacy score/bonus recalculation.
       setQuestions((prev) =>
         prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)),
       );

@@ -59,9 +59,11 @@ function frozenWrongQuestion(raw, key, uid, semesterId, questionId) {
   const checks = canonical ? raw.answerChecks : raw.details;
   const check = (Array.isArray(checks) ? checks : []).find(item => item &&
     String(item.id ?? item.qid ?? item.questionId) === questionId);
-  if (check?.correct !== false)
+  const effective = canonical ? require('./quizQuestionCorrections').effectiveQuizResult(raw) : raw;
+  const effectiveCheck = (effective.answerChecks || []).find(item => String(item.id) === questionId);
+  if (check?.correct !== false && effectiveCheck?.correct !== false)
     fail('invalid-argument', '이 제출에서 틀린 문항만 오답노트에 작성할 수 있습니다.', 'QUIZ_REVIEW_QUESTION_INVALID');
-  const original = (Array.isArray(raw.questionSnapshots) ? raw.questionSnapshots : []).find(item => item && String(item.id) === questionId)
+  const original = (Array.isArray(effective.questionSnapshots) ? effective.questionSnapshots : []).find(item => item && String(item.id) === questionId)
     || (!canonical ? { ...check, ...(check.questionSnapshot || {}) } : null);
   // Old submissions stored the frozen question fields directly on each detail.
   // Never fill a missing original from today's mutable question bank.

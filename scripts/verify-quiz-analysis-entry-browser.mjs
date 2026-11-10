@@ -33,7 +33,12 @@ export const getDoc=async path=>{
   qa.directReads.push(path);return {exists:()=>true,data:()=>({tree})};
 };
 const forbidden=(...args)=>{qa.writes.push(args);throw new Error('Unexpected write or unscoped read');};
-export const collection=forbidden,getDocs=forbidden,limit=forbidden,onSnapshot=forbidden,orderBy=forbidden,query=forbidden,where=forbidden;
+export const collection=forbidden,getDocs=forbidden,limit=forbidden,orderBy=forbidden,query=forbidden,where=forbidden;
+const signals=new Map();
+export const onSnapshot=(path,options,next,error)=>{if(!options.includeMetadataChanges)throw new Error('Missing metadata events');signals.set(path,{next,error});next({data:()=>({sequence:qa.sequence||0}),metadata:{fromCache:false}});return()=>signals.delete(path);};
+qa.emit=()=>{qa.sequence=(qa.sequence||0)+1;for(const[path,callback]of signals)if(path.includes('/classes/'))callback.next({data:()=>({sequence:qa.sequence}),metadata:{fromCache:false}});};
+qa.signalCount=()=>signals.size;
+const liveFor=(data,selected)=>({contextVersion:'a'.repeat(64),statePath:'quiz_class_analysis_state/'+data.semesterId,contentCursor:0,classes:selected.map(c=>({classId:c.id,statePath:'quiz_class_analysis_state/'+data.semesterId+'/classes/'+String(classes.findIndex(item=>item.id===c.id)+1).repeat(64),cursor:qa.sequence||0}))});
 export const getHttpsCallable=()=>forbidden;
 export const executeLearningCommand=forbidden,executeAssessmentManagementCommand=forbidden,refreshPublishedQuizDefinitions=forbidden;
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
@@ -56,13 +61,19 @@ export const callWithApplicationSession=async(name,input)=>{
   if(data.mode==='catalog')return {data:{semesterId:data.semesterId,classes,assessments,treeData:tree,generatedAt:'2026-11-07T09:00:00Z'}};
   const selectedClasses=classes.filter(c=>data.grade?c.grade===data.grade:data.classIds.includes(c.id));
   const students=selectedClasses.flatMap(c=>[1,2].map(n=>({uid:'synthetic-'+c.id+'-'+n,name:'합성 미응시 '+n,number:String(n),classId:c.id})));
+  if(data.mode==='changes'){
+    let paper=questions.map(q=>({...q,examRound:data.examRound}));
+    let rows=attempts(data,paper,students);
+    if(qa.corrected){paper=paper.map(q=>({...q,sourceRevision:'2',contentRevision:2,targetAchievementLevel:'A',intendedDifficulty:'hard'}));rows=rows.map(row=>({...row,raw:{...row.raw,percent:100,earnedPoints:100,learningSnapshot:paper,answerChecks:paper.map(q=>({id:q.id,correct:true}))}}));}
+    return {data:{semesterId:data.semesterId,rawRows:rows,records:[],removedKeys:rows.map(row=>row.source+':'+row.id),questionUpserts:qa.corrected?paper:[],questionRemovedIds:[],mockExamScoreRows:rows.map(row=>({...row,raw:{...row.raw,cutScoreQuestions:paper}})),live:liveFor(data,selectedClasses),hasMore:false}};
+  }
   if(data.mode==='summary'){
     const rows=selectedClasses.map(c=>({classId:c.id,label:c.label,rosterCount:2,submittedCount:0,unsubmittedCount:2,scoredCount:0,averageScore:null,behaviorCounts:{suspected_guessing:0,repeated_choice:0,unflagged:0,insufficient:0,no_attempt:2},scoreHistogram:[0,20,40,60,80].map((lower,i)=>({label:'',lower,upper:i===4?101:lower+20,count:0})),questions:[],concepts:[],relearning:{repeatedStudentCount:0,wrongToCorrectCount:0,correctToWrongCount:0},generatedAt:'2026-11-07T09:00:00Z',version:'v1',complete:true,smallSample:true}));
-    return {data:{...data,classes:rows,...(data.grade?{gradeComparison:{...rows[0],grade:data.grade,classId:'grade:'+data.grade,label:data.grade+'학년 전체',rosterCount:students.length,unsubmittedCount:students.length,classCount:rows.length,respondingClassCount:0,weighting:'scored_students'}}:{}),generatedAt:'2026-11-07T09:00:00Z'}};
+    return {data:{...data,live:undefined,classes:rows,...(data.grade?{gradeComparison:{...rows[0],grade:data.grade,classId:'grade:'+data.grade,label:data.grade+'학년 전체',rosterCount:students.length,unsubmittedCount:students.length,classCount:rows.length,respondingClassCount:0,weighting:'scored_students'}}:{}),generatedAt:'2026-11-07T09:00:00Z'}};
   }
   if(data.mode==='achievement'||data.mode==='detail'){
     const paper=questions.map(q=>({...q,examRound:data.examRound,achievementStandardCodes:[data.examRound==='round_1'?'9역10-01':'9역10-02']}));
-    return {data:{semesterId:data.semesterId,...(data.grade?{grade:qa.wrongGrade?'2':data.grade}:{}),complete:true,students,rawRows:attempts(data,paper,students),questions:paper,treeData:tree,configuredClasses:selectedClasses,generatedAt:'2026-11-07T09:00:00Z',version:'v1',...(data.mode==='achievement'?{mockExamScoreRows:scoreRows(data,paper,students)}:{})}};
+    return {data:{semesterId:data.semesterId,...(data.grade?{grade:qa.wrongGrade?'2':data.grade}:{}),complete:true,students,rawRows:attempts(data,paper,students),questions:paper,treeData:tree,configuredClasses:selectedClasses,generatedAt:'2026-11-07T09:00:00Z',version:'v1',...(qa.live?{live:liveFor(data,selectedClasses)}:{}),...(data.mode==='achievement'?{mockExamScoreRows:scoreRows(data,paper,students)}:{})}};
   }
   throw new Error('Unnecessary '+data.mode+' request on achievement entry');
 };
@@ -409,6 +420,20 @@ try {
   assert.equal(await analysis().getByText('첫 제출 6명',{exact:true}).count(),0,'stale grade response never repopulates a class selection');
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
   checks.push('whole-grade achievement and student detail, six classes, class labels, explicit single request, scope rejection and delayed response isolation');
+  await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=exam_prep")}`);
+  await pending().waitFor();await assessment().selectOption('mock-2');await classSelect().selectOption('class_1');
+  await page.evaluate(()=>{window.analysisEntryQa.live=true;window.analysisEntryQa.withAttempt=false;});
+  await query().click();await analysis().getByText('첫 제출 0명',{exact:true}).waitFor();
+  await page.waitForFunction(()=>window.analysisEntryQa.signalCount()===2);
+  await page.evaluate(()=>{window.analysisEntryQa.withAttempt=true;window.analysisEntryQa.emit();});
+  await analysis().getByText('첫 제출 1명',{exact:true}).waitFor();
+  await analysis().getByText('평균 50.0',{exact:true}).waitFor();
+  await page.evaluate(()=>{window.analysisEntryQa.corrected=true;window.analysisEntryQa.emit();});
+  await analysis().getByText('평균 100.0',{exact:true}).waitFor();
+  assert.deepEqual(await modes(),['catalog','achievement','changes','changes'],'submission and correction request only deltas');
+  await classSelect().selectOption('class_2');await pending().waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.signalCount()),0,'changing class releases the old listeners');
+  checks.push('live submitted answer and correction update rendered mean 50→100 without another full query; changing class releases listeners');
   await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=unit-a&readonly=1")}`);
   await page.waitForFunction(()=>document.querySelector('[aria-label="분석할 평가"] option[value="unit-a-diagnostic"]'));
   assert.equal(await page.getByRole("button",{name:"문제 등록",exact:true}).count(),0,"read-only teachers cannot open authoring");

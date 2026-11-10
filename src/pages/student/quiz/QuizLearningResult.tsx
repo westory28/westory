@@ -18,6 +18,7 @@ interface QuizLearningResultProps {
     direction: "up" | "down" | "same";
   } | null;
   reviewItems?: QuizRelearningItem[];
+  updatedReviewItems?: QuizRelearningItem[];
   onSaveReviewNote?: (
     draft: QuizReviewNoteDraft,
     expectedRevision: number,
@@ -36,6 +37,7 @@ export default function QuizLearningResult({
   totalCount,
   comparison,
   reviewItems = [],
+  updatedReviewItems,
   onSaveReviewNote,
   onReloadReviewNotes,
   onReview,
@@ -60,6 +62,7 @@ export default function QuizLearningResult({
         {reviewing ? (
           <QuizRelearning
             items={reviewItems}
+            updatedItems={updatedReviewItems}
             reviewNotes={reviewNotes}
             onSave={
               onSaveReviewNote

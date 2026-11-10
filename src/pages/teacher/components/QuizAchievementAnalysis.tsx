@@ -28,6 +28,8 @@ import {
 } from "../../../lib/quizClassAnalysis";
 import "./QuizAchievementAnalysis.css";
 import QuizAchievementEstimates from "./QuizAchievementEstimates";
+import { useQuizClassUpdates } from "./useQuizClassUpdates";
+import { applyQuizClassChanges } from "../../../lib/quizClassLiveState";
 import {
   AnalysisSortHeader,
   sortAnalysisRows,
@@ -181,6 +183,18 @@ export default function QuizAchievementAnalysis({
       onLoadingChange?.(false);
     };
   }, [requestKey, reload, enabled, refreshVersion, onLoadingChange]);
+  useQuizClassUpdates({
+    scope,
+    identityKey,
+    mode: "achievement",
+    data,
+    enabled,
+    onChanges: (changes) =>
+      setData((current) =>
+        current ? applyQuizClassChanges(current, changes) : current,
+      ),
+    onError: (failure) => setError(quizClassAnalysisError(failure)),
+  });
   const resolveCodes = useMemo(
     () => (metadata: AchievementMetadata) => {
       if (

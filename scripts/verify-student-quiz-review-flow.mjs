@@ -27,6 +27,7 @@ const snapshots = learning.captureQuestionSnapshots(questions.map(data => ({ pat
 const presentation = learning.questionPresentation(snapshots);
 assert(presentation.every(q => !q.answer && !q.explanation));
 const stubs = `
+export const watchQuizResultCorrections=()=>()=>{};
 const params=new URLSearchParams(location.search);const category=params.get('category')||sessionStorage.getItem('qa-category')||'exam_prep';sessionStorage.setItem('qa-category',category);
 const snapshots=${JSON.stringify(snapshots)};const presentation=${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const currentUser={uid:'synthetic-pupil',email:'fixture@example.invalid',getIdTokenResult:async()=>({claims:{}})};const userData={...currentUser,name:'가상 학생',grade:3,class:1,number:1};
@@ -58,7 +59,7 @@ const entry = `import React from 'react';import{createRoot}from'react-dom/client
 const built = await build({ stdin:{contents:entry,loader:"tsx",resolveDir:root},bundle:true,write:false,metafile:true,outdir:"fixture",format:"esm",platform:"browser",jsx:"automatic",loader:{".woff2":"dataurl",".woff":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},plugins:[{name:"synthetic-server-boundaries",setup(builder){
   builder.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:"popup-stub",namespace:"popup-fixture"}));
   builder.onLoad({filter:/.*/,namespace:"popup-fixture"},()=>({contents:"export default function QuizLessonPopup(){return null}",loader:"js"}));
-  builder.onResolve({filter:/contexts\/AuthContext$|(?:^|\/)(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|firebase|applicationSession)$/},()=>({path:"fixture-api",namespace:"fixture"}));
+  builder.onResolve({filter:/contexts\/AuthContext$|(?:^|\/)(semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|firebase|applicationSession)$/},()=>({path:"fixture-api",namespace:"fixture"}));
   builder.onLoad({filter:/.*/,namespace:"fixture"},()=>({contents:stubs,loader:"js"}));
 }}] });
 assert(!Object.keys(built.metafile.inputs).some(name=>/node_modules[\\/](@firebase|firebase)[\\/]/.test(name)),"Firebase must not enter this fixture");

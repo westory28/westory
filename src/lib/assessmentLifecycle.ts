@@ -2,6 +2,7 @@ import { getHistoryDictionaryCallable as getHttpsCallable } from "./historyDicti
 import { auth } from "./firebase";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { getIdTokenResult } from "firebase/auth";
+import { withRequestDeadline } from "./requestDeadline";
 import type { AssessmentTelemetrySnapshot } from "./assessmentTelemetry";
 import type { AssessmentLearningQuestion } from "./assessmentLearning";
 import type { MockExamPassageSet } from "./mockExamMaterials";
@@ -149,7 +150,8 @@ const rememberPendingCommandId = (key: string, commandId: string) => {
   }
 };
 
-const forgetPendingCommandId = (key: string) => {
+const forgetPendingCommandId = (key: string, expectedId: string) => {
+  if (readPendingCommandId(key) !== expectedId) return;
   pendingCommandIds.delete(key);
   try {
     window.sessionStorage.removeItem(key);
@@ -238,7 +240,7 @@ export const executeStudentAssessmentCommand = async <T>(
         { code: "functions/unknown" },
       );
     }
-    forgetPendingCommandId(key);
+    forgetPendingCommandId(key, commandId);
     if (commandType === "submitAssessmentAttempt" && response.data.replayed) {
       return { ...response.data.result, replayedSubmission: true };
     }
@@ -246,7 +248,7 @@ export const executeStudentAssessmentCommand = async <T>(
   } catch (error) {
     if (receivedSessionResponse(error)) throw error;
     if (!isAmbiguous(error)) {
-      forgetPendingCommandId(key);
+      forgetPendingCommandId(key, commandId);
       throw error;
     }
     const getStatus = await getHttpsCallable<
@@ -268,7 +270,7 @@ export const executeStudentAssessmentCommand = async <T>(
         status.data.commandType === commandType &&
         status.data.result != null
       ) {
-        forgetPendingCommandId(key);
+        forgetPendingCommandId(key, commandId);
         if (commandType === "submitAssessmentAttempt") {
           return { ...status.data.result, replayedSubmission: true };
         }
@@ -317,8 +319,10 @@ export const getAssessmentState = async (input: {
   prepareAssets?: boolean;
 }) => {
   const owner = auth.currentUser;
-  const assertOwner = await captureAssessmentOwner();
-  await assertOwner();
+  if (!owner)
+    throw Object.assign(new Error("로그인 상태를 확인해 주세요."), {
+      code: "functions/unauthenticated",
+    });
   const key = stableStringify(input);
   const reads =
     pendingStateReads.get(owner!) ||
@@ -326,16 +330,21 @@ export const getAssessmentState = async (input: {
   pendingStateReads.set(owner!, reads);
   const pending = reads.get(key);
   if (pending) return pending;
-  const request = (async () => {
-    const callable = await getHttpsCallable<
-      typeof input,
-      AssessmentStateResponse
-    >("getAssessmentState");
-    await assertOwner();
-    const response = await callable(input);
-    await assertOwner();
-    return response.data;
-  })();
+  const request = withRequestDeadline(
+    (async () => {
+      const assertOwner = await captureAssessmentOwner();
+      const callable = await getHttpsCallable<
+        typeof input,
+        AssessmentStateResponse
+      >("getAssessmentState");
+      await assertOwner();
+      const response = await callable(input);
+      await assertOwner();
+      return response.data;
+    })(),
+    15_000,
+    "응시 상태 확인이 지연되고 있습니다. 다시 시도해 주세요.",
+  );
   reads.set(key, request);
   try {
     return await request;
@@ -347,11 +356,110 @@ export const getAssessmentState = async (input: {
 export const startAssessmentAttempt = (input: {
   definitionId: string;
   preparedSourceHash?: string;
-}) =>
-  executeStudentAssessmentCommand<AssessmentAttemptState>(
-    "startAssessmentAttempt",
-    input,
+}) => {
+  const ownerCheck = captureAssessmentOwner();
+  const request = ownerCheck.then(() =>
+    executeStudentAssessmentCommand<AssessmentAttemptState>(
+      "startAssessmentAttempt",
+      input,
+    ),
   );
+  // A committed START can have a delayed/lost HTTP response. Read its exact
+  // receipt at most three times while pending, then restore its live attempt.
+  // Never infer commitment from a different active attempt or replay a write.
+  let stopRecovery = () => {};
+  const recovered = new Promise<AssessmentAttemptState>((resolve, reject) => {
+    let settled = false;
+    let recovering = false;
+    let recoveryCommandId: string | null = null;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    stopRecovery = () => {
+      settled = true;
+      timers.forEach(clearTimeout);
+    };
+    const finish = (value: AssessmentAttemptState) => {
+      if (settled) return;
+      stopRecovery();
+      resolve(value);
+    };
+    const recover = async () => {
+      if (settled || recovering) return;
+      recovering = true;
+      try {
+        const assertOwner = await ownerCheck;
+        await assertOwner();
+        if (settled) return;
+        const key = pendingKey("startAssessmentAttempt", input);
+        const commandId = recoveryCommandId || readPendingCommandId(key);
+        if (!commandId) return;
+        recoveryCommandId = commandId;
+        const getStatus = await getHttpsCallable<
+          { commandId: string; commandType: string },
+          {
+            commandId: string;
+            commandType: string;
+            status: string;
+            result?: AssessmentAttemptState;
+          }
+        >("getCommandStatus");
+        await assertOwner();
+        if (settled) return;
+        const response = await withRequestDeadline(
+          getStatus({ commandId, commandType: "startAssessmentAttempt" }),
+          7_000,
+          "시험 시작 확인이 지연되고 있습니다.",
+        );
+        await assertOwner();
+        if (
+          settled ||
+          response.data?.status !== "SUCCEEDED" ||
+          response.data.commandId !== commandId ||
+          response.data.commandType !== "startAssessmentAttempt" ||
+          !response.data.result?.attemptId
+        )
+          return;
+        const state = await getAssessmentState({
+          attemptId: response.data.result.attemptId,
+        });
+        await assertOwner();
+        if (
+          settled ||
+          !state.attempt ||
+          state.attempt.attemptId !== response.data.result.attemptId ||
+          state.attempt.definitionId !== input.definitionId ||
+          !["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(
+            state.attempt.status,
+          ) ||
+          !["READY", "RECOVERABLE"].includes(state.status)
+        )
+          return;
+        forgetPendingCommandId(key, commandId);
+        finish({
+          ...state.attempt,
+          resumed: true,
+          serverNowIso: state.serverNowIso,
+        });
+      } catch {
+        // The original request still owns its outcome and stable receipt ID.
+      } finally {
+        recovering = false;
+      }
+    };
+    for (const delay of [8_000, 16_000, 24_000]) {
+      timers.push(setTimeout(recover, delay));
+    }
+    request.then(finish, (error) => {
+      if (settled) return;
+      stopRecovery();
+      reject(error);
+    });
+  });
+  return withRequestDeadline(
+    recovered,
+    40_000,
+    "시험 시작 확인이 지연되고 있습니다. 다시 시도하면 저장된 응시를 확인합니다.",
+  ).finally(stopRecovery);
+};
 
 export const saveAssessmentProgress = async (input: {
   attemptId: string;
@@ -380,11 +488,11 @@ export const saveAssessmentProgress = async (input: {
     await assertOwner();
     const saved = await callable({ ...input, saveId });
     await assertAssessmentResponseOwner(assertOwner);
-    forgetPendingCommandId(key);
+    forgetPendingCommandId(key, saveId);
     return saved.data;
   } catch (error) {
     if (!isAmbiguous(error) && !receivedSessionResponse(error))
-      forgetPendingCommandId(key);
+      forgetPendingCommandId(key, saveId);
     throw error;
   }
 };

@@ -1,5 +1,9 @@
 import { callWithApplicationSession } from "./applicationSession";
-import type { QuizAnalysisStudent, QuizBehaviorCategory } from "./quizAnalysis";
+import type {
+  QuizAnalysisStudent,
+  QuizAnalysisRecord,
+  QuizBehaviorCategory,
+} from "./quizAnalysis";
 import type { AchievementRawRecord } from "./achievementAnalysis";
 import type {
   Question,
@@ -54,6 +58,8 @@ export interface QuizClassSummary {
     wrongCount: number;
     respondentCount: number;
     correctRate: number | null;
+    revisionExcludedCount?: number;
+    revisionUnknownCount?: number;
     reviewLessonId?: string;
   }>;
   concepts: Array<{
@@ -75,6 +81,15 @@ export interface QuizClassSummary {
 }
 
 export interface QuizClassSummaryResponse {
+  live?: QuizClassLiveCursor;
+  liveKey?: number;
+  liveData?: {
+    students: QuizAnalysisStudent[];
+    questions: Question[];
+    records: QuizAnalysisRecord[];
+    classes: Array<{ id: string; label: string; grade: string }>;
+    summaries?: QuizClassSummary[];
+  };
   semesterId: string;
   grade?: string;
   unitId: string;
@@ -101,6 +116,8 @@ export interface QuizClassSearch {
 }
 
 export interface QuizClassDetail {
+  live?: QuizClassLiveCursor;
+  liveKey?: number;
   semesterId?: string;
   grade?: string;
   keyword?: string;
@@ -135,6 +152,59 @@ export interface QuizClassScope {
   grade?: string;
   keyword?: string;
   comparisonGrade?: string;
+}
+
+export interface QuizClassLiveCursor {
+  contextVersion: string;
+  statePath: string;
+  contentCursor: number;
+  rosterGeneration?: string;
+  classes: Array<{ classId: string; statePath: string; cursor: number }>;
+}
+
+export interface QuizClassChanges {
+  semesterId: string;
+  rawRows: QuizClassDetail["rawRows"];
+  records: QuizAnalysisRecord[];
+  removedKeys: string[];
+  questionUpserts: Question[];
+  questionRemovedIds: string[];
+  mockExamScoreRows: AchievementRawRecord[];
+  live: QuizClassLiveCursor;
+  hasMore: boolean;
+}
+
+let liveKey = 0;
+const liveResponses = new WeakMap<object, object>();
+function identifyLive<T extends { live?: QuizClassLiveCursor }>(result: T) {
+  if (!result.live) return result;
+  const prior = liveResponses.get(result);
+  if (prior) return prior as T & { liveKey: number };
+  const identified = { ...result, liveKey: ++liveKey };
+  liveResponses.set(result, identified);
+  return identified;
+}
+
+export function getQuizClassChanges(
+  scope: QuizClassScope,
+  identityKey: string,
+  liveMode: "summary" | "detail" | "achievement",
+  live: QuizClassLiveCursor,
+) {
+  const { comparisonGrade, keyword, ...base } = scope;
+  return read<QuizClassChanges>(
+    {
+      ...base,
+      ...(liveMode === "summary" && comparisonGrade ? { comparisonGrade } : {}),
+      ...(liveMode !== "achievement" && keyword ? { keyword } : {}),
+      mode: "changes",
+      liveMode,
+      contextVersion: live.contextVersion,
+      contentCursor: live.contentCursor,
+      cursors: live.classes.map(({ classId, cursor }) => ({ classId, cursor })),
+    },
+    identityKey,
+  );
 }
 
 // Only concurrent requests are shared. No student records, names or session
@@ -215,9 +285,9 @@ export const getQuizClassSummary = (
   forceRefresh = false,
 ) =>
   read<QuizClassSummaryResponse>(
-    { ...scope, mode: "summary", forceRefresh },
+    { ...scope, mode: "summary", forceRefresh, live: !scope.keyword },
     identityKey,
-  );
+  ).then(identifyLive);
 
 export const getQuizClassDetail = (
   scope: QuizClassScope,
@@ -227,9 +297,17 @@ export const getQuizClassDetail = (
   // Firebase encodes undefined as null. Summary-only fields must be absent.
   const { comparisonGrade: _comparisonGrade, ...detailScope } = scope;
   return read<QuizClassDetail>(
-    { ...detailScope, mode: "detail", forceRefresh, snapshotDictionary: true },
+    {
+      ...detailScope,
+      mode: "detail",
+      forceRefresh,
+      snapshotDictionary: true,
+      live: !scope.keyword,
+    },
     identityKey,
-  ).then(restoreHistoricalQuestionSnapshots);
+  )
+    .then(restoreHistoricalQuestionSnapshots)
+    .then(identifyLive);
 };
 
 export const getQuizClassAchievement = (
@@ -247,18 +325,21 @@ export const getQuizClassAchievement = (
       ...analysisScope,
       mode: "achievement",
       forceRefresh,
+      live: true,
     },
     identityKey,
-  ).then((result) => {
-    if (
-      !Array.isArray(result.mockExamScoreRows) ||
-      !Array.isArray(result.rawRows)
-    )
-      throw new Error(
-        "모의고사 누적 점수 자료를 확인하지 못했습니다. 다시 조회해 주세요.",
-      );
-    return restoreHistoricalQuestionSnapshots(result);
-  });
+  )
+    .then((result) => {
+      if (
+        !Array.isArray(result.mockExamScoreRows) ||
+        !Array.isArray(result.rawRows)
+      )
+        throw new Error(
+          "모의고사 누적 점수 자료를 확인하지 못했습니다. 다시 조회해 주세요.",
+        );
+      return restoreHistoricalQuestionSnapshots(result);
+    })
+    .then(identifyLive);
 };
 
 export function quizClassAnalysisError(error: unknown) {

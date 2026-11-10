@@ -11,6 +11,7 @@ import {
 export interface QuizRelearningItem extends AssessmentQuestionSnapshot {
   submittedAnswer: string;
   submittedAnswerAvailable?: boolean;
+  submittedCorrect?: boolean;
   concepts: string[];
   reviewLessonId?: string;
 }

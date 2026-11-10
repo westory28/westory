@@ -14,6 +14,7 @@ const achievementProfiles = require("../achievementProfiles");
 const mockMaterials = require("./mockExamMaterials");
 const mockProgress = require("./mockExamProgress");
 const { createHistoryClassroomSync } = require("./historyClassroomSync");
+const { effectiveQuizResult } = require("../quizQuestionCorrections");
 
 const REGION = "asia-northeast3";
 const ASSESSMENT_SCHEMA_VERSION = 1;
@@ -1350,20 +1351,31 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (definition.assessmentKind === "QUIZ" && !(definition.assignedClassIds || []).length) {
         fail("permission-denied", "This assessment has no assigned class.", "ASSESSMENT_CLASS_NOT_ASSIGNED");
       }
-      const enrollment = await assertActiveEnrollment(transaction, definition.semesterId, actor.actorUid, definition.assignedClassIds || []);
-      await assertMockExamPrerequisite(transaction, definition, actor.actorUid);
-      if (
+      const studentAssigned = !(
         Array.isArray(definition.assignedStudentUids)
         && definition.assignedStudentUids.length > 0
         && !definition.assignedStudentUids.includes(actor.actorUid)
-      ) {
+      );
+      const projectPrior = definition.assessmentKind === "QUIZ" && definition.category === "exam_prep";
+      // Independent reads share this transaction snapshot. Settle them all before
+      // validating in the original order; denied starts never create an attempt,
+      // and resume still avoids loading the question bank or old paper bodies.
+      const [enrollmentRead, prerequisiteRead, priorRead] = await Promise.allSettled([
+        assertActiveEnrollment(transaction, definition.semesterId, actor.actorUid, definition.assignedClassIds || []),
+        assertMockExamPrerequisite(transaction, definition, actor.actorUid),
+        studentAssigned ? transaction.query(ATTEMPT_COLLECTION, { filters: [
+          { field: "definitionId", operator: "==", value: payload.definitionId },
+          { field: "studentUid", operator: "==", value: actor.actorUid },
+        ], ...(projectPrior ? { fieldMask: [...MOCK_ATTEMPT_STATE_FIELDS, "attemptOrdinal"] } : {}) }) : Promise.resolve([]),
+      ]);
+      if (enrollmentRead.status === "rejected") throw enrollmentRead.reason;
+      const enrollment = enrollmentRead.value;
+      if (prerequisiteRead.status === "rejected") throw prerequisiteRead.reason;
+      if (!studentAssigned) {
         fail("permission-denied", "This assessment is not assigned to the student.", "ASSESSMENT_STUDENT_NOT_ASSIGNED");
       }
-      const projectPrior = definition.assessmentKind === "QUIZ" && definition.category === "exam_prep";
-      const allPrior = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
-        { field: "definitionId", operator: "==", value: payload.definitionId },
-        { field: "studentUid", operator: "==", value: actor.actorUid },
-      ], ...(projectPrior ? { fieldMask: [...MOCK_ATTEMPT_STATE_FIELDS, "attemptOrdinal"] } : {}) }))
+      if (priorRead.status === "rejected") throw priorRead.reason;
+      const allPrior = priorRead.value
         .filter((document) => document.data?.studentUid === actor.actorUid);
       const prior = allPrior.filter((document) => document.data?.resetAt == null)
         .sort((left, right) => Number(left.data?.attemptNumber || 0) - Number(right.data?.attemptNumber || 0));
@@ -1489,7 +1501,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (attempt.status === "SUBMITTED") {
         if (attempt.resultRef !== resultPath(attempt.attemptId)) fail("failed-precondition", "Assessment result reference is inconsistent.", "ASSESSMENT_RESULT_INVALID");
         const resultDoc = await transaction.get(attempt.resultRef);
-        const result = resultDoc.data || {};
+        const result = effectiveQuizResult(resultDoc.data || {});
         if (!resultDoc.exists || result.studentUid !== actor.actorUid || result.semesterId !== attempt.semesterId || result.attemptId !== attempt.attemptId)
           fail("failed-precondition", "Assessment result is inconsistent.", "ASSESSMENT_RESULT_INVALID");
         const reward = result.reward || { status: "NOT_RECORDED", awarded: false, duplicate: false, amount: 0, bonusAwarded: false,

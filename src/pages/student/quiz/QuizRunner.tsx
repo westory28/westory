@@ -26,6 +26,8 @@ import "./QuizLearning.css";
 import QuizLearningResult from "./QuizLearningResult";
 import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
 import { loadMyQuizHistoryDetail } from "../../../lib/myQuizHistory";
+import { watchQuizResultCorrections } from "../../../lib/quizResultCorrections";
+import { historyReviewQuestion } from "../mypage/historyReviewData";
 import MockExamWorkspace from "./MockExamWorkspace";
 import { useQuizContentProtection } from "./useQuizContentProtection";
 import type {
@@ -222,6 +224,8 @@ const QuizRunner: React.FC = () => {
   const explicitRetakeRequestedRef = useRef(false);
   const [automaticEntryInProgress, setAutomaticEntryInProgress] =
     useState(false);
+  const [entryStage, setEntryStage] = useState("응시 상태 확인 중");
+  const [entryTakingLong, setEntryTakingLong] = useState(false);
   const initializationGenerationRef = useRef(0);
   const initializedScopeRef = useRef("");
   const { userData, config, currentUser } = useAuth();
@@ -302,6 +306,8 @@ const QuizRunner: React.FC = () => {
     useState<QuizScoreComparison | null>(null);
   const [resultCounts, setResultCounts] = useState({ correct: 0, total: 0 });
   const [reviewItems, setReviewItems] = useState<QuizRelearningItem[]>([]);
+  const [updatedReviewItems, setUpdatedReviewItems] =
+    useState<QuizRelearningItem[]>();
   const [paperResult, setPaperResult] = useState<{
     questions: MockExamPaperQuestion[];
     checks: MockExamPaperCheck[];
@@ -383,6 +389,7 @@ const QuizRunner: React.FC = () => {
       () => setShowOperationLoading(true),
       OPERATION_LOADING_DELAY_MS,
     );
+    if (view !== "quiz") return () => window.clearTimeout(timer);
     // A focused paper control must not react behind the loading overlay.
     // Keep browser shortcuts available while blocking page keyboard actions.
     const blockKeyboard = (event: KeyboardEvent) => {
@@ -397,9 +404,10 @@ const QuizRunner: React.FC = () => {
       window.removeEventListener("keydown", blockKeyboard, true);
       window.removeEventListener("keyup", blockKeyboard, true);
     };
-  }, [operationPending]);
+  }, [operationPending, view]);
 
   const preparePaperAssets = async (manifest: MockExamAssetManifest) => {
+    setEntryStage("시험지 그림·글꼴 준비 중");
     const controller = new AbortController();
     paperPreparationControllerRef.current?.abort();
     paperPreparationControllerRef.current = controller;
@@ -930,6 +938,72 @@ const QuizRunner: React.FC = () => {
   }, [currentIndex]);
 
   useEffect(() => {
+    if (view !== "result" || !finalizedResultId || !fallbackStudentUid) return;
+    let active = true;
+    const semesterId = `${assessmentYear}-${assessmentSemester}`;
+    const stop = watchQuizResultCorrections({
+      resultId: finalizedResultId,
+      semesterId,
+      onChange: async () => {
+        const latest = await loadMyQuizHistoryDetail(
+          semesterId,
+          `canonical:${finalizedResultId}`,
+        );
+        if (!active) return;
+        const rows = (latest.record.details || []).map(historyReviewQuestion);
+        const checks = rows.map((row) => ({
+          id: row.snapshot.id,
+          correct: row.correct === true,
+        }));
+        if (typeof latest.record.score === "number")
+          setScore(latest.record.score);
+        setResultCounts({
+          correct: checks.filter((check) => check.correct).length,
+          total: checks.length,
+        });
+        setUpdatedReviewItems(rows.map((row) => row.snapshot));
+        setReviewItems(
+          rows
+            .filter((row) => row.practiceAvailable)
+            .map((row) => row.snapshot),
+        );
+        setPaperResult((previous) => ({
+          questions:
+            previous?.questions.map(
+              (question) =>
+                rows.find(
+                  (row) =>
+                    row.snapshot.id === String(question.id) &&
+                    row.saved.questionAvailable,
+                )?.snapshot || question,
+            ) || rows.map((row) => row.snapshot),
+          checks,
+          earnedPoints:
+            typeof latest.record.earnedPoints === "number"
+              ? latest.record.earnedPoints
+              : undefined,
+        }));
+      },
+      onError: () =>
+        showToast({
+          tone: "warning",
+          title: "변경된 평가 결과를 확인하지 못했습니다.",
+          message: "오답 노트에서 결과를 다시 확인해 주세요.",
+        }),
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [
+    view,
+    finalizedResultId,
+    fallbackStudentUid,
+    assessmentYear,
+    assessmentSemester,
+  ]);
+
+  useEffect(() => {
     let active = true;
     setScoreComparison(null);
     if (
@@ -1125,14 +1199,22 @@ const QuizRunner: React.FC = () => {
   const initializeQuiz = async (retakeRequested = false) => {
     if (retakeRequested) explicitRetakeRequestedRef.current = true;
     setReviewItems([]);
+    setUpdatedReviewItems(undefined);
     if (!unitId || !category || !fallbackStudentUid) return;
     const generation = ++initializationGenerationRef.current;
+    // Explicit recovery replaces every phase of the previous entry. A late
+    // START/assets response must not clear or overwrite the new entry's state.
+    preparationGenerationRef.current += 1;
+    paperPreparationControllerRef.current?.abort();
+    paperPreparationControllerRef.current = null;
     const isCurrent = () => initializationGenerationRef.current === generation;
     initializedScopeRef.current = "";
     initialPreparationRef.current = null;
 
     try {
       setView("loading");
+      setEntryStage("응시 상태 확인 중");
+      setEntryTakingLong(false);
       setOpenHintQuestionId(null);
       setErrorMsg(null);
       setBlockReason(null);
@@ -1449,6 +1531,8 @@ const QuizRunner: React.FC = () => {
           }
           assertCurrent();
         }
+        setEntryStage("시험 시작 확인 중");
+        setPaperPreparationProgress(null);
         return startAssessmentAttempt({
           definitionId: assessmentDefinitionId,
           ...(preparedSourceHash ? { preparedSourceHash } : {}),
@@ -1507,11 +1591,7 @@ const QuizRunner: React.FC = () => {
       }
       setView("quiz");
     } catch (error) {
-      if (
-        preparationGenerationRef.current !== generation ||
-        (error instanceof Error && error.name === "AbortError")
-      )
-        return;
+      if (preparationGenerationRef.current !== generation) return;
       if (error instanceof MockExamAssetError) {
         setPaperPreparationError(error.message);
         return;
@@ -1571,6 +1651,21 @@ const QuizRunner: React.FC = () => {
     fallbackStudentUid,
     assessmentDefinitionId,
   ]);
+
+  const entryPending =
+    view === "loading" ||
+    automaticEntryInProgress ||
+    (view === "entry" &&
+      !blockReason &&
+      !errorMsg &&
+      !entryError &&
+      !paperPreparationError);
+  useEffect(() => {
+    setEntryTakingLong(false);
+    if (!entryPending) return;
+    const timer = window.setTimeout(() => setEntryTakingLong(true), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [entryPending, entryStage]);
 
   const handleAnswer = (input: string) => {
     const question = selectedQuestions[currentIndex];
@@ -1800,23 +1895,23 @@ const QuizRunner: React.FC = () => {
         )
       : null;
 
-  if (
-    view === "loading" ||
-    automaticEntryInProgress ||
-    (view === "entry" &&
-      !blockReason &&
-      !errorMsg &&
-      !entryError &&
-      !paperPreparationError)
-  ) {
+  if (entryPending) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
         <PageLoading message="문제를 준비하는 중입니다." />
-        {paperPreparationProgress && (
-          <p role="status" className="pb-4 text-sm text-slate-600">
-            시험지 준비 {paperPreparationProgress.loaded}/
-            {paperPreparationProgress.total}
-          </p>
+        <p role="status" className="pb-4 text-sm text-slate-600">
+          {entryStage}
+          {paperPreparationProgress &&
+            ` · ${paperPreparationProgress.loaded}/${paperPreparationProgress.total}`}
+        </p>
+        {entryTakingLong && (
+          <button
+            type="button"
+            onClick={() => void initializeQuiz()}
+            className="mb-4 min-h-11 rounded-lg border border-slate-200 px-5 font-bold text-slate-700"
+          >
+            응시 상태 다시 확인
+          </button>
         )}
       </div>
     );
@@ -2680,6 +2775,7 @@ const QuizRunner: React.FC = () => {
         totalCount={resultCounts.total}
         comparison={scoreComparison}
         reviewItems={reviewItems}
+        updatedReviewItems={updatedReviewItems}
         onSaveReviewNote={
           finalizedResultId
             ? async (draft, expectedRevision, saveId) => {

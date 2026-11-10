@@ -12,15 +12,18 @@ let handler = async () => { throw new Error('Unexpected callable'); };
 const source = ts.transpileModule(readFileSync('src/lib/assessmentLifecycle.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const deadlines = {};
+runInNewContext(ts.transpileModule(readFileSync('src/lib/requestDeadline.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: deadlines, setTimeout, clearTimeout });
 const exports = {};
 runInNewContext(source, { exports, require: name => {
+  if (name === './requestDeadline') return deadlines;
   if (name === './firebase') return { auth };
   if (name === 'firebase/auth') return { getIdTokenResult: async () => ({ authTime: new Date(epoch * 1000).toISOString() }) };
   if (name === './sensitiveOperation') return { ensureSensitiveOperation: async () => { sensitive++; if (sensitiveFailure) throw sensitiveFailure; } };
   if (name === './historyDictionarySession') return { getHistoryDictionaryCallable: async name => async data => ({ data: await handler(name, data) }) };
   throw new Error(name);
 }, window: { sessionStorage: { getItem: key => { if (storageBlocked) throw new Error('Storage blocked'); return storage.get(key); }, setItem: (key, value) => { if (storageBlocked) throw new Error('Storage blocked'); return storage.set(key, value); }, removeItem: key => { if (storageBlocked) throw new Error('Storage blocked'); return storage.delete(key); } } },
-crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}` }, Date, Map, console });
+setTimeout, clearTimeout, crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}` }, Date, Map, console });
 const error = (code, reason) => Object.assign(new Error(code), { code, details: { reason } });
 let calls = [];
 handler = async (name, payload) => { calls.push([name, payload]); return { status: 'READY', definition: { definitionId: 'quiz:2026-2:unit:formative' }, attempt: null }; };

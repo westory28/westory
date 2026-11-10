@@ -119,6 +119,21 @@ const questionRevisions = (
       },
     ),
   );
+  if (source === "canonical") {
+    for (const value of Object.values(object(data.gradingCorrections))) {
+      const correction = object(value);
+      if (
+        correction.semesterId === data.semesterId &&
+        correction.definitionId === data.definitionId
+      ) {
+        const id = text(correction.id);
+        metadata.set(id, {
+          ...metadata.get(id),
+          ...object(correction.metadata),
+        });
+      }
+    }
+  }
   const entries = items.map((raw) => {
     const row = object(raw);
     const id = text(row.id ?? row.questionId ?? row.qid);
@@ -141,7 +156,11 @@ const normalizeRecord = (
   row: QuizScoreComparisonSource,
   scope: QuizScoreComparisonRequest,
 ): ScoreRecord | null => {
-  const data = object(row.data);
+  const raw = object(row.data);
+  const data =
+    row.source === "canonical" && raw.assessmentKind === "QUIZ"
+      ? { ...raw, ...object(raw.gradingCorrectionSummary) }
+      : raw;
   const uid = text(data.studentUid) || text(data.uid);
   const storedSemester = text(data.semesterId);
   const legacySemester =

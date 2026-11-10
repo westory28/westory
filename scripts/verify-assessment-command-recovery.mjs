@@ -114,6 +114,8 @@ function harness({ storage = new Map(), receipts = new Map() } = {}) {
       exports,
       crypto: { randomUUID },
       console,
+      setTimeout,
+      clearTimeout,
       window: {
         sessionStorage: {
           getItem(key) {

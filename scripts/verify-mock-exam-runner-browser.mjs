@@ -39,6 +39,7 @@ const denseQuestions = Array.from({ length: 16 }, (_, index) => ({
 }));
 const denseFrozen = learning.captureQuestionSnapshots(denseQuestions.map(question => ({ path: `questions/${question.id}`, data: question })), denseQuestions.map(question => String(question.id)));
 const stubs = `
+export const watchQuizResultCorrections=()=>()=>{};
 export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};export const loadMyQuizHistoryDetail=async(semesterId,key)=>({semesterId,key,reviewNotes:{revision:0,items:[],updatedAt:''}});
 const dense=location.search.includes('dense');const snapshots=dense?${JSON.stringify(denseFrozen.questionSnapshots)}:${JSON.stringify(frozen.questionSnapshots)};const presentation=dense?${JSON.stringify(learning.questionPresentation(denseFrozen.questionSnapshots))}:${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
@@ -55,6 +56,7 @@ export const isAssessmentRevisionConflict=error=>error?.code==='aborted';
 export const loadQuizScoreComparison=async()=>{qa.comparisonReads++;return null};
 export const getAssessmentState=async(input={})=>{
   qa.reads.push(input);const readNumber=qa.reads.length;
+  if(location.search.includes('held-initial')&&readNumber<=2)await new Promise(resolve=>{qa.releaseInitial=resolve});
   if(location.search.includes('stale-initial')&&readNumber===1){await new Promise(r=>setTimeout(r,300));throw Error('Stale initial failure')};
   if(location.search.includes('slow-read'))await new Promise(resolve=>{qa.releaseRead=resolve});
   if(input.prepareAssets&&location.search.includes('prerequisite'))throw Object.assign(Error('Earlier round required'),{code:'functions/failed-precondition',details:{reason:'ASSESSMENT_PREREQUISITE_REQUIRED',requiredRound:'round_1'}});
@@ -64,7 +66,7 @@ export const getAssessmentState=async(input={})=>{
   const active=attempt&&['STARTED','IN_PROGRESS','RECOVERABLE'].includes(attempt.status);
   return {status:location.search.includes('prerequisite')?'PREREQUISITE_REQUIRED':active?'RECOVERABLE':attempt?.status==='SUBMITTED'?'SUBMITTED':location.search.includes('prepare-forbidden')?'CLOSED':'READY',requiredRound:'round_1',definition:{title:'중학교 3학년 복시 (2회 모의고사)',questionCount:snapshots.length,itemCount:snapshots.length,status:'PUBLISHED',durationSeconds:600,presentationSettings:settings,maxAttempts:3,cooldownMinutes:0},attempt:attempt?structuredClone(attempt):null,serverNowIso:new Date().toISOString(),...(input.prepareAssets?{preparedAssets:{sourceHash:'fixture-paper-'+qa.prepares.length,imageUrls:dense?[]:['/qa-material.svg','/qa-set-material.svg'],fontCharacters:[...new Set(JSON.stringify(presentation))].sort().join('')}}:{})};
 };
-export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(attempt&&['STARTED','IN_PROGRESS'].includes(attempt.status))return {...structuredClone(attempt),resumed:true};if(location.search.includes('start-offline')&&qa.starts.length===1)throw Object.assign(Error('Synthetic offline'),{code:'functions/unavailable'});if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();if(location.search.includes('lost-start-response')&&qa.starts.length===1)throw Object.assign(Error('Synthetic lost response'),{code:'functions/unavailable'});return structuredClone(attempt)};
+export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(attempt&&['STARTED','IN_PROGRESS'].includes(attempt.status))return {...structuredClone(attempt),resumed:true};if(location.search.includes('start-offline')&&qa.starts.length===1)throw Object.assign(Error('Synthetic offline'),{code:'functions/unavailable'});if(location.search.includes('stale-assets')&&qa.starts.length===1)throw Object.assign(Error('Changed paper'),{details:{reason:'ASSESSMENT_PREPARED_SOURCE_STALE'}});attempt={attemptId:'fixture-mock-attempt',definitionId,semesterId:'2026-2',assessmentKind:'QUIZ',attemptNumber:(attempt?.attemptNumber||0)+1,status:'STARTED',revision:1,answers:{},currentItemId:'1',questionIds:snapshots.map(question=>String(question.id)),startedAtIso:new Date().toISOString(),serverNowIso:new Date().toISOString(),deadlineAtIso:new Date(Date.now()+600000).toISOString(),lastSavedAtIso:new Date().toISOString(),submittedAtIso:'',resultRef:'',resumed:false,learningSnapshot:[],paperHeader:structuredClone(paperHeader),questionPresentation:presentation,questionSnapshotOmittedIds:[]};persist();if(location.search.includes('held-start-response'))await new Promise(resolve=>{qa.releaseStart=resolve});if(location.search.includes('lost-start-response')&&qa.starts.length===1)throw Object.assign(Error('Synthetic lost response'),{code:'functions/unavailable'});return structuredClone(attempt)};
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(location.search.includes('slow-save'))await new Promise(resolve=>{qa.releaseSave=resolve});if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(location.search.includes('slow-submit'))await new Promise(resolve=>{qa.releaseSubmit=resolve});if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
@@ -72,11 +74,11 @@ const entry = `import React from 'react';import {createRoot} from 'react-dom/cli
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
-  define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || process.argv.includes('--entry-only') ? 'development' : 'production') },
+  define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || (process.argv.includes('--entry-only')||process.argv.includes('--entry-recovery-only')) ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
     builder.onResolve({ filter: /\/QuizLessonPopup$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "popup-fixture" }, () => ({ contents: "export default function QuizLessonPopup(){return null}", loader: "js" }));
-    builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
+    builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
   } }],
 });
@@ -274,6 +276,26 @@ try {
     assert.deepEqual(await forbidden.evaluate(()=>({reads:window.mockRunnerQa.reads.length,starts:window.mockRunnerQa.starts.length})),{reads:2,starts:0},'The read-only fallback cannot authorize a new attempt');
     assert.equal(await forbidden.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0);
     await forbidden.close();
+  } else if(process.argv.includes('--entry-recovery-only')) {
+    for (const [width, search] of [[390,'held-start-response'],[768,'held-start-response'],[1280,'held-start-response'],[1280,'held-initial']]) {
+      const page=await browser.newPage({viewport:{width,height:900}});
+      page.on('pageerror',error=>pageErrors.push(error.message));
+      await page.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
+      await page.goto(origin+'?auto-entry&'+search);
+      const retry=page.getByRole('button',{name:'응시 상태 다시 확인',exact:true});
+      await retry.waitFor();
+      await retry.focus(); await page.keyboard.press('Enter');
+      await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
+      const restored=await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso,starts:window.mockRunnerQa.starts.length}));
+      assert.equal(restored.starts,1,'Recovery never starts the committed attempt twice');
+      if(search==='held-start-response')await page.evaluate(()=>window.mockRunnerQa.releaseStart());
+      else await page.evaluate(()=>window.mockRunnerQa.releaseInitial());
+      await page.waitForTimeout(150);
+      assert.equal(await page.locator('.mock-exam-paper').count(),1,'A late superseded phase cannot replace the recovered paper');
+      assert.deepEqual(await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso,starts:window.mockRunnerQa.starts.length})),restored);
+      await page.screenshot({path:path.join(evidence,`recovered-${search}-${width}.png`)});
+      await page.close();
+    }
   } else if(process.argv.includes('--entry-only')) {
     for(const [width,search] of [[390,''],[768,'direct-link'],[768,'curriculum-error'],[1280,'curriculum-pending'],[1366,'stale-initial'],[768,'start-offline'],[390,'lost-start-response']]) {
       const page=await browser.newPage({viewport:{width,height:900}});

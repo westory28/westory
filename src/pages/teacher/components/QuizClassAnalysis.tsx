@@ -40,6 +40,11 @@ import QuizAchievementAnalysis, {
 import { adaptQuizAnalysisRecords } from "./useQuizAnalysisData";
 import "./QuizClassAnalysis.css";
 import { quizQuestionFocus } from "../../../lib/quizQuestionFocus";
+import { useQuizClassUpdates } from "./useQuizClassUpdates";
+import {
+  applyQuizClassChanges,
+  applyQuizClassSummaryChanges,
+} from "../../../lib/quizClassLiveState";
 
 const percent = (part: number, total: number) =>
   total ? `${Math.round((part / total) * 100)}%` : "—";
@@ -600,9 +605,47 @@ export default function QuizClassAnalysis({
     if (reloadVersion.current === refreshVersion) return;
     reloadVersion.current = refreshVersion;
     savedAssessment.current = null;
-    if (achievementScope) setAchievementVersion((value) => value + 1);
-    if (summary) void loadSummary(true, true);
+    // Published question corrections arrive through the same incremental
+    // stream as submissions. Editing must not reload every student's answers.
+    if (summary && !summary.live) void loadSummary(true, true);
   }, [refreshVersion]);
+  useQuizClassUpdates({
+    scope: loadedScope,
+    identityKey,
+    mode: "summary",
+    data: summary,
+    enabled: !showAchievement && !detail,
+    onChanges: (changes) =>
+      setSummary((current) => {
+        if (!current || !loadedScope) return current;
+        const next = applyQuizClassSummaryChanges(
+          current,
+          loadedScope,
+          changes,
+        );
+        if (!loadedScope.keyword)
+          savedAssessment.current = { scope: loadedScope, data: next };
+        return next;
+      }),
+    onError: (failure) => setError(quizClassAnalysisError(failure)),
+  });
+  useQuizClassUpdates({
+    scope: detail?.scope || null,
+    identityKey,
+    mode: "detail",
+    data: detail?.data || null,
+    enabled: detailMode === "responses",
+    onChanges: (changes) =>
+      setDetail((current) =>
+        current
+          ? { ...current, data: applyQuizClassChanges(current.data, changes) }
+          : current,
+      ),
+    onError: (failure) => setDetailError(quizClassAnalysisError(failure)),
+  });
+  useEffect(() => {
+    if (detail) onDetailData(detail.data.questions, detail.data.treeData);
+  }, [detail?.data.questions]);
   const detailRecords = useMemo(
     () =>
       detail

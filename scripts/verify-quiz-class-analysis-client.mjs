@@ -30,7 +30,7 @@ const first = exports.getQuizClassSummary(scope, "teacher-a:1");
 const simultaneous = exports.getQuizClassSummary(scope, "teacher-a:1");
 assert.equal(calls.length, 1, "Only simultaneous identical reads may share one request");
 assert.equal(calls[0].callable, "getQuizClassAnalysis");
-assert.deepEqual(JSON.parse(JSON.stringify(calls[0].input)), { ...scope, mode: "summary", forceRefresh: false });
+assert.deepEqual(JSON.parse(JSON.stringify(calls[0].input)), { ...scope, mode: "summary", forceRefresh: false, live: true });
 resolveRequest({ data: { classes: [] } });
 assert.equal(await first, await simultaneous);
 
@@ -60,7 +60,7 @@ assert.equal((await pendingA).owner, "a");
 assert.equal((await pendingB).owner, "b");
 
 const detail = exports.getQuizClassDetail({ ...scope, classIds: ["3-1"] }, "teacher-a:1");
-assert.deepEqual(JSON.parse(JSON.stringify(calls[6].input)), { ...scope, classIds: ["3-1"], mode: "detail", forceRefresh: false, snapshotDictionary: true });
+assert.deepEqual(JSON.parse(JSON.stringify(calls[6].input)), { ...scope, classIds: ["3-1"], mode: "detail", forceRefresh: false, snapshotDictionary: true, live: true });
 resolveRequest({ data: { students: [], rawRows: [] } });
 await detail;
 const keywordDetail = exports.getQuizClassDetail({ ...scope, unitId: "", category: "", classIds: ["3-1"], keyword: "사화", comparisonGrade: "3" }, "teacher-a:1");
@@ -126,7 +126,7 @@ const packedDetail = JSON.parse(JSON.stringify({ ...baseDetail, ...packHistorica
 assert.equal(Object.keys(packedDetail.historicalQuestionSnapshots).length, 2, 'Different frozen revisions keep separate dictionary entries');
 const beforeDecode = JSON.stringify(packedDetail);
 const detailRequest = exports.getQuizClassDetail({ ...gradeScope, comparisonGrade: '2' }, 'teacher-a:1', true);
-assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).input)), { ...gradeScope, mode: 'detail', forceRefresh: true, snapshotDictionary: true });
+assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1).input)), { ...gradeScope, mode: 'detail', forceRefresh: true, snapshotDictionary: true, live: true });
 resolveRequest({ data: packedDetail });
 const decodedDetail = await detailRequest;
 assert.deepEqual(JSON.parse(JSON.stringify(decodedDetail.rawRows.map(row => {

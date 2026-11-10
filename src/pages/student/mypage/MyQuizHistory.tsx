@@ -7,6 +7,7 @@ import {
   type MyQuizHistoryDetail,
 } from "../../../lib/myQuizHistory";
 import { saveMyQuizReviewNote } from "../../../lib/quizReviewNotes";
+import { watchQuizResultCorrections } from "../../../lib/quizResultCorrections";
 import { normalizeMockExamPaperHeader } from "../../../lib/mockExamPaperHeader";
 import MockExamPaper, {
   MockExamQuestionContent,
@@ -58,6 +59,7 @@ export default function MyQuizHistory({
   >(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
+  const [correctionError, setCorrectionError] = useState("");
   const [index, setIndex] = useState(0);
   const [wrongOnly, setWrongOnly] = useState(false);
   const [practicing, setPracticing] = useState(false);
@@ -125,6 +127,7 @@ export default function MyQuizHistory({
         : `canonical:${requestedKey}`);
     setDetail(null);
     setDetailError("");
+    setCorrectionError("");
     setDetailLoading(true);
     setIndex(0);
     setWrongOnly(false);
@@ -196,6 +199,54 @@ export default function MyQuizHistory({
   useEffect(() => {
     if (detail || detailError) heading.current?.focus();
   }, [detail?.key, detailError]);
+  useEffect(() => {
+    if (!active || !detail?.key.startsWith("canonical:")) return;
+    let current = true;
+    const key = detail.key;
+    setCorrectionError("");
+    const stop = watchQuizResultCorrections({
+      resultId: key.slice("canonical:".length),
+      semesterId,
+      initialVersion: String(detail.record.gradingCorrectionVersion || ""),
+      onChange: async () => {
+        const next = await loadMyQuizHistoryDetail(semesterId, key);
+        if (!current) return;
+        detailCache.current.set(key, next);
+        setDetail((previous) =>
+          previous?.key === key
+            ? { ...previous, ...next, reviewNotes: previous.reviewNotes }
+            : previous,
+        );
+        setPage((previous) =>
+          previous
+            ? {
+                ...previous,
+                rows: previous.rows.map((row) =>
+                  row.key === key
+                    ? {
+                        ...row,
+                        score: next.record.score ?? null,
+                        wrongCount: (next.record.details || []).filter(
+                          (item) => item.correct === false,
+                        ).length,
+                      }
+                    : row,
+                ),
+              }
+            : previous,
+        );
+        setCorrectionError("");
+      },
+      onError: () =>
+        setCorrectionError(
+          "변경된 평가 결과를 확인하지 못했습니다. 다시 불러와 주세요.",
+        ),
+    });
+    return () => {
+      current = false;
+      stop();
+    };
+  }, [active, detail?.key, semesterId]);
   useEffect(() => {
     if (active && !requestedAttemptId && returnFocusKey.current) {
       (
@@ -313,6 +364,21 @@ export default function MyQuizHistory({
                   )}
                 </span>
               </div>
+              {correctionError && (
+                <p role="alert">
+                  {correctionError}
+                  <button
+                    type="button"
+                    className="student-quiz-secondary-action"
+                    onClick={() => {
+                      detailCache.current.delete(detail.key);
+                      void loadDetail(detail.key);
+                    }}
+                  >
+                    다시 불러오기
+                  </button>
+                </p>
+              )}
               {incorrectCount > reviewItems.length && (
                 <p className="my-quiz-history__muted">
                   문제 원문이나 정답이 없는 오답{" "}
@@ -323,6 +389,7 @@ export default function MyQuizHistory({
                 <QuizRelearning
                   key={detail.key}
                   items={reviewItems}
+                  updatedItems={paperQuestions}
                   questionNumbers={Object.fromEntries(
                     questions.map((item, position) => [
                       item.snapshot.id,

@@ -57,12 +57,14 @@ export default function QuizRelearning({
   onReload,
   onShowAnswers,
   questionNumbers,
+  updatedItems,
   closeLabel = "결과로",
 }: {
   items: QuizRelearningItem[];
   onClose: () => void;
   onShowAnswers?: () => void;
   questionNumbers?: Record<string, number>;
+  updatedItems?: QuizRelearningItem[];
   closeLabel?: string;
   reviewNotes?: QuizReviewNotes;
   onSave?: (
@@ -75,6 +77,16 @@ export default function QuizRelearning({
   const contentProtectionRef = useRef<HTMLElement>(null);
   useQuizContentProtection(contentProtectionRef);
   const [queue, setQueue] = useState(items);
+  const originalPositions = useRef(
+    new Map(items.map((entry, position) => [entry.id, position + 1])),
+  );
+  for (const entry of items) {
+    if (!originalPositions.current.has(entry.id))
+      originalPositions.current.set(
+        entry.id,
+        originalPositions.current.size + 1,
+      );
+  }
   const [reviewLessonId, setReviewLessonId] = useState<string | null>(null);
   const [lessonOpen, setLessonOpen] = useState(false);
   const [lessonDirty, setLessonDirty] = useState(false);
@@ -99,6 +111,32 @@ export default function QuizRelearning({
   );
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
+  useEffect(() => {
+    if (!updatedItems) return;
+    const latest = new Map(updatedItems.map((entry) => [entry.id, entry]));
+    // Keep the current question and unsaved reflection while replacing only the
+    // server-corrected answer/metadata of its original frozen paper.
+    setQueue((previous) =>
+      previous.map((entry) => latest.get(entry.id) || entry),
+    );
+    setResults((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).map(([id, correct]) => {
+          const entry = latest.get(id);
+          return [
+            id,
+            entry
+              ? isQuizPracticeAnswerCorrect(
+                  draftsRef.current[id]?.practiceAnswer || "",
+                  entry.answer,
+                  entry.type,
+                )
+              : correct,
+          ];
+        }),
+      ),
+    );
+  }, [updatedItems]);
   const [results, setResults] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -120,13 +158,9 @@ export default function QuizRelearning({
       .map((pair) => pair.split("=>")),
   );
   const dirtyIds = onSave
-    ? items
-        .filter(
-          (entry) =>
-            draftKey(drafts[entry.id] || getDraft(entry.id, savedNotes)) !==
-            draftKey(getDraft(entry.id, savedNotes)),
-        )
-        .map((entry) => entry.id)
+    ? Object.keys(drafts).filter(
+        (id) => draftKey(drafts[id]) !== draftKey(getDraft(id, savedNotes)),
+      )
     : [];
   const dirty = Boolean(item && dirtyIds.includes(item.id));
   const updateDraft = (change: Partial<QuizReviewNoteDraft>) => {
@@ -307,8 +341,17 @@ export default function QuizRelearning({
               type="button"
               className="student-quiz-secondary-action"
               onClick={() => {
-                setQueue(items);
-                setIndex(items.findIndex((entry) => entry.id === dirtyIds[0]));
+                const pendingItems = [
+                  ...queue,
+                  ...items.filter(
+                    (entry) =>
+                      !queue.some((previous) => previous.id === entry.id),
+                  ),
+                ];
+                setQueue(pendingItems);
+                setIndex(
+                  pendingItems.findIndex((entry) => entry.id === dirtyIds[0]),
+                );
                 setStage("review");
               }}
             >
@@ -391,7 +434,8 @@ export default function QuizRelearning({
   const questionIndex =
     (questionNumbers?.[item.id] ||
       item.paperOrder ||
-      items.findIndex((entry) => entry.id === item.id) + 1) - 1;
+      originalPositions.current.get(item.id) ||
+      1) - 1;
   const selectQuestion = (next: number) => {
     if (saveBusy.current) return;
     setIndex(next);
@@ -448,7 +492,8 @@ export default function QuizRelearning({
           >
             {questionNumbers?.[entry.id] ||
               entry.paperOrder ||
-              items.findIndex((original) => original.id === entry.id) + 1}
+              originalPositions.current.get(entry.id) ||
+              1}
             번
             {dirtyIds.includes(entry.id) && (
               <span className="sr-only"> · 저장하지 않음</span>
@@ -463,7 +508,7 @@ export default function QuizRelearning({
             index={questionIndex}
             answer={reviewing ? item.submittedAnswer : answer}
             hideAnswers={!reviewing}
-            correct={reviewing ? false : undefined}
+            correct={reviewing ? item.submittedCorrect === true : undefined}
           />
           {!reviewing && (
             <MockExamAnswerControls

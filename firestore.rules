@@ -1184,6 +1184,38 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Small, server-owned signals only. Result bodies and delta cursors remain
+    // behind the callable's current session, class and semester checks.
+    match /quiz_class_analysis_state/{semesterId} {
+      function currentQuizAnalysisScope() {
+        let config = get(/databases/$(database)/documents/site_settings/config).data;
+        let pointer = get(/databases/$(database)/documents/site_settings/semester_active).data;
+        let manifest = get(/databases/$(database)/documents/semester_manifests/$(semesterId)).data;
+        return semesterId.matches('^[0-9]{4}-[12]$')
+          && string(config.year) + '-' + string(config.semester) == semesterId
+          && config.activeSemesterId == semesterId
+          && pointer.semesterId == semesterId && manifest.semesterId == semesterId
+          && manifest.status == 'ACTIVE' && manifest.get('readOnly', false) == false
+          && manifest.revision is int && manifest.revision >= 1
+          && pointer.revision == manifest.revision;
+      }
+      allow get: if canUseWestory() && hasQuizReadRole() && currentQuizAnalysisScope();
+      allow list, write: if false;
+      match /classes/{classHash} {
+        allow get: if classHash.matches('^[a-f0-9]{64}$')
+          && canUseWestory() && hasQuizReadRole() && currentQuizAnalysisScope();
+        allow list, write: if false;
+      }
+    }
+
+    match /quiz_result_correction_signals/{resultId} {
+      // Authorize against the immutable owner even before a first signal exists.
+      allow get: if exists(/databases/$(database)/documents/semester_assessment_results/$(resultId))
+        && canReadSemesterAssessment(
+        get(/databases/$(database)/documents/semester_assessment_results/$(resultId)).data);
+      allow list, write: if false;
+    }
+
     match /semester_assessment_submissions/{submissionId} {
       allow read: if canReadSemesterAssessment(resource.data);
       allow write: if false;

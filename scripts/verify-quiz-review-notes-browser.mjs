@@ -20,7 +20,7 @@ if(variant==='short')Object.assign(item,{type:'short',question:'토지에서 조
 if(variant==='columns')Object.assign(item,{options:['(가) 김시민\t(나) 이순신','(가) 이순신\t(나) 권율'],answer:'(가) 김시민\t(나) 이순신',submittedAnswer:'(가) 이순신\t(나) 권율'});
 const qa=window.reviewQa={saved:{revision:1,updatedAt:'2026-11-08',items:[{questionId:'q1',practiceAnswer:'',reason:'',note:'기존 노트',correct:null,updatedAt:'2026-11-08'}]},requests:[],loads:0,failNext:false,conflictNext:false,hold:false};
 async function save(draft,expectedRevision,saveId){qa.requests.push({draft:structuredClone(draft),expectedRevision,saveId});if(qa.hold)await new Promise(resolve=>qa.release=resolve);if(qa.failNext){qa.failNext=false;throw Error('합성 통신 실패')}if(qa.conflictNext){qa.conflictNext=false;qa.saved={...qa.saved,revision:qa.saved.revision+1,items:[{...qa.saved.items[0],note:'다른 화면의 노트'}]};throw {details:{reason:'QUIZ_REVIEW_REVISION_CONFLICT'}}}qa.saved={revision:qa.saved.revision+1,updatedAt:'2026-11-08',items:[{...draft,correct:draft.practiceAnswer?draft.practiceAnswer==='정치':null,updatedAt:'2026-11-08'}]};return structuredClone(qa.saved)}
-function App(){const[open,setOpen]=useState(true);return open?<Review items={[item]} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[open,setOpen]=useState(true);const[corrected,setCorrected]=useState(null);qa.correct=()=>setCorrected({...item,answer:item.answer+",새 정답",submittedCorrect:true});return open?<Review items={corrected?[]:[item]} updatedItems={corrected?[corrected]:undefined} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
 const built = await build({ stdin: { contents: entry, loader: "tsx", resolveDir: process.cwd() }, bundle: true, write: false, metafile: true,
   platform: "browser", outdir: "fixture", define: { "process.env.NODE_ENV": '"production"' }, loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   plugins: [{name:'lesson-popup-boundary',setup(build){build.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:'popup',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export default function Popup(){return null}',loader:'js'}));}}] });
@@ -56,7 +56,7 @@ const checkLayout = async (page, width) => {
 };
 try {
   page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  page.on("pageerror", error => errors.push(error.message));
+  page.on("pageerror", error => { errors.push(error.message); console.error(error.stack); });
   page.on("dialog", async dialog => { dialogs.push(dialog.message()); await dialog.dismiss(); });
   await page.route("**/*", route => {
     if (route.request().url().startsWith(origin) || route.request().url().startsWith("data:")) return route.continue();
@@ -175,6 +175,15 @@ try {
     await reopen();
     assert.equal(await page.getByRole('radio', {name:label,exact:true}).isChecked(),true, `${label} is restored after reopening`);
   }
+  await page.goto(origin + '/?type=short');
+  await note.fill('정답 교정 중에도 보존할 노트');
+  await page.evaluate(() => window.reviewQa.correct());
+  await page.getByText('수조권,새 정답', {exact:true}).waitFor();
+  assert.equal(await note.inputValue(), '정답 교정 중에도 보존할 노트');
+  const beforeCorrectionClose = dialogs.length;
+  await page.getByRole('button', {name:'결과로',exact:true}).click();
+  assert.equal(dialogs.length, beforeCorrectionClose + 1, 'A newly accepted answer does not discard the current unsaved reflection');
+  await save(); await page.getByText('저장했어요.', {exact:true}).waitFor();
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
   console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, existing renderer, lesson button, four reasons and keyboard, side-by-side/stacked at 320/390/768/1280/1440, no Firebase" }));
 } catch (error) {

@@ -8,6 +8,8 @@ const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment
 const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
 const { historicalQuestionEvidence, packHistoricalQuestionSnapshots, createHistoricalQuestionSnapshotPool } = require('./quizAchievementEvidence');
+const { createLiveReader, createLiveRecorder } = require('./quizClassAnalysisLive');
+const { effectiveQuizResult } = require('./quizQuestionCorrections');
 
 const SCHEMA = 4;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -60,11 +62,24 @@ const studentRevisionRef = (db, scope, uid) => db.doc(`quiz_analysis_student_rev
 const dataOf = snap => snap?.exists ? snap.data() : {};
 
 function normalizeQuery(data) {
-  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', 'snapshotDictionary', '_session'];
+  if (data?.mode === 'changes') {
+    const { liveMode, contextVersion, contentCursor, cursors, ...base } = data;
+    if (!['summary', 'detail', 'achievement'].includes(liveMode)
+      || !/^[a-f0-9]{64}$/.test(contextVersion) || !Number.isSafeInteger(contentCursor) || contentCursor < 0
+      || !Array.isArray(cursors) || !cursors.length || cursors.length > MAX_GRADE_CLASSES + 4
+      || cursors.some(item => !item || Object.keys(item).some(key => !['classId', 'cursor'].includes(key))
+        || !validId(item.classId) || !Number.isSafeInteger(item.cursor) || item.cursor < 0)
+      || new Set(cursors.map(item => item.classId)).size !== cursors.length)
+      fail('invalid-argument', '변경된 분석 자료의 조회 위치를 확인해 주세요.', 'QUIZ_ANALYSIS_CURSOR_INVALID');
+    const normalized = normalizeQuery({ ...base, mode: liveMode });
+    return { ...normalized, mode: 'changes', liveMode, contextVersion, contentCursor, cursors };
+  }
+  const allowed = ['semesterId', 'mode', 'unitId', 'category', 'examRound', 'classIds', 'grade', 'forceRefresh', 'keyword', 'comparisonGrade', 'compactEvidence', 'snapshotDictionary', 'live', '_session'];
   if (!data || typeof data !== 'object' || Object.keys(data).some(key => !allowed.includes(key))
     || !validScope(data.semesterId) || !['catalog', 'summary', 'detail', 'achievement'].includes(data.mode)
     || (data.forceRefresh !== undefined && typeof data.forceRefresh !== 'boolean')
     || (data.compactEvidence !== undefined && typeof data.compactEvidence !== 'boolean')
+    || (data.live !== undefined && typeof data.live !== 'boolean')
     || (data.compactEvidence === true && data.mode !== 'achievement')
     || (Object.hasOwn(data, 'snapshotDictionary') && (data.mode !== 'detail' || typeof data.snapshotDictionary !== 'boolean'))) {
     fail('invalid-argument', '조회할 학기와 평가를 확인해 주세요.', 'QUIZ_ANALYSIS_QUERY_INVALID');
@@ -103,7 +118,7 @@ function normalizeQuery(data) {
     examRound: keyword ? '' : roundOf(data.category, data.examRound), classIds: data.classIds,
     ...(keyword ? { keyword } : {}), ...(data.grade ? { grade: data.grade } : {}),
     ...(data.comparisonGrade ? { comparisonGrade: data.comparisonGrade } : {}),
-    ...(data.snapshotDictionary === true ? { snapshotDictionary: true } : {}) };
+    ...(data.snapshotDictionary === true ? { snapshotDictionary: true } : {}), ...(data.live === true ? { live: true } : {}) };
 }
 
 // Every source query is paginated and has a hard failure bound. A partial page
@@ -137,12 +152,12 @@ async function readBounded(query, maximum, label, budget) {
 const RESULT_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail', 'assessmentKind',
   'semesterId', 'unitId', 'sourceId', 'category', 'examRound', 'definitionId', 'answerChecks', 'details', 'answers',
   'learningSnapshot', 'earnedPoints', 'maxPoints', 'questionSnapshots', 'questionSnapshotOmittedIds', 'analytics', 'score', 'percent', 'total', 'submittedAtIso', 'timestamp', 'createdAt',
-  'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash'];
+  'attemptId', 'canonicalAttemptId', 'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash', 'gradingCorrections', 'gradingCorrectionSummary'];
 const RESULT_SCOPE_FIELDS = ['studentUid', 'uid', 'studentId', 'userId', 'email', 'studentEmail',
   'assessmentKind', 'semesterId', 'sourceId', 'unitId', 'category', 'examRound', 'definitionId'];
 const SCORE_FIELDS = [...RESULT_SCOPE_FIELDS, 'percent', 'score', 'total', 'earnedPoints', 'maxPoints',
   'learningSnapshot', 'submittedAtIso', 'timestamp', 'createdAt', 'attemptId', 'canonicalAttemptId',
-  'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'sourceHash'];
+  'submissionRef', 'resultRef', 'resultId', 'legacyResultId', 'sourceHash', 'gradingCorrections', 'gradingCorrectionSummary'];
 const QUESTION_FIELDS = ['id', 'unitId', 'subUnitId', 'category', 'type', 'refBig', 'refMid', 'refSmall',
   'contentRevision', 'revision', 'concepts', 'reviewLessonId', 'question', 'options', 'examRound', 'paperOrder', 'points', 'paperBreakBefore',
   'familyId', 'cognitiveProcess', 'cognitiveProcesses', ...ACHIEVEMENT_FIELDS];
@@ -309,7 +324,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     const snapshots = await db.getAll(stateRef(db, scope), ...classes.map(entry => classStateRef(db, scope, entry.id)));
     return hash(classes.map((entry, index) => `${entry.id}:${versionOf([snapshots[0], snapshots[index + 1]])}`).join('\n'));
   };
-  const cached = async (scope, key, classId, forceRefresh, build, kind) => serial(key, async () => {
+  const cached = async (scope, key, classId, forceRefresh, build, kind, live = false) => serial(key, async () => {
     for (let attempt = 0; attempt < 2; attempt++) {
       const before = await revision(scope, classId, kind);
       const ref = db.doc(`quiz_class_analysis_cache/${hash(key)}`);
@@ -321,7 +336,16 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const written = await db.runTransaction(async tx => {
         const snapshots = await tx.getAll(...before.refs);
         const currentVersion = versionOf(snapshots, kind);
-        if (currentVersion !== before.version) return false;
+        if (currentVersion !== before.version) {
+          const current = dataOf(snapshots[0]);
+          // A live reader has a pre-read cursor and replays concurrent results.
+          // Return this baseline without caching it; never restart the whole
+          // class query merely because another pupil submitted during loading.
+          if (live && before.value.catalog === (current.catalogGeneration || '')
+            && before.value.roster === (current.rosterGeneration || '')
+            && before.value.content === (current.contentGeneration || '')) return true;
+          return false;
+        }
         tx.set(ref, { schemaVersion: SCHEMA, version: before.version, expiresAtMs: now() + CACHE_TTL, payload });
         return true;
       });
@@ -537,7 +561,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         && (round === query.examRound || (cumulativeMockExams && Number(round.slice(6)) <= Number(query.examRound.slice(6)))));
     };
     const add = (doc, source, normalizedRaw, decodedData) => {
-      const data = decodedData || doc.data(), raw = normalizedRaw || json(data);
+      const data = decodedData || doc.data(), raw = effectiveQuizResult(normalizedRaw || json(data));
       raw.behaviorAnswersAvailable = source === 'canonical' && !!data.answers
         && typeof data.answers === 'object' && !Array.isArray(data.answers);
       if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
@@ -721,31 +745,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }
     return result;
   };
-  const query = async input => {
-    const budget = { documents: 0, bytes: 0 };
-    const gradeRevision = input.grade ? await revision(input.semesterId, '') : null;
-    if (input.mode === 'achievement') {
-      // Explicitly requested evidence is read afresh. This route never creates
-      // a catalog/cache record and never changes grading or worksheet progress.
-      const classDocs = await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId), 300, '학급', budget);
-      const selectedClasses = selectClasses(classDocs.filter(doc => doc.data().status === 'ACTIVE').map(doc => ({
-        id: doc.id, grade: text(doc.data().grade), classNumber: text(doc.data().classNumber),
-        label: `${doc.data().grade}학년 ${doc.data().classNumber}반`,
-      })).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })), input);
-      const version = await scopeRevision(input.semesterId, selectedClasses);
-      const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
-      const [allRows, questions, treeData] = await Promise.all([
-        loadResults(input, students, true, budget, true),
-        loadQuestions(input, false, budget, [...QUESTION_FIELDS, 'answer']),
-        loadTree(input.semesterId),
-      ]);
-      if (!questions.length) fail('not-found', '선택한 모의고사를 찾을 수 없습니다.', 'QUIZ_ANALYSIS_ASSESSMENT_NOT_FOUND');
-      const rawRows = allRows.filter(row => {
-        const raw = row.raw, parts = text(raw.definitionId).split(':');
-        return text(raw.sourceId || raw.unitId || parts[2]) === input.unitId
-          && categoryOf(raw.category || parts[3]) === 'exam_prep'
-          && roundOf(raw.category || parts[3], raw.examRound || parts[4]) === input.examRound;
-      });
+  const prepareAchievementRows = rawRows => {
       for (const row of rawRows.filter(row => row.source === 'canonical')) {
         const metadata = new Map((row.raw.learningSnapshot || []).map(item => [text(item.id), item]));
         for (const item of row.raw.answerChecks || []) {
@@ -760,6 +760,42 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         }
         row.raw.learningSnapshot = [...metadata.values()];
       }
+  };
+  const liveReader = createLiveReader({ db, json, resultFields: RESULT_FIELDS, scoreFields: SCORE_FIELDS,
+    questionFields: QUESTION_FIELDS, adaptRecords, buildMockExamScoreRows, effectiveQuizResult, prepareAchievementRows });
+  const verifyLiveState = async (initial, scope, classes) => {
+    const current = await liveReader.state(scope, classes);
+    if (initial.contextVersion !== current.contextVersion || initial.contentGeneration !== current.contentGeneration)
+      fail('aborted', '조회 중 문항이나 명단이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
+  };
+  const query = async input => {
+    if (input.mode === 'changes') return liveReader.changes(input);
+    const budget = { documents: 0, bytes: 0 };
+    const gradeRevision = input.grade ? await revision(input.semesterId, '') : null;
+    if (input.mode === 'achievement') {
+      // Explicitly requested evidence is read afresh. This route never creates
+      // a catalog/cache record and never changes grading or worksheet progress.
+      const classDocs = await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId), 300, '학급', budget);
+      const selectedClasses = selectClasses(classDocs.filter(doc => doc.data().status === 'ACTIVE').map(doc => ({
+        id: doc.id, grade: text(doc.data().grade), classNumber: text(doc.data().classNumber),
+        label: `${doc.data().grade}학년 ${doc.data().classNumber}반`,
+      })).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })), input);
+      const version = await scopeRevision(input.semesterId, selectedClasses);
+      const live = input.live ? await liveReader.state(input.semesterId, selectedClasses) : undefined;
+      const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
+      const [allRows, questions, treeData] = await Promise.all([
+        loadResults(input, students, true, budget, true),
+        loadQuestions(input, false, budget, [...QUESTION_FIELDS, 'answer']),
+        loadTree(input.semesterId),
+      ]);
+      if (!questions.length) fail('not-found', '선택한 모의고사를 찾을 수 없습니다.', 'QUIZ_ANALYSIS_ASSESSMENT_NOT_FOUND');
+      const rawRows = allRows.filter(row => {
+        const raw = row.raw, parts = text(raw.definitionId).split(':');
+        return text(raw.sourceId || raw.unitId || parts[2]) === input.unitId
+          && categoryOf(raw.category || parts[3]) === 'exam_prep'
+          && roundOf(raw.category || parts[3], raw.examRound || parts[4]) === input.examRound;
+      });
+      prepareAchievementRows(rawRows);
       const missingAnswers = rawRows.filter(row => row.source === 'canonical'
         && (!row.raw.answers || typeof row.raw.answers !== 'object' || Array.isArray(row.raw.answers)));
       for (let offset = 0; offset < missingAnswers.length; offset += 100) {
@@ -782,10 +818,11 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       const packed = packHistoricalQuestionSnapshots(rawRows, historicalSnapshotHashes);
       const result = { semesterId: input.semesterId, students, ...packed, questions, treeData,
         configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(),
-        version, complete: true, mockExamScoreRows,
+        version, complete: true, mockExamScoreRows, ...(live ? { live } : {}),
         ...(input.grade ? { grade: input.grade } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
-      if (await scopeRevision(input.semesterId, selectedClasses) !== version
+      if (live) await verifyLiveState(live, input.semesterId, selectedClasses);
+      else if (await scopeRevision(input.semesterId, selectedClasses) !== version
         || (gradeRevision && (await revision(input.semesterId, '')).version !== gradeRevision.version))
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       return result;
@@ -824,6 +861,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     };
     if (input.mode === 'detail') {
       const version = await scopeRevision(input.semesterId, selectedClasses);
+      const live = input.live ? await liveReader.state(input.semesterId, selectedClasses) : undefined;
       const students = await loadScopeRoster(input.semesterId, selectedClasses, budget);
       const [rawRows, questionRows] = await Promise.all([searchResult && !searchResult.questions.length ? [] : loadResults(input, students, true, budget), questions()]);
       // Older canonical results contain checks but keep answers only in the
@@ -864,16 +902,20 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       }
       const presentations = input.snapshotDictionary === true ? packHistoricalQuestionSnapshots(rawRows, historicalSnapshotHashes) : { rawRows };
       const result = { semesterId: input.semesterId, students, ...presentations, questions: questionRows, treeData: catalog.treeData,
-        configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(), version, complete: true,
+        configuredClasses: selectedClasses.map(({ id, label }) => ({ id, label })), generatedAt: new Date(now()).toISOString(), version, complete: true, ...(live ? { live } : {}),
         ...(input.grade ? { grade: input.grade } : {}),
         ...(searchResult ? { keyword: input.keyword, search: searchResult.search, basis: KEYWORD_BASIS } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '학급 상세 자료가 너무 큽니다. 요약을 확인하거나 평가 기록 범위를 점검해 주세요.', 'QUIZ_ANALYSIS_DETAIL_TOO_LARGE');
       await verifySearch();
-      if (await scopeRevision(input.semesterId, selectedClasses) !== version)
+      if (live) await verifyLiveState(live, input.semesterId, selectedClasses);
+      else if (await scopeRevision(input.semesterId, selectedClasses) !== version)
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       return result;
     }
     const allClasses = [...new Map([...selectedClasses, ...gradeClasses].map(c => [c.id, c])).values()];
+    const live = input.live ? await liveReader.state(input.semesterId, allClasses) : undefined;
+    const liveData = { students: [], questions: [], records: [], summaries: [],
+      classes: allClasses.map(({ id, label, grade }) => ({ id, label, grade })) };
     // Whole-grade analysis must not combine a pre-transfer class cache with a
     // freshly read destination class while the enrollment trigger is pending.
     // Resolve the roster once, then keep result caches keyed by that membership.
@@ -895,26 +937,41 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
             .sort((a, b) => a[0].localeCompare(b[0]))))}` : '';
           const cacheKey = searchResult ? `keyword:v1:${input.semesterId}:${hash(searchText(input.keyword))}:${searchResult.version}:${targetClass.id}`
             : `summary:${input.semesterId}:${input.unitId}:${input.category}:${input.examRound}:${targetClass.id}`;
-          const summary = await cached(input.semesterId, cacheKey + rosterKey, targetClass.id, input.forceRefresh, async version => {
+          const summary = await cached(input.semesterId, cacheKey + rosterKey + (input.live ? ':live' : ''), targetClass.id, input.forceRefresh, async version => {
               const students = roster || await loadRoster(input.semesterId, targetClass, budget);
               const [rawRows, questionRows] = await Promise.all([searchResult && !searchResult.questions.length ? [] : loadResults(input, students, false, budget), questions()]);
-              return summarizeClass(input, targetClass, students, questionRows, rawRows, new Date(now()).toISOString(), version);
-            });
-          summaries.set(targetClass.id, summary);
+              const result = summarizeClass(input, targetClass, students, questionRows, rawRows, new Date(now()).toISOString(), version);
+              if (input.live) result.livePacked = gzipSync(JSON.stringify({
+                students: students.map(({ uid, classId, number, name }) => ({ uid, classId, number, name })),
+                questions: questionRows.map(question => Object.fromEntries(QUESTION_FIELDS.filter(field => field !== 'question')
+                  .concat(['sourceRevision']).filter(field => Object.hasOwn(question, field)).map(field => [field, question[field]]))),
+                records: adaptRecords(rawRows, students, input.semesterId),
+              })).toString('base64');
+              return result;
+            }, undefined, input.live);
+          const { livePacked, ...publicSummary } = summary;
+          if (livePacked) {
+            const unpacked = JSON.parse(gunzipSync(Buffer.from(livePacked, 'base64'), { maxOutputLength: MAX_BYTES }).toString());
+            liveData.students.push(...unpacked.students); liveData.records.push(...unpacked.records);
+            if (!liveData.questions.length) liveData.questions = unpacked.questions;
+          }
+          summaries.set(targetClass.id, publicSummary);
         } catch (error) { buildError ||= error; }
       }
     }));
     if (buildError) throw buildError;
     await verifySearch();
-    if (aggregateGrade) {
+    if (live) await verifyLiveState(live, input.semesterId, allClasses);
+    else if (aggregateGrade) {
       const states = await db.getAll(stateRef(db, input.semesterId), ...allClasses.map(c => classStateRef(db, input.semesterId, c.id)));
       if (allClasses.some((c, index) => summaries.get(c.id).version !== versionOf([states[0], states[index + 1]]))) {
         fail('aborted', '비교 중 학급 결과가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       }
     }
+    if (live) liveData.summaries = allClasses.map(item => summaries.get(item.id));
     const result = { semesterId: input.semesterId, unitId: input.unitId, category: input.category, examRound: input.examRound,
       classes: selectedClasses.map(c => { const value = summaries.get(c.id); return { ...value, concepts: value.concepts.filter(item => item.wrongCount > 0) }; }), generatedAt: new Date(now()).toISOString(),
-      ...(input.grade ? { grade: input.grade } : {}),
+      ...(input.grade ? { grade: input.grade } : {}), ...(live ? { live, liveData } : {}),
       ...(searchResult ? { keyword: input.keyword, search: searchResult.search } : {}),
       ...(aggregateGrade ? { gradeComparison: summarizeGrade(aggregateGrade,
         gradeClasses.map(c => summaries.get(c.id)), new Date(now()).toISOString()) } : {}) };
@@ -947,6 +1004,7 @@ const createQuizClassAnalysisHandler = ({ db, assertSession = assertScoreWorkflo
 };
 
 function createQuizAnalysisInvalidation({ db }) {
+  const liveRecorder = createLiveRecorder({ db });
   const invalidate = async (scope, fields) => {
     if (!validScope(scope)) return;
     await stateRef(db, scope).set({ ...Object.fromEntries(fields.map(field => [field, randomUUID()])), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -967,6 +1025,7 @@ function createQuizAnalysisInvalidation({ db }) {
     await Promise.all([...ids].map(id => classStateRef(db, scope, id).set({ generation: randomUUID(), updatedAt: FieldValue.serverTimestamp() })));
   };
   const onResult = async event => {
+    if (validId(event.params?.resultId)) return liveRecorder.result(event);
     const invalidated = new Set();
     for (const snapshot of [event.data?.before, event.data?.after]) {
       if (!snapshot?.exists) continue;
@@ -982,6 +1041,7 @@ function createQuizAnalysisInvalidation({ db }) {
     }
   };
   const onScope = fields => async event => {
+    if (validId(event.params?.questionId)) return liveRecorder.question(event);
     const scopes = new Set([event.params?.year ? `${event.params.year}-${event.params.semester}` : '',
       event.data?.before?.exists ? event.data.before.data().semesterId : '', event.data?.after?.exists ? event.data.after.data().semesterId : ''].filter(validScope));
     await Promise.all([...scopes].map(scope => invalidate(scope, fields)));

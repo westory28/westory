@@ -97,6 +97,7 @@ export function historyReviewQuestion(
       : undefined,
     submittedAnswer: saved.userAnswer,
     submittedAnswerAvailable: saved.userAnswerAvailable,
+    submittedCorrect: detail.correct === true,
     concepts: strings(detail.concepts),
     reviewLessonId:
       typeof detail.reviewLessonId === "string"

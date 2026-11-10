@@ -2,6 +2,7 @@ const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { loadQuizReviewNotes } = require('./studentQuizReviewNotes');
+const { effectiveQuizResult } = require('./quizQuestionCorrections');
 
 const PAGE_SIZE = 20;
 const MAX_RECORDS = 5000;
@@ -9,7 +10,8 @@ const CACHE_TTL_MS = 10 * 60 * 1000;
 const FIELDS = ['studentUid', 'uid', 'semesterId', 'assessmentKind', 'definitionId',
   'unitId', 'sourceId', 'category', 'examRound', 'title', 'unitTitle', 'score', 'percent',
   'total', 'correctCount', 'wrongCount', 'answerChecks', 'timestamp', 'submittedAtIso',
-  'attemptId', 'canonicalAttemptId', 'resultId', 'legacyResultId', 'submissionRef', 'resultRef', 'status'];
+  'attemptId', 'canonicalAttemptId', 'resultId', 'legacyResultId', 'submissionRef', 'resultRef', 'status',
+  'gradingCorrectionSummary', 'gradingCorrectionVersion'];
 const text = value => typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (code, message) => { throw new HttpsError(code, message); };
@@ -34,6 +36,7 @@ const validate = data => {
 
 function normalizeRows(documents, uid, semesterId, titles = {}) {
   const rows = documents.flatMap(({ id, source, raw }) => {
+    raw = effectiveQuizResult(raw);
     if ((raw.studentUid || raw.uid) !== uid || (raw.uid && raw.uid !== uid)
       || (raw.semesterId && raw.semesterId !== semesterId)
       || (source === 'canonical' && raw.assessmentKind !== 'QUIZ')
@@ -69,6 +72,7 @@ function normalizeRows(documents, uid, semesterId, titles = {}) {
 }
 
 function canonicalDetail(id, raw, answers) {
+  raw = effectiveQuizResult({ ...raw, ...(answers ? { answers } : {}) });
   const parts = text(raw.definitionId).split(':');
   const originalCategory = text(raw.category || parts[3]);
   const recordedAtMs = milliseconds(raw.submittedAtIso || raw.timestamp) || null;
@@ -80,6 +84,7 @@ function canonicalDetail(id, raw, answers) {
     category: originalCategory.startsWith('exam_prep') ? 'exam_prep' : originalCategory,
     examRound: text(raw.examRound || parts[4] || (originalCategory.match(/round_\d+/) || [])[0]),
     score: scoreValue(raw.percent), submittedAtIso: raw.submittedAtIso || '',
+    gradingCorrectionVersion: raw.gradingCorrectionVersion || '',
     ...(Number.isFinite(raw.earnedPoints) && Number.isFinite(raw.maxPoints)
       ? { earnedPoints: raw.earnedPoints, maxPoints: raw.maxPoints } : {}),
     ...(raw.paperHeader ? { paperHeader: raw.paperHeader } : {}),

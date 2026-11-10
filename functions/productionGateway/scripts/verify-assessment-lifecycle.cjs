@@ -1344,6 +1344,89 @@ const runMockStateReadBounds = async () => {
   assert.equal(f.fixture.writeCount + blocked.fixture.writeCount + ordinary.fixture.writeCount, 0);
 };
 
+const runStartReadConcurrency = async () => {
+  const definitionId = "quiz:2026-2:exam_prep:exam_prep:round_2";
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${definitionId}`;
+  const priorResultPath = `${assessment.RESULT_COLLECTION}/prior-round-result`;
+  const fixture = new MemoryStore({ ...seed,
+    "years/2026/semesters/2/quiz_questions/851": { id: 851, unitId: "exam_prep", category: "exam_prep",
+      type: "short", question: "합성 병렬 시작 검증", answer: "명", contentRevision: 1,
+      examRound: "round_2", paperOrder: 1, points: 3 },
+    [priorResultPath]: { studentUid: student.uid, semesterId,
+      definitionId: "quiz:2026-2:exam_prep:exam_prep:round_1" },
+  });
+  const apply = (target, commandType, payload, actor = admin, wrap = transaction => transaction) => target.runTransaction(transaction => adapter.apply({
+    transaction: wrap(transaction), commandId: commandId(), receiptId: "parallel-start-test", timestamp: { __serverTimestamp: nowMs },
+    actor: { actorUid: actor.uid, actorRole: actor === admin ? "admin" : "student" }, commandType,
+    payload: assessment.normalizeAssessmentPayload(commandType, payload),
+  }));
+  const base = definitionPayload("QUIZ");
+  await apply(fixture, "saveQuizAssessmentSettings", { ...base, definitionId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_2",
+    questionCount: 1, maxAttempts: 20, legacyConfigKey: "exam_prep_exam_prep__round_2", expectedRevision: 0,
+    reason: "Synthetic concurrent START reads", presentationSettings: { ...base.presentationSettings, questionCount: 1 } });
+  const freshSeed = Object.fromEntries(fixture.documents);
+  const releases = new Map(), began = [];
+  const hold = name => {
+    began.push(name);
+    return new Promise(resolve => releases.set(name, resolve));
+  };
+  fixture.queryLog.length = 0;
+  const started = apply(fixture, "startAssessmentAttempt", { definitionId }, student, transaction => ({
+    ...transaction,
+    getAll: async paths => {
+      await hold("enrollment");
+      return transaction.getAll(paths);
+    },
+    query: async (collection, query) => {
+      if (collection === assessment.RESULT_COLLECTION) await hold("prerequisite");
+      if (collection === assessment.ATTEMPT_COLLECTION) await hold("prior");
+      return transaction.query(collection, query);
+    },
+  }));
+  try {
+    await new Promise(setImmediate);
+    assert.deepEqual(began, ["enrollment", "prerequisite", "prior"], "All independent reads begin before any completes");
+    assert.equal(fixture.queryLog.length, 0, "Question source is not read before authority checks finish");
+  } finally {
+    releases.forEach(release => release());
+  }
+  const attempt = (await started).result;
+  assert.equal(attempt.questionPresentation.length, 1);
+  assert.equal(attempt.startedAtIso, new Date(nowMs).toISOString());
+  assert.equal(attempt.deadlineAtIso, new Date(nowMs + base.durationSeconds * 1000).toISOString());
+  const sourceQueries = fixture.queryLog.filter(item => item.collectionPath.endsWith("/quiz_questions"));
+  assert.equal(sourceQueries.length, 1, "New START loads its source exactly once after admission");
+  fixture.queryLog.length = 0;
+  const resumed = (await apply(fixture, "startAssessmentAttempt", { definitionId }, student)).result;
+  assert.equal(resumed.attemptId, attempt.attemptId);
+  assert.equal(resumed.deadlineAtIso, attempt.deadlineAtIso);
+  assert.equal(fixture.queryLog.filter(item => item.collectionPath.endsWith("/quiz_questions")).length, 0, "Resume does not speculate a source read");
+
+  for (const test of [
+    { reason: "ASSESSMENT_SEMESTER_NOT_ACTIVE", mutate: f => { f.documents.get("site_settings/semester_active").revision++; f.documents.delete(priorResultPath); } },
+    { reason: "ASSESSMENT_PREREQUISITE_REQUIRED", mutate: f => f.documents.delete(priorResultPath) },
+    { reason: "ASSESSMENT_STUDENT_NOT_ASSIGNED", mutate: f => { f.documents.get(definitionPath).assignedStudentUids = ["another-student"]; } },
+    { reason: "SYNTHETIC_PRIOR_READ_FAILED", mutate() {} },
+  ]) {
+    const denied = new MemoryStore(freshSeed);
+    test.mutate(denied);
+    let priorReads = 0;
+    await assert.rejects(apply(denied, "startAssessmentAttempt", { definitionId }, student, transaction => ({
+      ...transaction,
+      query: async (collection, query) => {
+        if (collection === assessment.ATTEMPT_COLLECTION) {
+          priorReads++;
+          throw Object.assign(new Error("Synthetic prior read failed"), { details: { reason: "SYNTHETIC_PRIOR_READ_FAILED" } });
+        }
+        return transaction.query(collection, query);
+      },
+    })), error => error?.details?.reason === test.reason, "Parallel failures preserve the original authorization/error priority");
+    assert.equal(denied.writeCount, 0);
+    assert.equal(denied.queryLog.filter(item => item.collectionPath.endsWith("/quiz_questions")).length, 0);
+    if (test.reason === "ASSESSMENT_STUDENT_NOT_ASSIGNED") assert.equal(priorReads, 0, "An explicitly unassigned student does not query attempts");
+  }
+};
+
 const runMockStartReadBounds = async () => {
   for (const fixedPaper of [true, false]) {
     const fixture = new MemoryStore({ ...seed,
@@ -1645,6 +1728,7 @@ const runLegacyReceiptHints = async () => {
   await runMockRetakeOverview();
   await runMockStateReadBounds();
   await runMockStartReadBounds();
+  await runStartReadConcurrency();
   await runShortAnswerAliases();
   await runMockSourceQueryBounds();
   await runClassVisibilityCommands();
@@ -1795,6 +1879,7 @@ const runLegacyReceiptHints = async () => {
       "MOCK_RETAKE_LIMIT_RESET_RESUME_LEGACY_OWNER_SEMESTER_AND_MASKED_READ_BOUNDS",
       "MOCK_STATE_PROJECTED_HISTORY_SINGLE_SELECTED_PAPER_SEMESTER_REUSE_AND_UNCHANGED_GATES",
       "MOCK_START_PROJECTED_HISTORY_FROZEN_RESUME_RETAKE_LIMIT_RESET_ORDINAL_AND_LEGACY_RANKING",
+      "START_READS_ACTUALLY_OVERLAP_AUTHORITY_ERROR_PRIORITY_ZERO_DENIED_WRITES_SOURCE_ONCE_AND_FROZEN_RESUME",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
