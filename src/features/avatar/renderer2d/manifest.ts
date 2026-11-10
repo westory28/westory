@@ -24,6 +24,8 @@ export interface ArtSelectionVariant {
   hideIds?: string[];
   hideSlots?: string[];
   clipGroups?: Record<string, Rect>;
+  /** Fit hair, features and headwear to the selected face before posing. */
+  transforms?: Record<string, ArtTransform>;
 }
 export interface ArtSelection extends ArtSelectionVariant {
   /** Complete pose artwork; omitted hide rules inherit the default selection. */
@@ -219,6 +221,32 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
       for (const [group, clip] of Object.entries(selection.clipGroups))
         if (!own(groups, group) || !clipRect(clip)) return fail();
     };
+    const transforms = (selection: Record<string, unknown>) => {
+      if (selection.transforms === undefined) return;
+      if (!dictionary(selection.transforms)) return fail();
+      for (const [group, transform] of Object.entries(selection.transforms)) {
+        if (!own(groups, group) || !dictionary(transform)) return fail();
+        if (
+          transform.rotation !== undefined &&
+          (typeof transform.rotation !== "number" ||
+            !Number.isFinite(transform.rotation) ||
+            Math.abs(transform.rotation) > Math.PI * 2)
+        )
+          return fail();
+        if (
+          transform.translate !== undefined &&
+          (!pair(transform.translate) ||
+            transform.translate.some((n) => Math.abs(n) > 1))
+        )
+          return fail();
+        if (
+          transform.scale !== undefined &&
+          (!pair(transform.scale) ||
+            transform.scale.some((n) => n < 0.5 || n > 2))
+        )
+          return fail();
+      }
+    };
     layers(art.base);
     for (const slot of DRAWN_SLOTS) {
       const values = art.slots[slot];
@@ -230,6 +258,7 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
           layers(choice.layers);
           hides(choice);
           clips(choice);
+          transforms(choice);
           if (choice.poses !== undefined) {
             if (!dictionary(choice.poses)) return fail();
             for (const [poseName, variant] of Object.entries(choice.poses)) {
@@ -242,6 +271,7 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
               layers(variant.layers);
               hides(variant);
               clips(variant);
+              transforms(variant);
             }
           }
         }
@@ -251,31 +281,7 @@ export function validateManifest(raw: unknown): AvatarArtManifest {
       if (!dictionary(pose)) return fail();
       if (pose.layers !== undefined) layers(pose.layers);
       hides(pose);
-      if (pose.transforms !== undefined) {
-        if (!dictionary(pose.transforms)) return fail();
-        for (const [group, transform] of Object.entries(pose.transforms)) {
-          if (!own(groups, group) || !dictionary(transform)) return fail();
-          if (
-            transform.rotation !== undefined &&
-            (typeof transform.rotation !== "number" ||
-              !Number.isFinite(transform.rotation) ||
-              Math.abs(transform.rotation) > Math.PI * 2)
-          )
-            return fail();
-          if (
-            transform.translate !== undefined &&
-            (!pair(transform.translate) ||
-              transform.translate.some((n) => Math.abs(n) > 1))
-          )
-            return fail();
-          if (
-            transform.scale !== undefined &&
-            (!pair(transform.scale) ||
-              transform.scale.some((n) => n < 0.5 || n > 2))
-          )
-            return fail();
-        }
-      }
+      transforms(pose);
     }
   }
   return raw as unknown as AvatarArtManifest;
@@ -309,6 +315,12 @@ export function resolveArt(manifest: AvatarArtManifest, look: AvatarLook) {
   const visibleSelections = selections.filter(
     ({ slot }) => !hiddenSlots.has(slot),
   );
+  const transforms: Record<string, ArtTransform> = {};
+  // Merge properties, not whole groups: a pose's rotation must retain the
+  // face's width fit. Hidden garments must not affect visible geometry.
+  for (const source of [...visibleSelections.map(({ choice }) => choice), pose])
+    for (const [group, transform] of Object.entries(source.transforms || {}))
+      transforms[group] = { ...transforms[group], ...transform };
   const hiddenIds = new Set([
     ...visibleSelections.flatMap(({ choice }) => choice.hideIds || []),
     ...(pose.hideIds || []),
@@ -341,5 +353,9 @@ export function resolveArt(manifest: AvatarArtManifest, look: AvatarLook) {
   }
   const layers = [...byId.values()].sort((a, b) => a.z - b.z);
   if (layers.length > 64) throw new Error("아바타 이미지 수가 너무 많습니다.");
-  return { art, pose, layers };
+  return {
+    art,
+    pose: Object.keys(transforms).length ? { ...pose, transforms } : pose,
+    layers,
+  };
 }

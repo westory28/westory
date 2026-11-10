@@ -4,6 +4,7 @@
  */
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { applyAvatarProportions } from "./avatar-2d-proportions.mjs";
 const file = "scripts/avatar-2d-art-registry.json";
 const spec = JSON.parse(await fs.readFile(file, "utf8"));
 const catalog = JSON.parse(
@@ -792,6 +793,7 @@ for (const character of ["girl", "boy"]) {
 }
 for (const cell of spec.cells.filter((c) => c.id.startsWith("head-")))
   cell.group = "face";
+applyAvatarProportions(spec);
 await fs.writeFile(file, JSON.stringify(spec, null, 2) + "\n");
 console.log(
   `Registered ${catalog.filter((item) => item.slot === "top").length} tops with 5 complete body poses, ${catalog.filter((item) => item.slot === "bottom").length} bottoms, ${shoeItems.length} shoes, rear/front hair and hat masks.`,

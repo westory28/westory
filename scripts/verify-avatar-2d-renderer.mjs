@@ -75,6 +75,10 @@ slots.accessory.hat = {
   layers: [],
   clipGroups: { hair: [0, 0.2, 1, 0.8] },
 };
+slots.faceShape.slim = {
+  layers: [],
+  transforms: { hair: { scale: [0.6, 1] } },
+};
 slots.top["plain-top"] = {
   layers: [
     { id: "default-top", src: "red.png", rect: [0.4, 0.4, 0.2, 0.45], z: 2 },
@@ -280,6 +284,99 @@ try {
       rejects: [true, true, true, true, true, true, true, true, true],
     },
     "pose artwork replaces default layers, inherits or replaces hide rules, and rejects malformed variants",
+  );
+  assert.deepEqual(
+    await page.evaluate(async (manifest) => {
+      const { validateManifest, resolveArt } =
+        await import("/src/features/avatar/renderer2d/manifest.ts");
+      const { defaultAvatarLook } =
+        await import("/src/features/avatar/catalog.ts");
+      const fitted = structuredClone(manifest);
+      const art = fitted.characters.boy;
+      art.groups.headwear = { parent: "head", pivot: [0.5, 0.35] };
+      art.groups.features = { parent: "head", pivot: [0.5, 0.35] };
+      art.slots.faceShape.slim.transforms = {
+        hair: { scale: [0.6, 1], rotation: 0.05, translate: [0.02, 0] },
+        headwear: { scale: [0.8, 1] },
+        features: { scale: [0.7, 1] },
+      };
+      art.poses.tilt.transforms.hair = { rotation: 0.1 };
+      art.slots.bottom["plain-bottom"] = {
+        layers: [],
+        transforms: { head: { scale: [2, 2] } },
+      };
+      validateManifest(fitted);
+      const original = JSON.stringify(fitted);
+      const look = {
+        ...defaultAvatarLook("boy"),
+        top: "plain-top",
+        bottom: "plain-bottom",
+        faceShape: "slim",
+        pose: "tilt",
+      };
+      const transforms = resolveArt(fitted, look).pose.transforms;
+      const cleared = resolveArt(fitted, {
+        ...look,
+        faceShape: "natural",
+        pose: "idle",
+      }).pose;
+      const rejects = [];
+      for (const mutation of [
+        (choice) => {
+          choice.transforms = { missing: { scale: [1, 1] } };
+        },
+        (choice) => {
+          choice.transforms = { hair: null };
+        },
+        (choice) => {
+          choice.transforms = { hair: { scale: [0.49, 1] } };
+        },
+        (choice) => {
+          choice.transforms = { hair: { scale: [1, Infinity] } };
+        },
+        (choice) => {
+          choice.transforms = { hair: { translate: [NaN, 0] } };
+        },
+        (choice) => {
+          choice.transforms = { hair: { rotation: Infinity } };
+        },
+        (choice) => {
+          choice.poses = { tilt: { layers: [], transforms: { missing: {} } } };
+        },
+        (choice) => {
+          choice.poses = {
+            tilt: { layers: [], transforms: { hair: { scale: [1, 2.01] } } },
+          };
+        },
+      ]) {
+        const invalid = structuredClone(fitted);
+        mutation(invalid.characters.boy.slots.faceShape.slim);
+        try {
+          validateManifest(invalid);
+          rejects.push(false);
+        } catch {
+          rejects.push(true);
+        }
+      }
+      return {
+        transforms,
+        cleared: cleared.transforms || {},
+        unchanged: JSON.stringify(fitted) === original,
+        rejects,
+      };
+    }, manifest),
+    {
+      transforms: {
+        hair: { scale: [0.6, 1], rotation: 0.1, translate: [0.02, 0] },
+        headwear: { scale: [0.8, 1] },
+        features: { scale: [0.7, 1] },
+        head: { rotation: -0.15 },
+      },
+      cleared: {},
+      unchanged: true,
+      rejects: [true, true, true, true, true, true, true, true],
+    },
+    "face fitting composes with parent tilt and pose overrides without mutating artwork; hidden selections and malformed transforms cannot change geometry",
   );
   await page.evaluate(async () => {
     window.webglRequests = 0;
@@ -522,6 +619,60 @@ try {
     },
     "hat clipping follows head tilt, intersects the hair's own clip, leaves clothes intact, and clears on removal",
   );
+  assert.deepEqual(
+    await page.evaluate(async () => {
+      const sample = async (points) => {
+        const image = await createImageBitmap(
+          await (await fetch(window.stage2d.capture())).blob(),
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0);
+        const values = points.map(
+          ([x, y]) =>
+            ctx.getImageData(
+              Math.round(x * image.width),
+              Math.round(y * image.height),
+              1,
+              1,
+            ).data[3],
+        );
+        image.close();
+        return values;
+      };
+      window.stage2d.setLook({ faceShape: "slim" });
+      const fitted = await sample([
+        [0.37, 0.25],
+        [0.44, 0.25],
+        [0.63, 0.25],
+      ]);
+      window.stage2d.setPose("tilt");
+      const tilted = await sample(
+        [
+          [0.37, 0.25],
+          [0.44, 0.25],
+          [0.63, 0.25],
+        ].map(([x, y]) => {
+          const dx = (x - 0.5) * 512,
+            dy = (y - 0.35) * 640;
+          return [
+            0.5 + (dx * Math.cos(-0.15) - dy * Math.sin(-0.15)) / 512,
+            0.35 + (dx * Math.sin(-0.15) + dy * Math.cos(-0.15)) / 640,
+          ];
+        }),
+      );
+      window.stage2d.setLook({ faceShape: "natural", pose: "idle" });
+      return {
+        fitted,
+        tilted,
+        restored: window.stage2d.capture() === window.saved,
+      };
+    }),
+    { fitted: [0, 255, 0], tilted: [0, 255, 0], restored: true },
+    "face-specific hair width renders through parent head tilt and returns to original pixels after deselection",
+  );
   assert.equal(
     await page.evaluate(
       () =>
@@ -586,7 +737,7 @@ try {
   );
   assert.deepEqual(errors, [], "no uncaught render errors");
   console.log(
-    "PASS 2D avatar: pose-specific garments and hide rules, headwear clipping through tilt/removal, malformed pose/clip rejection, unused-art requests, failed-pose recovery, deferred outfit, transparent capture, framed previews, rapid-selection cancellation, disposal and zero WebGL/models.",
+    "PASS 2D avatar: face-fit transforms and pose composition/reset, pose-specific garments and hide rules, headwear clipping through tilt/removal, malformed pose/clip/transform rejection, unused-art requests, failed-pose recovery, deferred outfit, transparent capture, framed previews, rapid-selection cancellation, disposal and zero WebGL/models.",
   );
 } finally {
   await browser?.close();

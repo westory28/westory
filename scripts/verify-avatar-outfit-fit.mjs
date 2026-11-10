@@ -1,5 +1,6 @@
 /** Actual 2D art combinations; local assets and synthetic UI only.
  * node scripts/verify-avatar-outfit-fit.mjs [--render-only] [--match=case-pattern]
+ *   [--suite=outfits,hair,bottoms,shoes,faces,accessories,matches] [--list-cases]
  * AVATAR_FIT_OUTPUT, PLAYWRIGHT_MODULE_PATH and PLAYWRIGHT_BROWSER_CHANNEL are optional.
  * The contact sheets require visual review: pixel checks cannot judge clothing taste,
  * anatomy, or whether an intentional strand should appear in front of a collar/hat.
@@ -19,11 +20,17 @@ const matchPattern = process.argv
   .find((argument) => argument.startsWith("--match="))
   ?.slice(8);
 const match = matchPattern ? new RegExp(matchPattern) : null;
+const suiteArgument = process.argv
+  .find((argument) => argument.startsWith("--suite="))
+  ?.slice(8);
+const selectedSuites = suiteArgument
+  ? new Set(suiteArgument.split(",").map((suite) => suite.trim()))
+  : null;
 const output = path.resolve(
   process.env.AVATAR_FIT_OUTPUT ||
     path.join(
       root,
-      match
+      match || selectedSuites
         ? "output/avatar-fit-20261110-filtered"
         : "output/avatar-fit-20261110",
     ),
@@ -57,19 +64,17 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const report = {
   manifestSha256: hash(manifestBytes),
   caseFilter: matchPattern || null,
+  suiteFilter: selectedSuites ? [...selectedSuites] : null,
   network: "local assets only; external requests blocked",
   productionWrites: 0,
   limits:
-    "Automated checks detect missing/empty art, selection failures and clipped full captures. Review contact sheets for anatomical fit, sleeve joins and hair/hat/collar occlusion.",
+    "Structural cross-product coverage, not every possible look: all hair/face/expression combinations, head accessory fits and representative garment families. Automated checks detect missing/empty art, selection failures and clipped full captures. Review contact sheets for anatomy, eye spacing, sleeve joins and hair/hat/collar occlusion.",
   cases: [],
   assets: [],
   layout: [],
   sheets: [],
   errors: [],
 };
-await fs.mkdir(path.join(output, "captures"), { recursive: true });
-await fs.mkdir(path.join(output, "sheets"), { recursive: true });
-
 const cases = [];
 function addCase(suite, group, patch) {
   const key = [suite, ...Object.values(patch)].join("--");
@@ -126,10 +131,120 @@ for (const character of ["girl", "boy"]) {
         shoes: shoes.value,
         pose,
       });
+  for (const hair of choices(character, "hairStyle")) {
+    for (const face of choices(character, "faceShape")) {
+      for (const expression of choices(character, "expression"))
+        addCase("faces", `${character}-${hair.value}`, {
+          character,
+          hairStyle: hair.value,
+          faceShape: face.value,
+          expression: expression.value,
+          pose: "idle",
+        });
+      for (const accessory of ["glasses-round", "star-clip", "headphones"])
+        for (const pose of ["idle", "tilt"])
+          addCase("accessories", `${character}-${hair.value}`, {
+            character,
+            hairStyle: hair.value,
+            accessory,
+            faceShape: face.value,
+            pose,
+          });
+    }
+  }
+  // Colorways share silhouettes. Cross each distinct upper/lower garment shape
+  // in every pose, including hidden bottoms beneath full-length robes.
+  const topFamilies = [
+    "plain-top",
+    "jacket-navy",
+    "hanbok-ivory",
+    "official-navy",
+    "summer-white",
+    "winter-hoodie",
+    "winter-halfzip",
+  ];
+  const bottomFamilies = [
+    "plain-bottom",
+    "pleated-navy",
+    character === "girl" ? "chima-navy" : "baji-cream",
+    "summer-shorts",
+    "winter-joggers",
+  ];
+  for (const top of topFamilies) {
+    assert(choices(character, "top").some((item) => item.value === top));
+    for (const bottom of bottomFamilies) {
+      assert(
+        choices(character, "bottom").some((item) => item.value === bottom),
+      );
+      for (const pose of choices(character, "pose"))
+        addCase("matches", `${character}-${top}`, {
+          character,
+          top,
+          bottom,
+          pose: pose.value,
+        });
+    }
+  }
 }
 
-const runCases = cases.filter((entry) => !match || match.test(entry.key));
+const availableSuites = [...new Set(cases.map((entry) => entry.suite))];
+for (const suite of selectedSuites || [])
+  assert(availableSuites.includes(suite), `Unknown avatar suite: ${suite}`);
+const requestedCases = cases.filter(
+  (entry) =>
+    (!selectedSuites || selectedSuites.has(entry.suite)) &&
+    (!match || match.test(entry.key)),
+);
+const uniqueLooks = new Map();
+for (const entry of requestedCases) {
+  // An explicit synthetic baseline makes omitted/default choices comparable.
+  // Pass the same complete look to the browser so deduplication and rendering
+  // cannot disagree about a default value.
+  const look = {
+    character: entry.patch.character,
+    skinTone: "original",
+    faceShape: "natural",
+    expression: "natural",
+    hairStyle: entry.patch.character === "boy" ? "curtain" : "bob",
+    hairTone: "original",
+    pose: "idle",
+    top: catalog.defaultClothing.top,
+    bottom: catalog.defaultClothing.bottom,
+    shoes: "plain-shoes",
+    accessory: "none",
+    ...entry.patch,
+  };
+  const key = JSON.stringify(look);
+  const existing = uniqueLooks.get(key);
+  const coveredCase = { suite: entry.suite, key: entry.key };
+  if (existing) existing.coveredCases.push(coveredCase);
+  else uniqueLooks.set(key, { ...entry, look, coveredCases: [coveredCase] });
+}
+const runCases = [...uniqueLooks.values()];
 assert(runCases.length, "No avatar cases matched the requested filter");
+const plannedCoverage = Object.fromEntries(
+  availableSuites.map((suite) => [
+    suite,
+    requestedCases.filter((entry) => entry.suite === suite).length,
+  ]),
+);
+if (process.argv.includes("--list-cases")) {
+  console.log(
+    JSON.stringify(
+      {
+        requested: requestedCases.length,
+        uniqueLooks: runCases.length,
+        duplicateLooks: requestedCases.length - runCases.length,
+        suites: plannedCoverage,
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
+}
+await fs.mkdir(path.join(output, "captures"), { recursive: true });
+await fs.mkdir(path.join(output, "sheets"), { recursive: true });
 
 const server = await createServer({
   root,
@@ -459,80 +574,102 @@ async function contactSheets() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(entry);
   }
-  for (const [group, entries] of groups) {
-    const columns = 6;
-    const tileWidth = 240;
-    const imageHeight = entries[0].suite === "hair" ? 270 : 300;
-    const tileHeight = imageHeight + 56;
-    const tiles = [];
-    for (const [index, entry] of entries.entries()) {
-      let source = sharp(path.join(output, entry.file));
-      if (entry.suite === "hair") {
-        const meta = await source.metadata();
-        source = source.extract({
-          left: 0,
-          top: 0,
-          width: meta.width,
-          height: Math.ceil(meta.height * 0.56),
-        });
-      }
-      const label = Object.entries(entry.patch)
-        .filter(([name]) => name !== "character")
-        .map(([, value]) => value);
-      const lines =
-        entry.suite === "hair"
-          ? [
-              `${entry.patch.hairStyle} / ${entry.patch.accessory}`,
-              `${entry.patch.faceShape} / ${entry.patch.pose}`,
-            ]
-          : [label.slice(0, -1).join(" / "), entry.patch.pose];
-      const escape = (value) =>
-        value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
-      const text = lines
-        .map(
-          (line, row) =>
-            `<text x="8" y="${imageHeight + 19 + row * 18}" font-size="12" font-family="Arial" fill="#334155">${escape(line)}</text>`,
-        )
-        .join("");
-      const tile = await sharp(
-        Buffer.from(
-          `<svg width="${tileWidth}" height="${tileHeight}"><rect width="100%" height="100%" fill="${entry.errors.length ? "#fee2e2" : "#f1f5f9"}"/>${text}</svg>`,
-        ),
-      )
-        .composite([
-          {
-            input: await source
-              .resize(tileWidth, imageHeight, {
-                fit: "contain",
-                background: "#f1f5f9",
-              })
-              .png()
-              .toBuffer(),
+  for (const [group, groupEntries] of groups) {
+    const pageSize = 24;
+    for (let offset = 0; offset < groupEntries.length; offset += pageSize) {
+      const entries = groupEntries.slice(offset, offset + pageSize);
+      const pageNumber = Math.floor(offset / pageSize) + 1;
+      const pageCount = Math.ceil(groupEntries.length / pageSize);
+      const columns = 6;
+      const tileWidth = 240;
+      const faceDetail = ["hair", "faces", "accessories"].includes(
+        entries[0].suite,
+      );
+      const imageHeight = faceDetail ? 270 : 300;
+      const tileHeight = imageHeight + 56;
+      const tiles = [];
+      for (const [index, entry] of entries.entries()) {
+        let source = sharp(path.join(output, entry.file));
+        if (faceDetail) {
+          const meta = await source.metadata();
+          source = source.extract({
             left: 0,
             top: 0,
-          },
-        ])
+            width: meta.width,
+            height: Math.ceil(meta.height * 0.56),
+          });
+        }
+        const label = Object.entries(entry.patch)
+          .filter(([name]) => name !== "character")
+          .map(([, value]) => value);
+        const lines =
+          entry.suite === "faces"
+            ? [
+                `${entry.patch.hairStyle} / ${entry.patch.faceShape}`,
+                `${entry.patch.expression} / ${entry.patch.pose}`,
+              ]
+            : faceDetail
+              ? [
+                  `${entry.patch.hairStyle} / ${entry.patch.accessory}`,
+                  `${entry.patch.faceShape} / ${entry.patch.pose}`,
+                ]
+              : [label.slice(0, -1).join(" / "), entry.patch.pose];
+        const escape = (value) =>
+          value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
+        const text = lines
+          .map(
+            (line, row) =>
+              `<text x="8" y="${imageHeight + 19 + row * 18}" font-size="12" font-family="Arial" fill="#334155">${escape(line)}</text>`,
+          )
+          .join("");
+        const tile = await sharp(
+          Buffer.from(
+            `<svg width="${tileWidth}" height="${tileHeight}"><rect width="100%" height="100%" fill="${entry.errors.length ? "#fee2e2" : "#f1f5f9"}"/>${text}</svg>`,
+          ),
+        )
+          .composite([
+            {
+              input: await source
+                .resize(tileWidth, imageHeight, {
+                  fit: "contain",
+                  background: "#f1f5f9",
+                })
+                .png()
+                .toBuffer(),
+              left: 0,
+              top: 0,
+            },
+          ])
+          .png()
+          .toBuffer();
+        tiles.push({
+          input: tile,
+          left: (index % columns) * tileWidth,
+          top: Math.floor(index / columns) * tileHeight,
+        });
+      }
+      const suffix =
+        pageCount > 1 ? `-${String(pageNumber).padStart(2, "0")}` : "";
+      const file = `sheets/${group}${suffix}.png`;
+      await sharp({
+        create: {
+          width: columns * tileWidth,
+          height: Math.ceil(entries.length / columns) * tileHeight,
+          channels: 4,
+          background: "#ffffff",
+        },
+      })
+        .composite(tiles)
         .png()
-        .toBuffer();
-      tiles.push({
-        input: tile,
-        left: (index % columns) * tileWidth,
-        top: Math.floor(index / columns) * tileHeight,
+        .toFile(path.join(output, file));
+      report.sheets.push({
+        group,
+        page: pageNumber,
+        pages: pageCount,
+        cases: entries.length,
+        file,
       });
     }
-    const file = `sheets/${group}.png`;
-    await sharp({
-      create: {
-        width: columns * tileWidth,
-        height: Math.ceil(entries.length / columns) * tileHeight,
-        channels: 4,
-        background: "#ffffff",
-      },
-    })
-      .composite(tiles)
-      .png()
-      .toFile(path.join(output, file));
-    report.sheets.push({ group, cases: entries.length, file });
   }
 }
 
@@ -608,7 +745,7 @@ try {
     try {
       const rendered = await page.evaluate(
         (patch) => window.renderFitCase(patch),
-        entry.patch,
+        entry.look,
       );
       const bytes = Buffer.from(rendered.image.split(",")[1], "base64");
       const { data, info } = await sharp(bytes)
@@ -640,9 +777,15 @@ try {
         );
       for (const slot of rendered.coverage)
         if (
-          ["top", "bottom", "shoes", "hairStyle", "faceShape"].includes(
-            slot.slot,
-          ) &&
+          [
+            "top",
+            "bottom",
+            "shoes",
+            "hairStyle",
+            "faceShape",
+            "expression",
+            "accessory",
+          ].includes(slot.slot) &&
           !slot.hidden &&
           slot.expected &&
           !slot.selected.length
@@ -697,9 +840,9 @@ try {
     for (const top of choices(character, "top")) {
       const matching = report.cases.filter(
         (entry) =>
-          entry.suite === "outfits" &&
-          entry.patch.character === character &&
-          entry.patch.top === top.value,
+          entry.coveredCases.some((covered) => covered.suite === "outfits") &&
+          entry.look.character === character &&
+          entry.look.top === top.value,
       );
       if (
         new Set(matching.map((entry) => entry.imageSha256).filter(Boolean))
@@ -736,11 +879,20 @@ try {
   report.passed = report.errors.length === 0;
   report.summary = {
     planned: runCases.length,
+    requested: requestedCases.length,
+    deduplicated: requestedCases.length - runCases.length,
+    plannedCoverage,
     rendered: report.cases.length,
     suites: Object.fromEntries(
       [...new Set(cases.map((entry) => entry.suite))].map((suite) => [
         suite,
-        report.cases.filter((entry) => entry.suite === suite).length,
+        report.cases.reduce(
+          (count, entry) =>
+            count +
+            entry.coveredCases.filter((covered) => covered.suite === suite)
+              .length,
+          0,
+        ),
       ]),
     ),
     assets: report.assets.length,
