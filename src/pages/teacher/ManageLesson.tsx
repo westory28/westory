@@ -26,10 +26,7 @@ import {
   where,
 } from "firebase/firestore";
 import { ref, uploadBytes } from "firebase/storage";
-import {
-  getSemesterCollectionPath,
-  getSemesterDocPath,
-} from "../../lib/semesterScope";
+import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import { normalizeLessonBlankClip } from "../../lib/lessonBlankClip";
 import {
@@ -63,6 +60,11 @@ import {
   readTeacherLessonDocument,
   type TeacherLessonDocument,
 } from "../../lib/teacherLessonLoading";
+import {
+  invalidateTeacherCurriculum,
+  readTeacherCurriculumDocument,
+  teacherCurriculumContext,
+} from "../../lib/teacherCurriculum";
 import {
   buildFailedLessonPdfProcessingMeta,
   buildQueuedLessonPdfProcessingMeta,
@@ -613,7 +615,12 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
 });
 
 const ManageLesson: React.FC = () => {
-  const { config, userData, currentUser } = useAuth();
+  const { config, userData, currentUser, authGeneration } = useAuth();
+  const curriculumContext = teacherCurriculumContext(
+    currentUser?.uid,
+    authGeneration,
+    userData,
+  );
   const { showToast } = useAppToast();
   const [corePointOverviewRequested, setCorePointOverviewRequested] =
     useState(false);
@@ -737,6 +744,7 @@ const ManageLesson: React.FC = () => {
   const deletedFootnoteAssetPathsRef = useRef<string[]>([]);
   const treeRevisionRef = useRef<number | null>(null);
   const treeScopeRef = useRef<LessonCommandScope | null>(null);
+  const treeLoadIdRef = useRef(0);
   const lessonRevisionRef = useRef<number | null>(null);
   const lessonScopeRef = useRef<LessonCommandScope | null>(null);
   const lessonLegacyRef = useRef(false);
@@ -1457,6 +1465,7 @@ const ManageLesson: React.FC = () => {
 
   useEffect(() => {
     lessonLoadIdRef.current += 1;
+    treeLoadIdRef.current += 1;
     lessonRevisionRef.current = null;
     lessonScopeRef.current = null;
     treeRevisionRef.current = null;
@@ -1464,8 +1473,9 @@ const ManageLesson: React.FC = () => {
     void loadTree();
     return () => {
       lessonLoadIdRef.current += 1;
+      treeLoadIdRef.current += 1;
     };
-  }, [config?.year, config?.semester, currentUser?.uid]);
+  }, [config?.year, config?.semester, curriculumContext.key]);
   useEffect(() => {
     if (!sourceArchivePickerFootnoteId || !currentUser?.uid) {
       setSourceArchiveLoading(false);
@@ -1883,25 +1893,36 @@ const ManageLesson: React.FC = () => {
 
   const loadTree = async () => {
     const loadId = lessonLoadIdRef.current;
+    const treeLoadId = treeLoadIdRef.current;
     const expectedUid = currentUser?.uid;
     const isCurrent = () =>
       loadId === lessonLoadIdRef.current &&
       Boolean(expectedUid) &&
       expectedUid === auth.currentUser?.uid;
+    const isTreeCurrent = () =>
+      treeLoadId === treeLoadIdRef.current &&
+      Boolean(expectedUid) &&
+      expectedUid === auth.currentUser?.uid;
     const scopedCollectionPath = getSemesterCollectionPath(config, "lessons");
     try {
-      const [commandScope, scopedDoc] = await Promise.all([
-        getLessonCommandScope(config).catch(() => null),
-        getDocFromServer(
-          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
-        ),
-      ]);
+      const scopePromise = (
+        canEdit ? getLessonCommandScope(config) : Promise.resolve(null)
+      )
+        .catch(() => null)
+        .then((commandScope) => {
+          if (isTreeCurrent()) treeScopeRef.current = commandScope;
+          return commandScope;
+        });
+      const scopedDoc = await readTeacherCurriculumDocument(
+        config,
+        curriculumContext,
+      );
       const applyLoadedTree = async (nextTree: TreeNode[]) => {
         if (!isCurrent()) return;
         setTreeData(nextTree);
         if (selectedNodeId) {
-          await loadLessonContent(selectedNodeId, selectedNodeTitle, {
-            commandScope,
+          void loadLessonContent(selectedNodeId, selectedNodeTitle, {
+            commandScope: scopePromise,
             expectedUid,
             scopedCollectionPath,
           });
@@ -1919,11 +1940,11 @@ const ManageLesson: React.FC = () => {
         setSelectedNodeId(latestSelection.node.id);
         setSelectedNodeTitle(latestSelection.node.title);
         setEditorTab("pdf");
-        await loadLessonContent(
+        void loadLessonContent(
           latestSelection.node.id,
           latestSelection.node.title,
           {
-            commandScope,
+            commandScope: scopePromise,
             expectedUid,
             scopedCollectionPath,
             lesson: latest.lesson,
@@ -1936,16 +1957,18 @@ const ManageLesson: React.FC = () => {
         throw new Error("트리의 저장 상태를 확인하지 못했습니다.");
       if (scopedDoc.exists() && scopedDoc.data().tree) {
         treeRevisionRef.current = scopedDoc.data().contentRevision ?? 0;
-        treeScopeRef.current = commandScope;
         await applyLoadedTree(scopedDoc.data().tree);
         return;
       }
-      const legacyDoc = await getDocFromServer(doc(db, "curriculum", "tree"));
+      const legacyDoc = await readTeacherCurriculumDocument(
+        config,
+        curriculumContext,
+        { legacy: true },
+      );
       if (!isCurrent()) return;
       if (legacyDoc.metadata.hasPendingWrites)
         throw new Error("트리의 저장 상태를 확인하지 못했습니다.");
       treeRevisionRef.current = 0;
-      treeScopeRef.current = commandScope;
       if (legacyDoc.exists() && legacyDoc.data().tree) {
         await applyLoadedTree(legacyDoc.data().tree);
         return;
@@ -1987,6 +2010,7 @@ const ManageLesson: React.FC = () => {
           commandScope,
         },
       );
+      invalidateTeacherCurriculum(config);
       if (
         loadId !== lessonLoadIdRef.current ||
         auth.currentUser?.uid !== expectedUid
@@ -1996,6 +2020,7 @@ const ManageLesson: React.FC = () => {
       setTreeData(newTree);
       if (!silent) alert("트리 구조를 저장했습니다.");
     } catch (error) {
+      invalidateTeacherCurriculum(config);
       console.error(error);
       if (loadId !== lessonLoadIdRef.current) return;
       alert(
@@ -2104,7 +2129,10 @@ const ManageLesson: React.FC = () => {
     unitId: string,
     title: string,
     loaded?: {
-      commandScope: LessonCommandScope | null;
+      commandScope:
+        | LessonCommandScope
+        | null
+        | Promise<LessonCommandScope | null>;
       expectedUid: string | undefined;
       scopedCollectionPath: string;
       lesson?: TeacherLessonDocument;
@@ -2140,17 +2168,29 @@ const ManageLesson: React.FC = () => {
     deletedFootnoteAssetPathsRef.current = [];
     setScreenBusyMessage("수업 자료를 불러오는 중입니다...");
     try {
-      const [commandScope, lesson] = await Promise.all([
+      // Reading content does not need the write pointer. Saving still compares
+      // this pointer with a fresh server read and rejects an unresolved scope.
+      void Promise.resolve(
         loaded
           ? loaded.commandScope
-          : getLessonCommandScope(config).catch(() => null),
+          : canEdit
+            ? getLessonCommandScope(config)
+            : null,
+      )
+        .catch(() => null)
+        .then((commandScope) => {
+          if (isCurrent()) lessonScopeRef.current = commandScope;
+        });
+      const lesson =
         loaded?.lesson ||
-          readTeacherLessonDocument(scopedCollectionPath, unitId, isCurrent),
-      ]);
+        (await readTeacherLessonDocument(
+          scopedCollectionPath,
+          unitId,
+          isCurrent,
+        ));
       if (!lesson || !isCurrent()) return;
       const snapshot = lesson.snapshot;
       lessonRevisionRef.current = snapshot?.data().contentRevision ?? 0;
-      lessonScopeRef.current = commandScope;
       lessonLegacyRef.current = lesson.legacy;
       if (snapshot) {
         const data = normalizeLessonData(snapshot.data(), {
@@ -3397,6 +3437,7 @@ const ManageLesson: React.FC = () => {
         message: errorMessage,
       });
     } finally {
+      if (nextTree) invalidateTeacherCurriculum(config);
       lessonSavingRef.current = false;
       if (loadId === lessonLoadIdRef.current) setScreenBusyMessage(null);
     }

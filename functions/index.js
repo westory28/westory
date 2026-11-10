@@ -22,6 +22,10 @@ exports.manageGongsinmoongo = onCall({ region: REGION, timeoutSeconds: 60, memor
 const registrationPolicyHandlers = require('./studentRegistrationPolicy').createStudentRegistrationPolicyHandlers({ db });
 exports.getStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.getStudentRegistrationPolicy);
 exports.saveStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.saveStudentRegistrationPolicy);
+exports.getTeacherStudentRoster = require('./studentMaintenance').onCallWithStudentMaintenance(
+  { region: 'us-central1', timeoutSeconds: 60, memory: '256MiB', minInstances: 0, maxInstances: 10, concurrency: 40 },
+  require('./teacherStudentRoster').createTeacherStudentRosterHandler({ db }),
+);
 const studentAvatarHandlers = require('./studentAvatar').createStudentAvatarHandlers({
   db,
   bucket: () => require('firebase-admin/storage').getStorage().bucket(),

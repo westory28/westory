@@ -6,11 +6,12 @@ import TeacherSubNavigation from "./components/TeacherSubNavigation";
 import QuizEditor, { type QuizQuestionDraft } from "./components/QuizEditor";
 import QuizBankTab from "./components/QuizBankTab";
 import QuizSettingsModal from "./components/QuizSettingsModal";
-import { db } from "../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { getSemesterDocPath } from "../../lib/semesterScope";
+import {
+  readTeacherCurriculumDocument,
+  teacherCurriculumContext,
+} from "../../lib/teacherCurriculum";
 import {
   canReadQuizManagement,
   canWriteQuizManagement,
@@ -26,7 +27,12 @@ interface TreeUnit {
 const ManageQuiz: React.FC = () => {
   const { config, userData, currentUser, authGeneration } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const identityKey = `${currentUser?.uid || ""}:${authGeneration}:${config?.year}:${config?.semester}`;
+  const curriculumContext = teacherCurriculumContext(
+    currentUser?.uid,
+    authGeneration,
+    userData,
+  );
+  const identityKey = `${curriculumContext.key}:${config?.year}:${config?.semester}`;
   const [treeState, setTreeState] = useState<{
     identity: string;
     data: TreeUnit[];
@@ -82,8 +88,10 @@ const ManageQuiz: React.FC = () => {
     });
     const loadTree = async () => {
       try {
-        const semesterTree = await getDoc(
-          doc(db, getSemesterDocPath(config, "curriculum", "tree")),
+        const semesterTree = await readTeacherCurriculumDocument(
+          config,
+          curriculumContext,
+          { force: treeVersion > 0 },
         );
         if (!active) return;
         if (semesterTree.exists()) {
@@ -96,7 +104,11 @@ const ManageQuiz: React.FC = () => {
           return;
         }
 
-        const legacyTree = await getDoc(doc(db, "curriculum", "tree"));
+        const legacyTree = await readTeacherCurriculumDocument(
+          config,
+          curriculumContext,
+          { legacy: true, force: treeVersion > 0 },
+        );
         if (active)
           setTreeState({
             identity: identityKey,

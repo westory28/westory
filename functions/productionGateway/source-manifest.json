@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-10: Communication audit captured live saveAssessmentProgress archive SHA-256 7c82238d8ce7ed2cb25ee4129d11950cd6d9131f49e31a8923ece1afb84c9213 (updated 2026-11-09). Its older source is preserved in an isolated release with only the SAVE projection changes applied to assessmentLifecycle.js. Deploy saveAssessmentProgress only from that reviewed archive, plus the new isolated us-central1 getTeacherStudentRoster endpoint. Do not deploy the newer full gateway to existing endpoints. Runtime/session/publication policies remain unchanged.",
     "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store.",
     "2026-11-10: Live Seoul executeCommand source matches baseline 94325681 for assessmentLifecycle, productionSource, commandGateway and session dependencies. Project mock START history without frozen bodies; deploy executeCommand only. No runtime configuration, session, permission, rule or external AI changes.",
     "2026-11-09: Performance source audit against 7a9da91f: live getAssessmentState revision 00014-quk matches all 113 compared runtime files, including its 31-file static relative dependency closure. The getQuizClassAnalysis core files match; older indirectly imported assessment modules are not used by its pure buildEnrollmentSlotId helper. Existing roster class/studentClass IN and unit+round/category question query shapes with document-ID order returned HTTP 200 using limit-1 name-only projections; no student fields or identifiers were retained.",
@@ -62,7 +63,7 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "2aaf3d469439aced75077daa3e45aee6929581d5373b98ec7de8aeffc55c6900",
+      "sha256": "30233890ca12f8bdb290b23e3772309779aebbba00ade14ee0b5635714742cb1",
       "changes": [
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
@@ -92,7 +93,8 @@
         "2026-11-09: Atomically update shared material for existing same-round set members, preserve individual questions and frozen attempts, increment revisions to reject stale editors; verified by memory, real Firestore rollback/concurrency and browser authoring tests.",
         "2026-11-10: Project mock START history to attempt metadata, hydrate only a resumed paper, and retain full learning history for unassigned legacy banks; preserve authorization, immutable ordinals, attempt limits, receipts, answers and deadlines.",
         "2026-11-10: Overlap independent START enrollment, prior-round prerequisite and own-attempt reads within the same transaction snapshot; settle all reads and retain original validation/error priority, source checks, transaction retry behavior, atomic writes and frozen resume. Barrier-based synthetic verification confirms actual overlap, zero denied writes, one new-paper source read and no source read on resume.",
-        "2026-11-10: Return the server-owned effective correction overlay when an already submitted attempt is submitted again; retain immutable attempt/result provenance, ownership, semester checks and reward records."
+        "2026-11-10: Return the server-owned effective correction overlay when an already submitted attempt is submitted again; retain immutable attempt/result provenance, ownership, semester checks and reward records.",
+        "2026-11-10: Project SAVE attempt metadata and grading limits, loading frozen question snapshots only for legacy long answers. Preserve owner/semester/prerequisite/deadline/revision validation, receipts, analytics and atomic answer writes; field selection reduces bytes, not document reads."
       ]
     },
     {

@@ -78,22 +78,34 @@ export interface MockExamOverview {
 // Read only when the student opens the round picker, never the full history.
 export const getMockExamOverview = async (input: { semesterId: string }) => {
   const assertOwner = await captureAssessmentOwner();
-  const callable = await getHttpsCallable<
-    { semesterId: string; mockExamOverview: true },
-    MockExamOverview
-  >("getAssessmentState");
-  await assertOwner();
-  const response = await callable({ ...input, mockExamOverview: true });
-  await assertOwner();
-  if (
-    response.data?.semesterId !== input.semesterId ||
-    !Array.isArray(response.data?.rounds)
-  ) {
-    throw new Error(
-      "모의고사 응시 상태를 확인하지 못했습니다. 다시 확인해 주세요.",
-    );
-  }
-  return response.data;
+  return sharePendingAssessmentRequest(
+    assertOwner,
+    "mockExamOverview",
+    input,
+    () =>
+      withRequestDeadline(
+        (async () => {
+          const callable = await getHttpsCallable<
+            { semesterId: string; mockExamOverview: true },
+            MockExamOverview
+          >("getAssessmentState");
+          await assertOwner();
+          const response = await callable({ ...input, mockExamOverview: true });
+          await assertOwner();
+          if (
+            response.data?.semesterId !== input.semesterId ||
+            !Array.isArray(response.data?.rounds)
+          ) {
+            throw new Error(
+              "모의고사 응시 상태를 확인하지 못했습니다. 다시 확인해 주세요.",
+            );
+          }
+          return response.data;
+        })(),
+        15_000,
+        "응시 상태 확인이 지연되고 있습니다. 다시 시도해 주세요.",
+      ),
+  );
 };
 
 interface CommandResponse<T> {
@@ -130,6 +142,34 @@ const pendingKey = (commandType: string, payload: unknown) =>
   `westory:w6a:${auth.currentUser?.uid || ""}:${commandType}:${stableStringify(payload)}`;
 
 const pendingCommandIds = new Map<string, string>();
+const pendingAssessmentRequests = new WeakMap<
+  object,
+  Map<string, Promise<unknown>>
+>();
+
+// Share only an identical request that is still running in the same login.
+// Completed reads never authorize later entry, and failed saves keep their
+// existing receipt ID for an explicit retry without an automatic write replay.
+const sharePendingAssessmentRequest = <T>(
+  owner: { owner: object; epoch: string },
+  kind: string,
+  input: unknown,
+  execute: () => Promise<T>,
+): Promise<T> => {
+  const requests = pendingAssessmentRequests.get(owner.owner) || new Map();
+  pendingAssessmentRequests.set(owner.owner, requests);
+  const key = `${owner.epoch}:${kind}:${stableStringify(input)}`;
+  const pending = requests.get(key);
+  if (pending) return pending as Promise<T>;
+  const request = execute();
+  requests.set(key, request);
+  const release = () => {
+    if (requests.get(key) === request) requests.delete(key);
+  };
+  void request.then(release, release);
+  return request;
+};
+
 const pendingStartExecutions = new WeakMap<
   object,
   Map<string, Promise<unknown>>
@@ -636,31 +676,39 @@ export const saveAssessmentProgress = async (input: {
   analytics?: AssessmentTelemetrySnapshot;
 }) => {
   const assertOwner = await captureAssessmentOwner();
-  const callable = await getHttpsCallable<
-    typeof input & { saveId: string },
-    {
-      attemptId: string;
-      status: "IN_PROGRESS";
-      revision: number;
-      deadlineAtIso: string;
-      savedAtIso: string;
-      replayed: boolean;
-    }
-  >("saveAssessmentProgress");
-  const key = pendingKey("saveAssessmentProgress", input);
-  const saveId = input.saveId || readPendingCommandId(key) || createCommandId();
-  rememberPendingCommandId(key, saveId);
-  try {
-    await assertOwner();
-    const saved = await callable({ ...input, saveId });
-    await assertAssessmentResponseOwner(assertOwner);
-    forgetPendingCommandId(key, saveId);
-    return saved.data;
-  } catch (error) {
-    if (!isAmbiguous(error) && !receivedSessionResponse(error))
-      forgetPendingCommandId(key, saveId);
-    throw error;
-  }
+  return sharePendingAssessmentRequest(
+    assertOwner,
+    "saveAssessmentProgress",
+    input,
+    async () => {
+      const callable = await getHttpsCallable<
+        typeof input & { saveId: string },
+        {
+          attemptId: string;
+          status: "IN_PROGRESS";
+          revision: number;
+          deadlineAtIso: string;
+          savedAtIso: string;
+          replayed: boolean;
+        }
+      >("saveAssessmentProgress");
+      const key = pendingKey("saveAssessmentProgress", input);
+      const saveId =
+        input.saveId || readPendingCommandId(key) || createCommandId();
+      rememberPendingCommandId(key, saveId);
+      try {
+        await assertOwner();
+        const saved = await callable({ ...input, saveId });
+        await assertAssessmentResponseOwner(assertOwner);
+        forgetPendingCommandId(key, saveId);
+        return saved.data;
+      } catch (error) {
+        if (!isAmbiguous(error) && !receivedSessionResponse(error))
+          forgetPendingCommandId(key, saveId);
+        throw error;
+      }
+    },
+  );
 };
 
 export const submitAssessmentAttempt = async (input: {

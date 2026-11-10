@@ -26,12 +26,14 @@ qa.changeIdentity = (uid, semester) => {
 qa.release = () => { const pending=qa.pending.splice(0); pending.forEach(resolve=>resolve()); };
 export const useAuth = () => useSyncExternalStore(listener=>{listeners.add(listener);return()=>listeners.delete(listener)},()=>qa.auth);
 export const db = {};
+export const auth = {get currentUser(){return qa.auth.currentUser;}};
 const tree=[{id:'big',title:'조선의 성립과 발전',children:[{id:'unit-a',title:'조선의 통치 체제'},{id:'unit-b',title:'사림 세력의 성장'},{id:'unit-empty',title:'등록 전 단원'}]}];
 export const doc=(_db,...parts)=>parts.join('/');
 export const getDoc=async path=>{
   if(!path.endsWith('/curriculum/tree'))throw new Error('Unexpected direct read '+path);
-  qa.directReads.push(path);return {exists:()=>true,data:()=>({tree})};
+  qa.directReads.push(path);if(qa.fail==='tree')throw new Error('synthetic tree read failure');return {exists:()=>true,data:()=>({tree}),metadata:{fromCache:false,hasPendingWrites:false}};
 };
+export const getDocFromServer=getDoc;
 const forbidden=(...args)=>{qa.writes.push(args);throw new Error('Unexpected write or unscoped read');};
 export const collection=forbidden,getDocs=forbidden,limit=forbidden,orderBy=forbidden,query=forbidden,where=forbidden;
 const signals=new Map();
@@ -44,6 +46,7 @@ export const executeLearningCommand=forbidden,executeAssessmentManagementCommand
 export const getAssessmentSemesterId=c=>c.year+'-'+c.semester;
 export const useAppToast=()=>({showToast:()=>{}});
 export const canReadQuizManagement=()=>true,canWriteQuizManagement=()=>!qa.readOnly;
+export const normalizeStaffPermissions=value=>Array.isArray(value)?[...value]:[];
 const classes=[1,2,3,4,5,6].map(n=>({id:'class_'+n,label:'3학년 '+n+'반',grade:'3',classNumber:String(n)})).concat({id:'other_grade',label:'2학년 1반',grade:'2',classNumber:'1'});
 const assessments=[...['unit-a','unit-b'].flatMap(unitId=>['diagnostic','formative'].map(category=>({id:unitId+'-'+category,unitId,unitTitle:unitId==='unit-a'?'조선의 통치 체제':'사림 세력의 성장',category,examRound:'',title:category==='diagnostic'?'진단평가':'형성평가',questionCount:1}))),...[1,2].map(n=>({id:'mock-'+n,unitId:'exam_prep',unitTitle:'모의고사',category:'exam_prep',examRound:'round_'+n,title:'모의고사 '+n,questionCount:2}))];
 const questions=[1,2].map(n=>({id:n,docId:String(n),unitId:'exam_prep',category:'exam_prep',examRound:'round_1',type:'choice',question:n+'번 합성 문항',options:['정답','오답'],answer:'정답',paperOrder:n,points:50,sourceRevision:'1',contentRevision:1,curriculumVersion:'2018-162',achievementStandardCodes:['9역12-01'],targetAchievementLevel:'C',intendedDifficulty:'medium'}));
@@ -79,7 +82,7 @@ export const callWithApplicationSession=async(name,input)=>{
 };
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import View from ${imp("src/pages/teacher/ManageQuiz.tsx")};import ${imp("src/assets/index.css")};import ${imp("src/components/common/portalPage.css")};
-const initial=new URLSearchParams(location.search).get('entry');if(initial)history.replaceState(null,'',initial);else if(location.pathname==='/')history.replaceState(null,'','/teacher/quiz?tab=manage');createRoot(document.getElementById('root')).render(<BrowserRouter><View/></BrowserRouter>);`;
+const initial=new URLSearchParams(location.search).get('entry');if(initial)history.replaceState(null,'',initial);else if(location.pathname==='/')history.replaceState(null,'','/teacher/quiz?tab=manage');function Fixture(){const[version,setVersion]=React.useState(0);window.analysisEntryQa.remount=()=>setVersion(v=>v+1);return <View key={version}/>;}createRoot(document.getElementById('root')).render(<BrowserRouter><Fixture/></BrowserRouter>);`;
 const bundle = await build({
   stdin: {contents:entry,resolveDir:root,loader:"tsx"}, bundle:true,write:false,format:"esm",platform:"browser",outfile:path.join(evidence,"fixture.js"),
   loader:{".svg":"dataurl",".webp":"dataurl",".woff":"dataurl",".woff2":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},
@@ -388,9 +391,9 @@ try {
   await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
   await query().click();await analysis().getByText('첫 제출 6명',{exact:true}).waitFor();
   await report().selectOption('4');
-  await analysis().getByText('3학년 1반 1번 합성 미응시 1',{exact:true}).waitFor();
-  assert.equal(await analysis().getByText('3학년 6반 1번 합성 미응시 1',{exact:true}).count(),1);
-  assert.equal(await analysis().getByText(/2학년 1반/).count(),0);
+  await analysis().getByText('합성 미응시 1(30101)',{exact:true}).waitFor();
+  assert.equal(await analysis().getByText('합성 미응시 1(30601)',{exact:true}).count(),1);
+  assert.equal(await analysis().getByText(/합성 미응시 \d+\(201\d{2}\)/).count(),0);
   for(const width of [320,390,768,1440]){
     await page.setViewportSize({width,height:900});await assertNoOverflow(width);
     await screenshot(`grade-analysis-${width}.png`);
@@ -443,6 +446,19 @@ try {
   assert.deepEqual(await modes(),["catalog"],"read-only unit navigation does not reread the catalog");
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
   checks.push("read-only teachers retain navigation and analysis without authoring controls");
+  const cachedTreeReads = await page.evaluate(()=>window.analysisEntryQa.directReads.length);
+  await page.evaluate(()=>window.analysisEntryQa.remount());
+  await page.locator('.quiz-navigation').getByRole('button',{name:'조선의 통치 체제',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),cachedTreeReads,'recent page re-entry reuses the scoped tree');
+  await page.evaluate(()=>{window.analysisEntryQa.fail='tree';window.analysisEntryQa.changeIdentity('other-teacher','2');});
+  await page.getByRole('alert').filter({hasText:'단원을 불러오지 못했습니다.'}).waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),cachedTreeReads+1,'identity change reads the server instead of reusing another context');
+  await page.evaluate(()=>{window.analysisEntryQa.fail='';});
+  await page.getByRole('button',{name:'다시 불러오기',exact:true}).click();
+  await page.locator('.quiz-navigation').getByRole('button',{name:'조선의 통치 체제',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),cachedTreeReads+2,'tree retry makes one fresh read');
+  assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
+  checks.push('recent remount shares curriculum metadata; changed identity and failed tree retry make one server read each with no writes');
   assert.deepEqual(errors,[]);
   console.log(`PASS ${checks.join("; ")}; 320/390/768/1280/1440px layouts`);
 } finally {

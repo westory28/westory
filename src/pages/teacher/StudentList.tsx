@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useLocation } from "react-router-dom";
-import { db } from "../../lib/firebase";
+import { loadTeacherStudentRoster } from "../../lib/teacherStudentRoster";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import StudentRosterModal from "./components/StudentRosterModal";
@@ -164,6 +163,13 @@ const StudentList: React.FC = () => {
   const { showToast } = useAppToast();
   const registrationUid =
     new URLSearchParams(location.search).get("registration") || "";
+  const registrationNavigationKey = registrationUid ? location.key : "";
+  const rosterPermissionKey = JSON.stringify([
+    userData?.role,
+    userData?.teacherPortalEnabled,
+    [...(userData?.staffPermissions || [])].sort(),
+    currentUser?.email,
+  ]);
   const fetchVersionRef = useRef(0);
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
@@ -207,12 +213,16 @@ const StudentList: React.FC = () => {
   const readOnly = !canEditStudentList(userData, currentUser?.email || "");
 
   useEffect(() => {
-    void loadSchoolConfig();
-  }, []);
-
-  useEffect(() => {
-    let active = true;
+    setStudents([]);
+    setFilteredStudents([]);
+    setSelectedIds(new Set());
+    setSelectedStudent(null);
+    setDetailModalOpen(false);
+    setMoveClassModalOpen(false);
+    setRegistrationPolicyOpen(false);
     setRosterModalMode(null);
+    if (!currentUser?.uid || !config?.year || !config?.semester) return;
+    let active = true;
     if (registrationUid) {
       setGradeFilter("all");
       setClassFilter("all");
@@ -220,7 +230,7 @@ const StudentList: React.FC = () => {
       setSearchQuery("");
       setSearchOpen(false);
     }
-    void fetchStudents().then((list) => {
+    void fetchStudents({ fresh: Boolean(registrationUid) }).then((list) => {
       if (!active || !registrationUid || registrationUid === "pending" || !list)
         return;
       const student = list.find((item) => item.id === registrationUid);
@@ -248,15 +258,17 @@ const StudentList: React.FC = () => {
     });
     return () => {
       active = false;
+      fetchVersionRef.current += 1;
     };
-  }, [location.key, registrationUid, readOnly, config?.year, config?.semester]);
-
-  const gradeOrderMap = useMemo(() => {
-    return gradeOptions.reduce<Record<string, number>>((acc, item, index) => {
-      acc[item.value] = index;
-      return acc;
-    }, {});
-  }, [gradeOptions]);
+  }, [
+    registrationNavigationKey,
+    registrationUid,
+    readOnly,
+    currentUser?.uid,
+    rosterPermissionKey,
+    config?.year,
+    config?.semester,
+  ]);
 
   const normalizedStudents = useMemo(() => {
     return students.map((student) => ({
@@ -284,17 +296,27 @@ const StudentList: React.FC = () => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
-  const fetchStudents = async (options: { silent?: boolean } = {}) => {
+  const fetchStudents = async (
+    options: { silent?: boolean; fresh?: boolean } = { fresh: true },
+  ) => {
     const version = ++fetchVersionRef.current;
     if (!options.silent) setLoading(true);
     setLoadError("");
     try {
-      const snap = await getDocs(collection(db, "users"));
+      const roster = await loadTeacherStudentRoster(
+        config,
+        rosterPermissionKey,
+        options,
+      );
       if (version !== fetchVersionRef.current) return null;
+      const loadedOptions = applySchoolConfig(roster.schoolConfig);
+      const gradeOrderMap = Object.fromEntries(
+        loadedOptions.grades.map((item, index) => [item.value, index]),
+      );
       const list: Student[] = [];
 
-      snap.forEach((item) => {
-        const data = item.data();
+      roster.students.forEach((item) => {
+        const data = item;
         const email = String(data.email || "").trim();
         const isTeacherAccount =
           data.role === "teacher" || email === ADMIN_EMAIL;
@@ -334,8 +356,14 @@ const StudentList: React.FC = () => {
       });
 
       list.sort((a, b) => {
-        const aCanonicalGrade = toCanonicalOptionValue(a.grade, gradeOptions);
-        const bCanonicalGrade = toCanonicalOptionValue(b.grade, gradeOptions);
+        const aCanonicalGrade = toCanonicalOptionValue(
+          a.grade,
+          loadedOptions.grades,
+        );
+        const bCanonicalGrade = toCanonicalOptionValue(
+          b.grade,
+          loadedOptions.grades,
+        );
         const aGradeOrder =
           gradeOrderMap[aCanonicalGrade] ?? Number.MAX_SAFE_INTEGER;
         const bGradeOrder =
@@ -347,10 +375,10 @@ const StudentList: React.FC = () => {
         }
 
         const aClass = classSortValue(
-          toCanonicalOptionValue(a.class, classOptions),
+          toCanonicalOptionValue(a.class, loadedOptions.classes),
         );
         const bClass = classSortValue(
-          toCanonicalOptionValue(b.class, classOptions),
+          toCanonicalOptionValue(b.class, loadedOptions.classes),
         );
         if (aClass.numeric && bClass.numeric) {
           const classGap = Number(aClass.value) - Number(bClass.value);
@@ -378,32 +406,31 @@ const StudentList: React.FC = () => {
     }
   };
 
-  const loadSchoolConfig = async () => {
-    try {
-      const snap = await getDoc(doc(db, "site_settings", "school_config"));
-      if (!snap.exists()) return;
-      const data = snap.data() as {
-        grades?: Array<{ value?: string; label?: string }>;
-        classes?: Array<{ value?: string; label?: string }>;
-      };
-      const loadedGrades = (data.grades || [])
-        .map((item) => ({
-          value: String(item?.value ?? "").trim(),
-          label: String(item?.label ?? "").trim(),
-        }))
-        .filter((item) => item.value && item.label);
-      const loadedClasses = (data.classes || [])
-        .map((item) => ({
-          value: String(item?.value ?? "").trim(),
-          label: String(item?.label ?? "").trim(),
-        }))
-        .filter((item) => item.value && item.label);
+  const applySchoolConfig = (
+    data: {
+      grades?: Array<{ value?: string; label?: string }>;
+      classes?: Array<{ value?: string; label?: string }>;
+    } | null,
+  ) => {
+    const loadedGrades = (Array.isArray(data?.grades) ? data.grades : [])
+      .map((item) => ({
+        value: String(item?.value ?? "").trim(),
+        label: String(item?.label ?? "").trim(),
+      }))
+      .filter((item) => item.value && item.label);
+    const loadedClasses = (Array.isArray(data?.classes) ? data.classes : [])
+      .map((item) => ({
+        value: String(item?.value ?? "").trim(),
+        label: String(item?.label ?? "").trim(),
+      }))
+      .filter((item) => item.value && item.label);
 
-      if (loadedGrades.length > 0) setGradeOptions(loadedGrades);
-      if (loadedClasses.length > 0) setClassOptions(loadedClasses);
-    } catch (error) {
-      console.error("Failed to load school config:", error);
-    }
+    if (loadedGrades.length > 0) setGradeOptions(loadedGrades);
+    if (loadedClasses.length > 0) setClassOptions(loadedClasses);
+    return {
+      grades: loadedGrades.length ? loadedGrades : gradeOptions,
+      classes: loadedClasses.length ? loadedClasses : classOptions,
+    };
   };
 
   const getGradeLabel = (gradeValue: string) => {
@@ -584,12 +611,12 @@ const StudentList: React.FC = () => {
         });
       }
       setSelectedIds(new Set());
-      void fetchStudents({ silent: true });
+      void fetchStudents({ silent: true, fresh: true });
     } catch (error) {
       console.error("Bulk promote failed", error);
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
-      void fetchStudents({ silent: true });
+      void fetchStudents({ silent: true, fresh: true });
       alert(
         error instanceof Error
           ? error.message
@@ -1196,7 +1223,8 @@ const StudentList: React.FC = () => {
               });
             }
             setSelectedIds(new Set());
-            void fetchStudents({ silent: true });
+            // Do not reopen an edit dialog against the pre-save roster.
+            void fetchStudents();
           }}
         />
 
@@ -1207,7 +1235,7 @@ const StudentList: React.FC = () => {
           students={students}
           onComplete={() => {
             setSelectedIds(new Set());
-            void fetchStudents({ silent: true });
+            void fetchStudents({ silent: true, fresh: true });
           }}
         />
       </div>

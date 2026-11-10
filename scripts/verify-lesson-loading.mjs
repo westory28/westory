@@ -309,7 +309,10 @@ const walk = (node) =>
     : node && typeof node === "object"
       ? [node, ...walk(node.props?.children)]
       : [];
-const harness = (store, { processPdfMapFile, archive = false } = {}) => {
+const harness = (
+  store,
+  { processPdfMapFile, archive = false, readOnly = false } = {},
+) => {
   const slots = [],
     effects = [],
     saves = [],
@@ -334,6 +337,7 @@ const harness = (store, { processPdfMapFile, archive = false } = {}) => {
     currentUser: auth.currentUser,
     userData: { role: "teacher" },
     config: { year: "2026", semester: "2" },
+    authGeneration: 1,
   };
   const commandScope = { semesterId: "2026-2", expectedSemesterRevision: 9 };
   const same = (a, b) =>
@@ -420,6 +424,15 @@ const harness = (store, { processPdfMapFile, archive = false } = {}) => {
       "LessonTreePanel",
     ].map((name) => [name, name]),
   );
+  const curriculum = compile("src/lib/teacherCurriculum.ts", {
+    "firebase/firestore": store.firestore,
+    "./firebase": { db: {}, auth },
+    "./permissions": compile("src/lib/permissions.ts", {}),
+    "./semesterScope": {
+      getSemesterDocPath: (config, name, id) =>
+        `years/${config.year}/semesters/${config.semester}/${name}/${id}`,
+    },
+  });
   const component = compile(
     "src/pages/teacher/ManageLesson.tsx",
     {
@@ -472,8 +485,9 @@ const harness = (store, { processPdfMapFile, archive = false } = {}) => {
       "../../lib/lessonBlankClip": blankClip,
       "../../lib/lessonData": data,
       "../../lib/teacherLessonLoading": store.loading,
+      "../../lib/teacherCurriculum": curriculum,
       "../../lib/lessonPdfExtraction": pdf,
-      "../../lib/permissions": { canWriteLessonManagement: () => true },
+      "../../lib/permissions": { canWriteLessonManagement: () => !readOnly },
       "../../lib/notifications": {},
       "../../lib/sourceArchive": {
         subscribeSourceArchiveAssets(next) {
@@ -582,6 +596,17 @@ const harness = (store, { processPdfMapFile, archive = false } = {}) => {
     "doc",
     "Tree read starts before scope read completes",
   );
+  await app.settle();
+  assert.equal(
+    app.find("LessonTreePanel").treeData.length,
+    1,
+    "Show the curriculum before the write pointer finishes",
+  );
+  assert.equal(
+    app.find("LessonEditorHeader").lessonTitle,
+    "자료 A",
+    "Show loaded content without waiting for the write pointer",
+  );
   scopeGate.resolve();
   await app.settle();
   assert.equal(app.find("LessonEditorHeader").lessonTitle, "자료 A");
@@ -622,6 +647,53 @@ console.log(
 );
 
 {
+  const store = makeStore({ [scopePath]: [lesson("A", 100)] });
+  const app = harness(store);
+  const scopeGate = deferred();
+  app.setScopeWait(scopeGate.promise);
+  app.render();
+  await app.settle();
+  app.find("LessonEditorHeader").onLessonTitleChange("저장 대기 제목");
+  app.render();
+  app.setScopeWait(undefined);
+  app.find("LessonEditorHeader").onSave();
+  await app.settle();
+  assert.equal(
+    app.saves.length,
+    0,
+    "Unresolved read scope still blocks writes",
+  );
+  assert.match(app.alerts.at(-1), /자료와 학기 정보를 다시 불러온/);
+  scopeGate.resolve();
+  await app.settle();
+  app.find("LessonEditorHeader").onSave();
+  await app.settle();
+  assert.equal(
+    app.saves.length,
+    1,
+    "Retry uses the verified scope and revision",
+  );
+}
+{
+  const store = makeStore({ [scopePath]: [lesson("A", 100), lesson("B", 90)] });
+  const app = harness(store, { readOnly: true });
+  app.render();
+  await app.settle();
+  app.select("B");
+  await app.settle();
+  assert.equal(app.find("LessonEditorHeader").lessonTitle, "자료 B");
+  assert.equal(
+    app.scopeReads,
+    0,
+    "Read-only viewing needs no write pointer read",
+  );
+  assert.equal(app.saves.length, 0);
+}
+console.log(
+  "PASS early content remains write-fenced; read-only views skip write-pointer reads",
+);
+
+{
   const store = makeStore({
     [scopePath]: [lesson("A", 100), lesson("B", 90, { pdfName: "B.pdf" })],
   });
@@ -647,8 +719,8 @@ console.log(
   await app.settle();
   assert.equal(
     app.find("LessonPdfSection").lessonPdfName,
-    "",
-    "Wait for both responses before applying edit context",
+    "B.pdf",
+    "Show selected content while its write pointer is pending",
   );
   scopeGate.resolve();
   await app.settle();

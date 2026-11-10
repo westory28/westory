@@ -25,6 +25,11 @@ const SUBMISSION_COLLECTION = "semester_assessment_submissions";
 const RESULT_COLLECTION = "semester_assessment_results";
 const LEGACY_ISSUE_COLLECTION = "assessment_legacy_issues";
 const MOCK_ATTEMPT_STATE_FIELDS = ["studentUid", "resetAt", "attemptNumber", "status", "submittedAtIso"];
+const SAVE_ATTEMPT_FIELDS = [
+  "attemptId", "studentUid", "semesterId", "assessmentKind", "definitionId", "sourceId", "category", "examRound",
+  "status", "revision", "startedAtIso", "deadlineAtIso", "lastSavedAtIso", "lastSaveId", "lastSaveHash",
+  "questionIds", "gradingSnapshot", "questionDocumentIds",
+];
 
 const ASSESSMENT_COMMAND_TYPES = Object.freeze({
   SAVE_ACHIEVEMENT_PROFILE: achievementProfiles.COMMAND_TYPE,
@@ -1947,7 +1952,9 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
     }
     const result = await store.runTransaction(async (transaction) => {
       const path = attemptPath(payload.attemptId);
-      const snapshot = await transaction.get(path);
+      // The frozen paper can contain large images and passages. Progress saves
+      // need only validation/receipt fields, not the presentation or old answers.
+      const [snapshot] = await transaction.getAll([path], { fieldMask: SAVE_ATTEMPT_FIELDS });
       if (!snapshot.exists) fail("not-found", "Assessment attempt was not found.", "ASSESSMENT_ATTEMPT_NOT_FOUND");
       const attempt = snapshot.data || {};
       if (attempt.studentUid !== actor.uid) fail("permission-denied", "Assessment attempt belongs to another student.", "ASSESSMENT_ATTEMPT_FORBIDDEN");
@@ -1967,6 +1974,15 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
       }
       const savedAtIso = savedAt.toISOString();
       const revision = payload.expectedRevision + 1;
+      const needsLegacySnapshot = attempt.assessmentKind === "QUIZ" && Object.entries(payload.answers).some(([id, answer]) =>
+        answer.length > SHORT_ANSWER_LIMIT && (attempt.gradingSnapshot || []).some(item =>
+          String(item.id) === id && !Number.isInteger(item.answerLimit)));
+      if (needsLegacySnapshot) {
+        // Older attempts may lack frozen answer limits. Keep their original
+        // snapshot-based limits even if a teacher has since edited the source.
+        const [legacy] = await transaction.getAll([path], { fieldMask: ["questionSnapshots"] });
+        attempt.questionSnapshots = legacy.data?.questionSnapshots || [];
+      }
       await assertAttemptAnswers(transaction, attempt, payload.answers);
       const analytics = attempt.assessmentKind === "QUIZ" && payload.analytics !== undefined
         ? { analytics: learning.normalizeAnalytics(payload.analytics, attempt, savedAt.getTime(), payload.answers) } : {};

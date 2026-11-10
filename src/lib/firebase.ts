@@ -204,6 +204,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       "saveStudentAvatar",
       "getAvatarStudioState",
       "getTeacherMyPage",
+      "getTeacherStudentRoster",
       "saveTeacherAvatar",
       "updateTeacherProfileIcon",
       "getAvatarCatalogPricing",

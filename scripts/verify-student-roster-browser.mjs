@@ -40,12 +40,13 @@ window.rosterQa={data,events,toasts:[],fail:false,loadFail:new URLSearchParams(l
 `;
 const mocks = {
   "qa-state": state,
-  "qa-auth": `export const useAuth=()=>({userData:{role:new URLSearchParams(location.search).has('readonly')?'staff':'teacher'},currentUser:{email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
+  "qa-auth": `export const useAuth=()=>({userData:{role:new URLSearchParams(location.search).has('readonly')?'staff':'teacher'},currentUser:{uid:'qa-teacher',email:'qa-teacher@example.test'},config:{year:'2026',semester:'2'}});`,
   "qa-firestore": `import{data}from'qa-state';export const collection=(db,name)=>({name});export const doc=(db,...names)=>({names});export const getDoc=async(ref)=>ref.names.join('/').endsWith('/assessment_config/enrollment_movement')&&!location.search.includes('noPeriod')?{exists:()=>true,data:()=>({startDate:'2026-08-14'})}:{exists:()=>false};export const getDocs=async()=>{window.rosterQa.listReads++;await new Promise(resolve=>setTimeout(resolve,100));if(window.rosterQa.loadFail)throw new Error('synthetic read failure');const docs=data.map(({id,...value})=>({id,data:()=>value}));return{docs,forEach:fn=>docs.forEach(fn)};};`,
   "qa-firebase": `import{data,events}from'qa-state';
 export const db={};export const auth={currentUser:{uid:'qa-teacher',getIdTokenResult:async()=>({claims:{auth_time:10}})}};
 export const getHttpsCallable=async(name)=>async(input)=>{
  if(name==='openApplicationSession')return{data:{status:'active',authTime:10,authorityGeneration:'w1r2-2026-08-09',protocolVersion:2,revision:'a'.repeat(64)}};
+ if(name==='getTeacherStudentRoster'){window.rosterQa.listReads++;await new Promise(resolve=>setTimeout(resolve,100));if(window.rosterQa.loadFail)throw new Error('synthetic read failure');return{data:{year:input.year,semester:input.semester,students:data.map(value=>({...value})),schoolConfig:null}};}
  events.push({name,input});if(window.rosterQa.fail)throw Object.assign(new Error('synthetic save failure'),{code:'unavailable'});
  if(name==='createStudentData'){data.push({id:'qa-new',role:'student',...input,studentName:input.name,enrollmentStatus:'active',registrationApprovalStatus:'PENDING'});return{data:{uid:'qa-new',registrationApprovalStatus:'PENDING',requiresFirstSignIn:true}};}
  if(name==='getStudentRegistrationApprovalState'){const student=data.find(item=>item.id===input.studentUid);return{data:{semesterId:'2026-2',manifestRevision:1,economyRevision:1,economyReady:true,classes:[{classId:'class-3-1',grade:'3',classNumber:'1',revision:1}],students:[{studentUid:student.id,status:student.registrationApprovalStatus,profileVersion:'a'.repeat(64),submittedProfile:{...student,number:String(student.number)},enrollmentId:'enr-qa',accountState:student.accountState||'NOT_PREPARED',accountRevision:1,blockedReason:''}]}};}
