@@ -1,4 +1,4 @@
-/** Exercise the real private draft with synthetic auth/toast and an inert shared footer boundary. */
+/** Exercise actual draft/footer components inside the production teacher-layout DOM/CSS contract. */
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -33,17 +33,19 @@ import {ADMIN_EMAIL} from ${source("src/lib/permissions.ts")};
 const role=new URLSearchParams(location.search).get('role')||'admin';
 const email=role==='admin'?ADMIN_EMAIL:role+'@fixture.invalid';
 const user=role==='signed-out'?null:{uid:'fixture-'+role,email};
-export const qa=window.gongsinQa={toasts:[],role};
-export const useAuth=()=>({currentUser:user,user,userData:user?{uid:user.uid,email,role:role==='admin'?'teacher':role,teacherPortalEnabled:role==='staff',staffPermissions:role==='staff'?['lesson_read','quiz_read']:[]}:null,config:{year:'2026',semester:'2'},configReady:true,menuConfig:null});
+export const qa=window.gongsinQa={toasts:[],backendCalls:[],role};
+export const useAuth=()=>({currentUser:user,user,userData:user?{uid:user.uid,email,role:role==='admin'?'teacher':role,teacherPortalEnabled:role==='staff',staffPermissions:role==='staff'?['lesson_read','quiz_read']:[]}:null,config:{year:'2026',semester:'2'},configReady:true,menuConfig:null,interfaceConfig:{footerText:'Copyright © Westory. All rights reserved.'}});
 export const useAppToast=()=>({showToast:value=>{qa.toasts.push(value);return 'fixture-toast';},dismissToast:()=>{}});
 `;
 const harness = `
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
+import {PortalWorkspaceFooterProvider,PortalFallbackFooter} from ${source("src/components/common/PortalWorkspace.tsx")};
 import Draft from ${source("src/pages/teacher/ManageGongsinmoongo.tsx")};
 import ${source("src/assets/index.css")};
-createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/gongsinmoongo']}><div className="qa-primary" aria-hidden="true"/><main className="qa-portal"><div className="qa-account" aria-hidden="true"/><Draft/></main></MemoryRouter>);
+import ${source("src/components/layout/teacherLayout.css")};
+createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/gongsinmoongo']}><PortalWorkspaceFooterProvider><div className="flex min-h-screen flex-col bg-gray-50 teacher-layout"><aside className="teacher-sidebar" aria-hidden="true"><div className="teacher-sidebar-brand-row">Westory</div></aside><header className="teacher-header teacher-account-header"><div className="header-container"><div className="teacher-header-start">Westory</div><div className="header-right"><span>예시 관리자</span><button className="btn-logout" disabled>로그아웃</button></div><button className="teacher-navigation-toggle" aria-label="교사 메뉴 예시" disabled>☰</button></div></header><main className="min-h-0 w-full flex-1"><Draft/></main><PortalFallbackFooter teacher/></div></PortalWorkspaceFooterProvider></MemoryRouter>);
 `;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
@@ -65,12 +67,13 @@ const bundle = await build({
     {
       name: "gongsinmoongo-auth-fixture",
       setup(plugin) {
-        plugin.onResolve({ filter: /(?:^|\/)Footer$/ }, () => ({
-          path: "footer",
-          namespace: "fixture-footer",
-        }));
-        plugin.onLoad({ filter: /.*/, namespace: "fixture-footer" }, () => ({
-          contents: "export default function Footer(){return null}",
+        plugin.onResolve(
+          { filter: /^(firebase\/firestore)$|(?:^|\/)lib\/firebase$/ },
+          () => ({ path: "transport", namespace: "fixture-transport" }),
+        );
+        plugin.onLoad({ filter: /.*/, namespace: "fixture-transport" }, () => ({
+          contents:
+            "const blocked=(name)=>(...args)=>{window.gongsinQa.backendCalls.push(name);throw new Error('Unexpected backend call: '+name)};export const db={};export const doc=blocked('doc');export const getDoc=blocked('getDoc');",
           loader: "js",
         }));
         plugin.onResolve(
@@ -114,7 +117,7 @@ assert(
   "Set PORTAL_DESIGN_TAILWIND_PATH to the locally cached production Tailwind runtime",
 );
 const html =
-  '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><style>.qa-account{height:48px}.qa-primary{display:none}.qa-portal{min-width:0}@media(min-width:1024px){.qa-primary{display:block;position:fixed;inset:0 auto 0 0;width:232px;background:#f1f5f9}.qa-portal{margin-left:232px}}</style></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
+  '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>';
 const assets = new Map([
   ["/", ["text/html", html]],
   ["/fixture.js", ["text/javascript", js]],
@@ -147,7 +150,15 @@ const report = {
   storageSamples,
   actualComponent:
     "ManageGongsinmoongo.tsx / SettingsGongsinmoongo.tsx / GongsinStudentPreview.tsx",
-  stubbedModules: ["AuthContext", "AppToastProvider", "Footer"],
+  stubbedModules: [
+    "AuthContext",
+    "AppToastProvider",
+    "Firebase initialization and Firestore transport",
+  ],
+  layoutContract:
+    "MainLayout teacher-layout/main/provider structure; production account-header CSS and actual Footer; synthetic account/header content avoids session lifecycle side effects",
+  deviceCoverage:
+    "Desktop browser responsive emulation, not physical-device testing",
   syntheticDataOnly: true,
 };
 try {
@@ -195,11 +206,12 @@ try {
       local: localStorage.length,
       session: sessionStorage.length,
       cookies: document.cookie,
+      backendCalls: window.gongsinQa?.backendCalls || [],
     }));
     storageSamples.push({ label, ...sample });
     assert.deepEqual(
       sample,
-      { operations: [], local: 0, session: 0, cookies: "" },
+      { operations: [], local: 0, session: 0, cookies: "", backendCalls: [] },
       `${label}: draft must not persist data`,
     );
     assert.deepEqual(
@@ -216,6 +228,119 @@ try {
       false,
       label + ": document overflows horizontally",
     );
+  const desktopGeometry = async (label, checkStudent = false) => {
+    const sample = await page.evaluate(() => {
+      const rect = (element) => {
+        if (!element) return null;
+        const b = element.getBoundingClientRect();
+        return {
+          x: b.x,
+          y: b.y,
+          width: b.width,
+          height: b.height,
+          right: b.right,
+          bottom: b.bottom,
+        };
+      };
+      const controls = [
+        ...document.querySelectorAll(
+          "main button,main input,main textarea,main select",
+        ),
+      ].filter(
+        (element) =>
+          element.getClientRects().length &&
+          !element.closest(".gsp-conversation,[hidden]"),
+      );
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        documentHeight: document.documentElement.scrollHeight,
+        bodyHeight: document.body.scrollHeight,
+        header: rect(document.querySelector(".teacher-account-header")),
+        footer: rect(document.querySelector(".teacher-layout-footer")),
+        main: rect(document.querySelector(".teacher-layout > main")),
+        content: rect(document.querySelector("[data-gongsin-draft]")),
+        contentAvailableWidth: (() => {
+          const element = document.querySelector("[data-gongsin-draft]");
+          const style = getComputedStyle(element);
+          return (
+            element.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight)
+          );
+        })(),
+        studentOuterCard: document
+          .querySelector(".gongsin-student-stage")
+          ?.classList.contains("ws-surface"),
+        student: rect(document.querySelector(".gongsin-student-preview")),
+        chat: rect(document.querySelector(".gsp-chat-pane")),
+        rail: rect(document.querySelector(".gsp-tools-rail")),
+        conversation: rect(document.querySelector(".gsp-conversation")),
+        clippedControls: controls
+          .map((element) => ({
+            name:
+              element.getAttribute("aria-label") ||
+              element.textContent?.trim().slice(0, 80),
+            rect: rect(element),
+          }))
+          .filter(
+            (item) =>
+              item.rect.y < -1 ||
+              item.rect.bottom > innerHeight + 1 ||
+              item.rect.x < -1 ||
+              item.rect.right > innerWidth + 1,
+          ),
+      };
+    });
+    report.desktopGeometry ||= [];
+    report.desktopGeometry.push({ label, ...sample });
+    assert(
+      sample.documentHeight <= sample.viewport.height + 1,
+      `${label}: document scroll height ${sample.documentHeight} exceeds ${sample.viewport.height}`,
+    );
+    assert(
+      sample.bodyHeight <= sample.viewport.height + 1,
+      `${label}: body scroll height ${sample.bodyHeight} exceeds ${sample.viewport.height}`,
+    );
+    assert.equal(
+      sample.header.height,
+      56,
+      `${label}: actual desktop account header must include its 8px top space`,
+    );
+    assert(
+      sample.footer &&
+        sample.footer.height >= 48 &&
+        sample.footer.bottom <= sample.viewport.height + 1,
+      `${label}: actual Footer must be visible and counted`,
+    );
+    assert.deepEqual(
+      sample.clippedControls,
+      [],
+      `${label}: controls are clipped outside the viewport`,
+    );
+    if (checkStudent) {
+      assert(
+        sample.student.width > 560,
+        `${label}: desktop student frame remains capped at 560px`,
+      );
+      assert(
+        sample.student.width >= sample.contentAvailableWidth - 1,
+        `${label}: student preview must use the available content width`,
+      );
+      assert.equal(
+        sample.studentOuterCard,
+        false,
+        `${label}: student preview must not have a redundant outer surface card`,
+      );
+      assert(
+        sample.rail && sample.chat && sample.rail.x >= sample.chat.right - 1,
+        `${label}: learning tools must occupy a separate rail beside the chat`,
+      );
+      assert(
+        sample.conversation.height > 70,
+        `${label}: conversation must retain usable internal scrolling space`,
+      );
+    }
+  };
   const screenshot = async (name, target) => {
     const filename = path.join(evidence, name + ".png");
     await page.evaluate(async () => {
@@ -246,7 +371,10 @@ try {
   const nav = (label) =>
     page
       .getByRole("navigation", { name: "공신문고 초안 보기" })
-      .getByRole("button", { name: label, exact: true });
+      .getByRole("button", {
+        name: label === "운영·연결" ? "운영 설정" : label,
+        exact: true,
+      });
   const student = () =>
     page.getByRole("region", { name: "학생 공신문고 미리보기", exact: true });
   const warning = () =>
@@ -261,8 +389,9 @@ try {
         .getByRole("button", { name: "질문 안내 확인", exact: true })
         .count()
     ) {
-      await warning().waitFor();
-      await warning()
+      await student().locator(".gsp-guidelines-dialog").waitFor();
+      await student()
+        .locator(".gsp-guidelines-dialog")
         .getByRole("button", { name: "확인했어요", exact: true })
         .click();
       await student()
@@ -278,6 +407,41 @@ try {
     page.getByRole("complementary", { name: "질문함", exact: true });
   const row = (text) =>
     sidebar().locator(".gongsin-question-row").filter({ hasText: text });
+  const selectQuestionRow = async (text) => {
+    const previous = sidebar().getByRole("button", {
+      name: "질문 목록 이전 페이지",
+      exact: true,
+    });
+    while (await previous.isEnabled()) await previous.click();
+    for (let count = 0; count < 50; count++) {
+      if (await row(text).count()) {
+        await row(text).click();
+        return;
+      }
+      const next = sidebar().getByRole("button", {
+        name: "질문 목록 다음 페이지",
+        exact: true,
+      });
+      if (await next.isDisabled()) break;
+      await next.click();
+    }
+    assert.fail("Question not present in any list page: " + text);
+  };
+  const settingsNav = (label) =>
+    page
+      .getByRole("navigation", { name: "공신문고 설정 항목" })
+      .getByRole("button", { name: label, exact: true });
+  const settingsPanel = () =>
+    page.getByRole("region", { name: "초안 설정", exact: true });
+  const openSettings = async (label) => {
+    await nav("운영·연결").click();
+    await settingsNav(label).click();
+  };
+  const applySettings = () =>
+    settingsPanel().getByRole("button", {
+      name: "설정 적용 (미리보기)",
+      exact: true,
+    });
   const teacherBell = () =>
     page.getByRole("button", { name: /^교사 알림 미리보기/ });
   const studentBell = () =>
@@ -400,7 +564,7 @@ try {
       assert.equal(await toggle.getAttribute("aria-expanded"), "false");
       await toggle.focus();
       await page.keyboard.press("Enter");
-      await row(formativeQuestion).click();
+      await selectQuestionRow(formativeQuestion);
       assert.equal(await toggle.getAttribute("aria-expanded"), "false");
       await assertFocused(
         toggle,
@@ -527,7 +691,7 @@ try {
     await noOverflow(`story-${width}`);
     await screenshot(`story-${width}`);
     await nav("운영·연결").click();
-    await page.getByText("중지 · 학생 비공개", { exact: true }).waitFor();
+    await page.getByText("초안 · 학생 비공개", { exact: true }).waitFor();
     await noOverflow(`operation-${width}`);
     await screenshot(`operation-${width}`);
     await auditPersistence(`viewport-${width}`);
@@ -537,16 +701,82 @@ try {
     "320/390/768/1280/1440: actual primary 232px + separate question sidebar; mobile disclosure/selection/focus; default own-only DM; stories; upward tools; no horizontal overflow",
   );
 
-  for (const label of [
-    "수업자료",
-    "모의고사",
-    "형성평가",
-    "진단평가",
-    "역사 사전",
+  for (const [width, height] of [
+    [1280, 720],
+    [1366, 768],
+    [1440, 900],
+    [1920, 1080],
   ]) {
-    const trigger = page
-      .locator(".gongsin-connection-list")
-      .getByRole("button", { name: new RegExp(`^${label}`) });
+    await page.setViewportSize({ width, height });
+    await page.goto(origin);
+    await page.locator("[data-gongsin-draft]").waitFor();
+    await desktopGeometry(`inbox-${width}x${height}`);
+    await screenshot(`desktop-inbox-${width}x${height}`);
+    await page
+      .getByRole("button", { name: "공개용 문구 편집", exact: true })
+      .click();
+    await desktopGeometry(`public-editor-${width}x${height}`);
+    await nav("학생 화면").click();
+    await acknowledgeWarning();
+    await desktopGeometry(`dm-${width}x${height}`, true);
+    await screenshot(`desktop-dm-${width}x${height}`);
+    const conversation = await student()
+      .locator(".gsp-conversation")
+      .evaluate((element) => ({
+        height: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        overflow: getComputedStyle(element).overflowY,
+      }));
+    assert(
+      /auto|scroll/.test(conversation.overflow),
+      "Only the conversation must provide scrolling for long messages",
+    );
+    for (const tab of ["기본", "알림", "이용안내", "학습연결", "학생제한"]) {
+      await openSettings(tab);
+      await desktopGeometry(`settings-${tab}-${width}x${height}`);
+      await screenshot(`desktop-settings-${tab}-${width}x${height}`);
+    }
+    await auditPersistence(`desktop-${width}x${height}`);
+  }
+  checks.push(
+    "Desktop browser responsive emulation 1280×720/1366×768/1440×900/1920×1080: production 56px account header and actual Footer fit without body/page scrolling, visible controls stay in bounds, full-width DM has an independent tool rail and conversation scroll",
+  );
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await nav("학생 화면").click();
+  await acknowledgeWarning();
+  await studentNav("내 질문").click();
+  for (const [sourceId, label] of [
+    ["lesson", "수업자료"],
+    ["mock", "모의고사"],
+    ["formative", "형성평가"],
+    ["diagnostic", "진단평가"],
+    ["dictionary", "역사 사전"],
+  ]) {
+    if (sourceId === "mock") {
+      await student()
+        .getByRole("button", { name: "오답 노트", exact: true })
+        .click();
+      await student()
+        .getByRole("button", { name: "이 문항 질문하기", exact: true })
+        .click();
+    } else {
+      const remove = student().getByRole("button", {
+        name: "모의고사 문항 연결 해제",
+        exact: true,
+      });
+      if (await remove.count()) await remove.click();
+      await student()
+        .getByRole("combobox", { name: "질문할 자료" })
+        .selectOption(sourceId);
+    }
+    const text =
+      "학습 연결 검증: " + label + " 자료에서 근거를 어떻게 찾을까요?";
+    await submit(text);
+    const trigger = student()
+      .locator(".gsp-message-pair")
+      .filter({ hasText: text })
+      .locator(".gsp-message-source");
     await trigger.click();
     const preview = page.getByRole("region", {
       name: "학습 연결 미리보기",
@@ -558,11 +788,11 @@ try {
     await page.keyboard.press("Escape");
     await assertFocused(
       trigger,
-      "Closing source preview must restore trigger focus",
+      "Closing source preview must restore its trigger",
     );
   }
   checks.push(
-    "All four learning/assessment categories and dictionary open only a local explanatory preview, with correct focus restoration",
+    "All four learning/assessment categories and dictionary open only local preview panels with correct focus restoration",
   );
 
   await page.reload();
@@ -628,8 +858,8 @@ try {
   const privateReply =
     "개별답변전용검증: 교과서에서 교류 상대와 교류 방식이 드러나는 근거를 찾아 비교하세요.";
   await page.getByLabel(/^개별 답변/).fill(privateReply);
-  await row(privateDiagnosticQuestion).click();
-  await row(question).click();
+  await selectQuestionRow(privateDiagnosticQuestion);
+  await selectQuestionRow(question);
   assert.equal(
     await page.getByLabel(/^개별 답변/).inputValue(),
     privateReply,
@@ -683,7 +913,7 @@ try {
     "Student notification Escape restores focus",
   );
   await nav("질문함").click();
-  await row(privateOtherQuestion).click();
+  await selectQuestionRow(privateOtherQuestion);
   await page
     .getByLabel(/^개별 답변/)
     .fill("학생B개별답변검증: 자료 속 교류 방식을 먼저 확인해 보세요.");
@@ -715,7 +945,7 @@ try {
   );
 
   await nav("질문함").click();
-  await row(question).click();
+  await selectQuestionRow(question);
   await page
     .getByRole("button", { name: "공개용 문구 편집", exact: true })
     .click();
@@ -871,51 +1101,75 @@ try {
       `목록스크롤검증 ${i + 1}: 교류 상대를 구분하는 근거를 어떻게 찾을까요?`,
     );
   await nav("질문함").click();
-  const listScroll = await page
-    .locator(".gongsin-question-list")
-    .evaluate((element) => {
-      let node = element;
-      while (node) {
-        const style = getComputedStyle(node);
-        if (
-          /auto|scroll/.test(style.overflowY) &&
-          node.scrollHeight > node.clientHeight + 1
-        ) {
-          node.scrollTop = node.scrollHeight;
-          return {
-            scrollHeight: node.scrollHeight,
-            clientHeight: node.clientHeight,
-            scrollTop: node.scrollTop,
-            className: node.className,
-          };
-        }
-        node = node.parentElement;
-      }
-      return null;
+  const previousPage = sidebar().getByRole("button", {
+    name: "질문 목록 이전 페이지",
+    exact: true,
+  });
+  while (await previousPage.isEnabled()) await previousPage.click();
+  const listedQuestions = new Set();
+  let visitedPages = 0;
+  do {
+    const text = await sidebar()
+      .locator(".gongsin-question-row strong")
+      .allTextContents();
+    assert(text.length <= 6, "Question pagination must bound row count");
+    text.forEach((item) => listedQuestions.add(item));
+    visitedPages++;
+    const next = sidebar().getByRole("button", {
+      name: "질문 목록 다음 페이지",
+      exact: true,
     });
-  assert(
-    listScroll && listScroll.scrollTop > 0,
-    "Long question lists must scroll inside the sidebar",
+    if (await next.isDisabled()) break;
+    await next.click();
+  } while (visitedPages < 30);
+  assert.equal(
+    listedQuestions.size,
+    19,
+    "Every submitted question must remain reachable through pagination",
   );
-  report.listScroll = listScroll;
+  const listGeometry = await sidebar().evaluate((element) =>
+    [
+      element,
+      ...element.querySelectorAll(
+        ".teacher-settings-navigation-inner,.teacher-settings-sections,.gongsin-question-list",
+      ),
+    ].map((node) => ({
+      className: node.className,
+      height: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      overflowY: getComputedStyle(node).overflowY,
+    })),
+  );
+  assert(
+    !listGeometry.some(
+      (item) =>
+        /auto|scroll/.test(item.overflowY) &&
+        item.scrollHeight > item.height + 1,
+    ),
+    "Question lists must paginate rather than scroll",
+  );
+  report.questionPagination = {
+    visitedPages,
+    questionCount: listedQuestions.size,
+    listGeometry,
+  };
   await noOverflow("long-question-sidebar");
-  await screenshot("long-list-sidebar");
-  await auditPersistence("long-list-and-dm");
+  await screenshot("paginated-question-sidebar");
+  await auditPersistence("paginated-list-and-dm");
   checks.push(
-    "Long Korean DM wraps at 320px; many questions scroll within the sidebar instead of expanding the full page",
+    "Long Korean DM wraps at 320px; 19 questions stay reachable through bounded pagination without question-list scrolling",
   );
 
-  await nav("운영·연결").click();
+  await openSettings("기본");
   await page
-    .getByRole("checkbox", { name: "질문 접수 미리보기", exact: true })
+    .getByRole("checkbox", { name: "질문 접수", exact: true })
     .uncheck();
   await page
-    .getByRole("checkbox", { name: "선정 스토리 미리보기", exact: true })
+    .getByRole("checkbox", { name: "선정 스토리", exact: true })
     .uncheck();
-  await page.getByText("중지 · 학생 비공개", { exact: true }).waitFor();
-  await page
-    .getByRole("button", { name: "학생 화면 확인", exact: true })
-    .click();
+  await page.getByText("초안 · 학생 비공개", { exact: true }).waitFor();
+  await applySettings().click();
+  await nav("학생 화면").click();
   await studentNav("내 질문").click();
   assert(await composer().isDisabled());
   assert(await send().isDisabled());
@@ -972,6 +1226,246 @@ try {
   );
 
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.reload();
+  await nav("학생 화면").click();
+  await acknowledgeWarning();
+  const settingsQuestion =
+    "알림설정검증: 교과서에서 교류 방식의 근거를 어떻게 찾나요?";
+  await composer().fill(settingsQuestion);
+  await openSettings("알림");
+  assert(
+    await applySettings().isDisabled(),
+    "Unchanged settings must not apply",
+  );
+  await settingsPanel()
+    .getByRole("checkbox", { name: "교사 새 질문 알림", exact: true })
+    .uncheck();
+  await settingsPanel()
+    .getByRole("checkbox", { name: "학생 답변 알림", exact: true })
+    .uncheck();
+  assert(await applySettings().isEnabled());
+  await settingsPanel()
+    .getByRole("button", { name: "되돌리기", exact: true })
+    .click();
+  assert(
+    await settingsPanel()
+      .getByRole("checkbox", { name: "교사 새 질문 알림", exact: true })
+      .isChecked(),
+  );
+  assert(
+    await settingsPanel()
+      .getByRole("checkbox", { name: "학생 답변 알림", exact: true })
+      .isChecked(),
+  );
+  assert(await applySettings().isDisabled());
+  await settingsPanel()
+    .getByRole("checkbox", { name: "교사 새 질문 알림", exact: true })
+    .uncheck();
+  await settingsPanel()
+    .getByRole("checkbox", { name: "학생 답변 알림", exact: true })
+    .uncheck();
+  await applySettings().click();
+  assert(
+    await applySettings().isDisabled(),
+    "Applying settings must clear the dirty state",
+  );
+  await nav("학생 화면").click();
+  assert.equal(
+    await warning().count(),
+    0,
+    "Notification settings must not revoke guidance acknowledgement",
+  );
+  assert.equal(await composer().inputValue(), settingsQuestion);
+  await send().click();
+  await student().getByText(settingsQuestion, { exact: true }).waitFor();
+  assert.equal(
+    await teacherBell().getAttribute("aria-label"),
+    "교사 알림 미리보기",
+    "Disabled teacher notifications must suppress only the notification",
+  );
+  await nav("질문함").click();
+  await selectQuestionRow(settingsQuestion);
+  const silentReply = "알림이 꺼져 있어도 이 개별 답변은 대화에 저장됩니다.";
+  await page.getByLabel(/^개별 답변/).fill(silentReply);
+  await save().click();
+  await nav("학생 화면").click();
+  await student().getByText(silentReply, { exact: true }).waitFor();
+  assert.equal(
+    await studentBell().getAttribute("aria-label"),
+    "알림, 읽지 않은 답변 0개",
+  );
+  await openSettings("알림");
+  await settingsPanel()
+    .getByRole("checkbox", { name: "교사 새 질문 알림", exact: true })
+    .check();
+  await settingsPanel()
+    .getByRole("checkbox", { name: "학생 답변 알림", exact: true })
+    .check();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  await submit("알림재개검증: 사료의 표현을 비교하려면 무엇을 보나요?");
+  assert.equal(
+    await teacherBell().getAttribute("aria-label"),
+    "교사 알림 미리보기, 새 알림 1개",
+  );
+  teacherPopup = await openTeacherNotifications();
+  await teacherPopup.getByRole("button").first().click();
+  await page
+    .getByLabel(/^개별 답변/)
+    .fill("다시 켠 알림과 함께 전달되는 답변입니다.");
+  await save().click();
+  await nav("학생 화면").click();
+  assert.equal(
+    await studentBell().getAttribute("aria-label"),
+    "알림, 읽지 않은 답변 1개",
+  );
+  checks.push(
+    "Settings save/cancel/no-op is functional; notification off preserves question/reply storage in the private conversation, and re-enabling notifications resumes both recipients",
+  );
+
+  await openSettings("이용안내");
+  const customTitle = "학습 질문을 보내기 전에";
+  const customBody =
+    "교과서와 학습지에서 궁금했던 내용을 적어 주세요.\n다른 사람의 개인정보는 적지 않아요.";
+  await settingsPanel()
+    .getByLabel("안내 제목", { exact: true })
+    .fill(customTitle);
+  await settingsPanel()
+    .getByLabel(/^안내 내용/)
+    .fill(customBody);
+  await applySettings().click();
+  await nav("학생 화면").click();
+  const changedWarning = student().getByRole("dialog", {
+    name: customTitle,
+    exact: true,
+  });
+  await changedWarning.waitFor();
+  assert(
+    (await changedWarning.innerText()).includes(
+      "다른 사람의 개인정보는 적지 않아요.",
+    ),
+  );
+  assert(await student().locator(".gsp-send").isDisabled());
+  await screenshot("updated-guidance");
+  await acknowledgeWarning();
+  await openSettings("이용안내");
+  await settingsPanel()
+    .getByLabel("안내 제목", { exact: true })
+    .fill("저장하지 않을 안내 제목");
+  await settingsPanel()
+    .getByRole("button", { name: "되돌리기", exact: true })
+    .click();
+  assert.equal(
+    await settingsPanel().getByLabel("안내 제목", { exact: true }).inputValue(),
+    customTitle,
+  );
+  assert(await applySettings().isDisabled());
+  await settingsPanel()
+    .getByRole("checkbox", { name: "첫 사용 안내", exact: true })
+    .uncheck();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  assert.equal(await student().getByRole("dialog").count(), 0);
+  await openSettings("이용안내");
+  await settingsPanel()
+    .getByRole("checkbox", { name: "첫 사용 안내", exact: true })
+    .check();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  await changedWarning.waitFor();
+  await acknowledgeWarning();
+  checks.push(
+    "Saved guidance text and enabled-state changes issue a new acknowledgement version; unrelated settings preserve acknowledgement; cancel restores text; disabling and re-enabling guidance changes the actual student flow",
+  );
+
+  await studentNav("내 질문").click();
+  const preservedSourceQuestion =
+    "연결설정보존검증: 선택한 수업자료에서 궁금한 내용입니다.";
+  await student()
+    .getByRole("combobox", { name: "질문할 자료" })
+    .selectOption("lesson");
+  await composer().fill(preservedSourceQuestion);
+  await openSettings("학습연결");
+  await settingsPanel()
+    .getByRole("checkbox", { name: "수업자료", exact: true })
+    .uncheck();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  assert.equal(await composer().inputValue(), preservedSourceQuestion);
+  assert(
+    await send().isDisabled(),
+    "A removed source must not silently attach a different source",
+  );
+  await student()
+    .getByRole("combobox", { name: "질문할 자료" })
+    .selectOption("dictionary");
+  assert(await send().isEnabled());
+  await send().click();
+  await student().getByText(preservedSourceQuestion, { exact: true }).waitFor();
+  await openSettings("학습연결");
+  await settingsPanel()
+    .getByRole("checkbox", { name: "모의고사", exact: true })
+    .uncheck();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  await student()
+    .getByRole("button", { name: "오답 노트", exact: true })
+    .click();
+  assert(
+    await student()
+      .getByRole("button", { name: "이 문항 질문하기", exact: true })
+      .isDisabled(),
+    "Disabling mock source must block wrong-note question entry",
+  );
+  await student()
+    .getByRole("button", { name: "오답 노트 닫기", exact: true })
+    .click();
+  await openSettings("학습연결");
+  for (const label of [
+    "수업자료",
+    "역사 사전",
+    "형성평가",
+    "진단평가",
+    "모의고사",
+  ])
+    await settingsPanel()
+      .getByRole("checkbox", { name: label, exact: true })
+      .uncheck();
+  await applySettings().click();
+  await nav("학생 화면").click();
+  await studentNav("내 질문").click();
+  assert(await send().isDisabled());
+  await openSettings("학습연결");
+  for (const label of [
+    "수업자료",
+    "역사 사전",
+    "형성평가",
+    "진단평가",
+    "모의고사",
+  ])
+    await settingsPanel()
+      .getByRole("checkbox", { name: label, exact: true })
+      .check();
+  await applySettings().click();
+  await openSettings("기본");
+  await settingsPanel()
+    .getByLabel(/^기본 제한 기간/)
+    .selectOption("10800000");
+  await applySettings().click();
+  await settingsNav("학생제한").click();
+  assert.equal(
+    await settingsPanel()
+      .getByLabel(/^제한 기간/)
+      .inputValue(),
+    "10800000",
+    "Saved default restriction duration must feed the integrated student control",
+  );
+  await auditPersistence("saved-settings-behaviour");
+  checks.push(
+    "Allowed learning sources affect real composition and wrong-note entry, preserve text without silent reassignment, handle no allowed source, and saved default restriction duration feeds integrated student management",
+  );
+
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.clock.install({ time: new Date("2026-11-10T10:00:00+09:00") });
   await page.reload();
   await nav("학생 화면").click();
@@ -979,13 +1473,11 @@ try {
   const heldQuestion =
     "제한해제보존검증: 교류 상대를 구분하는 학습 질문을 작성 중입니다.";
   await composer().fill(heldQuestion);
-  const restrictionPanel = () =>
-    page.getByRole("region", { name: "학생 질문 제한 설정", exact: true });
+  const restrictionPanel = () => page.locator(".gongsin-settings-restrictions");
   const openRestriction = async () => {
-    if (!(await restrictionPanel().isVisible()))
-      await page
-        .getByRole("button", { name: "질문 제한", exact: true })
-        .click();
+    if ((await nav("질문함").getAttribute("aria-pressed")) === "true")
+      await page.getByRole("button", { name: /^질문 제한/ }).click();
+    else await openSettings("학생제한");
     await restrictionPanel().waitFor();
   };
   const applyHourRestriction = async (reason) => {
@@ -999,7 +1491,7 @@ try {
       .click();
   };
   await nav("질문함").click();
-  await row(privateOtherQuestion).click();
+  await selectQuestionRow(privateOtherQuestion);
   await applyHourRestriction("학생 B 제한 범위 검증");
   await nav("학생 화면").click();
   assert(
@@ -1012,15 +1504,16 @@ try {
   );
   assert.equal(await composer().inputValue(), heldQuestion);
   await nav("질문함").click();
-  await row(formativeQuestion).click();
+  await selectQuestionRow(formativeQuestion);
   await applyHourRestriction("학습과 무관한 대화");
-  const sharedStudentDeadline = await editor()
-    .locator(".gongsin-restriction-status time")
+  const sharedStudentDeadline = await restrictionPanel()
+    .locator(".gongsin-settings-restriction-state time")
     .getAttribute("datetime");
-  await row("4군 6진의 위치가").click();
+  await selectQuestionRow("4군 6진의 위치가");
+  await openRestriction();
   assert.equal(
-    await editor()
-      .locator(".gongsin-restriction-status time")
+    await restrictionPanel()
+      .locator(".gongsin-settings-restriction-state time")
       .getAttribute("datetime"),
     sharedStudentDeadline,
     "A restriction applies to the same student across their questions",
@@ -1086,16 +1579,17 @@ try {
     "자동만료보존검증: 제한이 끝난 뒤 이어서 보낼 질문입니다.",
   );
   await nav("질문함").click();
-  await row(formativeQuestion).click();
+  await selectQuestionRow(formativeQuestion);
   await applyHourRestriction("자동 만료 검증");
-  const restrictionEnds = await editor()
-    .locator(".gongsin-restriction-status time")
+  const restrictionEnds = await restrictionPanel()
+    .locator(".gongsin-settings-restriction-state time")
     .getAttribute("datetime");
-  assert(
+  await page.waitForFunction(
+    (element) => element.disabled,
     await page
       .getByRole("button", { name: "제한 적용 (미리보기)", exact: true })
-      .isDisabled(),
-    "Unchanged restriction must not apply again",
+      .elementHandle(),
+    { timeout: 2000 },
   );
   await page
     .getByLabel("제한 사유", { exact: true })
@@ -1104,8 +1598,8 @@ try {
     .getByRole("button", { name: "제한 적용 (미리보기)", exact: true })
     .click();
   assert.equal(
-    await editor()
-      .locator(".gongsin-restriction-status time")
+    await restrictionPanel()
+      .locator(".gongsin-settings-restriction-state time")
       .getAttribute("datetime"),
     restrictionEnds,
     "Editing only the reason must preserve the original deadline",

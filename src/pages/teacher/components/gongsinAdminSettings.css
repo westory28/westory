@@ -1,0 +1,229 @@
+.gongsin-admin-settings {
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+}
+.gongsin-settings-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.gongsin-settings-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.gongsin-settings-heading > span {
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.gongsin-admin-settings > .ws-page-tabs {
+  margin-bottom: 12px;
+}
+.gongsin-admin-settings > .ws-page-tabs > button {
+  min-height: 44px;
+  padding-inline: 12px;
+  font-size: 14px;
+}
+.gongsin-settings-content,
+.gongsin-settings-fields {
+  min-width: 0;
+}
+.gongsin-settings-fields {
+  max-width: 720px;
+}
+.gongsin-settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  cursor: pointer;
+}
+.gongsin-settings-toggle > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.gongsin-settings-toggle strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+.gongsin-settings-toggle small {
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.gongsin-settings-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--ws-primary, #2563eb);
+}
+.gongsin-settings-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.gongsin-admin-settings :is(input[type="text"], select, textarea) {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #1f2937);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 400;
+}
+.gongsin-admin-settings textarea {
+  resize: vertical;
+  line-height: 1.6;
+}
+.gongsin-settings-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.gongsin-settings-inline select {
+  width: 176px;
+}
+.gongsin-settings-warning-fields {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}
+.gongsin-settings-sources {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 24px;
+}
+.gongsin-settings-error {
+  margin: 0;
+  color: var(--ws-danger, #dc2626);
+  font-size: 14px;
+}
+.gongsin-settings-actions,
+.gongsin-settings-restriction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gongsin-settings-actions {
+  padding-top: 16px;
+}
+.gongsin-settings-student-panel[hidden] {
+  display: none;
+}
+.gongsin-settings-restrictions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 24px;
+}
+.gongsin-settings-restriction-form {
+  min-width: 0;
+}
+.gongsin-settings-restriction-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.gongsin-settings-restriction-state {
+  margin: 12px 0;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.gongsin-settings-restrict {
+  color: var(--ws-danger, #dc2626);
+}
+.gongsin-settings-restriction-list {
+  min-width: 0;
+}
+.gongsin-settings-restriction-list h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  font-size: 14px;
+  font-weight: 700;
+}
+.gongsin-settings-restriction-list h3 span {
+  color: var(--ws-text-muted, #6b7280);
+  font-weight: 400;
+}
+.gongsin-settings-restriction-list > button {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  gap: 4px;
+  padding: 8px;
+  border: 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.gongsin-settings-restriction-list > button[aria-pressed="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.gongsin-settings-restriction-list strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.gongsin-settings-restriction-list time {
+  font-size: 12px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.gongsin-settings-empty {
+  margin: 0;
+  padding: 16px 0;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+.gongsin-settings-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  font-size: 14px;
+}
+.gongsin-settings-pages button {
+  padding-inline: 8px;
+  font-size: 14px;
+}
+@media (min-width: 768px) {
+  .gongsin-admin-settings textarea {
+    resize: none;
+  }
+}
+@media (max-width: 767px) {
+  .gongsin-settings-restrictions {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .gongsin-settings-sources {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gongsin-settings-actions > button {
+    flex: 1 1 auto;
+  }
+}

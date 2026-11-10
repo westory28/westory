@@ -5,6 +5,8 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import GongsinStudentPreview from "./GongsinStudentPreview";
+import GongsinAdminSettings from "./GongsinAdminSettings";
+import { createDefaultGongsinmoongoSettings } from "./gongsinmoongoSettings";
 import type { WestoryNotificationType } from "../../../types";
 import {
   createDraftQuestions,
@@ -25,13 +27,6 @@ interface DraftQuestionRestriction {
   until: number;
   reason: string;
 }
-const RESTRICTION_DURATIONS = [
-  [3600000, "1시간"],
-  [10800000, "3시간"],
-  [86400000, "1일"],
-  [259200000, "3일"],
-  [604800000, "7일"],
-] as const;
 const restrictionTime = (until: number) =>
   new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
@@ -59,7 +54,7 @@ type EditorDraft = Pick<
 const VIEWS = [
   ["inbox", "질문함"],
   ["student", "학생 화면"],
-  ["operation", "운영·연결"],
+  ["operation", "운영 설정"],
 ] as const;
 
 function Icon({
@@ -130,8 +125,13 @@ function DraftWorkspace() {
   const [selectedId, setSelectedId] = useState("example-1");
   const [filter, setFilter] = useState("all");
   const [listOpen, setListOpen] = useState(false);
-  const [previewReception, setPreviewReception] = useState(true);
-  const [previewStories, setPreviewStories] = useState(true);
+  const [settings, setSettings] = useState(createDefaultGongsinmoongoSettings);
+  const [settingsNavigation, setSettingsNavigation] = useState({
+    studentId: "",
+    requestId: 0,
+  });
+  const [listPage, setListPage] = useState(0);
+  const [pageSize, setPageSize] = useState(4);
   const [sourcePreview, setSourcePreview] = useState<DraftSourceId | null>(
     null,
   );
@@ -156,6 +156,53 @@ function DraftWorkspace() {
     );
   const selected =
     shownQuestions.find((item) => item.id === selectedId) ?? shownQuestions[0];
+  const totalListPages = Math.max(
+    1,
+    Math.ceil(shownQuestions.length / pageSize),
+  );
+  const currentListPage = Math.min(listPage, totalListPages - 1);
+  const pagedQuestions = shownQuestions.slice(
+    currentListPage * pageSize,
+    (currentListPage + 1) * pageSize,
+  );
+  const students = Array.from(
+    new Map(
+      questions.map((item) => [
+        item.studentId,
+        {
+          studentId: item.studentId,
+          label: item.studentLabel,
+          restriction: restrictions[item.studentId],
+        },
+      ]),
+    ).values(),
+  );
+  useEffect(() => {
+    const resize = () =>
+      setPageSize(
+        window.innerWidth >= 1024
+          ? Math.max(
+              1,
+              Math.min(6, Math.floor((window.innerHeight - 180) / 120)),
+            )
+          : 4,
+      );
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  useEffect(() => {
+    const index = shownQuestions.findIndex((item) => item.id === selectedId);
+    setListPage(index < 0 ? 0 : Math.floor(index / pageSize));
+  }, [selectedId, filter, questions.length, pageSize]);
+  const manageStudent = (studentId: string) => {
+    setSettingsNavigation((value) => ({
+      studentId,
+      requestId: value.requestId + 1,
+    }));
+    setSourcePreview(null);
+    setView("operation");
+  };
   const teacherNotifications = notifications.filter(
     (item) => item.recipientId === "preview-teacher",
   );
@@ -286,7 +333,8 @@ function DraftWorkspace() {
     if (
       typeof update.reply === "string" &&
       update.reply.trim() &&
-      update.reply.trim() !== original.reply
+      update.reply.trim() !== original.reply &&
+      settings.studentReplyNotifications
     ) {
       const notification: DraftNotification = {
         id: `reply-${nextId.current++}`,
@@ -305,7 +353,13 @@ function DraftWorkspace() {
     origin?: "wrong-note",
   ) => {
     const question = text.trim();
-    if (!previewReception || !question || question.length > 1000) return;
+    if (
+      !settings.acceptingQuestions ||
+      !settings.allowedSources.includes(source) ||
+      !question ||
+      question.length > 1000
+    )
+      return;
     if (activeRestriction(PREVIEW_STUDENT)) {
       notify("질문 제한 기간에는 새 질문을 보낼 수 없습니다.");
       return;
@@ -328,18 +382,19 @@ function DraftWorkspace() {
       ...(source === "mock" ? { origin: "wrong-note" as const } : {}),
     };
     setQuestions((items) => [...items, item]);
-    setNotifications((items) => [
-      {
-        id: `created-${id}`,
-        questionId: id,
-        recipientId: "preview-teacher",
-        type: "question_created",
-        title: "새 질문이 도착했습니다",
-        read: false,
-      },
-      ...items,
-    ]);
-    notify("교사 알림 미리보기에 새 질문을 추가했습니다.");
+    if (settings.teacherQuestionNotifications)
+      setNotifications((items) => [
+        {
+          id: `created-${id}`,
+          questionId: id,
+          recipientId: "preview-teacher",
+          type: "question_created",
+          title: "새 질문이 도착했습니다",
+          read: false,
+        },
+        ...items,
+      ]);
+    notify("미리보기 질문을 보냈습니다.");
   };
   const selectStory = (question: DraftQuestion) => {
     const id = storyLinks[question.id] || `story-local-${nextId.current++}`;
@@ -395,7 +450,7 @@ function DraftWorkspace() {
           {shownQuestions.length === 0 && (
             <p className="gongsin-empty">해당하는 질문이 없습니다.</p>
           )}
-          {shownQuestions.map((item) => (
+          {pagedQuestions.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -418,6 +473,29 @@ function DraftWorkspace() {
             </button>
           ))}
         </div>
+        <nav className="gongsin-list-pagination" aria-label="질문 목록 페이지">
+          <button
+            type="button"
+            className="gongsin-icon-button"
+            aria-label="질문 목록 이전 페이지"
+            disabled={currentListPage === 0}
+            onClick={() => setListPage(currentListPage - 1)}
+          >
+            <Icon name="left" />
+          </button>
+          <span aria-live="polite">
+            {currentListPage + 1} / {totalListPages}
+          </span>
+          <button
+            type="button"
+            className="gongsin-icon-button"
+            aria-label="질문 목록 다음 페이지"
+            disabled={currentListPage >= totalListPages - 1}
+            onClick={() => setListPage(currentListPage + 1)}
+          >
+            <Icon name="right" />
+          </button>
+        </nav>
       </PortalSubNavigation>
       <div className="teacher-sub-content gongsin-draft" data-gongsin-draft>
         <header className="ws-page-header">
@@ -517,7 +595,7 @@ function DraftWorkspace() {
         </div>
         {view === "inbox" && (
           <div
-            className="gongsin-question-detail ws-surface"
+            className="gongsin-question-detail"
             ref={detailRef}
             tabIndex={-1}
           >
@@ -542,12 +620,7 @@ function DraftWorkspace() {
                 onSource={openSourcePreview}
                 notify={notify}
                 restriction={activeRestriction(selected.studentId)}
-                onRestrict={(until, reason) =>
-                  applyRestriction(selected.studentId, until, reason)
-                }
-                onReleaseRestriction={() =>
-                  releaseRestriction(selected.studentId)
-                }
+                onManageRestriction={() => manageStudent(selected.studentId)}
               />
             ) : (
               <p className="gongsin-empty">선택할 질문이 없습니다.</p>
@@ -556,20 +629,15 @@ function DraftWorkspace() {
         )}
         <section
           hidden={view !== "student"}
-          className="gongsin-student-stage ws-surface"
+          className="gongsin-student-stage"
           aria-label="학생 화면 미리보기"
         >
-          <div className="gongsin-student-heading">
-            <strong>학생 화면 미리보기</strong>
-            <span className="gongsin-muted">예시 학생 A</span>
-          </div>
           <GongsinStudentPreview
             active={view === "student"}
             restriction={activeRestriction(PREVIEW_STUDENT)}
             questions={questions}
             stories={stories}
-            acceptingQuestions={previewReception}
-            storiesVisible={previewStories}
+            settings={settings}
             onAsk={askQuestion}
             onSource={openSourcePreview}
             notifications={notifications.filter(
@@ -578,86 +646,25 @@ function DraftWorkspace() {
             onReadNotification={markRead}
           />
         </section>
-        {view === "operation" && (
-          <div className="gongsin-operation">
-            <section className="gongsin-operation-status ws-surface">
-              <div>
-                <h3>
-                  <Icon name="lock" />
-                  실제 운영
-                </h3>
-                <p>중지 · 학생 비공개</p>
-              </div>
-              <span className="gongsin-muted">관리자가 운영을 결정합니다</span>
-            </section>
-            <section className="gongsin-preview-settings">
-              <h3>공개 후 화면 가정</h3>
-              <div className="gongsin-switches">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={previewReception}
-                    onChange={(event) =>
-                      setPreviewReception(event.target.checked)
-                    }
-                  />
-                  <span>질문 접수 미리보기</span>
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={previewStories}
-                    onChange={(event) =>
-                      setPreviewStories(event.target.checked)
-                    }
-                  />
-                  <span>선정 스토리 미리보기</span>
-                </label>
-                <button
-                  className="gongsin-button"
-                  type="button"
-                  onClick={() => setView("student")}
-                >
-                  학생 화면 확인
-                </button>
-              </div>
-              <p className="gongsin-muted">실제 운영 설정은 바뀌지 않습니다.</p>
-            </section>
-            <section className="gongsin-connections">
-              <h3>학습 연결</h3>
-              <div className="gongsin-connection-list">
-                {DRAFT_SOURCES.map((source) => (
-                  <button
-                    key={source.id}
-                    type="button"
-                    onClick={() => openSourcePreview(source.id)}
-                  >
-                    <strong>{source.label}</strong>
-                    <span>{source.flow}</span>
-                    <Icon name="right" />
-                  </button>
-                ))}
-              </div>
-            </section>
-            <section className="gongsin-permissions">
-              <h3>알림 연결</h3>
-              <dl>
-                <div>
-                  <dt>학생 질문 전송</dt>
-                  <dd>담당 교사 알림 → 해당 질문</dd>
-                </div>
-                <div>
-                  <dt>교사 개별 답변</dt>
-                  <dd>질문한 학생의 알림 → 해당 대화</dd>
-                </div>
-                <div>
-                  <dt>운영 중지</dt>
-                  <dd>학생에게 비공개 · 실제 알림 발송 없음</dd>
-                </div>
-              </dl>
-            </section>
-          </div>
-        )}
+        <section
+          hidden={view !== "operation"}
+          className="gongsin-operation"
+          aria-label="공신문고 운영 설정"
+        >
+          <GongsinAdminSettings
+            settings={settings}
+            onSave={(next) => {
+              setSettings(next);
+              notify("초안 설정을 적용했습니다.");
+            }}
+            students={students}
+            onApplyRestriction={applyRestriction}
+            onReleaseRestriction={releaseRestriction}
+            initialTab={settingsNavigation.studentId ? "students" : "general"}
+            initialStudentId={settingsNavigation.studentId || undefined}
+            navigationRequestId={settingsNavigation.requestId}
+          />
+        </section>
         {sourcePreview && (
           <section
             ref={sourcePreviewRef}
@@ -702,8 +709,7 @@ function QuestionEditor({
   onSource,
   notify,
   restriction,
-  onRestrict,
-  onReleaseRestriction,
+  onManageRestriction,
 }: {
   question: DraftQuestion;
   draft: EditorDraft;
@@ -715,8 +721,7 @@ function QuestionEditor({
   onSource: (id: DraftSourceId) => void;
   notify: (title: string) => void;
   restriction?: DraftQuestionRestriction;
-  onRestrict: (until: number, reason: string) => void;
-  onReleaseRestriction: () => void;
+  onManageRestriction: () => void;
 }) {
   const { reply, publicQuestion, publicReply, related } = draft;
   const [privacyChecked, setPrivacyChecked] = useState(false);
@@ -739,72 +744,82 @@ function QuestionEditor({
           <Icon name="right" />
         </button>
       </div>
-      <h3>{question.question}</h3>
-      <QuestionRestrictionEditor
-        restriction={restriction}
-        onApply={onRestrict}
-        onRelease={onReleaseRestriction}
-      />
-      <label className="gongsin-field">
-        개별 답변
-        <textarea
-          rows={4}
-          maxLength={2000}
-          value={reply}
-          onChange={(event) => onDraft({ reply: event.target.value })}
-          placeholder="학생에게 보낼 답변을 작성하세요."
-        />
-      </label>
-      <div className="gongsin-editor-actions">
+      <div className="gongsin-editor-mode">
         <button
-          className="gongsin-button gongsin-primary"
+          className="gongsin-text-button"
           type="button"
-          disabled={!reply.trim() || reply.trim() === question.reply}
-          onClick={saveReply}
+          onClick={onManageRestriction}
         >
-          답변 저장 (미리보기)
+          질문 제한
+          {restriction ? ` · ${restrictionTime(restriction.until)}까지` : ""}
         </button>
         <button
-          className="gongsin-button"
+          className="gongsin-text-button"
           type="button"
           disabled={!question.reply}
           aria-expanded={editingStory}
           aria-controls="gongsin-public-editor"
           onClick={() => setEditingStory((value) => !value)}
         >
-          {editingStory ? "공개용 편집 접기" : "공개용 문구 편집"}
+          {editingStory ? "개별 답변으로" : "공개용 문구 편집"}
         </button>
       </div>
+      {!editingStory && (
+        <div className="gongsin-private-answer">
+          <h3 className="gongsin-original-question" tabIndex={0}>
+            {question.question}
+          </h3>
+          <label className="gongsin-field">
+            개별 답변
+            <textarea
+              rows={4}
+              maxLength={2000}
+              value={reply}
+              onChange={(event) => onDraft({ reply: event.target.value })}
+              placeholder="학생에게 보낼 답변을 작성하세요."
+            />
+          </label>
+          <div className="gongsin-editor-actions">
+            <button
+              className="gongsin-button gongsin-primary"
+              type="button"
+              disabled={!reply.trim() || reply.trim() === question.reply}
+              onClick={saveReply}
+            >
+              답변 저장 (미리보기)
+            </button>
+          </div>
+        </div>
+      )}
       {editingStory && (
         <div className="gongsin-public-editor" id="gongsin-public-editor">
           <h4>스토리로 선정하기</h4>
-          <p className="gongsin-muted">
-            원본과 따로 편집합니다. 이름·학급·답안·점수는 제외하세요.
-          </p>
-          <label className="gongsin-field">
-            공개 질문
-            <textarea
-              rows={2}
-              maxLength={240}
-              value={publicQuestion}
-              onChange={(event) => {
-                onDraft({ publicQuestion: event.target.value });
-                setPrivacyChecked(false);
-              }}
-            />
-          </label>
-          <label className="gongsin-field">
-            공개 답변
-            <textarea
-              rows={3}
-              maxLength={1000}
-              value={publicReply}
-              onChange={(event) => {
-                onDraft({ publicReply: event.target.value });
-                setPrivacyChecked(false);
-              }}
-            />
-          </label>
+          <div className="gongsin-public-fields">
+            <label className="gongsin-field">
+              공개 질문
+              <textarea
+                rows={2}
+                maxLength={240}
+                value={publicQuestion}
+                onChange={(event) => {
+                  onDraft({ publicQuestion: event.target.value });
+                  setPrivacyChecked(false);
+                }}
+              />
+            </label>
+            <label className="gongsin-field">
+              공개 답변
+              <textarea
+                rows={3}
+                maxLength={1000}
+                value={publicReply}
+                onChange={(event) => {
+                  onDraft({ publicReply: event.target.value });
+                  setPrivacyChecked(false);
+                }}
+              />
+            </label>
+          </div>
           <fieldset className="gongsin-related-picker">
             <legend>이어서 공부할 자료</legend>
             {DRAFT_SOURCES.map((source) => (
@@ -867,122 +882,6 @@ function QuestionEditor({
         </div>
       )}
     </section>
-  );
-}
-
-function QuestionRestrictionEditor({
-  restriction,
-  onApply,
-  onRelease,
-}: {
-  restriction?: DraftQuestionRestriction;
-  onApply: (until: number, reason: string) => void;
-  onRelease: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [duration, setDuration] = useState(restriction ? "" : "3600000");
-  const [reason, setReason] = useState(
-    restriction?.reason ?? "학습과 무관한 대화",
-  );
-  const chosenDuration = restriction ? duration : duration || "3600000";
-  const unchanged =
-    Boolean(restriction) &&
-    !chosenDuration &&
-    reason.trim() === restriction?.reason;
-  return (
-    <div className="gongsin-restriction">
-      <div className="gongsin-restriction-heading">
-        <button
-          type="button"
-          className="gongsin-text-button"
-          aria-expanded={open}
-          aria-controls="gongsin-restriction-controls"
-          onClick={() => setOpen((value) => !value)}
-        >
-          질문 제한
-          <Icon name={open ? "up" : "right"} />
-        </button>
-        <span className="gongsin-restriction-status" role="status">
-          {restriction ? (
-            <>
-              <time dateTime={new Date(restriction.until).toISOString()}>
-                {restrictionTime(restriction.until)}
-              </time>
-              까지 (한국 시간)
-            </>
-          ) : (
-            "제한 없음"
-          )}
-        </span>
-      </div>
-      {open && (
-        <section
-          className="gongsin-restriction-controls"
-          id="gongsin-restriction-controls"
-          aria-label="학생 질문 제한 설정"
-        >
-          <div className="gongsin-restriction-fields">
-            <label className="gongsin-field">
-              제한 기간
-              <select
-                value={chosenDuration}
-                onChange={(event) => setDuration(event.target.value)}
-              >
-                {restriction && <option value="">현재 종료 시각 유지</option>}
-                {RESTRICTION_DURATIONS.map(([value, label]) => (
-                  <option value={value} key={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="gongsin-field">
-              제한 사유
-              <input
-                type="text"
-                maxLength={80}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                required
-              />
-            </label>
-          </div>
-          <p className="gongsin-muted">
-            이 학생의 새 질문만 제한합니다. 기존 답변과 스토리는 볼 수 있습니다.
-          </p>
-          <div className="gongsin-editor-actions">
-            <button
-              type="button"
-              className="gongsin-button gongsin-restriction-apply"
-              disabled={!reason.trim() || unchanged}
-              onClick={() => {
-                const until = chosenDuration
-                  ? Date.now() + Number(chosenDuration)
-                  : restriction?.until;
-                if (!until) return;
-                onApply(until, reason);
-                setDuration("");
-                setReason(reason.trim());
-              }}
-            >
-              제한 적용 (미리보기)
-            </button>
-            {restriction && (
-              <button
-                type="button"
-                className="gongsin-button"
-                onClick={() => {
-                  onRelease();
-                  setDuration("3600000");
-                }}
-              >
-                제한 해제
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-    </div>
   );
 }
 
