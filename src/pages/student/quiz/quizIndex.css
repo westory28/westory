@@ -61,7 +61,7 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(160px, 0.7fr) minmax(0, 1.3fr);
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: 24px;
   min-width: 0;
   min-height: 440px;
@@ -141,7 +141,12 @@
     transform var(--motion-slow, 300ms) ease,
     opacity var(--motion-slow, 300ms) ease;
 }
+.student-exam-lobby__visual {
+  display: grid;
+}
 .student-exam-lobby__scene {
+  grid-area: 1 / 1;
+  min-width: 0;
   transform-origin: 50% 80%;
   transition: transform var(--motion-slow, 300ms) ease;
 }
@@ -218,6 +223,9 @@
   padding-top: 24px;
   border-top: 1px solid var(--ws-border-blue, #dbeafe);
 }
+.student-exam-lobby__entry:empty {
+  display: none;
+}
 .student-exam-lobby__notice {
   flex: 1;
   margin: 0;
@@ -227,6 +235,11 @@
   word-break: keep-all;
 }
 .student-exam-lobby__enter {
+  position: relative;
+  z-index: 1;
+  grid-area: 1 / 1;
+  align-self: end;
+  justify-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,6 +247,8 @@
   flex-shrink: 0;
   min-height: 48px;
   min-width: 176px;
+  max-width: calc(100% - 32px);
+  margin: 0 16px 8px;
   padding: 12px 24px;
   border: 0;
   border-radius: 8px;
@@ -241,6 +256,7 @@
   color: white;
   font-size: 16px;
   font-weight: 700;
+  box-shadow: var(--shadow-md, 0 14px 28px rgba(15, 23, 42, 0.1));
 }
 .student-exam-lobby__enter {
   cursor: pointer;
@@ -279,7 +295,7 @@
   }
   .student-exam-lobby__art {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 3;
     width: 100%;
     max-width: 440px;
     justify-self: center;
@@ -322,7 +338,7 @@
   }
   .student-exam-lobby__detail {
     min-height: 328px;
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto;
     gap: 16px;
     padding: 24px 20px 20px;
     border-radius: 0 0 12px 12px;

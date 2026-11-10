@@ -394,24 +394,6 @@ const QuizIndex: React.FC = () => {
                 {selectedStatus}
               </span>
             </div>
-            <figure className="student-exam-lobby__art">
-              <div className="student-exam-lobby__scene">
-                <img
-                  key={selected.round}
-                  src={selectedScene.src}
-                  alt={selectedScene.alt}
-                  width="960"
-                  height="720"
-                  decoding="async"
-                  draggable={false}
-                />
-              </div>
-              <figcaption>
-                {getMockExamRoundNumber(selected.round) <= 3
-                  ? selectedScene.place
-                  : "과거 시험장"}
-              </figcaption>
-            </figure>
             <dl className="student-exam-lobby__facts">
               {selected.visible && selectedConfig?.hasExplicitQuestionCount && (
                 <div>
@@ -442,6 +424,53 @@ const QuizIndex: React.FC = () => {
                 </div>
               )}
             </dl>
+            <figure className="student-exam-lobby__art">
+              <div className="student-exam-lobby__visual">
+                <div className="student-exam-lobby__scene">
+                  <img
+                    key={selected.round}
+                    src={selectedScene.src}
+                    alt={selectedScene.alt}
+                    width="960"
+                    height="720"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="student-exam-lobby__enter"
+                  disabled={!canEnter}
+                  onClick={() =>
+                    canEnter &&
+                    startQuiz(
+                      "exam_prep",
+                      "exam_prep",
+                      formatMockExamRoundLabel(selected.round),
+                      selected.round,
+                    )
+                  }
+                >
+                  {retakeBlocked ? "재응시 불가" : "시험 입장"}{" "}
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 12h15m-6-6 6 6-6 6" />
+                  </svg>
+                </button>
+              </div>
+              <figcaption>
+                {getMockExamRoundNumber(selected.round) <= 3
+                  ? selectedScene.place
+                  : "과거 시험장"}
+              </figcaption>
+            </figure>
             <div className="student-exam-lobby__entry">
               {mockOverviewError && selected.visible ? (
                 <div className="student-exam-lobby__error" role="alert">
@@ -466,33 +495,6 @@ const QuizIndex: React.FC = () => {
                       : "응시 상태를 확인할 수 없습니다."}
                 </p>
               ) : null}
-              <button
-                type="button"
-                className="student-exam-lobby__enter"
-                disabled={!canEnter}
-                onClick={() =>
-                  canEnter &&
-                  startQuiz(
-                    "exam_prep",
-                    "exam_prep",
-                    formatMockExamRoundLabel(selected.round),
-                    selected.round,
-                  )
-                }
-              >
-                {retakeBlocked ? "재응시 불가" : "시험 입장"}{" "}
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M4 12h15m-6-6 6 6-6 6" />
-                </svg>
-              </button>
             </div>
           </div>
         </section>

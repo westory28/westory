@@ -62,10 +62,11 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
 const errors=[],external=[],report=[],imageRequests=[],sceneReport=[];
+const isExamIllustration=url=>/^\/assets\/(?:chosi|boksi|jeonsi)-[^/]+\.webp$/.test(new URL(url).pathname);
 try{
   const context=await browser.newContext();
   await context.route('**/*',route=>{if(route.request().url().startsWith(origin))return route.continue();external.push(route.request().url());return route.abort();});
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('.webp'))imageRequests.push(request.url());});
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(isExamIllustration(request.url()))imageRequests.push(request.url());});
   const tab=label=>page.getByRole('tab',{name:label,exact:true});
   const enter=()=>page.getByRole('button',{name:'시험 입장',exact:true});
   const firstRound=()=>page.getByRole('button',{name:'초시 (1회) · 응시 가능',exact:true});
@@ -193,7 +194,7 @@ try{
   assert((await page.getByRole('status').textContent()).includes('round=round_1'),'Freshly published paper enters its own runner');
   const failedImagePage=await context.newPage();failedImagePage.on('pageerror',error=>errors.push(error.message));
   const failedImageRequests=[];
-  await failedImagePage.route('**/*.webp',route=>{failedImageRequests.push(route.request().url());return route.fulfill({status:503,contentType:'image/webp',body:''});});
+  await failedImagePage.route('**/*.webp',route=>{if(!isExamIllustration(route.request().url()))return route.continue();failedImageRequests.push(route.request().url());return route.fulfill({status:503,contentType:'image/webp',body:''});});
   await failedImagePage.goto(origin);await failedImagePage.getByRole('tab',{name:'모의고사',exact:true}).click();
   await failedImagePage.getByRole('button',{name:'초시 (1회) · 응시 가능',exact:true}).waitFor();
   await failedImagePage.waitForFunction(()=>{const image=document.querySelector('.student-exam-lobby__scene > img');return image?.complete&&image.naturalWidth===0;});
