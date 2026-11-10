@@ -49,40 +49,50 @@ window.entryReads=[];
 export const getMockExamOverview=async input=>{window.entryReads.push(input);await new Promise(r=>setTimeout(r,100));if(params.has('error')&&window.entryReads.length===1)throw Error('synthetic read failure');return {semesterId:input.semesterId,writeCount:0,rounds:[1,2,3].map(n=>({examRound:'round_'+n,completed:n<=completed,retakeBlocked:n<=completed&&(params.has('noRetake')||params.has('limitReached'))&&!params.has('reset')&&!params.has('resumable'),prerequisiteMet:n<=completed+1,requiredRound:n>completed+1?'round_'+(completed+1):''}))}};
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,Routes,Route,useLocation}from'react-router-dom';import QuizIndex from './src/pages/student/quiz/QuizIndex';import './src/components/common/portalPage.css';import {normalizeAssessmentConfigEntry} from './src/lib/assessmentConfig';const metadata=normalizeAssessmentConfigEntry({questionCount:20,timeLimit:1800});window.metadataQA={count:metadata.hasExplicitQuestionCount,time:metadata.hasExplicitTimeLimit,spread:{...metadata},serialized:JSON.parse(JSON.stringify(metadata)),missing:normalizeAssessmentConfigEntry({active:true}).hasExplicitQuestionCount};const Destination=()=>{const location=useLocation();window.fixtureDestinationState=location.state;return <p role="status">{location.pathname+location.search}</p>};createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz']}><Routes><Route path="/student/quiz" element={<QuizIndex/>}/><Route path="/student/quiz/run" element={<Destination/>}/><Route path="/student/mypage" element={<Destination/>}/></Routes></MemoryRouter>);`;
-const built = await build({ stdin: { contents:entry,loader:'tsx',resolveDir:root },bundle:true,write:false,outdir:'fixture',format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/(?:contexts\/AuthContext|lib\/(?:assessmentLifecycle|semesterScope|studentLessonReadCache)|\.\/(?:firebase|semesterScope|siteSettings|historyDictionarySession)|firebase\/firestore)$/},()=>({path:'stub',namespace:'synthetic'}));p.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:stub,loader:'tsx',resolveDir:root}));}}]});
+const built = await build({ stdin: { contents:entry,loader:'tsx',resolveDir:root },bundle:true,write:false,outdir:'fixture',assetNames:'assets/[name]-[hash]',loader:{'.webp':'file'},format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/(?:contexts\/AuthContext|lib\/(?:assessmentLifecycle|semesterScope|studentLessonReadCache)|\.\/(?:firebase|semesterScope|siteSettings|historyDictionarySession)|firebase\/firestore)$/},()=>({path:'stub',namespace:'synthetic'}));p.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:stub,loader:'tsx',resolveDir:root}));}}]});
 let tailwind;
 for(const candidate of [process.env.PORTAL_DESIGN_TAILWIND_PATH,path.join(os.tmpdir(),'westory-qa-tailwind.js'),path.join(os.tmpdir(),'westory-assessment-qa-tailwind.js')].filter(Boolean)){try{tailwind=await fs.readFile(candidate,'utf8');break;}catch{}}
 assert(tailwind,'Existing browser QA Tailwind cache is required');
 const js=built.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=built.outputFiles.find(f=>f.path.endsWith('.css')).text;
+const imageAssets=new Map(built.outputFiles.filter(f=>f.path.endsWith('.webp')).map(f=>['/assets/'+path.basename(f.path),f.contents]));
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/app.css"><body style="margin:0;background:#f8fafc"><div id="root"></div><script type="module" src="/app.js"></script></body></html>';
-const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const [type,body]=({'/app.js':['text/javascript',js],'/app.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[pathname]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;if(imageAssets.has(pathname)){res.setHeader('Content-Type','image/webp');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.end(imageAssets.get(pathname));return;}if(pathname.startsWith('/assets/')){res.writeHead(404);res.end();return;}const [type,body]=({'/app.js':['text/javascript',js],'/app.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[pathname]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
-const errors=[],external=[],report=[];
+const errors=[],external=[],report=[],imageRequests=[],sceneReport=[];
 try{
   const context=await browser.newContext();
   await context.route('**/*',route=>{if(route.request().url().startsWith(origin))return route.continue();external.push(route.request().url());return route.abort();});
-  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('.webp'))imageRequests.push(request.url());});
   const tab=label=>page.getByRole('tab',{name:label,exact:true});
   const enter=()=>page.getByRole('button',{name:'시험 입장',exact:true});
   const firstRound=()=>page.getByRole('button',{name:'초시 (1회) · 응시 가능',exact:true});
   const openMock=async()=>{await tab('모의고사').click();await page.locator('.student-exam-lobby').waitFor()};
+  const scene=()=>page.locator('.student-exam-lobby__scene');
+  const sceneImage=()=>scene().locator(':scope > img');
+  const sceneTransform=()=>scene().evaluate(element=>getComputedStyle(element).transform);
+  const readyScene=async()=>{assert.equal(await sceneImage().count(),1,'Only the selected round image is mounted');await sceneImage().evaluate(async image=>{await image.decode();if(!image.naturalWidth||!image.naturalHeight)throw Error('Scene image failed to load');});return sceneImage().getAttribute('src');};
   for(const width of [320,390,768,1280,1440]){
+    const requestStart=imageRequests.length;
     await page.setViewportSize({width,height:900});await page.goto(origin);await tab('단원별 평가').waitFor();
     assert.equal(await page.getByRole('heading',{level:1}).textContent(),'문제 풀이');
     assert.equal(await page.evaluate(()=>window.entryReads.length),0,'No overview query before mock tab');
     assert.equal(await page.locator('.student-exam-lobby').count(),0);
+    assert.equal(imageRequests.length,requestStart,'Hidden mock exam tab does not request illustrations');
     assert.deepEqual(await page.evaluate(()=>window.fixtureReads.slice().sort()),['years/2026/semesters/2/assessment_config/settings','years/2026/semesters/2/assessment_config/status']);
     const unit=await page.locator('.student-quiz-unit').first().evaluate(el=>{const g=el.querySelector('.student-quiz-unit__actions');const buttons=[...g.querySelectorAll('button')].map(b=>{const r=b.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}});return{groupWidth:g.getBoundingClientRect().width,innerWidth:el.clientWidth-32,buttons}});
     assert.equal(unit.buttons[0].y,unit.buttons[1].y);assert(Math.abs(unit.buttons[0].width-unit.buttons[1].width)<1);assert(unit.buttons.every(b=>b.height>=44));if(width<1024)assert(Math.abs(unit.groupWidth-unit.innerWidth)<2);
     await tab('단원별 평가').press('ArrowRight');await firstRound().waitFor();
     assert.equal(await tab('모의고사').getAttribute('aria-selected'),'true');
     assert(await enter().isEnabled());
+    assert.match(await readyScene(),/chosi-/,'First round displays the local examination scene');
+    assert.equal(imageRequests.length-requestStart,1,'Opening the mock tab requests only its selected illustration');
     assert.equal(await page.locator('.student-exam-lobby__facts').innerText(),'출제 문항\n20문항\n제한 시간\n30분');
     const second=page.getByRole('button',{name:'복시 (2회) · 1회 제출 후',exact:true});assert(await second.isEnabled());await second.click();
     assert.equal(await page.locator('#student-exam-heading').textContent(),'복시');assert(await enter().isDisabled());
+    assert.match(await readyScene(),/boksi-/,'Second round displays its own Seoul scene even while locked');
     await tab('단원별 평가').click();await tab('모의고사').click();assert.equal(await page.evaluate(()=>window.entryReads.length),1,'Tab changes reuse the loaded overview');
     await firstRound().click();assert.equal(await firstRound().getAttribute('aria-pressed'),'true');
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
@@ -90,6 +100,45 @@ try{
     if(width<768)assert(layout.detailY>layout.listY,'Mobile lists rounds above details');else assert(layout.detailX>=layout.listRight-1,'Desktop details follow the left round list');
     await page.screenshot({path:path.join(evidence,`quiz-entry-${width}.png`),fullPage:true});report.push({width,unit,layout});
   }
+  // Real local illustration loading and CSS-only interactions must not add service or asset reads.
+  for(const width of [390,768,1280]){
+    await page.setViewportSize({width,height:900});await page.goto(origin+'?completed=3');await openMock();await page.getByRole('button',{name:'초시 (1회) · 응시 완료',exact:true}).waitFor();
+    const sources=[];
+    for(const [index,name] of ['초시','복시','전시'].entries()){
+      await page.getByRole('button',{name:name+' ('+(index+1)+'회) · 응시 완료',exact:true}).click();
+      const source=await readyScene();sources.push(source);
+      assert.match(source,new RegExp(['chosi','boksi','jeonsi'][index]+'-'));
+      await page.mouse.move(0,0);await page.evaluate(()=>document.activeElement?.blur());
+      await page.waitForTimeout(350);
+      const baseline=await sceneTransform();
+      const reads=await page.evaluate(()=>({overview:window.entryReads.length,settings:window.fixtureReads.length}));
+      const requests=imageRequests.length;
+      await enter().hover();await page.waitForTimeout(350);
+      const hovered=await sceneTransform();assert.notEqual(hovered,baseline,'Enabled entry hover raises the scene');
+      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Raised illustration must not cause horizontal overflow');
+      await page.screenshot({path:path.join(evidence,'scene-'+(index+1)+'-hover-'+width+'.png'),fullPage:true});
+      await page.mouse.move(0,0);await page.keyboard.press('Tab');await enter().focus();await page.waitForTimeout(350);
+      assert(await enter().evaluate(button=>button.matches(':focus-visible')),'Keyboard entry has a visible focus state');
+      assert.notEqual(await sceneTransform(),baseline,'Keyboard focus also raises the illustration');
+      await page.evaluate(()=>document.activeElement?.blur());await page.waitForTimeout(350);
+      await enter().hover();await page.mouse.down();await page.waitForTimeout(350);
+      assert.notEqual(await sceneTransform(),baseline,'Pointer press keeps the illustration raised');
+      await page.mouse.move(0,0);await page.mouse.up();
+      assert.deepEqual(await page.evaluate(()=>({overview:window.entryReads.length,settings:window.fixtureReads.length})),reads,'Illustration interactions add no server reads');
+      assert.equal(imageRequests.length,requests,'Illustration interactions add no image requests');
+      sceneReport.push({width,round:index+1,source,hovered,reads,imageRequestsDuringInteraction:0});
+    }
+    assert.equal(new Set(sources).size,3,'All three round scenes are distinct');
+  }
+  await page.emulateMedia({reducedMotion:'reduce'});await page.mouse.move(0,0);await page.evaluate(()=>document.activeElement?.blur());await page.waitForTimeout(350);
+  const reducedBaseline=await sceneTransform();await enter().hover();await page.waitForTimeout(350);
+  assert.equal(await sceneTransform(),reducedBaseline,'Reduced-motion preference keeps the scene still on hover');
+  await page.mouse.move(0,0);await page.keyboard.press('Tab');await enter().focus();await page.waitForTimeout(350);
+  assert.equal(await sceneTransform(),reducedBaseline,'Reduced-motion preference keeps the scene still on keyboard focus');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.goto(origin+'?completed=3&noRetake');await openMock();await page.getByRole('button',{name:'초시 (1회) · 응시 완료',exact:true}).waitFor();await readyScene();await page.mouse.move(0,0);await page.waitForTimeout(350);
+  const disabledBaseline=await sceneTransform();const disabledEntry=page.getByRole('button',{name:'재응시 불가',exact:true});await disabledEntry.hover();await page.waitForTimeout(350);
+  assert.equal(await sceneTransform(),disabledBaseline,'Disabled entry does not advertise an active hover effect');
   assert.deepEqual(await page.evaluate(()=>({count:window.metadataQA.count,time:window.metadataQA.time,missing:window.metadataQA.missing,spread:Object.hasOwn(window.metadataQA.spread,'hasExplicitQuestionCount'),serialized:Object.hasOwn(window.metadataQA.serialized,'hasExplicitTimeLimit')})),{count:true,time:true,missing:false,spread:false,serialized:false},'Display-only metadata provenance is excluded from save payloads');
   // A fast tab round trip while the overview is pending must not launch another read.
   await page.goto(origin);await openMock();await tab('단원별 평가').click();await openMock();await firstRound().waitFor();assert.equal(await page.evaluate(()=>window.entryReads.length),1);
@@ -142,6 +191,18 @@ try{
   await page.evaluate(()=>localStorage.setItem('synthetic-mock-published','true'));await page.reload();await openMock();await firstRound().waitFor();
   assert.equal(await page.evaluate(()=>window.fixtureReads.length),2);assert.equal(await page.evaluate(()=>window.entryReads.length),1);await enter().click();
   assert((await page.getByRole('status').textContent()).includes('round=round_1'),'Freshly published paper enters its own runner');
+  const failedImagePage=await context.newPage();failedImagePage.on('pageerror',error=>errors.push(error.message));
+  const failedImageRequests=[];
+  await failedImagePage.route('**/*.webp',route=>{failedImageRequests.push(route.request().url());return route.fulfill({status:503,contentType:'image/webp',body:''});});
+  await failedImagePage.goto(origin);await failedImagePage.getByRole('tab',{name:'모의고사',exact:true}).click();
+  await failedImagePage.getByRole('button',{name:'초시 (1회) · 응시 가능',exact:true}).waitFor();
+  await failedImagePage.waitForFunction(()=>{const image=document.querySelector('.student-exam-lobby__scene > img');return image?.complete&&image.naturalWidth===0;});
+  const fallbackEntry=failedImagePage.getByRole('button',{name:'시험 입장',exact:true});assert(await fallbackEntry.isEnabled(),'Illustration download failure must not block exam entry');
+  assert.equal(failedImageRequests.length,1,'Failed illustration does not start retry polling');
+  assert.equal(await failedImagePage.evaluate(()=>window.entryReads.length),1,'Image failure does not repeat assessment reads');
+  await failedImagePage.screenshot({path:path.join(evidence,'scene-download-failure.png'),fullPage:true});
+  await fallbackEntry.click();assert((await failedImagePage.getByRole('status').textContent()).includes('round=round_1'),'Exam entry still works when its illustration is unavailable');
+  await failedImagePage.close();
   assert.equal(errors.length,0,JSON.stringify(errors));assert.equal(external.length,0,JSON.stringify(external));
-  await fs.writeFile(path.join(evidence,'report.json'),JSON.stringify({passed:true,report,visibilityCases,publicationRefresh:true,actualConfigReader:true,settingsReads:2,schoolOrRosterReads:0,overviewReadsPerVisit:1,metadataProvenance:true,errors,external},null,2));console.log(evidence);
+  await fs.writeFile(path.join(evidence,'report.json'),JSON.stringify({passed:true,report,sceneReport,reducedMotion:true,disabledMotion:true,failedImageEntry:true,visibilityCases,publicationRefresh:true,actualConfigReader:true,settingsReads:2,schoolOrRosterReads:0,overviewReadsPerVisit:1,metadataProvenance:true,errors,external},null,2));console.log(evidence);
 }finally{await browser.close();await new Promise(r=>server.close(r));}

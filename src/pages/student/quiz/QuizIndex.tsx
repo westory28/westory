@@ -7,6 +7,9 @@ import {
 } from "../../../lib/assessmentLifecycle";
 import { getYearSemester } from "../../../lib/semesterScope";
 import "./quizIndex.css";
+import chosiScene from "../../../assets/mock-exam/chosi.webp";
+import boksiScene from "../../../assets/mock-exam/boksi.webp";
+import jeonsiScene from "../../../assets/mock-exam/jeonsi.webp";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -34,6 +37,24 @@ interface TreeItem {
 
 const getAllExpandedIndexes = (items: TreeItem[]) =>
   new Set(items.map((_, index) => index));
+
+const examScenes = [
+  {
+    src: chosiScene,
+    place: "고을의 시험장",
+    alt: "고을의 시험장에서 유생들이 한지에 붓과 먹으로 답안을 쓰는 초시 장면",
+  },
+  {
+    src: boksiScene,
+    place: "한성의 시험장",
+    alt: "한성의 시험장에서 시험관 아래 유생들이 한지에 붓으로 답안을 쓰는 복시 장면",
+  },
+  {
+    src: jeonsiScene,
+    place: "국왕 앞, 궁궐 전정",
+    alt: "곤룡포와 익선관을 갖춘 국왕을 향해 앉아 붓으로 답안을 쓰는 전시의 상징 장면",
+  },
+];
 
 const QuizIndex: React.FC = () => {
   const { userData, currentUser, config, menuConfig } = useAuth();
@@ -219,6 +240,8 @@ const QuizIndex: React.FC = () => {
     selectedState?.prerequisiteMet === true &&
     !retakeBlocked;
   const selectedStatus = roundStatus(selected.round, selected.visible);
+  const selectedScene =
+    examScenes[getMockExamRoundNumber(selected.round) - 1] || examScenes[0];
   const pageTitle = getStudentMenuLabel(
     menuConfig,
     "/student/quiz",
@@ -371,69 +394,24 @@ const QuizIndex: React.FC = () => {
                 {selectedStatus}
               </span>
             </div>
-            <div className="student-exam-lobby__paper" aria-hidden="true">
-              <svg viewBox="0 0 200 240" fill="none">
-                <path d="M14 7H173L187 22V229H14Z" fill="white" />
-                <path d="M173 7V22H187" stroke="#cbd5e1" />
-                <path d="M27 58H174M100 73V206" stroke="#cbd5e1" />
-                <text
-                  x="100"
-                  y="35"
-                  textAnchor="middle"
-                  fill="#1e3a8a"
-                  fontSize="12"
-                  fontWeight="700"
-                >
-                  역사과 모의고사
-                </text>
-                <text
-                  x="100"
-                  y="49"
-                  textAnchor="middle"
-                  fill="#64748b"
-                  fontSize="8"
-                >
-                  {getMockExamRoundNumber(selected.round)}회 ·{" "}
-                  {getMockExamRoundName(selected.round)}
-                </text>
-                {[80, 125, 170].map((y) => (
-                  <g key={y} stroke="#cbd5e1">
-                    <circle cx="31" cy={y} r="3" />
-                    <path
-                      d={`M40 ${y}H87M28 ${y + 10}H87M28 ${y + 20}H75M113 ${y}H172M113 ${y + 10}H172M113 ${y + 20}H160`}
-                    />
-                  </g>
-                ))}
-                <g transform="translate(132 170) rotate(-8)">
-                  <rect
-                    x="0"
-                    y="0"
-                    width="40"
-                    height="40"
-                    rx="2"
-                    stroke="var(--ws-danger, #dc2626)"
-                    strokeWidth="2"
-                  />
-                  <rect
-                    x="4"
-                    y="4"
-                    width="32"
-                    height="32"
-                    stroke="var(--ws-danger, #dc2626)"
-                  />
-                  <text
-                    x="20"
-                    y="25"
-                    textAnchor="middle"
-                    fill="var(--ws-danger, #dc2626)"
-                    fontSize="13"
-                    fontWeight="800"
-                  >
-                    {getMockExamRoundName(selected.round).slice(0, 2)}
-                  </text>
-                </g>
-              </svg>
-            </div>
+            <figure className="student-exam-lobby__art">
+              <div className="student-exam-lobby__scene">
+                <img
+                  key={selected.round}
+                  src={selectedScene.src}
+                  alt={selectedScene.alt}
+                  width="960"
+                  height="720"
+                  decoding="async"
+                  draggable={false}
+                />
+              </div>
+              <figcaption>
+                {getMockExamRoundNumber(selected.round) <= 3
+                  ? selectedScene.place
+                  : "과거 시험장"}
+              </figcaption>
+            </figure>
             <dl className="student-exam-lobby__facts">
               {selected.visible && selectedConfig?.hasExplicitQuestionCount && (
                 <div>
