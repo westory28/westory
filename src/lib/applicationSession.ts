@@ -239,6 +239,7 @@ export const callWithApplicationSession = async <
   name: string,
   input: RequestData,
   user: User | null = auth.currentUser,
+  options: { beforeDispatch?: () => void } = {},
 ): Promise<HttpsCallableResult<ResponseData>> => {
   if (!user) throw sessionError();
   const { version, authTime } = await sessionContextFor(user);
@@ -256,6 +257,7 @@ export const callWithApplicationSession = async <
       ResponseData
     >(name);
     await assertCurrent();
+    options.beforeDispatch?.();
     const response = await callable({ ...input, _session: proof });
     try {
       await assertCurrent();

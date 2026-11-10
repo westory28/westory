@@ -78,6 +78,10 @@ function harness({ storage = new Map(), receipts = new Map() } = {}) {
           },
         };
       }
+      if (name === "getAssessmentState") return { data: {
+        status: "RECOVERABLE", serverNowIso: new Date().toISOString(),
+        attempt: { attemptId: input.attemptId, status: "STARTED", definitionId: "quiz:2026-2:fixture:exam_prep:round_1" },
+      } };
       if (state.holdCommand) await state.holdCommand;
       if (state.commandError) throw state.commandError;
       const id = input.commandId || input.saveId;
@@ -114,7 +118,9 @@ function harness({ storage = new Map(), receipts = new Map() } = {}) {
       exports,
       crypto: { randomUUID },
       console,
-      setTimeout,
+      // Timing boundaries have a separate fake-clock suite; speed up bounded
+      // waits here while exercising the real session/assessment adapters.
+      setTimeout: (callback, delay) => setTimeout(callback, Math.max(1, delay / 1000)),
       clearTimeout,
       window: {
         sessionStorage: {
@@ -272,6 +278,20 @@ await check(
   },
 );
 
+await check("A stalled session releases the START flight and cannot dispatch after its entry deadline", async () => {
+  const h = harness(), gate = deferred();
+  h.state.holdOpen = gate.promise;
+  await assert.rejects(start(h), { assessmentStartNotDispatched: true });
+  assert.equal(h.mutations().length, 0);
+  const pendingId = [...h.storage.values()][0];
+  gate.resolve(); await flush(); await flush();
+  assert.equal(h.mutations().length, 0, "A late valid session cannot dispatch the abandoned START");
+  h.state.holdOpen = null;
+  await start(h);
+  assert.equal(h.mutations().length, 1, "A fresh explicit retry can use the now-ready session");
+  assert.equal(idOf(h.mutations()[0]), pendingId, "The bounded preparation keeps its stable receipt ID");
+});
+
 for (const code of [
   "functions/internal",
   "functions/unavailable",
@@ -319,13 +339,12 @@ await check(
     await flush();
     gate.resolve();
     await Promise.all(pending);
-    assert.equal(h.mutations().length, 2);
-    assert.equal(idOf(h.mutations()[0]), idOf(h.mutations()[1]));
+    assert.equal(h.mutations().length, 1, "Concurrent callers share the actual START request");
     assert.equal(h.state.applied, 1);
     h.state.commitThenThrow = null;
     h.state.statusError = null;
     await start(h);
-    assert.equal(idOf(h.mutations()[2]), idOf(h.mutations()[0]));
+    assert.equal(idOf(h.mutations()[1]), idOf(h.mutations()[0]));
     assert.equal(h.state.applied, 1);
   },
 );

@@ -11,7 +11,8 @@ const app = getApp();
 const db = getFirestore(app);
 const transactionOperation = new AsyncLocalStorage();
 const observedTransactions = [];
-const instanceConcurrency = 8;
+const instanceConcurrency = Number(process.env.QUIZ_TEST_INSTANCE_CONCURRENCY || 8);
+assert.ok(Number.isInteger(instanceConcurrency) && instanceConcurrency >= 1 && instanceConcurrency <= 32);
 const createRequestQueue = () => {
   const queued = [];
   let active = 0, peak = 0;
@@ -68,9 +69,9 @@ const payload = (revision, update = {}) => {
 };
 
 const verifyAllClassConcurrentMockStarts = async () => {
-  // Model admission to one configured instance, not a production load test.
-  // The unbounded 30-call experiment is separate: the emulator reported lock
-  // timeouts, so it must not be described as a successful simultaneous run.
+  // Default to one configured instance; the test-only override permits stress
+  // comparisons. Emulator locks and absent compound-index planning cannot
+  // establish production throughput or validate an index-plan improvement.
   const classCount = 10, studentCount = 30;
   const students = Array.from({ length: studentCount + 1 }, (_, index) => `synthetic-all-class-${index + 1}`);
   const session = await get(`application_sessions/student-three/sessions/${authTime}`);
@@ -182,7 +183,7 @@ const verifyAllClassConcurrentMockStarts = async () => {
   assert.equal((await state(outsider, { definitionId: defId })).status, "PERMISSION");
   await assert.rejects(state(outsider, { definitionId: defId, prepareAssets: true }), reason("ASSESSMENT_ASSET_PREPARATION_FORBIDDEN"));
   await assert.rejects(execute(outsider, "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_CLASS_NOT_ASSIGNED"));
-  console.log("PASS 30 requests at configured per-instance concurrency 8 across 10 classes, duplicate/lost-response recovery, concurrent owner reads/autosave, read-only transaction boundaries, outsider block and private answer fields");
+  console.log(`PASS 30 requests at test per-instance concurrency ${instanceConcurrency} across 10 classes, duplicate/lost-response recovery, concurrent owner reads/autosave, read-only transaction boundaries, outsider block and private answer fields`);
 };
 
 (async () => {

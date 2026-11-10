@@ -310,7 +310,7 @@ try {
         await page.getByRole('button',{name:'다시 시도',exact:true}).click();
         await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
         const after=await page.evaluate(()=>({starts:window.mockRunnerQa.starts.length,id:window.mockRunnerQa.attempt?.attemptId,deadline:window.mockRunnerQa.attempt?.deadlineAtIso,number:window.mockRunnerQa.attempt?.attemptNumber}));
-        assert.equal(after.starts,2);assert.equal(after.number,1);
+        assert.equal(after.starts,search==='lost-start-response'?1:2,'Retry reads canonical state before sending another START');assert.equal(after.number,1);
         if(search==='lost-start-response'){assert.equal(after.id,before.id);assert.equal(after.deadline,before.deadline)}
       } else {
         await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();

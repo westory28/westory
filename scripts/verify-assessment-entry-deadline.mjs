@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+const deferred = () => { let resolve, reject; const promise = new Promise((done, fail) => { resolve = done; reject = fail; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); await new Promise(setImmediate); };
 function harness() {
   let clock = 0, timerId = 0, commandId = 0;
@@ -24,11 +24,12 @@ function harness() {
       window: { sessionStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) } },
       require: dependency => {
         if (dependency === './firebase') return { auth, db: {} };
-        if (dependency === 'firebase/auth') return { getIdTokenResult: async () => ({ authTime: state.epoch }) };
+        if (dependency === 'firebase/auth') return { getIdTokenResult: async () => state.token ? state.token() : ({ authTime: state.epoch }) };
         if (dependency === './sensitiveOperation') return { ensureSensitiveOperation: async () => {} };
         if (dependency === 'firebase/firestore') return { doc: (_db, _collection, id) => id, getDoc: id => { calls.push({ name: 'getDoc', id }); return state.settings(id); }, getDocFromServer: id => { calls.push({ name: 'getDocFromServer', id }); return state.settings(id); } };
-        if (dependency === './historyDictionarySession') return { getHistoryDictionaryCallable: async name => async input => {
-          calls.push({ name, input });
+        if (dependency === './historyDictionarySession') return { getHistoryDictionaryCallable: async (name, options = {}) => async input => {
+          options.beforeDispatch?.();
+          calls.push({ name, input, at: clock });
           if (name === 'getAssessmentState') return { data: state.read ? await state.read(input) : snapshot() };
           if (name === 'getCommandStatus') return { data: receipts.get(input.commandId) || { ...input, status: 'NOT_FOUND' } };
           if (name !== 'executeCommand') throw Error(`Unexpected ${name}`);
@@ -71,22 +72,22 @@ function harness() {
   const h = harness();
   await h.api.startAssessmentAttempt({ definitionId: h.definitionId });
   assert.equal(h.timers.size, 0, 'Fast success cancels every recovery/deadline timer');
-  await h.advance(40000);
+  await h.advance(105000);
   assert.equal(h.calls.filter(call => call.name === 'getCommandStatus').length, 0, 'Fast START adds no receipt reads');
 }
 {
   const h = harness(), held = deferred(), stateRead = deferred();
   h.state.commit = false; h.state.command = () => held.promise;
   const pending = h.api.startAssessmentAttempt({ definitionId: h.definitionId });
-  await flush(); await h.advance(8000); await h.advance(8000);
+  await flush(); await h.advance(8000); await h.advance(24000); await h.advance(28000);
   const commandId = h.calls.find(call => call.name === 'executeCommand').input.commandId;
   h.receipts.set(commandId, { commandId, commandType: 'startAssessmentAttempt', status: 'SUCCEEDED', result: { ...h.attempt } });
   h.state.read = () => stateRead.promise;
-  await h.advance(8000); await h.advance(6000);
+  await h.advance(4000); await h.advance(14000);
   stateRead.resolve(h.snapshot());
-  assert.equal((await pending).attemptId, h.attempt.attemptId, 'A late commit recovers at 30 seconds without navigation');
+  assert.equal((await pending).attemptId, h.attempt.attemptId, 'A commit at 60 seconds can finish live-state recovery at 78 seconds');
   const statusReads = h.calls.filter(call => call.name === 'getCommandStatus');
-  assert.equal(statusReads.length, 3, 'Recovery is bounded to 8/16/24 seconds');
+  assert.deepEqual(statusReads.map(call => call.at), [8000, 32000, 64000], 'Three checks cover the full server transaction budget');
   assert(statusReads.every(call => call.input.commandId === commandId), 'All recovery reads use the same exact command receipt');
   assert.equal(h.calls.filter(call => call.name === 'executeCommand').length, 1);
   assert.equal(h.timers.size, 0, 'Recovery success cancels all remaining timers');
@@ -95,15 +96,68 @@ function harness() {
 {
   const h = harness(), held = deferred(); h.state.commit = false; h.state.command = () => held.promise;
   const pending = assert.rejects(h.api.startAssessmentAttempt({ definitionId: h.definitionId }), { code: 'functions/deadline-exceeded' });
-  await flush(); await h.advance(8000); await h.advance(8000); await h.advance(8000); await h.advance(16000); await pending;
+  await flush(); await h.advance(8000); await h.advance(24000); await h.advance(32000); await h.advance(26000); await pending;
   assert.equal(h.calls.filter(call => call.name === 'getCommandStatus').length, 3);
   assert.equal(h.timers.size, 0, 'Final timeout cancels scheduled recovery');
   const oldId = h.calls.find(call => call.name === 'executeCommand').input.commandId;
   assert.equal(h.calls.filter(call => call.name === 'executeCommand').length, 1, 'No automatic mutation retry on timeout');
   h.state.command = null; h.state.commit = true;
-  await h.api.startAssessmentAttempt({ definitionId: h.definitionId });
+  const retry = h.api.startAssessmentAttempt({ definitionId: h.definitionId }); await flush();
+  assert.equal(h.calls.filter(call => call.name === 'executeCommand').length, 2, 'The expired SDK flight releases after its transport budget so an explicit retry can recover');
+  await retry; held.resolve(); await flush();
   assert.equal(h.calls.filter(call => call.name === 'executeCommand').at(-1).input.commandId, oldId, 'Explicit retry preserves the pending receipt');
-  held.resolve(); await flush();
+  await flush();
+}
+{
+  const h = harness(), held = deferred(); h.state.commit = false; h.state.command = () => held.promise;
+  const requests = Array.from({ length: 3 }, () => h.api.startAssessmentAttempt({ definitionId: h.definitionId }));
+  await flush(); await h.advance(8000); await h.advance(24000);
+  requests.push(h.api.startAssessmentAttempt({ definitionId: h.definitionId })); await flush();
+  assert.equal(h.calls.filter(call => call.name === 'executeCommand').length, 1, 'Repeated entry/retry shares one active transaction');
+  assert.equal(h.calls.filter(call => call.name === 'getCommandStatus').length, 2, 'Repeated entry shares one bounded recovery schedule');
+  await h.advance(28000); held.resolve();
+  const results = await Promise.all(requests);
+  assert(results.every(result => result.attemptId === h.attempt.attemptId), 'The valid 60-second response opens every current caller');
+  assert.equal(h.timers.size, 0);
+}
+{
+  const h = harness(), held = deferred(); h.state.commit = false; h.state.command = () => held.promise;
+  const pending = h.api.startAssessmentAttempt({ definitionId: h.definitionId }); await flush();
+  held.reject(Object.assign(new Error('Synthetic lost HTTP response'), { code: 'functions/unavailable' }));
+  await flush(); await h.advance(8000); await h.advance(24000); await h.advance(28000);
+  const commandId = h.calls.find(call => call.name === 'executeCommand').input.commandId;
+  h.receipts.set(commandId, { commandId, commandType: 'startAssessmentAttempt', status: 'SUCCEEDED', result: h.attempt });
+  await h.advance(4000);
+  assert.equal((await pending).attemptId, h.attempt.attemptId, 'An early ambiguous error does not cancel recovery of a late commit');
+  assert.equal(h.calls.filter(call => call.name === 'executeCommand').length, 1);
+}
+{
+  const h = harness(), held = deferred(); h.state.token = () => held.promise;
+  const pending = assert.rejects(h.api.startAssessmentAttempt({ definitionId: h.definitionId }), { code: 'functions/deadline-exceeded' });
+  await flush(); await h.advance(15000); await pending;
+  assert.equal(h.calls.length, 0, 'Hung owner capture remains bounded and sends no START');
+  held.resolve({ authTime: h.state.epoch }); await flush();
+  assert.equal(h.calls.length, 0, 'Late owner capture cannot start a timed-out entry');
+}
+{
+  const h = harness(), held = deferred(); let checks = 0;
+  h.state.token = () => ++checks === 2 ? held.promise : { authTime: h.state.epoch };
+  const pending = assert.rejects(h.api.startAssessmentAttempt({ definitionId: h.definitionId }), { code: 'functions/deadline-exceeded' });
+  await flush(); await h.advance(15000); await pending;
+  held.resolve({ authTime: h.state.epoch }); await flush();
+  assert.equal(h.calls.length, 0, 'The freshness check after owner capture cannot dispatch after its deadline');
+}
+{
+  const h = harness(); let checks = 0;
+  h.state.token = async () => {
+    if (++checks !== 2) return { authTime: h.state.epoch };
+    return { get authTime() {
+      queueMicrotask(() => { h.auth.currentUser = { uid: 'another-student' }; });
+      return h.state.epoch;
+    } };
+  };
+  await assert.rejects(h.api.startAssessmentAttempt({ definitionId: h.definitionId }), { code: 'functions/unauthenticated' });
+  assert.equal(h.calls.length, 0, 'Owner changes after outer capture cannot recapture and start as the next account');
 }
 {
   const h = harness(), held = deferred(); h.state.command = () => held.promise;

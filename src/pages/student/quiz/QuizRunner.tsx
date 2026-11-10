@@ -1489,6 +1489,7 @@ const QuizRunner: React.FC = () => {
             : 0,
         );
         timeoutHandledRef.current = false;
+        explicitRetakeRequestedRef.current = false;
         setView("quiz");
         return;
       }
@@ -1569,6 +1570,7 @@ const QuizRunner: React.FC = () => {
       const committedSubmission =
         mapCanonicalAttemptToSubmission(committedAttempt);
 
+      explicitRetakeRequestedRef.current = false;
       setAnswers({});
       setCurrentIndex(0);
       setHintUsedCount(0);
@@ -1631,8 +1633,10 @@ const QuizRunner: React.FC = () => {
     // old links without router state. Consume this initialization before START
     // so StrictMode, state changes and failed requests cannot start it twice.
     automaticEntryConsumedRef.current = initializationGenerationRef.current;
-    explicitRetakeRequestedRef.current = false;
     if (automaticEntryRequested) {
+      // Retain explicit intent across an in-flight START and its recovery.
+      // The router flag is consumed now; the intent ends at a confirmed START.
+      explicitRetakeRequestedRef.current = true;
       navigate(`${location.pathname}${location.search}${location.hash}`, {
         replace: true,
         state: { ...location.state, startAssessment: false },
@@ -1928,9 +1932,7 @@ const QuizRunner: React.FC = () => {
           {!blockReason && (
             <button
               type="button"
-              onClick={() =>
-                errorMsg ? void initializeQuiz() : void startQuiz(true)
-              }
+              onClick={() => void initializeQuiz()}
               disabled={startingQuiz}
               className="min-h-11 rounded-lg bg-blue-600 px-5 font-bold text-white disabled:opacity-50"
             >

@@ -130,6 +130,10 @@ const pendingKey = (commandType: string, payload: unknown) =>
   `westory:w6a:${auth.currentUser?.uid || ""}:${commandType}:${stableStringify(payload)}`;
 
 const pendingCommandIds = new Map<string, string>();
+const pendingStartExecutions = new WeakMap<
+  object,
+  Map<string, Promise<unknown>>
+>();
 
 const readPendingCommandId = (key: string) => {
   const remembered = pendingCommandIds.get(key);
@@ -183,14 +187,76 @@ const captureAssessmentOwner = async () => {
   if (!owner) throw changed();
   const epoch = (await getIdTokenResult(owner)).authTime;
   if (!epoch || auth.currentUser !== owner) throw changed();
-  return async () => {
-    if (
-      auth.currentUser !== owner ||
-      (await getIdTokenResult(owner)).authTime !== epoch ||
-      auth.currentUser !== owner
-    )
-      throw changed();
+  return Object.assign(
+    async () => {
+      if (
+        auth.currentUser !== owner ||
+        (await getIdTokenResult(owner)).authTime !== epoch ||
+        auth.currentUser !== owner
+      )
+        throw changed();
+    },
+    { owner, epoch },
+  );
+};
+
+// A timed-out screen does not cancel a callable or its transaction. Keep the
+// actual START flight through its transport budget so retries cannot contend.
+const executeStartOnce = <T>(
+  owner: object,
+  key: string,
+  execute: (beforeDispatch: () => void) => Promise<T>,
+  isCurrent: () => boolean,
+): Promise<T> => {
+  const executions = pendingStartExecutions.get(owner) || new Map();
+  pendingStartExecutions.set(owner, executions);
+  const existing = executions.get(key);
+  if (existing) return existing as Promise<T>;
+  const request = new Promise<T>((resolve, reject) => {
+    let finished = false;
+    const timeout = (notDispatched: boolean) => {
+      if (finished) return;
+      finished = true;
+      reject(
+        Object.assign(new Error("시험 시작 확인이 지연되고 있습니다."), {
+          code: "functions/deadline-exceeded",
+          assessmentStartNotDispatched: notDispatched,
+        }),
+      );
+    };
+    let timer = setTimeout(() => timeout(true), 15_000);
+    const beforeDispatch = () => {
+      if (finished || !isCurrent())
+        throw Object.assign(new Error("응시 준비가 취소되었습니다."), {
+          code: "functions/cancelled",
+          assessmentStartNotDispatched: true,
+        });
+      clearTimeout(timer);
+      timer = setTimeout(() => timeout(false), 75_000);
+    };
+    execute(beforeDispatch)
+      .then(
+        (value) => {
+          if (!finished) {
+            finished = true;
+            resolve(value);
+          }
+        },
+        (error) => {
+          if (!finished) {
+            finished = true;
+            reject(error);
+          }
+        },
+      )
+      .finally(() => clearTimeout(timer));
+  });
+  executions.set(key, request);
+  const release = () => {
+    if (executions.get(key) === request) executions.delete(key);
   };
+  void request.then(release, release);
+  return request;
 };
 
 const assertAssessmentResponseOwner = async (
@@ -210,11 +276,21 @@ const assertAssessmentResponseOwner = async (
 export const executeStudentAssessmentCommand = async <T>(
   commandType: string,
   payload: Record<string, unknown>,
+  recoverAmbiguousResponse = true,
+  capturedOwner?: Awaited<ReturnType<typeof captureAssessmentOwner>>,
+  isCurrent = () => true,
 ) => {
-  const assertOwner = await captureAssessmentOwner();
+  const assertOwner = capturedOwner || (await captureAssessmentOwner());
+  await assertOwner();
+  if (!isCurrent())
+    throw Object.assign(new Error("응시 준비가 취소되었습니다."), {
+      code: "functions/cancelled",
+      assessmentStartNotDispatched: true,
+    });
   const key = pendingKey(commandType, payload);
   const commandId = readPendingCommandId(key) || createCommandId();
   rememberPendingCommandId(key, commandId);
+  let beforeDispatch = () => {};
   const execute = await getHttpsCallable<
     {
       commandId: string;
@@ -222,10 +298,22 @@ export const executeStudentAssessmentCommand = async <T>(
       payload: Record<string, unknown>;
     },
     CommandResponse<T>
-  >("executeCommand");
+  >("executeCommand", { beforeDispatch: () => beforeDispatch() });
   try {
     await assertOwner();
-    const response = await execute({ commandId, commandType, payload });
+    const send = () => execute({ commandId, commandType, payload });
+    const response =
+      commandType === "startAssessmentAttempt"
+        ? await executeStartOnce(
+            assertOwner.owner,
+            `${assertOwner.epoch}:${commandId}`,
+            (dispatch) => {
+              beforeDispatch = dispatch;
+              return send();
+            },
+            isCurrent,
+          )
+        : await send();
     await assertAssessmentResponseOwner(assertOwner);
     if (
       response.data?.status !== "SUCCEEDED" ||
@@ -251,6 +339,7 @@ export const executeStudentAssessmentCommand = async <T>(
       forgetPendingCommandId(key, commandId);
       throw error;
     }
+    if (!recoverAmbiguousResponse) throw error;
     const getStatus = await getHttpsCallable<
       { commandId: string; commandType: string },
       {
@@ -353,17 +442,30 @@ export const getAssessmentState = async (input: {
   }
 };
 
-export const startAssessmentAttempt = (input: {
+type StartAssessmentInput = {
   definitionId: string;
   preparedSourceHash?: string;
-}) => {
-  const ownerCheck = captureAssessmentOwner();
-  const request = ownerCheck.then(() =>
-    executeStudentAssessmentCommand<AssessmentAttemptState>(
+};
+const pendingStarts = new WeakMap<
+  object,
+  Map<string, Promise<AssessmentAttemptState>>
+>();
+
+const confirmAssessmentStart = (
+  input: StartAssessmentInput,
+  ownerCheck: ReturnType<typeof captureAssessmentOwner>,
+  isCurrent: () => boolean,
+) => {
+  const request = ownerCheck.then(async (assertOwner) => {
+    await assertOwner();
+    return executeStudentAssessmentCommand<AssessmentAttemptState>(
       "startAssessmentAttempt",
       input,
-    ),
-  );
+      false,
+      assertOwner,
+      isCurrent,
+    );
+  });
   // A committed START can have a delayed/lost HTTP response. Read its exact
   // receipt at most three times while pending, then restore its live attempt.
   // Never infer commitment from a different active attempt or replay a write.
@@ -445,20 +547,84 @@ export const startAssessmentAttempt = (input: {
         recovering = false;
       }
     };
-    for (const delay of [8_000, 16_000, 24_000]) {
+    for (const delay of [8_000, 32_000, 64_000]) {
       timers.push(setTimeout(recover, delay));
     }
     request.then(finish, (error) => {
       if (settled) return;
+      // A disconnected HTTP response does not prove that START failed. Keep
+      // checking its exact receipt; definitive access/session errors still stop.
+      if (
+        isAmbiguous(error) &&
+        !receivedSessionResponse(error) &&
+        !(error as { assessmentStartNotDispatched?: boolean })
+          .assessmentStartNotDispatched
+      )
+        return;
       stopRecovery();
       reject(error);
     });
   });
   return withRequestDeadline(
     recovered,
-    40_000,
+    // Preserve the 70-second callable budget, plus the last receipt check at
+    // 64 seconds (7 seconds) and its live-state confirmation (15 seconds).
+    90_000,
     "시험 시작 확인이 지연되고 있습니다. 다시 시도하면 저장된 응시를 확인합니다.",
   ).finally(stopRecovery);
+};
+
+const startForCurrentOwner = async (
+  input: StartAssessmentInput,
+  isCurrent: () => boolean,
+) => {
+  const assertOwner = await withRequestDeadline(
+    (async () => {
+      const owner = await captureAssessmentOwner();
+      await owner();
+      return owner;
+    })(),
+    15_000,
+    "로그인 연결을 확인하지 못했습니다. 다시 시도해 주세요.",
+  );
+  if (!isCurrent())
+    throw Object.assign(new Error("응시 준비가 취소되었습니다."), {
+      code: "functions/cancelled",
+      assessmentStartNotDispatched: true,
+    });
+  const starts = pendingStarts.get(assertOwner.owner) || new Map();
+  pendingStarts.set(assertOwner.owner, starts);
+  const key = `${assertOwner.epoch}:${stableStringify(input)}`;
+  const existing = starts.get(key);
+  if (existing) {
+    const result = await existing;
+    await assertOwner();
+    return result;
+  }
+  const request = confirmAssessmentStart(
+    input,
+    Promise.resolve(assertOwner),
+    isCurrent,
+  );
+  starts.set(key, request);
+  const release = () => {
+    if (starts.get(key) === request) starts.delete(key);
+  };
+  void request.then(release, release);
+  const result = await request;
+  await assertOwner();
+  return result;
+};
+
+export const startAssessmentAttempt = (input: StartAssessmentInput) => {
+  let current = true;
+  return withRequestDeadline(
+    startForCurrentOwner(input, () => current),
+    105_000,
+    "시험 시작 확인이 지연되고 있습니다. 다시 시도하면 저장된 응시를 확인합니다.",
+  ).finally(() => {
+    current = false;
+  });
 };
 
 export const saveAssessmentProgress = async (input: {

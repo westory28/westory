@@ -1396,6 +1396,16 @@ const runStartReadConcurrency = async () => {
   assert.equal(attempt.deadlineAtIso, new Date(nowMs + base.durationSeconds * 1000).toISOString());
   const sourceQueries = fixture.queryLog.filter(item => item.collectionPath.endsWith("/quiz_questions"));
   assert.equal(sourceQueries.length, 1, "New START loads its source exactly once after admission");
+  const priorQuery = fixture.queryLog.find(item => item.collectionPath === assessment.ATTEMPT_COLLECTION);
+  assert.deepEqual(priorQuery.filter.filters, [
+    { field: "definitionId", operator: "==", value: definitionId },
+    { field: "studentUid", operator: "==", value: student.uid },
+  ], "START remains restricted to this exact student and assessment");
+  const indexes = require("../../../firestore.indexes.json").indexes;
+  assert.ok(indexes.some(index => index.collectionGroup === assessment.ATTEMPT_COLLECTION && index.queryScope === "COLLECTION"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "studentUid", order: "ASCENDING" }, { fieldPath: "definitionId", order: "ASCENDING" },
+    ])), "Keep the student-first compound index so START does not merge a shared definition index range");
   fixture.queryLog.length = 0;
   const resumed = (await apply(fixture, "startAssessmentAttempt", { definitionId }, student)).result;
   assert.equal(resumed.attemptId, attempt.attemptId);

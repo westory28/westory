@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "semester_assessment_attempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentUid", "order": "ASCENDING" },
+        { "fieldPath": "definitionId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "semester_wis_ledger",
       "queryScope": "COLLECTION",
       "fields": [

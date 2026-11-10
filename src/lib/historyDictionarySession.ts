@@ -11,7 +11,7 @@ export const getHistoryDictionaryCallable = async <
   ResponseData = unknown,
 >(
   name: string,
-  _options: { reuseSessionProof?: boolean } = {},
+  options: { reuseSessionProof?: boolean; beforeDispatch?: () => void } = {},
 ) => {
   return async (
     data?: RequestData,
@@ -19,6 +19,8 @@ export const getHistoryDictionaryCallable = async <
     callWithApplicationSession<Record<string, unknown>, ResponseData>(
       name,
       (data || {}) as Record<string, unknown>,
+      undefined,
+      { beforeDispatch: options.beforeDispatch },
     );
 };
 

@@ -13,17 +13,18 @@ const source = ts.transpileModule(readFileSync('src/lib/assessmentLifecycle.ts',
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const deadlines = {};
-runInNewContext(ts.transpileModule(readFileSync('src/lib/requestDeadline.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: deadlines, setTimeout, clearTimeout });
+const boundedTimer = (callback, delay) => setTimeout(callback, Math.max(1, delay / 1000));
+runInNewContext(ts.transpileModule(readFileSync('src/lib/requestDeadline.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { exports: deadlines, setTimeout: boundedTimer, clearTimeout });
 const exports = {};
 runInNewContext(source, { exports, require: name => {
   if (name === './requestDeadline') return deadlines;
   if (name === './firebase') return { auth };
   if (name === 'firebase/auth') return { getIdTokenResult: async () => ({ authTime: new Date(epoch * 1000).toISOString() }) };
   if (name === './sensitiveOperation') return { ensureSensitiveOperation: async () => { sensitive++; if (sensitiveFailure) throw sensitiveFailure; } };
-  if (name === './historyDictionarySession') return { getHistoryDictionaryCallable: async name => async data => ({ data: await handler(name, data) }) };
+  if (name === './historyDictionarySession') return { getHistoryDictionaryCallable: async (name, options = {}) => async data => { options.beforeDispatch?.(); return { data: await handler(name, data) }; } };
   throw new Error(name);
 }, window: { sessionStorage: { getItem: key => { if (storageBlocked) throw new Error('Storage blocked'); return storage.get(key); }, setItem: (key, value) => { if (storageBlocked) throw new Error('Storage blocked'); return storage.set(key, value); }, removeItem: key => { if (storageBlocked) throw new Error('Storage blocked'); return storage.delete(key); } } },
-setTimeout, clearTimeout, crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}` }, Date, Map, console });
+setTimeout: boundedTimer, clearTimeout, crypto: { randomUUID: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}` }, Date, Map, console });
 const error = (code, reason) => Object.assign(new Error(code), { code, details: { reason } });
 let calls = [];
 handler = async (name, payload) => { calls.push([name, payload]); return { status: 'READY', definition: { definitionId: 'quiz:2026-2:unit:formative' }, attempt: null }; };
@@ -38,6 +39,7 @@ assert.equal(calls.length, 2, 'Completed state is never cached across a later pu
 handler = async (name, payload) => {
   calls.push([name, payload]);
   if (name === 'executeCommand') throw error('functions/unavailable');
+  if (name === 'getAssessmentState') return { status: 'RECOVERABLE', attempt: { attemptId: 'attempt-recovered', definitionId: 'quiz:2026-2:unit:formative', status: 'STARTED' } };
   return { ...payload, status: 'SUCCEEDED', result: { attemptId: 'attempt-recovered', revision: 1 } };
 };
 const recovered = await exports.startAssessmentAttempt({ definitionId: 'quiz:2026-2:unit:formative' });
@@ -49,10 +51,10 @@ handler = async (name, payload) => { calls.push([name, payload]); throw error('f
 await assert.rejects(exports.startAssessmentAttempt({ definitionId: 'quiz:2026-2:unit:formative' }));
 const firstId = calls[0][1].commandId;
 await assert.rejects(exports.startAssessmentAttempt({ definitionId: 'quiz:2026-2:unit:formative' }));
-assert.equal(calls[2][1].commandId, firstId);
+assert.equal(calls.filter(([name]) => name === 'executeCommand').at(-1)[1].commandId, firstId);
 auth.currentUser = { uid: 'student-b' };
 await assert.rejects(exports.startAssessmentAttempt({ definitionId: 'quiz:2026-2:unit:formative' }));
-assert.notEqual(calls[4][1].commandId, firstId);
+assert.notEqual(calls.filter(([name]) => name === 'executeCommand').at(-1)[1].commandId, firstId);
 storage.clear();
 
 let submissions = 0;
