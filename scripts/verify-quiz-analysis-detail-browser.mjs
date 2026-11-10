@@ -69,15 +69,25 @@ const snapshots = Object.fromEntries(
     Object.fromEntries(questions.map((q) => [q.id, q])),
   ]),
 );
+const mockQuestion = {
+  ...questions[0], unitId: "exam_prep", category: "exam_prep", examRound: "round_1",
+  paperOrder: 7, points: 4, question: "자료에 나타난 국가를 고르시오.",
+  answer: "고려", options: ["고려", "조선", "신라", "백제", "발해"],
+  image: "/current-material.svg", examplePassage: "ㄱ. 벽란도\nㄴ. 팔관회",
+  choiceOptionImages: ["/frozen-choice.svg", null, null, null, null],
+  passageSet: { id: "shared-1", instruction: "다음 자료를 읽고 답하시오.",
+    passage: "벽란도에서 교역이 이루어졌다.", image: "/frozen-shared.svg" },
+};
 const entry = `import React,{useEffect,useRef,useState} from 'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAnalysisView.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};
-const questions=${JSON.stringify(questions)},students=${JSON.stringify(students)},records=${JSON.stringify(records)},snapshots=${JSON.stringify(snapshots)};
-function App(){const ref=useRef(null);const[action,setAction]=useState('');useEffect(()=>{ref.current.showModal()},[]);const keyword=new URLSearchParams(location.search).has('keyword');const empty=new URLSearchParams(location.search).has('empty');return <><p>합성 문항 분석 검증</p><output aria-label="실행한 동작">{action}</output><dialog ref={ref} className="qca-detail-dialog" aria-labelledby="fixture-title"><header className="qca-detail-header"><div><h3 id="fixture-title">3학년 1반 · 문항·학생 상세</h3><p>{keyword?'전체 단원 · 붕당 검색':'형성평가'}</p></div><button aria-label="상세 닫기" onClick={()=>ref.current.close()}>닫기</button></header><div className="qca-detail-body"><View questions={empty?[]:questions} students={students} records={empty?[]:keyword?records:records.map(record=>({...record,totalCount:23,items:record.items.filter(item=>item.questionId!=='2')}))} tree={[{id:'big',title:'조선',children:[{id:'unit-a',title:'정치',children:[{id:'leaf',title:'붕당의 형성'}]},{id:'unit-b',title:'사회',children:[]}]}]} snapshots={snapshots} configuredClasses={[{id:'class_1',label:'3학년 1반'}]} semesterId="2026-2" loading={false} errors={[]} legacyLimited={false} canEdit={true} onEdit={q=>setAction('edit:'+q.id)} onDerive={q=>setAction('derive:'+q.id)} onReload={()=>setAction('reload')} lockedScope={{unitId:keyword?'irrelevant-unit':'unit-a',category:'formative',examRound:'',classId:'class_1',...(keyword?{keyword:'붕당',questionIds:empty?[]:['1','2']}: {})}}/></div></dialog></>;}createRoot(document.getElementById('root')).render(<App/>);`;
+const regularQuestions=${JSON.stringify(questions)},students=${JSON.stringify(students)},regularRecords=${JSON.stringify(records)},regularSnapshots=${JSON.stringify(snapshots)},mockQuestion=${JSON.stringify(mockQuestion)};
+function App(){const ref=useRef(null);const[action,setAction]=useState('');useEffect(()=>{ref.current.showModal()},[]);const keyword=new URLSearchParams(location.search).has('keyword');const empty=new URLSearchParams(location.search).has('empty');const mock=new URLSearchParams(location.search).has('mock');const questions=mock?[mockQuestion]:regularQuestions;const records=mock?regularRecords.map(record=>({...record,unitId:'exam_prep',category:'exam_prep',examRound:'round_1',totalCount:1,items:record.items.filter(item=>item.questionId==='1')})):regularRecords;const snapshots=mock?Object.fromEntries(records.map(record=>['canonical:'+record.id,{'1':{...mockQuestion,image:'/frozen-material.svg'}}])):regularSnapshots;return <><p>합성 문항 분석 검증</p><output aria-label="실행한 동작">{action}</output><dialog ref={ref} className="qca-detail-dialog" aria-labelledby="fixture-title"><header className="qca-detail-header"><div><h3 id="fixture-title">3학년 1반 · 문항·학생 상세</h3><p>{keyword?'전체 단원 · 붕당 검색':'형성평가'}</p></div><button aria-label="상세 닫기" onClick={()=>ref.current.close()}>닫기</button></header><div className="qca-detail-body"><View questions={empty?[]:questions} students={students} records={empty?[]:keyword?records:records.map(record=>({...record,totalCount:23,items:record.items.filter(item=>item.questionId!=='2')}))} tree={[{id:'big',title:'조선',children:[{id:'unit-a',title:'정치',children:[{id:'leaf',title:'붕당의 형성'}]},{id:'unit-b',title:'사회',children:[]}]}]} snapshots={snapshots} configuredClasses={[{id:'class_1',label:'3학년 1반'}]} semesterId="2026-2" loading={false} errors={[]} legacyLimited={false} canEdit={true} onEdit={q=>setAction('edit:'+q.id)} onDerive={q=>setAction('derive:'+q.id)} onReload={()=>setAction('reload')} lockedScope={{unitId:mock?'exam_prep':keyword?'irrelevant-unit':'unit-a',category:mock?'exam_prep':'formative',examRound:mock?'round_1':'',classId:'class_1',...(keyword?{keyword:'붕당',questionIds:empty?[]:['1','2']}: {})}}/></div></dialog></>;}createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
   bundle: true,
   write: false,
   format: "esm",
   platform: "browser",
+  loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   outfile: path.join(evidence, "fixture.js"),
   define: { "process.env.NODE_ENV": '"production"' },
 });
@@ -88,6 +98,11 @@ const base =
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root"></div><script type="module" src="/fixture.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
+  if (url.pathname.endsWith(".svg")) {
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.end('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="100" viewBox="0 0 240 100"><rect x="1" y="1" width="238" height="98" fill="white" stroke="black"/><path d="M20 80L70 25L120 65L165 15L220 80" fill="none" stroke="black" stroke-width="2"/></svg>');
+    return;
+  }
   res.setHeader(
     "Content-Type",
     url.pathname.endsWith(".js")
@@ -115,6 +130,8 @@ const checks = [],
 try {
   for (const width of [390, 768, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
+    await page.route("**/*", route => route.request().url().startsWith(origin)
+      || route.request().url().startsWith("data:") ? route.continue() : route.abort());
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(origin);
     const dialog = page.getByRole("dialog");
@@ -426,6 +443,51 @@ try {
       headerSorting: true,
       readOnlySorting: true,
     });
+    await page.goto(origin + "?mock");
+    const mockDialog = page.getByRole("dialog");
+    const mockRow = mockDialog.locator(".qa-question-table tbody tr").first();
+    await mockRow.waitFor();
+    await mockRow.getByRole("button").click();
+    const mockDetail = mockDialog.getByRole("region", { name: "문항 상세", exact: true });
+    const paper = mockDetail.locator(".mock-exam-question-ink");
+    await paper.waitFor();
+    assert.equal(await paper.locator(".mock-exam-number").innerText(), "7.",
+      "A filtered analysis keeps the original paper number");
+    assert.equal(await paper.locator(".mock-exam-set-passage").count(), 1);
+    assert.ok((await paper.locator(".mock-exam-set-passage").innerText()).includes(mockQuestion.passageSet.passage));
+    assert.ok((await paper.locator(".mock-exam-example").innerText()).includes("벽란도"));
+    assert.equal(await paper.locator(".mock-exam-options li").count(), 5);
+    assert.equal(await paper.locator('img[src="/current-material.svg"]').count(), 0,
+      "Current bank image must not replace the matching frozen exam snapshot");
+    for (const name of ["frozen-material", "frozen-shared", "frozen-choice"]) {
+      const img = paper.locator(`img[src="/${name}.svg"]`);
+      await img.waitFor({ state: "visible" });
+      await img.evaluate(image => image.decode());
+      assert.ok(await img.evaluate(image => image.complete && image.naturalWidth > 0));
+    }
+    const paperStyle = await paper.evaluate(element => {
+      const style = getComputedStyle(element);
+      const bounds = element.getBoundingClientRect();
+      const container = element.closest(".qa-question-content").getBoundingClientRect();
+      return { font: style.fontFamily, lineHeight: style.lineHeight,
+        right: bounds.right, containerRight: container.right };
+    });
+    assert.match(paperStyle.font, /Noto Serif KR/, "The preview uses the exam's serif typeface");
+    assert.ok(paperStyle.right <= paperStyle.containerRight + 1, "Preview fits the detail width");
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    assert.equal(await page.getByLabel("실행한 동작").textContent(), "",
+      "Preview uses already loaded snapshots without reload or mutation");
+    assert.equal(await page.getByRole("dialog").count(), 1);
+    await page.screenshot({ path: path.join(evidence, `mock-paper-${width}.png`), fullPage: true });
+    await mockDetail.getByRole("button", { name: "닫기", exact: true }).click();
+    await mockDialog.getByRole("button", { name: "학생", exact: true }).click();
+    await mockDialog.locator(".qa-student-table tbody button").first().click();
+    await mockDialog.locator(".qa-student-answers summary").first().click();
+    const savedPaper = mockDialog.locator(".qa-student-answers .mock-exam-question-ink");
+    assert.equal(await savedPaper.locator('img[src="/frozen-material.svg"]').count(), 1);
+    assert.equal(await savedPaper.locator(".mock-exam-number").innerText(), "7.");
+    checks.push({ width, mockPaper: true, frozenImagePreferred: true, sharedMaterial: true,
+      choiceImage: true, originalPaperNumber: true, noAddedServerQuery: true, studentReview: true });
     await page.close();
   }
   const page = await browser.newPage({

@@ -66,6 +66,9 @@ interface LessonContentProps {
   fullscreenPreview?: boolean;
   onClosePreview?: () => void;
   allowHiddenAccess?: boolean;
+  /** Embedded review keeps answer saving, without loading whole-semester rewards. */
+  reviewPopup?: boolean;
+  onDraftStateChange?: (dirty: boolean, saving: boolean) => void;
 }
 
 const EMPTY_BLANK_LABEL = "빈칸";
@@ -109,6 +112,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
   fullscreenPreview = false,
   onClosePreview,
   allowHiddenAccess = false,
+  reviewPopup = false,
+  onDraftStateChange,
 }) => {
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
@@ -134,6 +139,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     "";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [lessonLoadRetry, setLessonLoadRetry] = useState(0);
+  const [progressLoadError, setProgressLoadError] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [studentAnswers, setStudentAnswers] = useState<
     Record<string, { value?: string; status?: AnswerStatus }>
@@ -218,6 +225,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setPendingCorePointRequests(new Set(requests));
   };
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
+  useEffect(() => {
+    onDraftStateChange?.(hasUnsavedChanges, isSaving);
+  }, [hasUnsavedChanges, isSaving, onDraftStateChange]);
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
     const normalized = normalizeLessonData(lesson, {
@@ -322,6 +332,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const fetchLesson = async () => {
       setLoading(true);
       setError(false);
+      setProgressLoadError(false);
       setIsBlocked(false);
       setActiveWorksheetPage(null);
       try {
@@ -366,7 +377,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [allowHiddenAccess, config, fallbackTitle, lessonOverride, unitId]);
+  }, [
+    allowHiddenAccess,
+    config,
+    fallbackTitle,
+    lessonOverride,
+    unitId,
+    lessonLoadRetry,
+  ]);
 
   const getProgressRef = () => {
     if (!canPersist || !currentUser?.uid || !unitId) return null;
@@ -899,15 +917,17 @@ const LessonContent: React.FC<LessonContentProps> = ({
           input.value = saved.value || "";
           applyInputStatus(input, saved.status || "");
         });
-        void refreshCorePointOverview(restoredCorePointIds).catch(
-          (overviewError) => {
-            console.warn(
-              "Failed to refresh core point overview:",
-              overviewError,
-            );
-          },
-        );
+        if (!reviewPopup)
+          void refreshCorePointOverview(restoredCorePointIds).catch(
+            (overviewError) => {
+              console.warn(
+                "Failed to refresh core point overview:",
+                overviewError,
+              );
+            },
+          );
       } catch (restoreError) {
+        if (!cancelled && reviewPopup) setProgressLoadError(true);
         console.error("Failed to restore lesson progress:", restoreError);
       }
     };
@@ -931,10 +951,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
     config?.semester,
     lesson,
     unitId,
+    reviewPopup,
   ]);
 
   useEffect(() => {
-    if (!canPersist || !currentUser?.uid || !lesson) {
+    if (reviewPopup || !canPersist || !currentUser?.uid || !lesson) {
       setCorePointOverview({
         loaded: false,
         totalCount: currentCorePointIds.length,
@@ -969,6 +990,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     currentUser?.uid,
     lesson,
     unitId,
+    reviewPopup,
   ]);
 
   const handleReset = () => {
@@ -1043,6 +1065,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <h2 className="text-xl font-bold text-gray-500">
           수업 자료를 찾을 수 없습니다.
         </h2>
+        {reviewPopup && error && (
+          <button
+            type="button"
+            className="mt-4 min-h-11 rounded-lg border px-4"
+            onClick={() => setLessonLoadRetry((value) => value + 1)}
+          >
+            다시 불러오기
+          </button>
+        )}
       </div>
     );
   if (isBlocked)
@@ -1247,6 +1278,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   };
 
   const handleFindCorePoint = async (highlightId: string) => {
+    if (reviewPopup) return false;
     const operationScope = activeScope;
     const currentIdSet = new Set(currentCorePointIds);
     if (
@@ -1398,7 +1430,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const displayedCorePointFoundCount = corePointOverview.loaded
     ? corePointOverview.foundCount
     : foundCorePointIds.length;
-  const showFloatingCorePointStatus = displayedCorePointTotalCount > 0;
+  const showFloatingCorePointStatus =
+    !reviewPopup && displayedCorePointTotalCount > 0;
   const isCorePointCompletionReady =
     corePointOverview.loaded &&
     displayedCorePointTotalCount > 0 &&
@@ -1442,7 +1475,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
       </strong>
     </>
   );
-  const floatingSaveControls = canPersist ? (
+  const showSaveControls = canPersist && !(reviewPopup && progressLoadError);
+  const floatingSaveControls = showSaveControls ? (
     <div
       data-lesson-save-controls="true"
       className={
@@ -1607,8 +1641,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
+        {reviewPopup && progressLoadError && (
+          <div role="alert" className="py-4 text-red-700">
+            저장된 학습지 입력을 불러오지 못했습니다.
+            <button
+              type="button"
+              className="ml-2 min-h-11 rounded-lg border px-4"
+              onClick={() => setLessonLoadRetry((value) => value + 1)}
+            >
+              다시 불러오기
+            </button>
+          </div>
+        )}
         <div
           ref={contentRef}
+          hidden={reviewPopup && progressLoadError}
           className="space-y-6"
           onInput={handleLessonInput}
           onBlur={handleLessonBlur}

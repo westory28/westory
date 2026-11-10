@@ -15,6 +15,10 @@ import {
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
 import QuizPassage from "../../../components/common/QuizPassage";
+import {
+  MockExamQuestionContent,
+  type MockExamPaperQuestion,
+} from "../../../components/common/MockExamPaper";
 import { formatQuizChoiceText } from "../../../lib/quizChoiceColumns";
 import InfoHelp from "../../../components/common/InfoHelp";
 import QuizItemStatistics from "./QuizItemStatistics";
@@ -483,6 +487,27 @@ export default function QuizAnalysisView({
   const selectedQuestion = scopedQuestions.find(
     (q) => String(q.id) === selectedQuestionId,
   );
+  const selectedQuestionSnapshot = useMemo(() => {
+    if (!selectedQuestion) return undefined;
+    const revision = String(
+      selectedQuestion.sourceRevision ?? selectedQuestion.contentRevision ?? "",
+    );
+    const candidates = analysis.students
+      .map((student) => student.latestRecord)
+      .filter((record): record is QuizAnalysisRecord => !!record)
+      .sort((a, b) => timestampMs(b.submittedAt) - timestampMs(a.submittedAt));
+    for (const record of candidates) {
+      const item = record.items.find(
+        (item) => String(item.questionId) === selectedQuestionId,
+      );
+      if (!item || (revision && String(item.sourceRevision ?? "") !== revision))
+        continue;
+      const snapshot =
+        snapshots[`${record.source}:${record.id}`]?.[selectedQuestionId];
+      if (snapshot?.question) return snapshot;
+    }
+    return undefined;
+  }, [selectedQuestion, selectedQuestionId, analysis.students, snapshots]);
   const questionStat = selectedQuestion
     ? byQuestion.get(String(selectedQuestion.id))
     : undefined;
@@ -1383,7 +1408,22 @@ export default function QuizAnalysisView({
                         {questionStat.revisionExcludedCount}명
                       </p>
                     )}
-                  <QuestionContent question={selectedQuestion} />
+                  <QuestionContent
+                    question={selectedQuestionSnapshot || selectedQuestion}
+                    category={selectedQuestion.category}
+                    index={Math.max(
+                      0,
+                      Number(
+                        (
+                          selectedQuestionSnapshot as Partial<MockExamPaperQuestion>
+                        )?.paperOrder ||
+                          (selectedQuestion as Partial<MockExamPaperQuestion>)
+                            .paperOrder ||
+                          questionOrder.get(selectedQuestionId) ||
+                          1,
+                      ) - 1,
+                    )}
+                  />
                   <QuizItemStatistics
                     key={`${selectedQuestion.id}:${assessmentKey}:${classId}`}
                     row={itemStatistics.questions.find(
@@ -1460,10 +1500,34 @@ export default function QuizAnalysisView({
 function QuestionContent({
   question,
   category = question.category,
+  index = Math.max(
+    0,
+    Number((question as Partial<MockExamPaperQuestion>).paperOrder || 1) - 1,
+  ),
 }: {
   question: Partial<Question>;
   category?: string;
+  index?: number;
 }) {
+  if (normalizeMockExamCategory(category) === "exam_prep")
+    return (
+      <div className="qa-question-content qa-question-content--paper">
+        <MockExamQuestionContent
+          question={question as MockExamPaperQuestion}
+          index={index}
+        />
+        {question.answer != null && (
+          <p>
+            <strong>정답</strong> {answerLabel(question.answer, question.type)}
+          </p>
+        )}
+        {question.explanation && (
+          <div className="qa-explanation">
+            <strong>해설</strong> <QuizPassage value={question.explanation} />
+          </div>
+        )}
+      </div>
+    );
   return (
     <div className="qa-question-content">
       <h4>{question.question || "원문 미보관"}</h4>
@@ -1649,6 +1713,13 @@ function StudentDetail({
                       <QuestionContent
                         question={snapshot}
                         category={record.category}
+                        index={Math.max(
+                          0,
+                          Number(
+                            (snapshot as Partial<MockExamPaperQuestion>)
+                              .paperOrder || index + 1,
+                          ) - 1,
+                        )}
                       />
                     )}
                     <p>

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazyWithRetry } from "../../../lib/lazyWithRetry";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { MockExamQuestionContent } from "../../../components/common/MockExamPaper";
 import MockExamAnswerControls from "../../../components/common/MockExamAnswerControls";
@@ -15,6 +16,11 @@ import {
   isQuizPracticeAnswerCorrect,
   type QuizRelearningItem,
 } from "./quizPracticeData";
+
+const QuizLessonPopup = lazyWithRetry(
+  () => import("./QuizLessonPopup"),
+  "student-quiz-lesson-popup",
+);
 
 const reflectionReasons = [
   "실수했어요",
@@ -69,6 +75,17 @@ export default function QuizRelearning({
   const contentProtectionRef = useRef<HTMLElement>(null);
   useQuizContentProtection(contentProtectionRef);
   const [queue, setQueue] = useState(items);
+  const [reviewLessonId, setReviewLessonId] = useState<string | null>(null);
+  const [lessonOpen, setLessonOpen] = useState(false);
+  const [lessonDirty, setLessonDirty] = useState(false);
+  const [lessonSaving, setLessonSaving] = useState(false);
+  const handleLessonDraftState = useCallback(
+    (dirty: boolean, saving: boolean) => {
+      setLessonDirty(dirty);
+      setLessonSaving(saving);
+    },
+    [],
+  );
   const [index, setIndex] = useState(0);
   const [stage, setStage] = useState<"review" | "practice" | "checked">(
     "review",
@@ -125,11 +142,13 @@ export default function QuizRelearning({
   };
   const setAnswer = (practiceAnswer: string) => updateDraft({ practiceAnswer });
   const leave = (action: () => void) => {
-    if (saveBusy.current) return;
+    if (saveBusy.current || lessonSaving) return;
     if (
-      dirtyIds.length &&
+      (dirtyIds.length || lessonDirty) &&
       !window.confirm(
-        "저장하지 않은 오답 노트가 있어요. 저장하지 않고 나갈까요?",
+        lessonDirty
+          ? "저장하지 않은 학습지 입력이 있어요. 저장하지 않고 나갈까요?"
+          : "저장하지 않은 오답 노트가 있어요. 저장하지 않고 나갈까요?",
       )
     )
       return;
@@ -137,14 +156,14 @@ export default function QuizRelearning({
   };
   const close = () => leave(onClose);
   useEffect(() => {
-    if (!dirtyIds.length) return;
+    if (!dirtyIds.length && !lessonDirty) return;
     const guard = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", guard);
     return () => window.removeEventListener("beforeunload", guard);
-  }, [dirtyIds.length]);
+  }, [dirtyIds.length, lessonDirty]);
 
   const save = async () => {
     if (!onSave || !draft || !dirty || saveBusy.current) return;
@@ -245,7 +264,15 @@ export default function QuizRelearning({
     setStage("practice");
   };
   const advance = () => {
-    if (saveBusy.current) return;
+    if (saveBusy.current || lessonSaving) return;
+    if (
+      index + 1 >= queue.length &&
+      lessonDirty &&
+      !window.confirm(
+        "저장하지 않은 학습지 입력이 있어요. 저장하지 않고 복습을 마칠까요?",
+      )
+    )
+      return;
     setIndex(index + 1);
     setSaveError("");
     setSavedMessage("");
@@ -487,11 +514,13 @@ export default function QuizRelearning({
             </>
           )}
           {item.reviewLessonId && (
-            <a
+            <button
+              type="button"
               className="quiz-notebook__lesson"
-              href={`#/student/lesson/note?id=${encodeURIComponent(item.reviewLessonId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={() => {
+                setReviewLessonId(item.reviewLessonId!);
+                setLessonOpen(true);
+              }}
             >
               <svg
                 width="24"
@@ -504,9 +533,8 @@ export default function QuizRelearning({
               >
                 <path d="M12 5v15M12 5C8 2 4 3 2 4v15c3-1 6-1 10 1 4-2 7-2 10-1V4c-2-1-6-2-10 1Z" />
               </svg>
-              연결된 학습지 열기 <span aria-hidden="true">↗</span>
-              <span className="sr-only">(새 탭)</span>
-            </a>
+              연결된 학습지 열기
+            </button>
           )}
           {checked && (
             <p className="student-quiz-relearning-feedback" role="status">
@@ -655,6 +683,16 @@ export default function QuizRelearning({
           )}
         </div>
       </div>
+      {reviewLessonId && (
+        <Suspense fallback={null}>
+          <QuizLessonPopup
+            unitId={reviewLessonId}
+            open={lessonOpen}
+            onClose={() => setLessonOpen(false)}
+            onDraftStateChange={handleLessonDraftState}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }

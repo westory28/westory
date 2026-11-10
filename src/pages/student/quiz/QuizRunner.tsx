@@ -18,7 +18,6 @@ import {
   QuizChoiceColumnCells,
 } from "../../../components/common/QuizChoiceColumns";
 import { getQuizChoiceColumnCount } from "../../../lib/quizChoiceColumns";
-import InfoHelp from "../../../components/common/InfoHelp";
 import {
   AssessmentTelemetryCollector,
   type AssessmentTelemetrySnapshot,
@@ -219,7 +218,8 @@ const QuizRunner: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const automaticEntryRequested = location.state?.startAssessment === true;
-  const automaticEntryConsumedRef = useRef<string | null>(null);
+  const automaticEntryConsumedRef = useRef(0);
+  const explicitRetakeRequestedRef = useRef(false);
   const [automaticEntryInProgress, setAutomaticEntryInProgress] =
     useState(false);
   const initializationGenerationRef = useRef(0);
@@ -242,16 +242,14 @@ const QuizRunner: React.FC = () => {
       ? formatMockExamRoundLabel(examRound)
       : searchParams.get("title") || "평가";
 
-  const [view, setView] = useState<"loading" | "intro" | "quiz" | "result">(
+  const [view, setView] = useState<"loading" | "entry" | "quiz" | "result">(
     "loading",
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [blockReason, setBlockReason] = useState<string | null>(null);
-  const [resumeNotice, setResumeNotice] = useState("");
 
   const [quizConfig, setQuizConfig] = useState<QuizConfig | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<Question[]>([]);
-  const [historyCount, setHistoryCount] = useState<number | null>(null);
   const [activeSubmission, setActiveSubmission] =
     useState<QuizSubmissionDoc | null>(null);
   const [canonicalAttempt, setCanonicalAttemptState] =
@@ -368,6 +366,7 @@ const QuizRunner: React.FC = () => {
       initializationGenerationRef.current += 1;
       preparationGenerationRef.current += 1;
       initialPreparationRef.current = null;
+      explicitRetakeRequestedRef.current = false;
       startingQuizRef.current = false;
       paperPreparationControllerRef.current?.abort();
       paperPreparationControllerRef.current = null;
@@ -1050,8 +1049,7 @@ const QuizRunner: React.FC = () => {
       setSelectedQuestions([]);
       setActiveSubmission(null);
       setCanonicalAttempt(null);
-      setHistoryCount(0);
-      setView("intro");
+      setView("entry");
       return;
     }
     void initializeQuiz();
@@ -1124,7 +1122,8 @@ const QuizRunner: React.FC = () => {
     return () => window.clearInterval(timerId);
   }, [finishSubmitting, view]);
 
-  const initializeQuiz = async () => {
+  const initializeQuiz = async (retakeRequested = false) => {
+    if (retakeRequested) explicitRetakeRequestedRef.current = true;
     setReviewItems([]);
     if (!unitId || !category || !fallbackStudentUid) return;
     const generation = ++initializationGenerationRef.current;
@@ -1137,8 +1136,6 @@ const QuizRunner: React.FC = () => {
       setOpenHintQuestionId(null);
       setErrorMsg(null);
       setBlockReason(null);
-      setHistoryCount(null);
-      setResumeNotice("");
       setStartingQuiz(false);
       setAutomaticEntryInProgress(false);
       startingQuizRef.current = false;
@@ -1189,7 +1186,7 @@ const QuizRunner: React.FC = () => {
         setBlockReason(
           "유효하지 않거나 더 이상 사용할 수 없는 평가 링크입니다.",
         );
-        setView("intro");
+        setView("entry");
         return;
       }
       setAssessmentTitle(
@@ -1209,7 +1206,7 @@ const QuizRunner: React.FC = () => {
                   : "";
       if (stateBlockReason) {
         setBlockReason(stateBlockReason);
-        setView("intro");
+        setView("entry");
         return;
       }
 
@@ -1250,7 +1247,6 @@ const QuizRunner: React.FC = () => {
 
       const canonicalExistingAttempt = assessmentState.attempt;
       setCanonicalAttempt(canonicalExistingAttempt);
-      setHistoryCount(Number(canonicalExistingAttempt?.attemptNumber || 0));
       const existingSubmission = canonicalExistingAttempt
         ? mapCanonicalAttemptToSubmission(canonicalExistingAttempt)
         : null;
@@ -1265,29 +1261,36 @@ const QuizRunner: React.FC = () => {
         if (
           restoredQuestions.length === existingSubmission.questionIds.length
         ) {
-          const remainingSeconds = restoreSubmissionState(
+          restoreSubmissionState(
             existingSubmission,
             restoredQuestions,
             assessmentState.serverNowIso,
           );
-          setResumeNotice(
-            remainingSeconds <= 0
-              ? "제한 시간이 끝난 응시입니다. 이어하기를 누르면 저장된 답안으로 제출을 마칩니다."
-              : "서버에 저장된 진행 상태를 이어서 풀 수 있습니다.",
-          );
           initializedScopeRef.current = `${fallbackStudentUid}:${assessmentDefinitionId}`;
-          setView("intro");
+          setView("entry");
           return;
         }
       }
 
+      if (!nextQuizConfig.questionCount) {
+        setBlockReason("이 평가에 등록된 문항이 없습니다.");
+        setView("entry");
+        return;
+      }
+
       if (canonicalExistingAttempt?.status === "SUBMITTED") {
+        // A refresh/back navigation must not consume another permitted attempt.
+        // Retakes are requested explicitly from the assessment list.
+        if (!automaticEntryRequested && !explicitRetakeRequestedRef.current) {
+          navigate("/student/quiz", { replace: true });
+          return;
+        }
         if (
           canonicalExistingAttempt.attemptNumber >=
           assessmentState.definition.maxAttempts
         ) {
           setBlockReason("응시 가능 횟수를 모두 사용했습니다.");
-          setView("intro");
+          setView("entry");
           return;
         }
         const retryAt =
@@ -1297,7 +1300,7 @@ const QuizRunner: React.FC = () => {
           setBlockReason(
             `${Math.ceil((retryAt - Date.parse(assessmentState.serverNowIso)) / 60000)}분 후 다시 응시할 수 있습니다.`,
           );
-          setView("intro");
+          setView("entry");
           return;
         }
       }
@@ -1321,7 +1324,7 @@ const QuizRunner: React.FC = () => {
           },
         };
       }
-      setView("intro");
+      setView("entry");
     } catch (error) {
       if (!isCurrent()) return;
       const failure = error as {
@@ -1348,7 +1351,7 @@ const QuizRunner: React.FC = () => {
       } else {
         setErrorMsg(getQuizEntryErrorMessage(error));
       }
-      setView("intro");
+      setView("entry");
     }
   };
 
@@ -1357,7 +1360,8 @@ const QuizRunner: React.FC = () => {
       !unitId ||
       !category ||
       !fallbackStudentUid ||
-      !quizConfig?.questionCount ||
+      (!quizConfig?.questionCount &&
+        activeSubmission?.status !== "in_progress") ||
       startingQuizRef.current
     ) {
       return;
@@ -1407,7 +1411,8 @@ const QuizRunner: React.FC = () => {
         return;
       }
 
-      await resolveStudentIdentity();
+      // Identity is resolved independently; START verifies the authenticated
+      // account on the server and does not use a client-supplied email.
       assertCurrent();
       const startPreparedAttempt = async () => {
         let preparedSourceHash: string | undefined;
@@ -1494,11 +1499,6 @@ const QuizRunner: React.FC = () => {
       // Question numbers follow the frozen server attempt in both the runner
       // and result history. Only order/matching answer choices are shuffled.
       setOrderOptionMap(buildOrderOptionMap(committedQuestions));
-      setResumeNotice(
-        attempt.resumed
-          ? "서버에 저장된 진행 상태를 이어서 풀 수 있습니다."
-          : "응시가 시작되었습니다. 답안은 서버에 자동 저장됩니다.",
-      );
       if (isMockExamAttempt) {
         // Also covers an already-running attempt resumed by the server and
         // old snapshots. Deadline/remaining time remain server-authoritative.
@@ -1535,31 +1535,39 @@ const QuizRunner: React.FC = () => {
 
   useEffect(() => {
     if (
-      !automaticEntryRequested ||
-      automaticEntryConsumedRef.current === location.key ||
-      view !== "intro" ||
+      view !== "entry" ||
       errorMsg ||
       blockReason ||
-      !quizConfig?.questionCount ||
+      entryError ||
+      paperPreparationError ||
+      (!quizConfig?.questionCount &&
+        activeSubmission?.status !== "in_progress") ||
       initializedScopeRef.current !==
-        `${fallbackStudentUid}:${assessmentDefinitionId}`
+        `${fallbackStudentUid}:${assessmentDefinitionId}` ||
+      automaticEntryConsumedRef.current === initializationGenerationRef.current
     )
       return;
-    // The list click is the explicit start action. Consume it before START so
-    // refresh/back navigation and StrictMode cannot create another attempt.
-    automaticEntryConsumedRef.current = location.key;
-    navigate(`${location.pathname}${location.search}${location.hash}`, {
-      replace: true,
-      state: { ...location.state, startAssessment: false },
-    });
+    // Every authorized entry opens the paper directly, including refresh and
+    // old links without router state. Consume this initialization before START
+    // so StrictMode, state changes and failed requests cannot start it twice.
+    automaticEntryConsumedRef.current = initializationGenerationRef.current;
+    explicitRetakeRequestedRef.current = false;
+    if (automaticEntryRequested) {
+      navigate(`${location.pathname}${location.search}${location.hash}`, {
+        replace: true,
+        state: { ...location.state, startAssessment: false },
+      });
+    }
     void startQuiz(true);
   }, [
     automaticEntryRequested,
-    location.key,
     view,
     errorMsg,
     blockReason,
+    entryError,
+    paperPreparationError,
     quizConfig?.questionCount,
+    activeSubmission?.status,
     fallbackStudentUid,
     assessmentDefinitionId,
   ]);
@@ -1784,15 +1792,6 @@ const QuizRunner: React.FC = () => {
     }
   };
 
-  const timeLimitSeconds = useMemo(
-    () =>
-      Math.max(
-        60,
-        Number(activeSubmission?.timeLimitSeconds || quizConfig?.timeLimit) ||
-          60,
-      ),
-    [activeSubmission?.timeLimitSeconds, quizConfig?.timeLimit],
-  );
   const operationLoadingOverlay =
     showOperationLoading && operationPending
       ? createPortal(
@@ -1804,174 +1803,52 @@ const QuizRunner: React.FC = () => {
   if (
     view === "loading" ||
     automaticEntryInProgress ||
-    (view === "intro" &&
-      automaticEntryRequested &&
+    (view === "entry" &&
       !blockReason &&
       !errorMsg &&
-      Boolean(quizConfig?.questionCount))
+      !entryError &&
+      !paperPreparationError)
   ) {
-    return <PageLoading message="문제를 준비하는 중입니다." />;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+        <PageLoading message="문제를 준비하는 중입니다." />
+        {paperPreparationProgress && (
+          <p role="status" className="pb-4 text-sm text-slate-600">
+            시험지 준비 {paperPreparationProgress.loaded}/
+            {paperPreparationProgress.total}
+          </p>
+        )}
+      </div>
+    );
   }
 
-  if (view === "intro") {
-    const timeLimitMinutes = Math.max(1, Math.round(timeLimitSeconds / 60));
-    const questionCount = blockReason
-      ? 0
-      : selectedQuestions.length || quizConfig?.questionCount || 10;
-    const assessmentTypeLabel =
-      category === "diagnostic"
-        ? "진단평가"
-        : category === "formative"
-          ? "형성평가"
-          : "모의고사";
-    const introStatusLabel = blockReason
-      ? "응시 불가"
-      : activeSubmission?.status === "in_progress"
-        ? "이어 풀기"
-        : "응시 전 확인";
-    const introActionLabel = startingQuiz
-      ? "준비 중..."
-      : paperPreparationError
-        ? "자료 다시 불러오기"
-        : entryError
-          ? "다시 시도"
-          : activeSubmission?.status === "in_progress"
-            ? "이어하기"
-            : "평가 시작하기";
-
+  if (view === "entry") {
     return (
-      <div className="student-quiz-intro mx-auto flex min-h-0 w-full max-w-5xl flex-1 animate-fadeIn items-center px-4 py-2 lg:py-3">
-        {operationLoadingOverlay}
-        <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
-          <div className="grid md:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
-            <section className="p-4 text-left sm:p-6 lg:p-7">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                  <i className="fas fa-file-signature text-[11px]"></i>
-                  {assessmentTypeLabel}
-                </span>
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black ${
-                    blockReason
-                      ? "bg-rose-50 text-rose-600"
-                      : activeSubmission?.status === "in_progress"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {introStatusLabel}
-                </span>
-              </div>
-
-              <div className="mt-3 flex items-center gap-1 sm:mt-4">
-                <h1 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
-                  {title}
-                </h1>
-                <InfoHelp label="풀이 기록 수집 안내">
-                  문항을 화면에서 본 시간, 첫 답과 마지막 답을 고른 시점, 답
-                  변경·재방문·힌트 사용을 답안과 함께 저장합니다. 화면을 벗어난
-                  시간은 풀이 시간에서 제외합니다. 시간만으로 실력이나 찍기를
-                  판단하지 않으며, 풀이 기록은 점수와 위스에 영향을 주지
-                  않습니다.
-                </InfoHelp>
-              </div>
-
-              <dl className="mt-4 grid grid-cols-3 divide-x divide-blue-100 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 text-left sm:mt-5">
-                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
-                  <dt className="text-xs font-bold text-slate-500">
-                    제한 시간
-                  </dt>
-                  <dd className="mt-1 text-lg font-black text-blue-700 sm:text-xl">
-                    {timeLimitMinutes}분
-                  </dd>
-                </div>
-                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
-                  <dt className="text-xs font-bold text-slate-500">
-                    출제 문항
-                  </dt>
-                  <dd className="mt-1 text-lg font-black text-blue-700 sm:text-xl">
-                    {questionCount}문항
-                  </dd>
-                </div>
-                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
-                  <dt className="text-xs font-bold text-slate-500">
-                    응시 횟수
-                  </dt>
-                  <dd className="mt-1 text-lg font-black text-slate-900 sm:text-xl">
-                    {historyCount === null ? "—" : `${historyCount}회`}
-                  </dd>
-                </div>
-              </dl>
-
-              {(resumeNotice || errorMsg) && (
-                <div className="mt-4 space-y-2">
-                  {resumeNotice && !blockReason && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-                      {resumeNotice}
-                    </div>
-                  )}
-                  {errorMsg && (
-                    <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-500">
-                      {errorMsg}
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-
-            <aside className="flex flex-col justify-between gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:p-6 md:border-l md:border-t-0">
-              <div className="flex items-start gap-3 md:block">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg text-white shadow-lg shadow-blue-200 sm:h-12 sm:w-12 sm:text-xl">
-                  <i className="fas fa-stopwatch"></i>
-                </div>
-                <p className="text-sm font-bold leading-6 text-slate-600 md:mt-4">
-                  시작 후에는 화면을 벗어나도 제한 시간이 계속됩니다.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {startingQuiz && paperPreparationProgress && (
-                  <div
-                    role="status"
-                    className="text-sm font-bold text-blue-700"
-                  >
-                    시험지 준비 중 · {paperPreparationProgress.loaded}/
-                    {paperPreparationProgress.total}
-                  </div>
-                )}
-                {(paperPreparationError || entryError) && (
-                  <p role="alert" className="text-sm font-bold text-red-600">
-                    {paperPreparationError || entryError}
-                  </p>
-                )}
-                {!blockReason ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      errorMsg ? void initializeQuiz() : void startQuiz()
-                    }
-                    disabled={startingQuiz}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-5 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 sm:h-12"
-                  >
-                    {errorMsg ? "다시 불러오기" : introActionLabel}
-                  </button>
-                ) : (
-                  <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-500">
-                    <i className="fas fa-ban mr-2"></i>
-                    {blockReason}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => navigate(-1)}
-                  className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                >
-                  돌아가기
-                </button>
-              </div>
-            </aside>
-          </div>
+      <div className="ws-page ws-page--reading">
+        <h1 className="text-xl font-bold">{title}</h1>
+        <p role="alert" className="my-4 text-sm text-red-600">
+          {blockReason || errorMsg || paperPreparationError || entryError}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {!blockReason && (
+            <button
+              type="button"
+              onClick={() =>
+                errorMsg ? void initializeQuiz() : void startQuiz(true)
+              }
+              disabled={startingQuiz}
+              className="min-h-11 rounded-lg bg-blue-600 px-5 font-bold text-white disabled:opacity-50"
+            >
+              {paperPreparationError ? "자료 다시 불러오기" : "다시 시도"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => navigate("/student/quiz", { replace: true })}
+            className="min-h-11 rounded-lg border border-slate-200 px-5 font-bold text-slate-700"
+          >
+            평가 목록
+          </button>
         </div>
       </div>
     );
@@ -2837,7 +2714,7 @@ const QuizRunner: React.FC = () => {
         onReview={() => navigate(resultReviewUrl)}
         onRetry={() => {
           setView("loading");
-          void initializeQuiz();
+          void initializeQuiz(true);
         }}
       />
     );

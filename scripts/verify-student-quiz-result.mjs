@@ -24,6 +24,10 @@ const { outputFiles } = await build({
   jsx: "automatic",
   loader: { ".css": "empty" },
   external: ["react", "react/jsx-runtime", "react-dom"],
+  plugins: [{ name: "result-popup-boundary", setup(builder) {
+    builder.onResolve({ filter: /\/QuizLessonPopup$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
+    builder.onLoad({ filter: /.*/, namespace: "popup-fixture" }, () => ({ contents: "export default function QuizLessonPopup(){return null}", loader: "js" }));
+  } }],
 });
 const module = { exports: {} };
 vm.runInNewContext(outputFiles[0].text, {

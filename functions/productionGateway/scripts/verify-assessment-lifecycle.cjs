@@ -6,6 +6,9 @@ const archiveEnrollment = require("../archiveEnrollment");
 const mockProgress = require("../mockExamProgress");
 
 const clone = (value) => structuredClone(value);
+const project = (value, fields) => fields?.length
+  ? Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, clone(value[field])]))
+  : clone(value);
 const matchesQuery = (data, filter) => !filter || (filter.filters || [filter]).every(clause =>
   clause.operator === "in" ? clause.value.includes(data?.[clause.field]) : data?.[clause.field] === clause.value);
 
@@ -14,6 +17,7 @@ class MemoryStore {
     this.documents = new Map(Object.entries(seed).map(([path, data]) => [path, clone(data)]));
     this.writeCount = 0;
     this.queryLog = [];
+    this.readLog = [];
     this.queue = Promise.resolve();
   }
 
@@ -32,7 +36,7 @@ class MemoryStore {
     return [...this.documents.entries()]
       .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
       .filter(([, data]) => matchesQuery(data, filter))
-      .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
+      .map(([path, data]) => ({ exists: true, path, data: project(data, filter?.fieldMask) }))
       .slice(0, filter?.limit || Infinity);
   }
 
@@ -46,6 +50,7 @@ class MemoryStore {
     const staged = new Map(this.documents);
     let localWrites = 0;
     const read = (path) => {
+      this.readLog.push(path);
       const exists = staged.has(path);
       return { exists, path, data: exists ? clone(staged.get(path)) : null };
     };
@@ -55,7 +60,7 @@ class MemoryStore {
       return [...staged.entries()]
         .filter(([path]) => path.startsWith(prefix) && !path.slice(prefix.length).includes("/"))
         .filter(([, data]) => matchesQuery(data, filter))
-        .map(([path, data]) => ({ exists: true, path, data: clone(data) }))
+        .map(([path, data]) => ({ exists: true, path, data: project(data, filter?.fieldMask) }))
         .slice(0, filter?.limit || Infinity);
     };
     const transaction = {
@@ -1339,6 +1344,67 @@ const runMockStateReadBounds = async () => {
   assert.equal(f.fixture.writeCount + blocked.fixture.writeCount + ordinary.fixture.writeCount, 0);
 };
 
+const runMockStartReadBounds = async () => {
+  for (const fixedPaper of [true, false]) {
+    const fixture = new MemoryStore({ ...seed,
+      "years/2026/semesters/2/quiz_questions/801": {
+        id: 801, unitId: "exam_prep", category: "exam_prep", type: "short",
+        question: "합성 시작 검증", answer: "명", contentRevision: 1,
+        ...(fixedPaper ? { examRound: "round_1", paperOrder: 1, points: 3 } : {}),
+      },
+    });
+    const apply = (commandType, payload, actor = admin) => fixture.runTransaction(transaction => adapter.apply({
+      transaction, commandId: commandId(), receiptId: "start-query-test", timestamp: { __serverTimestamp: nowMs },
+      actor: { actorUid: actor.uid, actorRole: actor === admin ? "admin" : "student" }, commandType,
+      payload: assessment.normalizeAssessmentPayload(commandType, payload),
+    }));
+    const base = definitionPayload("QUIZ");
+    const definitionId = "quiz:2026-2:exam_prep:exam_prep:round_1";
+    await apply("saveQuizAssessmentSettings", { ...base, definitionId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1",
+      questionCount: 1, maxAttempts: 20, legacyConfigKey: "exam_prep_exam_prep__round_1", expectedRevision: 0,
+      reason: "Synthetic projected start test", presentationSettings: { ...base.presentationSettings, questionCount: 1 } });
+    const start = () => apply("startAssessmentAttempt", { definitionId }, student);
+    const initial = (await start()).result;
+    const initialPath = `${assessment.ATTEMPT_COLLECTION}/${initial.attemptId}`;
+    const initialDocument = fixture.snapshot(initialPath).data;
+    fixture.documents.delete(initialPath);
+    const historyPaths = Array.from({ length: 19 }, (_, index) => `${assessment.ATTEMPT_COLLECTION}/historical-${index}`);
+    historyPaths.forEach((path, index) => fixture.documents.set(path, {
+      ...clone(initialDocument), status: "SUBMITTED", attemptNumber: index + 1, attemptOrdinal: index + 11,
+      submittedAtIso: new Date(nowMs - 1000).toISOString(), answers: { "801": "명" },
+      questionSnapshots: [{ ...initialDocument.questionSnapshots[0], passage: "가".repeat(20_000) }],
+    }));
+    fixture.queryLog.length = fixture.readLog.length = 0;
+    const next = (await start()).result;
+    assert.equal(next.attemptNumber, 20);
+    assert.equal(fixture.snapshot(`${assessment.ATTEMPT_COLLECTION}/${next.attemptId}`).data.attemptOrdinal, 30,
+      "Projected history preserves the lifetime ordinal separately from the allowed count");
+    const priorQuery = fixture.queryLog.find(item => item.collectionPath === assessment.ATTEMPT_COLLECTION);
+    assert.deepEqual(priorQuery.filter.fieldMask, ["studentUid", "resetAt", "attemptNumber", "status", "submittedAtIso", "attemptOrdinal"]);
+    assert.deepEqual(fixture.readLog.filter(path => historyPaths.includes(path)), fixedPaper ? [] : historyPaths,
+      "Fixed papers skip all historical bodies; unassigned legacy banks retain full learning history");
+    const nextPath = `${assessment.ATTEMPT_COLLECTION}/${next.attemptId}`;
+    Object.assign(fixture.documents.get(nextPath), { status: "IN_PROGRESS", answers: { "801": "학생 응답" }, currentItemId: "801" });
+    fixture.readLog.length = 0;
+    const resumed = (await start()).result;
+    assert.equal(resumed.attemptId, next.attemptId);
+    assert.equal(resumed.deadlineAtIso, next.deadlineAtIso);
+    assert.deepEqual(resumed.answers, { "801": "학생 응답" });
+    assert.deepEqual(resumed.questionPresentation, next.questionPresentation);
+    assert.deepEqual(fixture.readLog.filter(path => path.startsWith(`${assessment.ATTEMPT_COLLECTION}/`)), [nextPath],
+      "Resume hydrates exactly the active paper with frozen answers and deadline");
+    fixture.documents.get(nextPath).status = "SUBMITTED";
+    const writesBeforeLimit = fixture.writeCount;
+    await assert.rejects(start(), error => error?.details?.reason === "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
+    assert.equal(fixture.writeCount, writesBeforeLimit);
+    for (const path of [...historyPaths, nextPath]) fixture.documents.get(path).resetAt = { seconds: 1 };
+    const reset = (await start()).result;
+    assert.equal(reset.attemptNumber, 1);
+    assert.equal(fixture.snapshot(`${assessment.ATTEMPT_COLLECTION}/${reset.attemptId}`).data.attemptOrdinal, 31);
+    assert.deepEqual(fixture.snapshot(nextPath).data.answers, { "801": "학생 응답" });
+  }
+};
+
 const runMockSourceQueryBounds = async () => {
   const makeFixture = (questions) => {
     const boundedStore = new MemoryStore({ ...seed, ...Object.fromEntries(questions.map(q => [
@@ -1578,6 +1644,7 @@ const runLegacyReceiptHints = async () => {
   await runMockExamSetEditing();
   await runMockRetakeOverview();
   await runMockStateReadBounds();
+  await runMockStartReadBounds();
   await runShortAnswerAliases();
   await runMockSourceQueryBounds();
   await runClassVisibilityCommands();
@@ -1727,6 +1794,7 @@ const runLegacyReceiptHints = async () => {
       "MOCK_SET_EDIT_SHARED_ATOMIC_REVISIONS_SIBLING_PRESERVATION_STALE_AND_SCOPE_GATES",
       "MOCK_RETAKE_LIMIT_RESET_RESUME_LEGACY_OWNER_SEMESTER_AND_MASKED_READ_BOUNDS",
       "MOCK_STATE_PROJECTED_HISTORY_SINGLE_SELECTED_PAPER_SEMESTER_REUSE_AND_UNCHANGED_GATES",
+      "MOCK_START_PROJECTED_HISTORY_FROZEN_RESUME_RETAKE_LIMIT_RESET_ORDINAL_AND_LEGACY_RANKING",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",

@@ -7,6 +7,7 @@ import {
 } from "../../../lib/assessmentLifecycle";
 import { getYearSemester } from "../../../lib/semesterScope";
 import "./quizIndex.css";
+import InfoHelp from "../../../components/common/InfoHelp";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { readStudentCurriculumTree } from "../../../lib/studentLessonReadCache";
@@ -251,7 +252,16 @@ const QuizIndex: React.FC = () => {
         </div>
       )}
       <header className="ws-page-header mb-5">
-        <h1>{pageTitle === "퀴즈" ? "문제 풀이" : pageTitle}</h1>
+        <div className="flex items-center gap-1">
+          <h1>{pageTitle === "퀴즈" ? "문제 풀이" : pageTitle}</h1>
+          <InfoHelp label="풀이 기록 수집 안내">
+            시작 후에는 화면을 벗어나도 제한 시간이 계속됩니다. 문항을 화면에서
+            본 시간, 첫 답과 마지막 답을 고른 시점, 답 변경·재방문·힌트 사용을
+            답안과 함께 저장합니다. 화면을 벗어난 시간은 풀이 시간에서
+            제외합니다. 시간만으로 실력이나 찍기를 판단하지 않으며, 풀이 기록은
+            점수와 위스에 영향을 주지 않습니다.
+          </InfoHelp>
+        </div>
         <button
           type="button"
           onClick={() => navigate("/student/mypage?menu=wrong_note")}

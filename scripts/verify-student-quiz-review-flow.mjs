@@ -56,6 +56,8 @@ export const callWithApplicationSession=async(name,input)=>{qa.calls.push({name,
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{BrowserRouter,Routes,Route,useSearchParams,useNavigate}from'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import MyQuizHistory from './src/pages/student/mypage/MyQuizHistory';import{AppToastProvider}from'./src/components/common/AppToastProvider';import{AppDialogProvider}from'./src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';function History(){const[params]=useSearchParams();const navigate=useNavigate();return <MyQuizHistory semesterId="2026-2" active requestedAttemptId={params.get('attemptId')||''} onSelect={key=>navigate('/student/mypage?attemptId='+encodeURIComponent(key))} onClose={()=>navigate('/student/mypage')} onStart={()=>navigate('/student/quiz/run')}/>};createRoot(document.getElementById('root')).render(<BrowserRouter><AppToastProvider><AppDialogProvider><div className="student-layout"><Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<History/>}/></Routes></div></AppDialogProvider></AppToastProvider></BrowserRouter>);`;
 const built = await build({ stdin:{contents:entry,loader:"tsx",resolveDir:root},bundle:true,write:false,metafile:true,outdir:"fixture",format:"esm",platform:"browser",jsx:"automatic",loader:{".woff2":"dataurl",".woff":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},plugins:[{name:"synthetic-server-boundaries",setup(builder){
+  builder.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:"popup-stub",namespace:"popup-fixture"}));
+  builder.onLoad({filter:/.*/,namespace:"popup-fixture"},()=>({contents:"export default function QuizLessonPopup(){return null}",loader:"js"}));
   builder.onResolve({filter:/contexts\/AuthContext$|(?:^|\/)(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|firebase|applicationSession)$/},()=>({path:"fixture-api",namespace:"fixture"}));
   builder.onLoad({filter:/.*/,namespace:"fixture"},()=>({contents:stubs,loader:"js"}));
 }}] });
@@ -70,12 +72,12 @@ const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||"msedge",headless:true});
 const reports=[];let activePage;let failure;
 try {
-  for(const width of [320,390,768,1280,1440])for(const category of ["exam_prep","diagnostic","formative"]){
+  const retakeOnly = process.argv.includes("--retake-only");
+  for(const width of retakeOnly ? [390,1280] : [320,390,768,1280,1440])for(const category of retakeOnly ? ["diagnostic","formative"] : ["exam_prep","diagnostic","formative"]){
     const page=activePage=await browser.newPage({viewport:{width,height:1000},hasTouch:width<=768});
     const errors=[],external=[];page.on("pageerror",e=>errors.push(e.message));
     await page.route("**/*",route=>{if(route.request().url().startsWith(origin)||route.request().url().startsWith("data:"))return route.continue();external.push(route.request().url());return route.abort();});
     await page.goto(`${origin}/student/quiz/run?unitId=${category==="exam_prep"?"exam_prep":"fixture"}&category=${category}&round=round_2`);
-    await page.getByRole("button",{name:"평가 시작하기",exact:true}).click();
     if(category==="exam_prep"){
       await page.getByRole("button",{name:"1번 문제 확대",exact:true}).click();
       const dialog=page.getByRole("dialog",{name:"1번 문제 확대",exact:true});
@@ -95,6 +97,15 @@ try {
     }
     await page.getByRole("button",{name:"제출하기",exact:true}).click();
     await page.getByRole("alertdialog").getByRole("button",{name:"제출하기",exact:true}).click();
+    if (retakeOnly) {
+      await page.getByRole("button", {name:"다시 풀기",exact:true}).click();
+      await page.getByRole("button", {name:/경주/}).waitFor();
+      assert.equal(await page.evaluate(()=>window.reviewQa.starts.length),2,"Explicit result retry starts a new attempt directly");
+      assert.equal(await page.locator(".student-quiz-intro").count(),0,"No old intro on result retry");
+      assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+      reports.push({width,category,retake:true,passed:true});
+      await page.close();activePage=null;continue;
+    }
     if(category==="exam_prep"){
       await page.getByRole("button",{name:"저장된 답안·해설",exact:true}).click();
     }else await page.getByRole("button",{name:"전체 답안 및 해설 보기",exact:true}).click();

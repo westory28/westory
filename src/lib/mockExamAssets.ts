@@ -121,6 +121,7 @@ export const createMockExamAssetLoader = (
   },
 ) => {
   const decodedImages = new Map<string, HTMLImageElement>();
+  const readyFontCharacters = new Map<string, Set<string>>();
   let current: AbortController | undefined;
   let disposed = false;
 
@@ -175,19 +176,27 @@ export const createMockExamAssetLoader = (
   const loadFonts = async (characters: string, signal: AbortSignal) => {
     try {
       const body = uniqueCharacters(PAPER_FONT_CHARACTERS + characters);
-      const loaded = await waitWithSignal(
-        Promise.all([
-          environment.fonts.load('400 14px "Noto Serif KR"', body),
-          environment.fonts.load('700 14px "Noto Serif KR"', body),
-          environment.fonts.load(
-            '900 28px "Noto Serif KR"',
-            PAPER_FONT_CHARACTERS,
-          ),
-        ]),
-        signal,
+      await Promise.all(
+        [
+          ['400 14px "Noto Serif KR"', body],
+          ['700 14px "Noto Serif KR"', body],
+          ['900 28px "Noto Serif KR"', PAPER_FONT_CHARACTERS],
+        ].map(async ([font, text]) => {
+          const ready = readyFontCharacters.get(font) || new Set<string>();
+          const missing = [...text].filter(
+            (character) => !ready.has(character),
+          );
+          if (!missing.length) return;
+          const faces = await waitWithSignal(
+            environment.fonts.load(font, missing.join("")),
+            signal,
+          );
+          if (!faces.length) throw new MockExamAssetError("font");
+          if (signal.aborted) throw signal.reason || abortError();
+          missing.forEach((character) => ready.add(character));
+          readyFontCharacters.set(font, ready);
+        }),
       );
-      if (loaded.some((faces) => faces.length === 0))
-        throw new MockExamAssetError("font");
     } catch (error) {
       if (signal.aborted) throw signal.reason || abortError();
       throw error instanceof MockExamAssetError
@@ -268,6 +277,7 @@ export const createMockExamAssetLoader = (
       disposed = true;
       current?.abort(abortError());
       decodedImages.clear();
+      readyFontCharacters.clear();
     },
   };
 };

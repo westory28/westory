@@ -1359,10 +1359,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       ) {
         fail("permission-denied", "This assessment is not assigned to the student.", "ASSESSMENT_STUDENT_NOT_ASSIGNED");
       }
+      const projectPrior = definition.assessmentKind === "QUIZ" && definition.category === "exam_prep";
       const allPrior = (await transaction.query(ATTEMPT_COLLECTION, { filters: [
         { field: "definitionId", operator: "==", value: payload.definitionId },
         { field: "studentUid", operator: "==", value: actor.actorUid },
-      ] }))
+      ], ...(projectPrior ? { fieldMask: [...MOCK_ATTEMPT_STATE_FIELDS, "attemptOrdinal"] } : {}) }))
         .filter((document) => document.data?.studentUid === actor.actorUid);
       const prior = allPrior.filter((document) => document.data?.resetAt == null)
         .sort((left, right) => Number(left.data?.attemptNumber || 0) - Number(right.data?.attemptNumber || 0));
@@ -1375,7 +1376,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       }
       const active = prior.find((document) => ["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(document.data?.status));
       if (active) {
-        return { target: { kind: "assessment-attempt", id: active.data.attemptId, refs: [active.path] }, sourceHash: active.data.sourceHash || null, result: { ...serializeAttempt(active.data, true), serverNowIso: now().toISOString() } };
+        const current = projectPrior ? await transaction.get(active.path) : active;
+        return { target: { kind: "assessment-attempt", id: current.data.attemptId, refs: [current.path] }, sourceHash: current.data.sourceHash || null, result: { ...serializeAttempt(current.data, true), serverNowIso: now().toISOString() } };
       }
       if (prior.length >= Number(definition.maxAttempts || 1)) fail("failed-precondition", "No assessment attempts remain.", "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
       const latestSubmitted = [...prior].reverse().find((document) => document.data?.submittedAtIso);
@@ -1393,9 +1395,14 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const attemptOrdinal = Math.max(0, ...allPrior.map((document) =>
         Number(document.data?.attemptOrdinal || document.data?.attemptNumber || 0))) + 1;
       if (!Number.isSafeInteger(attemptOrdinal)) fail("failed-precondition", "Assessment attempt sequence is invalid.", "ASSESSMENT_ATTEMPT_INVALID");
+      // A fixed paper never ranks questions from past answers. Keep its large
+      // historical snapshots out of START, hydrating only a resumable attempt.
+      // Unassigned legacy mock banks still use their original learning ranking.
+      const selectionPrior = projectPrior && !source.fixedPaper
+        ? await transaction.getAll(allPrior.map(document => document.path)) : allPrior;
       const { questionIds, ...cycleFields } = selectAttemptQuestionIds({
         source, definition, studentUid: actor.actorUid, attemptNumber, attemptOrdinal,
-        priorAttempts: allPrior.map(document => document.data || {}),
+        priorAttempts: selectionPrior.map(document => document.data || {}),
       });
       const selectedIds = await orderAttemptQuestionIds({
         transaction, source, definition, questionIds,

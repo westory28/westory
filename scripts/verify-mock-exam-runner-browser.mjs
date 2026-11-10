@@ -68,12 +68,14 @@ export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(attem
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(location.search.includes('slow-save'))await new Promise(resolve=>{qa.releaseSave=resolve});if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(location.search.includes('slow-submit'))await new Promise(resolve=>{qa.releaseSubmit=resolve});if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation();React.useEffect(()=>{window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation();React.useEffect(()=>{window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/><Route path="/student/quiz" element={<p>평가 목록 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
 const built = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || process.argv.includes('--entry-only') ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
+    builder.onResolve({ filter: /\/QuizLessonPopup$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
+    builder.onLoad({ filter: /.*/, namespace: "popup-fixture" }, () => ({ contents: "export default function QuizLessonPopup(){return null}", loader: "js" }));
     builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
   } }],
@@ -103,7 +105,6 @@ const open = async (width, height = 1024, touch = false, search = "") => {
   page.on("pageerror", error => pageErrors.push(error.stack || error.message));
   await page.route("**/*", route => route.request().url().startsWith(origin) || route.request().url().startsWith("data:") ? route.continue() : route.abort());
   await page.goto(origin + search);
-  await page.getByRole("button", { name: "평가 시작하기", exact: true }).click();
   await page.getByRole("button", { name: "1번 문제 확대", exact: true }).waitFor();
   return page;
 };
@@ -257,14 +258,12 @@ try {
     const recoverable=await open(768);
     const originalAttempt=await recoverable.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso}));
     await recoverable.goto(origin+'?prepare-forbidden');
-    await recoverable.getByRole('button',{name:'이어하기',exact:true}).click();
     await recoverable.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
     assert.deepEqual(await recoverable.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso})),originalAttempt,'Closed preparation preserves the authorized active attempt and its clock');
     assert.deepEqual(await recoverable.evaluate(()=>({reads:window.mockRunnerQa.reads.length,prepares:window.mockRunnerQa.prepares.length,starts:window.mockRunnerQa.starts.length})),{reads:2,prepares:0,starts:0});
     await recoverable.evaluate(()=>{const saved=window.mockRunnerQa.attempt;saved.status='SUBMITTED';saved.attemptNumber=3;saved.submittedAtIso=new Date().toISOString();sessionStorage.setItem('mock-runner-attempt',JSON.stringify(saved))});
     await recoverable.goto(origin+'?attempt-limit');
     await recoverable.getByText('응시 가능 횟수를 모두 사용했습니다.',{exact:true}).waitFor();
-    assert.equal(await recoverable.getByText('—',{exact:true}).count(),1,'An unavailable attempt count is not reported as zero');
     assert.equal(await recoverable.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0,'Already-submitted attempt limit keeps the existing no-new-attempt outcome');
     assert.equal(await recoverable.evaluate(()=>window.mockRunnerQa.starts.length),0);
     await recoverable.close();
@@ -276,11 +275,11 @@ try {
     assert.equal(await forbidden.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0);
     await forbidden.close();
   } else if(process.argv.includes('--entry-only')) {
-    for(const [width,search] of [[390,''],[768,'curriculum-error'],[1280,'curriculum-pending'],[1366,'stale-initial'],[768,'start-offline'],[390,'lost-start-response']]) {
+    for(const [width,search] of [[390,''],[768,'direct-link'],[768,'curriculum-error'],[1280,'curriculum-pending'],[1366,'stale-initial'],[768,'start-offline'],[390,'lost-start-response']]) {
       const page=await browser.newPage({viewport:{width,height:900}});
       page.on('pageerror',error=>pageErrors.push(error.message));
       await page.route('**/*',route=>route.request().url().startsWith(origin)||route.request().url().startsWith('data:')?route.continue():route.abort());
-      await page.goto(origin+'?auto-entry&'+search);
+      await page.goto(origin+(search==='direct-link'?'?direct-link':'?auto-entry&'+search));
       if(['start-offline','lost-start-response'].includes(search)) {
         await page.getByRole('alert').filter({hasText:'서버 연결을 확인하지 못했습니다.'}).waitFor();
         assert.equal(await page.getByRole('button',{name:'평가 시작하기',exact:true}).count(),0,'An entry failure offers a retry, not another start confirmation');
@@ -296,7 +295,7 @@ try {
         assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),1,'List intent starts exactly once, including StrictMode');
       }
       assert.equal(await page.locator('.student-quiz-intro').count(),0,'No repeated introduction after list entry');
-      assert.equal(await page.evaluate(()=>window.mockRunnerLocationState?.startAssessment),false,'The explicit navigation intent is consumed');
+      if(search!=='direct-link')assert.equal(await page.evaluate(()=>window.mockRunnerLocationState?.startAssessment),false,'The explicit navigation intent is consumed');
       assert.equal(await page.evaluate(()=>window.mockRunnerQa.attempt.attemptNumber),1);
       if(search==='stale-initial') {
         await page.waitForTimeout(350);
@@ -305,7 +304,6 @@ try {
       if(width===390&&search==='') {
         const before=await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso}));
         await page.reload();
-        await page.getByRole('button',{name:'이어하기',exact:true}).click();
         await page.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
         assert.deepEqual(await page.evaluate(()=>({id:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso})),before);
         assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),0,'Refresh resumes the existing paper without START');
@@ -381,11 +379,10 @@ try {
     return route.continue();
   });
   await preparedPage.goto(origin);
-  await preparedPage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
   await requestStarted;
   assert.equal(await preparedPage.evaluate(()=>window.mockRunnerQa.starts.length),0,'Slow asset preparation does not start the exam timer');
   assert.equal(await preparedPage.locator('.mock-exam-paper').count(),0,'No partial question paper is exposed while assets are pending');
-  await preparedPage.locator('.ws-loading-overlay').getByRole('status',{name:'처리 중',exact:true}).waitFor();
+  await preparedPage.locator('.ws-loading-page').getByRole('status',{name:'처리 중',exact:true}).waitFor();
   releaseImage();
   await preparedPage.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
   assert.equal(await preparedPage.evaluate(()=>window.mockRunnerQa.starts[0].preparedSourceHash),'fixture-paper-1');
@@ -404,7 +401,6 @@ try {
     return route.continue();
   });
   await brokenPage.goto(origin);
-  await brokenPage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
   await brokenPage.getByRole('alert').filter({hasText:'시험지 그림을 모두 불러오지 못했습니다.'}).waitFor();
   assert.equal(await brokenPage.evaluate(()=>window.mockRunnerQa.starts.length),0,'Broken images never consume an attempt');
   await brokenPage.screenshot({path:path.join(evidence,'asset-error-390.png'),fullPage:true});
@@ -422,7 +418,10 @@ try {
   const retakePage=await open(1280);
   await retakePage.evaluate(()=>{const saved=window.mockRunnerQa.attempt;saved.status='SUBMITTED';saved.submittedAtIso=new Date(Date.now()-60000).toISOString();sessionStorage.setItem('mock-runner-attempt',JSON.stringify(saved));});
   await retakePage.reload();
-  await retakePage.getByRole('button',{name:'평가 시작하기',exact:true}).click();
+  await retakePage.getByText('평가 목록 경로',{exact:true}).waitFor();
+  assert.equal(await retakePage.evaluate(()=>window.mockRunnerQa.starts.length),0,'Refreshing a submitted attempt does not create a retake');
+  await retakePage.evaluate(()=>sessionStorage.removeItem('mock-entry-consumed'));
+  await retakePage.goto(origin+'?auto-entry');
   await retakePage.getByRole('button',{name:'1번 문제 확대',exact:true}).waitFor();
   assert.equal(await retakePage.evaluate(()=>window.mockRunnerQa.attempt.attemptNumber),2,'A permitted retake prepares the next paper after SUBMITTED state');
   await retakePage.close();
@@ -432,7 +431,6 @@ try {
   await expiredPage.route('**/qa-material.svg',route=>route.abort());
   expiredPage.on('dialog',dialog=>dialog.dismiss());
   await expiredPage.reload();
-  await expiredPage.getByRole('button',{name:'이어하기',exact:true}).click();
   await expiredPage.getByRole('button',{name:'저장된 답안·해설',exact:true}).waitFor();
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.submits[0].submitReason),'TIMEOUT','Image failure cannot block submission of an already-expired attempt');
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.reads.length),1,'Expired resume uses the initial state without another preparation request');
@@ -509,7 +507,6 @@ try {
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => window.mockRunnerQa.attempt.answers['1'] === '조선');
     await page.reload();
-    await page.getByRole("button", { name: "이어하기", exact: true }).click();
     const restored = await openQuestion(page, 1);
     assert.equal(await restored.getByRole("radio", { name: /조선/ }).isChecked(), true);
     await page.keyboard.press("Escape");

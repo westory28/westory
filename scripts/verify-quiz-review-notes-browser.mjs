@@ -22,7 +22,8 @@ const qa=window.reviewQa={saved:{revision:1,updatedAt:'2026-11-08',items:[{quest
 async function save(draft,expectedRevision,saveId){qa.requests.push({draft:structuredClone(draft),expectedRevision,saveId});if(qa.hold)await new Promise(resolve=>qa.release=resolve);if(qa.failNext){qa.failNext=false;throw Error('합성 통신 실패')}if(qa.conflictNext){qa.conflictNext=false;qa.saved={...qa.saved,revision:qa.saved.revision+1,items:[{...qa.saved.items[0],note:'다른 화면의 노트'}]};throw {details:{reason:'QUIZ_REVIEW_REVISION_CONFLICT'}}}qa.saved={revision:qa.saved.revision+1,updatedAt:'2026-11-08',items:[{...draft,correct:draft.practiceAnswer?draft.practiceAnswer==='정치':null,updatedAt:'2026-11-08'}]};return structuredClone(qa.saved)}
 function App(){const[open,setOpen]=useState(true);return open?<Review items={[item]} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
 const built = await build({ stdin: { contents: entry, loader: "tsx", resolveDir: process.cwd() }, bundle: true, write: false, metafile: true,
-  platform: "browser", outdir: "fixture", define: { "process.env.NODE_ENV": '"production"' }, loader: { ".woff2": "dataurl", ".woff": "dataurl" } });
+  platform: "browser", outdir: "fixture", define: { "process.env.NODE_ENV": '"production"' }, loader: { ".woff2": "dataurl", ".woff": "dataurl" },
+  plugins: [{name:'lesson-popup-boundary',setup(build){build.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:'popup',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export default function Popup(){return null}',loader:'js'}));}}] });
 assert(!Object.keys(built.metafile.inputs).some(name => /node_modules[\\/](@firebase|firebase)[\\/]/.test(name)), "Type-only note API imports keep component fixtures free of Firebase");
 const js = built.outputFiles.find(file => file.path.endsWith(".js")).text;
 const css = built.outputFiles.find(file => file.path.endsWith(".css")).text;
@@ -67,10 +68,9 @@ try {
   const reopen = async () => { await page.getByRole("button", { name: "결과로", exact: true }).click(); await page.getByRole("button", { name: "다시 열기", exact: true }).click(); };
   await note.waitFor(); assert.equal(await note.inputValue(), "기존 노트");
   assert.equal(await page.locator('.quiz-notebook__paper .mock-exam-question-ink').count(), 1, 'Existing exam renderer is used on entry');
-  const lesson = page.getByRole('link', { name: /연결된 학습지 열기/ });
-  assert.equal(await lesson.getAttribute('href'), '#/student/lesson/note?id=fixture-lesson');
-  assert.equal(await lesson.getAttribute('target'), '_blank');
-  assert.match(await lesson.getAttribute('rel'), /noopener/);
+  const lesson = page.getByRole('button', { name: /연결된 학습지 열기/ });
+  assert.equal(await lesson.getAttribute('type'), 'button');
+  assert.equal(await lesson.getAttribute('href'), null);
   await lesson.focus();
   assert.equal(await lesson.evaluate(node => node === document.activeElement), true);
   for (const label of ['실수했어요', '몰랐어요', '잘못 읽었어요', '찍었어요']) {

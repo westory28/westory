@@ -621,11 +621,17 @@
   font-size: 18px;
   font-weight: 700;
 }
-.qa-question-content p {
+.qa-question-content:not(.qa-question-content--paper) p {
   margin: 0;
 }
-.qa-question-content p > strong {
+.qa-question-content:not(.qa-question-content--paper) p > strong {
   margin-right: 8px;
+}
+.qa-question-content--paper > .mock-exam-question-ink {
+  font-family: "Noto Serif KR", serif;
+  font-size: 20px;
+  line-height: 1.5;
+  color: #111;
 }
 .qa-question-image {
   max-height: 320px;
