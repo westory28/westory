@@ -34,6 +34,7 @@ import {
 } from "./QuizAnalysisStudents";
 import { useQuizClassUpdates } from "./useQuizClassUpdates";
 import { applyQuizClassChanges } from "../../../lib/quizClassLiveState";
+import { quizPaperItemIdentity } from "../../../lib/quizAnalysis";
 import {
   AnalysisSortHeader,
   sortAnalysisRows,
@@ -297,7 +298,7 @@ export default function QuizAchievementAnalysis({
         (form &&
           JSON.stringify(
             selectedAttempt.items
-              .map((item) => [item.id, item.sourceRevision])
+              .map((item) => [item.id, quizPaperItemIdentity(item)])
               .sort(([a], [b]) => a.localeCompare(b)),
           ) !== form.key)
       )

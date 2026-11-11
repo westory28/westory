@@ -192,7 +192,27 @@ for (const round of [1, 2, 3]) for (const grade of [false, true]) for (const lar
     encoding: "gzip-base64", uncompressedBytes: Buffer.byteLength(json), payload: gzipSync(json).toString("base64"),
   };
 }
-const service = `const fixtures=${JSON.stringify(fixtures)};const originals=${JSON.stringify(questions)};const encoded=${JSON.stringify(encodedFixtures)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);const key=[round,Boolean(query.get('grade')),Boolean(query.get('large')),Boolean(query.get('inline'))].join(':');const data=window.fixture=fixtures[key];window.qa={calls:[],saves:[],questionMode:'ok',pending:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);if(request.mode==='question'){const result={semesterId:request.semesterId,sourceVersion:request.sourceVersion,question:originals.find(q=>q.id===request.questionId)||null};if(window.qa.questionMode==='error')throw new Error('문항 조회 실패');if(window.qa.questionMode==='missing'||data.rawRows.find(row=>row.id===request.resultId&&row.source===request.resultSource)?.raw.questionSnapshotOmittedIds?.includes(request.questionId)){result.question=null;result.missingReason='not-preserved';}if(window.qa.questionMode==='defer')await new Promise(resolve=>window.qa.pending.push(resolve));return {data:structuredClone(result)};}return {data:structuredClone(request.responseEncoding==='gzip-base64'?encoded[key]:data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
+// Exercise the same frozen-material identities used by production S-P forms.
+for (const variant of ['material', 'mixed']) {
+  const data = structuredClone(fixtures['1:false:false:false']);
+  const rows = data.rawRows.filter(row => row.source === 'canonical');
+  for (const [index, row] of rows.entries()) {
+    const paperMaterialHash = (variant === 'mixed' && index === 0 ? 'b' : 'a').repeat(64);
+    for (const snapshot of [...row.raw.learningSnapshot, ...row.raw.questionSnapshots]) {
+      snapshot.paperMaterialHash = paperMaterialHash;
+      if (index === 1) snapshot.sourceRevision = '3';
+    }
+  }
+  // A different paper has a preserved copy with the same question IDs.
+  if (variant === 'mixed') delete rows[0].raw.questionSnapshotOmittedIds;
+  const key = `1:false:false:false:${variant}`;
+  fixtures[key] = data;
+  const json = JSON.stringify(data);
+  encodedFixtures[key] = {
+    encoding: 'gzip-base64', uncompressedBytes: Buffer.byteLength(json), payload: gzipSync(json).toString('base64'),
+  };
+}
+const service = `const fixtures=${JSON.stringify(fixtures)};const originals=${JSON.stringify(questions)};const encoded=${JSON.stringify(encodedFixtures)};const query=new URLSearchParams(location.search);const round=Number(query.get('round')||1);const key=[round,Boolean(query.get('grade')),Boolean(query.get('large')),Boolean(query.get('inline'))].join(':')+(query.get('identity')?':'+query.get('identity'):'');const data=window.fixture=fixtures[key];window.qa={calls:[],saves:[],questionMode:'ok',pending:[]};export const callWithApplicationSession=async(name,request)=>{window.qa.calls.push(request);if(request.mode==='question'){const result={semesterId:request.semesterId,sourceVersion:request.sourceVersion,question:originals.find(q=>q.id===request.questionId)||null};if(window.qa.questionMode==='error')throw new Error('문항 조회 실패');if(window.qa.questionMode==='missing'||data.rawRows.find(row=>row.id===request.resultId&&row.source===request.resultSource)?.raw.questionSnapshotOmittedIds?.includes(request.questionId)){result.question=null;result.missingReason='not-preserved';}if(window.qa.questionMode==='defer')await new Promise(resolve=>window.qa.pending.push(resolve));return {data:structuredClone(result)};}return {data:structuredClone(request.responseEncoding==='gzip-base64'?encoded[key]:data)};};export const executeLearningCommand=async(name,payload)=>{window.qa.saves.push({name,payload});throw new Error('Analysis must be read-only');};export const useAppToast=()=>({showToast:()=>{}});`;
 const entry = `import React,{useEffect,useRef,useState}from'react';import{createRoot}from'react-dom/client';import View from ${imp("src/pages/teacher/components/QuizAchievementAnalysis.tsx")};import {LoadingProvider} from ${imp("src/components/common/LoadingState.tsx")};import ${imp("src/pages/teacher/components/QuizClassAnalysis.css")};import ${imp("src/components/common/portalPage.css")};const query=new URLSearchParams(location.search);const grade=query.get('grade');const round=query.get('round')||'1';function App(){const ref=useRef(null);const[identity,setIdentity]=useState('fixture');const[scopeRound,setScopeRound]=useState(round);const[tick,setTick]=useState(0);window.changeIdentity=setIdentity;window.changeScope=setScopeRound;window.redraw=()=>setTick(tick+1);useEffect(()=>{ref.current.showModal()},[]);return <section className="quiz-class-analysis"><dialog ref={ref} className="qca-detail-dialog"><header className="qca-detail-header"><h2>3학년 {grade?'전체':'1반'} · 성취기준 분석</h2></header><div className="qca-detail-body"><View scope={{semesterId:'2026-2',unitId:'unit-a',category:'exam_prep',examRound:'round_'+scopeRound,classIds:grade?[]:['class_1'],...(grade?{grade}: {})}} identityKey={identity} canEdit={true}/></div></dialog></section>;}createRoot(document.getElementById('root')).render(<LoadingProvider><App/></LoadingProvider>);`;
 const bundle = await build({
   stdin: { contents: entry, resolveDir: root, loader: "tsx" },
@@ -633,6 +653,30 @@ try {
     ]);
     assert.equal(await page.evaluate(() => window.qa.calls.length), 1);
   }
+  for (const identity of ['', 'material', 'mixed']) {
+    await page.goto(`${origin}/?identity=${identity}`);
+    await page.getByRole('combobox', {name:'분석 보기',exact:true}).selectOption('4');
+    if (identity === 'mixed') {
+      await page.getByRole('combobox', {name:'시험지 구성',exact:true}).selectOption({label:'시험지 2 · 6문항 · 23명'});
+    }
+    const grid = page.getByRole('region', {name:'학생과 문항별 정오 S-P표',exact:true});
+    const trigger = grid.getByRole('button', {name:'1',exact:true});
+    await trigger.waitFor();
+    assert.equal(await page.evaluate(() => window.qa.calls.filter(call => call.mode === 'question').length), 0);
+    await trigger.press('Enter');
+    const popup = page.getByRole('dialog', {name:'응시 당시 문항',exact:true});
+    await popup.getByText('공통 지문 원문 보존 검증', {exact:true}).waitFor();
+    const calls = await page.evaluate(() => window.qa.calls.filter(call => call.mode === 'question'));
+    assert.equal(calls.length, 1, `${identity || 'revision'} identity performs one original read`);
+    assert.equal(calls[0].resultId, 'exam-1-1', 'Uses a preserved original in the selected form, including equal material with different revisions');
+    assert.equal(calls[0].resultSource, 'canonical');
+    assert.equal(calls[0].sourceVersion, '000000001793920000000000000');
+    assert.equal(calls[0].questionId, 'q1');
+    assert.equal(await popup.getByText('현재 문제은행에서 변경된 발문', {exact:true}).count(), 0);
+    assert.equal(await page.evaluate(() => window.qa.saves.length), 0);
+    await page.keyboard.press('Escape');
+    assert.equal(await trigger.evaluate(element => element === document.activeElement), true);
+  }
   // Only student rendering is windowed: all statistics and curves use all 65.
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -821,6 +865,7 @@ try {
           "profile graph",
           "correct-answer fill and atypical outline",
           "S-P student and item header sorts preserve response identity",
+          "S-P question links use revision/material form identity; equal material across revisions and different material with equal IDs stay correctly scoped",
           "item statistic header sorts in both directions",
           "keyboard sorting and unavailable values last",
           "cumulative mock exam levels are read-only",
