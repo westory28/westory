@@ -18,6 +18,8 @@
   max-height: none;
   margin: 0;
   border: 0;
+  /* This status-only dialog receives focus without an interactive control. */
+  outline: none;
   isolation: isolate;
 }
 .ws-loading-slot {
