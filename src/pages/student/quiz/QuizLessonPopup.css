@@ -24,6 +24,12 @@
   color: var(--ws-text-strong);
 }
 .quiz-lesson-popup__header {
+  position: relative;
+  top: auto;
+  min-height: 0;
+  flex-shrink: 0;
+  background: transparent;
+  box-shadow: none;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -98,10 +104,85 @@
   font-weight: 700;
 }
 .quiz-lesson-popup__body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: hidden;
   padding: 16px 24px;
+}
+.lesson-review-content,
+.lesson-review-content__main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.lesson-review-content__main > .ws-page-header {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+.lesson-review-content__toolbar {
+  flex: none;
+  margin-bottom: 8px;
+}
+.lesson-worksheet-zoom {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.lesson-worksheet-zoom button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  font-size: 14px;
+  font-weight: 700;
+}
+.lesson-worksheet-zoom button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lesson-review-content__scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.lesson-review-content__actions {
+  flex: none;
+  padding-top: 8px;
+}
+.lesson-review-content__action-items,
+.lesson-review-content__pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lesson-review-content__action-items {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.lesson-review-content__pages {
+  margin-right: auto;
+}
+.lesson-review-content__pages > button,
+.lesson-review-content__action-items > button {
+  min-width: 44px;
+  min-height: 44px;
+  width: auto;
+}
+@media (max-width: 639px) {
+  .lesson-review-content__pages {
+    flex-basis: 100%;
+    justify-content: center;
+  }
 }
 @media (max-width: 767px) {
   .quiz-lesson-popup {

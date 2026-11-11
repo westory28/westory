@@ -110,6 +110,9 @@ interface LessonWorksheetStageProps {
   studentCurrentPage?: number | null;
   onStudentCurrentPageChange?: (page: number) => void;
   hideStudentPageNavigator?: boolean;
+  /** Review dialogs own one scroll region shared with supplementary content. */
+  studentScrollContainerRef?: React.RefObject<HTMLDivElement>;
+  studentZoomControlsHost?: HTMLElement | null;
   showPageLabel?: boolean;
 }
 
@@ -425,6 +428,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   studentCurrentPage,
   onStudentCurrentPageChange,
   hideStudentPageNavigator = false,
+  studentScrollContainerRef,
+  studentZoomControlsHost,
   showPageLabel = true,
 }) => {
   const capabilities = useMemo(
@@ -436,6 +441,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     isTeacherEditMode && teacherRightButtonPan;
   const isTeacherViewMode = capabilities.showTeacherPageNavigator;
   const isStudentSolveMode = capabilities.enableBlankSolve;
+  const useStudentScrollContainer =
+    isStudentSolveMode && !!studentScrollContainerRef;
   // Annotation tools are retired in every mode; legacy props cannot enable them.
   const isAnnotationEnabled = capabilities.enableAnnotationTools;
   const isViewportInteractive =
@@ -506,6 +513,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const eraserSessionRef = useRef<EraserSessionState | null>(null);
   const viewportZoomFrameRef = useRef<number | null>(null);
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const getScrollHost = (page: number) =>
+    (useStudentScrollContainer && studentScrollContainerRef?.current) ||
+    scrollHostRefs.current[page];
+  useEffect(() => {
+    if (!useStudentScrollContainer) return;
+    const host = studentScrollContainerRef?.current;
+    if (!host) return;
+    host.scrollTop = 0;
+    host.scrollLeft = 0;
+  }, [activeStudentPage, studentScrollContainerRef, useStudentScrollContainer]);
   const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
   const corePointBurstTimeoutsRef = useRef<number[]>([]);
   useEffect(() => {
@@ -962,7 +979,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       setStudentZoom(clampedZoom);
       return;
     }
-    const host = scrollHostRefs.current[page];
+    const host = getScrollHost(page);
     if (!host) {
       setStudentZoom(clampedZoom);
       return;
@@ -989,7 +1006,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
     viewportZoomFrameRef.current = window.requestAnimationFrame(() => {
       viewportZoomFrameRef.current = null;
-      const nextHost = scrollHostRefs.current[page];
+      const nextHost = getScrollHost(page);
       if (!nextHost) return;
       nextHost.scrollLeft = Math.max(0, contentAnchorX * clampedZoom - localX);
       const nextScrollTop = Math.max(0, contentAnchorY * clampedZoom - localY);
@@ -998,7 +1015,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   };
 
   const beginMovePan = (page: number, clientX: number, clientY: number) => {
-    const host = scrollHostRefs.current[page];
+    const host = getScrollHost(page);
     if (!host) return;
     const verticalHost = host;
     panRef.current = {
@@ -2031,6 +2048,50 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
   return (
     <>
+      {isStudentSolveMode &&
+        studentZoomControlsHost &&
+        createPortal(
+          <div
+            className="lesson-worksheet-zoom"
+            role="group"
+            aria-label="학습지 배율"
+          >
+            <button
+              type="button"
+              aria-label="학습지 축소"
+              disabled={studentZoom <= MIN_STUDENT_ZOOM}
+              onClick={() =>
+                applyViewportZoom(studentZoom - 0.1, {
+                  page: activeStudentPage ?? undefined,
+                })
+              }
+            >
+              <span aria-hidden="true">−</span>
+            </button>
+            <button
+              type="button"
+              aria-label="학습지 배율 100%로 되돌리기"
+              onClick={() =>
+                applyViewportZoom(1, { page: activeStudentPage ?? undefined })
+              }
+            >
+              {zoomPercent}%
+            </button>
+            <button
+              type="button"
+              aria-label="학습지 확대"
+              disabled={studentZoom >= MAX_STUDENT_ZOOM}
+              onClick={() =>
+                applyViewportZoom(studentZoom + 0.1, {
+                  page: activeStudentPage ?? undefined,
+                })
+              }
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>,
+          studentZoomControlsHost,
+        )}
       <div className="space-y-6">
         {shouldShowAnnotationToolbar && (
           <>
@@ -2452,15 +2513,17 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   scrollHostRefs.current[pageImage.page] = node;
                 }}
                 className={
-                  isStudentSolveMode
-                    ? shouldUseBoundedViewportScroll
-                      ? "overflow-auto"
-                      : "overflow-x-auto overflow-y-visible"
-                    : `rounded-2xl border border-gray-200 bg-gray-50 ${
-                        shouldUseBoundedViewportScroll
-                          ? "overflow-auto"
-                          : "overflow-x-auto overflow-y-visible"
-                      }`
+                  useStudentScrollContainer
+                    ? "overflow-visible"
+                    : isStudentSolveMode
+                      ? shouldUseBoundedViewportScroll
+                        ? "overflow-auto"
+                        : "overflow-x-auto overflow-y-visible"
+                      : `rounded-2xl border border-gray-200 bg-gray-50 ${
+                          shouldUseBoundedViewportScroll
+                            ? "overflow-auto"
+                            : "overflow-x-auto overflow-y-visible"
+                        }`
                 }
                 style={
                   isViewportInteractive
@@ -2471,12 +2534,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         overscrollBehavior: shouldUseBoundedViewportScroll
                           ? "contain"
                           : undefined,
-                        maxHeight: shouldUseBoundedViewportScroll
-                          ? "min(78vh, 960px)"
-                          : undefined,
-                        overflowY: shouldUseBoundedViewportScroll
-                          ? "auto"
-                          : "visible",
+                        maxHeight:
+                          shouldUseBoundedViewportScroll &&
+                          !useStudentScrollContainer
+                            ? "min(78vh, 960px)"
+                            : undefined,
+                        overflowY:
+                          shouldUseBoundedViewportScroll &&
+                          !useStudentScrollContainer
+                            ? "auto"
+                            : "visible",
                       }
                     : undefined
                 }
@@ -2500,6 +2567,12 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     return;
                   }
                   if (isStudentSolveMode && !isAnnotationEnabled) {
+                    if (
+                      useStudentScrollContainer &&
+                      !event.ctrlKey &&
+                      !event.metaKey
+                    )
+                      return;
                     const delta = getWheelZoomDelta(event);
                     if (!delta) return;
                     event.preventDefault();
@@ -2533,7 +2606,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   event.preventDefault();
                   const distance = getTouchDistance(event.touches);
                   const center = getTouchCenter(event.touches);
-                  const host = scrollHostRefs.current[pageImage.page];
+                  const host = getScrollHost(pageImage.page);
                   const verticalHost = host;
                   if (!distance || !center || !host) return;
                   cancelStudentInteraction();

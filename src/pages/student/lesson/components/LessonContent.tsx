@@ -163,6 +163,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [lessonLoadRetry, setLessonLoadRetry] = useState(0);
+  const [reviewZoomHost, setReviewZoomHost] = useState<HTMLDivElement | null>(
+    null,
+  );
   const [progressLoadRetry, setProgressLoadRetry] = useState(0);
   const [progressLoading, setProgressLoading] = useState(false);
   const [progressLoadError, setProgressLoadError] = useState(false);
@@ -1528,14 +1531,28 @@ const LessonContent: React.FC<LessonContentProps> = ({
     <div
       data-lesson-save-controls="true"
       className={
-        fullscreenPreview
-          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
-          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
+        reviewPopup
+          ? "lesson-review-content__actions"
+          : fullscreenPreview
+            ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
+            : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
       }
     >
-      <div className="pointer-events-auto flex w-[11.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
+      <div
+        className={
+          reviewPopup
+            ? "lesson-review-content__action-items"
+            : "pointer-events-auto flex w-[11.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl"
+        }
+      >
         {hasWorksheetPageControls && (
-          <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-1 rounded-full bg-blue-50/80 p-1">
+          <div
+            className={
+              reviewPopup
+                ? "lesson-review-content__pages"
+                : "grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-1 rounded-full bg-blue-50/80 p-1"
+            }
+          >
             <button
               type="button"
               onClick={() => handleWorksheetPageChange(-1)}
@@ -1634,6 +1651,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
     </div>
   ) : null;
 
+  const lessonVideo = embedUrl ? (
+    <div
+      className="relative mb-6 h-0 overflow-hidden rounded-2xl bg-black shadow-md"
+      style={{ paddingBottom: "56.25%" }}
+    >
+      <iframe
+        className="absolute left-0 top-0 h-full w-full"
+        src={embedUrl}
+        frameBorder="0"
+        allowFullScreen
+        title="Lesson Video"
+      />
+    </div>
+  ) : null;
+
   const content = (
     <div
       data-lesson-image-protection={!disablePersistence || undefined}
@@ -1644,20 +1676,24 @@ const LessonContent: React.FC<LessonContentProps> = ({
         disablePersistence ? undefined : preventLessonImageExport
       }
       className={
-        fullscreenPreview
-          ? `relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn ${canPersist ? "pb-36" : ""}`
-          : `relative w-full min-w-0 animate-fadeIn ${canPersist ? "pb-36" : ""}`
+        reviewPopup
+          ? "lesson-review-content relative w-full min-w-0"
+          : fullscreenPreview
+            ? `relative mx-auto w-full max-w-[min(100vw-1.5rem,1600px)] animate-fadeIn ${canPersist ? "pb-36" : ""}`
+            : `relative w-full min-w-0 animate-fadeIn ${canPersist ? "pb-36" : ""}`
       }
     >
-      {floatingSaveControls}
+      {!reviewPopup && floatingSaveControls}
       {isSaving && <LoadingOverlay />}
       <div
         className={
-          fullscreenPreview
-            ? "rounded-[28px] border border-white/70 bg-white/95 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-5"
-            : disablePersistence
-              ? "p-4 md:p-6"
-              : "ws-flat-section mb-6"
+          reviewPopup
+            ? "lesson-review-content__main"
+            : fullscreenPreview
+              ? "rounded-[28px] border border-white/70 bg-white/95 p-4 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-5"
+              : disablePersistence
+                ? "p-4 md:p-6"
+                : "ws-flat-section mb-6"
         }
       >
         <div className="ws-page-header">
@@ -1692,19 +1728,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
           )}
         </div>
 
-        {embedUrl && (
+        {!reviewPopup && lessonVideo}
+        {reviewPopup && !!worksheet.pageImages.length && (
           <div
-            className="relative mb-6 h-0 overflow-hidden rounded-2xl bg-black shadow-md"
-            style={{ paddingBottom: "56.25%" }}
-          >
-            <iframe
-              className="absolute left-0 top-0 h-full w-full"
-              src={embedUrl}
-              frameBorder="0"
-              allowFullScreen
-              title="Lesson Video"
-            />
-          </div>
+            ref={setReviewZoomHost}
+            className="lesson-review-content__toolbar"
+          />
         )}
 
         {progressLoadError && (
@@ -1734,7 +1763,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
               applyAnswerStatusesToInputs(pending.answers);
           }}
           hidden={progressLoadError}
-          className="space-y-6"
+          className={
+            reviewPopup
+              ? "lesson-review-content__scroll space-y-6"
+              : "space-y-6"
+          }
           onInput={handleLessonInput}
           onBlur={handleLessonBlur}
           onFocus={(event) => {
@@ -1751,6 +1784,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           }}
           onCompositionEnd={handleLessonCompositionEnd}
         >
+          {reviewPopup && lessonVideo}
           {!!worksheet.pageImages.length && (
             <React.Suspense
               fallback={
@@ -1784,6 +1818,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 studentCurrentPage={resolvedWorksheetPage}
                 onStudentCurrentPageChange={setActiveWorksheetPage}
                 hideStudentPageNavigator={canPersist}
+                studentScrollContainerRef={reviewPopup ? contentRef : undefined}
+                studentZoomControlsHost={
+                  reviewPopup ? reviewZoomHost : undefined
+                }
                 studentAnswers={studentAnswers}
                 onStudentAnswerChange={handleWorksheetAnswerChange}
                 annotationEnabled={false}
@@ -1934,6 +1972,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         )}
       </div>
 
+      {reviewPopup && floatingSaveControls}
       <style>{`
                 .cloze-input { border: none; border-bottom: 2px solid #334155; text-align: center; font-weight: 700; color: #2563eb; background: transparent; padding: 0 4px; margin: 0 4px; transition: all 0.2s ease; font-size: var(--blank-font-size, 1rem); line-height: 1.2; }
                 .cloze-input::placeholder, .worksheet-blank-input::placeholder { color: #94a3b8; opacity: 1; }
