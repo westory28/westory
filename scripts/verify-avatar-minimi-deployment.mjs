@@ -5,9 +5,13 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const audit = path.resolve(root, process.argv[2] || 'output/avatar-minimi-20261111/release-audit');
+const auditArgument = process.argv.slice(2).find(value => !value.startsWith('--'));
+const groupName = process.argv.find(value => value.startsWith('--group='))?.slice('--group='.length);
+const audit = path.resolve(root, auditArgument || 'output/avatar-minimi-20261111/release-audit');
 const readJson = async file => JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
-const groups = await readJson(path.join(audit, 'prepared-release.json'));
+const plans = await readJson(path.join(audit, 'prepared-release.json'));
+const groups = groupName ? plans.filter(group => group.group === groupName) : plans;
+assert.ok(groups.length > 0, 'Unknown release group');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const settings = value => ({
   runtime: value.buildConfig.runtime, entryPoint: value.buildConfig.entryPoint,
@@ -16,7 +20,9 @@ const settings = value => ({
     'maxInstanceCount', 'maxInstanceRequestConcurrency', 'ingressSettings', 'serviceAccountEmail',
     'vpcConnector', 'vpcConnectorEgressSettings', 'securityLevel'].map(key => [key, value.serviceConfig?.[key] ?? null])),
   event: value.eventTrigger ? Object.fromEntries(['eventType', 'eventFilters', 'retryPolicy',
-    'triggerRegion', 'serviceAccountEmail'].map(key => [key, value.eventTrigger[key] ?? null])) : null,
+    'triggerRegion', 'serviceAccountEmail'].map(key => [key, key === 'eventFilters'
+      ? [...(value.eventTrigger.eventFilters || [])].sort((a, b) => a.attribute.localeCompare(b.attribute))
+      : value.eventTrigger[key] ?? null])) : null,
 });
 const result = [];
 for (const group of groups) {
@@ -38,6 +44,6 @@ for (const group of groups) {
       verifiedSourceFiles: process.argv.includes('--metadata-only') ? 0 : manifest.baselineFiles.length });
   }
 }
-await fs.writeFile(path.join(audit, 'post-deploy-verification.json'), JSON.stringify(result, null, 2) + '\n');
+await fs.writeFile(path.join(audit, groupName ? `post-deploy-${groupName}-verification.json` : 'post-deploy-verification.json'), JSON.stringify(result, null, 2) + '\n');
 console.log(JSON.stringify({ passed: true, metadataOnly: process.argv.includes('--metadata-only'), targets: result.length,
   sourceFiles: result.reduce((count, row) => count + row.verifiedSourceFiles, 0) }));

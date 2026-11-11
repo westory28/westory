@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
-const sharp = createRequire(path.join(root, "functions/package.json"))("sharp");
 const destination = path.join(root, "public/avatar/minimi-v2/previews");
 const evidence = path.join(root, "output/minimi-rebuild-20261111");
 const catalog = JSON.parse(
@@ -72,10 +71,18 @@ if (process.argv.includes("--check")) {
     const bytes = await fs.readFile(path.join(destination, entry.file));
     assert.equal(bytes.subarray(8, 12).toString(), "WEBP");
     assert.equal(hash(bytes), record.sha256);
-    const meta = await sharp(bytes).metadata();
-    assert.equal(meta.width, 256);
-    assert.equal(meta.height, 256);
-    assert(meta.hasAlpha);
+    // Generated assets use the simple lossless VP8L container. Keep CI checks
+    // independent of the separate Functions install and its native sharp module.
+    // https://developers.google.com/speed/webp/docs/webp_lossless_bitstream_specification#3_riff_header
+    assert.equal(bytes.subarray(0, 4).toString(), "RIFF");
+    assert.equal(bytes.readUInt32LE(4) + 8, bytes.length);
+    assert.equal(bytes.subarray(12, 16).toString(), "VP8L");
+    assert.equal(bytes[20], 0x2f);
+    const dimensions = bytes.readUInt32LE(21);
+    assert.equal((dimensions & 0x3fff) + 1, 256);
+    assert.equal(((dimensions >>> 14) & 0x3fff) + 1, 256);
+    assert.equal((dimensions >>> 28) & 1, 1, "Transparent lossless preview");
+    assert.equal(dimensions >>> 29, 0, "Supported VP8L version");
     assert(bytes.length > 100 && bytes.length < 40000);
     total += bytes.length;
   }
@@ -85,6 +92,7 @@ if (process.argv.includes("--check")) {
   );
   process.exit(0);
 }
+const sharp = createRequire(path.join(root, "functions/package.json"))("sharp");
 let playwright;
 try {
   playwright = require("playwright");

@@ -5,7 +5,7 @@
   "scale": 2,
   "format": "lossless-webp",
   "sources": {
-    "scripts/render-avatar-item-previews.mjs": "67cda22d9bc88161e3fd45cb52b6500942c6bb2c5f2e65c71e554008e23ea9a0",
+    "scripts/render-avatar-item-previews.mjs": "6e02ec072853504672c7b19be1c74bdf3d18b4841aba974f1659f7dff95049c2",
     "functions/avatarCatalog.json": "582fc136f1f4937317e2df6a7edc6e0c23f649acfdcafcc24e18acc244aef5b3",
     "src/features/avatar/catalog.ts": "83bf586921d9383f7059f8c6fe932e7cea78133e84c9dd0d867ad9b26f6f5f5b",
     "src/features/avatar/minimi/draw.ts": "490d082c30da121061765a5096f63a349a2eed125102eda6ea7bd93457149e64",

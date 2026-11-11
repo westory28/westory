@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 // it never deploys, changes a runtime option, or substitutes a repository index.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const audit = path.resolve(root, process.argv[2] || 'output/avatar-minimi-20261111/release-audit');
+const baselineCommit = process.argv[3] || 'a22c1cd93fd312c703785d6e5644e790cbf1be18';
+assert.match(baselineCommit, /^[a-f0-9]{40}$/, 'Explicit source baseline commit required');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const readJson = async name => JSON.parse((await fs.readFile(name, 'utf8')).replace(/^\uFEFF/, ''));
 const rows = await readJson(path.join(audit, 'source-map.json'));
@@ -59,7 +61,7 @@ for (const group of groups.values()) {
   } else {
     for (const file of allowed) {
       if (group.mode === 'avatar') {
-        const baseline = execFileSync('git', ['show', `HEAD:functions/${file}`], { cwd: root, encoding: 'utf8' });
+        const baseline = execFileSync('git', ['show', `${baselineCommit}:functions/${file}`], { cwd: root, encoding: 'utf8' });
         const live = await fs.readFile(path.join(group.source, file), 'utf8');
         assert.equal(live.replace(/\r\n/g, '\n'), baseline.replace(/\r\n/g, '\n'), `Unreviewed deployed source difference: ${file}`);
       }
