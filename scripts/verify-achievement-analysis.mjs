@@ -1,10 +1,62 @@
 import assert from "node:assert/strict";
 import { build } from "esbuild";
-import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import * as crypto from "node:crypto";
+import vm from "node:vm";
 
-const require = createRequire(import.meta.url);
-const { projectAchievementRaw } = require("../functions/quizAchievementProjection.js");
-const { buildCorrection } = require("../functions/quizQuestionCorrections.js");
+// Vercel installs the root package only. Run the actual pure projection and
+// correction sources without resolving the separate Functions dependencies.
+// Any accidental Firestore/trigger use fails instead of reaching a service.
+class HttpsError extends Error {
+  constructor(code, message, details) {
+    super(message);
+    this.code = code;
+    this.details = details;
+  }
+}
+const noFirestore = () => {
+  throw new Error("Frontend analysis verification cannot access Firestore.");
+};
+const functionModules = new Map();
+const pureModules = new Set([
+  "quizAchievementProjection",
+  "quizQuestionCorrections",
+  "quizAnswerMatching",
+  "quizAchievementEvidence",
+  "historyAchievementMetadata",
+]);
+function loadPureFunctionModule(name) {
+  assert.ok(pureModules.has(name), `Unexpected Functions dependency: ${name}`);
+  if (functionModules.has(name)) return functionModules.get(name).exports;
+  const module = { exports: {} };
+  functionModules.set(name, module);
+  const require = (specifier) => {
+    if (specifier === "node:crypto") return crypto;
+    if (specifier === "firebase-functions/v2/https") return { HttpsError };
+    if (specifier === "firebase-functions/v2/firestore")
+      return { onDocumentWritten: noFirestore };
+    if (specifier === "firebase-admin/firestore")
+      return {
+        FieldPath: { documentId: noFirestore },
+        FieldValue: { serverTimestamp: noFirestore },
+      };
+    if (specifier === "./shared/historyAchievementStandards.json")
+      return JSON.parse(readFileSync(new URL(
+        "../functions/shared/historyAchievementStandards.json", import.meta.url,
+      ), "utf8"));
+    if (specifier.startsWith("./"))
+      return loadPureFunctionModule(specifier.slice(2));
+    throw new Error(`Unexpected external Functions dependency: ${specifier}`);
+  };
+  vm.runInNewContext(
+    readFileSync(new URL(`../functions/${name}.js`, import.meta.url), "utf8"),
+    { module, exports: module.exports, require, Buffer },
+    { filename: `functions/${name}.js` },
+  );
+  return module.exports;
+}
+const { projectAchievementRaw } = loadPureFunctionModule("quizAchievementProjection");
+const { buildCorrection } = loadPureFunctionModule("quizQuestionCorrections");
 
 const bundled = await build({
   entryPoints: ["src/lib/achievementAnalysis.ts"],
