@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
+import ts from "typescript";
 
 const require = createRequire(import.meta.url);
 const playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.homedir(),
@@ -33,6 +34,17 @@ const cases = [
   ["<img src=x onerror=alert(1)> 아닌 것은?", ["아닌"]],
   ["이 국왕이 시행한 정책을 <보기>와 〈보기〉에서 고르시오.", []],
   ["그 인물의 활동으로 적절하지 않은 것은?", ["적절하지 않은"]],
+  ["아닌 않은 없는", ["아닌", "않은", "없는"]],
+  ["아닌,않은/없는", ["아닌", "않은", "없는"]],
+  ["가적절하지 않은 것은?", ["않은"]],
+  ["1아닌 _아닌 漢아닌 𐐀아닌 아닌1 아닌_ 아닌漢 아닌𐐀", []],
+  ["🙂아닌🙂 않은\n없는", ["아닌", "않은", "없는"]],
+  ["(이 국왕),그 인물을 고르시오.", [], ["이 국왕", "그 인물을"]],
+  ["가이 국왕 1그 인물 _이 국왕 𐐀그 인물", [], []],
+  ["자료<보기>와〈보기〉를 확인하시오.", [], ["<보기>", "〈보기〉"]],
+  ["이 국왕이 아닌 인물과 그 인물의 정책", ["아닌"], ["이 국왕이", "아닌", "그 인물의"]],
+  ["〈보기〉이 국왕 <보기>그 인물", [], ["〈보기〉", "이 국왕", "<보기>", "그 인물"]],
+  ["가이 그 인물", [], ["그 인물"]],
 ];
 const question = {
   id: 1, type: "choice", question: "다음 정책에 해당하는 것이 아닌 것은?",
@@ -73,6 +85,18 @@ const bundle = await build({ stdin: { contents: entry, loader: "tsx", resolveDir
   loader: { ".woff2": "dataurl", ".woff": "dataurl" }, define: { "process.env.NODE_ENV": '"production"' } });
 assert(!Object.keys(bundle.metafile.inputs).some(name => /node_modules[\\/](@firebase|firebase)[\\/]/.test(name)));
 const js = bundle.outputFiles.find(file => file.path.endsWith(".js")).text;
+// Legacy Safari rejects lookbehind/named groups while parsing the module,
+// before feature detection can run. Audit actual emitted regex literals too.
+let regexLiteralCount = 0;
+const auditRegexSyntax = node => {
+  if (ts.isRegularExpressionLiteral(node)) {
+    regexLiteralCount++;
+    assert(!node.text.includes("(?<"), "Assessment bundle must not contain lookbehind or named groups");
+  }
+  ts.forEachChild(node, auditRegexSyntax);
+};
+auditRegexSyntax(ts.createSourceFile("fixture.js", js, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS));
+assert(regexLiteralCount > 0, "Compatibility audit must inspect emitted regex literals");
 const css = bundle.outputFiles.find(file => file.path.endsWith(".css")).text;
 const tailwind = await fs.readFile(process.env.PORTAL_DESIGN_TAILWIND_PATH || path.join(os.tmpdir(), "westory-qa-tailwind.js"), "utf8");
 const server = http.createServer((request, response) => {
@@ -82,7 +106,11 @@ const server = http.createServer((request, response) => {
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const browser = await playwright.chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge", headless: true });
+const browserEngine = process.env.QUIZ_EMPHASIS_BROWSER || "chromium";
+const browser = await playwright[browserEngine].launch({
+  ...(browserEngine === "chromium" ? { channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge" } : {}),
+  headless: true,
+});
 const errors = [], external = [];
 try {
   const page = await browser.newPage();
@@ -97,6 +125,7 @@ try {
     const rendered = page.locator(`[data-case="${index}"]`);
     assert.equal(await rendered.textContent(), cases[index][0], "plain text remains byte-for-byte unchanged");
     assert.deepEqual(await rendered.locator("u").allTextContents(), cases[index][1]);
+    if (cases[index][2]) assert.deepEqual(await rendered.locator(".quiz-question-keep").allTextContents(), cases[index][2]);
     assert.equal(await rendered.locator("img").count(), 0, "text never becomes HTML");
   }
   assert.equal(await page.locator('[data-view="plain"] u').count(), 0, "passages are not automatically emphasized");
@@ -155,6 +184,6 @@ try {
   assert.equal(await page.locator(".mock-exam-answer-controls .quiz-question-negative").count(), 0);
   await page.screenshot({ path: path.join(evidence, "student-zoom.png") });
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
-  console.log(JSON.stringify({ pass: true, lexicalCases: cases.length, widths: [320, 390, 768, 1280, 1440], evidence,
+  console.log(JSON.stringify({ pass: true, browserEngine, regexLiteralCount, lexicalCases: cases.length, widths: [320, 390, 768, 1280, 1440], evidence,
     checks: "negative modifier boundaries; unchanged source/choices/passages; word-boundary wrapping; intact short references and underlined phrases; overwide text fallback; one-pixel manual underline in editor, preview, paper and student zoom; labels and blank boxes preserved; no live reads/writes" }));
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
