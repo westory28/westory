@@ -1,8 +1,26 @@
 // Generated from src/lib/quizAnalysis.ts. Do not edit.
-// source-sha256: a7b914112eca8dfb3e99161f6dc869d0efeb81ccc9b81b9536fc5b179f6cd3d6
+// source-sha256: 41c75d190767904df174c340b0471b12ff68232a6a89660d01934f2f15c4cadd
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildQuizItemStatistics = exports.buildQuizAnalysis = exports.classifyQuizResponseBehavior = exports.deduplicateQuizAnalysisRecords = exports.QUIZ_BEHAVIOR_LABELS = void 0;
+exports.buildQuizItemStatistics = exports.buildQuizAnalysis = exports.classifyQuizResponseBehavior = exports.deduplicateQuizAnalysisRecords = exports.QUIZ_BEHAVIOR_LABELS = exports.quizPaperItemIdentity = exports.quizPaperMaterialHash = void 0;
+const quizPaperMaterialHash = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value) ? value : "";
+exports.quizPaperMaterialHash = quizPaperMaterialHash;
+/** Missing historical material never makes two different revisions equivalent. */
+const quizPaperItemIdentity = (item) => {
+    const material = (0, exports.quizPaperMaterialHash)(item.paperMaterialHash);
+    return material
+        ? `material:${material}`
+        : `revision:${item.sourceRevision || ""}`;
+};
+exports.quizPaperItemIdentity = quizPaperItemIdentity;
+const sameQuestionMaterial = (question, item) => {
+    const currentMaterial = (0, exports.quizPaperMaterialHash)(question.paperMaterialHash);
+    const historicalMaterial = (0, exports.quizPaperMaterialHash)(item.paperMaterialHash);
+    if (currentMaterial && historicalMaterial)
+        return currentMaterial === historicalMaterial;
+    const currentRevision = revision(question.sourceRevision) || revision(question.contentRevision);
+    return !!currentRevision && revision(item.sourceRevision) === currentRevision;
+};
 exports.QUIZ_BEHAVIOR_LABELS = {
     suspected_guessing: "찍기 추정",
     repeated_choice: "반복 선택",
@@ -151,8 +169,7 @@ const buildStudentQuestions = (records, questions) => questions.map((question) =
         return [{ item, record, submittedAt: record.submittedAt }];
     });
     const currentRevision = revision(question.sourceRevision) || revision(question.contentRevision);
-    const currentRows = rows.filter((row) => !!currentRevision &&
-        revision(row.item.sourceRevision) === currentRevision);
+    const currentRows = rows.filter((row) => sameQuestionMaterial(question, row.item));
     const selected = latest(currentRows);
     return {
         question,
@@ -162,7 +179,7 @@ const buildStudentQuestions = (records, questions) => questions.map((question) =
         chronologyUnknown: selected.chronologyUnknown,
         revisionExcluded: rows.some((row) => !!currentRevision &&
             !!revision(row.item.sourceRevision) &&
-            revision(row.item.sourceRevision) !== currentRevision),
+            !sameQuestionMaterial(question, row.item)),
         revisionUnknown: rows.some((row) => !currentRevision || !revision(row.item.sourceRevision)),
     };
 });
@@ -295,9 +312,7 @@ const classifyQuizResponseBehavior = (record, questions, state = "submitted") =>
         };
         group.total += 1;
         groups.set(question.type, group);
-        const currentRevision = revision(question.sourceRevision) || revision(question.contentRevision);
-        if (!currentRevision ||
-            revision(item.sourceRevision) !== currentRevision ||
+        if (!sameQuestionMaterial(question, item) ||
             typeof item.answer !== "string")
             continue;
         let label = null;
@@ -664,16 +679,13 @@ const buildQuizItemStatistics = (input) => {
         }
         if (first.items.some((item) => {
             const current = questionMap.get(text(item.questionId));
-            const currentRevision = current &&
-                (revision(current.sourceRevision) ||
-                    revision(current.contentRevision));
-            return (!currentRevision || revision(item.sourceRevision) !== currentRevision);
+            return !current || !sameQuestionMaterial(current, item);
         })) {
             summary.excludedRevisionCount += 1;
             continue;
         }
         const signature = first.items
-            .map((item) => [text(item.questionId), revision(item.sourceRevision)])
+            .map((item) => [text(item.questionId), (0, exports.quizPaperItemIdentity)(item)])
             .sort(([left], [right]) => left.localeCompare(right));
         const formKey = JSON.stringify([assessmentKey(first), signature]);
         const cohort = forms.get(formKey) || [];

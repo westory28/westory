@@ -3,6 +3,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
 const { SCOPE_FIELDS, sourceVersionOf, readAchievementProjections, updateAchievementProjection } = require('./quizAchievementProjection');
+const { paperMaterialHash } = require('./quizQuestionCorrections');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const text = value => String(value ?? '').trim();
@@ -183,6 +184,8 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
             if (current.exists && matches(raw, query)) {
               const fields = query.liveMode === 'summary' ? questionFields.filter(field => field !== 'question') : Object.keys(raw);
               const question = { ...json(Object.fromEntries(fields.filter(field => Object.hasOwn(raw, field)).map(field => [field, raw[field]]))),
+                ...(!compactAchievement && query.liveMode === 'detail' && paperMaterialHash(raw)
+                  ? { paperMaterialHash: paperMaterialHash(raw) } : {}),
                 id: raw.id ?? Number(event.id), docId: event.id, sourceRevision: String(raw.contentRevision || raw.revision || 'legacy') };
               questionUpserts.push(question); bytes += Buffer.byteLength(JSON.stringify(question));
             }

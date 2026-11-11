@@ -14,6 +14,9 @@ const deferred = () => {
 const flush = async () => { for (let index = 0; index < 20; index++) await Promise.resolve(); };
 const timers = new Map();
 let timerId = 0, commandId = 0, epoch = 1;
+let clock = Date.now();
+class TestDate extends Date { static now() { return clock; } }
+let readToken = async () => ({ authTime: String(epoch) });
 const setTimer = (callback, delay) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; };
 const clearTimer = id => timers.delete(id);
 const deadlines = {};
@@ -25,10 +28,11 @@ const calls = [];
 const client = {};
 runInNewContext(transpile("src/lib/assessmentLifecycle.ts"), {
   exports: client,
+  Date: TestDate,
   require: name => {
     if (name === "./requestDeadline") return deadlines;
     if (name === "./firebase") return { auth };
-    if (name === "firebase/auth") return { getIdTokenResult: async () => ({ authTime: String(epoch) }) };
+    if (name === "firebase/auth") return { getIdTokenResult: () => readToken() };
     if (name === "./sensitiveOperation") return { ensureSensitiveOperation: async () => {} };
     if (name === "./historyDictionarySession") return { getHistoryDictionaryCallable: async name => async input => {
       calls.push({ name, input });
@@ -121,6 +125,129 @@ gate.resolve(overview("2026-2"));
 await oldOwner;
 assert.equal(calls.length, 2);
 
+// State/asset preparation has the same login boundary as overview and saves.
+const stateInput = { definitionId: "quiz:2026-2:fixture:diagnostic" };
+const stateResult = { status: "READY", definition: { id: stateInput.definitionId } };
+calls.length = 0;
+gate = deferred();
+readToken = () => gate.promise;
+const waitingForToken = assert.rejects(client.getAssessmentState(stateInput), /로그인 연결/);
+await flush();
+const tokenDeadline = [...timers.values()].find(timer => timer.delay === 15_000);
+assert.ok(tokenDeadline);
+tokenDeadline.callback();
+await waitingForToken;
+gate.resolve({ authTime: String(epoch) });
+await flush();
+assert.equal(calls.length, 0, "A late token must not dispatch after the owner deadline");
+readToken = async () => ({ authTime: String(epoch) });
+// Keep the existing total state-read budget even when token refresh is slow.
+calls.length = 0;
+const tokenGate = deferred(), responseGate = deferred();
+readToken = () => tokenGate.promise;
+handler = async () => responseGate.promise;
+const slowLoginRead = assert.rejects(client.getAssessmentState(stateInput), /지연/);
+await flush();
+clock += 6000;
+tokenGate.resolve({ authTime: String(epoch) });
+await flush();
+assert.equal(calls.length, 1);
+const remainingDeadline = [...timers.values()].find(timer => timer.delay === 9000);
+assert.ok(remainingDeadline, "6 seconds of token refresh leaves 9 seconds for the state read");
+remainingDeadline.callback();
+await slowLoginRead;
+responseGate.resolve(stateResult);
+await flush();
+readToken = async () => ({ authTime: String(epoch) });
+
+// An earlier caller with a slow token can join a later caller's live flight.
+// Its own 15-second budget must not inherit the later transport's deadline.
+calls.length = 0;
+const joiningTokenGate = deferred(), sharedResponseGate = deferred();
+let joiningTokenReads = 0, laterCallerSettled = false;
+readToken = () => ++joiningTokenReads === 1
+  ? joiningTokenGate.promise
+  : Promise.resolve({ authTime: String(epoch) });
+handler = async () => sharedResponseGate.promise;
+const earlierStartedAt = clock;
+const earlierCaller = assert.rejects(client.getAssessmentState(stateInput), {
+  code: "functions/deadline-exceeded",
+});
+await flush();
+clock += 13000;
+const laterCaller = client.getAssessmentState(stateInput);
+void laterCaller.then(
+  () => { laterCallerSettled = true; },
+  () => { laterCallerSettled = true; },
+);
+await flush();
+assert.equal(calls.length, 1, "The later caller starts the only shared transport");
+clock += 1000;
+joiningTokenGate.resolve({ authTime: String(epoch) });
+await flush();
+assert.equal(calls.length, 1, "The earlier caller joins without a second transport");
+const joiningDeadline = [...timers.values()].find(timer => timer.delay === 1000);
+assert.ok(joiningDeadline, "A caller joining after 14 seconds retains only its final second");
+clock += 1000;
+joiningDeadline.callback();
+await earlierCaller;
+assert.equal(clock - earlierStartedAt, 15000);
+assert.equal(laterCallerSettled, false, "One caller's timeout must not cancel the later caller");
+const thirdCaller = client.getAssessmentState(stateInput);
+await flush();
+assert.equal(calls.length, 1, "A caller timeout must not evict another caller's live transport");
+sharedResponseGate.resolve(stateResult);
+assert.equal((await laterCaller).status, "READY");
+assert.equal((await thirdCaller).status, "READY");
+await flush();
+readToken = async () => ({ authTime: String(epoch) });
+
+calls.length = 0;
+gate = deferred();
+handler = async () => gate.promise;
+const stateReads = Array.from({ length: 4 }, () => client.getAssessmentState({ ...stateInput }));
+await flush();
+assert.equal(calls.length, 1, "Concurrent state reads share only one transport");
+gate.resolve(stateResult);
+await Promise.all(stateReads);
+handler = async () => stateResult;
+await client.getAssessmentState(stateInput);
+assert.equal(calls.length, 2, "A later state read rechecks live access");
+
+calls.length = 0;
+gate = deferred();
+handler = async () => gate.promise;
+const obsoleteState = assert.rejects(client.getAssessmentState(stateInput), /로그인 상태가 변경/);
+await flush();
+epoch++;
+handler = async () => stateResult;
+const freshState = client.getAssessmentState(stateInput);
+await flush();
+assert.equal(calls.length, 2, "Reauthentication on the same User must dispatch a new state read");
+assert.equal((await freshState).status, "READY");
+gate.resolve(stateResult);
+await obsoleteState;
+
+calls.length = 0;
+const stateGates = [];
+handler = async () => { const next = deferred(); stateGates.push(next); return next.promise; };
+const differentStates = [client.getAssessmentState(stateInput), client.getAssessmentState({ ...stateInput, prepareAssets: true }), client.getAssessmentState({ attemptId: "another-attempt" })];
+await flush();
+assert.equal(calls.length, 3, "State, asset preparation and another attempt remain distinct");
+stateGates.forEach(next => next.resolve(stateResult));
+await Promise.all(differentStates);
+
+calls.length = 0;
+gate = deferred();
+handler = async () => gate.promise;
+const lostStates = Promise.allSettled([client.getAssessmentState(stateInput), client.getAssessmentState(stateInput)]);
+await flush();
+gate.reject(unavailable());
+assert.ok((await lostStates).every(result => result.status === "rejected"));
+handler = async () => stateResult;
+await client.getAssessmentState(stateInput);
+assert.equal(calls.length, 2, "Failed state reads permit an explicit new retry");
+
 const progress = { attemptId: "synthetic-attempt", expectedRevision: 1, answers: { q1: "조선" }, currentItemId: "q1" };
 const saveResult = { attemptId: progress.attemptId, status: "IN_PROGRESS", revision: 2, savedAtIso: "2026-11-10T12:00:00.000Z", replayed: false };
 calls.length = 0;
@@ -175,4 +302,4 @@ await client.saveAssessmentProgress(progress);
 gate.resolve(saveResult);
 await oldSave;
 assert.equal(calls.length, 2, "A save from the previous auth_time is never shared");
-console.log("PASS assessment request sharing: 4 concurrent overview/save calls each use 1 transport; completed/error/timeout eviction, explicit receipt retry, semester/account/auth_time isolation and distinct answers/revisions preserved. No live network or production writes.");
+console.log("PASS assessment request sharing: 4 concurrent overview/state/save calls each use 1 transport; completed/error/timeout eviction, stalled-token and caller-specific total deadlines, explicit receipt retry, semester/account/auth_time isolation and distinct assets/answers/revisions preserved. No live network or production writes.");

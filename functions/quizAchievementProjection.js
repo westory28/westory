@@ -2,7 +2,7 @@
 
 const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
-const { effectiveQuizResult } = require('./quizQuestionCorrections');
+const { effectiveQuizResult, withQuizPaperMaterialHashes } = require('./quizQuestionCorrections');
 const { historicalQuestionEvidence } = require('./quizAchievementEvidence');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
 
@@ -13,7 +13,7 @@ const RAW_FIELDS = [...SCOPE_FIELDS, 'earnedPoints', 'maxPoints', 'score', 'perc
   'submittedAtIso', 'timestamp', 'createdAt', 'attemptId', 'canonicalAttemptId', 'submissionRef',
   'resultRef', 'resultId', 'legacyResultId', 'startedAtIso', 'sourceHash', 'questionSnapshotOmittedIds',
   'answers', 'answerChecks', 'behaviorAnswersAvailable'];
-const METADATA_FIELDS = ['id', 'sourceRevision', 'revisionBasis', 'metadataLimited', 'points',
+const METADATA_FIELDS = ['id', 'sourceRevision', 'paperMaterialHash', 'revisionBasis', 'metadataLimited', 'points',
   'unitId', 'subUnitId', 'refBig', 'refMid', 'refSmall', 'familyId', ...ACHIEVEMENT_FIELDS];
 const PROJECTION_INPUT_FIELDS = [...RAW_FIELDS, 'learningSnapshot', 'questionSnapshots', 'details',
   'gradingCorrections', 'gradingCorrectionSummary'];
@@ -45,7 +45,7 @@ function sourceVersionOf(snapshot) {
 const projectionRef = (db, sourcePath) => db.doc(`quiz_achievement_result_views/${hash(sourcePath)}`);
 
 function projectAchievementRaw(original) {
-  const raw = effectiveQuizResult(jsonValue(original));
+  const raw = withQuizPaperMaterialHashes(effectiveQuizResult(jsonValue(original)));
   const metadata = new Map((Array.isArray(raw.learningSnapshot) ? raw.learningSnapshot : [])
     .map(item => [text(item.id), pick(item, METADATA_FIELDS)]));
   for (const check of Array.isArray(raw.answerChecks) ? raw.answerChecks : []) {
@@ -59,7 +59,7 @@ function projectAchievementRaw(original) {
   const result = pick(raw, RAW_FIELDS);
   if (Array.isArray(raw.learningSnapshot) || metadata.size) result.learningSnapshot = [...metadata.values()];
   if (Array.isArray(raw.questionSnapshots)) result.questionSnapshots = raw.questionSnapshots.map(item =>
-    pick(item, ['id', 'type', 'options', 'answer', 'points']));
+    pick(item, ['id', 'type', 'options', 'answer', 'points', 'paperMaterialHash']));
   if (Array.isArray(raw.details)) result.details = raw.details.map(item =>
     pick(item, ['id', 'qid', 'questionId', 'correct', 'u', 'userAnswer', 'answer', 'sourceRevision']));
   return result;
@@ -67,13 +67,13 @@ function projectAchievementRaw(original) {
 
 function buildAchievementProjection({ sourcePath, source, sourceVersion, semesterId, raw }) {
   const rawCompact = { ...projectAchievementRaw(raw), analysisSourceVersion: sourceVersion };
-  const base = { schemaVersion: 1, sourcePath, source, sourceVersion, semesterId };
+  const base = { schemaVersion: 2, sourcePath, source, sourceVersion, semesterId };
   if (Buffer.byteLength(JSON.stringify(rawCompact)) > 800000) return { ...base, unavailable: true };
   return { ...base, rawCompact, projectionHash: digest(rawCompact) };
 }
 
 function validProjection(value, entry) {
-  return !!entry.sourceVersion && value?.schemaVersion === 1 && value.sourcePath === entry.path
+  return !!entry.sourceVersion && value?.schemaVersion === 2 && value.sourcePath === entry.path
     && value.source === entry.source && value.sourceVersion === entry.sourceVersion
     && value.rawCompact?.analysisSourceVersion === entry.sourceVersion
     && value.semesterId === (entry.scope.semesterId || entry.path.match(/^years\/(\d{4})\/semesters\/([12])\//)?.slice(1).join('-'))
@@ -159,11 +159,12 @@ async function updateAchievementProjection(db, event) {
   const eligible = isEligible(raw);
   if (!eligible && !isEligible(previousRaw)) return false;
   const value = eligible ? buildAchievementProjection({ sourcePath, source, sourceVersion, semesterId, raw })
-    : { schemaVersion: 1, sourcePath, source, sourceVersion, semesterId, deleted: true };
+    : { schemaVersion: 2, sourcePath, source, sourceVersion, semesterId, deleted: true };
   const ref = projectionRef(db, sourcePath);
   return db.runTransaction(async tx => {
     const [prior] = await tx.getAll(ref), current = prior.exists ? prior.data() : {};
-    if (current.sourceVersion && current.sourceVersion >= sourceVersion) return false;
+    if (current.sourceVersion && (current.sourceVersion > sourceVersion
+      || (current.sourceVersion === sourceVersion && current.schemaVersion >= value.schemaVersion))) return false;
     tx.set(ref, value);
     return true;
   });

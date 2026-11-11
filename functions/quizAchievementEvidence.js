@@ -70,8 +70,11 @@ function historicalQuestionEvidence(raw, itemId, knownHashes) {
     || typeof frozen.question !== 'string' || !frozen.question.trim()
     || typeof frozen.answer !== 'string' || !frozen.answer.trim()
     || !['choice', 'ox', 'short', 'word', 'order', 'matching'].includes(frozen.type)) return null;
+  // The derived material digest is transport metadata, not part of the original
+  // immutable snapshot's provenance hash.
+  const { paperMaterialHash, ...original } = frozen;
   return { metadata: { ...frozen, ...(metadata || {}) },
-    sourceRevision: `snapshot:${knownHashes?.get(frozen) || snapshotHash(frozen)}`,
+    sourceRevision: `snapshot:${paperMaterialHash ? snapshotHash(original) : knownHashes?.get(frozen) || snapshotHash(frozen)}`,
     revisionBasis: 'frozen-snapshot' };
 }
 

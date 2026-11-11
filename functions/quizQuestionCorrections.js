@@ -31,6 +31,36 @@ const fingerprint = question => hash(canonical({
   examRound: text(question?.examRound), paperOrder: question?.paperOrder ?? null, points: question?.points ?? null,
 }));
 
+// Analysis identity describes what pupils saw, not the grading key or learning
+// tags. Call only with a complete original/bank document, before compacting it.
+// A missing historical presentation deliberately retains revision-based identity.
+const paperMaterialHash = question => question && text(question.question)
+  && ["choice", "ox", "short", "word", "order", "matching"].includes(question.type)
+  ? fingerprint(question) : "";
+
+function withQuizPaperMaterialHashes(raw, snapshotCache) {
+  const withoutMaterialHash = value => {
+    const { paperMaterialHash: _derived, ...original } = value;
+    return original;
+  };
+  if (!Array.isArray(raw?.questionSnapshots)) return Array.isArray(raw?.learningSnapshot)
+    ? { ...raw, learningSnapshot: raw.learningSnapshot.map(withoutMaterialHash) } : raw;
+  const materials = new Map();
+  const questionSnapshots = raw.questionSnapshots.map(question => {
+    const cached = snapshotCache?.get(question);
+    const digest = cached?.paperMaterialHash || paperMaterialHash(question);
+    if (digest) materials.set(text(question.id), digest);
+    if (cached) return cached;
+    const presentation = { ...withoutMaterialHash(question), ...(digest ? { paperMaterialHash: digest } : {}) };
+    snapshotCache?.set(question, presentation);
+    return presentation;
+  });
+  return { ...raw, questionSnapshots, ...(Array.isArray(raw.learningSnapshot) ? {
+    learningSnapshot: raw.learningSnapshot.map(item => ({ ...withoutMaterialHash(item),
+      ...(materials.has(text(item.id)) ? { paperMaterialHash: materials.get(text(item.id)) } : {}) })),
+  } : {}) };
+}
+
 function buildCorrection(scope, docId, before, after, previous = {}) {
   if (!before || !after || !after.unitId || !after.category || idOf(before, docId) !== idOf(after, docId)
     || before.unitId !== after.unitId || before.category !== after.category || text(before.examRound) !== text(after.examRound)
@@ -231,5 +261,5 @@ function createQuizQuestionCorrectionTriggers({ db }) {
     reconcileQuizResultCorrection: onDocumentWritten({ ...options, document: "semester_assessment_results/{resultId}" }, service.onResult),
   };
 }
-module.exports = { fingerprint, buildCorrection, applicableCorrection, effectiveQuizResult,
+module.exports = { fingerprint, paperMaterialHash, withQuizPaperMaterialHashes, buildCorrection, applicableCorrection, effectiveQuizResult,
   createQuizQuestionCorrectionService, createQuizQuestionCorrectionTriggers, correctionKey, indexKey };

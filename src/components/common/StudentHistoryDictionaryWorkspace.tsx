@@ -32,9 +32,13 @@ import {
   matchesHistoryDictionaryInitial,
 } from "../../lib/historyDictionaryInitials";
 
-export default function StudentHistoryDictionaryWorkspace() {
+export default function StudentHistoryDictionaryWorkspace({
+  active = true,
+}: {
+  active?: boolean;
+}) {
   const { currentUser, config, configReady } = useAuth();
-  const gongsinAvailability = useGongsinAvailability();
+  const gongsinAvailability = useGongsinAvailability(active);
   const [searchParams] = useSearchParams();
   const { showToast } = useAppToast();
   const [view, setView] = useState<"catalog" | "notebook">("catalog");
@@ -67,6 +71,7 @@ export default function StudentHistoryDictionaryWorkspace() {
   const definitionRef = useRef<HTMLTextAreaElement>(null);
   const wordListRef = useRef<HTMLDivElement>(null);
   const baseDraft = useRef({ word: "", definition: "" });
+  const pendingCatalogWord = useRef("");
   const id = useId();
   const scopeKey = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
   const scopeRef = useRef({ key: scopeKey, user: currentUser });
@@ -116,6 +121,8 @@ export default function StudentHistoryDictionaryWorkspace() {
     // and semester, including a rapid account switch back to the same UID.
     scopeRef.current = { key: scopeKey, user: currentUser };
     setWords([]);
+    setWordsError("");
+    setWordsLoading(true);
     setInitial("");
     setWord("");
     setDefinition("");
@@ -131,6 +138,7 @@ export default function StudentHistoryDictionaryWorkspace() {
     setError("");
     setBusy("");
     pending.current = false;
+    pendingCatalogWord.current = "";
     baseDraft.current = { word: "", definition: "" };
     return () => {
       scopeRef.current = { key: "", user: null };
@@ -138,33 +146,55 @@ export default function StudentHistoryDictionaryWorkspace() {
   }, [scopeKey, currentUser]);
 
   useEffect(() => {
+    if (!active || view !== "notebook") {
+      setWordsLoading(true);
+      return;
+    }
     if (!ready || !currentUser?.uid) {
       setWordsLoading(!configReady);
       return;
     }
-    let active = true;
+    let subscribed = true;
     setWordsLoading(true);
     setWordsError("");
     const unsubscribe = subscribeStudentHistoryDictionaryWords(
       currentUser.uid,
       (items) => {
-        if (!active) return;
+        if (!subscribed) return;
         setWords(items);
         setWordsLoading(false);
         setWordsError("");
+        // Opening an existing catalog word must keep its saved definition even
+        // when the notebook has not been opened (and loaded) yet.
+        const catalogWord = pendingCatalogWord.current;
+        pendingCatalogWord.current = "";
+        const existing = items.find(
+          (item) =>
+            !item.readOnly &&
+            item.normalizedWord === normalizeHistoryDictionaryWord(catalogWord),
+        );
+        if (catalogWord && existing) {
+          setDefinition(existing.definition || "");
+          baseDraft.current = {
+            word: catalogWord,
+            definition: existing.definition || "",
+          };
+        }
+        if (catalogWord) focusEditor(true);
       },
       config,
       (failure) => {
-        if (!active) return;
+        if (!subscribed) return;
+        setWords([]);
         setWordsLoading(false);
         setWordsError(getHistoryDictionaryErrorMessage(failure));
       },
     );
     return () => {
-      active = false;
+      subscribed = false;
       unsubscribe();
     };
-  }, [scopeKey, ready, retry, currentUser]);
+  }, [active, view, scopeKey, ready, retry, currentUser]);
 
   useEffect(() => {
     setTeacherTerm(null);
@@ -207,6 +237,7 @@ export default function StudentHistoryDictionaryWorkspace() {
     setRequestOpen(false);
     setWarningAccepted(false);
     setReference(entry);
+    pendingCatalogWord.current = entry ? nextWord : "";
     setMemo("");
     setError("");
     setView("notebook");
@@ -382,6 +413,7 @@ export default function StudentHistoryDictionaryWorkspace() {
       </div>
       <div hidden={view !== "catalog"}>
         <HistoryDictionaryCatalogBrowser
+          active={active && view === "catalog"}
           disabled={Boolean(busy)}
           initialTermId={searchParams.get("term") || ""}
           renderEntryAction={
@@ -535,7 +567,13 @@ export default function StudentHistoryDictionaryWorkspace() {
               </p>
             )}
             <fieldset
-              disabled={Boolean(busy) || !ready || readOnly}
+              disabled={
+                Boolean(busy) ||
+                !ready ||
+                readOnly ||
+                wordsLoading ||
+                Boolean(wordsError)
+              }
               className={readOnly ? "history-dictionary-readonly" : undefined}
             >
               <label
@@ -552,6 +590,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                   maxLength={40}
                   placeholder="예: 율령"
                   onChange={(event) => {
+                    pendingCatalogWord.current = "";
                     setWord(event.target.value);
                     setSelectedSource("");
                     setSelectedArchive(null);
@@ -589,6 +628,7 @@ export default function StudentHistoryDictionaryWorkspace() {
                   placeholder="내 말로 뜻을 정리해 보세요."
                   aria-describedby={`${id}-definition-length`}
                   onChange={(event) => {
+                    pendingCatalogWord.current = "";
                     setDefinition(event.target.value);
                     setError("");
                   }}

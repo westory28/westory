@@ -9,6 +9,8 @@ export interface QuizAnalysisStudent {
 export interface QuizAnalysisQuestion {
   id: string | number;
   sourceRevision?: string;
+  /** Server digest of the frozen visible material and points, excluding grading metadata. */
+  paperMaterialHash?: string;
   contentRevision?: number;
   unitId?: string | null;
   subUnitId?: string | null;
@@ -29,10 +31,38 @@ export interface QuizAnalysisItem {
   /** Empty string is a recorded non-answer; absent/null is an unavailable answer. */
   answer?: string | null;
   sourceRevision?: string;
+  paperMaterialHash?: string;
   /** Metadata from this attempt, never guessed from the current question bank. */
   concepts?: string[];
   reviewLessonId?: string;
 }
+
+export const quizPaperMaterialHash = (value: unknown): string =>
+  typeof value === "string" && /^[a-f0-9]{64}$/.test(value) ? value : "";
+
+/** Missing historical material never makes two different revisions equivalent. */
+export const quizPaperItemIdentity = (item: {
+  sourceRevision?: string;
+  paperMaterialHash?: string;
+}): string => {
+  const material = quizPaperMaterialHash(item.paperMaterialHash);
+  return material
+    ? `material:${material}`
+    : `revision:${item.sourceRevision || ""}`;
+};
+
+const sameQuestionMaterial = (
+  question: QuizAnalysisQuestion,
+  item: QuizAnalysisItem,
+): boolean => {
+  const currentMaterial = quizPaperMaterialHash(question.paperMaterialHash);
+  const historicalMaterial = quizPaperMaterialHash(item.paperMaterialHash);
+  if (currentMaterial && historicalMaterial)
+    return currentMaterial === historicalMaterial;
+  const currentRevision =
+    revision(question.sourceRevision) || revision(question.contentRevision);
+  return !!currentRevision && revision(item.sourceRevision) === currentRevision;
+};
 
 export interface QuizAnalysisRecord {
   id: string;
@@ -447,10 +477,8 @@ const buildStudentQuestions = (
     });
     const currentRevision =
       revision(question.sourceRevision) || revision(question.contentRevision);
-    const currentRows = rows.filter(
-      (row) =>
-        !!currentRevision &&
-        revision(row.item.sourceRevision) === currentRevision,
+    const currentRows = rows.filter((row) =>
+      sameQuestionMaterial(question, row.item),
     );
     const selected = latest(currentRows);
     return {
@@ -463,7 +491,7 @@ const buildStudentQuestions = (
         (row) =>
           !!currentRevision &&
           !!revision(row.item.sourceRevision) &&
-          revision(row.item.sourceRevision) !== currentRevision,
+          !sameQuestionMaterial(question, row.item),
       ),
       revisionUnknown: rows.some(
         (row) => !currentRevision || !revision(row.item.sourceRevision),
@@ -621,11 +649,8 @@ export const classifyQuizResponseBehavior = (
     };
     group.total += 1;
     groups.set(question.type!, group);
-    const currentRevision =
-      revision(question.sourceRevision) || revision(question.contentRevision);
     if (
-      !currentRevision ||
-      revision(item.sourceRevision) !== currentRevision ||
+      !sameQuestionMaterial(question, item) ||
       typeof item.answer !== "string"
     )
       continue;
@@ -1100,20 +1125,14 @@ export const buildQuizItemStatistics = (input: {
     if (
       first.items.some((item) => {
         const current = questionMap.get(text(item.questionId));
-        const currentRevision =
-          current &&
-          (revision(current.sourceRevision) ||
-            revision(current.contentRevision));
-        return (
-          !currentRevision || revision(item.sourceRevision) !== currentRevision
-        );
+        return !current || !sameQuestionMaterial(current, item);
       })
     ) {
       summary.excludedRevisionCount += 1;
       continue;
     }
     const signature = first.items
-      .map((item) => [text(item.questionId), revision(item.sourceRevision)])
+      .map((item) => [text(item.questionId), quizPaperItemIdentity(item)])
       .sort(([left], [right]) => left.localeCompare(right));
     const formKey = JSON.stringify([assessmentKey(first), signature]);
     const cohort = forms.get(formKey) || [];

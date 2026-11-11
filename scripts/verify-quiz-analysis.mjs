@@ -1357,4 +1357,18 @@ test("keyword filtering follows canonical deduplication", () => {
   assert.equal(analysis.averageScore, null);
 });
 
+test("proven material identity compares metadata-only revisions while keeping changed materials separate", () => {
+  const bank = questions.map(q => ({ ...q, paperMaterialHash: "a".repeat(64) }));
+  const old = record("material-old", "a", 10, 100,
+    [item(1, true, "선지 A", { sourceRevision: "1", paperMaterialHash: "a".repeat(64) })], { totalCount: 1 });
+  const result = run([old], { questions: bank });
+  assert.equal(result.questions[0].correctCount, 1);
+  assert.equal(buildQuizItemStatistics({ semesterId, students, questions: bank, records: [old] }).eligibleSubmissionCount, 1);
+  const changed = { ...old, items: [{ ...old.items[0], sourceRevision: "2", paperMaterialHash: "b".repeat(64) }] };
+  assert.equal(run([changed], { questions: bank }).questions[0].correctCount, 0);
+  assert.equal(buildQuizItemStatistics({ semesterId, students, questions: bank, records: [changed] }).excludedRevisionCount, 1);
+  const missing = { ...old, items: [{ ...old.items[0], paperMaterialHash: undefined }] };
+  assert.equal(run([missing], { questions: bank }).questions[0].correctCount, 0);
+});
+
 console.log(`quiz analysis verified: ${cases} scenarios`);

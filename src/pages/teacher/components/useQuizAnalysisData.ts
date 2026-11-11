@@ -37,7 +37,7 @@ type RawRecord = {
 };
 export type QuizReviewSnapshots = Record<
   string,
-  Record<string, Partial<Question>>
+  Record<string, Partial<Question> & { paperMaterialHash?: string }>
 >;
 
 /** Configured options include classes with no student accounts or submissions. */
@@ -190,6 +190,9 @@ export function adaptQuizAnalysisRecords(
             correct: typeof item.correct === "boolean" ? item.correct : null,
             ...(answer == null ? {} : { answer: String(answer) }),
             sourceRevision: meta?.sourceRevision || item.sourceRevision,
+            paperMaterialHash:
+              snapshots[`${source}:${id}`][questionId]?.paperMaterialHash ||
+              meta?.paperMaterialHash,
             concepts: Array.isArray(meta?.concepts) ? meta.concepts : [],
             reviewLessonId: meta?.reviewLessonId,
           },

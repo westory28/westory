@@ -131,8 +131,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
     !disablePersistence && !allowHiddenAccess && !fullscreenPreview,
   );
   const { showToast } = useAppToast();
+  const normalizedLessonOverride = useMemo(
+    () => (lessonOverride ? normalizeLessonData(lessonOverride) : null),
+    [lessonOverride],
+  );
   const [lesson, setLesson] = useState<LessonData | null>(
-    lessonOverride ? normalizeLessonData(lessonOverride) : null,
+    normalizedLessonOverride,
   );
   const safeBodyHtml = useMemo(
     () =>
@@ -159,6 +163,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [lessonLoadRetry, setLessonLoadRetry] = useState(0);
+  const [progressLoadRetry, setProgressLoadRetry] = useState(0);
+  const [progressLoading, setProgressLoading] = useState(false);
   const [progressLoadError, setProgressLoadError] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [studentAnswers, setStudentAnswers] = useState<
@@ -200,7 +206,12 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [corePointOverview, setCorePointOverview] =
     useState<CorePointOverviewState>(EMPTY_CORE_POINT_OVERVIEW);
 
-  const contentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const pendingAnswerRestoreRef = useRef<{
+    scope: string;
+    draftVersion: number;
+    answers: Record<string, { value?: string; status?: AnswerStatus }>;
+  } | null>(null);
   const foundCorePointIdsRef = useRef<string[]>([]);
   const corePointOverviewRef = useRef<CorePointOverviewState>(
     EMPTY_CORE_POINT_OVERVIEW,
@@ -316,9 +327,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   }, [footnotePanelOpen, saveCompletionPopup, worksheetScreenOpen]);
 
   useEffect(() => {
-    const normalized = lessonOverride
-      ? normalizeLessonData(lessonOverride)
-      : null;
+    const normalized = normalizedLessonOverride;
     setLesson(normalized);
     setIsBlocked(
       Boolean(
@@ -328,6 +337,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       ),
     );
     setError(false);
+    setProgressLoadError(false);
     setLoading(false);
     setStudentAnswers({});
     setHasUnsavedChanges(false);
@@ -344,7 +354,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
     viewStartedAtRef.current = Date.now();
     interactedRef.current = false;
-  }, [allowHiddenAccess, lessonOverride]);
+  }, [allowHiddenAccess, normalizedLessonOverride]);
 
   useEffect(() => {
     if (lessonOverride || !unitId) {
@@ -403,7 +413,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
     };
   }, [
     allowHiddenAccess,
-    config,
+    config?.year,
+    config?.semester,
+    currentUser,
     fallbackTitle,
     lessonOverride,
     unitId,
@@ -426,9 +438,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     );
   };
 
-  const refreshCorePointOverview = async (
-    currentUnitFoundIds = foundCorePointIdsRef.current,
-  ) => {
+  const refreshCorePointOverview = async (currentUnitFoundIds?: string[]) => {
     const operationScope = activeScope;
     if (!canPersist || !currentUser?.uid) {
       const fallbackOverview = {
@@ -474,10 +484,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
       totalCount += corePointIds.length;
       const corePointIdSet = new Set(corePointIds);
+      const savedFoundIds = progressByUnitId.get(lessonUnitId)?.corePointFinds;
       const rawFoundIds =
         lessonUnitId === unitId
-          ? currentUnitFoundIds
-          : progressByUnitId.get(lessonUnitId)?.corePointFinds;
+          ? (currentUnitFoundIds ?? [
+              ...(Array.isArray(savedFoundIds) ? savedFoundIds : []),
+              ...foundCorePointIdsRef.current,
+            ])
+          : savedFoundIds;
       const foundIds = Array.isArray(rawFoundIds)
         ? rawFoundIds
             .map((value) => String(value || "").trim())
@@ -897,16 +911,26 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
   useEffect(() => {
     answerRevisionRef.current = null;
-    if (!canPersist || !lesson) return;
+    setProgressLoading(false);
+    if (
+      loading ||
+      !canPersist ||
+      !lesson ||
+      (!lessonOverride && lesson.unitId !== unitId)
+    )
+      return;
     let cancelled = false;
     const restoreDraftVersion = draftVersionRef.current;
     const restoreProgress = async () => {
       const progressRef = getProgressRef();
-      const container = contentRef.current;
-      if (!progressRef || !container) return;
+      // Lazy/error recovery can commit the body after this effect starts.
+      // Fetching the saved answers must not depend on an already-mounted DOM.
+      if (!progressRef) return;
+      setProgressLoading(true);
       try {
         const snap = await getDoc(progressRef);
         if (cancelled) return;
+        setProgressLoadError(false);
         answerRevisionRef.current = snap.exists()
           ? Number(snap.data().answerRevision || 0)
           : 0;
@@ -925,34 +949,21 @@ const LessonContent: React.FC<LessonContentProps> = ({
               .map((value) => String(value || "").trim())
               .filter((value) => value && currentCorePointIdSet.has(value))
           : [];
+        pendingAnswerRestoreRef.current = {
+          scope: activeScope,
+          draftVersion: restoreDraftVersion,
+          answers,
+        };
         setStudentAnswers(answers);
         setFoundCorePointIds(restoredCorePointIds);
         foundCorePointIdsRef.current = restoredCorePointIds;
         setHasUnsavedChanges(false);
         setSaveMessage("");
-        const inputs = container.querySelectorAll(
-          ".cloze-input, .worksheet-blank-input",
-        ) as NodeListOf<HTMLInputElement>;
-        inputs.forEach((input, index) => {
-          const key =
-            input.dataset.blankId || input.dataset.blankIndex || String(index);
-          const saved = answers[key];
-          if (!saved) return;
-          input.value = saved.value || "";
-          applyInputStatus(input, saved.status || "");
-        });
-        if (!reviewPopup)
-          void refreshCorePointOverview(restoredCorePointIds).catch(
-            (overviewError) => {
-              console.warn(
-                "Failed to refresh core point overview:",
-                overviewError,
-              );
-            },
-          );
       } catch (restoreError) {
-        if (!cancelled && reviewPopup) setProgressLoadError(true);
+        if (!cancelled) setProgressLoadError(true);
         console.error("Failed to restore lesson progress:", restoreError);
+      } finally {
+        if (!cancelled) setProgressLoading(false);
       }
     };
     const { bodyHtml, worksheet } = getLessonContentSections(lesson);
@@ -974,12 +985,22 @@ const LessonContent: React.FC<LessonContentProps> = ({
     config?.year,
     config?.semester,
     lesson,
+    lessonOverride,
+    loading,
+    progressLoadRetry,
     unitId,
     reviewPopup,
   ]);
 
   useEffect(() => {
-    if (reviewPopup || !canPersist || !currentUser?.uid || !lesson) {
+    if (
+      reviewPopup ||
+      !canPersist ||
+      !currentUser?.uid ||
+      loading ||
+      !lesson ||
+      (!lessonOverride && lesson.unitId !== unitId)
+    ) {
       setCorePointOverview({
         loaded: false,
         totalCount: currentCorePointIds.length,
@@ -1009,10 +1030,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     };
   }, [
     canPersist,
-    config,
+    config?.year,
+    config?.semester,
     currentCorePointIds.length,
     currentUser?.uid,
     lesson,
+    lessonOverride,
+    loading,
     unitId,
     reviewPopup,
   ]);
@@ -1089,7 +1113,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         <h2 className="text-xl font-bold text-gray-500">
           수업 자료를 찾을 수 없습니다.
         </h2>
-        {reviewPopup && error && (
+        {error && (
           <button
             type="button"
             className="mt-4 min-h-11 rounded-lg border px-4"
@@ -1499,7 +1523,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       </strong>
     </>
   );
-  const showSaveControls = canPersist && !(reviewPopup && progressLoadError);
+  const showSaveControls = canPersist && !progressLoadError;
   const floatingSaveControls = showSaveControls ? (
     <div
       data-lesson-save-controls="true"
@@ -1683,21 +1707,33 @@ const LessonContent: React.FC<LessonContentProps> = ({
           </div>
         )}
 
-        {reviewPopup && progressLoadError && (
+        {progressLoadError && (
           <div role="alert" className="py-4 text-red-700">
             저장된 학습지 입력을 불러오지 못했습니다.
             <button
               type="button"
               className="ml-2 min-h-11 rounded-lg border px-4"
-              onClick={() => setLessonLoadRetry((value) => value + 1)}
+              disabled={progressLoading}
+              onClick={() => setProgressLoadRetry((value) => value + 1)}
             >
               다시 불러오기
             </button>
           </div>
         )}
         <div
-          ref={contentRef}
-          hidden={reviewPopup && progressLoadError}
+          ref={(container) => {
+            contentRef.current = container;
+            const pending = pendingAnswerRestoreRef.current;
+            if (!container || !pending) return;
+            pendingAnswerRestoreRef.current = null;
+            // Restore inline inputs after commit, without replacing newer typing.
+            if (
+              pending.scope === activeScopeRef.current &&
+              pending.draftVersion === draftVersionRef.current
+            )
+              applyAnswerStatusesToInputs(pending.answers);
+          }}
+          hidden={progressLoadError}
           className="space-y-6"
           onInput={handleLessonInput}
           onBlur={handleLessonBlur}

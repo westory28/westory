@@ -35,6 +35,7 @@ import { InlineLoading } from "./LoadingState";
 import "./historyDictionary.css";
 
 interface Props {
+  active?: boolean;
   onChoose?: (entry: HistoryDictionaryCatalogTerm) => void;
   chooseLabel?: string;
   disabled?: boolean;
@@ -91,6 +92,7 @@ export function HistoryDictionaryAttribution({
 }
 
 export default function HistoryDictionaryCatalogBrowser({
+  active: enabled = true,
   onChoose,
   chooseLabel = "내 말로 정리하기",
   disabled = false,
@@ -120,6 +122,7 @@ export default function HistoryDictionaryCatalogBrowser({
     setLoading(true);
     setFailed(false);
     setCatalog([]);
+    if (!enabled) return;
     if (!configReady || !config || !currentUser?.uid) {
       setLoading(!configReady);
       if (configReady) setFailed(true);
@@ -140,7 +143,14 @@ export default function HistoryDictionaryCatalogBrowser({
     return () => {
       active = false;
     };
-  }, [retry, configReady, config?.year, config?.semester, currentUser]);
+  }, [
+    enabled,
+    retry,
+    configReady,
+    config?.year,
+    config?.semester,
+    currentUser,
+  ]);
 
   useEffect(() => {
     if (!initialTermId || appliedInitialTerm.current === initialTermId) return;

@@ -3,7 +3,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { SCOPE_FIELDS, sourceVersionOf, projectionRef, projectAchievementRaw, buildAchievementProjection,
   readAchievementProjections, updateAchievementProjection } = require('../quizAchievementProjection');
-const { buildCorrection } = require('../quizQuestionCorrections');
+const { buildCorrection, paperMaterialHash } = require('../quizQuestionCorrections');
+const { historicalQuestionEvidence } = require('../quizAchievementEvidence');
 const { parseArgs, runBackfill } = require('./backfill-quiz-achievement-projection.cjs');
 const { createLiveRecorder, createLiveReader, contextVersion } = require('../quizClassAnalysisLive');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
@@ -51,7 +52,11 @@ test('compact projection preserves historical identity, scores and ordered optio
   const first = projectAchievementRaw(raw()), second = projectAchievementRaw({ ...raw(), questionSnapshots: [{ ...raw().questionSnapshots[0], question: '같은 sourceHash의 다른 원문' }] });
   assert.notEqual(first.learningSnapshot[0].sourceRevision, second.learningSnapshot[0].sourceRevision);
   assert.match(first.learningSnapshot[0].sourceRevision, /^snapshot:[a-f0-9]{64}$/);
-  assert.deepEqual(first.questionSnapshots, [{ id: 'q', type: 'choice', options: ['가', '나'], answer: '가', points: 5 }]);
+  assert.equal(first.learningSnapshot[0].sourceRevision, historicalQuestionEvidence(raw(), 'q').sourceRevision,
+    'derived material hash must not change original snapshot provenance');
+  assert.deepEqual(first.questionSnapshots, [{ id: 'q', type: 'choice', options: ['가', '나'], answer: '가', points: 5,
+    paperMaterialHash: paperMaterialHash(raw().questionSnapshots[0]) }]);
+  assert.notEqual(first.questionSnapshots[0].paperMaterialHash, second.questionSnapshots[0].paperMaterialHash);
   assert.deepEqual(first.answers, raw().answers);
   assert.equal(first.percent, 0);
   assert.equal(Object.hasOwn(first, 'analytics'), false);
@@ -74,6 +79,40 @@ test('compact projection applies compatible corrections before stripping materia
   assert.equal(projectAchievementRaw({ ...value, gradingCorrections: { correction: { ...correction, semesterId: '2026-1' } } }).percent, 0);
 });
 
+test('paper identity ignores answer aliases and metadata but distinguishes every visible material boundary', () => {
+  const question = { ...raw().questionSnapshots[0], examRound: 'round_2', paperOrder: 1, contentRevision: 1,
+    passage: '자료', examplePassage: '보기', choiceOptionImages: ['a.png', 'b.png'],
+    passageSet: { id: 'set', instruction: '지시', passage: '공동 자료', image: 'set.png' } };
+  const identity = paperMaterialHash(question);
+  for (const changes of [{ answer: '가||나' }, { answer: '나' }, { contentRevision: 9 },
+    { targetAchievementLevel: 'B', concepts: ['새 태그'], intendedDifficulty: 'hard', explanation: '새 해설' }])
+    assert.equal(paperMaterialHash({ ...question, ...changes }), identity);
+  for (const changes of [{ question: '다른 발문' }, { image: 'new.png' }, { options: ['나', '가'] },
+    { choiceOptionImages: ['c.png', 'b.png'] }, { passage: '다른 자료' }, { examplePassage: '다른 보기' },
+    { passageSet: { ...question.passageSet, image: 'changed.png' } }, { points: 4 }, { paperOrder: 2 }, { type: 'word' }])
+    assert.notEqual(paperMaterialHash({ ...question, ...changes }), identity);
+  assert.equal(paperMaterialHash({ id: 'q', type: 'word', answer: '가' }), '', 'missing original cannot imply equivalence');
+  const incomplete = projectAchievementRaw({ ...raw(), learningSnapshot: [{ id: 'q', sourceRevision: '1', paperMaterialHash: identity }],
+    questionSnapshots: [{ id: 'q', type: 'word', answer: '가', paperMaterialHash: identity }] });
+  assert.equal(incomplete.learningSnapshot[0].paperMaterialHash, undefined);
+  assert.equal(incomplete.questionSnapshots[0].paperMaterialHash, undefined, 'stored claims never replace original material evidence');
+  const order = { question: '순서', type: 'order', answer: '가||나' };
+  assert.notEqual(paperMaterialHash(order), paperMaterialHash({ ...order, answer: '가||다' }), 'encoded visible order choices are material');
+  const matching = { question: '연결', type: 'matching', answer: '가=>나||다=>라' };
+  assert.notEqual(paperMaterialHash(matching), paperMaterialHash({ ...matching, answer: '가=>나||다=>마' }), 'encoded matching labels are material');
+});
+
+test('same-version projection upgrade is idempotent and never writes a source result', async () => {
+  const f = memory(), entry = f.entry(), ref = projectionRef(f.db, PATH);
+  const view = buildAchievementProjection({ sourcePath: PATH, source: 'canonical', sourceVersion: entry.sourceVersion, semesterId: SCOPE, raw: raw() });
+  f.data.set(ref.path, { ...view, schemaVersion: 1 });
+  const event = { params: { resultId: 'result-a' }, data: { after: f.snapshot(PATH), before: f.snapshot(PATH) } };
+  assert.equal(await updateAchievementProjection(f.db, event), true);
+  assert.equal(await updateAchievementProjection(f.db, event), false);
+  assert.equal(f.data.get(ref.path).schemaVersion, 2);
+  assert.deepEqual(f.writes, [ref.path]);
+});
+
 test('matching sidecars avoid all original body reads and stale/corrupt entries fall back without writes', async () => {
   const f = memory(), entry = f.entry(), ref = projectionRef(f.db, PATH);
   const view = buildAchievementProjection({ sourcePath: PATH, source: 'canonical', sourceVersion: entry.sourceVersion, semesterId: SCOPE, raw: raw() });
@@ -83,7 +122,7 @@ test('matching sidecars avoid all original body reads and stale/corrupt entries 
   assert.equal(hit.raw.analysisSourceVersion, entry.sourceVersion);
   assert.equal(budget.projectionHits, 1);
   assert.equal(f.reads.filter(read => read.path === PATH).length, 0);
-  for (const damaged of [null, { ...view, sourceVersion: 'stale' }, { ...view, rawCompact: { ...view.rawCompact, percent: 100 } }, { ...view, sourcePath: 'foreign' }]) {
+  for (const damaged of [null, { ...view, schemaVersion: 1 }, { ...view, sourceVersion: 'stale' }, { ...view, rawCompact: { ...view.rawCompact, percent: 100 } }, { ...view, sourcePath: 'foreign' }]) {
     damaged ? f.data.set(ref.path, damaged) : f.data.delete(ref.path);
     const calls = f.reads.length, [fallback] = await readAchievementProjections({ db: f.db, entries: [entry] });
     assert.deepEqual(fallback.raw, hit.raw);

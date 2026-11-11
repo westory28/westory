@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { build } from "esbuild";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { projectAchievementRaw } = require("../functions/quizAchievementProjection.js");
+const { buildCorrection } = require("../functions/quizQuestionCorrections.js");
 
 const bundled = await build({
   entryPoints: ["src/lib/achievementAnalysis.ts"],
@@ -368,5 +373,47 @@ test("analysis does not mutate immutable results", () => {
   const before = JSON.stringify(rows);
   cumulative(rows, "round_1");
   assert.equal(JSON.stringify(rows), before);
+});
+test("actual compact projections keep aliases and metadata revisions in one frozen paper", () => {
+  const roster = [{ uid: "s1" }, { uid: "s2" }];
+  const presentation = raw.questionSnapshots.map(q => ({ ...q, type: "word", question: `문항 ${q.id}`,
+    unitId: "exam_prep", category: "exam_prep", examRound: "round_2", contentRevision: 1, image: "original.png" }));
+  const first = { ...raw, assessmentKind: "QUIZ", definitionId: "quiz:2026-2:exam_prep:exam_prep:round_2",
+    questionSnapshots: presentation, learningSnapshot: raw.learningSnapshot.map(q => ({ ...q, sourceRevision: "1" })) };
+  const second = { ...first, studentUid: "s2", attemptId: "exam2",
+    questionSnapshots: presentation.map(q => ({ ...q, answer: "정답, 대체 정답", contentRevision: 2 })),
+    learningSnapshot: first.learningSnapshot.map(q => ({ ...q, sourceRevision: "2", targetAchievementLevel: "B" })) };
+  const analyze = values => {
+    const rawRows = values.map((value, i) => ({ id: `result-${i}`, source: "canonical", raw: projectAchievementRaw(value) }));
+    const attempts = adaptAchievementAttempts({ semesterId, students: roster, questions, rawRows, resolveCodes });
+    return run({ students: roster, attempts });
+  };
+  const before = JSON.stringify([first, second]);
+  const same = analyze([first, second]);
+  assert.equal(same.forms.length, 1);
+  assert.equal(same.forms[0].sampleSize, 2);
+  assert.equal(same.attempts[0].items[0].sourceRevision, "1", "form identity must not rewrite learning provenance");
+  for (const patch of [{ question: "다른 발문" }, { image: "changed.png" }, { points: 6 }, { options: ["다른 보기", "정답"] }]) {
+    const changed = { ...second, questionSnapshots: second.questionSnapshots.map((q, i) => i ? q : { ...q, ...patch }) };
+    assert.equal(analyze([first, changed]).forms.length, 2, "genuinely changed papers stay separate");
+  }
+  const correction = buildCorrection(semesterId, "q2", presentation[1], { ...presentation[1], answer: "정답, 오답", contentRevision: 2 });
+  const corrected = projectAchievementRaw({ ...first, gradingCorrections: { q2: correction } });
+  assert.equal(corrected.answerChecks[1].correct, true);
+  assert.equal(corrected.questionSnapshots[1].paperMaterialHash, projectAchievementRaw(first).questionSnapshots[1].paperMaterialHash);
+  assert.equal(JSON.stringify([first, second]), before);
+});
+
+test("same material retries use the first observation and missing material never merges different revisions", () => {
+  const first = adapt()[0];
+  const withMaterial = { ...first, items: first.items.map(item => ({ ...item, paperMaterialHash: "a".repeat(64) })) };
+  const retry = { ...withMaterial, id: "retry", attemptId: "retry", submittedAt: first.submittedAt + 1000,
+    items: withMaterial.items.map(item => ({ ...item, sourceRevision: "3", correct: true })) };
+  const combined = run({ attempts: [withMaterial, retry] });
+  assert.equal(combined.forms.length, 1);
+  assert.equal(combined.forms[0].sampleSize, 1);
+  assert.equal(combined.forms[0].items[1].correctRate, 0);
+  const unknown = { ...retry, items: retry.items.map(({ paperMaterialHash, ...item }) => item) };
+  assert.equal(run({ attempts: [first, unknown] }).forms.length, 2);
 });
 console.log(`Achievement analysis verified: ${cases} synthetic cases.`);

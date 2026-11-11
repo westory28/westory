@@ -5,7 +5,7 @@ const { randomBytes } = require('node:crypto');
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const { buildQuizAnalysis } = require('../quizClassAnalysisCore.cjs');
 const { sourceVersionOf, projectionRef, buildAchievementProjection } = require('../quizAchievementProjection');
-const { buildCorrection } = require('../quizQuestionCorrections');
+const { buildCorrection, withQuizPaperMaterialHashes } = require('../quizQuestionCorrections');
 const { normalizeQuery, createQuizClassAnalysisService, createQuizClassAnalysisHandler,
   createQuizAnalysisInvalidation, createQuizAnalysisTriggers, summarizeClass, adaptRecords, readBounded, hash } = require('../quizClassAnalysis');
 
@@ -598,8 +598,8 @@ test('whole-grade achievement transports all 300 pupils above 8 MiB without trun
   assert.equal(new Set(result.rawRows.map(row => row.raw.studentUid)).size, 300);
   for (const row of restored.rawRows) {
     const original = initial[`semester_assessment_results/${row.id}`];
-    assert.deepEqual(row.raw.learningSnapshot, original.learningSnapshot);
-    assert.deepEqual(row.raw.questionSnapshots, original.questionSnapshots);
+    assert.deepEqual(row.raw.learningSnapshot, withQuizPaperMaterialHashes(original).learningSnapshot);
+    assert.deepEqual(row.raw.questionSnapshots, withQuizPaperMaterialHashes(original).questionSnapshots);
     assert.deepEqual(row.raw.answers, original.answers);
     assert.equal(row.raw.percent, original.percent);
   }
@@ -900,7 +900,7 @@ test('achievement interns over 32 MiB of repeated frozen papers in ten-result ba
   assert.ok(Buffer.byteLength(JSON.stringify(result)) < 8 * 1024 * 1024);
   for (const row of result.rawRows) {
     const original = f.data.get(`semester_assessment_results/${row.id}`);
-    assert.deepEqual(row.raw.questionSnapshotRefs.map(ref => result.historicalQuestionSnapshots[ref]), original.questionSnapshots);
+    assert.deepEqual(row.raw.questionSnapshotRefs.map(ref => result.historicalQuestionSnapshots[ref]), withQuizPaperMaterialHashes(original).questionSnapshots);
     assert.deepEqual(row.raw.answers, original.answers);
     const score = result.mockExamScoreRows.find(scoreRow => scoreRow.id === row.id);
     assert.deepEqual(score.raw.cutScoreQuestions, [{ id: '91', points: 100, targetAchievementLevel: original.learningSnapshot[0].targetAchievementLevel }]);

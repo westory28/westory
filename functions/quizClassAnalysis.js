@@ -9,7 +9,7 @@ const { buildQuizAnalysis } = require('./quizClassAnalysisCore.cjs');
 const { ACHIEVEMENT_FIELDS, normalizeAchievementMetadata } = require('./historyAchievementMetadata');
 const { historicalQuestionEvidence, packHistoricalQuestionSnapshots, createHistoricalQuestionSnapshotPool } = require('./quizAchievementEvidence');
 const { createLiveReader, createLiveRecorder } = require('./quizClassAnalysisLive');
-const { effectiveQuizResult } = require('./quizQuestionCorrections');
+const { effectiveQuizResult, paperMaterialHash, withQuizPaperMaterialHashes } = require('./quizQuestionCorrections');
 const { readAchievementProjections, sourceVersionOf } = require('./quizAchievementProjection');
 
 const SCHEMA = 4;
@@ -215,6 +215,7 @@ function adaptRecords(rawRows, students, semesterId) {
         const answer = source === 'canonical' ? answerMap ? answerMap[questionId] ?? '' : undefined : item.u ?? item.userAnswer ?? item.answer;
         return [{ questionId, correct: typeof item.correct === 'boolean' ? item.correct : null,
           ...(answer == null ? {} : { answer: String(answer) }), sourceRevision: meta.sourceRevision || item.sourceRevision,
+          ...(meta.paperMaterialHash ? { paperMaterialHash: meta.paperMaterialHash } : {}),
           concepts: Array.isArray(meta.concepts) ? meta.concepts : [], reviewLessonId: meta.reviewLessonId }];
       }),
       attemptId: raw.attemptId, canonicalAttemptId: raw.canonicalAttemptId, submissionRef: raw.submissionRef,
@@ -319,6 +320,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   // Weak keys reuse digests while this request's interned snapshots are alive;
   // they never retain pupil records or become a cross-request content cache.
   const historicalSnapshotHashes = new WeakMap();
+  const materialSnapshots = new WeakMap();
   const inFlight = new Map();
   const serial = (key, build) => {
     if (!inFlight.has(key)) inFlight.set(key, Promise.resolve().then(build).finally(() => inFlight.delete(key)));
@@ -548,6 +550,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }
     return documents.map(doc => ({
       ...json(doc.data()), id: doc.data().id ?? (query.mode === 'achievement' ? doc.id : Number(doc.id)), docId: doc.id,
+      ...(!fields && paperMaterialHash(doc.data()) ? { paperMaterialHash: paperMaterialHash(doc.data()) } : {}),
       sourceRevision: String(query.mode === 'achievement'
         ? doc.data().contentRevision ?? doc.data().revision ?? 'legacy'
         : doc.data().contentRevision || doc.data().revision || 'legacy'),
@@ -576,7 +579,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         && (round === query.examRound || (cumulativeMockExams && Number(round.slice(6)) <= Number(query.examRound.slice(6)))));
     };
     const add = (doc, source, normalizedRaw, decodedData) => {
-      const data = decodedData || doc.data(), raw = effectiveQuizResult(normalizedRaw || json(data));
+      const data = decodedData || doc.data(), raw = withQuizPaperMaterialHashes(effectiveQuizResult(normalizedRaw || json(data)), materialSnapshots);
       raw.behaviorAnswersAvailable = source === 'canonical' && !!data.answers
         && typeof data.answers === 'object' && !Array.isArray(data.answers);
       if (!detail && Array.isArray(raw.details)) raw.details = raw.details.map(item => ({ id: item.id ?? item.qid ?? item.questionId,
@@ -790,7 +793,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
       }
   };
   const liveReader = createLiveReader({ db, json, resultFields: RESULT_FIELDS, scoreFields: SCORE_FIELDS,
-    questionFields: QUESTION_FIELDS, adaptRecords, buildMockExamScoreRows, effectiveQuizResult, prepareAchievementRows });
+    questionFields: QUESTION_FIELDS, adaptRecords, buildMockExamScoreRows,
+    effectiveQuizResult: raw => withQuizPaperMaterialHashes(effectiveQuizResult(raw), materialSnapshots), prepareAchievementRows });
   const verifyLiveState = async (initial, scope, classes) => {
     const current = await liveReader.state(scope, classes);
     if (initial.contextVersion !== current.contextVersion || initial.contentGeneration !== current.contentGeneration)
@@ -960,6 +964,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
           .map(q => db.doc(`${root(input.semesterId)}/quiz_questions/${q.docId}`)));
         if (snapshots.some(snapshot => !snapshot.exists)) fail('aborted', '검색 문항이 갱신되었습니다. 다시 검색해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
         documents.push(...snapshots.map(snapshot => ({ ...json(snapshot.data()), docId: snapshot.id,
+          ...(paperMaterialHash(snapshot.data()) ? { paperMaterialHash: paperMaterialHash(snapshot.data()) } : {}),
           id: snapshot.data().id ?? Number(snapshot.id), sourceRevision: String(snapshot.data().contentRevision || snapshot.data().revision || 'legacy') })));
       }
       return documents;

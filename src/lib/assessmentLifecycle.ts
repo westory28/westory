@@ -438,49 +438,45 @@ export const executeAssessmentManagementCommand = async <T>(
   return executeStudentAssessmentCommand<T>(commandType, payload);
 };
 
-const pendingStateReads = new WeakMap<
-  object,
-  Map<string, Promise<AssessmentStateResponse>>
->();
-
 export const getAssessmentState = async (input: {
   definitionId?: string;
   attemptId?: string;
   prepareAssets?: boolean;
 }) => {
-  const owner = auth.currentUser;
-  if (!owner)
-    throw Object.assign(new Error("로그인 상태를 확인해 주세요."), {
-      code: "functions/unauthenticated",
-    });
-  const key = stableStringify(input);
-  const reads =
-    pendingStateReads.get(owner!) ||
-    new Map<string, Promise<AssessmentStateResponse>>();
-  pendingStateReads.set(owner!, reads);
-  const pending = reads.get(key);
-  if (pending) return pending;
-  const request = withRequestDeadline(
-    (async () => {
-      const assertOwner = await captureAssessmentOwner();
-      const callable = await getHttpsCallable<
-        typeof input,
-        AssessmentStateResponse
-      >("getAssessmentState");
-      await assertOwner();
-      const response = await callable(input);
-      await assertOwner();
-      return response.data;
-    })(),
+  const requestedAt = Date.now();
+  const assertOwner = await withRequestDeadline(
+    captureAssessmentOwner(),
     15_000,
+    "로그인 연결을 확인하지 못했습니다. 다시 시도해 주세요.",
+  );
+  const remainingBudget = Math.max(1, 15_000 - (Date.now() - requestedAt));
+  const request = sharePendingAssessmentRequest(
+    assertOwner,
+    "assessmentState",
+    input,
+    () =>
+      withRequestDeadline(
+        (async () => {
+          const callable = await getHttpsCallable<
+            typeof input,
+            AssessmentStateResponse
+          >("getAssessmentState");
+          await assertOwner();
+          const response = await callable(input);
+          await assertOwner();
+          return response.data;
+        })(),
+        remainingBudget,
+        "응시 상태 확인이 지연되고 있습니다. 다시 시도해 주세요.",
+      ),
+  );
+  // Joining an existing request must still respect this caller's total budget.
+  // Its timeout does not cancel another caller's shared transport.
+  return withRequestDeadline(
+    request,
+    remainingBudget,
     "응시 상태 확인이 지연되고 있습니다. 다시 시도해 주세요.",
   );
-  reads.set(key, request);
-  try {
-    return await request;
-  } finally {
-    if (reads.get(key) === request) reads.delete(key);
-  }
 };
 
 type StartAssessmentInput = {

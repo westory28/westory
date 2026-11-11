@@ -345,7 +345,7 @@ export default function StudentHistoryDictionaryController() {
           </button>
         </header>
         <div className="history-dictionary-dialog-body">
-          {visited && <StudentHistoryDictionaryWorkspace />}
+          {visited && <StudentHistoryDictionaryWorkspace active={open} />}
         </div>
       </dialog>
     </>

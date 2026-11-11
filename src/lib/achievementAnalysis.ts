@@ -1,5 +1,6 @@
 /** Read-only mock-exam analysis; cumulative scores use frozen paper cut scores. */
 import { buildEstimatedCutScores } from "./achievementEstimates";
+import { quizPaperItemIdentity, quizPaperMaterialHash } from "./quizAnalysis";
 import {
   analyzeAchievementPsychometrics,
   type AchievementPsychometrics,
@@ -66,6 +67,7 @@ export interface CumulativeAchievementScore {
 export interface AchievementItem extends AchievementMetadata {
   id: string;
   sourceRevision: string;
+  paperMaterialHash?: string;
   correct: boolean | null;
   answer: string | null;
   codes: string[];
@@ -501,6 +503,13 @@ export function adaptAchievementAttempts(input: {
           ...metadata,
           id,
           sourceRevision: revision,
+          // This is computed from the immutable presentation before the server
+          // strips images/text for transport. Learning tags and answer aliases
+          // retain their original revision without creating a second paper.
+          paperMaterialHash:
+            quizPaperMaterialHash(presentations.get(id)?.paperMaterialHash) ||
+            quizPaperMaterialHash(snapshot?.paperMaterialHash) ||
+            undefined,
           correct: typeof check.correct === "boolean" ? check.correct : null,
           answer: answer == null ? null : String(answer),
           codes: [...new Set(resolved.codes)],
@@ -723,7 +732,7 @@ export function buildAchievementAnalysis(input: {
   const firstPerForm = new Map<string, AchievementAttempt[]>();
   for (const attempt of input.attempts.filter((row) => row.complete)) {
     const signature = attempt.items
-      .map((item) => [item.id, item.sourceRevision])
+      .map((item) => [item.id, quizPaperItemIdentity(item)])
       .sort(([a], [b]) => a.localeCompare(b));
     const key = JSON.stringify([signature, attempt.studentUid]);
     firstPerForm.set(key, [...(firstPerForm.get(key) || []), attempt]);
@@ -739,7 +748,7 @@ export function buildAchievementAnalysis(input: {
       continue;
     const attempt = ordered[0];
     const signature = attempt.items
-      .map((item) => [item.id, item.sourceRevision])
+      .map((item) => [item.id, quizPaperItemIdentity(item)])
       .sort(([a], [b]) => a.localeCompare(b));
     const key = JSON.stringify(signature);
     forms.set(key, [...(forms.get(key) || []), attempt]);

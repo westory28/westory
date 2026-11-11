@@ -185,6 +185,7 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         assessmentDefinitionId: attempt.definitionId,
         timeoutHandledRef: { current: false },
         startingQuizRef: { current: false },
+        explicitRetakeRequestedRef: { current: false },
         preparationGenerationRef: { current: 0 },
         isMockExamAttempt: false,
         MockExamAssetError: class extends Error {},
@@ -213,6 +214,8 @@ for (const unitId of ["unit-a", "exam_prep"]) {
           return result;
         },
         emitSessionActivity: noop,
+        markAssetRecoveryEdited: noop,
+        getQuizEntryErrorMessage: (error) => { throw error; },
         beginTelemetry: noop,
         observe: noop,
         readTelemetry: () => undefined,

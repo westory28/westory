@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { createHash } = require('node:crypto');
 const { createStudentLessonAccessHandler, selectVisibleLessons } = require('../studentLessonAccess');
 
 const scoped = 'years/2026/semesters/2/lessons';
@@ -137,4 +138,90 @@ test('core-point mode preserves the session gate and the shared class visibility
   assert.deepEqual(selectVisibleLessons(rows, [{ unitId: 'a' }], 'class-b').scopedLessons.map(row => row.unitId), ['all']);
   assert.equal(selectVisibleLessons(rows, [{ unitId: 'a' }], 'class-b').legacyLessons.length, 0);
   assert.deepEqual(selectVisibleLessons(rows, [], '').scopedLessons.map(row => row.unitId), ['a', 'all']);
+});
+
+const studentFixture = () => {
+  const uid = 'synthetic-lesson-student', scope = '2026-2';
+  const slot = `semester_enrollment_slots/slot_${createHash('sha256').update(`${scope}\n${uid}`).digest('hex').slice(0, 40)}`;
+  const documents = new Map([
+    [`users/${uid}`, { role: 'student' }],
+    ['site_settings/config', { year: '2026', semester: '2' }],
+    ['site_settings/semester_active', { semesterId: scope, revision: 4 }],
+    [`semester_manifests/${scope}`, { status: 'ACTIVE', revision: 4 }],
+    [slot, { studentUid: uid, semesterId: scope, activeEnrollmentId: 'synthetic-enrollment', status: 'ACTIVE' }],
+    ['semester_enrollments/synthetic-enrollment', { studentUid: uid, semesterId: scope, enrollmentStatus: 'ACTIVE', classId: 'class-a' }],
+    ['semester_classes/class-a', { semesterId: scope, status: 'ACTIVE' }],
+  ]);
+  const collections = {
+    [scoped]: [{ unitId: 'allowed', assignedClassIds: ['class-a'], updatedAt: 2 },
+      { unitId: 'other-class', assignedClassIds: ['class-b'], updatedAt: 2 },
+      { unitId: 'other-class', assignedClassIds: ['class-a'], updatedAt: 1 }],
+    lessons: [{ unitId: 'other-class', contentHtml: 'must stay hidden' }, { unitId: 'legacy-only', contentHtml: 'visible legacy' }],
+  };
+  const reads = [];
+  const readDoc = path => { reads.push({ kind: 'doc', path }); return { exists: documents.has(path), data: () => documents.get(path) }; };
+  const db = {
+    doc: path => ({ path, get: async () => readDoc(path) }),
+    getAll: async (...refs) => refs.map(ref => readDoc(ref.path)),
+    collection: path => {
+      let filter, fields;
+      const query = {
+        where: (field, operator, value) => { assert.equal(operator, '=='); filter = { field, value }; return query; },
+        select: (...selected) => { fields = selected; return query; },
+        get: async () => {
+          const rows = (collections[path] || []).filter(row => !filter || row[filter.field] === filter.value);
+          reads.push({ kind: 'query', path, filter, documents: rows.length, fields });
+          return { docs: rows.map(row => ({ data: () => Object.fromEntries(Object.entries(row).filter(([field]) => fields.includes(field))) })) };
+        },
+      };
+      return query;
+    },
+  };
+  const handler = createStudentLessonAccessHandler({ db, assertSession: async () => undefined });
+  return { documents, collections, reads, slot, read: input => handler({ auth: { uid }, data: { year: '2026', semester: '2', ...input } }) };
+};
+
+test('student catalogue uses canonical class, preserves complete legacy-only units, and strips assignment metadata', async () => {
+  const f = studentFixture();
+  f.collections[scoped].push(...Array.from({ length: 501 }, (_, index) => ({ unitId: `complete-${index}`, assignedClassIds: ['class-a'] })));
+  const result = await f.read({ view: 'catalog' });
+  assert.equal(result.scopedLessons.length, 502);
+  assert.deepEqual(result.legacyLessons.map(row => row.unitId), ['legacy-only']);
+  assert.equal(result.scopedLessons.some(row => row.unitId === 'other-class'), false);
+  assert.ok(result.scopedLessons.every(row => row.semesterRevision === 4 && !Object.hasOwn(row, 'assignedClassIds')));
+  assert.equal(f.reads.filter(row => row.kind === 'doc').length, 7, 'all seven authority/scope reads remain; session checks are separate');
+  assert.equal(f.reads.filter(row => row.kind === 'query').length, 2);
+  assert.equal(f.reads.filter(row => row.kind === 'query').reduce((sum, row) => sum + row.documents, 0), 506);
+});
+
+test('student cannot retrieve an older matching-class or legacy revision when the newest scoped unit targets another class', async () => {
+  const f = studentFixture();
+  assert.deepEqual(await f.read({ unitId: 'other-class' }), { scopedLessons: [], legacyLessons: [] });
+  assert.deepEqual(f.reads.filter(row => row.kind === 'query').map(row => row.path), [scoped]);
+});
+
+test('semester, slot, enrollment, and classroom failures stop before any lesson source read', async () => {
+  const cases = [
+    ['site_settings/config', { year: '2025' }],
+    ['site_settings/semester_active', { semesterId: '2026-1' }],
+    ['semester_manifests/2026-2', { revision: 5 }],
+    ['semester_manifests/2026-2', { status: 'ARCHIVED' }],
+    ['semester_manifests/2026-2', { readOnly: true }],
+    ['slot', { studentUid: 'other-student' }],
+    ['slot', { status: 'INACTIVE' }],
+    ['slot', { activeEnrollmentId: '' }],
+    ['semester_enrollments/synthetic-enrollment', { studentUid: 'other-student' }],
+    ['semester_enrollments/synthetic-enrollment', { semesterId: '2026-1' }],
+    ['semester_enrollments/synthetic-enrollment', { enrollmentStatus: 'INACTIVE' }],
+    ['semester_enrollments/synthetic-enrollment', { readOnly: true }],
+    ['semester_classes/class-a', { semesterId: '2026-1' }],
+    ['semester_classes/class-a', { status: 'ARCHIVED' }],
+    ['semester_classes/class-a', { readOnly: true }],
+  ];
+  for (const [target, patch] of cases) {
+    const f = studentFixture(), path = target === 'slot' ? f.slot : target;
+    f.documents.set(path, { ...f.documents.get(path), ...patch });
+    await assert.rejects(f.read({ unitId: 'allowed' }), error => ['permission-denied', 'failed-precondition'].includes(error.code));
+    assert.equal(f.reads.filter(row => row.kind === 'query').length, 0, `${target} failure must not read lessons`);
+  }
 });
