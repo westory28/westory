@@ -6,6 +6,7 @@ import { isStudentRegistrationPending } from "./studentRegistrationStatus";
 // Include mobile persistence, redirect restoration and the server handshake.
 // A short page deadline must not discard an otherwise valid mobile sign-in.
 export const AUTH_STARTUP_DEADLINE_MS = 60_000;
+const TRANSIENT_RETRY_DELAYS_MS = [1_000, 3_000];
 export type AuthPhase =
   | "resolving"
   | "opening-session"
@@ -97,6 +98,13 @@ export const authStartupFailure = (error: unknown): AuthStartupError => {
       retryable: true,
     };
   }
+  if (reason === "SESSION_AUTHORITY_CONFIG_INVALID") {
+    return {
+      code,
+      message: "서버 연결을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      retryable: true,
+    };
+  }
   if (
     code.includes("unauthenticated") ||
     [
@@ -130,6 +138,31 @@ export const authStartupFailure = (error: unknown): AuthStartupError => {
     retryable: true,
   };
 };
+// Retry transport failures only. A revoked credential, rejected permission or
+// session fence must still remove access immediately, regardless of its code.
+const isTransientAuthFailure = (error: unknown) => {
+  const failure = error as { code?: string; details?: { reason?: string } };
+  const reason = String(failure?.details?.reason || "");
+  if (
+    reason &&
+    ![
+      "SESSION_AUTHORITY_CONFIG_INVALID",
+      "maintenance-config-read-failed",
+      "maintenance-profile-read-failed",
+    ].includes(reason)
+  )
+    return false;
+  return [
+    "auth/network-request-failed",
+    "unavailable",
+    "deadline-exceeded",
+    "aborted",
+    "resource-exhausted",
+    "internal",
+  ].includes(
+    String(failure?.code || "").replace(/^(functions|firestore)\//, ""),
+  );
+};
 const failureError = (failure: AuthStartupError) =>
   Object.assign(new Error(failure.message), { code: failure.code });
 const staleError = () =>
@@ -153,6 +186,7 @@ export class AuthStartupController {
   private attempt: Attempt | null = null;
   private state: AuthStartupState;
   private waiters = new Set<(state: AuthStartupState) => void>();
+  private pendingRetries = new Set<() => void>();
 
   constructor(
     private readonly deps: Dependencies,
@@ -195,6 +229,8 @@ export class AuthStartupController {
     this.generation += 1;
     this.observation += 1;
     this.clearDeadline();
+    for (const cancel of this.pendingRetries) cancel();
+    this.pendingRetries.clear();
     this.stopProfile?.();
     this.stopProfile = null;
     if (this.attempt && !this.attempt.settled) {
@@ -203,6 +239,40 @@ export class AuthStartupController {
     }
     this.attempt = null;
     for (const notify of this.waiters) notify(this.empty("resolving"));
+  }
+  private waitForRetry(delay: number, current: () => boolean) {
+    return new Promise<void>((resolve, reject) => {
+      const cancel = () => {
+        this.deps.clearTimer(timer);
+        this.pendingRetries.delete(cancel);
+        reject(staleError());
+      };
+      const timer = this.deps.setTimer(() => {
+        this.pendingRetries.delete(cancel);
+        if (current()) resolve();
+        else reject(staleError());
+      }, delay);
+      this.pendingRetries.add(cancel);
+    });
+  }
+  private async withTransientRecovery<T>(
+    operation: () => Promise<T>,
+    current: () => boolean,
+  ): Promise<T> {
+    for (let retry = 0; ; retry++) {
+      if (!current()) throw staleError();
+      try {
+        return await operation();
+      } catch (error) {
+        if (
+          !current() ||
+          !isTransientAuthFailure(error) ||
+          retry >= TRANSIENT_RETRY_DELAYS_MS.length
+        )
+          throw error;
+        await this.waitForRetry(TRANSIENT_RETRY_DELAYS_MS[retry], current);
+      }
+    }
   }
   private fail(generation: number, error: unknown) {
     if (!this.active || this.generation !== generation) return;
@@ -231,7 +301,10 @@ export class AuthStartupController {
     if (!this.isCurrent(generation, user)) throw staleError();
     let timer: number | null = null;
     const token = await Promise.race([
-      user.getIdTokenResult(),
+      this.withTransientRecovery(
+        () => user.getIdTokenResult(),
+        () => this.isCurrent(generation, user),
+      ),
       new Promise<never>((_, reject) => {
         timer = this.deps.setTimer(() => {
           const error = { code: "auth/startup-timeout" };
@@ -277,14 +350,15 @@ export class AuthStartupController {
     }
     if (attempt.authTime === null) return;
     const observation = ++this.observation;
+    const current = () =>
+      this.isCurrent(attempt.generation, user) &&
+      observation === this.observation;
     try {
-      const token = await user.getIdTokenResult();
-      if (
-        !this.active ||
-        observation !== this.observation ||
-        this.deps.currentUser() !== user
-      )
-        return;
+      const token = await this.withTransientRecovery(
+        () => user.getIdTokenResult(),
+        current,
+      );
+      if (!current()) return;
       const authTime = Number(token.claims.auth_time);
       if (!Number.isFinite(authTime)) throw staleError();
       if (authTime !== attempt.authTime) {
@@ -293,7 +367,7 @@ export class AuthStartupController {
         this.start(user, true, true);
       }
     } catch (error) {
-      if (observation === this.observation) this.fail(this.generation, error);
+      if (current()) this.fail(attempt.generation, error);
     }
   };
 
@@ -487,7 +561,10 @@ export class AuthStartupController {
     const { user, generation } = attempt;
     const current = () => this.isCurrent(generation, user);
     try {
-      const token = await user.getIdTokenResult();
+      const token = await this.withTransientRecovery(
+        () => user.getIdTokenResult(),
+        current,
+      );
       if (!current()) return;
       const authTime = Number(token.claims.auth_time);
       if (!Number.isFinite(authTime)) throw staleError();
@@ -496,6 +573,8 @@ export class AuthStartupController {
       let sessionReady = false;
       let settingsStarted = false;
       let verifiedSnapshot: ProfileSnapshot | null = null;
+      let profileRetries = 0;
+      let profileSubscription = 0;
       const publishProfile = () => {
         if (!current() || !sessionReady || !verifiedSnapshot) return;
         try {
@@ -549,44 +628,83 @@ export class AuthStartupController {
       // Own-profile reads are allowed before opening the application session.
       // Fetch in parallel, but expose no profile until the server session and
       // auth epoch have both been verified for this attempt.
-      const stopProfile = this.deps.listenProfile(
-        user,
-        (snapshot) => {
-          if (!current()) return;
-          if (snapshot.fromCache || snapshot.hasPendingWrites) {
+      const subscribeProfile = () => {
+        if (!current()) return;
+        const subscription = ++profileSubscription;
+        const listening = () =>
+          current() && subscription === profileSubscription;
+        const stopProfile = this.deps.listenProfile(
+          user,
+          (snapshot) => {
+            if (!listening()) return;
+            if (snapshot.fromCache || snapshot.hasPendingWrites) {
+              verifiedSnapshot = null;
+              return;
+            }
+            verifiedSnapshot = snapshot;
+            profileRetries = 0;
+            // A changed access profile must not wait for a slow session RPC to
+            // remove an old portal. Cached or pending writes never grant access.
+            const retained = attempt.retainedState?.userData;
+            const next = snapshot.data;
+            if (
+              retained &&
+              (!snapshot.exists ||
+                !next ||
+                next.role !== retained.role ||
+                (next.teacherPortalEnabled === true) !==
+                  retained.teacherPortalEnabled ||
+                JSON.stringify(
+                  normalizeStaffPermissions(next.staffPermissions),
+                ) !== JSON.stringify(retained.staffPermissions) ||
+                isStudentRegistrationPending(next as UserData))
+            ) {
+              attempt.retainedState = null;
+              this.publish(this.empty("loading-profile"));
+            }
+            publishProfile();
+          },
+          (error) => {
+            if (!listening()) return;
+            // A terminal listener error receives no further SDK events. Reattach
+            // only this user's listener; keep the verified portal mounted while
+            // a transient connection recovers, without reopening its session.
+            profileSubscription += 1;
             verifiedSnapshot = null;
-            return;
-          }
-          verifiedSnapshot = snapshot;
-          // A changed access profile must not wait for a slow session RPC to
-          // remove an old portal. Cached or pending writes never grant access.
-          const retained = attempt.retainedState?.userData;
-          const next = snapshot.data;
-          if (
-            retained &&
-            (!snapshot.exists ||
-              !next ||
-              next.role !== retained.role ||
-              (next.teacherPortalEnabled === true) !==
-                retained.teacherPortalEnabled ||
-              JSON.stringify(
-                normalizeStaffPermissions(next.staffPermissions),
-              ) !== JSON.stringify(retained.staffPermissions) ||
-              isStudentRegistrationPending(next as UserData))
-          ) {
-            attempt.retainedState = null;
-            this.publish(this.empty("loading-profile"));
-          }
-          publishProfile();
-        },
-        (error) => this.fail(generation, error),
+            this.stopProfile?.();
+            this.stopProfile = null;
+            if (
+              !isTransientAuthFailure(error) ||
+              profileRetries >= TRANSIENT_RETRY_DELAYS_MS.length
+            ) {
+              this.fail(generation, error);
+              return;
+            }
+            if (this.timer === null) this.armDeadline(generation);
+            void this.waitForRetry(
+              TRANSIENT_RETRY_DELAYS_MS[profileRetries++],
+              current,
+            ).then(
+              () => {
+                try {
+                  subscribeProfile();
+                } catch (error) {
+                  this.fail(generation, error);
+                }
+              },
+              () => undefined,
+            );
+          },
+        );
+        if (listening()) this.stopProfile = stopProfile;
+        else stopProfile();
+      };
+      subscribeProfile();
+      if (!current()) return;
+      await this.withTransientRecovery(
+        () => this.deps.prepareSession(user, { fresh, isCurrent: current }),
+        current,
       );
-      if (current()) this.stopProfile = stopProfile;
-      else {
-        stopProfile();
-        return;
-      }
-      await this.deps.prepareSession(user, { fresh, isCurrent: current });
       await this.assertCurrent(generation, user);
       if (!current()) return;
       if (!attempt.retainedState) this.publish(this.empty("loading-profile"));

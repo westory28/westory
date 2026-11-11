@@ -82,6 +82,8 @@ const fixture = ({ role = "student", autoProfile = true } = {}) => {
   const calls = [];
   const profiles = [];
   const states = [];
+  let profileImmediately = autoProfile;
+  let settingsCalls = 0;
   const session = load(sessionSource, {
     "./semesterArchive": { isSemesterArchive: false },
     "./firebase": {
@@ -110,7 +112,7 @@ const fixture = ({ role = "student", autoProfile = true } = {}) => {
     listenProfile(account, next, error) {
       const subscription = { account, next, error, stopped: false };
       profiles.push(subscription);
-      if (autoProfile)
+      if (profileImmediately)
         next({
           exists: true,
           data: { role },
@@ -122,7 +124,9 @@ const fixture = ({ role = "student", autoProfile = true } = {}) => {
       };
     },
     change: (state) => states.push(state),
-    sessionReady() {},
+    sessionReady() {
+      settingsCalls++;
+    },
     mark() {},
     setTimer: timer.set,
     clearTimer: timer.clear,
@@ -139,6 +143,12 @@ const fixture = ({ role = "student", autoProfile = true } = {}) => {
     states,
     controller,
     session,
+    setAutoProfile(value) {
+      profileImmediately = value;
+    },
+    get settingsCalls() {
+      return settingsCalls;
+    },
     get state() {
       return states.at(-1);
     },
@@ -212,19 +222,19 @@ await check(
         code: "functions/deadline-exceeded",
       }),
     );
-    await assert.rejects(claim, { code: "functions/deadline-exceeded" });
-    assert.equal(h.state.phase, "error");
-    assert.equal(h.state.error.retryable, true);
+    await flush();
+    assert.equal(h.state.phase, "opening-session");
+    assert.equal(h.state.error, null);
     assert.equal(
       h.auth.currentUser,
       account,
       "Transport failure keeps the SDK login",
     );
-    const retry = h.retry();
+    h.timer.advance(1000);
     await flush();
     assert.equal(h.calls.length, 2);
     await h.respond(1);
-    await retry;
+    await claim;
     assert.equal(h.state.phase, "ready");
     h.controller.dispose();
   },
@@ -396,6 +406,406 @@ await check(
     assert.equal(h.state.phase, "signed-out");
     assert.equal(h.state.currentUser, null);
     assert.equal(h.calls.length, 1);
+    h.controller.dispose();
+  },
+);
+
+const transportError = (code = "unavailable", reason) =>
+  Object.assign(new Error("Synthetic transport failure"), {
+    code,
+    ...(reason ? { details: { reason } } : {}),
+  });
+const snapshot = (role, extra = {}) => ({
+  exists: true,
+  data: { role },
+  fromCache: false,
+  hasPendingWrites: false,
+  ...extra,
+});
+const ready = async (options = {}) => {
+  const h = fixture(options);
+  const { account, claim } = await h.signIn();
+  await h.respond();
+  if (options.autoProfile === false)
+    h.profiles[0].next(snapshot(options.role || "student"));
+  await claim;
+  assert.equal(h.state.phase, "ready");
+  return { h, account };
+};
+
+for (const role of ["student", "teacher"]) {
+  await check(
+    `${role}: transient token refresh preserves the mounted generation`,
+    async () => {
+      const { h, account } = await ready({ role });
+      const generation = h.state.generation;
+      const oldStates = h.states.length;
+      let tokenCalls = 0;
+      account.getIdTokenResult = async () => {
+        if (++tokenCalls === 1)
+          throw transportError("auth/network-request-failed");
+        return { claims: { auth_time: account.epoch } };
+      };
+      const observation = h.controller.observe(account);
+      await flush();
+      assert.equal(h.state.phase, "ready");
+      assert.equal(h.state.generation, generation);
+      h.timer.advance(1000);
+      await observation;
+      assert.equal(tokenCalls, 2);
+      assert.equal(h.state.phase, "ready");
+      assert.equal(
+        h.states.length,
+        oldStates,
+        "Recovery must not publish a loading/error state",
+      );
+      assert.equal(
+        h.calls.length,
+        1,
+        "Token recovery must not reopen the server session",
+      );
+      assert.equal(h.profiles.length, 1);
+      assert.equal(h.settingsCalls, 1);
+      h.controller.dispose();
+    },
+  );
+
+  await check(
+    `${role}: transient profile failure reattaches only its own subscription`,
+    async () => {
+      const { h } = await ready({ role });
+      const generation = h.state.generation;
+      const original = h.state.userData;
+      h.profiles[0].error(transportError());
+      assert.equal(h.state.phase, "ready");
+      assert.equal(h.state.userData, original);
+      assert.equal(h.profiles[0].stopped, true);
+      h.profiles[0].next(snapshot(role, { exists: false, data: null }));
+      assert.equal(
+        h.state.phase,
+        "ready",
+        "Retired subscription cannot revoke the replacement",
+      );
+      h.timer.advance(1000);
+      await flush();
+      assert.equal(h.profiles.length, 2);
+      assert.equal(h.state.phase, "ready");
+      assert.equal(h.state.generation, generation);
+      assert.equal(h.calls.length, 1);
+      assert.equal(
+        h.settingsCalls,
+        1,
+        "Profile recovery must not repeat config reads",
+      );
+      h.timer.advance(startup.AUTH_STARTUP_DEADLINE_MS);
+      assert.equal(
+        h.state.phase,
+        "ready",
+        "Successful server recovery cancels its deadline",
+      );
+      h.profiles[1].error(transportError("permission-denied"));
+      assert.equal(h.state.phase, "error");
+      assert.equal(h.state.error.retryable, false);
+      assert.equal(h.state.userData, null);
+      h.timer.advance(10000);
+      await flush();
+      assert.equal(
+        h.profiles.length,
+        2,
+        "A rejected permission is never retried",
+      );
+      h.controller.dispose();
+    },
+  );
+
+  await check(
+    `${role}: cached or pending profiles cannot escalate permissions during recovery`,
+    async () => {
+      const { h } = await ready({ role, autoProfile: false });
+      h.profiles[0].error(transportError());
+      h.timer.advance(1000);
+      await flush();
+      const previous = h.state.userData;
+      h.profiles[1].next(snapshot("teacher", { fromCache: true }));
+      assert.equal(h.state.userData, previous);
+      h.profiles[1].next(snapshot("teacher", { hasPendingWrites: true }));
+      assert.equal(h.state.userData, previous);
+      h.profiles[1].next(
+        snapshot("student", {
+          data: { role: "student", registrationApprovalStatus: "REJECTED" },
+        }),
+      );
+      assert.equal(h.state.phase, "registration-pending");
+      assert.equal(
+        h.state.currentUser,
+        null,
+        "Server rejection removes existing portal access",
+      );
+      assert.equal(h.calls.length, 1);
+      h.controller.dispose();
+    },
+  );
+}
+
+await check(
+  "Profile recovery stops after two retries and can be retried explicitly",
+  async () => {
+    const { h } = await ready({ autoProfile: false });
+    for (const [index, delay] of [
+      [0, 1000],
+      [1, 3000],
+    ]) {
+      h.profiles[index].error(transportError());
+      assert.equal(h.state.phase, "ready");
+      h.timer.advance(delay - 1);
+      await flush();
+      assert.equal(h.profiles.length, index + 1);
+      h.timer.advance(1);
+      await flush();
+      assert.equal(h.profiles.length, index + 2);
+    }
+    h.profiles[2].error(transportError());
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.state.error.retryable, true);
+    assert.equal(h.state.userData, null);
+    h.timer.advance(120000);
+    await flush();
+    assert.equal(
+      h.profiles.length,
+      3,
+      "No polling after the recovery budget is exhausted",
+    );
+    assert.equal(h.calls.length, 1);
+    const retry = h.retry();
+    await flush();
+    assert.equal(h.calls.length, 2);
+    await h.respond();
+    h.profiles[3].next(snapshot("student"));
+    await retry;
+    assert.equal(h.state.phase, "ready");
+    h.controller.dispose();
+  },
+);
+
+await check(
+  "A reattached cache-only profile cannot keep an old portal indefinitely",
+  async () => {
+    const { h } = await ready({ autoProfile: false });
+    h.profiles[0].error(transportError());
+    h.timer.advance(1000);
+    await flush();
+    h.profiles[1].next(snapshot("student", { fromCache: true }));
+    h.timer.advance(startup.AUTH_STARTUP_DEADLINE_MS - 1000);
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.state.error.code, "auth/startup-timeout");
+    assert.equal(h.profiles[1].stopped, true);
+    assert.equal(h.calls.length, 1);
+    h.controller.dispose();
+  },
+);
+
+await check(
+  "Token recovery has exactly two retries and never repeats profile or session work",
+  async () => {
+    const { h, account } = await ready();
+    let tokenCalls = 0;
+    account.getIdTokenResult = async () => {
+      tokenCalls++;
+      throw transportError("auth/network-request-failed");
+    };
+    const observation = h.controller.observe(account);
+    await flush();
+    h.timer.advance(1000);
+    await flush();
+    h.timer.advance(3000);
+    await observation;
+    assert.equal(tokenCalls, 3);
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.state.error.retryable, true);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.profiles.length, 1);
+    h.controller.dispose();
+  },
+);
+
+await check(
+  "Initial session recovery keeps one profile subscription and stops after three requests",
+  async () => {
+    const h = fixture();
+    const { claim } = await h.signIn();
+    for (const [index, delay] of [
+      [0, 1000],
+      [1, 3000],
+    ]) {
+      h.calls[index].gate.reject(transportError("functions/unavailable"));
+      await flush();
+      assert.equal(h.state.phase, "opening-session");
+      assert.equal(h.state.currentUser, null);
+      h.timer.advance(delay);
+      await flush();
+      assert.equal(h.calls.length, index + 2);
+    }
+    h.calls[2].gate.reject(transportError("functions/unavailable"));
+    await assert.rejects(claim, { code: "functions/unavailable" });
+    h.timer.advance(120000);
+    await flush();
+    assert.equal(h.state.phase, "error");
+    assert.equal(h.calls.length, 3);
+    assert.equal(h.profiles.length, 1);
+    assert.equal(h.settingsCalls, 0);
+    h.controller.dispose();
+  },
+);
+
+for (const failure of [
+  transportError("functions/unauthenticated", "SESSION_REAUTH_REQUIRED"),
+  transportError("functions/unavailable", "SESSION_EXPIRED"),
+  transportError("auth/user-disabled"),
+  transportError("functions/permission-denied"),
+]) {
+  await check(
+    `Explicit authentication rejection is not retried: ${failure.details?.reason || failure.code}`,
+    async () => {
+      const h = fixture();
+      const { claim } = await h.signIn();
+      h.calls[0].gate.reject(failure);
+      await assert.rejects(claim);
+      assert.equal(h.state.phase, "error");
+      assert.equal(h.state.error.retryable, false);
+      h.timer.advance(120000);
+      await flush();
+      assert.equal(h.calls.length, 1);
+      h.controller.dispose();
+    },
+  );
+}
+
+await check(
+  "Session configuration outage remains retryable and retains an existing proof",
+  async () => {
+    const { h, account } = await ready();
+    const proof = await h.session.ensureApplicationSessionProof(account);
+    const failure = transportError(
+      "functions/unavailable",
+      "SESSION_AUTHORITY_CONFIG_INVALID",
+    );
+    assert.equal(startup.authStartupFailure(failure).retryable, true);
+    const fresh = h.session.prepareApplicationSession(account, { fresh: true });
+    await flush();
+    h.calls[1].gate.reject(failure);
+    await assert.rejects(fresh);
+    const retained = await h.session.ensureApplicationSessionProof(account);
+    assert.equal(retained.revision, proof.revision);
+    assert.equal(h.calls.length, 2);
+    h.controller.dispose();
+  },
+);
+
+for (const reason of [
+  "maintenance-config-read-failed",
+  "maintenance-profile-read-failed",
+]) {
+  await check(
+    `Maintenance read transport failure automatically recovers: ${reason}`,
+    async () => {
+      const h = fixture();
+      const { claim } = await h.signIn();
+      h.calls[0].gate.reject(transportError("functions/unavailable", reason));
+      await flush();
+      assert.equal(h.state.phase, "opening-session");
+      assert.equal(h.state.currentUser, null);
+      h.timer.advance(1000);
+      await flush();
+      assert.equal(h.calls.length, 2);
+      await h.respond();
+      await claim;
+      assert.equal(h.state.phase, "ready");
+      assert.equal(h.profiles.length, 1);
+      h.controller.dispose();
+    },
+  );
+}
+
+for (const reason of ["maintenance-config-malformed", "student-maintenance"]) {
+  await check(
+    `Maintenance policy failure must not be retried automatically: ${reason}`,
+    async () => {
+      const h = fixture();
+      const { claim } = await h.signIn();
+      h.calls[0].gate.reject(transportError("functions/unavailable", reason));
+      await assert.rejects(claim);
+      assert.equal(h.state.phase, "error");
+      assert.equal(h.state.currentUser, null);
+      h.timer.advance(120000);
+      await flush();
+      assert.equal(h.calls.length, 1);
+      h.controller.dispose();
+    },
+  );
+}
+
+for (const recovery of ["profile", "token", "session"]) {
+  await check(
+    `Logout cancels delayed ${recovery} retries and late responses`,
+    async () => {
+      const h = fixture();
+      const { account, claim } = await h.signIn();
+      let tokenCalls = 0;
+      let observation;
+      if (recovery !== "session") {
+        await h.respond();
+        await claim;
+      }
+      if (recovery === "profile") h.profiles[0].error(transportError());
+      if (recovery === "session")
+        h.calls[0].gate.reject(transportError("functions/unavailable"));
+      if (recovery === "token") {
+        account.getIdTokenResult = async () => {
+          tokenCalls++;
+          throw transportError("auth/network-request-failed");
+        };
+        observation = h.controller.observe(account);
+      }
+      await flush();
+      h.controller.invalidate();
+      h.auth.currentUser = null;
+      if (recovery === "session")
+        await assert.rejects(claim, { code: "auth/stale-attempt" });
+      h.timer.advance(120000);
+      await flush();
+      await observation;
+      h.profiles[0].next(snapshot("teacher"));
+      assert.equal(h.state.phase, "signed-out");
+      assert.equal(h.state.currentUser, null);
+      assert.equal(h.calls.length, 1);
+      assert.equal(h.profiles.length, 1);
+      assert.equal(tokenCalls, recovery === "token" ? 1 : 0);
+      h.controller.dispose();
+    },
+  );
+}
+
+await check(
+  "Account switching cancels old profile recovery and ignores its late permission error",
+  async () => {
+    const { h } = await ready();
+    h.profiles[0].error(transportError());
+    const replacement = user("replacement-teacher", 5000);
+    h.auth.currentUser = replacement;
+    await h.controller.observe(replacement);
+    await flush();
+    assert.equal(h.state.currentUser, null);
+    await h.respond();
+    h.profiles[1].next(snapshot("teacher"));
+    assert.equal(h.state.currentUser, replacement);
+    h.timer.advance(120000);
+    await flush();
+    h.profiles[0].error(transportError("permission-denied"));
+    assert.equal(h.state.phase, "ready");
+    assert.equal(h.state.currentUser, replacement);
+    assert.equal(h.state.userData.role, "teacher");
+    assert.equal(h.calls.length, 2);
+    assert.equal(h.profiles.length, 2);
     h.controller.dispose();
   },
 );

@@ -70,7 +70,12 @@ export const invalidateApplicationSession = (user?: User | null) => {
 
 const isAuthenticationFailure = (error: unknown) => {
   const failure = error as { code?: string; details?: { reason?: string } };
-  if (failure?.details?.reason === "APP_CHECK_REQUIRED") return false;
+  if (
+    ["APP_CHECK_REQUIRED", "SESSION_AUTHORITY_CONFIG_INVALID"].includes(
+      String(failure?.details?.reason || ""),
+    )
+  )
+    return false;
   return (
     [
       "functions/unauthenticated",
