@@ -1,5 +1,6 @@
 import { useState } from "react";
 import AvatarPlaceholder from "../../features/avatar/AvatarPlaceholder";
+import { isCurrentAvatar } from "../../features/avatar/catalog";
 import type { WisHallOfFameEntry } from "../../types";
 import "./wisHallOfFameAvatar.css";
 
@@ -11,7 +12,9 @@ export default function WisHallOfFameAvatar({
   className?: string;
 }) {
   const [failedUrl, setFailedUrl] = useState<string | undefined>();
-  const url = entry.avatar?.thumbnailUrl;
+  const url = isCurrentAvatar(entry.avatar)
+    ? entry.avatar?.thumbnailUrl
+    : undefined;
   return (
     <div
       className={`wis-hall-avatar ${className}`}

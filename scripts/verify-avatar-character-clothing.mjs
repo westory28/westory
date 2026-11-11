@@ -17,14 +17,16 @@ const {
   itemForLook,
   selectAvatarItem,
   restoreAvatarLook,
+  restoreAvatarState,
+  AVATAR_CATALOG_VERSION,
 } = module.exports;
 const skirts = AVATAR_ITEMS.filter(
-  (item) => item.slot === "bottom" && /^(pleated|chima)-/.test(item.value),
+  (item) => item.slot === "bottom" && item.value === "mm-skirt-navy",
 );
 const boy = defaultAvatarLook("boy"),
   girl = defaultAvatarLook("girl");
-const boyItem = AVATAR_ITEMS.find((item) => item.id === "character:boy");
-assert.equal(skirts.length, 7);
+const boyItem = AVATAR_ITEMS.find((item) => item.id === "minimi-character-boy");
+assert.equal(skirts.length, 1);
 for (const skirt of skirts) {
   assert.equal(
     itemForLook({ ...boy, bottom: skirt.value }, "bottom"),
@@ -52,6 +54,17 @@ for (const skirt of skirts) {
     "female selection survives restore",
   );
 }
+const retired = restoreAvatarState({
+  schemaVersion: 1, catalogVersion: 1, look: { ...boy, hairStyle: "curtain" },
+  revision: 17, lookHash: "retired", ownedItemIds: ["top:summer-white"],
+  thumbnailUrl: "https://example.invalid/old-avatar.webp", requiresThumbnailRefresh: true,
+});
+assert.deepEqual(retired.look, defaultAvatarLook());
+assert.equal(retired.catalogVersion, AVATAR_CATALOG_VERSION);
+assert.equal(retired.revision, 17);
+assert.equal(retired.ownedItemIds.length, 0);
+assert.equal(retired.thumbnailUrl, undefined);
+assert.equal(retired.requiresThumbnailRefresh, undefined);
 console.log(
-  "PASS avatar clothing: 7 skirts are female-only; direct selection, character switch and saved-look restoration retain supported clothes.",
+  "PASS minimi clothing: skirt restriction, character switch, saved choices and complete retired-catalog reset.",
 );

@@ -1,7 +1,7 @@
 const { Timestamp } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
-const { catalog, items, SLOTS, effectiveAvatarPrice } = require('./studentAvatarCatalog');
+const { catalog, items, SLOTS, itemIdFor, effectiveAvatarPrice } = require('./studentAvatarCatalog');
 
 const PRICING_PATH = 'avatar_catalog_settings/current';
 const MAX_AVATAR_PRICE = 1000000;
@@ -42,7 +42,7 @@ const readAvatarTeacher = async (tx, db, identity) => {
   }
   return value;
 };
-const ownedLookIds = look => SLOTS.map(slot => `${slot}:${look[slot]}`);
+const ownedLookIds = look => SLOTS.map(slot => itemIdFor(slot, look[slot]));
 const canUsePricedLook = (look, owned, pricing) => ownedLookIds(look)
   .every(id => pricing.prices[id] === 0 || owned.includes(id));
 
@@ -72,7 +72,7 @@ const createAvatarCatalogPricingHandlers = ({ db, assertSession = assertScoreWor
       if (catalog.items.every(item => prices[item.id] === current.prices[item.id])) return current;
       if (!Number.isSafeInteger(current.revision + 1)) fail('failed-precondition', '가격표 버전을 확인해 주세요.', 'AVATAR_PRICING_INVALID');
       const overrides = Object.fromEntries(catalog.items.filter(item => prices[item.id] !== item.price).map(item => [item.id, prices[item.id]]));
-      tx.set(db.doc(PRICING_PATH), { schemaVersion: 1, revision: current.revision + 1, prices: overrides,
+      tx.set(db.doc(PRICING_PATH), { schemaVersion: 1, catalogVersion: catalog.version, revision: current.revision + 1, prices: overrides,
         updatedAt: Timestamp.fromMillis(now()), updatedBy: identity.uid });
       return publicPricing(current.revision + 1, overrides);
     });

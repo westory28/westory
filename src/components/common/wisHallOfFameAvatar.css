@@ -10,6 +10,7 @@
   height: 100%;
   object-fit: contain;
   object-position: center bottom;
+  image-rendering: pixelated;
 }
 .wis-hall-avatar .avatar-placeholder {
   padding: 0;

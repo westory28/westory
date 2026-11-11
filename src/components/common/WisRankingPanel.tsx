@@ -10,6 +10,7 @@ import { getWisRankingPreview } from "../../lib/wisRankingPreview";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { subscribeAvatarUpdated } from "../../features/avatar/events";
 import AvatarPlaceholder from "../../features/avatar/AvatarPlaceholder";
+import { isCurrentAvatar } from "../../features/avatar/catalog";
 import "./wisRankingAvatar.css";
 import {
   getPointRankDefaultEmojiValue,
@@ -66,32 +67,26 @@ const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
   rankSnapshot: null,
 });
 
-const avatarAsset = (character: string) =>
-  `${import.meta.env.BASE_URL}avatar/v1/${character === "boy" ? "boy" : "girl"}-preview-v2.webp`;
-
 const RankingAvatar: React.FC<{ entry: WisHallOfFameEntry }> = ({ entry }) => {
-  const [imageFailed, setImageFailed] = useState(false);
-  const fallback = avatarAsset(entry.avatar?.look.character || "girl");
+  const [failedUrl, setFailedUrl] = useState<string>();
   const name = entry.displayName || entry.studentName;
-  const hasSavedAvatar = Boolean(entry.avatar?.thumbnailUrl);
+  const url = isCurrentAvatar(entry.avatar)
+    ? entry.avatar?.thumbnailUrl
+    : undefined;
 
   return (
     <div className="wis-ranking-avatar" data-avatar-student={entry.uid}>
       <div className="wis-ranking-avatar__frame">
-        {!hasSavedAvatar || imageFailed ? (
+        {!url || failedUrl === url ? (
           <AvatarPlaceholder />
         ) : (
           <img
             className="wis-ranking-avatar__image"
-            src={entry.avatar?.thumbnailUrl || fallback}
+            src={url}
             alt={`${name} 학생의 아바타`}
             loading="lazy"
             decoding="async"
-            onError={(event) => {
-              if (event.currentTarget.getAttribute("src") !== fallback) {
-                event.currentTarget.src = fallback;
-              } else setImageFailed(true);
-            }}
+            onError={() => setFailedUrl(url)}
           />
         )}
       </div>

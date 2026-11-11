@@ -31,16 +31,17 @@ const clientCatalog = await import(
 const serverCatalog = createRequire(import.meta.url)(
   "../functions/studentAvatarCatalog.js",
 );
-assert.equal(clientCatalog.AVATAR_PRICING_POLICY_VERSION, 2);
+assert.equal(clientCatalog.AVATAR_CATALOG_VERSION, 2);
+assert.equal(clientCatalog.AVATAR_PRICING_POLICY_VERSION, 3);
 assert.deepEqual(
   catalog.freeClothingItemIds.slice().sort(),
   [
-    "top:summer-white",
-    "top:summer-navy",
-    "bottom:summer-shorts",
-    "top:winter-hoodie",
-    "top:winter-halfzip",
-    "bottom:winter-joggers",
+    "minimi-top-school-white",
+    "minimi-top-school-navy",
+    "minimi-bottom-school-shorts",
+    "minimi-top-school-hoodie",
+    "minimi-top-school-halfzip",
+    "minimi-bottom-school-joggers",
   ].sort(),
 );
 for (const item of catalog.items) {
@@ -59,8 +60,8 @@ for (const item of catalog.items) {
 for (const character of ["girl", "boy"]) {
   const look = clientCatalog.defaultAvatarLook(character);
   assert.deepEqual(look, serverCatalog.defaultLook(character));
-  assert.equal(look.top, "summer-white");
-  assert.equal(look.bottom, "summer-shorts");
+  assert.equal(look.top, "mm-school-white");
+  assert.equal(look.bottom, "mm-school-shorts");
   assert.equal(clientCatalog.unownedAvatarItems(look, []).length, 0);
   for (const slot of slots)
     assert(
@@ -73,7 +74,10 @@ for (const character of ["girl", "boy"]) {
       `${character}/${slot} has a free choice`,
     );
   const preview = await fs.readFile(
-    path.join(root, `public/avatar/v1/${character}-preview-v2.webp`),
+    path.join(
+      root,
+      `public/avatar/minimi-v2/previews/${character}/character-${character}.webp`,
+    ),
   );
   assert.equal(
     preview.subarray(8, 12).toString(),
@@ -85,6 +89,22 @@ for (const character of ["girl", "boy"]) {
 console.log(
   `PASS: ${catalog.items.length} stable catalog items, free coverage for both characters and compatible saved-image fixtures.`,
 );
+const retired = clientCatalog.restoreAvatarState({
+  schemaVersion: 1,
+  catalogVersion: 1,
+  revision: 9,
+  look: { ...clientCatalog.defaultAvatarLook("boy"), hairStyle: "curtain" },
+  ownedItemIds: ["top:sunshine"],
+  lookHash: "old",
+  thumbnailUrl: "https://example.invalid/old.webp",
+  requiresThumbnailRefresh: true,
+});
+assert.deepEqual(retired.look, clientCatalog.defaultAvatarLook());
+assert.deepEqual(retired.ownedItemIds, []);
+assert.equal(retired.thumbnailUrl, undefined);
+assert.equal(retired.requiresThumbnailRefresh, undefined);
+assert.equal(retired.revision, 9);
+assert.equal(clientCatalog.isCurrentAvatar({ catalogVersion: 1 }), false);
 const checkRankingLayout = process.argv.includes("--check-ranking-layout");
 if (!process.argv.includes("--serve") && !checkRankingLayout) process.exit(0);
 
@@ -113,12 +133,12 @@ import {defaultAvatarLook,AVATAR_ITEMS} from './src/features/avatar/catalog';
 import './src/assets/index.css';
 import './src/pages/student/studentDashboard.css';
 import './src/pages/teacher/teacherDashboard.css';
-const qa=window.avatarQa={rankingReads:0,purchases:[],saves:[],reports:[],errors:[],entries:Array.from({length:5},(_,i)=>({uid:'qa-'+i,studentName:'검증학생'+(i+1),grade:'3',class:String(i+1),number:'1',cumulativeEarned:4420-i*500,currentBalance:500,rank:i+1,avatar:{look:defaultAvatarLook(i%2?'boy':'girl'),lookHash:'qa-'+i,revision:1,...(i<2?{thumbnailUrl:'/avatar/v1/'+(i%2?'boy':'girl')+'-preview-v2.webp'}:{})}}))};
+const qa=window.avatarQa={loadCalls:0,saveCalls:0,failLoad:false,failSave:false,rankingReads:0,purchases:[],saves:[],reports:[],errors:[],entries:Array.from({length:5},(_,i)=>({uid:'qa-'+i,studentName:'검증학생'+(i+1),grade:'3',class:String(i+1),number:'1',cumulativeEarned:4420-i*500,currentBalance:500,rank:i+1,avatar:{schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(i%2?'boy':'girl'),lookHash:'qa-'+i,revision:1,...(i<2?{thumbnailUrl:'/avatar/minimi-v2/previews/'+(i%2?'boy':'girl')+'/character-'+(i%2?'boy':'girl')+'.webp'}:{})}}))};
 window.addEventListener('error',e=>qa.errors.push(e.message));window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
-let saved={schemaVersion:1,catalogVersion:1,look:defaultAvatarLook(),revision:0,lookHash:'fixture',ownedItemIds:[]},balance=500;
-const adapter={load:async()=>({avatar:saved,balance}),purchase:async id=>{const item=AVATAR_ITEMS.find(i=>i.id===id);if(balance<item.price)throw Error('Insufficient fixture funds');const owned=saved.ownedItemIds.includes(id);const charge=owned?0:item.price;balance-=charge;saved={...saved,ownedItemIds:[...new Set([...saved.ownedItemIds,id])]};qa.purchases.push({id,charge,balance});return{itemId:id,charged:charge,avatar:saved,wallet:{balance},alreadyOwned:owned,duplicate:false}},save:async(look,revision,thumbnailUrl)=>{if(revision!==saved.revision)throw Error('Fixture revision mismatch');saved={...saved,look,revision:revision+1,thumbnailUrl};const bitmap=await createImageBitmap(await(await fetch(thumbnailUrl)).blob());const probe=document.createElement('canvas');probe.width=bitmap.width;probe.height=bitmap.height;const context=probe.getContext('2d');context.drawImage(bitmap,0,0);const cornerAlpha=context.getImageData(0,0,1,1).data[3];bitmap.close();qa.saves.push({look,revision:saved.revision,thumbnailBytes:thumbnailUrl.length,cornerAlpha});qa.entries[0].avatar=saved;return saved}};
-function measure(){const sample=document.getElementById('sample'),list=sample.querySelector('.wis-ranking-list-scroll'),right=sample.querySelector('.wis-ranking-avatar-aside');const rows=[...sample.querySelectorAll('.wis-ranking-row')];const leftWidth=list?.getBoundingClientRect().width,rightWidth=right?.getBoundingClientRect().width;const report={mode:sample.dataset.mode,viewport:innerWidth,panelWidth:sample.clientWidth,leftWidth,rightWidth,twoToOneColumns:!list||Math.abs(leftWidth-2*rightWidth)<1,rowCount:rows.length,leftFields:rows.map(r=>({name:r.querySelector('.wis-ranking-name')?.textContent,classroom:r.querySelector('.wis-ranking-classroom')?.textContent,rank:r.querySelector('.wis-ranking-rank-badge')?.textContent,amount:r.querySelector('.wis-ranking-score')?.textContent})),overflow:sample.scrollWidth>sample.clientWidth,documentOverflow:document.documentElement.scrollWidth>innerWidth,canvases:sample.querySelectorAll('canvas').length,modelRequests:performance.getEntriesByType('resource').filter(r=>r.name.includes('.glb')).length,rankingReads:qa.rankingReads,imagesValid:[...sample.querySelectorAll('img')].every(i=>i.complete&&i.naturalWidth>0),purchases:qa.purchases,saves:qa.saves,errors:qa.errors};qa.reports.push(report);fetch('/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});return report}
-function PoseCheck(){const[look,setLook]=useState(defaultAvatarLook()),[active,setActive]=useState(false),[ready,setReady]=useState(false),[stats,setStats]=useState(null),[cycle,setCycle]=useState(false);const controller=useRef(null);const poses=AVATAR_ITEMS.filter(i=>i.slot==='pose');useEffect(()=>{if(!cycle)return;let index=0;const timer=setInterval(()=>{setLook(l=>({...l,pose:poses[index++%poses.length].value}))},1500);return()=>clearInterval(timer)},[cycle]);return <section><div className="qa-controls"><button onClick={()=>{setActive(v=>!v);setReady(false);controller.current=null}}>{active?'렌더러 해제':'렌더러 시작'}</button><button onClick={()=>{setLook(defaultAvatarLook(look.character==='girl'?'boy':'girl'));setReady(false)}}>남녀 전환</button><button onClick={()=>setCycle(v=>!v)}>{cycle?'포즈 순회 정지':'6포즈 순회'}</button><button onClick={()=>setStats(controller.current?.stats||null)}>렌더링 통계</button>{poses.map(p=><button key={p.id} onClick={()=>setLook(l=>({...l,pose:p.value}))}>{p.label}</button>)}</div><p>상태: {active?(ready?'준비 완료':'로딩 중'):'해제됨'} · 포즈: {look.pose}</p><div style={{height:420,position:'relative',background:'#f8fafc'}}>{active&&<AvatarStage look={look} active onReady={c=>{controller.current=c;setReady(true)}} onError={e=>qa.errors.push(e.message)}/>}</div><pre>{JSON.stringify(stats,null,2)}</pre></section>}
+let saved={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:0,lookHash:'fixture',ownedItemIds:[]},balance=500;
+const adapter={load:async()=>{qa.loadCalls++;if(qa.failLoad)throw Error('합성 조회 오류');return{avatar:saved,balance}},purchase:async id=>{const item=AVATAR_ITEMS.find(i=>i.id===id);if(balance<item.price)throw Error('Insufficient fixture funds');const owned=saved.ownedItemIds.includes(id);const charge=owned?0:item.price;balance-=charge;saved={...saved,ownedItemIds:[...new Set([...saved.ownedItemIds,id])]};qa.purchases.push({id,charge,balance});return{itemId:id,charged:charge,avatar:saved,wallet:{balance},alreadyOwned:owned,duplicate:false}},save:async(look,revision,thumbnailUrl)=>{qa.saveCalls++;if(qa.failSave)throw Error('합성 저장 오류');if(revision!==saved.revision)throw Error('Fixture revision mismatch');saved={...saved,look,revision:revision+1,thumbnailUrl};const bitmap=await createImageBitmap(await(await fetch(thumbnailUrl)).blob());const probe=document.createElement('canvas');probe.width=bitmap.width;probe.height=bitmap.height;const context=probe.getContext('2d');context.drawImage(bitmap,0,0);const cornerAlpha=context.getImageData(0,0,1,1).data[3];bitmap.close();qa.saves.push({look,revision:saved.revision,thumbnailBytes:thumbnailUrl.length,cornerAlpha});qa.entries[0].avatar=saved;return saved}};
+qa.setRetired=()=>{saved={schemaVersion:1,catalogVersion:1,look:{...defaultAvatarLook('boy'),hairStyle:'curtain'},revision:7,lookHash:'old',ownedItemIds:['top:old'],thumbnailUrl:'/avatar/v1/old.webp'}};function measure(){const sample=document.getElementById('sample'),list=sample.querySelector('.wis-ranking-list-scroll'),right=sample.querySelector('.wis-ranking-avatar-aside');const rows=[...sample.querySelectorAll('.wis-ranking-row')];const leftWidth=list?.getBoundingClientRect().width,rightWidth=right?.getBoundingClientRect().width;const report={mode:sample.dataset.mode,viewport:innerWidth,panelWidth:sample.clientWidth,leftWidth,rightWidth,twoToOneColumns:!list||Math.abs(leftWidth-2*rightWidth)<1,rowCount:rows.length,leftFields:rows.map(r=>({name:r.querySelector('.wis-ranking-name')?.textContent,classroom:r.querySelector('.wis-ranking-classroom')?.textContent,rank:r.querySelector('.wis-ranking-rank-badge')?.textContent,amount:r.querySelector('.wis-ranking-score')?.textContent})),overflow:sample.scrollWidth>sample.clientWidth,documentOverflow:document.documentElement.scrollWidth>innerWidth,canvases:sample.querySelectorAll('canvas').length,modelRequests:performance.getEntriesByType('resource').filter(r=>r.name.includes('.glb')).length,rankingReads:qa.rankingReads,imagesValid:[...sample.querySelectorAll('img')].every(i=>i.complete&&i.naturalWidth>0),purchases:qa.purchases,saves:qa.saves,errors:qa.errors};qa.reports.push(report);fetch('/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});return report}
+function PoseCheck(){const[look,setLook]=useState(defaultAvatarLook()),[active,setActive]=useState(false),[ready,setReady]=useState(false),[stats,setStats]=useState(null),[cycle,setCycle]=useState(false);const controller=useRef(null);const poses=AVATAR_ITEMS.filter(i=>i.slot==='pose');useEffect(()=>{if(!cycle)return;let index=0;const timer=setInterval(()=>{setLook(l=>({...l,pose:poses[index++%poses.length].value}))},1500);return()=>clearInterval(timer)},[cycle]);return <section><div className="qa-controls"><button onClick={()=>{setActive(v=>!v);setReady(false);controller.current=null}}>{active?'렌더러 해제':'렌더러 시작'}</button><button onClick={()=>{setLook(defaultAvatarLook(look.character==='girl'?'boy':'girl'));setReady(false)}}>남녀 전환</button><button onClick={()=>setCycle(v=>!v)}>{cycle?'포즈 순회 정지':'3포즈 순회'}</button><button onClick={()=>setStats(controller.current?.stats||null)}>렌더링 통계</button>{poses.map(p=><button key={p.id} onClick={()=>setLook(l=>({...l,pose:p.value}))}>{p.label}</button>)}</div><p>상태: {active?(ready?'준비 완료':'로딩 중'):'해제됨'} · 포즈: {look.pose}</p><div style={{height:420,position:'relative',background:'#f8fafc'}}>{active&&<AvatarStage look={look} active onReady={c=>{controller.current=c;setReady(true)}} onError={e=>qa.errors.push(e.message)}/>}</div><pre>{JSON.stringify(stats,null,2)}</pre></section>}
 function App(){const[width,setWidth]=useState(768),[mode,setMode]=useState('ranking'),[audience,setAudience]=useState('student'),[report,setReport]=useState(null);return <AppToastProvider><main style={{padding:16}}><h1>아바타 출시 검증 · 합성 데이터</h1><div className="qa-controls">{[320,390,768,1280].map(w=><button key={w} onClick={()=>setWidth(w)}>폭 {w}</button>)}<button onClick={()=>setAudience(a=>a==='student'?'teacher':'student')}>{audience==='student'?'교사 문맥':'학생 문맥'}</button><button onClick={()=>setMode('ranking')}>순위 화면</button><button onClick={()=>setMode('studio')}>꾸미기 화면</button><button onClick={()=>setMode('poses')}>포즈·취소 검사</button><button onClick={()=>setReport(measure())}>현재 검사</button></div><pre id="qa-report">{JSON.stringify(report,null,2)}</pre><div id="sample" data-mode={mode} className={audience==='teacher'?'teacher-dashboard-ranking':'student-dashboard-ranking'} style={{width,maxWidth:'100%'}}>{mode==='ranking'?<Ranking config={{year:'2026',semester:'2'}} hallOfFamePath={'/'+audience+'/points'}/>:mode==='studio'?<AvatarStudio key={audience} adapter={adapter} access={audience}/>:<PoseCheck/>}</div></main></AppToastProvider>}
 createRoot(document.getElementById('root')).render(<HashRouter><App/></HashRouter>);
 `;
@@ -199,7 +219,7 @@ const server = http.createServer(async (req, res) => {
     }
     let data = files.get(url.pathname),
       type = url.pathname.endsWith(".css") ? "text/css" : "text/javascript";
-    if (/^\/avatar\/v[12]\//.test(url.pathname)) {
+    if (/^\/avatar\/minimi-v2\//.test(url.pathname)) {
       const assetRoot = path.resolve(root, "public/avatar");
       const target = path.resolve(
         root,

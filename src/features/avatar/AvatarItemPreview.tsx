@@ -3,7 +3,7 @@ import type { AvatarCharacter, AvatarItem } from "./catalog";
 import { avatarItemPreviewPath } from "./itemPresentation";
 import "./avatarItemPreview.css";
 
-/** Static captures of the same illustrated layers used in the studio. */
+/** Static captures of the same pixel painter used in the studio. */
 export default function AvatarItemPreview({
   item,
   character,

@@ -5,7 +5,7 @@ export default function AvatarPlaceholder() {
     <div className="avatar-placeholder" role="img" aria-label="아바타 미선택">
       <img
         className="avatar-placeholder__silhouette"
-        src={`${import.meta.env.BASE_URL}avatar/v1/neutral-silhouette-v2.svg`}
+        src={`${import.meta.env.BASE_URL}avatar/minimi-v2/neutral.svg`}
         alt=""
         aria-hidden="true"
         draggable={false}

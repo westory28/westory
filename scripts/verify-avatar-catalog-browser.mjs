@@ -1,10 +1,9 @@
-/** Exercise the actual AvatarStudio against the isolated verify-avatar-ui fixture. */
+/** Exercise real AvatarStudio using local synthetic data only. */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
-
 const require = createRequire(import.meta.url);
 let playwright;
 try {
@@ -22,172 +21,169 @@ const origin = process.env.AVATAR_QA_URL || "http://127.0.0.1:4181";
 assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin), "Local fixture only");
 const evidence =
   process.env.AVATAR_QA_EVIDENCE ||
-  path.join(os.tmpdir(), "westory-avatar-catalog-qa");
+  path.resolve("output/minimi-rebuild-20261111/studio");
 await fs.mkdir(evidence, { recursive: true });
+const catalog = JSON.parse(
+  await fs.readFile(
+    new URL("../functions/avatarCatalog.json", import.meta.url),
+    "utf8",
+  ),
+);
+const labelFor = (value) =>
+  catalog.items.find((item) => item.value === value).label;
 const browser = await playwright.chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
   headless: true,
-  args: ["--enable-unsafe-swiftshader"],
 });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-const errors = [];
-const modelRequests = [];
-page.on("pageerror", (error) => errors.push(error.message));
-page.on("request", (request) => {
-  if (/\.glb(?:\?|$)|\/renderer\/engine/.test(request.url()))
-    modelRequests.push(request.url());
+const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+const errors = [],
+  oldRequests = [],
+  externalRequests = [],
+  screenshots = [],
+  coverage = [];
+page.on("pageerror", (e) => errors.push(e.message));
+page.on("request", (r) => {
+  if (/\/avatar\/v[12]\/|\.glb(?:\?|$)|\/renderer\/engine/.test(r.url()))
+    oldRequests.push(r.url());
 });
 await page.addInitScript(() => {
   window.webglRequests = 0;
-  const getContext = HTMLCanvasElement.prototype.getContext;
+  const get = HTMLCanvasElement.prototype.getContext;
   HTMLCanvasElement.prototype.getContext = function (type, ...options) {
     if (/^(webgl2?|experimental-webgl)$/.test(type)) window.webglRequests++;
-    return getContext.call(this, type, ...options);
+    return get.call(this, type, ...options);
   };
 });
-await page.route("**/*", (route) =>
-  route.request().url().startsWith(origin) ||
-  /^(data|blob):/.test(route.request().url())
-    ? route.continue()
-    : route.abort(),
-);
-const screenshots = [];
+await page.route("**/*", (r) => {
+  const url = r.request().url();
+  if (url.startsWith(origin) || /^(data|blob):/.test(url)) return r.continue();
+  externalRequests.push(url);
+  return r.abort();
+});
+const button = (name) => page.getByRole("button", { name, exact: true });
+const saveButton = () => button("아바타 저장");
+const ready = () =>
+  page.waitForFunction(
+    () =>
+      document.querySelector(".avatar-studio-camera button")?.disabled ===
+      false,
+  );
+const itemButton = (label) =>
+  page
+    .locator(".avatar-studio-item")
+    .filter({ has: page.getByText(label, { exact: true }) });
 try {
   await page.goto(origin);
-  await page.getByRole("button", { name: "꾸미기 화면", exact: true }).click();
-  await page.getByRole("button", { name: /^여학생 아바타/ }).click();
-  await page.waitForFunction(
-    () =>
-      !document.querySelector(".avatar-studio-save .avatar-primary")?.disabled,
-  );
-  await page.getByRole("button", { name: /용신중 동복 후드 집업/ }).click();
-  await page.getByRole("button", { name: "하의", exact: true }).click();
-  await page.getByRole("button", { name: /용신중 동복 체육복 바지/ }).click();
-  await page.getByRole("button", { name: "상의", exact: true }).click();
+  await button("꾸미기 화면").click();
+  await page.locator(".avatar-studio").waitFor();
   assert.equal(
-    await page.locator(".avatar-studio-pending").count(),
-    0,
-    "School sportswear is available without a purchase",
+    await page.evaluate(() => window.avatarQa.loadCalls),
+    1,
+    "One load on entry",
   );
-  for (const width of [320, 390, 768, 1280]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page
-      .getByRole("button", { name: `폭 ${width}`, exact: true })
-      .click();
-    await page
-      .locator(".avatar-studio-item")
-      .filter({ hasText: "용신중 동복 후드 집업" })
-      .scrollIntoViewIfNeeded();
-    await page.waitForFunction(() =>
-      [
-        ...document.querySelectorAll(
-          ".avatar-studio-item .avatar-item-preview img",
-        ),
-      ]
-        .filter((image) => {
-          const rect = image.getBoundingClientRect();
-          return rect.top < innerHeight && rect.bottom > 0;
-        })
-        .every((image) => image.complete && image.naturalWidth === 256),
-    );
-    assert(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth + 1,
-      ),
-      `Page overflow ${width}`,
-    );
-    assert.equal(
-      await page.locator(".avatar-studio canvas").count(),
-      1,
-      "Only the selected avatar has a 2D drawing canvas",
-    );
-    await page.locator(".avatar-studio").scrollIntoViewIfNeeded();
-    const file = path.join(evidence, `student-studio-${width}.png`);
-    await page.screenshot({ path: file, fullPage: true });
-    screenshots.push(file);
-  }
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.getByRole("button", { name: "헤어", exact: true }).click();
-  const hairButtons = page.locator(".avatar-studio-item");
-  assert((await hairButtons.count()) >= 5, "Distinct selectable hair catalog");
-  await page.getByRole("button", { name: "아바타 저장", exact: true }).click();
-  await page.waitForFunction(() => window.avatarQa.saves.length === 1);
-  assert.equal(
-    await page.evaluate(() => window.avatarQa.saves[0].cornerAlpha),
-    0,
-    "Saved thumbnail retains transparency",
-  );
-  await page.getByRole("button", { name: "상의", exact: true }).click();
-  await page.getByRole("button", { name: /햇살 재킷/ }).click();
-  assert(
-    await page
-      .getByRole("button", { name: "아바타 저장", exact: true })
-      .isDisabled(),
-    "Unowned item cannot be saved",
-  );
-  await page
-    .getByRole("button", { name: "180 위스로 구매", exact: true })
-    .click();
-  await page.getByRole("button", { name: "구매하기", exact: true }).click();
-  await page.waitForFunction(() => window.avatarQa.purchases.length === 1);
-  const purchasesBeforeTeacher = await page.evaluate(
-    () => window.avatarQa.purchases.length,
-  );
-  await page.getByRole("button", { name: "순위 화면", exact: true }).click();
   assert.equal(
     await page.locator("canvas").count(),
     0,
-    "Leaving releases the studio canvas",
+    "Unselected does not invent a character",
   );
-  await page.getByRole("button", { name: "교사 문맥", exact: true }).click();
-  await page.getByRole("button", { name: "꾸미기 화면", exact: true }).click();
-  await page.waitForFunction(
-    () =>
-      !document.querySelector(".avatar-studio-save .avatar-primary")?.disabled,
+  await button("여학생 아바타").focus();
+  await page.keyboard.press("Enter");
+  await ready();
+  await itemButton(labelFor("mm-school-hoodie")).click();
+  await button("하의").click();
+  await itemButton(labelFor("mm-school-joggers")).click();
+  await button("상의").click();
+  assert.equal(await page.locator(".avatar-studio-pending").count(), 0);
+  const reads = await page.evaluate(() => window.avatarQa.loadCalls);
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await button(`폭 ${width}`).click();
+    await page.locator(".avatar-studio").scrollIntoViewIfNeeded();
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      `No page overflow at ${width}`,
+    );
+    assert.equal(await page.locator(".avatar-studio canvas").count(), 1);
+    const heading = await page
+      .locator(".avatar-studio-heading")
+      .evaluate((n) => ({
+        background: getComputedStyle(n).backgroundColor,
+        shadow: getComputedStyle(n).boxShadow,
+      }));
+    assert.equal(heading.background, "rgba(0, 0, 0, 0)");
+    assert.equal(heading.shadow, "none");
+    const file = path.join(evidence, `student-${width}.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    screenshots.push(file);
+  }
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.loadCalls),
+    reads,
+    "Local choices/resizes make no reads",
+  );
+  await page.evaluate(() => (window.avatarQa.failSave = true));
+  await saveButton().click();
+  await page.locator(".avatar-studio-error").waitFor();
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.saves.length),
+    0,
+    "Failed save does not replace stored look",
+  );
+  assert.equal(await page.evaluate(() => window.avatarQa.saveCalls), 1);
+  await page.evaluate(() => (window.avatarQa.failSave = false));
+  await saveButton().click();
+  await page.waitForFunction(() => window.avatarQa.saves.length === 1);
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.saveCalls),
+    2,
+    "Only explicit retry writes",
   );
   assert.equal(
-    await page.getByRole("button", { name: "왼쪽으로 돌리기" }).count(),
+    await page.evaluate(() => window.avatarQa.saves[0].cornerAlpha),
     0,
   );
+  assert(await saveButton().isDisabled(), "Unchanged saved look cannot write");
+  await itemButton("크림 니트").click();
+  assert(await saveButton().isDisabled(), "Unowned garment cannot save");
+  await button("160 위스로 구매").click();
+  await button("구매하기").click();
+  await page.waitForFunction(() => window.avatarQa.purchases.length === 1);
   assert.equal(
-    await page.getByRole("button", { name: "오른쪽으로 돌리기" }).count(),
-    0,
+    await page.evaluate(() => window.avatarQa.purchases[0].charge),
+    160,
   );
+  await button("순위 화면").click();
+  assert.equal(
+    await page.locator("canvas").count(),
+    0,
+    "Unmount disposes canvas",
+  );
+  await button("교사 문맥").click();
+  await button("꾸미기 화면").click();
+  await ready();
   assert.equal(await page.locator(".avatar-studio-wallet").count(), 0);
-  // An unchanged saved look must support an explicit refresh of the old image.
-  assert.equal(await page.evaluate(() => window.avatarQa.saves.length), 1);
-  await page.getByRole("button", { name: "아바타 저장", exact: true }).click();
-  await page.waitForFunction(() => window.avatarQa.saves.length === 2);
-  assert.equal(
-    await page.evaluate(() => window.avatarQa.saves[1].cornerAlpha),
-    0,
-  );
   assert(
-    await page
-      .getByRole("button", { name: "아바타 저장", exact: true })
-      .isDisabled(),
+    await saveButton().isDisabled(),
+    "Opening a saved current avatar never requests refresh",
   );
+  await button("포즈").click();
+  await itemButton("손 인사").click();
+  await saveButton().click();
+  await page.waitForFunction(() => window.avatarQa.saves.length === 2);
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page
-      .getByRole("button", { name: `폭 ${width}`, exact: true })
-      .click();
+    await button(`폭 ${width}`).click();
     assert(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
       ),
     );
-    const file = path.join(evidence, `teacher-studio-${width}.png`);
+    const file = path.join(evidence, `teacher-${width}.png`);
     await page.screenshot({ path: file, fullPage: true });
     screenshots.push(file);
   }
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  const catalog = JSON.parse(
-    await fs.readFile(
-      new URL("../functions/avatarCatalog.json", import.meta.url),
-      "utf8",
-    ),
-  );
   const slotLabels = {
     top: "상의",
     bottom: "하의",
@@ -195,105 +191,100 @@ try {
     accessory: "장식",
     hairStyle: "헤어",
     hairTone: "염색",
-    faceShape: "얼굴형",
     expression: "눈매·표정",
     skinTone: "피부색",
     pose: "포즈",
   };
-  const coverage = [];
   for (const character of ["girl", "boy"]) {
-    await page
-      .getByRole("button", {
-        name: character === "boy" ? "남성 아바타" : "여성 아바타",
-        exact: true,
-      })
-      .click();
+    await button(character === "boy" ? "남성 아바타" : "여성 아바타").click();
+    await ready();
     for (const [slot, label] of Object.entries(slotLabels)) {
-      await page.getByRole("button", { name: label, exact: true }).click();
+      await button(label).click();
       const candidates = catalog.items.filter(
-        (item) => item.slot === slot && item.characters.includes(character),
+        (i) => i.slot === slot && i.characters.includes(character),
       );
-      if (slot === "bottom") {
-        for (const skirt of catalog.items.filter(
-          (item) =>
-            item.slot === "bottom" && /^(pleated|chima)-/.test(item.value),
-        ))
-          assert.equal(
-            await page
-              .locator(".avatar-studio-item")
-              .filter({
-                has: page.locator(".avatar-studio-item-name", {
-                  hasText: skirt.label,
-                }),
-              })
-              .count(),
-            character === "girl" ? 1 : 0,
-            `${character}/${skirt.id} availability`,
-          );
-      }
-      const poseImages = new Set();
+      if (slot === "bottom")
+        assert.equal(
+          await itemButton("남색 치마").count(),
+          character === "girl" ? 1 : 0,
+        );
+      const distinct = new Set();
       for (const item of candidates) {
-        await page
-          .locator(".avatar-studio-item")
-          .filter({
-            has: page.locator(".avatar-studio-item-name", {
-              hasText: item.label,
-            }),
-          })
-          .click();
-        await page.waitForFunction(
-          () =>
-            document
-              .querySelector(".avatar-studio-stage [aria-busy]")
-              ?.getAttribute("aria-busy") === "false",
-        );
+        await itemButton(item.label).click();
+        await ready();
         assert.equal(
-          await page.locator(".avatar-studio-stage [role='alert']").count(),
+          await page.locator(".avatar-studio-stage [role=alert]").count(),
           0,
-          `${character}/${item.id} loads`,
         );
-        assert.equal(
-          await page.locator(".avatar-studio-pending").count(),
-          0,
-          "Teachers use items without a purchase",
-        );
-        if (slot === "pose") {
-          const pixels = await page
-            .locator(".avatar-studio canvas")
-            .evaluate((canvas) => canvas.toDataURL());
-          poseImages.add(pixels);
-          const file = path.join(
-            evidence,
-            `${character}-pose-${item.value}.png`,
-          );
-          await page.locator(".avatar-studio-stage").screenshot({ path: file });
-          screenshots.push(file);
-        }
+        assert.equal(await page.locator(".avatar-studio-pending").count(), 0);
         coverage.push(`${character}/${item.id}`);
+        if (slot === "pose")
+          distinct.add(
+            await page
+              .locator(".avatar-studio canvas")
+              .evaluate((c) => c.toDataURL()),
+          );
       }
       if (slot === "pose")
-        assert.equal(
-          poseImages.size,
-          candidates.length,
-          "Every pose visibly differs",
-        );
+        assert.equal(distinct.size, candidates.length, "All poses differ");
     }
   }
   assert.equal(
     await page.evaluate(() => window.avatarQa.purchases.length),
-    purchasesBeforeTeacher,
+    1,
+    "Teacher does not buy",
   );
-  assert.deepEqual(
-    modelRequests,
-    [],
-    "2D studio never requests old models or the 3D runtime",
-  );
+  // A response retained by an old client must not restore ownership or thumbnails.
+  await button("순위 화면").click();
+  await page.evaluate(() => window.avatarQa.setRetired());
+  await button("꾸미기 화면").click();
+  await page.locator(".avatar-studio").waitFor();
+  assert.equal(await page.locator(".avatar-placeholder").count(), 1);
+  assert.equal(await page.locator(".avatar-studio canvas").count(), 0);
   assert.equal(
-    await page.evaluate(() => window.webglRequests),
+    await page.locator(".avatar-studio-characters [aria-pressed=true]").count(),
     0,
-    "2D studio never creates WebGL contexts",
+    "Retired gender/hair choices are not partially restored",
   );
+  // Explicit retry after load failure, no automatic polling.
+  await button("순위 화면").click();
+  await page.evaluate(() => (window.avatarQa.failLoad = true));
+  await button("꾸미기 화면").click();
+  await button("다시 불러오기").waitFor();
+  const failedReads = await page.evaluate(() => window.avatarQa.loadCalls);
+  await page.waitForTimeout(120);
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.loadCalls),
+    failedReads,
+  );
+  await page.evaluate(() => (window.avatarQa.failLoad = false));
+  await button("다시 불러오기").click();
+  await page.locator(".avatar-studio").waitFor();
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.loadCalls),
+    failedReads + 1,
+  );
+  // Old public replicas are filtered before any image URL is requested.
+  await page.evaluate(() => {
+    window.avatarQa.entries.forEach((entry) => {
+      entry.avatar.catalogVersion = 1;
+      entry.avatar.thumbnailUrl = "/avatar/v1/retired.webp";
+    });
+  });
+  await button("순위 화면").click();
+  await page.locator(".wis-ranking-row").first().waitFor();
+  assert.equal(await page.locator(".wis-ranking-avatar__image").count(), 0);
+  assert.equal(
+    await page.locator(".wis-ranking-avatar .avatar-placeholder").count(),
+    1,
+  );
+  assert.deepEqual(oldRequests, []);
+  assert.deepEqual(externalRequests, []);
+  assert.equal(await page.evaluate(() => window.webglRequests), 0);
+  assert.deepEqual(errors, []);
   const result = await page.evaluate(() => ({
+    loadCalls: window.avatarQa.loadCalls,
+    saveCalls: window.avatarQa.saveCalls,
     purchases: window.avatarQa.purchases,
     saves: window.avatarQa.saves.map(({ thumbnailBytes, cornerAlpha }) => ({
       thumbnailBytes,
@@ -301,8 +292,6 @@ try {
     })),
     errors: window.avatarQa.errors,
   }));
-  assert.equal(result.purchases[0].charge, 180);
-  assert.deepEqual(errors, []);
   assert.deepEqual(result.errors, []);
   await fs.writeFile(
     path.join(evidence, "report.json"),
@@ -310,9 +299,10 @@ try {
       {
         passed: true,
         widths: [320, 390, 768, 1280],
-        screenshots,
         coverage,
-        modelRequests,
+        screenshots,
+        oldRequests,
+        externalRequests,
         ...result,
       },
       null,
@@ -322,11 +312,9 @@ try {
   console.log(
     JSON.stringify({
       passed: true,
+      coverage: coverage.length,
       evidence,
-      screenshots,
-      widths: [320, 390, 768, 1280],
-      network: "local only",
-      purchase: "synthetic only",
+      ...result,
     }),
   );
 } finally {

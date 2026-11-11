@@ -105,33 +105,69 @@ let rules;
     assert.equal(result.charged, current.prices[fixture.paid[0].id]);
     assert.equal((await get(fixture.accountPath)).balance, 1000 - result.charged);
   });
-  await check('school uniform policy preserves legacy saved clothing while rejecting stale and zero-price purchases', async () => {
+  await check('school uniforms stay free and retired choices cannot reconnect or grant new clothes', async () => {
     await seed(); await seedTeacher();
-    await db.doc(PRICING_PATH).set({ schemaVersion: 1, revision: 1, prices: { 'top:plain-top': 0, 'bottom:plain-bottom': 0, 'top:winter-hoodie': 999 } });
+    await db.doc(PRICING_PATH).set({ schemaVersion: 1, revision: 1, prices: { 'minimi-top-knit-cream': 0, 'minimi-bottom-jeans': 0, 'minimi-top-school-hoodie': 999 } });
     const pricing = await pricingApi.getAvatarCatalogPricing(teacherRequest({}));
-    assert.equal(pricing.prices['top:plain-top'], 160); assert.equal(pricing.prices['bottom:plain-bottom'], 100);
-    assert.equal(pricing.prices['top:winter-hoodie'], 0); assert.equal(pricing.policyVersion, 2);
-    await assert.rejects(pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { 'top:plain-top': 0 } })),
+    assert.equal(pricing.prices['minimi-top-knit-cream'], 160); assert.equal(pricing.prices['minimi-bottom-jeans'], 100);
+    assert.equal(pricing.prices['minimi-top-school-hoodie'], 0); assert.equal(pricing.policyVersion, 3);
+    await assert.rejects(pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { 'minimi-top-knit-cream': 0 } })),
       error => error.details?.reason === 'AVATAR_PRICING_INPUT_INVALID');
-    const plain = catalog.items.find(item => item.id === 'top:plain-top');
+    const plain = catalog.items.find(item => item.id === 'minimi-top-knit-cream');
     const stale = authenticated(fixture.purchase(plain)); delete stale.data.expectedPricingPolicyVersion;
     await assert.rejects(api.purchaseStudentAvatarItem(stale), error => error.details?.reason === 'AVATAR_PRICE_CHANGED');
-    const unownedLook = { ...defaultLook(), top: 'plain-top', bottom: 'plain-bottom' };
+    const unownedLook = { ...defaultLook(), top: 'mm-knit-cream', bottom: 'mm-jeans' };
     await assert.rejects(api.saveStudentAvatar(authenticated(await fixture.save({ look: unownedLook }))), error => error.details?.reason === 'AVATAR_ITEM_NOT_OWNED');
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
     assert.equal((await db.doc(fixture.avatarPath).get()).exists, false);
-    const uniformLook = { ...defaultLook(), top: 'winter-hoodie', bottom: 'winter-joggers' };
+    const uniformLook = { ...defaultLook(), top: 'mm-school-hoodie', bottom: 'mm-school-joggers' };
     await api.saveStudentAvatar(authenticated(await fixture.save({ look: uniformLook })));
     const saved = await get(fixture.avatarPath);
-    await db.doc(fixture.avatarPath).set({ ...saved, look: unownedLook, lookHash: lookHash(unownedLook),
-      ownedItemIds: ['top:jacket-navy'], lastSavedAtMs: 1 });
+    await db.doc(fixture.avatarPath).set({ ...saved, catalogVersion: 1, look: unownedLook, lookHash: lookHash(unownedLook),
+      ownedItemIds: ['minimi-top-sweat-blue'], lastSavedAtMs: 1 });
     const recovered = await api.getStudentAvatar(authenticated(fixture.req({})));
-    assert.deepEqual(recovered.look, unownedLook);
-    for (const id of ['top:plain-top', 'bottom:plain-bottom', 'top:jacket-navy']) assert.ok(recovered.ownedItemIds.includes(id));
-    const result = await api.saveStudentAvatar(authenticated(await fixture.save({ look: unownedLook, expectedRevision: 1, requestId: 'legacy-uniform-save' })));
+    assert.deepEqual(recovered.look, defaultLook()); assert.deepEqual(recovered.ownedItemIds, []);
+    const result = await api.saveStudentAvatar(authenticated(await fixture.save({ look: defaultLook(), expectedRevision: 1, requestId: 'legacy-uniform-save' })));
     assert.equal(result.revision, 2);
     assert.equal((await get(fixture.accountPath)).balance, 1000);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+  });
+  await check('generation reset is idempotent, preserves receipts and money, and skips concurrent new avatars', async () => {
+    await seed();
+    const { resetAvatarOwner } = require('../avatarGenerationReset');
+    const old = { schemaVersion: 1, catalogVersion: 1, studentUid: fixture.uid, revision: 7,
+      look: { character: 'boy', hairStyle: 'old-hair' }, ownedItemIds: ['top:old'],
+      thumbnailPath: 'student_avatar_thumbnails/v1/old.webp', lastSavedAtMs: 1 };
+    await db.doc(fixture.avatarPath).set(old);
+    await db.doc(`users/${fixture.uid}`).update({ avatar: { catalogVersion: 1, thumbnailUrl: 'old' }, profileIcon: '😀' });
+    const receiptRef = db.doc(`${fixture.avatarPath}/requests/old-purchase`);
+    await receiptRef.set({ charged: 100, immutable: true });
+    const backups = [];
+    const args = { db, uid: fixture.uid, audience: 'student', apply: true, backup: async value => backups.push(value) };
+    assert.deepEqual(await resetAvatarOwner({ ...args, apply: false }), { inventory: true, projection: true });
+    assert.equal((await get(fixture.avatarPath)).revision, 7);
+    assert.deepEqual(await resetAvatarOwner(args), { inventory: true, projection: true });
+    assert.equal((await get(fixture.avatarPath)).revision, 8);
+    assert.deepEqual((await get(fixture.avatarPath)).ownedItemIds, []);
+    assert.equal((await get(fixture.avatarPath)).thumbnailPath, undefined);
+    assert.equal((await get(`users/${fixture.uid}`)).avatar, undefined);
+    assert.equal((await get(`users/${fixture.uid}`)).profileIcon, '😀');
+    assert.deepEqual((await receiptRef.get()).data(), { charged: 100, immutable: true });
+    assert.equal((await get(fixture.accountPath)).balance, 1000); assert.equal(backups.length, 1);
+    assert.deepEqual(await resetAvatarOwner(args), { inventory: false, projection: false });
+    const current = await api.saveStudentAvatar(authenticated(await fixture.save({ expectedRevision: 8 })));
+    assert.deepEqual(await resetAvatarOwner(args), { inventory: false, projection: false });
+    assert.equal((await get(`users/${fixture.uid}`)).avatar.thumbnailUrl, current.thumbnailUrl);
+    await db.doc('users/orphan-avatar').set({ role: 'student', avatar: { schemaVersion: 1, thumbnailUrl: 'old-unversioned' }, preserved: 'yes' });
+    const candidates = await db.collection('users').where('avatar', '!=', null)
+      .select('avatar', 'role').orderBy('avatar').get();
+    assert.ok(candidates.docs.some(doc => doc.id === 'orphan-avatar'));
+    const orphanArgs = { db, uid: 'orphan-avatar', audience: 'student', apply: true };
+    await assert.rejects(resetAvatarOwner({ ...orphanArgs, backup: async () => { throw new Error('Backup unavailable'); } }));
+    assert.equal((await get('users/orphan-avatar')).avatar.thumbnailUrl, 'old-unversioned');
+    assert.deepEqual(await resetAvatarOwner(orphanArgs), { inventory: false, projection: true });
+    assert.equal((await get('users/orphan-avatar')).avatar, undefined);
+    assert.equal((await get('users/orphan-avatar')).preserved, 'yes');
   });
   await check('teacher all-item save and emoji use real sessions without a teacher wallet and reject role downgrade during save', async () => {
     await seed(); await seedTeacher();

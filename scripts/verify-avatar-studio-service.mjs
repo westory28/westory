@@ -173,7 +173,7 @@ await assert.rejects(
 assert.equal(calls.length, 1);
 assert.equal(calls[0].payload.expectedPrice, 500);
 assert.equal(calls[0].payload.expectedPricingRevision, 2);
-assert.equal(calls[0].payload.expectedPricingPolicyVersion, 2);
+assert.equal(calls[0].payload.expectedPricingPolicyVersion, 3);
 const declinedRequestId = calls[0].payload.requestId;
 assert.equal(service.avatarPricingFromError(changed).prices["top:test"], 700);
 assert.match(service.avatarErrorMessage(changed), /가격이 변경/);
@@ -204,11 +204,24 @@ assert.equal(calls[1].payload.expectedPrice, 700);
 
 // A retry after a network failure keeps its idempotency key, and duplicate recovery is one read.
 reset();
+const oldRequestId = "11111111-1111-4111-8111-111111111111";
+storage.set(
+  "westory:avatar-request:avatar-client-test:2026:2:top:test",
+  oldRequestId,
+);
 responses.set("purchaseStudentAvatarItem", async () => {
   throw { code: "functions/unavailable" };
 });
 await assert.rejects(service.purchaseAvatarItem(scope, "top:test", 700, 3));
 const retryId = calls[0].payload.requestId;
+assert.notEqual(
+  retryId,
+  oldRequestId,
+  "A retired catalog receipt is never reused",
+);
+assert(
+  storage.has("westory:avatar-request:v2:avatar-client-test:2026:2:top:test"),
+);
 responses.set("purchaseStudentAvatarItem", async () => ({
   itemId: "top:test",
   charged: 700,

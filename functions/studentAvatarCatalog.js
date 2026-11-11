@@ -3,6 +3,7 @@ const catalog = require('./avatarCatalog.json');
 
 const SLOTS = Object.freeze(['character', 'skinTone', 'faceShape', 'expression', 'hairStyle', 'hairTone', 'pose', 'top', 'bottom', 'shoes', 'accessory']);
 const items = new Map();
+const itemIdFor = (slot, value) => `minimi-${slot}-${String(value).replace(/^mm-/, '')}`;
 const freeClothingItemIds = new Set(catalog.freeClothingItemIds);
 const itemPricePolicy = item => ['top', 'bottom'].includes(item.slot)
   ? (freeClothingItemIds.has(item.id) ? 'free' : 'paid') : null;
@@ -13,7 +14,7 @@ const effectiveAvatarPrice = (item, override) => {
   return override ?? item.price;
 };
 for (const item of catalog.items) {
-  if (!SLOTS.includes(item.slot) || item.id !== `${item.slot}:${item.value}` || items.has(item.id)
+  if (!SLOTS.includes(item.slot) || item.id !== itemIdFor(item.slot, item.value) || items.has(item.id)
     || !Number.isSafeInteger(item.price) || item.price < 0 || !Array.isArray(item.characters)
     || (itemPricePolicy(item) === 'free' ? item.price !== 0 : itemPricePolicy(item) === 'paid' && item.price === 0)
     || !item.characters.length || item.characters.some(value => !['girl', 'boy'].includes(value))) {
@@ -22,7 +23,7 @@ for (const item of catalog.items) {
   items.set(item.id, Object.freeze(item));
 }
 const defaultLook = (character = 'girl') => Object.fromEntries(SLOTS.map(slot => {
-  const preferred = catalog.defaultClothing[slot];
+  const preferred = slot === 'hairStyle' ? catalog.defaultHairStyle[character] : catalog.defaultClothing[slot];
   const item = catalog.items.find(entry => entry.slot === slot && entry.price === 0
     && entry.characters.includes(character) && (slot !== 'character' || entry.value === character)
     && (!preferred || entry.value === preferred));
@@ -37,21 +38,14 @@ const validateLook = (look, ownedItemIds) => {
   const result = {};
   for (const slot of SLOTS) {
     if (typeof look[slot] !== 'string') return null;
-    const item = items.get(`${slot}:${look[slot]}`);
+    const item = items.get(itemIdFor(slot, look[slot]));
     if (!item || !item.characters.includes(look.character) || (owned && item.price > 0 && !owned.has(item.id))) return null;
     result[slot] = item.value;
   }
   return result;
 };
-// These four skirts used to be shared. Repair only this retired combination
-// when reading a hash-verified saved look; incoming saves still use validateLook.
-const retiredBoySkirts = new Set(['pleated-lilac', 'pleated-navy', 'pleated-cream', 'pleated-mint']);
-const restoreStoredLook = look => {
-  const current = validateLook(look);
-  if (current) return current;
-  if (look?.character !== 'boy' || !retiredBoySkirts.has(look.bottom)) return null;
-  return validateLook({ ...look, bottom: defaultLook('boy').bottom });
-};
+// Retired generations must never reconnect through a per-slot fallback.
+const restoreStoredLook = look => validateLook(look);
 const lookHash = look => createHash('sha256').update(JSON.stringify(SLOTS.map(slot => [slot, look[slot]]))).digest('hex');
 const sanitizePublicAvatar = value => {
   if (!value || value.schemaVersion !== 1 || value.catalogVersion !== catalog.version
@@ -62,10 +56,10 @@ const sanitizePublicAvatar = value => {
   const result = { schemaVersion: 1, catalogVersion: catalog.version, look, revision: value.revision, lookHash: currentHash };
   // Only the server's immutable object namespace is eligible for public projection.
   if (currentHash === value.lookHash && typeof value.thumbnailUrl === 'string' && value.thumbnailUrl.length < 1024
-    && /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/student_avatar_thumbnails%2Fv1%2F[a-f0-9]{64}%2F[a-f0-9]{64}\.webp\?alt=media&token=[a-f0-9-]{36}$/.test(value.thumbnailUrl)) {
+    && /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/[^/]+\/o\/student_avatar_thumbnails%2Fv2%2F[a-f0-9]{64}%2F[a-f0-9]{64}\.webp\?alt=media&token=[a-f0-9-]{36}$/.test(value.thumbnailUrl)) {
     result.thumbnailUrl = value.thumbnailUrl;
   }
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, catalog, items, itemIdFor, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };

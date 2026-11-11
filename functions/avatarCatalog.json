@@ -1,21 +1,25 @@
 {
-  "version": 1,
-  "pricingPolicyVersion": 2,
+  "version": 2,
+  "pricingPolicyVersion": 3,
   "defaultClothing": {
-    "top": "summer-white",
-    "bottom": "summer-shorts"
+    "top": "mm-school-white",
+    "bottom": "mm-school-shorts"
+  },
+  "defaultHairStyle": {
+    "girl": "mm-bob",
+    "boy": "mm-parted"
   },
   "freeClothingItemIds": [
-    "top:summer-white",
-    "top:summer-navy",
-    "bottom:summer-shorts",
-    "top:winter-hoodie",
-    "top:winter-halfzip",
-    "bottom:winter-joggers"
+    "minimi-top-school-white",
+    "minimi-top-school-navy",
+    "minimi-top-school-hoodie",
+    "minimi-top-school-halfzip",
+    "minimi-bottom-school-shorts",
+    "minimi-bottom-school-joggers"
   ],
   "items": [
     {
-      "id": "character:girl",
+      "id": "minimi-character-girl",
       "slot": "character",
       "value": "girl",
       "label": "여학생",
@@ -27,7 +31,7 @@
       ]
     },
     {
-      "id": "character:boy",
+      "id": "minimi-character-boy",
       "slot": "character",
       "value": "boy",
       "label": "남학생",
@@ -39,114 +43,62 @@
       ]
     },
     {
-      "id": "skinTone:original",
+      "id": "minimi-skinTone-ivory",
       "slot": "skinTone",
-      "value": "original",
-      "label": "기본",
+      "value": "mm-ivory",
+      "label": "밝은 살구",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#f7cfa8"
+      "color": "#f8d8b8"
     },
     {
-      "id": "skinTone:fair",
+      "id": "minimi-skinTone-peach",
       "slot": "skinTone",
-      "value": "fair",
-      "label": "밝은 피부",
+      "value": "mm-peach",
+      "label": "살구",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#f9d8bc"
+      "color": "#eeb98f"
     },
     {
-      "id": "skinTone:peach",
+      "id": "minimi-skinTone-tan",
       "slot": "skinTone",
-      "value": "peach",
-      "label": "복숭아빛",
+      "value": "mm-tan",
+      "label": "햇빛",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#e9b99b"
+      "color": "#c98c62"
     },
     {
-      "id": "skinTone:warm",
+      "id": "minimi-skinTone-deep",
       "slot": "skinTone",
-      "value": "warm",
-      "label": "따뜻한 피부",
+      "value": "mm-deep",
+      "label": "깊은 갈색",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#d8aa82"
+      "color": "#945d43"
     },
     {
-      "id": "skinTone:honey",
-      "slot": "skinTone",
-      "value": "honey",
-      "label": "꿀빛 피부",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#c6986e"
-    },
-    {
-      "id": "skinTone:tan",
-      "slot": "skinTone",
-      "value": "tan",
-      "label": "햇빛 피부",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#af7a50"
-    },
-    {
-      "id": "skinTone:brown",
-      "slot": "skinTone",
-      "value": "brown",
-      "label": "갈색 피부",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#87573e"
-    },
-    {
-      "id": "skinTone:deep",
-      "slot": "skinTone",
-      "value": "deep",
-      "label": "짙은 피부",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#57392e"
-    },
-    {
-      "id": "faceShape:natural",
+      "id": "minimi-faceShape-round",
       "slot": "faceShape",
-      "value": "natural",
-      "label": "기본 얼굴",
+      "value": "mm-round",
+      "label": "동그란 얼굴",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -155,34 +107,10 @@
       ]
     },
     {
-      "id": "faceShape:round",
-      "slot": "faceShape",
-      "value": "round",
-      "label": "동그란 볼",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "faceShape:slim",
-      "slot": "faceShape",
-      "value": "slim",
-      "label": "갸름한 턱선",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "expression:natural",
+      "id": "minimi-expression-smile",
       "slot": "expression",
-      "value": "natural",
-      "label": "기본 미소",
+      "value": "mm-smile",
+      "label": "미소",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -191,10 +119,10 @@
       ]
     },
     {
-      "id": "expression:calm",
+      "id": "minimi-expression-bright",
       "slot": "expression",
-      "value": "calm",
-      "label": "차분한 눈매",
+      "value": "mm-bright",
+      "label": "활짝",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -203,184 +131,131 @@
       ]
     },
     {
-      "id": "expression:smile",
+      "id": "minimi-expression-calm",
       "slot": "expression",
-      "value": "smile",
-      "label": "방긋 미소",
-      "price": 150,
-      "tier": "premium",
+      "value": "mm-calm",
+      "label": "차분",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "expression:curious",
+      "id": "minimi-expression-wink",
       "slot": "expression",
-      "value": "curious",
-      "label": "궁금한 눈매",
-      "price": 120,
-      "tier": "premium",
+      "value": "mm-wink",
+      "label": "윙크",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "expression:bright",
-      "slot": "expression",
-      "value": "bright",
-      "label": "초롱초롱",
-      "price": 180,
-      "tier": "premium",
+      "id": "minimi-hairStyle-bob",
+      "slot": "hairStyle",
+      "value": "mm-bob",
+      "label": "단발",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "expression:determined",
-      "slot": "expression",
-      "value": "determined",
-      "label": "새침한 눈매",
-      "price": 150,
-      "tier": "premium",
+      "id": "minimi-hairStyle-long",
+      "slot": "hairStyle",
+      "value": "mm-long",
+      "label": "긴 머리",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "hairStyle:bob",
+      "id": "minimi-hairStyle-ponytail",
       "slot": "hairStyle",
-      "value": "bob",
-      "label": "단정한 단발",
+      "value": "mm-ponytail",
+      "label": "묶은 머리",
       "price": 0,
       "tier": "basic",
-      "characters": [
-        "girl"
-      ]
-    },
-    {
-      "id": "hairStyle:curtain",
-      "slot": "hairStyle",
-      "value": "curtain",
-      "label": "단정한 가르마",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "boy"
-      ]
-    },
-    {
-      "id": "hairStyle:volume",
-      "slot": "hairStyle",
-      "value": "volume",
-      "label": "구름 볼륨 펌",
-      "price": 160,
-      "tier": "premium",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "hairStyle:wave",
+      "id": "minimi-hairStyle-crop",
       "slot": "hairStyle",
-      "value": "wave",
-      "label": "사이드 스윕 웨이브",
-      "price": 220,
-      "tier": "premium",
+      "value": "mm-crop",
+      "label": "짧은 머리",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "hairStyle:long",
+      "id": "minimi-hairStyle-parted",
       "slot": "hairStyle",
-      "value": "long",
-      "label": "물결 롱 헤어",
-      "price": 280,
-      "tier": "premium",
+      "value": "mm-parted",
+      "label": "가르마",
+      "price": 0,
+      "tier": "basic",
       "characters": [
-        "girl"
-      ]
-    },
-    {
-      "id": "hairStyle:crop",
-      "slot": "hairStyle",
-      "value": "crop",
-      "label": "업스윕 숏컷",
-      "price": 240,
-      "tier": "premium",
-      "characters": [
+        "girl",
         "boy"
       ]
     },
     {
-      "id": "hairStyle:toben",
+      "id": "minimi-hairStyle-wave",
       "slot": "hairStyle",
-      "value": "toben",
-      "label": "토벤 스타일",
+      "value": "mm-wave",
+      "label": "물결 머리",
       "price": 0,
       "tier": "basic",
       "characters": [
+        "girl",
         "boy"
       ]
     },
     {
-      "id": "hairStyle:twin-tail",
-      "slot": "hairStyle",
-      "value": "twin-tail",
-      "label": "물결 트윈테일",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl"
-      ]
-    },
-    {
-      "id": "hairStyle:half-up",
-      "slot": "hairStyle",
-      "value": "half-up",
-      "label": "볼륨 반묶음",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl"
-      ]
-    },
-    {
-      "id": "hairTone:original",
+      "id": "minimi-hairTone-ink",
       "slot": "hairTone",
-      "value": "original",
-      "label": "기본 머리색",
+      "value": "mm-ink",
+      "label": "검정",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#573323"
+      "color": "#262535"
     },
     {
-      "id": "hairTone:black",
+      "id": "minimi-hairTone-brown",
       "slot": "hairTone",
-      "value": "black",
-      "label": "블랙",
+      "value": "mm-brown",
+      "label": "갈색",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#201b22"
+      "color": "#604333"
     },
     {
-      "id": "hairTone:chestnut",
+      "id": "minimi-hairTone-chestnut",
       "slot": "hairTone",
-      "value": "chestnut",
+      "value": "mm-chestnut",
       "label": "밤색",
       "price": 0,
       "tier": "basic",
@@ -388,130 +263,26 @@
         "girl",
         "boy"
       ],
-      "color": "#633624"
+      "color": "#985d3d"
     },
     {
-      "id": "hairTone:chocolate",
+      "id": "minimi-hairTone-honey",
       "slot": "hairTone",
-      "value": "chocolate",
-      "label": "초콜릿",
-      "price": 70,
-      "tier": "premium",
+      "value": "mm-honey",
+      "label": "꿀빛",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ],
-      "color": "#39221b"
+      "color": "#cc9b58"
     },
     {
-      "id": "hairTone:copper",
-      "slot": "hairTone",
-      "value": "copper",
-      "label": "코퍼",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#ad542b"
-    },
-    {
-      "id": "hairTone:blonde",
-      "slot": "hairTone",
-      "value": "blonde",
-      "label": "골드 블론드",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#dab46a"
-    },
-    {
-      "id": "hairTone:platinum",
-      "slot": "hairTone",
-      "value": "platinum",
-      "label": "플래티넘",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#e8dfcd"
-    },
-    {
-      "id": "hairTone:rose",
-      "slot": "hairTone",
-      "value": "rose",
-      "label": "로즈",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#bd6f89"
-    },
-    {
-      "id": "hairTone:lavender",
-      "slot": "hairTone",
-      "value": "lavender",
-      "label": "라벤더",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#9c83c7"
-    },
-    {
-      "id": "hairTone:blue",
-      "slot": "hairTone",
-      "value": "blue",
-      "label": "블루",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#526fa6"
-    },
-    {
-      "id": "hairTone:mint",
-      "slot": "hairTone",
-      "value": "mint",
-      "label": "민트",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#6eaaa0"
-    },
-    {
-      "id": "hairTone:silver",
-      "slot": "hairTone",
-      "value": "silver",
-      "label": "실버",
-      "price": 70,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#b9bbc2"
-    },
-    {
-      "id": "pose:idle",
+      "id": "minimi-pose-idle",
       "slot": "pose",
-      "value": "idle",
-      "label": "기본 자세",
+      "value": "mm-idle",
+      "label": "바로 서기",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -520,10 +291,10 @@
       ]
     },
     {
-      "id": "pose:tilt",
+      "id": "minimi-pose-wave",
       "slot": "pose",
-      "value": "tilt",
-      "label": "고개 갸웃",
+      "value": "mm-wave",
+      "label": "손 인사",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -532,275 +303,10 @@
       ]
     },
     {
-      "id": "pose:wave",
+      "id": "minimi-pose-cheer",
       "slot": "pose",
-      "value": "wave",
-      "label": "반가워요",
-      "price": 120,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "pose:cheer",
-      "slot": "pose",
-      "value": "cheer",
-      "label": "응원해요",
-      "price": 180,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "pose:think",
-      "slot": "pose",
-      "value": "think",
-      "label": "생각 중",
-      "price": 150,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "pose:heart",
-      "slot": "pose",
-      "value": "heart",
-      "label": "두 손 모아",
-      "price": 200,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ]
-    },
-    {
-      "id": "top:plain-top",
-      "slot": "top",
-      "value": "plain-top",
-      "label": "기본 상의",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#c9cbd4"
-    },
-    {
-      "id": "top:jacket-sunshine",
-      "slot": "top",
-      "value": "jacket-sunshine",
-      "label": "햇살 재킷",
-      "price": 180,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#f4c54e"
-    },
-    {
-      "id": "top:jacket-lavender",
-      "slot": "top",
-      "value": "jacket-lavender",
-      "label": "라벤더 재킷",
-      "price": 180,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#b4a0d6"
-    },
-    {
-      "id": "top:jacket-navy",
-      "slot": "top",
-      "value": "jacket-navy",
-      "label": "네이비 재킷",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#394b70"
-    },
-    {
-      "id": "top:jacket-mint",
-      "slot": "top",
-      "value": "jacket-mint",
-      "label": "민트 재킷",
-      "price": 180,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#85c6b5"
-    },
-    {
-      "id": "top:jacket-rose",
-      "slot": "top",
-      "value": "jacket-rose",
-      "label": "로즈 재킷",
-      "price": 180,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#e29baf"
-    },
-    {
-      "id": "top:jacket-cream",
-      "slot": "top",
-      "value": "jacket-cream",
-      "label": "크림 재킷",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#e8dcc4"
-    },
-    {
-      "id": "bottom:plain-bottom",
-      "slot": "bottom",
-      "value": "plain-bottom",
-      "label": "기본 하의",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#999fab"
-    },
-    {
-      "id": "bottom:pleated-lilac",
-      "slot": "bottom",
-      "value": "pleated-lilac",
-      "label": "라일락 하의",
-      "price": 120,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#a68ac7"
-    },
-    {
-      "id": "bottom:pleated-navy",
-      "slot": "bottom",
-      "value": "pleated-navy",
-      "label": "네이비 하의",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#344764"
-    },
-    {
-      "id": "bottom:pleated-cream",
-      "slot": "bottom",
-      "value": "pleated-cream",
-      "label": "크림 하의",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#e8dbc4"
-    },
-    {
-      "id": "bottom:pleated-mint",
-      "slot": "bottom",
-      "value": "pleated-mint",
-      "label": "민트 하의",
-      "price": 120,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#85b9a9"
-    },
-    {
-      "id": "shoes:plain-shoes",
-      "slot": "shoes",
-      "value": "plain-shoes",
-      "label": "기본 운동화",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#dbdce2"
-    },
-    {
-      "id": "shoes:sneakers-pink",
-      "slot": "shoes",
-      "value": "sneakers-pink",
-      "label": "피치 운동화",
-      "price": 90,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#d8a0ae"
-    },
-    {
-      "id": "shoes:sneakers-white",
-      "slot": "shoes",
-      "value": "sneakers-white",
-      "label": "크림 운동화",
-      "price": 80,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#eee9df"
-    },
-    {
-      "id": "shoes:sneakers-blue",
-      "slot": "shoes",
-      "value": "sneakers-blue",
-      "label": "블루 운동화",
-      "price": 90,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#819bbb"
-    },
-    {
-      "id": "shoes:sneakers-lavender",
-      "slot": "shoes",
-      "value": "sneakers-lavender",
-      "label": "라벤더 운동화",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#b5a0c8"
-    },
-    {
-      "id": "accessory:none",
-      "slot": "accessory",
-      "value": "none",
-      "label": "장식 없음",
+      "value": "mm-cheer",
+      "label": "응원",
       "price": 0,
       "tier": "basic",
       "characters": [
@@ -809,294 +315,207 @@
       ]
     },
     {
-      "id": "accessory:glasses-round",
-      "slot": "accessory",
-      "value": "glasses-round",
-      "label": "동그란 안경",
-      "price": 180,
-      "tier": "premium",
+      "id": "minimi-top-school-white",
+      "slot": "top",
+      "value": "mm-school-white",
+      "label": "용신중 하복 흰색",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "accessory:star-clip",
-      "slot": "accessory",
-      "value": "star-clip",
-      "label": "별빛 머리핀",
-      "price": 150,
-      "tier": "premium",
+      "id": "minimi-top-school-navy",
+      "slot": "top",
+      "value": "mm-school-navy",
+      "label": "용신중 하복 남색",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "accessory:headphones",
-      "slot": "accessory",
-      "value": "headphones",
-      "label": "뮤직 헤드폰",
-      "price": 280,
-      "tier": "premium",
+      "id": "minimi-top-school-hoodie",
+      "slot": "top",
+      "value": "mm-school-hoodie",
+      "label": "용신중 동복 후드",
+      "price": 0,
+      "tier": "basic",
       "characters": [
         "girl",
         "boy"
       ]
     },
     {
-      "id": "top:hanbok-ivory",
+      "id": "minimi-top-school-halfzip",
       "slot": "top",
-      "value": "hanbok-ivory",
-      "label": "아이보리 저고리",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#f3e7cd"
-    },
-    {
-      "id": "top:hanbok-sky",
-      "slot": "top",
-      "value": "hanbok-sky",
-      "label": "하늘빛 저고리",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#a8cddd"
-    },
-    {
-      "id": "top:hanbok-peach",
-      "slot": "top",
-      "value": "hanbok-peach",
-      "label": "복숭아빛 저고리",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#efb0a1"
-    },
-    {
-      "id": "top:official-navy",
-      "slot": "top",
-      "value": "official-navy",
-      "label": "남색 흉배 관복",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#263854"
-    },
-    {
-      "id": "top:official-red",
-      "slot": "top",
-      "value": "official-red",
-      "label": "홍색 관복",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#9c312e"
-    },
-    {
-      "id": "top:official-black",
-      "slot": "top",
-      "value": "official-black",
-      "label": "흑색 흉배 관복",
-      "price": 160,
-      "tier": "premium",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#282d39"
-    },
-    {
-      "id": "top:summer-white",
-      "slot": "top",
-      "value": "summer-white",
-      "label": "용신중 흰색 하복",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#f0f1ee"
-    },
-    {
-      "id": "top:summer-navy",
-      "slot": "top",
-      "value": "summer-navy",
-      "label": "용신중 네이비 하복",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#1f2c42"
-    },
-    {
-      "id": "bottom:chima-rose",
-      "slot": "bottom",
-      "value": "chima-rose",
-      "label": "장미빛 한복 치마",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#b65d78"
-    },
-    {
-      "id": "bottom:chima-navy",
-      "slot": "bottom",
-      "value": "chima-navy",
-      "label": "남색 한복 치마",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#29446a"
-    },
-    {
-      "id": "bottom:chima-jade",
-      "slot": "bottom",
-      "value": "chima-jade",
-      "label": "옥빛 한복 치마",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "girl"
-      ],
-      "color": "#398a7f"
-    },
-    {
-      "id": "bottom:baji-navy",
-      "slot": "bottom",
-      "value": "baji-navy",
-      "label": "남색 한복 바지",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "boy"
-      ],
-      "color": "#33465f"
-    },
-    {
-      "id": "bottom:baji-cream",
-      "slot": "bottom",
-      "value": "baji-cream",
-      "label": "미색 한복 바지",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "boy"
-      ],
-      "color": "#e6d7bb"
-    },
-    {
-      "id": "bottom:baji-charcoal",
-      "slot": "bottom",
-      "value": "baji-charcoal",
-      "label": "먹색 한복 바지",
-      "price": 100,
-      "tier": "premium",
-      "characters": [
-        "boy"
-      ],
-      "color": "#454750"
-    },
-    {
-      "id": "bottom:summer-shorts",
-      "slot": "bottom",
-      "value": "summer-shorts",
-      "label": "용신중 하복 반바지",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#202835"
-    },
-    {
-      "id": "accessory:official-samo",
-      "slot": "accessory",
-      "value": "official-samo",
-      "label": "사모",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#20232a"
-    },
-    {
-      "id": "accessory:official-gat",
-      "slot": "accessory",
-      "value": "official-gat",
-      "label": "갓",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#20232a"
-    },
-    {
-      "id": "top:winter-hoodie",
-      "slot": "top",
-      "value": "winter-hoodie",
-      "label": "용신중 동복 후드 집업",
-      "price": 0,
-      "tier": "basic",
-      "characters": [
-        "girl",
-        "boy"
-      ],
-      "color": "#202c42"
-    },
-    {
-      "id": "top:winter-halfzip",
-      "slot": "top",
-      "value": "winter-halfzip",
+      "value": "mm-school-halfzip",
       "label": "용신중 동복 반집업",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
-      ],
-      "color": "#202c42"
+      ]
     },
     {
-      "id": "bottom:winter-joggers",
+      "id": "minimi-top-knit-cream",
+      "slot": "top",
+      "value": "mm-knit-cream",
+      "label": "크림 니트",
+      "price": 160,
+      "tier": "standard",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-top-sweat-blue",
+      "slot": "top",
+      "value": "mm-sweat-blue",
+      "label": "파랑 맨투맨",
+      "price": 160,
+      "tier": "standard",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-bottom-school-shorts",
       "slot": "bottom",
-      "value": "winter-joggers",
-      "label": "용신중 동복 체육복 바지",
+      "value": "mm-school-shorts",
+      "label": "용신중 하복 반바지",
       "price": 0,
       "tier": "basic",
       "characters": [
         "girl",
         "boy"
-      ],
-      "color": "#202c42"
+      ]
+    },
+    {
+      "id": "minimi-bottom-school-joggers",
+      "slot": "bottom",
+      "value": "mm-school-joggers",
+      "label": "용신중 동복 체육복",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-bottom-jeans",
+      "slot": "bottom",
+      "value": "mm-jeans",
+      "label": "청바지",
+      "price": 100,
+      "tier": "standard",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-bottom-skirt-navy",
+      "slot": "bottom",
+      "value": "mm-skirt-navy",
+      "label": "남색 치마",
+      "price": 100,
+      "tier": "standard",
+      "characters": [
+        "girl"
+      ]
+    },
+    {
+      "id": "minimi-shoes-sneakers-white",
+      "slot": "shoes",
+      "value": "mm-sneakers-white",
+      "label": "흰 운동화",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-shoes-sneakers-navy",
+      "slot": "shoes",
+      "value": "mm-sneakers-navy",
+      "label": "남색 운동화",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-shoes-loafers",
+      "slot": "shoes",
+      "value": "mm-loafers",
+      "label": "로퍼",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-accessory-none",
+      "slot": "accessory",
+      "value": "mm-none",
+      "label": "없음",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-accessory-glasses",
+      "slot": "accessory",
+      "value": "mm-glasses",
+      "label": "동그란 안경",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-accessory-ribbon",
+      "slot": "accessory",
+      "value": "mm-ribbon",
+      "label": "리본",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
+    },
+    {
+      "id": "minimi-accessory-cap",
+      "slot": "accessory",
+      "value": "mm-cap",
+      "label": "모자",
+      "price": 0,
+      "tier": "basic",
+      "characters": [
+        "girl",
+        "boy"
+      ]
     }
   ]
 }

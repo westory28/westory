@@ -99,7 +99,7 @@ if (require.main === module) {
 test('default, free catalog choices and private state never return another identity', async () => {
   const state = fixture(); const result = await state.api.getStudentAvatar(req({}));
   assert.deepEqual(result.look, defaultLook()); assert.equal(result.revision, 0); assert.deepEqual(result.ownedItemIds, []);
-  assert.equal(result.look.top, 'summer-white'); assert.equal(result.look.bottom, 'summer-shorts');
+  assert.equal(result.look.top, 'mm-school-white'); assert.equal(result.look.bottom, 'mm-school-shorts');
   assert.deepEqual(catalog.items.filter(item => ['top', 'bottom'].includes(item.slot) && item.price === 0)
     .map(item => item.id).sort(), [...catalog.freeClothingItemIds].sort());
   await assert.rejects(state.api.getStudentAvatar(req({ uid: 'foreign' })), reason('AVATAR_INPUT_INVALID'));
@@ -186,11 +186,13 @@ test('approved-student authority and valid application session precede all write
   const state = fixture(); state.rejectSession(); await assert.rejects(state.api.getStudentAvatar(req({}))); assert.equal(state.reads.length, 0);
   const other = fixture(); other.sessionActor('foreign'); await assert.rejects(other.api.getStudentAvatar(req({}))); assert.equal(other.reads.length, 0);
 });
-test('save validates every equipped slot and ownership; girl-only hair cannot be put on boy', async () => {
+test('save validates every equipped slot and ownership; all minimi hair supports both characters', async () => {
   const state = fixture();
   const look = { ...defaultLook(), [paid[0].slot]: paid[0].value };
   await assert.rejects(state.api.saveStudentAvatar(await save({ look })), reason('AVATAR_ITEM_NOT_OWNED'));
-  await assert.rejects(state.api.saveStudentAvatar(await save({ look: { ...defaultLook(), character: 'boy' } })), reason('AVATAR_INPUT_INVALID'));
+  for (const hair of catalog.items.filter(item => item.slot === 'hairStyle')) {
+    for (const character of ['girl', 'boy']) assert.ok(validateLook({ ...defaultLook(character), hairStyle: hair.value }));
+  }
   await assert.rejects(state.api.saveStudentAvatar(await save({ look: { ...defaultLook(), top: 'none' } })), reason('AVATAR_INPUT_INVALID'));
   assert.equal(state.bucket.objects.size, 0); assert.equal(state.writes.length, 0);
 });
@@ -207,8 +209,8 @@ test('save persists only validated public projection and immutable bounded reenc
 });
 
 test('all skirts remain available to girls and cannot be saved on boys even when owned', async () => {
-  const skirts = catalog.items.filter(item => item.slot === 'bottom' && /^(pleated|chima)-/.test(item.value));
-  assert.equal(skirts.length, 7);
+  const skirts = catalog.items.filter(item => item.slot === 'bottom' && /^mm-skirt-/.test(item.value));
+  assert.equal(skirts.length, 1);
   const state = fixture();
   for (const item of skirts) {
     assert.deepEqual(item.characters, ['girl']);
@@ -218,42 +220,33 @@ test('all skirts remain available to girls and cannot be saved on boys even when
   }
   assert.equal(state.writes.length, 0);
   assert.equal(state.bucket.objects.size, 0);
-  for (const item of catalog.items.filter(item => item.slot === 'bottom' && !/^(pleated|chima)-/.test(item.value))) {
+  for (const item of catalog.items.filter(item => item.slot === 'bottom' && !/^mm-skirt-/.test(item.value))) {
     assert.ok(validateLook({ ...defaultLook('boy'), bottom: item.value }, [item.id]), item.id);
   }
 });
 
-test('legacy boy skirts recover to free shorts without read-time writes or losing owned clothes', async () => {
-  const state = fixture(), look = { ...defaultLook('boy'), bottom: 'pleated-navy' };
-  const old = { schemaVersion: 1, catalogVersion: catalog.version, studentUid: uid, revision: 3,
-    look, lookHash: lookHash(look), ownedItemIds: ['bottom:pleated-navy', 'top:jacket-navy'], lastSavedAtMs: 1,
-    thumbnailPath: 'student_avatar_thumbnails/v1/legacy/example.webp',
-    thumbnailUrl: `https://firebasestorage.googleapis.com/v0/b/test.appspot.com/o/student_avatar_thumbnails%2Fv1%2F${'a'.repeat(64)}%2F${'b'.repeat(64)}.webp?alt=media&token=11111111-1111-1111-1111-111111111111` };
+test('retired selections, ownership and thumbnails disconnect without read-time writes', async () => {
+  const state = fixture();
+  const old = { schemaVersion: 1, catalogVersion: 1, studentUid: uid, revision: 3,
+    look: { character: 'boy', bottom: 'pleated-navy' }, lookHash: 'retired-hash',
+    ownedItemIds: ['bottom:pleated-navy', 'top:jacket-navy'], lastSavedAtMs: 1,
+    thumbnailPath: 'student_avatar_thumbnails/v1/legacy/example.webp', thumbnailUrl: 'retired-thumbnail' };
   state.documents.set(avatarPath, structuredClone(old));
   const current = await state.api.getStudentAvatar(req({}));
-  assert.deepEqual(current.look, defaultLook('boy'));
-  assert.equal(current.requiresThumbnailRefresh, true);
-  assert.equal(current.thumbnailUrl, undefined);
-  assert.equal(current.revision, 3);
-  assert.ok(current.ownedItemIds.includes('bottom:pleated-navy'));
-  assert.ok(current.ownedItemIds.includes('top:jacket-navy'));
+  assert.deepEqual(current.look, defaultLook()); assert.deepEqual(current.ownedItemIds, []);
+  assert.equal(current.requiresThumbnailRefresh, undefined); assert.equal(current.thumbnailUrl, undefined);
+  assert.equal(current.revision, 3); assert.equal(current.catalogVersion, 2);
   const combined = await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }));
-  assert.deepEqual(combined.avatar, current);
-  assert.deepEqual(state.documents.get(avatarPath), old);
-  assert.equal(state.writes.length, 0);
-  const projection = sanitizePublicAvatar(old);
-  assert.deepEqual(projection.look, current.look);
-  assert.equal(projection.lookHash, lookHash(current.look));
-  assert.equal(projection.thumbnailUrl, undefined);
-  assert.equal(sanitizePublicAvatar({ ...old, lookHash: 'tampered' }), null);
-  const saved = await state.api.saveStudentAvatar(await save({ look: current.look, expectedRevision: 3 }));
-  assert.equal(saved.requiresThumbnailRefresh, undefined);
-  assert.ok(saved.thumbnailUrl);
-  assert.ok(saved.ownedItemIds.includes('bottom:pleated-navy'));
-  assert.deepEqual(state.documents.get(avatarPath).look, current.look);
+  assert.deepEqual(combined.avatar, current); assert.deepEqual(state.documents.get(avatarPath), old);
+  assert.equal(state.writes.length, 0); assert.equal(sanitizePublicAvatar(old), null);
+  const saved = await state.api.saveStudentAvatar(await save({ expectedRevision: 3 }));
+  assert.equal(saved.requiresThumbnailRefresh, undefined); assert.ok(saved.thumbnailUrl.includes('%2Fv2%2F'));
+  assert.equal(saved.ownedItemIds.some(id => !id.startsWith('minimi-')), false);
+  assert.equal(state.documents.get(avatarPath).previousThumbnailPath, null);
+  assert.equal(state.documents.get(accountPath).balance, 1000);
 });
 
-test('legacy recovery never accepts malformed looks or never-supported boy hanbok skirts', async () => {
+test('current generation rejects malformed and retired values rather than repairing them', async () => {
   for (const patch of [{ bottom: 'chima-navy' }, { hairStyle: 'bob' }, { unknown: 'extra' }]) {
     const state = fixture(), look = { ...defaultLook('boy'), bottom: 'pleated-navy', ...patch };
     const old = { schemaVersion: 1, catalogVersion: catalog.version, studentUid: uid, revision: 1,
@@ -304,6 +297,37 @@ test('public sanitizer rejects invalid hashes/URLs, unsupported catalog and alte
   assert.ok(sanitizePublicAvatar(value)); assert.equal(sanitizePublicAvatar({ ...value, lookHash: 'bad' }), null);
   assert.equal(sanitizePublicAvatar({ ...value, catalogVersion: 999 }), null);
   assert.equal(sanitizePublicAvatar({ ...value, thumbnailUrl: 'javascript:evil' }).thumbnailUrl, undefined);
+});
+
+test('old purchase IDs and receipts cannot reattach retired ownership or saved images', async () => {
+  const state = fixture();
+  for (const itemId of ['character:girl', 'top:summer-white', 'hairStyle:bob']) {
+    await assert.rejects(state.api.purchaseStudentAvatarItem(req({ ...purchase().data, itemId })), reason('AVATAR_INPUT_INVALID'));
+  }
+  const input = await save(), legacyKey = createHash('sha256').update(input.data.requestId).digest('hex');
+  const receiptPath = `${avatarPath}/requests/${legacyKey}`;
+  const receipt = { schemaVersion: 1, studentUid: uid, payloadHash: 'legacy', result: { thumbnailUrl: 'retired-image', charged: 25 } };
+  state.documents.set(receiptPath, structuredClone(receipt));
+  const result = await state.api.saveStudentAvatar(input);
+  assert.equal(result.duplicate, false); assert.equal(result.catalogVersion, 2);
+  assert.ok(result.thumbnailUrl.includes('%2Fv2%2F'));
+  assert.deepEqual(state.documents.get(receiptPath), receipt);
+  assert.equal(state.documents.get(accountPath).balance, 1000);
+});
+
+test('thumbnail normalization preserves exact pixel colors, transparent cells and nearest-neighbor edges', async () => {
+  const width = 512, height = 512, pixels = Buffer.alloc(width * height * 4);
+  const palette = [[32, 28, 43, 255], [248, 216, 184, 255], [49, 73, 126, 255], [0, 0, 0, 0]];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const color = palette[(Math.floor(x / 8) + Math.floor(y / 8)) % palette.length];
+    color.forEach((value, channel) => { pixels[(y * width + x) * 4 + channel] = value; });
+  }
+  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).webp({ lossless: true }).toBuffer();
+  const encoded = await encodeThumbnail(`data:image/webp;base64,${source.toString('base64')}`);
+  const actual = await sharp(encoded).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const expected = await sharp(source).resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true, kernel: 'nearest' }).ensureAlpha().raw().toBuffer();
+  assert.equal(actual.info.width, 384); assert.equal(actual.info.height, 384);
+  assert.deepEqual(actual.data, expected); assert.ok(encoded.length <= 64 * 1024);
 });
 test('ranking preview and full hall reuse existing profile batches and expose only sanitized avatar fields', async () => {
   const { setup, publicId } = require('./verify-wis-ranking-preview.cjs');

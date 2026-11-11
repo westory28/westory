@@ -14,7 +14,7 @@ import {
   defaultAvatarLook,
   effectiveAvatarItemPrice,
   ownsAvatarItem,
-  restoreAvatarLook,
+  restoreAvatarState,
   selectAvatarItem,
   type AvatarItem,
   type AvatarLook,
@@ -103,21 +103,14 @@ export function AvatarStudio({
     try {
       const data = await adapter.load();
       if (current !== generation.current) return;
-      const restoredLook = restoreAvatarLook(data.avatar.look);
-      setSaved({ ...data.avatar, look: restoredLook });
-      setLook(restoredLook);
+      const restored = restoreAvatarState(data.avatar);
+      setSaved(restored);
+      setLook(restored.look);
       setCharacterChosen(
-        Boolean(
-          data.avatar.thumbnailUrl || data.avatar.requiresThumbnailRefresh,
-        ),
+        Boolean(restored.thumbnailUrl || restored.requiresThumbnailRefresh),
       );
-      // Existing saved images can still use the previous renderer. Refresh only
-      // after the owner explicitly saves; viewing the studio never writes data.
-      setNeedsThumbnailRefresh(
-        Boolean(
-          data.avatar.thumbnailUrl || data.avatar.requiresThumbnailRefresh,
-        ),
-      );
+      // Merely opening the studio never writes a selection.
+      setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
       setBalance(data.balance);
       setPricing(data.pricing || { revision: 0, prices: {} });
     } catch (failure) {
@@ -280,7 +273,7 @@ export function AvatarStudio({
     try {
       stage.current.stop?.();
       stage.current.resetView();
-      // Let the illustrated view finish its full-body framing before capture.
+      // Allow the full-body view to paint before capturing the shared pixel art.
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
       );
@@ -475,7 +468,10 @@ export function AvatarStudio({
         <div className="avatar-studio-picker">
           <div className="avatar-studio-categories" aria-label="꾸미기 종류">
             {AVATAR_SLOTS.filter(
-              (category) => category.key !== "character",
+              (category) =>
+                category.key !== "character" &&
+                AVATAR_ITEMS.filter((item) => item.slot === category.key)
+                  .length > 1,
             ).map((category) => (
               <button
                 type="button"

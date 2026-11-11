@@ -80,16 +80,16 @@ export const defaultAvatarLook = (
   character: AvatarCharacter = "girl",
 ): AvatarLook => ({
   character,
-  skinTone: "original",
-  faceShape: "natural",
-  expression: "natural",
-  hairStyle: character === "boy" ? "curtain" : "bob",
-  hairTone: "original",
-  pose: "idle",
+  skinTone: "mm-ivory",
+  faceShape: "mm-round",
+  expression: "mm-smile",
+  hairStyle: character === "boy" ? "mm-parted" : "mm-bob",
+  hairTone: "mm-ink",
+  pose: "mm-idle",
   top: catalog.defaultClothing.top,
   bottom: catalog.defaultClothing.bottom,
-  shoes: "plain-shoes",
-  accessory: "none",
+  shoes: "mm-sneakers-white",
+  accessory: "mm-none",
 });
 export const itemForLook = (look: AvatarLook, slot: AvatarSlot) =>
   AVATAR_ITEMS.find(
@@ -123,12 +123,39 @@ export const selectAvatarItem = (
   return next;
 };
 
-// Reconcile saved choices against the current catalog without deleting owned
-// items or saving automatically. Also covers an older API response during rollout.
-export const restoreAvatarLook = (look: AvatarLook): AvatarLook => {
+// A retired catalog is a reset, never a partial migration of the old character.
+export const restoreAvatarLook = (
+  look: AvatarLook,
+  catalogVersion = AVATAR_CATALOG_VERSION,
+): AvatarLook => {
+  if (catalogVersion !== AVATAR_CATALOG_VERSION) return defaultAvatarLook();
   const next = { ...look };
   const fallback = defaultAvatarLook(look.character);
   for (const { key } of AVATAR_SLOTS)
     if (!itemForLook(next, key)) next[key] = fallback[key] as never;
   return next;
+};
+
+export const isCurrentAvatar = (
+  avatar: { catalogVersion?: number; thumbnailUrl?: string } | null | undefined,
+): boolean => avatar?.catalogVersion === AVATAR_CATALOG_VERSION;
+
+export const restoreAvatarState = (state: AvatarState): AvatarState => {
+  if (!isCurrentAvatar(state)) {
+    return {
+      schemaVersion: 1,
+      catalogVersion: AVATAR_CATALOG_VERSION,
+      look: defaultAvatarLook(),
+      revision: state.revision,
+      lookHash: "",
+      ownedItemIds: [],
+    };
+  }
+  return {
+    ...state,
+    look: restoreAvatarLook(state.look, state.catalogVersion),
+    ownedItemIds: state.ownedItemIds.filter((id) =>
+      AVATAR_ITEMS.some((item) => item.id === id),
+    ),
+  };
 };

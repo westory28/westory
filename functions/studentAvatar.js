@@ -21,7 +21,7 @@ const scopeOf = data => {
 };
 const requestKey = value => {
   if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(value)) invalid();
-  return hash(value);
+  return hash(`avatar-catalog-${catalog.version}\n${value}`);
 };
 const publicState = state => {
   const look = restoreStoredLook(state.look);
@@ -34,7 +34,7 @@ const publicState = state => {
 const privateState = state => {
   const current = publicState(state);
   return { ...current, ownedItemIds: [...state.ownedItemIds],
-    ...(current.lookHash !== lookHash(state.look) ? { requiresThumbnailRefresh: true } : {}) };
+    ...(state.requiresThumbnailRefresh || current.lookHash !== lookHash(state.look) ? { requiresThumbnailRefresh: true } : {}) };
 };
 const walletState = account => Object.fromEntries(['semesterId', 'accountId', 'balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal', 'adjustedTotal', 'revision'].map(key => [key, account[key]]));
 
@@ -46,12 +46,10 @@ async function encodeThumbnail(input) {
   try {
     const meta = await sharp(bytes, { limitInputPixels: 512 * 512, animated: true }).metadata();
     if (meta.format !== 'webp' || !meta.width || !meta.height || meta.width > 512 || meta.height > 512 || (meta.pages || 1) !== 1) invalid();
-    for (const quality of [84, 72, 60]) {
-      const result = await sharp(bytes, { limitInputPixels: 512 * 512 }).rotate()
-        .resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true })
-        .webp({ quality, effort: 4 }).toBuffer();
-      if (result.length <= 64 * 1024) return result;
-    }
+    const result = await sharp(bytes, { limitInputPixels: 512 * 512 }).rotate()
+      .resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true, kernel: 'nearest' })
+      .webp({ lossless: true, effort: 4 }).toBuffer();
+    if (result.length <= 64 * 1024) return result;
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     invalid();
@@ -93,9 +91,17 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const doc = await tx.get(db.doc(`${collection}/${uid}`));
     if (!doc.exists) return { [ownerField]: uid, revision: 0, ownedItemIds: [], look: defaultLook() };
     const value = doc.data();
-    if (value[ownerField] !== uid || value.schemaVersion !== 1 || !safe(value.revision, 1)
+    if (value[ownerField] !== uid || value.schemaVersion !== 1 || !safe(value.revision, 1)) {
+      fail('failed-precondition', '아바타 보관함을 확인하지 못했습니다.', 'AVATAR_STATE_INVALID');
+    }
+    if (value.catalogVersion === undefined || value.catalogVersion === 1) {
+      // Disconnect every retired choice and image without a write on page load.
+      // The revision remains a CAS boundary until the explicit reset/save commits.
+      return { [ownerField]: uid, revision: value.revision, ownedItemIds: [], look: defaultLook() };
+    }
+    if (value.catalogVersion !== catalog.version
       || !Array.isArray(value.ownedItemIds) || value.ownedItemIds.length > 500
-      || value.ownedItemIds.some(id => typeof id !== 'string' || id.length > 100)
+      || value.ownedItemIds.some(id => typeof id !== 'string' || !items.has(id))
       || new Set(value.ownedItemIds).size !== value.ownedItemIds.length
       || !restoreStoredLook(value.look) || value.lookHash !== lookHash(value.look)) {
       fail('failed-precondition', '아바타 보관함을 확인하지 못했습니다.', 'AVATAR_STATE_INVALID');
@@ -109,7 +115,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) return null;
     const receipt = snapshot.data();
-    if (receipt[ownerField] !== uid || receipt.payloadHash !== digest) {
+    if (receipt[ownerField] !== uid || receipt.catalogVersion !== catalog.version || receipt.payloadHash !== digest) {
       fail('already-exists', '이 요청 번호는 다른 선택에 사용되었습니다. 다시 시도해 주세요.', 'AVATAR_REQUEST_REUSED');
     }
     return { ...receipt.result, duplicate: true };
@@ -120,7 +126,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     tx.set(db.doc(`users/${uid}`), { avatar: publicState(data), updatedAt: timestamp }, { merge: true });
   };
   const writeReceipt = (tx, ref, uid, digest, result, timestamp) => tx.create(ref, {
-    schemaVersion: 1, [ownerField]: uid, payloadHash: digest, result, createdAt: timestamp,
+    schemaVersion: 1, catalogVersion: catalog.version, [ownerField]: uid, payloadHash: digest, result, createdAt: timestamp,
   });
 
   const getStudentAvatar = async request => {
@@ -275,7 +281,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     if (prepared.previous) return prepared.previous;
     const storageBucket = typeof bucket === 'function' ? bucket() : bucket;
     if (!storageBucket) fail('unavailable', '아바타 이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'AVATAR_STORAGE_UNAVAILABLE');
-    const objectPath = `${thumbnailFolder}/v1/${hash(uid)}/${hash(`${key}\n${digest}`)}.webp`;
+    const objectPath = `${thumbnailFolder}/v2/${hash(uid)}/${hash(`${key}\n${digest}`)}.webp`;
     const file = storageBucket.file(objectPath);
     let token = randomUUID(), created = false;
     try {
@@ -300,7 +306,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
         if (checked.previous) return checked.previous;
         const state = checked.state, timestamp = Timestamp.fromMillis(now());
         retiredPath = state.previousThumbnailPath || null;
-        const next = { ...state, look, revision: state.revision + 1,
+        const next = { ...state, look, revision: state.revision + 1, requiresThumbnailRefresh: false,
           ownedItemIds: [...new Set([...state.ownedItemIds, ...ownedLookIds(look)])].sort(), thumbnailUrl, thumbnailPath: objectPath,
           previousThumbnailPath: state.thumbnailPath || null, lastSavedAtMs: now() };
         writeState(tx, uid, next, timestamp);
@@ -310,7 +316,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       });
       // Retain current and previous image so normal page/cache transitions work.
       // Cleanup is best-effort; failures must not turn a committed save into failure.
-      if (retiredPath && retiredPath !== objectPath && retiredPath.startsWith(`${thumbnailFolder}/v1/${hash(uid)}/`)) {
+      if (retiredPath && retiredPath !== objectPath && retiredPath.startsWith(`${thumbnailFolder}/v2/${hash(uid)}/`)) {
         try {
           const current = (await db.doc(`${collection}/${uid}`).get()).data() || {};
           if (![current.thumbnailPath, current.previousThumbnailPath].includes(retiredPath)) await storageBucket.file(retiredPath).delete({ ignoreNotFound: true });
@@ -363,7 +369,9 @@ const createStudentAvatarDeletionHandler = ({ db, bucket, audience = 'student' }
   if (!acquired) return;
   const storageBucket = typeof bucket === 'function' ? bucket() : bucket;
   if (!storageBucket) throw new Error('Avatar cleanup storage unavailable');
-  await storageBucket.deleteFiles({ prefix: `${thumbnails}/v1/${hash(uid)}/`, force: true });
+  for (const version of ['v1', 'v2']) {
+    await storageBucket.deleteFiles({ prefix: `${thumbnails}/${version}/${hash(uid)}/`, force: true });
+  }
   await db.recursiveDelete(db.doc(`${collection}/${uid}`));
   await db.runTransaction(async tx => {
     const lock = await tx.get(lockRef);

@@ -5,6 +5,7 @@ import { getYearSemester } from "../../lib/semesterScope";
 import type { SystemConfig } from "../../types";
 import {
   AVATAR_PRICING_POLICY_VERSION,
+  AVATAR_CATALOG_VERSION,
   type AvatarLook,
   type AvatarState,
 } from "./catalog";
@@ -60,7 +61,9 @@ const requestIdFor = (key: string) => {
   if (requestIds.has(key)) return requestIds.get(key)!;
   let stored: string | null = null;
   try {
-    stored = sessionStorage.getItem(`westory:avatar-request:${key}`);
+    stored = sessionStorage.getItem(
+      `westory:avatar-request:v${AVATAR_CATALOG_VERSION}:${key}`,
+    );
   } catch {
     /* Memory fallback. */
   }
@@ -70,7 +73,10 @@ const requestIdFor = (key: string) => {
       : crypto.randomUUID();
   requestIds.set(key, id);
   try {
-    sessionStorage.setItem(`westory:avatar-request:${key}`, id);
+    sessionStorage.setItem(
+      `westory:avatar-request:v${AVATAR_CATALOG_VERSION}:${key}`,
+      id,
+    );
   } catch {
     /* Memory fallback. */
   }
@@ -79,7 +85,9 @@ const requestIdFor = (key: string) => {
 const clearRequest = (key: string) => {
   requestIds.delete(key);
   try {
-    sessionStorage.removeItem(`westory:avatar-request:${key}`);
+    sessionStorage.removeItem(
+      `westory:avatar-request:v${AVATAR_CATALOG_VERSION}:${key}`,
+    );
   } catch {
     /* Optional storage. */
   }
@@ -329,12 +337,13 @@ export const makeAvatarThumbnail = async (dataUrl: string): Promise<string> => {
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("미리보기를 만들지 못했습니다.");
+    ctx.imageSmoothingEnabled = false;
     // Preserve the renderer's alpha so the saved avatar can stand on a podium.
     const scale = Math.min(384 / bitmap.width, 512 / bitmap.height);
     const w = bitmap.width * scale,
       h = bitmap.height * scale;
     ctx.drawImage(bitmap, (384 - w) / 2, (512 - h) / 2, w, h);
-    for (const quality of [0.82, 0.68, 0.5]) {
+    for (const quality of [1]) {
       const webp = canvas.toDataURL("image/webp", quality);
       if (webp.startsWith("data:image/webp;base64,") && webp.length < 86_000)
         return webp;

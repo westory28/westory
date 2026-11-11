@@ -16,6 +16,7 @@
   height: 100%;
   object-fit: contain;
   object-position: center;
+  image-rendering: pixelated;
 }
 
 .avatar-placeholder__question {

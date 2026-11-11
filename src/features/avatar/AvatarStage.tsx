@@ -31,7 +31,7 @@ export interface AvatarStageHandle {
   stop(): void;
 }
 
-/** Load the illustrated layers only when the studio is visible and active. */
+/** Mount the shared pixel renderer only while the studio is visible. */
 export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
   function AvatarStage(
     {
@@ -145,15 +145,13 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
       setError(null);
       setLoading(true);
       callbacksRef.current.onLoadingChange?.(true);
-      void import("./renderer2d/engine")
+      void import("./minimi/engine")
         .then(async ({ createAvatarStage }) => {
           if (abort.signal.aborted) return null;
           requestedLook = lookRef.current;
-          // The controller loads the shared art manifest first; selected layers
-          // are prepared below so a newer selection can cancel stale requests.
+          // A newer selection can cancel preparation before the stage is ready.
           return createAvatarStage(container, requestedLook, {
             signal: abort.signal,
-            assetBaseUrl: `${import.meta.env.BASE_URL}avatar/v2/`,
             maxPixelRatio: 1.5,
             deferPreparation: true,
           });
@@ -166,7 +164,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           }
           controller = created;
           stageRef.current = created;
-          // A selection may have changed while the shared artwork loaded.
+          // A selection may have changed while the renderer loaded.
           void applyLatestLook(created, lookRef.current);
         })
         .catch((cause: unknown) => {

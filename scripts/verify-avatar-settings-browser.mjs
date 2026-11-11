@@ -8,9 +8,14 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const catalog = JSON.parse(
+  await fs.readFile(path.join(root, "functions/avatarCatalog.json"), "utf8"),
+);
+const labelFor = (value) =>
+  catalog.items.find((item) => item.value === value).label;
 const output = path.resolve(
   process.env.AVATAR_SETTINGS_EVIDENCE ||
-    path.join(root, "output/avatar-settings-20261028"),
+    path.join(root, "output/minimi-rebuild-20261111/settings"),
 );
 await fs.mkdir(output, { recursive: true });
 const entry = `
@@ -21,8 +26,8 @@ import MainLayout from './src/components/layout/MainLayout';
 import Settings from './src/pages/teacher/Settings';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
 const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
-qa.prices['top:official-black']=0;qa.prices['top:summer-white']=999;qa.prices['top:winter-hoodie']=999;
-qa.avatar={schemaVersion:1,catalogVersion:1,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
+qa.prices['minimi-top-knit-cream']=0;qa.prices['minimi-top-school-white']=999;qa.prices['minimi-top-school-hoodie']=999;
+qa.avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
 window.addEventListener('error',e=>qa.errors.push(e.message));
 window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
 qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices}}};
@@ -256,7 +261,10 @@ try {
       assert.equal(await nav.isVisible(), false);
     }
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
-    for (const label of ["용신중 흰색 하복", "용신중 동복 후드 집업"]) {
+    for (const label of [
+      labelFor("mm-school-white"),
+      labelFor("mm-school-hoodie"),
+    ]) {
       const mode = page.getByLabel(label + " 무료·유료", { exact: true });
       assert.equal(await mode.inputValue(), "free");
       assert.equal(await mode.isDisabled(), true);
@@ -276,7 +284,7 @@ try {
     );
     await page
       .getByLabel("유형", { exact: true })
-      .selectOption("학교 동복 체육복");
+      .selectOption("용신중 동복 체육복");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 2);
     await page.getByLabel("유형", { exact: true }).selectOption("all");
     await page
@@ -297,8 +305,8 @@ try {
       /남성형/,
     );
     await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("top");
-    await page.getByLabel("유형", { exact: true }).selectOption("관복");
-    assert.equal(await page.locator(".avatar-pricing-item").count(), 3);
+    await page.getByLabel("유형", { exact: true }).selectOption("일상 상의");
+    assert.equal(await page.locator(".avatar-pricing-item").count(), 2);
     await page.getByLabel("아바타", { exact: true }).selectOption("boy");
     if (process.argv.includes("--require-previews"))
       assert.equal(
@@ -306,9 +314,9 @@ try {
           .locator(".avatar-pricing-preview img")
           .first()
           .getAttribute("src"),
-        "/avatar/v2/previews/boy/top-official-navy.webp",
+        "/avatar/minimi-v2/previews/boy/top-mm-knit-cream.webp",
       );
-    await page.getByLabel("아이템 검색", { exact: true }).fill("흑색");
+    await page.getByLabel("아이템 검색", { exact: true }).fill("크림");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
     const name = await page.locator(".avatar-pricing-item h4").innerText();
     assert.equal(
