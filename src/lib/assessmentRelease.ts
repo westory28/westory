@@ -227,7 +227,7 @@ export const buildQuizDefinitionPayload = (
   durationSeconds: presentationSettings.timeLimit,
   maxAttempts: presentationSettings.allowRetake ? 20 : 1,
   cooldownMinutes: presentationSettings.cooldown,
-  opensAt: "",
+  opensAt: asIso(presentationSettings.opensAt),
   closesAt: "",
   assignedClassIds: presentationSettings.visibleClassIds,
   legacyConfigKey,
@@ -257,10 +257,17 @@ const buildItem = async (
   config: ConfigLike,
   payload: Data,
 ): Promise<AssessmentReleaseItem> => {
-  const [source, current] = await Promise.all([
-    readSource(config, payload),
-    readDefinition(payload.definitionId),
-  ]);
+  const current = await readDefinition(payload.definitionId);
+  const lockedPaper =
+    current?.paperSnapshotId &&
+    current?.presentationSettings?.lockPaper === true;
+  const source = lockedPaper
+    ? {
+        sourceHash: current.sourceHash,
+        itemCount: current.itemCount,
+        fixedPaper: true,
+      }
+    : await readSource(config, payload);
   if (source.fixedPaper && source.itemCount > 0) {
     payload = {
       ...payload,

@@ -35,6 +35,9 @@ vm.runInNewContext(fs.readFileSync(serverPath, "utf8"), {
     if (name === "./assessmentLearning") return require("../functions/productionGateway/assessmentLearning.js");
     if (name === "./mockExamMaterials") return require("../functions/productionGateway/mockExamMaterials.js");
     if (name === "./historyClassroomSync") return require("../functions/productionGateway/historyClassroomSync.js");
+    // Release planning does not read student results; correction projection has
+    // its own server integration suite.
+    if (name === "../quizQuestionCorrections") return { effectiveQuizResult: value => value };
     if (name === "./archiveEnrollment") return { SEMESTER_CLASS_COLLECTION: "semester_classes" };
     if (["./cutoverAuthorization", "./sessionAuthority", "./studentMaintenance"].includes(name)) return {};
     throw new Error(name);
@@ -133,6 +136,42 @@ const newHistorySource = () => ({
   timeLimitMinutes: 10, cooldownMinutes: 5, passThresholdPercent: 90, dueWindowDays: 7,
   publishedAt: "2099-01-01T00:00:00.000Z", dueAt: "2099-01-08T00:00:00.000Z",
 });
+
+{
+  const { api, docs, calls, browserQueries } = harness();
+  const key = "exam_prep_exam_prep__round_3";
+  const opensAt = "2026-11-11T06:00:00.000Z";
+  const scheduled = { ...settings, questionCount: 23, timeLimit: 2100,
+    questionOrder: "created", randomOrder: false, allowRetake: false,
+    cooldown: 0, lockPaper: true, opensAt };
+  docs.set(`${root}/assessment_config/settings`, { [key]: scheduled });
+  for (let i = 1; i <= 23; i++) docs.set(`${root}/quiz_questions/frozen-${i}`, {
+    id: `frozen-${i}`, unitId: "exam_prep", category: "exam_prep", examRound: "round_3",
+    type: "choice", question: `고정 문항 ${i}`, options: ["가", "나"], answer: "가",
+    contentRevision: 1, paperOrder: i, points: i <= 15 ? 4 : 5,
+  });
+  await api.saveQuizAssessmentSettings(config, "exam_prep", "exam_prep", "round_3", "전시",
+    key, scheduled);
+  const definition = docs.get("semester_assessment_definitions/quiz:2026-2:exam_prep:exam_prep:round_3");
+  assert.equal(definition.opensAt, opensAt);
+  assert.equal(definition.durationSeconds, 2100);
+  assert.equal(definition.maxAttempts, 1);
+  assert.equal(definition.questionCount, 23);
+  assert.ok(definition.paperSnapshotId);
+  docs.get(`${root}/quiz_questions/frozen-6`).contentRevision = 9;
+  const bankQueryCount = () => browserQueries.filter(query => query.path.endsWith("/quiz_questions")).length;
+  const queriesBefore = bankQueryCount();
+  const callsBefore = calls.length;
+  const plan = await api.planCurrentAssessmentRelease(config);
+  const item = plan.items.find(item => item.payload.examRound === "round_3");
+  assert.equal(item.status, "READY");
+  assert.equal(item.payload.opensAt, opensAt);
+  assert.equal(item.sourceHash, definition.sourceHash);
+  assert.equal(item.itemCount, 23);
+  assert.equal(bankQueryCount(), queriesBefore, "Locked plan never reads the live question bank");
+  assert.equal(calls.length, callsBefore, "Planning a locked paper never writes");
+  console.log("PASS scheduled 23-question fixed paper: 35 minutes, one attempt, same hash and zero live-bank reads after edits");
+}
 
 {
   const { api, docs, calls } = harness();

@@ -15,6 +15,7 @@ await fs.mkdir(evidence, { recursive: true });
 const stub = `
 import React from 'react';
 const params=new URLSearchParams(location.search);const completed=Number(params.get('completed')||0);
+const opensAt='2026-11-11T06:00:00.000Z';
 const config={year:'2026',semester:'2'};const currentUser={uid:'synthetic-student'};
 export const useAuth=()=>({config,currentUser,userData:{uid:currentUser.uid,grade:Number(params.get('grade')||3),class:Number(params.get('class')||1)},menuConfig:{}});
 export const getYearSemester=()=>({year:'2026',semester:'2'});
@@ -32,24 +33,28 @@ export const getDocs=async()=>{throw Error('Student quiz must not query a school
 export const readSiteSettingDoc=async()=>{throw Error('Student quiz must not fetch school_config or roster defaults')};
 export const getHttpsCallable=async()=>{throw Error('Unexpected callable')};
 export const getHistoryDictionaryCallable=getHttpsCallable;
+export const getStudentClassKey=()=> '3-1';
+window.noticeSubscriptions=0;
+export const subscribeVisibleNotices=(_db,_path,_class,next)=>{window.noticeSubscriptions++;next([{id:'fixture-round-3',targetType:'all',category:'exam',content:params.has('emptyNotice')?'':'오늘 오후 3시 모의고사 3회 전시 공개',imageUrl:'/fixture-notice.svg',imageWidth:1200,imageHeight:675,mockExamRound:params.get('noticeRound')||'round_3'}]);return()=>{}};
 export const getDoc=async ref=>{
  window.fixtureReads.push(ref.path);
  if(!['years/2026/semesters/2/assessment_config/settings','years/2026/semesters/2/assessment_config/status'].includes(ref.path))throw Error('Unexpected student read: '+ref.path);
  const active=params.has('refresh')?localStorage.getItem('synthetic-mock-published')==='true':!params.has('closed');
  const keys=['exam_prep_exam_prep__round_1','exam_prep_exam_prep__round_2','exam_prep_exam_prep__round_3','mid_diagnostic','mid_formative','mid2_diagnostic','mid2_formative'];
- const metadata=params.has('missingMetadata')?{}:{questionCount:20,timeLimit:Number(params.get('seconds')||1800)};
+ const metadata=params.has('missingMetadata')?{}:{questionCount:params.has('scheduled')?23:20,timeLimit:Number(params.get('seconds')||(params.has('scheduled')?2100:1800))};
  if(params.has('extraRound'))keys.push('exam_prep_exam_prep__round_4');
  const visibility=params.has('legacy')?{visibleTargetGrade:params.get('targetGrade')||'3'}:{visibilityVersion:2,visibleClassIds:params.has('noClasses')?[]:['3-1']};
  const data=params.has('legacyStatus')
   ?(ref.path.endsWith('/status')?{exam_prep_exam_prep:active,mid_diagnostic:active,mid_formative:active}:{})
-  :ref.path.endsWith('/settings')?Object.fromEntries(keys.map(key=>[key,{active,allowRetake:!params.has('noRetake'),...visibility,...metadata}])):{};
+  :ref.path.endsWith('/settings')?Object.fromEntries(keys.map(key=>[key,{active,allowRetake:!params.has('noRetake'),...visibility,...metadata,...(params.has('scheduled')&&key.endsWith('round_3')?{opensAt,lockPaper:true,questionOrder:'created',randomOrder:false}:{} )}])):{};
  return {exists:()=>true,data:()=>data};
 };
-window.entryReads=[];
-export const getMockExamOverview=async input=>{window.entryReads.push(input);await new Promise(r=>setTimeout(r,100));if(params.has('error')&&window.entryReads.length===1)throw Error('synthetic read failure');return {semesterId:input.semesterId,writeCount:0,rounds:[1,2,3].map(n=>({examRound:'round_'+n,completed:n<=completed,retakeBlocked:n<=completed&&(params.has('noRetake')||params.has('limitReached'))&&!params.has('reset')&&!params.has('resumable'),prerequisiteMet:n<=completed+1,requiredRound:n>completed+1?'round_'+(completed+1):''}))}};
+window.entryReads=[];window.entryReturned=0;
+export const getMockExamOverview=async input=>{window.entryReads.push(input);await new Promise(r=>setTimeout(r,100));if(params.has('error')&&window.entryReads.length===1)throw Error('synthetic read failure');window.entryReturned++;return {semesterId:input.semesterId,serverNowIso:new Date(Date.now()-Number(params.get('clockSkewMs')||0)).toISOString(),writeCount:0,rounds:[1,2,3].map(n=>({examRound:'round_'+n,completed:n<=completed,retakeBlocked:n<=completed&&(params.has('noRetake')||params.has('limitReached'))&&!params.has('reset')&&!params.has('resumable'),prerequisiteMet:n<=completed+1,requiredRound:n>completed+1?'round_'+(completed+1):''}))}};
 `;
-const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,Routes,Route,useLocation}from'react-router-dom';import QuizIndex from './src/pages/student/quiz/QuizIndex';import './src/components/common/portalPage.css';import {normalizeAssessmentConfigEntry} from './src/lib/assessmentConfig';const metadata=normalizeAssessmentConfigEntry({questionCount:20,timeLimit:1800});window.metadataQA={count:metadata.hasExplicitQuestionCount,time:metadata.hasExplicitTimeLimit,spread:{...metadata},serialized:JSON.parse(JSON.stringify(metadata)),missing:normalizeAssessmentConfigEntry({active:true}).hasExplicitQuestionCount};const Destination=()=>{const location=useLocation();window.fixtureDestinationState=location.state;return <p role="status">{location.pathname+location.search}</p>};createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/student/quiz']}><Routes><Route path="/student/quiz" element={<QuizIndex/>}/><Route path="/student/quiz/run" element={<Destination/>}/><Route path="/student/mypage" element={<Destination/>}/></Routes></MemoryRouter>);`;
-const built = await build({ stdin: { contents:entry,loader:'tsx',resolveDir:root },bundle:true,write:false,outdir:'fixture',assetNames:'assets/[name]-[hash]',loader:{'.webp':'file'},format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/(?:contexts\/AuthContext|lib\/(?:assessmentLifecycle|semesterScope|studentLessonReadCache)|\.\/(?:firebase|semesterScope|siteSettings|historyDictionarySession)|firebase\/firestore)$/},()=>({path:'stub',namespace:'synthetic'}));p.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:stub,loader:'tsx',resolveDir:root}));}}]});
+const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter,Routes,Route,useLocation}from'react-router-dom';import QuizIndex from './src/pages/student/quiz/QuizIndex';import NoticeBoard from './src/pages/student/components/NoticeBoard';import './src/components/common/portalPage.css';import './src/pages/student/studentDashboard.css';import {getNoticeDestination} from './src/lib/noticeDestination';import {normalizeAssessmentConfigEntry} from './src/lib/assessmentConfig';const metadata=normalizeAssessmentConfigEntry({questionCount:20,timeLimit:1800});window.metadataQA={count:metadata.hasExplicitQuestionCount,time:metadata.hasExplicitTimeLimit,spread:{...metadata},serialized:JSON.parse(JSON.stringify(metadata)),missing:normalizeAssessmentConfigEntry({active:true}).hasExplicitQuestionCount};window.noticeDestinationQA=getNoticeDestination;window.scheduleConfigQA=normalizeAssessmentConfigEntry({active:true,opensAt:'2026-11-11T15:00:00+09:00',lockPaper:true,questionCount:23,questionOrder:'created',randomOrder:false,timeLimit:2100,allowRetake:false});const Destination=()=>{const location=useLocation();window.fixtureDestinationState=location.state;return <p role="status">{location.pathname+location.search}</p>};const initialPath=new URLSearchParams(location.search).has('notice')?'/student/dashboard':'/student/quiz';createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[initialPath+location.search]}><Routes><Route path="/student/dashboard" element={<div className="student-portal-dashboard"><NoticeBoard/></div>}/><Route path="/student/quiz" element={<QuizIndex/>}/><Route path="/student/quiz/run" element={<Destination/>}/><Route path="/student/mypage" element={<Destination/>}/></Routes></MemoryRouter>);`;
+const built = await build({ stdin: { contents:entry,loader:'tsx',resolveDir:root },bundle:true,write:false,metafile:true,outdir:'fixture',assetNames:'assets/[name]-[hash]',loader:{'.webp':'file'},format:'esm',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/(?:contexts\/AuthContext|lib\/(?:assessmentLifecycle|semesterScope|studentLessonReadCache|firebase|visibleSchedule)|\.\/(?:firebase|semesterScope|siteSettings|historyDictionarySession)|firebase\/firestore)$/},()=>({path:'stub',namespace:'synthetic'}));p.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:stub,loader:'tsx',resolveDir:root}));}}]});
+assert(!Object.keys(built.metafile.inputs).some(name=>/node_modules[\\/](@firebase|firebase)[\\/]/.test(name)),'No live Firebase runtime in the entry/notice fixture');
 let tailwind;
 for(const candidate of [process.env.PORTAL_DESIGN_TAILWIND_PATH,path.join(os.tmpdir(),'westory-qa-tailwind.js'),path.join(os.tmpdir(),'westory-assessment-qa-tailwind.js')].filter(Boolean)){try{tailwind=await fs.readFile(candidate,'utf8');break;}catch{}}
 assert(tailwind,'Existing browser QA Tailwind cache is required');
@@ -57,11 +62,11 @@ const js=built.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=built.outputFiles.find(f=>f.path.endsWith('.css')).text;
 const imageAssets=new Map(built.outputFiles.filter(f=>f.path.endsWith('.webp')).map(f=>['/assets/'+path.basename(f.path),f.contents]));
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/app.css"><body style="margin:0;background:#f8fafc"><div id="root"></div><script type="module" src="/app.js"></script></body></html>';
-const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;if(imageAssets.has(pathname)){res.setHeader('Content-Type','image/webp');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.end(imageAssets.get(pathname));return;}if(pathname.startsWith('/assets/')){res.writeHead(404);res.end();return;}const [type,body]=({'/app.js':['text/javascript',js],'/app.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[pathname]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;if(pathname==='/fixture-notice.svg'){res.setHeader('Content-Type','image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675"><rect width="1200" height="675" fill="#e2e8f0"/><text x="100" y="200" font-size="48">15:00</text></svg>');return;}if(imageAssets.has(pathname)){res.setHeader('Content-Type','image/webp');res.setHeader('Cache-Control','public,max-age=31536000,immutable');res.end(imageAssets.get(pathname));return;}if(pathname.startsWith('/assets/')){res.writeHead(404);res.end();return;}const [type,body]=({'/app.js':['text/javascript',js],'/app.css':['text/css',css],'/tailwind.js':['text/javascript',tailwind]})[pathname]||['text/html',html];res.setHeader('Content-Type',type+';charset=utf-8');res.end(body);});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${server.address().port}`;
 const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
-const errors=[],external=[],report=[],imageRequests=[],sceneReport=[];
+const errors=[],external=[],report=[],imageRequests=[],sceneReport=[],scheduledReport=[];
 const isExamIllustration=url=>/^\/assets\/(?:chosi|boksi|jeonsi)-[^/]+\.webp$/.test(new URL(url).pathname);
 try{
   const context=await browser.newContext();
@@ -75,6 +80,7 @@ try{
   const sceneImage=()=>scene().locator(':scope > img');
   const sceneTransform=()=>scene().evaluate(element=>getComputedStyle(element).transform);
   const readyScene=async()=>{assert.equal(await sceneImage().count(),1,'Only the selected round image is mounted');await sceneImage().evaluate(async image=>{await image.decode();if(!image.naturalWidth||!image.naturalHeight)throw Error('Scene image failed to load');});return sceneImage().getAttribute('src');};
+  if(!process.argv.includes('--scheduled-only')){
   for(const width of [320,390,768,1280,1440]){
     const requestStart=imageRequests.length;
     await page.setViewportSize({width,height:900});await page.goto(origin);await tab('단원별 평가').waitFor();
@@ -204,6 +210,96 @@ try{
   await failedImagePage.screenshot({path:path.join(evidence,'scene-download-failure.png'),fullPage:true});
   await fallbackEntry.click();assert((await failedImagePage.getByRole('status').textContent()).includes('round=round_1'),'Exam entry still works when its illustration is unavailable');
   await failedImagePage.close();
+  }
+  const openingTime=Date.parse('2026-11-11T06:00:00.000Z');
+  for(const scenario of [
+    ...[320,390,768,1280,1440].map(width=>({width,mode:'timer',completed:2})),
+    {width:390,mode:'timer',completed:2,skew:3600000},
+    {width:390,mode:'timer',completed:2,skew:-3600000},
+    {width:390,mode:'visibilitychange',completed:2},
+    {width:768,mode:'pageshow',completed:2},
+    {width:390,mode:'timer',completed:1},
+    {width:390,mode:'timer',completed:3},
+    {width:390,mode:'timer',completed:2,notice:true},
+    {width:390,mode:'timer',completed:2,error:true},
+    {width:390,mode:'timer',completed:2,round:' ROUND_3 ',noTab:true},
+    {width:390,mode:'timer',completed:2,notice:true,noticeRound:' ROUND_3 '},
+    {width:390,mode:'timer',completed:2,notice:true,emptyNotice:true},
+  ]){
+    const scheduledPage=await context.newPage();scheduledPage.on('pageerror',error=>errors.push(error.message));
+    await scheduledPage.setViewportSize({width:scenario.width,height:900});
+    const skew=scenario.skew||0;
+    await scheduledPage.clock.install({time:new Date(openingTime-10000+skew)});
+    const params=new URLSearchParams({scheduled:'',completed:String(scenario.completed),noRetake:'',clockSkewMs:String(skew),...(scenario.error?{error:''}:{}),...(scenario.emptyNotice?{emptyNotice:''}:{}),...(scenario.notice?{notice:'',noticeRound:scenario.noticeRound||'round_3'}:{...(scenario.noTab?{}:{tab:'mock'}),round:scenario.round||'round_3'})});
+    await scheduledPage.goto(origin+'?'+params);
+    if(scenario.notice){
+      const notice=scheduledPage.getByRole('button',{name:'모의고사 응시 화면 열기',exact:true});
+      assert.equal(await notice.locator('img').getAttribute('alt'),scenario.emptyNotice?'알림장':'오늘 오후 3시 모의고사 3회 전시 공개','Notice image preserves its announcement text and empty-text fallback');
+      await notice.focus();await scheduledPage.keyboard.press('Enter');
+      assert.equal(await scheduledPage.evaluate(()=>window.noticeSubscriptions),1,'Notice click does not duplicate its subscription');
+    }
+    await scheduledPage.getByRole('button',{name:'Coming soon',exact:true}).waitFor();
+    if(scenario.error){
+      await scheduledPage.getByRole('alert').waitFor();
+      assert(await scheduledPage.getByRole('button',{name:'Coming soon',exact:true}).isDisabled());
+      assert.match(await scheduledPage.locator('.student-exam-lobby__notice').innerText(),/3:00.*공개/,'Scheduled opening remains visible with the error');
+      assert((await scheduledPage.evaluate(()=>Date.now()))<openingTime,'Retry is offered before opening time');
+      assert.equal(await scheduledPage.evaluate(()=>window.entryReads.length),1);
+      await scheduledPage.screenshot({path:path.join(evidence,'scheduled-retry-before-opening-390.png'),fullPage:true});
+      await scheduledPage.getByRole('button',{name:'다시 확인',exact:true}).click();
+    }
+    await scheduledPage.waitForFunction(()=>window.entryReturned===1);
+    assert.equal(await scheduledPage.getByRole('alert').count(),0,'Successful status retry clears the error');
+    assert.equal(await scheduledPage.getByRole('tab',{name:'모의고사',exact:true}).getAttribute('aria-selected'),'true','Direct link selects the mock exam tab');
+    assert.equal(await scheduledPage.locator('#student-exam-heading').textContent(),'전시','Direct link selects round 3');
+    assert.equal(await scheduledPage.locator('.student-exam-lobby__facts').innerText(),'출제 문항\n23문항\n제한 시간\n35분');
+    assert(await scheduledPage.getByRole('button',{name:'Coming soon',exact:true}).isDisabled(),'Entry is disabled before 15:00 server time');
+    const image=scheduledPage.locator('.student-exam-lobby__scene > img');
+    await image.evaluate(image=>image.decode());
+    assert.equal(await image.evaluate(image=>getComputedStyle(image).filter),'grayscale(1)');
+    assert.match(await scheduledPage.locator('.student-exam-lobby__notice').innerText(),/11월 11일.*3:00.*공개/);
+    assert.equal(await scheduledPage.evaluate(()=>window.fixtureDestinationState),undefined,'Opening the scheduled lobby does not start an attempt');
+    const reads=await scheduledPage.evaluate(()=>({settings:window.fixtureReads.length,overview:window.entryReads.length}));
+    assert.deepEqual(reads,{settings:2,overview:scenario.error?2:1});
+    if(!skew&&scenario.completed===2&&!scenario.notice)await scheduledPage.screenshot({path:path.join(evidence,`scheduled-before-${scenario.mode}-${scenario.width}.png`),fullPage:true});
+    if(scenario.mode==='timer'){
+      const remaining=await scheduledPage.evaluate(({openingTime,skew})=>openingTime-(Date.now()-skew)+30,{openingTime,skew});
+      await scheduledPage.clock.fastForward(Math.max(0,remaining));
+    }else{
+      await scheduledPage.clock.setSystemTime(new Date(openingTime+skew+1000));
+      await scheduledPage.evaluate(mode=>(mode==='pageshow'?window:document).dispatchEvent(new Event(mode)),scenario.mode);
+    }
+    await scheduledPage.waitForFunction(()=>getComputedStyle(document.querySelector('.student-exam-lobby__scene > img')).filter==='none');
+    assert.equal(await scheduledPage.getByRole('button',{name:'Coming soon',exact:true}).count(),0);
+    const entry=scheduledPage.getByRole('button',{name:scenario.completed===3?'재응시 불가':'시험 입장',exact:true});
+    assert.equal(await entry.isEnabled(),scenario.completed===2,'Opening time retains prerequisite and no-retake restrictions');
+    assert.deepEqual(await scheduledPage.evaluate(()=>({settings:window.fixtureReads.length,overview:window.entryReads.length})),reads,'Clock and tab recovery add no server reads');
+    assert.equal(await scheduledPage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+    const header=await scheduledPage.locator('.ws-page-header').evaluate(node=>{const style=getComputedStyle(node);return{background:style.backgroundColor,position:style.position,minHeight:style.minHeight,shadow:style.boxShadow}});
+    assert.deepEqual(header,{background:'rgba(0, 0, 0, 0)',position:'static',minHeight:'0px',shadow:'none'},'Page heading stays on the page background');
+    if(!skew&&scenario.completed===2&&!scenario.notice)await scheduledPage.screenshot({path:path.join(evidence,`scheduled-open-${scenario.mode}-${scenario.width}.png`),fullPage:true});
+    if(scenario.completed===2){
+      await entry.click();
+      const destination=await scheduledPage.getByRole('status').textContent();
+      assert(destination.includes('/student/quiz/run?')&&destination.includes('category=exam_prep')&&destination.includes('round=round_3'));
+      assert.equal(await scheduledPage.evaluate(()=>window.fixtureDestinationState?.startAssessment),true,'Only explicit entry requests a timed attempt');
+    }
+    scheduledReport.push({...scenario,reads,passed:true});
+    await scheduledPage.close();
+  }
+  await page.goto(origin);
+  const destinations=await page.evaluate(()=>[null,{},
+    {mockExamRound:'round_3'},
+    {mockExamRound:' ROUND_3 '},
+    {developerLogPostId:'exam_3-announcement'},
+    {mockExamRound:'javascript:alert(1)'},
+    {mockExamRound:'//evil.invalid'},
+    {developerLogPostId:'https://evil.invalid'},
+    {developerLogPostId:'../outside'},
+    {developerLogPostId:'safe?redirect=//evil.invalid'},
+  ].map(window.noticeDestinationQA));
+  assert.deepEqual(destinations,[null,null,{path:'/student/quiz?tab=mock&round=round_3',label:'모의고사 응시 화면 열기'},{path:'/student/quiz?tab=mock&round=round_3',label:'모의고사 응시 화면 열기'},{path:'/developer-log/exam_3-announcement',label:'연결된 개발자 일지 열기'},null,null,null,null,null]);
+  assert.deepEqual(await page.evaluate(()=>{const config=window.scheduleConfigQA;return{opensAt:config.opensAt,lockPaper:config.lockPaper,questionCount:config.questionCount,questionOrder:config.questionOrder,randomOrder:config.randomOrder,timeLimit:config.timeLimit,allowRetake:config.allowRetake}}),{opensAt:'2026-11-11T06:00:00.000Z',lockPaper:true,questionCount:23,questionOrder:'created',randomOrder:false,timeLimit:2100,allowRetake:false},'Normalization preserves the scheduled fixed-paper contract');
   assert.equal(errors.length,0,JSON.stringify(errors));assert.equal(external.length,0,JSON.stringify(external));
-  await fs.writeFile(path.join(evidence,'report.json'),JSON.stringify({passed:true,report,sceneReport,reducedMotion:true,disabledMotion:true,failedImageEntry:true,visibilityCases,publicationRefresh:true,actualConfigReader:true,settingsReads:2,schoolOrRosterReads:0,overviewReadsPerVisit:1,metadataProvenance:true,errors,external},null,2));console.log(evidence);
+  await fs.writeFile(path.join(evidence,'report.json'),JSON.stringify({passed:true,report,sceneReport,scheduledReport,noticeSafeRoutes:true,actualConfigReader:true,settingsReads:2,schoolOrRosterReads:0,overviewReadsPerVisit:1,metadataProvenance:true,errors,external},null,2));console.log(evidence);
 }finally{await browser.close();await new Promise(r=>server.close(r));}

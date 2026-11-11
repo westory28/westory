@@ -63,6 +63,12 @@ const RECOVERY_COOLDOWN_MS = 60_000;
 let editedInDocument = false;
 let installed = false;
 
+// Buttons and keyboard-driven answer controls may not emit input/change.
+// Retain the same conservative flag without storing any answer or form value.
+export const markAssetRecoveryEdited = () => {
+  editedInDocument = true;
+};
+
 const moduleEntry = (document: Document): string | null => {
   const source = document
     .querySelector<HTMLScriptElement>('script[type="module"][src]')
@@ -138,7 +144,7 @@ export function installAssetRecovery() {
       target instanceof HTMLElement &&
       target.closest("input, textarea, select, [contenteditable='true']")
     )
-      editedInDocument = true;
+      markAssetRecoveryEdited();
   };
   // Keep only a conservative flag, never input values or student information.
   document.addEventListener("input", markEdited, true);

@@ -67,6 +67,7 @@ import {
   type QuizSubmissionDoc,
 } from "../../../lib/quizSubmissions";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
+import { markAssetRecoveryEdited } from "../../../lib/assetRecovery";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
   buildAssessmentDefinitionId,
@@ -1678,6 +1679,7 @@ const QuizRunner: React.FC = () => {
         ? limitShortAnswer(input)
         : input;
     if (answers[String(question.id)] === value) return;
+    markAssetRecoveryEdited();
     pendingSubmitAnalyticsRef.current = undefined;
 
     emitSessionActivity();

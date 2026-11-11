@@ -12,6 +12,7 @@
     "getWisCommandStatusFast"
   ],
   "notes": [
+    "2026-11-11: Opt-in immutable mock-paper publication and server-time overview. Deploy only executeCommand and getAssessmentState from each captured live archive plus this assessmentLifecycle patch; preserve their existing SAVE implementation and all other runtime files. Scheduled publication keeps opensAt under old-client saves. No runtime sizing, session, rules, prior-round or student-result changes.",
     "2026-11-10: Communication audit captured live saveAssessmentProgress archive SHA-256 7c82238d8ce7ed2cb25ee4129d11950cd6d9131f49e31a8923ece1afb84c9213 (updated 2026-11-09). Its older source is preserved in an isolated release with only the SAVE projection changes applied to assessmentLifecycle.js. Deploy saveAssessmentProgress only from that reviewed archive, plus the new isolated us-central1 getTeacherStudentRoster endpoint. Do not deploy the newer full gateway to existing endpoints. Runtime/session/publication policies remain unchanged.",
     "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store.",
     "2026-11-10: Live Seoul executeCommand source matches baseline 94325681 for assessmentLifecycle, productionSource, commandGateway and session dependencies. Project mock START history without frozen bodies; deploy executeCommand only. No runtime configuration, session, permission, rule or external AI changes.",
@@ -63,8 +64,9 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "30233890ca12f8bdb290b23e3772309779aebbba00ade14ee0b5635714742cb1",
+      "sha256": "1e5d2c1be0ec3ffe25f4b47c7387e76690258074bb0d601acc7c55b1591d5fa4",
       "changes": [
+        "2026-11-11: Freeze an explicitly locked authored mock paper before any attempt; reuse its server-only source for all starts and preparation, retain question/learning revisions, preserve old-client schedules and expose serverNowIso in round overview. Independent review and lifecycle regression passed.",
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",
         "Preserve current lesson-source metadata in the History Classroom source command.",

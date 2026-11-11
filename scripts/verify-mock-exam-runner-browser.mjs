@@ -72,7 +72,7 @@ export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClo
 `;
 const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation();React.useEffect(()=>{window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/><Route path="/student/quiz" element={<p>평가 목록 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
 const built = await build({
-  stdin: { contents: entry, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
+  stdin: { contents: `import {recoverAssetLoad} from './src/lib/assetRecovery';window.mockRunnerRecoverAsset=()=>recoverAssetLoad(new Error('Failed to fetch dynamically imported module'));${entry}`, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
   outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || (process.argv.includes('--entry-only')||process.argv.includes('--entry-recovery-only')) ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
@@ -208,7 +208,24 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
 try {
-  if(process.argv.includes('--loading-only') || process.argv.includes('--recovery-only')) {
+  if(process.argv.includes('--asset-recovery-only')) {
+    for(const width of [390,1280]) {
+      const page = await open(width,844,width===390);
+      const dialog = await openQuestion(page,1);
+      const answer = dialog.getByRole('radio',{name:/조선/});
+      await answer.focus();
+      await page.keyboard.press('Space');
+      assert.equal(await answer.isChecked(),true);
+      // This fixture does not install the document input/change listener: the
+      // real QuizRunner answer callback must protect keyboard/button changes.
+      assert.equal(await page.evaluate(()=>window.mockRunnerRecoverAsset()),'draft');
+      await page.waitForFunction(()=>window.mockRunnerQa.attempt?.answers?.['1']==='조선');
+      assert.equal(await answer.isChecked(),true);
+      assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),1);
+      await page.screenshot({path:path.join(evidence,`asset-recovery-answer-${width}.png`),fullPage:true});
+      await page.close();
+    }
+  } else if(process.argv.includes('--loading-only') || process.argv.includes('--recovery-only')) {
     for(const width of process.argv.includes('--recovery-only')?[]:[390,768,1280]) {
       const page=await browser.newPage({viewport:{width,height:900},hasTouch:width<1000});
       page.on('pageerror',error=>pageErrors.push(error.stack||error.message));
@@ -618,7 +635,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
-  console.log(process.argv.includes('--recovery-only')
+  console.log(process.argv.includes('--asset-recovery-only')
+    ? `Exam asset recovery passed: actual keyboard answer changes prevent automatic deployment reload at 390/1280px and preserve normal answer saving. Evidence: ${evidence}`
+    : process.argv.includes('--recovery-only')
     ? `Exam recovery passed: closed active attempt and deadline preserved, limited submitted attempt blocked, unavailable counts unknown, and forbidden fresh attempt blocked. Evidence: ${evidence}`
     : process.argv.includes('--loading-only')
     ? `Exam loading passed: one initial read, no optional mock reads, delayed common overlay at 390/768/1280, in-flight save revision, keyboard duplicate prevention, mounted full-screen paper, explicit submit retry, closed recovery and new-attempt gates. Evidence: ${evidence}`

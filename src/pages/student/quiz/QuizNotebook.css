@@ -1,6 +1,15 @@
 .quiz-notebook {
   container-type: inline-size;
 }
+.quiz-notebook__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.quiz-notebook__heading h2 {
+  margin: 0;
+}
 .quiz-notebook__questions,
 .quiz-notebook__practice-actions {
   display: flex;
@@ -104,6 +113,19 @@
 .quiz-notebook .student-quiz-relearning-actions > button {
   white-space: normal;
 }
+.quiz-notebook__paging {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border);
+}
+.quiz-notebook__paging > span {
+  color: var(--ws-text-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
 @container (min-width: 880px) {
   .quiz-notebook__workspace {
     grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
@@ -115,6 +137,25 @@
   }
 }
 @media (max-width: 640px) {
+  .quiz-notebook__heading {
+    flex-basis: 100%;
+  }
+  .quiz-notebook .student-quiz-relearning-header > button {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-left: 0;
+    padding-inline: 8px;
+    white-space: normal;
+  }
+  .quiz-notebook__questions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 4px;
+  }
+  .quiz-notebook__questions button {
+    flex: 0 0 auto;
+  }
   .quiz-notebook__paper {
     padding: 16px;
     font-size: 19px;

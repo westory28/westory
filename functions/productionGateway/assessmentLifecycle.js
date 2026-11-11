@@ -20,6 +20,7 @@ const REGION = "asia-northeast3";
 const ASSESSMENT_SCHEMA_VERSION = 1;
 const ASSESSMENT_POLICY_VERSION = "w6a-v1";
 const DEFINITION_COLLECTION = "semester_assessment_definitions";
+const PAPER_COLLECTION = "semester_assessment_papers";
 const ATTEMPT_COLLECTION = "semester_assessment_attempts";
 const SUBMISSION_COLLECTION = "semester_assessment_submissions";
 const RESULT_COLLECTION = "semester_assessment_results";
@@ -172,6 +173,8 @@ const normalizePresentationSettings = (value) => {
     "visibilityVersion",
     "paperTitle",
     "paperHeading",
+    "opensAt",
+    "lockPaper",
   ], "presentationSettings", 20_000);
   if (
     typeof normalized.active !== "boolean"
@@ -185,6 +188,9 @@ const normalizePresentationSettings = (value) => {
   }
   const visibleClassIds = normalized.visibleClassIds.map((item) =>
     text(item, "visibleClassId", 180));
+  if (normalized.opensAt !== undefined) normalized.opensAt = normalizeIso(normalized.opensAt, "presentationSettings.opensAt");
+  if (normalized.lockPaper !== undefined && typeof normalized.lockPaper !== "boolean")
+    fail("invalid-argument", "lockPaper must be a boolean.", "ASSESSMENT_PAYLOAD_INVALID");
   if (new Set(visibleClassIds).size !== visibleClassIds.length) {
     fail("invalid-argument", "presentationSettings has duplicate class ids.", "ASSESSMENT_PAYLOAD_INVALID");
   }
@@ -256,6 +262,7 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     const settings = definition.presentationSettings;
     if (definition.questionCount !== settings.questionCount || definition.durationSeconds !== settings.timeLimit
       || definition.maxAttempts !== (settings.allowRetake ? 20 : 1) || definition.cooldownMinutes !== settings.cooldown
+      || (settings.opensAt !== undefined && definition.opensAt !== settings.opensAt)
       || canonicalJson([...definition.assignedClassIds].sort()) !== canonicalJson([...settings.visibleClassIds].sort())) {
       fail("invalid-argument", "Quiz settings and response policy must agree.", "ASSESSMENT_PAYLOAD_INVALID");
     }
@@ -619,6 +626,22 @@ const collectHistoryAnswerKey = (data) => {
 };
 
 const loadDefinitionSource = async (transaction, payload) => {
+  if (payload.paperSnapshotId) {
+    const id = payload.paperSnapshotId;
+    if (!/^paper_[a-f0-9]{64}$/.test(id))
+      fail("failed-precondition", "고정 시험지 연결을 확인해 주세요.", "ASSESSMENT_PAPER_SNAPSHOT_INVALID");
+    const snapshot = await transaction.get(`${PAPER_COLLECTION}/${id}`);
+    const paper = snapshot.data || {};
+    if (!snapshot.exists || paper.schemaVersion !== 1 || !paper.source?.fixedPaper
+      || ["definitionId", "semesterId", "sourceId", "category", "examRound"].some(key => paper[key] !== payload[key])
+      || !Array.isArray(paper.source.answerKey) || !Array.isArray(paper.source.quizDocuments)
+      || paper.source.answerKey.length !== paper.source.itemCount
+      || paper.source.quizDocuments.length !== paper.source.itemCount
+      || paper.source.sourceHash !== sha256(canonicalJson(paper.source.answerKey))
+      || (payload.sourceHash && payload.sourceHash !== paper.source.sourceHash))
+      fail("failed-precondition", "고정 시험지를 불러오지 못했습니다. 선생님께 알려 주세요.", "ASSESSMENT_PAPER_SNAPSHOT_INVALID");
+    return paper.source;
+  }
   if (payload.assessmentKind === "QUIZ") {
     const collectionPath = `${semesterRoot(payload.semesterId)}/quiz_questions`;
     const bankFilters = [
@@ -686,6 +709,46 @@ const loadDefinitionSource = async (transaction, payload) => {
   const threshold = snapshot.data.passThresholdPercent == null || snapshot.data.passThresholdPercent === "" ? Number.NaN : Number(snapshot.data.passThresholdPercent);
   const passThresholdPercent = Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 80;
   return { itemCount: answerKey.length, answerKey, assignedStudentUids, passThresholdPercent, sourceContentRevision, sourceHash: sha256(canonicalJson({ answerKey, assignedStudentUids })) };
+};
+
+// Opt-in publication lock. One server-only immutable document supplies every
+// new attempt; subsequent question-bank corrections never issue another form.
+// Existing rounds retain their current source behavior unless explicitly locked
+// before any attempt. Authorization and response-window gates run before reads.
+const preparePaperLock = async (transaction, payload, current, source) => {
+  if (current?.paperSnapshotId) return { id: current.paperSnapshotId };
+  if (payload.presentationSettings?.lockPaper !== true) return null;
+  if (payload.assessmentKind !== "QUIZ" || payload.category !== "exam_prep" || !source?.fixedPaper)
+    fail("failed-precondition", "문항 번호가 지정된 모의고사만 시험지를 고정할 수 있습니다.", "ASSESSMENT_PAPER_LOCK_UNSUPPORTED");
+  const attempts = await transaction.query(ATTEMPT_COLLECTION, {
+    filters: [{ field: "definitionId", operator: "==", value: payload.definitionId }],
+    limit: 1, fieldMask: ["definitionId"],
+  });
+  if (attempts.length)
+    fail("failed-precondition", "이미 응시한 학생이 있어 시험지를 새로 고정할 수 없습니다.", "ASSESSMENT_PAPER_ALREADY_STARTED");
+  const ids = source.answerKey.map(item => item.id);
+  const captured = learning.captureQuestionSnapshots(source.quizDocuments, ids, {}, { paper: true });
+  if (captured.questionSnapshotOmittedIds.length)
+    fail("failed-precondition", "시험지 자료가 너무 큽니다. 이미지 크기를 줄여 주세요.", "ASSESSMENT_PAPER_TOO_LARGE");
+  const documentsById = new Map(source.quizDocuments.map(document => [String(document.data.id ?? document.path.split("/").at(-1)), document]));
+  const frozen = { ...source, quizDocuments: captured.questionSnapshots.map(question => ({
+    path: documentsById.get(question.id).path,
+    data: { ...question, category: "exam_prep" },
+  })) };
+  const data = { schemaVersion: 1, definitionId: payload.definitionId, semesterId: payload.semesterId,
+    sourceId: payload.sourceId, category: payload.category, examRound: payload.examRound, source: frozen };
+  if (Buffer.byteLength(JSON.stringify(data), "utf8") > 750_000)
+    fail("failed-precondition", "시험지 자료가 너무 큽니다. 이미지 크기를 줄여 주세요.", "ASSESSMENT_PAPER_TOO_LARGE");
+  return { id: `paper_${sha256(`${payload.definitionId}\n${source.sourceHash}`)}`, data };
+};
+
+const applyPaperLock = (transaction, plan, definition, actor, timestamp, commandId) => {
+  if (!plan) return [];
+  definition.paperSnapshotId = plan.id;
+  definition.presentationSettings = { ...definition.presentationSettings, lockPaper: true };
+  const path = `${PAPER_COLLECTION}/${plan.id}`;
+  if (plan.data) transaction.create(path, { ...plan.data, createdBy: actor.actorUid, createdAt: timestamp, commandId });
+  return [path];
 };
 
 const resolveAssignedClassIds = async (transaction, semesterId, requestedIds) => {
@@ -1184,7 +1247,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const published = payload.presentationSettings.active;
       // Closing access must succeed even if questions/classes have since been
       // removed. Only publication needs to read and validate the source bank.
-      const source = published ? await loadDefinitionSource(transaction, payload) : null;
+      const source = published ? await loadDefinitionSource(transaction, { ...payload,
+        ...(current.paperSnapshotId ? { paperSnapshotId: current.paperSnapshotId, sourceHash: current.sourceHash } : {}) }) : null;
       if (source && !source.fixedPaper && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "출제 문항 수가 등록된 문항 수보다 많습니다.", "ASSESSMENT_QUESTION_SET_INVALID");
       }
@@ -1194,10 +1258,18 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       const assignedClassIds = published
         ? await resolveAssignedClassIds(transaction, payload.semesterId, payload.assignedClassIds)
         : payload.assignedClassIds.length ? current.assignedClassIds || [] : [];
-      const { expectedRevision, expectedSourceHash: _expectedSourceHash, reason, ...definitionPayload } = payload;
+      const paperLock = published ? await preparePaperLock(transaction, payload, current, source)
+        : current.paperSnapshotId ? { id: current.paperSnapshotId } : null;
+      // An older open settings tab sends opensAt:"" and knows no presentation
+      // schedule field. Preserve the server reservation until a capable client
+      // explicitly supplies it; routine saves must not open the paper early.
+      const effectivePayload = current.opensAt && payload.presentationSettings.opensAt === undefined
+        ? { ...payload, opensAt: current.opensAt,
+          presentationSettings: { ...payload.presentationSettings, opensAt: current.opensAt } } : payload;
+      const { expectedRevision, expectedSourceHash: _expectedSourceHash, reason, ...definitionPayload } = effectivePayload;
       if (source?.fixedPaper) {
         definitionPayload.questionCount = source.itemCount;
-        definitionPayload.presentationSettings = { ...payload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
+        definitionPayload.presentationSettings = { ...effectivePayload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
       }
       const definition = {
         schemaVersion: ASSESSMENT_SCHEMA_VERSION, policyVersion: ASSESSMENT_POLICY_VERSION,
@@ -1210,9 +1282,10 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         ...(snapshot.exists ? {} : { createdBy: actor.actorUid, createdAt: timestamp }),
       };
       const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
+      const paperRefs = applyPaperLock(transaction, paperLock, definition, actor, timestamp, commandId);
       transaction.set(path, definition, { merge: true });
-      transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionPayload.presentationSettings }, { merge: true });
-      return { target: { kind: "assessment-definition", id: payload.definitionId, refs: [path, legacyConfigPath] },
+      transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definition.presentationSettings }, { merge: true });
+      return { target: { kind: "assessment-definition", id: payload.definitionId, refs: [path, legacyConfigPath, ...paperRefs] },
         sourceHash: definition.sourceHash || null,
         result: { definitionId: payload.definitionId, status: definition.status, revision: definition.revision,
           sourceHash: definition.sourceHash, itemCount: definition.itemCount } };
@@ -1236,6 +1309,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         payload.semesterId,
         payload.assignedClassIds,
       );
+      const paperLock = await preparePaperLock(transaction, payload, null, source);
       const { expectedSourceRevision: _expectedSourceRevision, ...definitionPayload } = payload;
       if (source.fixedPaper) {
         definitionPayload.questionCount = source.itemCount;
@@ -1258,11 +1332,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         createdAt: timestamp,
         updatedAt: timestamp,
       };
+      const refs = [path, ...applyPaperLock(transaction, paperLock, definition, actor, timestamp, commandId)];
       transaction.create(path, definition);
-      const refs = [path];
       if (payload.assessmentKind === "QUIZ") {
         const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
-        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionPayload.presentationSettings }, { merge: true });
+        transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definition.presentationSettings }, { merge: true });
         refs.push(legacyConfigPath);
       }
       return { target: { kind: "assessment-definition", id: payload.definitionId, refs }, sourceHash: source.sourceHash, result: { definition: { ...definition, createdAt: null, updatedAt: null } } };
@@ -1281,7 +1355,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       if (Number(current.revision || 0) !== payload.expectedRevision) fail("aborted", "Assessment definition revision changed.", "ASSESSMENT_REVISION_CONFLICT");
       if (current.status === "CLOSED") fail("failed-precondition", "A closed assessment definition cannot be edited.", "ASSESSMENT_DEFINITION_CLOSED");
       if (current.semesterId !== payload.semesterId || current.assessmentKind !== payload.assessmentKind || current.sourceId !== payload.sourceId) fail("failed-precondition", "Assessment definition identity cannot be changed.", "ASSESSMENT_IDENTITY_IMMUTABLE");
-      const source = await loadDefinitionSource(transaction, payload);
+      const source = await loadDefinitionSource(transaction, { ...payload,
+        ...(current.paperSnapshotId ? { paperSnapshotId: current.paperSnapshotId, sourceHash: current.sourceHash } : {}) });
       if (payload.assessmentKind === "QUIZ" && !source.fixedPaper && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "questionCount exceeds the canonical question set.", "ASSESSMENT_QUESTION_SET_INVALID");
       }
@@ -1291,11 +1366,16 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         payload.assignedClassIds,
       );
       const revision = payload.expectedRevision + 1;
-      const { expectedRevision: _expectedRevision, expectedSourceRevision: _expectedSourceRevision, reason, ...definitionUpdate } = payload;
+      const paperLock = await preparePaperLock(transaction, payload, current, source);
+      const effectivePayload = current.opensAt && payload.presentationSettings && payload.presentationSettings.opensAt === undefined
+        ? { ...payload, opensAt: current.opensAt,
+          presentationSettings: { ...payload.presentationSettings, opensAt: current.opensAt } } : payload;
+      const { expectedRevision: _expectedRevision, expectedSourceRevision: _expectedSourceRevision, reason, ...definitionUpdate } = effectivePayload;
       if (source.fixedPaper) {
         definitionUpdate.questionCount = source.itemCount;
-        definitionUpdate.presentationSettings = { ...payload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
+        definitionUpdate.presentationSettings = { ...effectivePayload.presentationSettings, questionCount: source.itemCount, randomOrder: false, questionOrder: "created" };
       }
+      const paperRefs = applyPaperLock(transaction, paperLock, definitionUpdate, actor, timestamp, commandId);
       transaction.set(path, {
         ...definitionUpdate,
         assignedClassIds,
@@ -1309,7 +1389,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         commandId,
         updatedAt: timestamp,
       }, { merge: true });
-      const refs = [path];
+      const refs = [path, ...paperRefs];
       if (payload.assessmentKind === "QUIZ") {
         const legacyConfigPath = `${semesterRoot(payload.semesterId)}/assessment_config/settings`;
         transaction.set(legacyConfigPath, { [payload.legacyConfigKey]: definitionUpdate.presentationSettings }, { merge: true });
@@ -1767,7 +1847,8 @@ const createAssessmentQueryCore = ({ store, readOnlyStore = store, assertSession
       if (actor.role !== "student") fail("permission-denied", "A student account is required.", "ASSESSMENT_STUDENT_REQUIRED");
       return readOnlyStore.runTransaction(async transaction => {
         await assertActiveEnrollment(transaction, query.semesterId, actor.uid, []);
-        return { semesterId: query.semesterId, rounds: await mockProgress.overview(transaction, query.semesterId, actor.uid), writeCount: 0 };
+        return { semesterId: query.semesterId, rounds: await mockProgress.overview(transaction, query.semesterId, actor.uid),
+          serverNowIso: now().toISOString(), writeCount: 0 };
       });
     }
     if (query.semesterId) {

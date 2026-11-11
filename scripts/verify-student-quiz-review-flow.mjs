@@ -28,6 +28,7 @@ const presentation = learning.questionPresentation(snapshots);
 assert(presentation.every(q => !q.answer && !q.explanation));
 const stubs = `
 export const watchQuizResultCorrections=()=>()=>{};
+export const useGongsinAvailability=()=>({loaded:true,enabled:true,semesterId:'2026-2'});export const getGongsinQuestionUrl=()=>'/student/gongsinmoongo';
 const params=new URLSearchParams(location.search);const category=params.get('category')||sessionStorage.getItem('qa-category')||'exam_prep';sessionStorage.setItem('qa-category',category);
 const snapshots=${JSON.stringify(snapshots)};const presentation=${JSON.stringify(presentation)};
 const config={year:'2026',semester:'2'};const currentUser={uid:'synthetic-pupil',email:'fixture@example.invalid',getIdTokenResult:async()=>({claims:{}})};const userData={...currentUser,name:'가상 학생',grade:3,class:1,number:1};
@@ -56,10 +57,10 @@ export const callWithApplicationSession=async(name,input)=>{qa.calls.push({name,
  }throw Error('Unexpected server boundary '+name)};
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{BrowserRouter,Routes,Route,useSearchParams,useNavigate}from'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import MyQuizHistory from './src/pages/student/mypage/MyQuizHistory';import{AppToastProvider}from'./src/components/common/AppToastProvider';import{AppDialogProvider}from'./src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';function History(){const[params]=useSearchParams();const navigate=useNavigate();return <MyQuizHistory semesterId="2026-2" active requestedAttemptId={params.get('attemptId')||''} onSelect={key=>navigate('/student/mypage?attemptId='+encodeURIComponent(key))} onClose={()=>navigate('/student/mypage')} onStart={()=>navigate('/student/quiz/run')}/>};createRoot(document.getElementById('root')).render(<BrowserRouter><AppToastProvider><AppDialogProvider><div className="student-layout"><Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<History/>}/></Routes></div></AppDialogProvider></AppToastProvider></BrowserRouter>);`;
-const built = await build({ stdin:{contents:entry,loader:"tsx",resolveDir:root},bundle:true,write:false,metafile:true,outdir:"fixture",format:"esm",platform:"browser",jsx:"automatic",loader:{".woff2":"dataurl",".woff":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},plugins:[{name:"synthetic-server-boundaries",setup(builder){
+const built = await build({ stdin:{contents:entry,loader:"tsx",resolveDir:root},bundle:true,write:false,metafile:true,outdir:"fixture",format:"esm",platform:"browser",jsx:"automatic",loader:{".woff2":"dataurl",".woff":"dataurl",".webp":"dataurl"},define:{"process.env.NODE_ENV":'"production"'},plugins:[{name:"synthetic-server-boundaries",setup(builder){
   builder.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:"popup-stub",namespace:"popup-fixture"}));
   builder.onLoad({filter:/.*/,namespace:"popup-fixture"},()=>({contents:"export default function QuizLessonPopup(){return null}",loader:"js"}));
-  builder.onResolve({filter:/contexts\/AuthContext$|(?:^|\/)(semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|firebase|applicationSession)$/},()=>({path:"fixture-api",namespace:"fixture"}));
+  builder.onResolve({filter:/contexts\/AuthContext$|(?:^|\/)(semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|gongsinmoongo|firebase|applicationSession)$/},()=>({path:"fixture-api",namespace:"fixture"}));
   builder.onLoad({filter:/.*/,namespace:"fixture"},()=>({contents:stubs,loader:"js"}));
 }}] });
 assert(!Object.keys(built.metafile.inputs).some(name=>/node_modules[\\/](@firebase|firebase)[\\/]/.test(name)),"Firebase must not enter this fixture");

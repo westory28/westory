@@ -156,6 +156,7 @@ export default function QuizRelearning({
   const saveBusy = useRef(false);
   const pendingSave = useRef<{ key: string; saveId: string } | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const questionNavigationRef = useRef<HTMLElement>(null);
   const item = queue[index];
   const finished = index >= queue.length;
   const draft = item ? drafts[item.id] || getDraft(item.id, savedNotes) : null;
@@ -302,6 +303,20 @@ export default function QuizRelearning({
   useEffect(() => {
     headingRef.current?.focus();
   }, [index, stage, finished]);
+
+  useEffect(() => {
+    const navigation = questionNavigationRef.current;
+    const selected = navigation?.querySelector<HTMLButtonElement>(
+      '[aria-current="step"]',
+    );
+    if (!navigation || !selected) return;
+    const bounds = navigation.getBoundingClientRect();
+    const selectedBounds = selected.getBoundingClientRect();
+    if (selectedBounds.left < bounds.left)
+      navigation.scrollLeft -= bounds.left - selectedBounds.left;
+    else if (selectedBounds.right > bounds.right)
+      navigation.scrollLeft += selectedBounds.right - bounds.right;
+  }, [index, finished]);
 
   const startPractice = () => {
     setStage("practice");
@@ -462,15 +477,17 @@ export default function QuizRelearning({
       aria-label="오답 복습"
     >
       <div className="student-quiz-relearning-header">
-        <h2 ref={headingRef} tabIndex={-1}>
-          오답 노트 {index + 1} / {queue.length}
-        </h2>
-        <InfoHelp label="오답 복습 기록 안내">
-          {onSave
-            ? "노트 저장을 누르면 선택한 이유와 메모, 연습 답안을 저장합니다. "
-            : "선택한 이유와 연습 답안은 이 화면에서만 사용합니다. "}
-          평가 점수·응시 횟수·위스에는 반영하지 않습니다.
-        </InfoHelp>
+        <div className="quiz-notebook__heading">
+          <h2 ref={headingRef} tabIndex={-1}>
+            오답 노트 {index + 1} / {queue.length}
+          </h2>
+          <InfoHelp label="오답 복습 기록 안내">
+            {onSave
+              ? "노트 저장을 누르면 선택한 이유와 메모, 연습 답안을 저장합니다. "
+              : "선택한 이유와 연습 답안은 이 화면에서만 사용합니다. "}
+            평가 점수·응시 횟수·위스에는 반영하지 않습니다.
+          </InfoHelp>
+        </div>
         {onShowAnswers && (
           <button
             type="button"
@@ -490,7 +507,11 @@ export default function QuizRelearning({
           {closeLabel}
         </button>
       </div>
-      <nav className="quiz-notebook__questions" aria-label="오답 문항 선택">
+      <nav
+        ref={questionNavigationRef}
+        className="quiz-notebook__questions"
+        aria-label="오답 문항 선택"
+      >
         {queue.map((entry, position) => (
           <button
             key={entry.id}
@@ -738,6 +759,29 @@ export default function QuizRelearning({
           )}
         </div>
       </div>
+      {queue.length > 1 && (
+        <nav className="quiz-notebook__paging" aria-label="오답 문항 이동">
+          <button
+            type="button"
+            className="student-quiz-secondary-action"
+            disabled={saving || index === 0}
+            onClick={() => selectQuestion(index - 1)}
+          >
+            이전 문항
+          </button>
+          <span aria-label={`오답 ${queue.length}개 중 ${index + 1}번째`}>
+            {index + 1} / {queue.length}
+          </span>
+          <button
+            type="button"
+            className="student-quiz-secondary-action"
+            disabled={saving || index === queue.length - 1}
+            onClick={() => selectQuestion(index + 1)}
+          >
+            다음 문항
+          </button>
+        </nav>
+      )}
       {reviewLessonId && (
         <Suspense fallback={null}>
           <QuizLessonPopup

@@ -25,6 +25,7 @@ export interface VisibleNotice {
   imageMimeType?: string;
   noticeOrder?: number;
   developerLogPostId?: string;
+  mockExamRound?: string;
   createdAt: any;
   targetDate?: string;
   publishAt?: any;

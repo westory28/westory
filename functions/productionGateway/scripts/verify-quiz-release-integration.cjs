@@ -68,12 +68,12 @@ const payload = (revision, update = {}) => {
     legacyConfigKey: "release-unit_diagnostic", presentationSettings, expectedRevision: revision, reason: "격리된 검증" };
 };
 
-const verifyAllClassConcurrentMockStarts = async () => {
+const verifyAllClassConcurrentMockStarts = async ({ locked = false } = {}) => {
   // Default to one configured instance; the test-only override permits stress
   // comparisons. Emulator locks and absent compound-index planning cannot
   // establish production throughput or validate an index-plan improvement.
   const classCount = 10, studentCount = 30;
-  const students = Array.from({ length: studentCount + 1 }, (_, index) => `synthetic-all-class-${index + 1}`);
+  const students = Array.from({ length: studentCount + 1 }, (_, index) => `synthetic-${locked ? "locked" : "all"}-class-${index + 1}`);
   const session = await get(`application_sessions/student-three/sessions/${authTime}`);
   const batch = db.batch();
   for (const [index, uid] of students.entries()) {
@@ -87,13 +87,40 @@ const verifyAllClassConcurrentMockStarts = async () => {
     batch.set(db.doc(`student_identities/${uid}`), { studentUid: uid });
     batch.set(db.doc(`semester_enrollments/${enrollmentId}`), { semesterId, studentUid: uid, enrollmentId, classId, enrollmentStatus: "ACTIVE" });
     batch.set(db.doc(`semester_enrollment_slots/${enrollment.buildEnrollmentSlotId(semesterId, uid)}`), { semesterId, studentUid: uid, activeEnrollmentId: enrollmentId });
+    if (locked) {
+      const accountId = wis.accountIdFor(semesterId, uid);
+      batch.set(db.doc(`${wis.WIS_ACCOUNT_COLLECTION}/${accountId}`), { schemaVersion: 1, policyVersion: wis.WIS_POLICY_VERSION, accountId,
+        semesterId, studentUid: uid, enrollmentId, classId, status: "ACTIVE", revision: 1,
+        balance: 0, earnedTotal: 0, rankEarnedTotal: 0, adjustedTotal: 0, spentTotal: 0, recentLedgerEntries: [] });
+    }
   }
+  const sourceId = locked ? "locked-release" : "exam_prep";
+  if (locked) for (let index = 0; index < 23; index++) batch.set(db.doc(`${root}/quiz_questions/locked-${index + 21}`), {
+    id: String(index + 21), unitId: sourceId, category: "exam_prep", examRound: "round_1", contentRevision: 1,
+    type: "word", question: `합성 고정 문항 ${index + 1}`, answer: index === 1 ? "신라" : "고려",
+    paperOrder: index + 1, points: index === 22 ? 12 : 4,
+  });
   await batch.commit();
-  const defId = `quiz:${semesterId}:exam_prep:exam_prep:round_1`;
+  const defId = `quiz:${semesterId}:${sourceId}:exam_prep:round_1`;
   const visibleClassIds = Array.from({ length: classCount }, (_, index) => `3-${index + 1}`);
   const current = await get(`semester_assessment_definitions/${defId}`);
-  await execute("teacher", "saveQuizAssessmentSettings", { ...payload(current.revision, { visibleClassIds, questionCount: 2 }),
-    definitionId: defId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_1", legacyConfigKey: "exam_prep_exam_prep__round_1" });
+  const questionCount = locked ? 23 : 2;
+  const release = { ...payload(current?.revision || 0, { visibleClassIds, questionCount,
+    ...(locked ? { lockPaper: true, allowRetake: false, timeLimit: 2100, opensAt: "2099-11-11T06:00:00.000Z" } : {}) }),
+    definitionId: defId, sourceId, category: "exam_prep", examRound: "round_1", legacyConfigKey: `${sourceId}_exam_prep__round_1`,
+    ...(locked ? { maxAttempts: 1, durationSeconds: 2100, opensAt: "2099-11-11T06:00:00.000Z" } : {}) };
+  await execute("teacher", "saveQuizAssessmentSettings", release);
+  if (locked) {
+    assert.equal((await state(students[0], { definitionId: defId })).status, "NOT_OPEN");
+    await assert.rejects(execute(students[0], "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_WINDOW_CLOSED"));
+    await execute("teacher", "saveQuizAssessmentSettings", { ...release, expectedRevision: 1, opensAt: "2020-01-01T00:00:00.000Z",
+      presentationSettings: { ...release.presentationSettings, opensAt: "2020-01-01T00:00:00.000Z" } });
+    // Source edits after publication cannot change the frozen paper or revision.
+    const changes = db.batch();
+    for (let index = 0; index < 23; index++) changes.update(db.doc(`${root}/quiz_questions/locked-${index + 21}`),
+      { question: "공개 뒤 원본 변경", answer: "수정된 정답", contentRevision: 2 });
+    await changes.commit();
+  }
   const assigned = students.slice(0, studentCount);
   const attemptsForStudents = () => db.collection("semester_assessment_attempts")
     .where("definitionId", "==", defId).where("studentUid", "in", assigned).get();
@@ -136,8 +163,15 @@ const verifyAllClassConcurrentMockStarts = async () => {
   const attempts = await attemptsForStudents();
   assert.equal(attempts.size, studentCount);
   assert.equal(new Set(attempts.docs.map(doc => doc.data().studentUid)).size, studentCount);
-  assert.ok(started.every(item => item.result.questionPresentation.length === 2 && item.result.questionPresentation.every(question =>
+  assert.ok(started.every(item => item.result.questionPresentation.length === questionCount && item.result.questionPresentation.every(question =>
     !Object.hasOwn(question, "answer") && !Object.hasOwn(question, "explanation") && !Object.hasOwn(question, "hint"))));
+  if (locked) {
+    assert.equal(new Set(attempts.docs.map(doc => doc.data().sourceHash)).size, 1);
+    assert.equal(new Set(attempts.docs.map(doc => JSON.stringify(doc.data().questionSnapshots))).size, 1);
+    assert.ok(attempts.docs.every(doc => doc.data().gradingSnapshot.every(item => item.sourceRevision === "1")));
+    assert.ok(started.every(item => Date.parse(item.result.deadlineAtIso) - Date.parse(item.result.startedAtIso) === 2100_000));
+    assert.deepEqual(started[0].result.questionIds, Array.from({ length: 23 }, (_, index) => String(index + 21)));
+  }
   const recovered = await status(commands[0].uid, { commandType: "startAssessmentAttempt", commandId: commands[0].commandId });
   assert.equal(recovered.result.attemptId, started[0].result.attemptId);
 
@@ -170,6 +204,19 @@ const verifyAllClassConcurrentMockStarts = async () => {
   assert.equal(recoveredSave.revision, 3);
   assert.deepEqual((await state(commands[0].uid, { attemptId: secondSave.attemptId })).attempt.answers, secondSave.answers);
   assert.equal((await attemptsForStudents()).size, studentCount, "Reads and lost-response retries never consume another attempt");
+  if (locked) {
+    const answers = Object.fromEntries(Array.from({ length: 23 }, (_, index) => [String(index + 21), index === 1 ? "신라" : "고려"]));
+    const submitId = randomUUID();
+    const submissionPayload = { attemptId: secondSave.attemptId, expectedRevision: 3, answers, submitReason: "STUDENT" };
+    const submitted = await execute(commands[0].uid, "submitAssessmentAttempt", submissionPayload, submitId);
+    assert.equal(submitted.result.score, 23);
+    assert.equal(submitted.result.earnedPoints, 100);
+    assert.equal(submitted.result.percent, 100, "Grading uses the frozen key even after the problem bank changed");
+    assert.equal((await execute(commands[0].uid, "submitAssessmentAttempt", submissionPayload, submitId)).replayed, true);
+    await assert.rejects(execute(commands[0].uid, "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_ATTEMPT_LIMIT_REACHED"));
+    assert.equal((await db.collection("semester_assessment_results").where("definitionId", "==", defId)
+      .where("studentUid", "==", commands[0].uid).get()).size, 1);
+  }
   assert.ok((await state("teacher", { semesterId })).classes.length >= classCount);
   for (const operation of ["query", "status", "command", "save"]) {
     const transactions = observedTransactions.filter(item => item.operation === operation);
@@ -183,7 +230,7 @@ const verifyAllClassConcurrentMockStarts = async () => {
   assert.equal((await state(outsider, { definitionId: defId })).status, "PERMISSION");
   await assert.rejects(state(outsider, { definitionId: defId, prepareAssets: true }), reason("ASSESSMENT_ASSET_PREPARATION_FORBIDDEN"));
   await assert.rejects(execute(outsider, "startAssessmentAttempt", { definitionId: defId }), reason("ASSESSMENT_CLASS_NOT_ASSIGNED"));
-  console.log(`PASS 30 requests at test per-instance concurrency ${instanceConcurrency} across 10 classes, duplicate/lost-response recovery, concurrent owner reads/autosave, read-only transaction boundaries, outsider block and private answer fields`);
+  console.log(`PASS ${locked ? "locked 23-question 35-minute paper" : "existing paper"}: 30 requests at test per-instance concurrency ${instanceConcurrency} across 10 classes, duplicate/lost-response recovery, concurrent owner reads/autosave, read-only transaction boundaries, outsider block and private answer fields`);
 };
 
 (async () => {
@@ -389,6 +436,7 @@ const verifyAllClassConcurrentMockStarts = async () => {
     expectedRevision: staleDraft.revision, answers: { 32: "조선" }, submitReason: "STUDENT" }), reason("ASSESSMENT_PREREQUISITE_REQUIRED"));
   assert.deepEqual(await get(`semester_assessment_attempts/${staleId}`), staleDraft);
   console.log("PASS mock round overview scoped to self, sequential start/assets/recovery/save/submit gates, no draft mutation");
+  await verifyAllClassConcurrentMockStarts({ locked: true });
   await verifyAllClassConcurrentMockStarts();
 
   const races = await Promise.allSettled([

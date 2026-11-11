@@ -17,9 +17,16 @@ const row = (id, title, sortOrder) => ({
     ...(sortOrder === undefined ? {} : { sortOrder }),
   },
 });
+const user = (uid, epoch = 100) => ({
+  uid,
+  epoch,
+  async getIdTokenResult() {
+    return { claims: { auth_time: this.epoch } };
+  },
+});
 
 function fixture() {
-  const auth = { currentUser: { uid: "student-a" } };
+  const auth = { currentUser: user("student-a") };
   const clock = { now: 1800000000000 };
   class ClockDate extends Date {
     static now() {
@@ -176,7 +183,7 @@ let checks = 0;
   const ownerA = f.auth.currentUser;
   f.collections.set(scopePath(current), [row("scope", "A 사용자 조회", 1)]);
   const a = await f.read(current);
-  f.auth.currentUser = { uid: "student-b" };
+  f.auth.currentUser = user("student-b");
   f.collections.set(scopePath(current), [row("scope", "B 사용자 조회", 1)]);
   const b = await f.read(current);
   assert.equal(b.find((item) => item.id === "scope").title, "B 사용자 조회");
@@ -211,7 +218,7 @@ let checks = 0;
   f.controls.beforeRead = () => pending;
   const first = f.read(current);
   const second = f.read(current);
-  assert.strictEqual(first, second);
+  await new Promise(setImmediate);
   assert.equal(f.reads.length, 2);
   release();
   assert.strictEqual(await first, await second);
@@ -226,7 +233,8 @@ let checks = 0;
   f.controls.beforeRead = () => pending;
   const previousOwner = f.auth.currentUser;
   const first = f.read(current);
-  f.auth.currentUser = { uid: "student-b" };
+  await new Promise(setImmediate);
+  f.auth.currentUser = user("student-b");
   release();
   await assert.rejects(first, /로그인 계정/);
   f.controls.beforeRead = async () => {};

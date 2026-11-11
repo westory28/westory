@@ -56,6 +56,8 @@ interface QuizSettingsModalProps {
   canEdit: boolean;
 }
 interface QuizSettingsFormState {
+  opensAt?: string;
+  lockPaper?: boolean;
   questionCount: number | "";
   questionOrder: AssessmentQuestionOrder;
   timeLimitMinutes: number | "";
@@ -184,6 +186,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     : `${nodeTitle || "선택한 단원"} · ${categoryLabel}`;
   const busy = saving || Boolean(resettingClassId);
   const dirty = ready && savedFingerprint !== formFingerprint(settings);
+  const openingLabel = settings.opensAt
+    ? new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(settings.opensAt))
+    : "";
   const requestNavigation = (target: "close" | MockExamRound) => {
     if (busy) return;
     if (dirty) {
@@ -345,6 +358,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             ? {
                 settings: {
                   ...(data.presentationSettings || {}),
+                  opensAt: data.opensAt ?? data.presentationSettings?.opensAt,
+                  ...(data.paperSnapshotId ? { lockPaper: true } : {}),
                   active: data.status === "PUBLISHED",
                   questionCount: data.questionCount,
                   timeLimit: data.durationSeconds,
@@ -434,6 +449,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       typeof raw.allowRetake === "boolean";
     const entry = normalizeAssessmentConfigEntry(raw, defaultClassIds);
     const next: QuizSettingsFormState = {
+      ...(entry.opensAt ? { opensAt: entry.opensAt } : {}),
+      ...(entry.lockPaper === true ? { lockPaper: true } : {}),
       questionCount: entry.questionCount,
       questionOrder: entry.questionOrder,
       timeLimitMinutes: entry.timeLimit / 60,
@@ -501,6 +518,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     );
     const payload = {
       active: normalizedSelectedClassIds.length > 0,
+      ...(settings.opensAt ? { opensAt: settings.opensAt } : {}),
+      ...(settings.lockPaper === true ? { lockPaper: true } : {}),
       questionCount: Number(settings.questionCount),
       randomOrder: settings.questionOrder === "random",
       questionOrder: settings.questionOrder,
@@ -543,7 +562,9 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         tone: "success",
         title: "평가 설정 저장",
         message: published
-          ? `선택한 ${normalizedSelectedClassIds.length}개 학급의 학생에게 공개하고 응시 설정을 저장했습니다.`
+          ? settings.opensAt && Date.parse(settings.opensAt) > Date.now()
+            ? `선택한 ${normalizedSelectedClassIds.length}개 학급의 예약 공개 설정을 저장했습니다.`
+            : `선택한 ${normalizedSelectedClassIds.length}개 학급의 학생에게 공개하고 응시 설정을 저장했습니다.`
           : "모든 학생에게 비공개로 저장했습니다.",
       });
       onClose();
@@ -901,6 +922,22 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       </button>
                     </div>
                   </div>
+                  {(settings.opensAt || settings.lockPaper) && (
+                    <p
+                      className="quiz-settings-summary flex flex-wrap gap-x-4 gap-y-2"
+                      aria-label="예약 공개 및 시험지 상태"
+                    >
+                      {settings.opensAt && (
+                        <span>
+                          예약 공개:{" "}
+                          <time dateTime={settings.opensAt}>
+                            {openingLabel}
+                          </time>
+                        </span>
+                      )}
+                      {settings.lockPaper && <span>동일 시험지 고정</span>}
+                    </p>
+                  )}
                   <h4 className="quiz-settings-grade">
                     {defaultVisibilityGroup.gradeLabel}{" "}
                     <span>

@@ -5,6 +5,7 @@ import useNoticeCarouselInteraction from "../../../components/common/useNoticeCa
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getYearSemester } from "../../../lib/semesterScope";
+import { getNoticeDestination } from "../../../lib/noticeDestination";
 import {
   getStudentClassKey,
   subscribeVisibleNotices,
@@ -68,6 +69,7 @@ const NoticeBoard: React.FC = () => {
   }, [notices.length]);
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
+  const activeDestination = getNoticeDestination(activeNotice);
   const incomingNotice =
     incomingIndex === null ? null : notices[incomingIndex] || null;
   const showCarousel = notices.length > 1;
@@ -128,9 +130,8 @@ const NoticeBoard: React.FC = () => {
   };
 
   const openLinkedPost = (notice: Notice | null) => {
-    const linkedPostId = String(notice?.developerLogPostId || "").trim();
-    if (!linkedPostId) return;
-    navigate(`/developer-log/${linkedPostId}`);
+    const destination = getNoticeDestination(notice);
+    if (destination) navigate(destination.path);
   };
 
   useEffect(() => {
@@ -189,18 +190,14 @@ const NoticeBoard: React.FC = () => {
                 ...carousel.frameStyle,
                 touchAction: "pan-y pinch-zoom",
               }}
-              aria-disabled={!activeNotice.developerLogPostId}
-              tabIndex={activeNotice.developerLogPostId ? 0 : -1}
+              aria-disabled={!activeDestination}
+              tabIndex={activeDestination ? 0 : -1}
               className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
-                activeNotice.developerLogPostId
+                activeDestination
                   ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
                   : "cursor-default"
               }`}
-              aria-label={
-                activeNotice.developerLogPostId
-                  ? "연결된 개발자 일지 열기"
-                  : "알림장 이미지"
-              }
+              aria-label={activeDestination?.label || "알림장 이미지"}
             >
               {activeNotice && (
                 <img
@@ -210,7 +207,7 @@ const NoticeBoard: React.FC = () => {
                   onError={carousel.onImageReady}
                   draggable={false}
                   src={activeNotice.imageUrl}
-                  alt="알림장"
+                  alt={activeNotice.content || "알림장"}
                   loading="eager"
                   decoding="async"
                   className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
@@ -232,7 +229,7 @@ const NoticeBoard: React.FC = () => {
                   key={`incoming-${incomingNotice.id}`}
                   draggable={false}
                   src={incomingNotice.imageUrl}
-                  alt="알림장"
+                  alt={incomingNotice.content || "알림장"}
                   loading="eager"
                   decoding="async"
                   className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${

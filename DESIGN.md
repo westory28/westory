@@ -41,6 +41,7 @@
 
 ## 오답 노트와 평가 목차·문항 줄바꿈 (2026-11-09)
 
+- 모바일 오답 노트는 제목과 도움말을 한 묶음으로, 전체 답안·목록 버튼을 다음 행에 나란히 배치한다. 640px 이하에서는 오답 번호를 한 줄의 가로 탐색으로 표시하고 선택 문항이 보이게 유지한다. 본문 아래에 44px 이상 이전·다음 문항 버튼과 현재 순서를 두어 위로 되돌아가지 않고 이동하며 문항별 미저장 입력을 보존한다. 고정 도구 모음을 추가하지 않고 기존 8/12/16px 간격·중성 경계·파란 선택 토큰을 재사용한다. (2026-11-11)
 - 학생 마이페이지의 `응시 기록`을 `오답 노트`로 바꾸고, 평가 선택 시 보관된 오답과 성찰 입력을 바로 표시한다. `전체 답안 보기`에서 보관 시험지와 모든 문항을 확인한다. 문항은 기존 `MockExamQuestionContent`와 `MockExamAnswerControls`를 재사용하며 원래 문항 번호·공통 지문·〈보기〉·이미지·제출 답안·채점을 보존한다.
 - 오답 노트의 본문 가용 폭이 880px 이상이면 문제를 왼쪽 3, 해설·성찰을 오른쪽 2 비율로 배치한다. 오른쪽 최소 폭은 320px, 열 간격은 기존 24px이며 좁은 화면에서는 문제 다음에 해설·성찰을 둔다. 시험지 확대 화면의 20px 명조체(모바일 19px), 흰 표면·8px 모서리·16/24px 여백을 재사용한다. 긴 문항은 자연 높이로 표시하고 내부 스크롤을 추가하지 않는다.
 - 오답 번호, 전체 답안, 목록, 다시 풀기, 성찰 이유는 최소 44px 버튼 또는 라디오 버튼 표면으로 구분한다. `연결된 학습지 열기`는 책 아이콘·파란 테두리·옅은 파란 배경의 56px 링크 버튼이며 새 탭을 접근 가능한 이름으로 알린다. 성찰 이유는 기존 값과 함께 `실수했어요`, `몰랐어요`, `잘못 읽었어요`, `찍었어요`를 제공한다. 메모·연습 답안은 명시적으로 저장하며 실패·충돌 시 작성 내용을 보존한다.
@@ -1238,6 +1239,10 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Reuse the existing primary/surface/border/text tokens, 8/12px corners, 8/12/16/24px spacing and 44px controls. Comparison tables retain an accessible horizontal scroll region on mobile; charts and learning summaries become one column. No extra filter card or navigation sidebar is introduced.
 - Student MyPage loads the selected history tab in pages of 20 compact records. Date, assessment title, score and wrong-answer count identify each attempt. Open saved questions and answers for one attempt at a time, preserving unknown values separately from zero or unanswered. Offer review, optional reflection and answer-hidden practice using the saved submission, with local practice clearly distinguished from official retakes.
 - Browser checks cover 390, 768, 1280 and 1366px, visible keyboard focus, errors/retry and stale responses after changing scope. UI and server verification evidence is recorded in `docs/reviews/class-assessment-history-20261025.md`.
+
+### Scheduled mock exam entry (2026-11-11)
+
+- Reuse the existing exam lobby and character artwork. A scheduled visible round shows a grayscale scene, disabled `Coming soon` button and concise Seoul opening time until the server opening boundary; then restore the original color and existing entry eligibility. Teacher settings show the reserved time and frozen-paper state as compact transparent text. No new header card or navigation is introduced. Preserve keyboard focus, error/retry access and mobile visibility recovery; evidence is in `docs/reviews/release-stability-20261111.md`.
 
 ### Teacher response patterns (2026-10-25)
 

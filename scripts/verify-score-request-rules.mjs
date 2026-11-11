@@ -233,6 +233,18 @@ try {
   console.log(
     "PASS authorized score signature creation/repair, exact version, blocked maintenance and owner boundaries",
   );
+  // Frozen exam papers contain answer keys and are server-only, including for
+  // privileged browser clients. Operational IAM writes are tested separately.
+  const paperPath = "semester_assessment_papers/synthetic-private-paper";
+  await privileged((db) => setDoc(doc(db, paperPath), {
+    semesterId: "2026-2", source: { answerKey: [{ id: "q1", answer: "A" }] },
+  }));
+  for (const actor of ["anon", "student-a", "teacher", "admin"]) {
+    await denied(getDocFromServer(doc(clients[actor], paperPath)));
+    await denied(getDocsFromServer(collection(clients[actor], "semester_assessment_papers")));
+    await denied(setDoc(doc(clients[actor], paperPath), { answerKey: [] }));
+  }
+  console.log("PASS frozen exam papers: anonymous/student/teacher/admin browser get/list/write denied (12 assertions)");
   for (const [enabled, count] of [
     [false, 0],
     [false, 1],

@@ -14,13 +14,15 @@ const entry = `import React,{useState} from 'react';import {createRoot} from 're
 import Review from './src/pages/student/quiz/QuizRelearning';import './src/pages/student/quiz/QuizLearning.css';
 const item={id:'q1',type:'choice',question:'다음 합성 자료의 내용으로 옳지 않은 것은?',options:['정치','경제'],answer:'정치',submittedAnswer:'경제',concepts:['자료 해석'],passage:'{{box:(가)}} {{u:정책}}의 자료'+Array(9).fill(' 자료를 차례로 읽고 근거가 되는 내용을 확인합니다.').join(''),examplePassage:'ㄱ. 합성 보기',passageSet:{id:'set1',instruction:'공통 자료를 읽으시오.',passage:'공통 지문',image:null},explanation:'자료의 정책과 관련된 근거를 확인합니다.',reviewLessonId:'fixture-lesson'};
 const variant=new URLSearchParams(location.search).get('type');
+const multiple=new URLSearchParams(location.search).has('multiple');
 if(variant==='order')Object.assign(item,{type:'order',options:['가','나'],answer:'가||나'});
 if(variant==='matching')Object.assign(item,{type:'matching',matchingPairs:[{left:'인물1',right:'가'},{left:'인물2',right:'나'}],answer:'인물1=>가||인물2=>나'});
 if(variant==='short')Object.assign(item,{type:'short',question:'토지에서 조세를 거둘 수 있는 권리를 세 글자로 쓰시오.',options:[],answer:'수조권',submittedAnswer:'',concepts:['경제 개념'],passage:'',examplePassage:'',passageSet:null,explanation:'수조권은 토지 소유권과 구별된다.'});
 if(variant==='columns')Object.assign(item,{options:['(가) 김시민\t(나) 이순신','(가) 이순신\t(나) 권율'],answer:'(가) 김시민\t(나) 이순신',submittedAnswer:'(가) 이순신\t(나) 권율'});
 const qa=window.reviewQa={saved:{revision:1,updatedAt:'2026-11-08',items:[{questionId:'q1',practiceAnswer:'',reason:'',note:'기존 노트',correct:null,updatedAt:'2026-11-08'}]},requests:[],loads:0,failNext:false,conflictNext:false,hold:false};
 async function save(draft,expectedRevision,saveId){qa.requests.push({draft:structuredClone(draft),expectedRevision,saveId});if(qa.hold)await new Promise(resolve=>qa.release=resolve);if(qa.failNext){qa.failNext=false;throw Error('합성 통신 실패')}if(qa.conflictNext){qa.conflictNext=false;qa.saved={...qa.saved,revision:qa.saved.revision+1,items:[{...qa.saved.items[0],note:'다른 화면의 노트'}]};throw {details:{reason:'QUIZ_REVIEW_REVISION_CONFLICT'}}}qa.saved={revision:qa.saved.revision+1,updatedAt:'2026-11-08',items:[{...draft,correct:draft.practiceAnswer?draft.practiceAnswer==='정치':null,updatedAt:'2026-11-08'}]};return structuredClone(qa.saved)}
-function App(){const[open,setOpen]=useState(true);const[corrected,setCorrected]=useState(null);qa.correct=()=>setCorrected({...item,answer:item.answer+",새 정답",submittedCorrect:true});return open?<Review items={corrected?[]:[item]} updatedItems={corrected?[corrected]:undefined} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
+const items=multiple?Array.from({length:23},(_,index)=>({...item,id:'q'+(index+1),paperOrder:index+1})):[item];
+function App(){const[open,setOpen]=useState(true);const[corrected,setCorrected]=useState(null);qa.correct=()=>setCorrected({...item,answer:item.answer+",새 정답",submittedCorrect:true});return open?<Review items={corrected?[]:items} updatedItems={corrected?[corrected]:undefined} reviewNotes={qa.saved} onSave={save} onReload={async()=>{qa.loads++;return structuredClone(qa.saved)}} onShowAnswers={multiple?()=>{}:undefined} closeLabel={multiple?'오답 노트 목록':'결과로'} onClose={()=>setOpen(false)}/>:<button onClick={()=>setOpen(true)}>다시 열기</button>};createRoot(document.getElementById('root')).render(<App/>);`;
 const built = await build({ stdin: { contents: entry, loader: "tsx", resolveDir: process.cwd() }, bundle: true, write: false, metafile: true,
   platform: "browser", outdir: "fixture", define: { "process.env.NODE_ENV": '"production"' }, loader: { ".woff2": "dataurl", ".woff": "dataurl" },
   plugins: [{name:'lesson-popup-boundary',setup(build){build.onResolve({filter:/\/QuizLessonPopup$/},()=>({path:'popup',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export default function Popup(){return null}',loader:'js'}));}}] });
@@ -184,8 +186,46 @@ try {
   await page.getByRole('button', {name:'결과로',exact:true}).click();
   assert.equal(dialogs.length, beforeCorrectionClose + 1, 'A newly accepted answer does not discard the current unsaved reflection');
   await save(); await page.getByText('저장했어요.', {exact:true}).waitFor();
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    await page.setViewportSize({width, height:900});
+    await page.goto(origin + '/?multiple&type=short');
+    await note.waitFor();
+    await checkLayout(page,width);
+    const navigation=page.getByRole('navigation',{name:'오답 문항 선택',exact:true});
+    const paging=page.getByRole('navigation',{name:'오답 문항 이동',exact:true});
+    assert.equal(await navigation.getByRole('button').count(),23);
+    if(width<=640){
+      const compact=await navigation.evaluate(node=>({height:node.clientHeight,scrolls:node.scrollWidth>node.clientWidth,rows:new Set([...node.children].map(child=>child.offsetTop)).size}));
+      assert.equal(compact.rows,1,'Mobile question numbers remain one row');
+      assert(compact.scrolls&&compact.height<80,'23 question numbers do not push the question below a tall menu');
+    }
+    await note.fill('첫 문항에서 작성 중인 내용');
+    await paging.getByRole('button',{name:'다음 문항',exact:true}).click();
+    await page.getByRole('heading',{name:'오답 노트 2 / 23',exact:true}).waitFor();
+    assert.equal(await note.inputValue(),'');
+    await note.fill('두 번째 문항에서 작성 중인 내용');
+    await paging.getByRole('button',{name:'이전 문항',exact:true}).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading',{name:'오답 노트 1 / 23',exact:true}).waitFor();
+    assert.equal(await note.inputValue(),'첫 문항에서 작성 중인 내용','Previous/next navigation preserves each unsaved note');
+    assert.equal(await page.evaluate(()=>window.reviewQa.requests.length),0,'Question navigation does not save or read data');
+    await navigation.getByRole('button',{name:'23번',exact:true}).click();
+    await page.getByRole('heading',{name:'오답 노트 23 / 23',exact:true}).waitFor();
+    const selectedVisible=await navigation.evaluate(node=>{const bounds=node.getBoundingClientRect(),selected=node.querySelector('[aria-current="step"]').getBoundingClientRect();return selected.left>=bounds.left-1&&selected.right<=bounds.right+1});
+    assert(selectedVisible,'The selected question remains visible in the mobile number strip');
+    assert(await paging.getByRole('button',{name:'다음 문항',exact:true}).isDisabled());
+    await paging.getByRole('button',{name:'이전 문항',exact:true}).click();
+    await page.getByRole('heading',{name:'오답 노트 22 / 23',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('.quiz-notebook__heading h2')),true,'Question navigation returns focus to the question heading');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+    await page.screenshot({path:path.join(evidence,`multiple-${width}.png`),fullPage:true});
+    await navigation.getByRole('button').nth(0).click();
+    await note.fill('기존 노트');
+    await navigation.getByRole('button').nth(1).click();
+    await note.fill('');
+  }
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
-  console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, existing renderer, lesson button, four reasons and keyboard, side-by-side/stacked at 320/390/768/1280/1440, no Firebase" }));
+  console.log(JSON.stringify({ pass: true, evidence, checks: "explicit save only, initial/reopened notes, clean and reverted close, dirty guard, empty answer note save, retry ID, conflict reload with draft preservation, in-flight edits, shared/example passage, existing renderer, lesson button, four reasons and keyboard, side-by-side/stacked at 320/390/768/1280/1440, 23-question mobile strip and keyboard paging with unsaved draft preservation and no requests, no Firebase" }));
 } catch (error) {
   if (page) { await page.screenshot({path:path.join(evidence,'failure.png'),fullPage:true}).catch(()=>{}); await fs.writeFile(path.join(evidence,'failure.html'),await page.content()); }
   console.error(JSON.stringify({pass:false,evidence,error:String(error)})); throw error;

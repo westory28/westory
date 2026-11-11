@@ -71,7 +71,7 @@ export const saveQuizAssessmentSettings=async(scope,nodeId,category,round,title,
   const status=qa.statusOverride||(payload.active?'PUBLISHED':'PAUSED');
   const result={status,revision:expectedRevision+1};
   qa.settings[key]=structuredClone(payload);
-  qa.definitions[qa.definitionId(scope,nodeId,category,round)]={...result,questionCount:payload.questionCount,durationSeconds:payload.timeLimit,maxAttempts:payload.allowRetake?20:1,cooldownMinutes:payload.cooldown,presentationSettings:structuredClone(payload)};
+  qa.definitions[qa.definitionId(scope,nodeId,category,round)]={...result,questionCount:payload.questionCount,durationSeconds:payload.timeLimit,maxAttempts:payload.allowRetake?20:1,cooldownMinutes:payload.cooldown,opensAt:payload.opensAt||'',...(payload.lockPaper?{paperSnapshotId:'fixture-fixed-paper'}:{}),presentationSettings:structuredClone(payload)};
   qa.commits.push(structuredClone(result));
   return result;
 };
@@ -98,6 +98,14 @@ if(params.has('canonical'))qa.definitions[qa.definitionId({year:'2026',semester:
 if(params.has('stale-class'))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,round)].presentationSettings={...stored,visibleClassIds:['3-2','3-5']};
 if(params.has('paused'))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,round)]={status:'PAUSED',revision:8,questionCount:7,durationSeconds:1380,maxAttempts:99,cooldownMinutes:17,presentationSettings:{...stored,active:false}};
 if(params.has('legacy-active'))qa.legacyStatus={[key]:true};
+const scheduledMode=params.get('scheduled');
+if(scheduledMode){
+  const scheduled={...stored,questionCount:23,timeLimit:2100,allowRetake:false,cooldown:0,hintLimit:0,opensAt:'2026-11-11T06:00:00.000Z',lockPaper:true};
+  if(scheduledMode==='opens-only')delete scheduled.lockPaper;
+  if(scheduledMode==='lock-only')delete scheduled.opensAt;
+  qa.settings[getAssessmentConfigKey(nodeId,category,'round_3')]=scheduled;
+  if(['canonical','cleared'].includes(scheduledMode))qa.definitions[qa.definitionId({year:'2026',semester:'2'},nodeId,category,'round_3')]={status:'PUBLISHED',revision:12,questionCount:23,durationSeconds:2100,maxAttempts:1,cooldownMinutes:0,opensAt:scheduledMode==='cleared'?'':scheduled.opensAt,paperSnapshotId:'fixture-fixed-paper',presentationSettings:{...scheduled,opensAt:'2026-11-11T05:00:00.000Z',lockPaper:false}};
+}
 function Fixture(){
   const [open,setOpen]=useState(true);
   return <main><h1>평가 관리 검증</h1><button onClick={()=>setOpen(true)}>평가 설정 다시 열기</button><Modal isOpen={open} onClose={()=>{qa.closes++;setOpen(false);}} nodeId={nodeId} nodeTitle='긴 한글 단원명으로 확인하는 우리 역사의 전개와 변화' category={category} canEdit={!params.has('readonly')}/></main>;
@@ -252,6 +260,7 @@ async function open(query = "", width = 1280) {
     externalRequests.push(route.request().url());
     return route.abort();
   });
+  if(new URLSearchParams(query).has('scheduled'))await page.clock.install({time:new Date('2026-11-11T05:00:00.000Z')});
   await page.goto(`${origin}/?${query}`);
   await ready(page);
   return page;
@@ -707,6 +716,58 @@ try {
   assert.equal(await readonlyMock.evaluate(() => window.quizSettingsQa.saves.length), 0);
   await readonlyMock.close();
   checks.push("Mock retake toggles save both directions per round, preserve legacy/canonical settings on reopen and round changes, and remain read-only at 390/768/1280px.");
+
+  const scheduledStatus=page=>page.locator('[aria-label="예약 공개 및 시험지 상태"]');
+  const selectThirdRound=async page=>{
+    await page.getByRole('button',{name:'중학교 3학년 전시 (3회 모의고사)',exact:true}).click();
+    await ready(page);
+    await page.waitForFunction(()=>document.querySelector('input[aria-label="출제 문항 수"]')?.value==='23');
+  };
+  for(const width of [390,768,1280]){
+    const page=await open('category=exam_prep&scheduled=canonical',width);
+    assert.equal(await scheduledStatus(page).count(),0,'First round does not inherit round-three scheduling');
+    await selectThirdRound(page);
+    const status=scheduledStatus(page);
+    assert.equal(await status.locator('time').getAttribute('datetime'),'2026-11-11T06:00:00.000Z','Canonical opening overrides stale presentation settings');
+    assert.equal(await status.locator('time').innerText(),'2026년 11월 11일 오후 3:00');
+    assert.equal(await status.getByText('동일 시험지 고정',{exact:true}).count(),1,'A persisted paper snapshot identifies the fixed paper');
+    assert.equal(await status.locator('input,button,select').count(),0,'Schedule and fixed paper are read-only facts');
+    assert.equal(await status.evaluate(node=>getComputedStyle(node).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await saveButton(page).isDisabled(),true,'Loading schedule metadata does not dirty the form');
+    await status.scrollIntoViewIfNeeded();
+    await capture(page,`scheduled-mock-settings-${width}`);
+    assert.equal(await page.locator('.quiz-settings-body').evaluate(node=>node.scrollWidth<=node.clientWidth+1),true);
+    await page.getByRole('textbox',{name:'머리말',exact:true}).fill('전시 응시 안내');
+    await saveButton(page).click();
+    await closeAfterSave(page,'예약 공개 설정을 저장');
+    assert.deepEqual(await page.evaluate(()=>{const saved=window.quizSettingsQa.saves.at(-1);return{round:saved.round,opensAt:saved.payload.opensAt,lockPaper:saved.payload.lockPaper,questionCount:saved.payload.questionCount,timeLimit:saved.payload.timeLimit,allowRetake:saved.payload.allowRetake,questionOrder:saved.payload.questionOrder,randomOrder:saved.payload.randomOrder}}),{round:'round_3',opensAt:'2026-11-11T06:00:00.000Z',lockPaper:true,questionCount:23,timeLimit:2100,allowRetake:false,questionOrder:'created',randomOrder:false},'Saving an unrelated setting preserves the scheduled 23-question fixed paper');
+    await reopen(page);await selectThirdRound(page);
+    assert.equal(await scheduledStatus(page).locator('time').getAttribute('datetime'),'2026-11-11T06:00:00.000Z');
+    assert.equal(await scheduledStatus(page).getByText('동일 시험지 고정',{exact:true}).count(),1);
+    await page.getByRole('button',{name:'중학교 3학년 복시 (2회 모의고사)',exact:true}).click();await ready(page);
+    await scheduledStatus(page).waitFor({state:'hidden'});
+    await selectThirdRound(page);
+    assert.equal(await scheduledStatus(page).locator('time').getAttribute('datetime'),'2026-11-11T06:00:00.000Z');
+    assert.equal(await page.evaluate(()=>window.quizSettingsQa.saves.length),1,'Reopening and switching rounds add no saves');
+    await page.close();
+  }
+  for(const mode of ['stored','opens-only','lock-only','cleared']){
+    const page=await open('category=exam_prep&scheduled='+mode,390);await selectThirdRound(page);
+    const hasOpening=!['lock-only','cleared'].includes(mode),hasLock=mode!=='opens-only';
+    assert.equal(await scheduledStatus(page).locator('time').count(),hasOpening?1:0,'Only the authoritative saved opening is displayed');
+    assert.equal(await scheduledStatus(page).getByText('동일 시험지 고정',{exact:true}).count(),hasLock?1:0);
+    await page.getByRole('textbox',{name:'머리말',exact:true}).fill('보존 확인');await saveButton(page).click();
+    await page.getByRole('dialog').waitFor({state:'hidden'});
+    assert.deepEqual(await page.evaluate(()=>{const payload=window.quizSettingsQa.saves.at(-1).payload;return{opensAt:payload.opensAt||'',lockPaper:payload.lockPaper===true}}),{opensAt:hasOpening?'2026-11-11T06:00:00.000Z':'',lockPaper:hasLock});
+    await page.close();
+  }
+  const readonlySchedule=await open('category=exam_prep&scheduled=canonical&readonly',390);await selectThirdRound(readonlySchedule);
+  assert.equal(await scheduledStatus(readonlySchedule).locator('time').innerText(),'2026년 11월 11일 오후 3:00');
+  assert.equal(await scheduledStatus(readonlySchedule).getByText('동일 시험지 고정',{exact:true}).count(),1);
+  assert.equal(await saveButton(readonlySchedule).count(),0);
+  assert.equal(await readonlySchedule.evaluate(()=>window.quizSettingsQa.saves.length),0);
+  await capture(readonlySchedule,'scheduled-mock-readonly-390');await readonlySchedule.close();
+  checks.push('Scheduled round 3: canonical Asia/Seoul opening and fixed-paper snapshot survive unrelated saves, reopen and round changes; optional/legacy fields and read-only view preserved at 390/768/1280px.');
 
   for (const width of [320, 390, 768, 1280, 1366]) {
     const page = await open("ten-classes", width);

@@ -1260,7 +1260,9 @@ function providerHarness({ readSetting } = {}) {
     effects = [],
     sessions = [],
     reads = [],
+    publicReads = [],
     snapshots = [],
+    settingSnapshots = [],
     timer = clock();
   let cursor = 0,
     dirty = true,
@@ -1336,8 +1338,16 @@ function providerHarness({ readSetting } = {}) {
         doc: (_db, ...path) => path.join("/"),
         onSnapshot: (path, options, success, failure) => {
           assert.equal(options.includeMetadataChanges, true);
+          const record = { path, success, failure, stopped: false };
+          // Public interface loading and live settings were added after this
+          // provider fixture. Keep profile events targeted at the user stream.
+          if (path.startsWith("site_settings/")) {
+            settingSnapshots.push(record);
+            return () => {
+              record.stopped = true;
+            };
+          }
           reads.push(path);
-          const record = { success, failure, stopped: false };
           snapshots.push(record);
           return () => {
             record.stopped = true;
@@ -1377,6 +1387,10 @@ function providerHarness({ readSetting } = {}) {
         invalidateSiteSettingDocCache: noop,
         readSiteSettingDoc: async () => ({}),
         readFreshSiteSettingDoc: async (name) => {
+          if (name === "interface_config") {
+            publicReads.push(name);
+            return {};
+          }
           reads.push(name);
           return readSetting
             ? readSetting(auth.currentUser, name)
@@ -1408,7 +1422,9 @@ function providerHarness({ readSetting } = {}) {
     auth,
     sessions,
     reads,
+    publicReads,
     snapshots,
+    settingSnapshots,
     timer,
     signOutGate,
     signOutCalls,
@@ -1446,6 +1462,7 @@ for (const role of ["teacher", "student"])
     async () => {
       const h = providerHarness();
       await h.render();
+      assert.deepEqual(h.publicReads, ["interface_config"]);
       const account = user(`synthetic-provider-${role}`);
       await h.observe(account);
       assert.deepEqual(h.reads, [`users/${account.uid}`]);
@@ -1466,11 +1483,21 @@ for (const role of ["teacher", "student"])
       assert.equal(h.value.currentUser, account);
       assert.equal(h.value.userData.uid, account.uid);
       assert.equal(h.value.config.semester, "2");
+      assert.equal(h.publicReads.length, 2);
+      assert.deepEqual(
+        h.settingSnapshots.map((item) => item.path),
+        [
+          "site_settings/config",
+          "site_settings/menu_config",
+          "site_settings/interface_config",
+        ],
+      );
       const signOut = h.value.logout();
       await h.render();
       assert.equal(h.value.currentUser, null);
       assert.equal(h.value.userData, null);
       assert.equal(h.value.config, null);
+      assert.ok(h.settingSnapshots.every((item) => item.stopped));
       h.signOutGate.resolve();
       await signOut;
       h.unmount();

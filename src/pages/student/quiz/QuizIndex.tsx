@@ -1,6 +1,6 @@
 import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   getMockExamOverview,
   type MockExamOverview,
@@ -26,6 +26,8 @@ import {
   getMockExamRoundsFromAssessmentConfig,
   getMockExamRoundNumber,
   getMockExamRoundName,
+  isMockExamRound,
+  normalizeMockExamRound,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
 
@@ -56,6 +58,12 @@ const examScenes = [
 const QuizIndex: React.FC = () => {
   const { userData, currentUser, config, menuConfig } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const linkedRound = isMockExamRound(searchParams.get("round"))
+    ? normalizeMockExamRound(searchParams.get("round"))
+    : "";
+  const openMockFromLink =
+    searchParams.get("tab") === "mock" || isMockExamRound(linkedRound);
 
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [assessmentConfig, setAssessmentConfig] = useState<
@@ -65,9 +73,15 @@ const QuizIndex: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
-  const [activeTab, setActiveTab] = useState<"units" | "mock">("units");
-  const [hasOpenedMockExam, setHasOpenedMockExam] = useState(false);
-  const [selectedRound, setSelectedRound] = useState<MockExamRound>("round_1");
+  const [activeTab, setActiveTab] = useState<"units" | "mock">(
+    openMockFromLink ? "mock" : "units",
+  );
+  const [hasOpenedMockExam, setHasOpenedMockExam] = useState(openMockFromLink);
+  const [selectedRound, setSelectedRound] = useState<MockExamRound>(
+    isMockExamRound(linkedRound) ? linkedRound! : "round_1",
+  );
+  const [clockNow, setClockNow] = useState(Date.now);
+  const [serverClockOffset, setServerClockOffset] = useState(0);
   const [mockOverview, setMockOverview] = useState<{
     scope: string;
     data: MockExamOverview;
@@ -78,6 +92,38 @@ const QuizIndex: React.FC = () => {
   const { year, semester } = getYearSemester(config);
   const semesterId = `${year}-${semester}`;
   const mockScope = `${currentUser?.uid || ""}:${semesterId}`;
+
+  useEffect(() => {
+    if (!openMockFromLink) return;
+    setActiveTab("mock");
+    setHasOpenedMockExam(true);
+    if (isMockExamRound(linkedRound)) setSelectedRound(linkedRound!);
+  }, [linkedRound, openMockFromLink]);
+
+  // One local timer at the next opening boundary. Returning from a sleeping
+  // mobile tab updates the same clock without polling or starting an attempt.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const update = () => {
+      if (timer) clearTimeout(timer);
+      const now = Date.now() + serverClockOffset;
+      setClockNow(now);
+      const next = Object.values(assessmentConfig)
+        .map((entry) => Date.parse(entry.opensAt || ""))
+        .filter((time) => Number.isFinite(time) && time > now)
+        .sort((a, b) => a - b)[0];
+      if (next)
+        timer = setTimeout(update, Math.min(next - now + 20, 2147483647));
+    };
+    update();
+    window.addEventListener("pageshow", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("pageshow", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, [assessmentConfig, serverClockOffset]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +222,12 @@ const QuizIndex: React.FC = () => {
     void getMockExamOverview({ semesterId }).then(
       (data) => {
         if (!cancelled) {
+          if (
+            data.serverNowIso &&
+            Number.isFinite(Date.parse(data.serverNowIso))
+          ) {
+            setServerClockOffset(Date.parse(data.serverNowIso) - Date.now());
+          }
           setMockOverview({ scope: mockScope, data });
           setMockOverviewLoading(false);
         }
@@ -211,6 +263,10 @@ const QuizIndex: React.FC = () => {
       (item) => item.examRound === round,
     );
     if (!visible) return "준비 중";
+    const opensAt =
+      assessmentConfig[getAssessmentConfigKey("exam_prep", "exam_prep", round)]
+        ?.opensAt;
+    if (opensAt && Date.parse(opensAt) > clockNow) return "공개 예정";
     if (state?.prerequisiteMet === false)
       return `${getMockExamRoundNumber(state.requiredRound)}회 제출 후`;
     if (state?.completed) return "응시 완료";
@@ -232,8 +288,21 @@ const QuizIndex: React.FC = () => {
       getAssessmentConfigKey("exam_prep", "exam_prep", selected.round)
     ];
   const retakeBlocked = selectedState?.retakeBlocked === true;
+  const scheduled =
+    selected.visible && Date.parse(selectedConfig?.opensAt || "") > clockNow;
+  const openingLabel = selectedConfig?.opensAt
+    ? new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(new Date(selectedConfig.opensAt))
+    : "";
   const canEnter =
     selected.visible &&
+    !scheduled &&
     selectedState?.prerequisiteMet === true &&
     !retakeBlocked;
   const selectedStatus = roundStatus(selected.round, selected.visible);
@@ -423,7 +492,9 @@ const QuizIndex: React.FC = () => {
             </dl>
             <figure className="student-exam-lobby__art">
               <div className="student-exam-lobby__visual">
-                <div className="student-exam-lobby__scene">
+                <div
+                  className={`student-exam-lobby__scene${scheduled ? " is-scheduled" : ""}`}
+                >
                   <img
                     key={selected.round}
                     src={selectedScene.src}
@@ -448,7 +519,11 @@ const QuizIndex: React.FC = () => {
                     )
                   }
                 >
-                  {retakeBlocked ? "재응시 불가" : "시험 입장"}{" "}
+                  {scheduled
+                    ? "Coming soon"
+                    : retakeBlocked
+                      ? "재응시 불가"
+                      : "시험 입장"}{" "}
                   <svg
                     viewBox="0 0 24 24"
                     width="20"
@@ -464,6 +539,11 @@ const QuizIndex: React.FC = () => {
               </div>
             </figure>
             <div className="student-exam-lobby__entry">
+              {scheduled && (
+                <p className="student-exam-lobby__notice" role="status">
+                  {openingLabel} 공개
+                </p>
+              )}
               {mockOverviewError && selected.visible ? (
                 <div className="student-exam-lobby__error" role="alert">
                   <span>{mockOverviewError}</span>
@@ -478,7 +558,7 @@ const QuizIndex: React.FC = () => {
                 <p className="student-exam-lobby__notice" role="status">
                   응시 상태 확인 중…
                 </p>
-              ) : !canEnter && !retakeBlocked ? (
+              ) : !canEnter && !retakeBlocked && !scheduled ? (
                 <p className="student-exam-lobby__notice">
                   {selected.visible && selectedState?.prerequisiteMet === false
                     ? `${formatMockExamRoundShortLabel(selectedState.requiredRound)}를 제출한 뒤 입장할 수 있습니다.`

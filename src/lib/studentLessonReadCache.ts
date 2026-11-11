@@ -36,6 +36,8 @@ export interface StudentCurriculumTreeItem {
 }
 
 interface CacheEntry<T> {
+  owner: NonNullable<typeof auth.currentUser>;
+  authTime: number;
   promise?: Promise<T>;
   value?: T;
   expiresAt?: number;
@@ -123,22 +125,36 @@ const filterTreeByVisibleLessons = (
     })
     .filter((item): item is StudentCurriculumTreeItem => Boolean(item));
 
-const readCached = <T>(
+const readCached = async <T>(
   cache: Map<string, CacheEntry<T>>,
   key: string,
   loader: () => Promise<T>,
 ) => {
-  const cached = cache.get(key);
-  if (cached?.value !== undefined && (cached.expiresAt || 0) > Date.now()) {
-    return Promise.resolve(cached.value);
-  }
-  if (cached?.promise) return cached.promise;
-
-  const entry: CacheEntry<T> = {};
   const owner = auth.currentUser;
+  if (!owner) throw new Error("로그인 상태를 확인해 주세요.");
+  const authTime = Number((await owner.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== owner || !Number.isFinite(authTime))
+    throw new Error("로그인 계정이 바뀌었습니다.");
+
+  const cached = cache.get(key);
+  // A UID can sign in again while the module stays mounted. A cached read is
+  // reusable only within the same Firebase user object and authentication epoch.
+  if (cached?.owner === owner && cached.authTime === authTime) {
+    if (cached.value !== undefined && (cached.expiresAt || 0) > Date.now()) {
+      return cached.value;
+    }
+    if (cached.promise) return cached.promise;
+  }
+
+  const entry: CacheEntry<T> = { owner, authTime };
   entry.promise = loader()
-    .then((value) => {
+    .then(async (value) => {
       if (auth.currentUser !== owner)
+        throw new Error("로그인 계정이 바뀌었습니다.");
+      const settledAuthTime = Number(
+        (await owner.getIdTokenResult()).claims.auth_time,
+      );
+      if (auth.currentUser !== owner || settledAuthTime !== authTime)
         throw new Error("로그인 계정이 바뀌었습니다.");
       entry.value = value;
       entry.expiresAt = Date.now() + STUDENT_READ_CACHE_TTL_MS;
@@ -146,7 +162,7 @@ const readCached = <T>(
       return value;
     })
     .catch((error) => {
-      cache.delete(key);
+      if (cache.get(key) === entry) cache.delete(key);
       throw error;
     });
   cache.set(key, entry);

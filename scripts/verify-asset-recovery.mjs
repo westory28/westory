@@ -138,7 +138,7 @@ const bundle = await build({
 import {createRoot} from "react-dom/client";
 import ErrorBoundary from ${modulePath("src/components/common/ErrorBoundary.tsx")};
 import {LoadingProvider} from ${modulePath("src/components/common/LoadingState.tsx")};
-import {installAssetRecovery} from ${modulePath("src/lib/assetRecovery.ts")};
+import {installAssetRecovery,markAssetRecoveryEdited} from ${modulePath("src/lib/assetRecovery.ts")};
 installAssetRecovery();
 const mode=new URLSearchParams(location.search).get('case');
 const current=document.querySelector('script[type="module"]').src;
@@ -147,7 +147,7 @@ function Fixture(){
  const fail=()=>{const error=new Error('Unable to preload CSS for /assets/GongsinmoongoWorkspace-old.css');const event=new Event('vite:preloadError',{cancelable:true});event.payload=error;window.dispatchEvent(event);setFailed(true);};
  if(failed)throw new Error('Unable to preload CSS for /assets/GongsinmoongoWorkspace-old.css');
  if(current.endsWith('/new.js')&&mode!=='repeat')return <p>새 버전 화면</p>;
- return <div><textarea aria-label="초안"/><button onClick={fail}>파일 오류 발생</button></div>;
+ return <div><textarea aria-label="초안"/><button onClick={markAssetRecoveryEdited}>답안 선택</button><button onClick={fail}>파일 오류 발생</button></div>;
 }
 createRoot(document.getElementById('root')).render(<React.StrictMode><LoadingProvider><ErrorBoundary><Fixture/></ErrorBoundary></LoadingProvider></React.StrictMode>);`,
     resolveDir: root,
@@ -249,6 +249,7 @@ try {
     "unchanged",
     "offline",
     "draft",
+    "choice-draft",
     "storage",
     "network",
     "repeat",
@@ -281,6 +282,8 @@ try {
       await page
         .getByRole("textbox", { name: "초안" })
         .fill("기기에만 남겨야 하는 초안");
+    if (mode === "choice-draft")
+      await page.getByRole("button", { name: "답안 선택" }).click();
     await page.getByRole("button", { name: "파일 오류 발생" }).click();
     if (mode === "updated") {
       await page.locator('[data-loading-scope="screen"]').waitFor();
@@ -306,7 +309,7 @@ try {
         null,
         `${mode}: technical error collapsed`,
       );
-      const expected = ["offline", "draft"].includes(mode)
+      const expected = ["offline", "draft", "choice-draft"].includes(mode)
         ? 0
         : mode === "repeat"
           ? 2
@@ -317,8 +320,16 @@ try {
       });
       if (mode === "offline")
         await page.getByText(/인터넷 연결이 끊겨/).waitFor();
-      if (mode === "draft")
+      if (["draft", "choice-draft"].includes(mode))
         await page.getByText(/입력 중이던 내용이 있어/).waitFor();
+      if (mode === "choice-draft") {
+        await page
+          .getByText(/저장하지 않은 내용이 사라질 수 있습니다/)
+          .waitFor();
+        await page.getByRole("button", { name: "다시 불러오기" }).click();
+        await page.getByText("새 버전 화면").waitFor();
+        assert.deepEqual(counts.get(mode), { documents: 2, checks: 0 });
+      }
       if (["storage", "cancelled", "repeat"].includes(mode))
         await page.getByText(/새 버전으로 자동 복구하지 못했습니다/).waitFor();
       if (mode === "manual") {

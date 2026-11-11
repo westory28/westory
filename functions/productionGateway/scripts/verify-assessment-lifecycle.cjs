@@ -1561,6 +1561,139 @@ const runMockSourceQueryBounds = async () => {
   assert.equal(tooMany.questionReads()[0].filter.limit, 201, "The 200-question validation needs at most one extra document");
 };
 
+const runScheduledLockedPaper = async () => {
+  const fixture = new MemoryStore(seed);
+  const opensAt = "2026-11-11T06:00:00.000Z";
+  let clock = Date.parse(opensAt) - 1;
+  const lockedAdapter = assessment.createAssessmentCommandAdapter({ now: () => new Date(clock),
+    wisRewards: { prepare: async () => ({ refs: [], result: { status: "DISABLED" }, apply() {} }) } });
+  const definitionId = "quiz:2026-2:exam_prep:exam_prep:round_3";
+  const definitionPath = `${assessment.DEFINITION_COLLECTION}/${definitionId}`;
+  const apply = (commandType, payload, uid = admin.uid) => fixture.runTransaction(transaction => lockedAdapter.apply({
+    transaction, commandId: commandId(), receiptId: "locked-paper-test", timestamp: { __serverTimestamp: clock },
+    actor: { actorUid: uid, actorRole: uid === admin.uid ? "admin" : "student" }, commandType,
+    payload: assessment.normalizeAssessmentPayload(commandType, payload),
+  }));
+  const query = assessment.createAssessmentQueryCore({ store: fixture, now: () => new Date(clock),
+    serverTimestamp: () => ({ __serverTimestamp: clock }), assertSession: async request => ({ uid: request.auth.uid }) });
+  const students = [student.uid, "locked-second-student", "locked-third-student"];
+  for (const uid of students) {
+    fixture.documents.set(`users/${uid}`, { role: "student" });
+    fixture.documents.set(`student_identities/${uid}`, { studentUid: uid });
+    fixture.documents.set(`semester_enrollment_slots/${archiveEnrollment.buildEnrollmentSlotId(semesterId, uid)}`,
+      { semesterId, studentUid: uid, activeEnrollmentId: `locked-${uid}` });
+    fixture.documents.set(`semester_enrollments/locked-${uid}`,
+      { semesterId, studentUid: uid, classId: "class_one", enrollmentId: `locked-${uid}`, enrollmentStatus: "ACTIVE" });
+    for (const round of [1, 2]) fixture.documents.set(`${assessment.RESULT_COLLECTION}/prior-${uid}-${round}`,
+      { semesterId, studentUid: uid, definitionId: `quiz:2026-2:exam_prep:exam_prep:round_${round}` });
+  }
+  for (let index = 1; index <= 23; index++) {
+    const id = String(5000 - index);
+    fixture.documents.set(`years/2026/semesters/2/quiz_questions/${id}`, {
+      id, unitId: "exam_prep", category: "exam_prep", examRound: "round_3", contentRevision: 1,
+      type: "word", question: `고정 문항 ${index}`, answer: "고려", explanation: "제출 뒤 해설",
+      paperOrder: index, points: index === 23 ? 12 : 4,
+      ...(index === 1 ? { type: "choice", options: ["신라", "발해", "고려", "고구려", "대한 제국"] } : {}),
+      ...(index === 2 ? { type: "order", options: ["다", "가", "나"], answer: "다||나||가" } : {}),
+      ...(index === 3 ? { type: "matching", answer: "가=>둘||나=>하나",
+        matchingPairs: [{ left: "가", right: "둘" }, { left: "나", right: "하나" }] } : {}),
+    });
+  }
+  const base = definitionPayload("QUIZ");
+  const config = { ...base, definitionId, sourceId: "exam_prep", category: "exam_prep", examRound: "round_3",
+    questionCount: 23, durationSeconds: 2100, maxAttempts: 1, opensAt,
+    legacyConfigKey: "exam_prep_exam_prep__round_3", expectedRevision: 0, reason: "Synthetic scheduled paper",
+    presentationSettings: { ...base.presentationSettings, questionCount: 23, timeLimit: 2100, allowRetake: false,
+      randomOrder: false, questionOrder: "created", opensAt, lockPaper: true } };
+  assert.throws(() => assessment.normalizeAssessmentPayload("saveQuizAssessmentSettings", {
+    ...config, presentationSettings: { ...config.presentationSettings, opensAt: "" },
+  }), error => error?.details?.reason === "ASSESSMENT_PAYLOAD_INVALID");
+  const saved = await apply("saveQuizAssessmentSettings", config);
+  const definition = fixture.snapshot(definitionPath).data;
+  const paperPath = `semester_assessment_papers/${definition.paperSnapshotId}`;
+  const frozen = clone(fixture.snapshot(paperPath).data);
+  assert.equal(fixture.writeCount, 3, "Publish stores exactly one paper, definition, and settings document (gateway audit/receipt are separate)");
+  assert.equal(frozen.source.itemCount, 23);
+  assert.equal(frozen.source.answerKey.reduce((sum, item) => sum + item.points, 0), 100);
+  assert.equal(definition.presentationSettings.lockPaper, true);
+  const oldSettings = { ...config.presentationSettings };
+  delete oldSettings.opensAt; delete oldSettings.lockPaper;
+  await apply("saveQuizAssessmentSettings", { ...config, opensAt: "", expectedRevision: 1, presentationSettings: oldSettings });
+  assert.equal(fixture.snapshot(definitionPath).data.opensAt, opensAt, "Old settings clients cannot clear a server reservation");
+  assert.equal(fixture.snapshot(definitionPath).data.presentationSettings.opensAt, opensAt);
+  assert.equal(fixture.snapshot(definitionPath).data.presentationSettings.lockPaper, true);
+  const state = (uid = student.uid, extra = {}) => query.getAssessmentState({ auth: { uid }, data: { definitionId, ...extra } });
+  const start = uid => apply("startAssessmentAttempt", { definitionId, preparedSourceHash: saved.result.sourceHash }, uid);
+  fixture.queryLog.length = 0; fixture.readLog.length = 0;
+  assert.equal((await state()).status, "NOT_OPEN");
+  await assert.rejects(start(student.uid), error => error?.details?.reason === "ASSESSMENT_WINDOW_CLOSED");
+  await assert.rejects(state(student.uid, { prepareAssets: true }), error => error?.details?.reason === "ASSESSMENT_ASSET_PREPARATION_FORBIDDEN");
+  assert.equal(fixture.writeCount, 5);
+  assert.ok(!fixture.readLog.includes(paperPath), "Before the server opening instant no private paper is read");
+  assert.ok(!fixture.queryLog.some(entry => entry.collectionPath.endsWith("/quiz_questions")));
+  clock++;
+  const overview = await query.getAssessmentState({ auth: student, data: { semesterId, mockExamOverview: true } });
+  assert.equal(overview.serverNowIso, opensAt);
+  fixture.readLog.length = 0; fixture.queryLog.length = 0;
+  const prepared = await state(student.uid, { prepareAssets: true });
+  assert.equal(prepared.status, "READY");
+  assert.equal(prepared.preparedAssets.sourceHash, saved.result.sourceHash);
+  assert.equal(fixture.readLog.filter(path => path === paperPath).length, 1);
+  assert.equal(fixture.queryLog.filter(entry => entry.collectionPath.endsWith("/quiz_questions")).length, 0,
+    "Preparation reads one frozen document instead of 23 bank documents");
+  const first = (await start(student.uid)).result;
+  const expectedIds = Array.from({ length: 23 }, (_, index) => String(4999 - index));
+  assert.deepEqual(first.questionIds, expectedIds);
+  assert.deepEqual(first.questionPresentation[0].options, ["신라", "발해", "고려", "고구려", "대한 제국"], "Choice order is frozen without shuffling");
+  assert.deepEqual(first.questionPresentation[1].options, ["가", "나", "다"], "Order choices keep the existing answer-free deterministic presentation");
+  assert.deepEqual(first.questionPresentation[2].matchingLeftOptions, ["가", "나"]);
+  assert.equal(Date.parse(first.deadlineAtIso) - Date.parse(first.startedAtIso), 35 * 60 * 1000);
+  assert.ok(first.questionPresentation.every(item => !Object.hasOwn(item, "answer") && !Object.hasOwn(item, "explanation")));
+  // Corrections remain in the live bank; new starts still use the original
+  // publication revision and existing result-correction triggers can project them.
+  for (const [path, data] of fixture.documents) if (path.startsWith("years/2026/semesters/2/quiz_questions/") && data.examRound === "round_3") {
+    fixture.documents.set(path, { ...data, answer: "조선", contentRevision: 2, question: "변경된 원문" });
+  }
+  const resaved = await apply("saveQuizAssessmentSettings", { ...config, expectedRevision: 2,
+    expectedSourceHash: saved.result.sourceHash, presentationSettings: { ...config.presentationSettings, lockPaper: false } });
+  assert.equal(resaved.result.sourceHash, saved.result.sourceHash);
+  assert.equal(fixture.snapshot(definitionPath).data.presentationSettings.lockPaper, true);
+  assert.deepEqual(fixture.snapshot(paperPath).data, frozen, "Settings never overwrite the immutable paper");
+  const beforeStale = fixture.writeCount;
+  await assert.rejects(apply("saveQuizAssessmentSettings", { ...config, expectedRevision: 3, expectedSourceHash: "a".repeat(64) }),
+    error => error?.details?.reason === "ASSESSMENT_SOURCE_REVISION_CONFLICT");
+  assert.equal(fixture.writeCount, beforeStale);
+  fixture.readLog.length = 0; fixture.queryLog.length = 0;
+  const [second, duplicate] = await Promise.all([start(students[1]), start(students[1])]);
+  assert.equal(second.result.attemptId, duplicate.result.attemptId);
+  assert.deepEqual(second.result.questionPresentation, first.questionPresentation);
+  assert.deepEqual(second.result.questionIds, first.questionIds);
+  assert.equal(fixture.readLog.filter(path => path === paperPath).length, 1, "Only the fresh start reads the frozen paper; duplicate start resumes");
+  assert.equal(fixture.queryLog.filter(entry => entry.collectionPath.endsWith("/quiz_questions")).length, 0);
+  const attempt = fixture.snapshot(`${assessment.ATTEMPT_COLLECTION}/${second.result.attemptId}`).data;
+  assert.equal(attempt.sourceHash, saved.result.sourceHash);
+  assert.ok(attempt.gradingSnapshot.every(item => item.sourceRevision === "1"
+    && item.answer === frozen.source.answerKey.find(question => question.id === item.id).answer));
+  assert.equal((await state(students[1])).attempt.attemptId, attempt.attemptId);
+  fixture.documents.get(`${assessment.ATTEMPT_COLLECTION}/${first.attemptId}`).status = "SUBMITTED";
+  await assert.rejects(start(student.uid), error => error?.details?.reason === "ASSESSMENT_ATTEMPT_LIMIT_REACHED");
+  const current = fixture.snapshot(definitionPath).data;
+  const beforeMissing = fixture.writeCount;
+  fixture.documents.delete(paperPath);
+  await assert.rejects(start(students[2]), error => error?.details?.reason === "ASSESSMENT_PAPER_SNAPSHOT_INVALID");
+  assert.equal(fixture.writeCount, beforeMissing, "Missing frozen data fails closed without consuming an attempt or falling back to edited content");
+  // Closing access still works even if the frozen source is unavailable.
+  await apply("saveQuizAssessmentSettings", { ...config, expectedRevision: current.revision,
+    presentationSettings: { ...config.presentationSettings, active: false } });
+  await assert.rejects(start(students[2]), error => error?.details?.reason === "ASSESSMENT_NOT_PUBLISHED");
+  fixture.documents.set(paperPath, frozen);
+  fixture.documents.set(definitionPath, { ...definition, paperSnapshotId: undefined });
+  const beforeExisting = fixture.writeCount;
+  await assert.rejects(apply("saveQuizAssessmentSettings", { ...config, expectedRevision: 1 }),
+    error => error?.details?.reason === "ASSESSMENT_PAPER_ALREADY_STARTED");
+  assert.equal(fixture.writeCount, beforeExisting, "A running exam cannot be redefined as a newly locked publication");
+};
+
 const runShortAnswerAliases = async () => {
   // Each fixture uses the real authoring, publication, attempt and progress handlers.
   // Legacy attempts intentionally omit only the fields unavailable in that version.
@@ -1741,6 +1874,7 @@ const runLegacyReceiptHints = async () => {
   await runStartReadConcurrency();
   await runShortAnswerAliases();
   await runMockSourceQueryBounds();
+  await runScheduledLockedPaper();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
   await runKind("QUIZ");
@@ -1892,6 +2026,7 @@ const runLegacyReceiptHints = async () => {
       "START_READS_ACTUALLY_OVERLAP_AUTHORITY_ERROR_PRIORITY_ZERO_DENIED_WRITES_SOURCE_ONCE_AND_FROZEN_RESUME",
       "SHORT_ANSWER_ALIASES_AUTHOR_PUBLISH_AUTOSAVE_GRADE_WEIGHTED_POINTS_LEGACY_TYPES_REPLAY_AND_SCOPE",
       "MOCK_SOURCE_EXACT_ROUND_BOUNDED_PROBE_LEGACY_FALLBACK_HASH_AND_FIRST_ROUND_KEY_MIGRATION",
+      "SCHEDULED_23_QUESTION_LOCKED_PUBLICATION_EXACT_OPENING_IDENTICAL_PAPERS_ZERO_BANK_READS_RETRY_AND_FAIL_CLOSED",
       "LEGACY_MOCK_START_RECEIPT_REPLAY_STATUS_HINT_FILTER_IMMUTABLE_AND_NORMAL_HINTS_PRESERVED",
       "HISTORY_LESSON_METADATA_PRESERVED",
       "HISTORY_SOURCE_CREATION_PROVENANCE_PRESERVED_AND_REPAIRED",

@@ -4,7 +4,22 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const calls = [];
-const auth = { currentUser: { uid: "lesson-query-student" } };
+const user = (uid, epoch = 100) => ({
+  uid,
+  epoch,
+  tokenFailure: null,
+  async getIdTokenResult() {
+    if (this.tokenFailure) throw this.tokenFailure;
+    return { claims: { auth_time: this.epoch } };
+  },
+});
+const auth = { currentUser: user("lesson-query-student") };
+let now = 1800000000000;
+class ClockDate extends Date {
+  static now() {
+    return now;
+  }
+}
 const tree = [
   {
     id: "major",
@@ -38,6 +53,7 @@ const compile = (file, modules) => {
     {
       exports,
       console,
+      Date: ClockDate,
       require(name) {
         assert.ok(name in modules, `Unexpected dependency ${name}`);
         return modules[name];
@@ -133,7 +149,7 @@ readGate = new Promise((resolve) => {
 });
 const pending = api.readStudentLesson(scope, "unit-b");
 await new Promise((resolve) => setImmediate(resolve));
-auth.currentUser = { uid: "another-student" };
+auth.currentUser = user("another-student");
 release();
 await assert.rejects(pending, /로그인 계정/);
 readGate = null;
@@ -143,6 +159,86 @@ assert.equal(
   6,
   "A new account never receives the old account's cached detail",
 );
+
+let before = calls.length;
+auth.currentUser = user(auth.currentUser.uid);
+await api.readStudentLesson(scope, "unit-a");
+assert.equal(
+  calls.length,
+  before + 1,
+  "Same UID with a new User must recheck access",
+);
+auth.currentUser.epoch += 1;
+await api.readStudentLesson(scope, "unit-a");
+assert.equal(
+  calls.length,
+  before + 2,
+  "Same User with new auth_time must recheck access",
+);
+await api.readStudentLesson(scope, "unit-a");
+assert.equal(
+  calls.length,
+  before + 2,
+  "The same authentication still reuses its cache",
+);
+now += 60001;
+await api.readStudentLesson(scope, "unit-a");
+assert.equal(calls.length, before + 3, "Expired detail rechecks access");
+
+readGate = new Promise((resolve) => {
+  release = resolve;
+});
+const beforeReauthentication = api.readStudentLesson(scope, "unit-b");
+const rejectedReauthentication = assert.rejects(
+  beforeReauthentication,
+  /로그인 계정/,
+);
+await new Promise(setImmediate);
+auth.currentUser.epoch += 1;
+release();
+await rejectedReauthentication;
+readGate = null;
+before = calls.length;
+await api.readStudentLesson(scope, "unit-b");
+assert.equal(calls.length, before + 1, "A rejected epoch read is retryable");
+
+let rejectOldRead;
+readGate = new Promise((_resolve, reject) => {
+  rejectOldRead = reject;
+});
+const oldRead = api.readStudentLesson(scope, "missing-unit");
+const oldReadRejected = assert.rejects(oldRead, /old network failure/);
+await new Promise(setImmediate);
+auth.currentUser = user(auth.currentUser.uid, auth.currentUser.epoch + 1);
+readGate = null;
+assert.equal(await api.readStudentLesson(scope, "missing-unit"), null);
+before = calls.length;
+rejectOldRead(new Error("old network failure"));
+await oldReadRejected;
+assert.equal(await api.readStudentLesson(scope, "missing-unit"), null);
+assert.equal(
+  calls.length,
+  before,
+  "Old failure cannot evict the newer authentication's cached null",
+);
+
+auth.currentUser.tokenFailure = new Error("token temporarily unavailable");
+await assert.rejects(
+  api.readStudentLesson(scope, "unit-a"),
+  /token temporarily unavailable/,
+);
+assert.equal(
+  calls.length,
+  before,
+  "Failed authentication lookup dispatches no lesson query",
+);
+auth.currentUser.tokenFailure = null;
+await api.readStudentLesson(scope, "unit-a");
+assert.equal(calls.length, before + 1);
+before = calls.length;
+auth.currentUser = null;
+await assert.rejects(api.readStudentLesson(scope, "unit-a"), /로그인 상태/);
+assert.equal(calls.length, before, "Signed-out reads never dispatch");
 console.log(
-  "PASS lightweight shared catalog, targeted detail, retained blanks, summary compatibility, semester and account isolation",
+  "PASS lightweight shared catalog, targeted detail, retained blanks, summary compatibility, account/epoch/semester isolation, expiry, failed-read recovery and stale-flight eviction guards",
 );

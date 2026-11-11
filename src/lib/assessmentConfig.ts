@@ -28,6 +28,8 @@ export type AssessmentQuestionOrder = "random" | "created" | "unit";
 
 export interface AssessmentConfigEntry extends MockExamPaperHeaderSettings {
   active: boolean;
+  opensAt?: string;
+  lockPaper?: boolean;
   questionCount: number;
   randomOrder: boolean;
   questionOrder: AssessmentQuestionOrder;
@@ -642,6 +644,10 @@ export const normalizeAssessmentConfigEntry = (
       ? normalizeMockExamPaperHeader(source)
       : {}),
     active: source.active === true,
+    ...(source.opensAt && Number.isFinite(Date.parse(source.opensAt))
+      ? { opensAt: new Date(source.opensAt).toISOString() }
+      : {}),
+    ...(source.lockPaper === true ? { lockPaper: true } : {}),
     questionCount: Math.max(1, Number(source.questionCount) || 10),
     randomOrder: questionOrder === "random",
     questionOrder,

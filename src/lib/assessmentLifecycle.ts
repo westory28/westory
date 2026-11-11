@@ -65,6 +65,7 @@ export interface AssessmentStateResponse {
 
 export interface MockExamOverview {
   semesterId: string;
+  serverNowIso?: string;
   rounds: {
     examRound: string;
     completed: boolean;

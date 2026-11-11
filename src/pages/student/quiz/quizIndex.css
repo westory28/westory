@@ -157,6 +157,9 @@
   aspect-ratio: 4 / 3;
   object-fit: contain;
 }
+.student-exam-lobby__scene.is-scheduled img {
+  filter: grayscale(1);
+}
 .student-exam-lobby__detail:has(
     .student-exam-lobby__enter:enabled:focus-visible
   )
