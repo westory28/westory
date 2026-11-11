@@ -22,7 +22,7 @@ const playwright = require(
 );
 const mocks = {
   state: `export const config={year:'2026',semester:'2'},currentUser={uid:'synthetic-teacher'},userData={grade:'3',class:'1'};export const qa=window.jitterQA={subscriptions:[],callbacks:{},phase:'pending',reads:0};const noticeCount=Number(new URLSearchParams(location.search).get('notices')??5);export const notices=Array.from({length:noticeCount},(_,i)=>({id:'notice-'+i,category:'notice',content:'합성 알림',imageUrl:'/notice.svg',imageWidth:1600,imageHeight:900,developerLogPostId:new URLSearchParams(location.search).get('linked')==='1'?'synthetic-post':'',createdAt:null}));const date=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'});export const events=Array.from({length:noticeCount===0?0:18},(_,i)=>({id:'event-'+i,title:'합성 학사 일정 '+(i+1),start:date,eventType:'event',targetType:'common',startPeriod:'allDay'}));export const release=kind=>{qa.phase=kind+'-complete';(qa.callbacks[kind]||[]).forEach(fn=>fn());};window.jitterRelease=release;`,
-  auth: `import {config,currentUser,userData} from 'fixture:state';export const useAuth=()=>({config,currentUser,userData,configReady:true,loading:false});`,
+  auth: `import React,{useEffect,useState} from 'react';import {config,currentUser,userData} from 'fixture:state';let currentConfig=config;window.jitterRefresh=()=>{currentConfig={...currentConfig,semester:currentConfig.semester==='2'?'1':'2'};window.dispatchEvent(new Event('fixture-auth-refresh'));};export const useAuth=()=>{const[state,setState]=useState(currentConfig);useEffect(()=>{const listener=()=>setState(currentConfig);window.addEventListener('fixture-auth-refresh',listener);return()=>window.removeEventListener('fixture-auth-refresh',listener);},[]);return{config:state,currentUser,userData,configReady:true,loading:false};};`,
   firebase: `export const db={};`,
   firestore: `import {qa,notices,events} from 'fixture:state';export const collection=(_db,path)=>({path});export const doc=(_db,...parts)=>({path:parts.join('/')});export const query=(ref)=>ref;export const limit=()=>({});export const orderBy=()=>({});export const getDoc=async()=>{qa.reads++;return{exists:()=>false,data:()=>({})};};export const onSnapshot=(ref,next)=>{const kind=ref.path.endsWith('/calendar')?'calendar':ref.path.endsWith('/notices')?'notices':'config';qa.subscriptions.push({kind,path:ref.path});const emit=()=>{const data=kind==='calendar'?events:notices;const docs=data.map(d=>({id:d.id,data:()=>d}));next({docs,forEach:fn=>docs.forEach(fn),exists:()=>false});};if(kind==='config')next({exists:()=>false,data:()=>({})});else (qa.callbacks[kind]??=[]).push(emit);return()=>{};};`,
   semester: `export const getYearSemester=config=>config;`,
@@ -195,6 +195,10 @@ async function startRecording(page, role) {
     window.dashboardRecording = true;
     const sample = () => {
       if (!window.dashboardRecording) return;
+      if (window.dashboardCapturePaused) {
+        requestAnimationFrame(sample);
+        return;
+      }
       const row = {
         at: performance.now(),
         phase: window.jitterQA.phase,
@@ -224,6 +228,38 @@ async function startRecording(page, role) {
 }
 function span(values) {
   return Math.max(...values) - Math.min(...values);
+}
+async function captureWithoutSampling(page, options) {
+  // Full-page capture temporarily changes the layout viewport and scrollbar.
+  // Keep viewport-only evidence and exclude only capture plus two restore
+  // frames. Native scrollbar geometry must match before sampling resumes.
+  const dimensions = () => ({
+    viewportWidth: innerWidth,
+    viewportHeight: innerHeight,
+    clientWidth: document.documentElement.clientWidth,
+    parentWidth: document
+      .querySelector(".teacher-week-events__list,.student-week-events__list")
+      ?.getBoundingClientRect().width,
+  });
+  const before = await page.evaluate(dimensions);
+  await page.evaluate(() => (window.dashboardCapturePaused = true));
+  try {
+    await page.screenshot({ ...options, fullPage: false });
+  } finally {
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    const after = await page.evaluate(dimensions);
+    await page.evaluate(() => (window.dashboardCapturePaused = false));
+    assert.deepEqual(
+      after,
+      before,
+      "viewport capture preserves the viewport and actual scrollport width after exactly two animation frames",
+    );
+  }
 }
 function summarize(frames) {
   const summary = {};
@@ -348,14 +384,14 @@ async function verifyCase(
     await startRecording(page, role);
     await page.waitForTimeout(350);
     if (count === 5)
-      await page.screenshot({
+      await captureWithoutSampling(page, {
         path: path.join(out, `${id}-pending.png`),
         fullPage: true,
       });
     await page.evaluate(() => window.jitterRelease("notices"));
     await page.waitForTimeout(400);
     if (count === 5)
-      await page.screenshot({
+      await captureWithoutSampling(page, {
         path: path.join(out, `${id}-notice-complete.png`),
         fullPage: true,
       });
@@ -365,7 +401,7 @@ async function verifyCase(
       () =>
         !document.querySelector(".ws-loading-surface,.ws-loading-exit-surface"),
     );
-    await page.screenshot({
+    await captureWithoutSampling(page, {
       path: path.join(out, `${id}-complete.png`),
       fullPage: true,
     });
@@ -493,6 +529,202 @@ async function verifyCase(
     `${result.passed ? "PASS" : "FAIL"} ${id}${result.metrics ? " " + JSON.stringify(result.metrics) : ""}`,
   );
 }
+async function verifySteady(
+  browser,
+  engine,
+  { width, height, dpr = 1, retained = false },
+) {
+  const id = `${engine}-steady-${width}x${height}-dpr${dpr}${retained ? "-retained" : ""}`;
+  const page = await browser.newPage({
+    viewport: { width, height },
+    deviceScaleFactor: dpr,
+  });
+  const errors = [],
+    backendRequests = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request) => {
+    if (
+      !request.url().startsWith(origin) ||
+      ["xhr", "fetch", "websocket"].includes(request.resourceType())
+    )
+      backendRequests.push(request.url());
+  });
+  await page.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  const result = {
+    id,
+    type: "steady",
+    engine,
+    width,
+    height,
+    dpr,
+    retained,
+    passed: false,
+  };
+  try {
+    await page.goto(origin + "/?role=teacher&notices=5&linked=1");
+    await page
+      .locator(".teacher-week-events__list .ws-loading__logo")
+      .waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    if (retained) {
+      await page.evaluate(() => {
+        window.jitterRelease("notices");
+        window.jitterRelease("calendar");
+      });
+      await page.waitForFunction(
+        () =>
+          !document.querySelector(
+            ".ws-loading-surface,.ws-loading-exit-surface",
+          ),
+      );
+      await page.evaluate(() => {
+        document.querySelector(".teacher-week-events__list").scrollTop = 220;
+        window.jitterRefresh();
+      });
+      await page
+        .locator(".teacher-week-events__list .ws-loading__logo")
+        .waitFor();
+      assert.ok(
+        (await page.locator(".teacher-week-event").count()) > 0,
+        "retained fixture keeps real schedule rows during loading",
+      );
+    }
+    const measurement = await page.evaluate(async () => {
+      const scrollbarProbe = document.createElement("div");
+      scrollbarProbe.style.cssText =
+        "position:absolute;left:-10000px;top:0;width:100px;height:100px;overflow:scroll;visibility:hidden";
+      scrollbarProbe.innerHTML = '<div style="width:200px;height:200px"></div>';
+      document.body.append(scrollbarProbe);
+      const nativeScrollbarWidth =
+        scrollbarProbe.offsetWidth - scrollbarProbe.clientWidth;
+      scrollbarProbe.remove();
+      const parent = document.querySelector(".teacher-week-events__list"),
+        surface = parent.querySelector(".ws-loading-surface"),
+        svg = surface.querySelector("svg");
+      const rect = (node) => {
+        const box = node.getBoundingClientRect();
+        return {
+          x: box.x,
+          y: box.y,
+          width: box.width,
+          height: box.height,
+          clientWidth: node.clientWidth,
+          clientHeight: node.clientHeight,
+          scrollWidth: node.scrollWidth,
+          scrollHeight: node.scrollHeight,
+          scrollTop: node.scrollTop,
+        };
+      };
+      const resizeEvents = [];
+      const observer = new ResizeObserver((entries) =>
+        resizeEvents.push(
+          entries.map((entry) => ({
+            width: entry.contentRect.width,
+            height: entry.contentRect.height,
+          })),
+        ),
+      );
+      observer.observe(parent);
+      const frames = [];
+      await new Promise((resolve) => {
+        const sample = () => {
+          frames.push({
+            parent: rect(parent),
+            surface: rect(surface),
+            svg: rect(svg),
+            scrollY,
+            letters: [...svg.querySelectorAll("[data-loading-letter]")].map(
+              (letter) => getComputedStyle(letter).transform,
+            ),
+          });
+          if (frames.length < 120) requestAnimationFrame(sample);
+          else resolve();
+        };
+        requestAnimationFrame(sample);
+      });
+      observer.disconnect();
+      return {
+        nativeScrollbarWidth,
+        devicePixelRatio,
+        frames,
+        resizeEvents,
+        subscriptions: window.jitterQA.subscriptions,
+      };
+    });
+    await fs.writeFile(
+      path.join(out, id + "-frames.json"),
+      JSON.stringify(measurement, null, 2),
+    );
+    result.nativeScrollbarWidth = measurement.nativeScrollbarWidth;
+    result.resizeCallbacks = measurement.resizeEvents.length;
+    result.ranges = {};
+    assert.ok(
+      measurement.nativeScrollbarWidth > 0,
+      "native scrollbars occupy layout space; hidden/overlay bars cannot reproduce this regression",
+    );
+    for (const part of ["parent", "surface", "svg"])
+      for (const key of [
+        "x",
+        "y",
+        "width",
+        "height",
+        "clientWidth",
+        "clientHeight",
+        "scrollWidth",
+        "scrollHeight",
+        "scrollTop",
+      ]) {
+        const values = measurement.frames.map((frame) => frame[part][key]);
+        const movement = span(values);
+        result.ranges[part + "." + key] = movement;
+        assert.equal(
+          movement,
+          0,
+          `${id}: ${part}.${key} oscillates ${movement}px while steadily pending`,
+        );
+      }
+    assert.ok(
+      measurement.resizeEvents.length <= 1,
+      `${id}: repeated parent ResizeObserver feedback (${measurement.resizeEvents.length} callbacks)`,
+    );
+    assert.equal(
+      span(measurement.frames.map((frame) => frame.scrollY)),
+      0,
+      "steady loading cannot move page scroll",
+    );
+    assert.ok(
+      Array.from(
+        { length: 7 },
+        (_, i) =>
+          new Set(measurement.frames.map((frame) => frame.letters[i])).size,
+      ).every((count) => count > 1),
+      "stable geometry preserves the seven intended letter animations",
+    );
+    assert.deepEqual(errors, []);
+    assert.deepEqual(backendRequests, []);
+    result.backendRequests = backendRequests;
+    result.passed = true;
+    await page.screenshot({
+      path: path.join(out, id + ".png"),
+      fullPage: true,
+    });
+  } catch (error) {
+    result.error = error.stack || String(error);
+    result.runtimeErrors = errors;
+    console.error(`FAIL ${id}: ${error.message}`);
+    await page
+      .screenshot({ path: path.join(out, id + "-failure.png"), fullPage: true })
+      .catch(() => {});
+  } finally {
+    await page.close();
+  }
+  results.push(result);
+  console.log(
+    `${result.passed ? "PASS" : "FAIL"} ${id}; native scrollbar ${result.nativeScrollbarWidth}px; resize callbacks ${result.resizeCallbacks}`,
+  );
+}
 try {
   for (const engine of engines) {
     assert.ok(
@@ -503,9 +735,19 @@ try {
       engine === "msedge" ? "chromium" : engine
     ].launch({
       headless: true,
+      ...(engine !== "webkit"
+        ? { ignoreDefaultArgs: ["--hide-scrollbars"] }
+        : {}),
       ...(engine === "msedge" ? { channel: "msedge" } : {}),
     });
     try {
+      for (const dimensions of [
+        { width: 1366, height: 768 },
+        { width: 1536, height: 911, dpr: 1.25 },
+        { width: 1920, height: 911 },
+        { width: 1920, height: 911, retained: true },
+      ])
+        await verifySteady(browser, engine, dimensions);
       for (const role of ["teacher", "student"])
         for (const width of [390, 768, 1280, 1440])
           for (const count of [5, 1, 0])

@@ -251,8 +251,6 @@ function ContainerLoadingSurface({
       Object.assign(overlay.style, {
         top: `${target.scrollTop}px`,
         left: `${target.scrollLeft}px`,
-        width: `${target.clientWidth}px`,
-        height: `${target.clientHeight}px`,
       });
       overlay.style.setProperty(
         "--ws-loading-center-y",

@@ -17,3 +17,13 @@
 대시보드 자동 검사는 실제 양쪽 알림장·일정 컴포넌트와 교사 Dashboard를 사용하며 학생 대시보드 외곽과 순위에는 합성 셸을 사용한다. 서버 요청은 차단되어 0건이고, 완료 전후 구독·설정 조회 횟수는 증가하지 않았다. 이미지는 합성 16:9이며 기존 모바일 원본 비율 전환을 제거하지 않는다. 실물 모바일 기기 검증을 뜻하지 않는다.
 
 원본 결과와 화면은 `.superloopy/sessions/dashboard-loading/evidence`, `.superloopy/sessions/loading-jitter/common-transparent`, `.superloopy/sessions/loading-jitter/week-schedule`에 기록한다.
+
+## 스크롤바에 의한 지속 진동 추가 수정
+
+위 초기 검사는 Chromium headless 기본 인수 `--hide-scrollbars` 때문에 실제 스크롤바가 차지하는 공간을 반영하지 못했다. 스크롤바를 표시하면 1366×768 대시보드의 실제 일정 높이 512.796875px은 고정인데 `clientHeight`가 503↔513px, 로고 Y가 465.296875↔470.296875px로 매 프레임 왕복했다. 정수로 반올림한 client 크기를 내부 덮개에 다시 쓰면서 가로·세로 스크롤바가 생성·제거되고 ResizeObserver가 재호출되는 순환이었다.
+
+덮개의 너비·높이는 CSS 100%로 지정해 소수점 치수를 그대로 사용한다. 자바스크립트는 스크롤 오프셋과 보이는 영역의 로고 중심만 계산한다. 공통·대시보드 Chromium 검사 모두 `ignoreDefaultArgs: ['--hide-scrollbars']`를 적용하고, 대시보드는 완료 전후뿐 아니라 대기 중 연속 프레임의 위치와 크기를 검사한다.
+
+독립 검증에서 1366·1536·1920px 및 DPR 1·1.25·1.5의 9조합, 기존 콘텐츠의 중간·끝·양축 스크롤 18조합 모두 로고 위치와 client 크기가 고정됐다. 안정 구간의 ResizeObserver 추가 호출은 0이며 글자 애니메이션·스크롤 위치·로컬 입력 차단을 유지했다. 서버 조회·쓰기·폴링은 추가하지 않았다.
+
+방재석 Chrome에서도 측정 UI로 실제 120프레임을 기록했다. 로고 X/Y와 부모 client 크기의 변화는 0px, ResizeObserver·scroll 추가 호출은 0이었다. 일곱 글자의 transform은 계속 바뀌어 글자별 튀기가 유지됨을 확인했다. 스크롤바를 표시한 대시보드 회귀 59조건(기존 55조건과 연속 120프레임 4조건), 공통 Edge·WebKit 검사와 `npm run build`도 통과했다. 회귀 검사의 화면 캡처는 viewport만 사용하고 캡처 전후 스크롤 영역 너비가 같아야 기록을 이어 간다. 결과는 `.superloopy/loading-micro-jitter/regression-pass`와 `.superloopy/loading-micro-jitter/common`에 남긴다.

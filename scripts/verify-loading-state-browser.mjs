@@ -851,6 +851,9 @@ async function runEngine(engine) {
   const type = ["msedge", "chrome"].includes(engine) ? "chromium" : engine;
   const browser = await playwright[type].launch({
     headless: true,
+    ...(type === "chromium"
+      ? { ignoreDefaultArgs: ["--hide-scrollbars"] }
+      : {}),
     ...(type !== engine ? { channel: engine } : {}),
   });
   const directory = path.join(evidence, engine);
