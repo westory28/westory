@@ -48,7 +48,9 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
   const hostBox = localHost?.getBoundingClientRect();
   const surfaceBox = surface?.getBoundingClientRect();
   const surfaceStyle = surface ? getComputedStyle(surface) : null;
-  const background = surfaceStyle?.backgroundColor || "rgb(255 255 255 / 60%)";
+  const background =
+    surfaceStyle?.backgroundColor ||
+    (local ? "transparent" : "rgb(255 255 255 / 60%)");
   const backdrop = surfaceStyle?.backdropFilter || "blur(4px)";
   const fill = svg.querySelector<SVGRectElement>("[data-loading-fill]")!;
   const initialFill = getComputedStyle(fill).transform;
@@ -66,6 +68,13 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
     if (
       local &&
       (!localHost?.isConnected || document.querySelector(".ws-loading-screen"))
+    )
+      return;
+    // Lazy content can replace a card's placeholder with a loader below its
+    // heading. This is still the same wait, so do not leave a logo at the old
+    // position while the next loading stage is already visible in that card.
+    if (
+      localHost?.querySelector(".ws-loading__logo:not(.ws-loading__logo--exit)")
     )
       return;
     const replacement = [

@@ -90,8 +90,9 @@
 .student-notice-board__controls {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-shrink: 0;
+  height: 46px;
   gap: 8px;
   margin-top: 8px;
 }
@@ -100,14 +101,22 @@
 .student-notice-board__page-button {
   width: 44px;
   height: 44px;
+  flex-shrink: 0;
 }
 
 .student-notice-board__pagination {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 1;
   min-width: 0;
   margin-left: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.student-notice-board__pagination::-webkit-scrollbar {
+  display: none;
 }
 
 .student-notice-board__page-button {

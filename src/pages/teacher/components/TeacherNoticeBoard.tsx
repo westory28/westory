@@ -283,96 +283,110 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
           </>
         )}
       </div>
-      {!loading && activeNotice && (
-        <div className="teacher-notice-board__controls mt-4 flex flex-wrap items-center gap-2">
-          {showCarousel && (
-            <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-              <button
-                type="button"
-                onClick={() => move(-1)}
-                className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                aria-label="이전 알림"
-              >
-                <i className="fas fa-chevron-left text-xs"></i>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsPaused((prev) => !prev)}
-                className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
-                aria-label={
-                  isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
-                }
-                title={isPaused ? "재생" : "일시정지"}
-              >
-                <i
-                  className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
-                ></i>
-              </button>
-              <button
-                type="button"
-                onClick={() => move(1)}
-                className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                aria-label="다음 알림"
-              >
-                <i className="fas fa-chevron-right text-xs"></i>
-              </button>
-            </div>
-          )}
-
-          {showCarousel && (
-            <div className="ml-5 flex items-center gap-1.5">
-              {notices.map((notice, index) => (
-                <button
-                  key={`${notice.id}-dot`}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  className={`h-2.5 rounded-full transition ${
-                    activeIndex === index
-                      ? "w-6 bg-blue-600"
-                      : "w-2.5 bg-gray-200"
-                  }`}
-                  aria-label={`${index + 1}번째 알림 보기`}
-                />
-              ))}
-            </div>
-          )}
-
+      <div
+        className="teacher-notice-board__controls mt-4 flex flex-wrap items-center gap-2"
+        style={{
+          visibility: loading || !activeNotice ? "hidden" : undefined,
+        }}
+        aria-hidden={loading || !activeNotice || undefined}
+      >
+        <div
+          className="teacher-notice-board__playback inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+          style={{
+            visibility: !loading && !showCarousel ? "hidden" : undefined,
+          }}
+          aria-hidden={!showCarousel || undefined}
+        >
           <button
             type="button"
-            onClick={() => handleEdit(activeNotice)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
+            onClick={() => move(-1)}
+            className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+            aria-label="이전 알림"
           >
-            <i className="fas fa-hand-pointer text-gray-400"></i>
-            이미지 수정
+            <i className="fas fa-chevron-left text-xs"></i>
           </button>
-          {activeNotice.developerLogPostId && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-extrabold text-blue-700">
-              <i className="fas fa-link text-[10px]"></i>
-              게시물 연동
-            </span>
-          )}
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsOrderModalOpen(true)}
-              disabled={notices.length <= 1}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <i className="fas fa-list-ol mr-1"></i>
-              순서
-            </button>
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
-            >
-              <i className="fas fa-plus mr-1"></i>
-              쓰기
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsPaused((prev) => !prev)}
+            className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+            aria-label={
+              isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
+            }
+            title={isPaused ? "재생" : "일시정지"}
+          >
+            <i
+              className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+            ></i>
+          </button>
+          <button
+            type="button"
+            onClick={() => move(1)}
+            className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+            aria-label="다음 알림"
+          >
+            <i className="fas fa-chevron-right text-xs"></i>
+          </button>
         </div>
-      )}
+
+        <div
+          className="teacher-notice-board__pagination ml-5 flex items-center gap-1.5"
+          style={{
+            visibility: !loading && !showCarousel ? "hidden" : undefined,
+          }}
+          aria-hidden={!showCarousel || undefined}
+        >
+          {Array.from({ length: loading ? 5 : notices.length }, (_, index) => (
+            <button
+              key={`${notices[index]?.id || `pending-${index}`}-dot`}
+              type="button"
+              onClick={() => setActiveIndex(index)}
+              className={`h-2.5 rounded-full transition ${
+                activeIndex === index ? "w-6 bg-blue-600" : "w-2.5 bg-gray-200"
+              }`}
+              aria-label={`${index + 1}번째 알림 보기`}
+            />
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => activeNotice && handleEdit(activeNotice)}
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
+        >
+          <i className="fas fa-hand-pointer text-gray-400"></i>
+          이미지 수정
+        </button>
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-extrabold text-blue-700"
+          style={{
+            visibility: activeNotice?.developerLogPostId ? undefined : "hidden",
+          }}
+          aria-hidden={!activeNotice?.developerLogPostId || undefined}
+        >
+          <i className="fas fa-link text-[10px]"></i>
+          게시물 연동
+        </span>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsOrderModalOpen(true)}
+            disabled={notices.length <= 1}
+            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <i className="fas fa-list-ol mr-1"></i>
+            순서
+          </button>
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+          >
+            <i className="fas fa-plus mr-1"></i>
+            쓰기
+          </button>
+        </div>
+      </div>
       {(isModalOpen || isOrderModalOpen) && (
         <NoticeManagerModal
           notices={notices}

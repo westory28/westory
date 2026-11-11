@@ -166,148 +166,147 @@ const NoticeBoard: React.FC = () => {
       </div>
 
       <div className="student-notice-board__body min-h-0 flex-1">
-        {loading && (
-          <InlineLoading
-            className="flex h-full min-h-[180px] items-center"
-            message="알림장을 불러오는 중입니다."
-            showWarning
-          />
-        )}
-
-        {!loading && !activeNotice && (
-          <div className="flex h-full min-h-[180px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
-            등록된 알림 이미지가 없습니다.
-          </div>
-        )}
-
-        {!loading && activeNotice && (
-          <div className="student-notice-board__carousel flex h-full flex-col">
-            <button
-              type="button"
-              onClick={() => openLinkedPost(activeNotice)}
-              {...carousel.pointerHandlers}
-              style={{
-                ...carousel.frameStyle,
-                touchAction: "pan-y pinch-zoom",
-              }}
-              aria-disabled={!activeDestination}
-              tabIndex={activeDestination ? 0 : -1}
-              className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
-                activeDestination
-                  ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
-                  : "cursor-default"
-              }`}
-              aria-label={activeDestination?.label || "알림장 이미지"}
-            >
-              {activeNotice && (
-                <img
-                  key={`active-${activeNotice.id}`}
-                  ref={carousel.imageRef}
-                  onLoad={carousel.onImageReady}
-                  onError={carousel.onImageReady}
-                  draggable={false}
-                  src={activeNotice.imageUrl}
-                  alt={activeNotice.content || "알림장"}
-                  loading="eager"
-                  decoding="async"
-                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
-                    isSliding
-                      ? slideDirection === 1
-                        ? "-translate-x-full"
-                        : "translate-x-full"
-                      : "translate-x-0"
-                  }`}
-                  style={{
-                    transition: incomingNotice
-                      ? "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)"
-                      : "none",
-                  }}
-                />
-              )}
-              {incomingNotice && (
-                <img
-                  key={`incoming-${incomingNotice.id}`}
-                  draggable={false}
-                  src={incomingNotice.imageUrl}
-                  alt={incomingNotice.content || "알림장"}
-                  loading="eager"
-                  decoding="async"
-                  className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
-                    isSliding
-                      ? "translate-x-0"
-                      : slideDirection === 1
-                        ? "translate-x-full"
-                        : "-translate-x-full"
-                  }`}
-                  style={{
-                    transition:
-                      "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)",
-                  }}
-                  onTransitionEnd={(event) => {
-                    if (event.target === event.currentTarget) {
-                      finishSlide();
-                    }
-                  }}
-                />
-              )}
-            </button>
-
-            {showCarousel && (
-              <div className="student-notice-board__controls">
-                <div className="student-notice-board__playback inline-flex shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white">
-                  <button
-                    type="button"
-                    onClick={() => move(-1)}
-                    className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                    aria-label="이전 알림"
-                  >
-                    <i className="fas fa-chevron-left text-[10px]"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPaused((prev) => !prev)}
-                    className="inline-flex items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
-                    aria-label={
-                      isPaused
-                        ? "알림 자동 넘김 재생"
-                        : "알림 자동 넘김 일시정지"
-                    }
-                    title={isPaused ? "재생" : "일시정지"}
-                  >
-                    <i
-                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-[10px]`}
-                    ></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => move(1)}
-                    className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
-                    aria-label="다음 알림"
-                  >
-                    <i className="fas fa-chevron-right text-[10px]"></i>
-                  </button>
-                </div>
-
-                <div className="student-notice-board__pagination">
-                  {notices.map((notice, index) => (
-                    <button
-                      key={`${notice.id}-dot`}
-                      type="button"
-                      onClick={() => selectNotice(index)}
-                      className="student-notice-board__page-button"
-                      aria-current={
-                        selectedIndex === index ? "true" : undefined
-                      }
-                      aria-label={`${index + 1}번째 알림 보기`}
-                    >
-                      <span aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
+        <div className="student-notice-board__carousel flex h-full flex-col">
+          <button
+            type="button"
+            disabled={loading || !activeNotice}
+            onClick={() => openLinkedPost(activeNotice)}
+            {...carousel.pointerHandlers}
+            style={{
+              ...carousel.frameStyle,
+              touchAction: "pan-y pinch-zoom",
+            }}
+            aria-disabled={loading || !activeDestination}
+            tabIndex={!loading && activeDestination ? 0 : -1}
+            className={`student-notice-board__viewport relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+              activeDestination
+                ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
+                : "cursor-default"
+            }`}
+            aria-label={activeDestination?.label || "알림장 이미지"}
+          >
+            {loading && (
+              <InlineLoading
+                className="flex h-full items-center"
+                message="알림장을 불러오는 중입니다."
+                showWarning
+              />
+            )}
+            {!loading && !activeNotice && (
+              <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
+                등록된 알림 이미지가 없습니다.
               </div>
             )}
+            {activeNotice && (
+              <img
+                key={`active-${activeNotice.id}`}
+                ref={carousel.imageRef}
+                onLoad={carousel.onImageReady}
+                onError={carousel.onImageReady}
+                draggable={false}
+                src={activeNotice.imageUrl}
+                alt={activeNotice.content || "알림장"}
+                loading="eager"
+                decoding="async"
+                className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
+                  isSliding
+                    ? slideDirection === 1
+                      ? "-translate-x-full"
+                      : "translate-x-full"
+                    : "translate-x-0"
+                }`}
+                style={{
+                  transition: incomingNotice
+                    ? "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)"
+                    : "none",
+                }}
+              />
+            )}
+            {incomingNotice && (
+              <img
+                key={`incoming-${incomingNotice.id}`}
+                draggable={false}
+                src={incomingNotice.imageUrl}
+                alt={incomingNotice.content || "알림장"}
+                loading="eager"
+                decoding="async"
+                className={`student-notice-board__image absolute inset-0 block h-full w-full object-contain object-center will-change-transform ${
+                  isSliding
+                    ? "translate-x-0"
+                    : slideDirection === 1
+                      ? "translate-x-full"
+                      : "-translate-x-full"
+                }`}
+                style={{
+                  transition: "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)",
+                }}
+                onTransitionEnd={(event) => {
+                  if (event.target === event.currentTarget) {
+                    finishSlide();
+                  }
+                }}
+              />
+            )}
+          </button>
+
+          <div
+            className="student-notice-board__controls"
+            style={{
+              visibility: loading || !showCarousel ? "hidden" : undefined,
+            }}
+            aria-hidden={loading || !showCarousel || undefined}
+          >
+            <div className="student-notice-board__playback inline-flex shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white">
+              <button
+                type="button"
+                onClick={() => move(-1)}
+                className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                aria-label="이전 알림"
+              >
+                <i className="fas fa-chevron-left text-[10px]"></i>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsPaused((prev) => !prev)}
+                className="inline-flex items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                aria-label={
+                  isPaused ? "알림 자동 넘김 재생" : "알림 자동 넘김 일시정지"
+                }
+                title={isPaused ? "재생" : "일시정지"}
+              >
+                <i
+                  className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-[10px]`}
+                ></i>
+              </button>
+              <button
+                type="button"
+                onClick={() => move(1)}
+                className="inline-flex items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                aria-label="다음 알림"
+              >
+                <i className="fas fa-chevron-right text-[10px]"></i>
+              </button>
+            </div>
+
+            <div className="student-notice-board__pagination">
+              {Array.from(
+                { length: loading ? 5 : notices.length },
+                (_, index) => (
+                  <button
+                    key={`${notices[index]?.id || `pending-${index}`}-dot`}
+                    type="button"
+                    onClick={() => selectNotice(index)}
+                    className="student-notice-board__page-button"
+                    aria-current={selectedIndex === index ? "true" : undefined}
+                    aria-label={`${index + 1}번째 알림 보기`}
+                  >
+                    <span aria-hidden="true" />
+                  </button>
+                ),
+              )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

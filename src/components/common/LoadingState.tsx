@@ -304,6 +304,8 @@ function ContainerLoadingSurface({
   return (
     <div
       ref={layer}
+      // Parent stack spacing must not offset this out-of-flow surface.
+      style={kind === "overlay" ? { margin: 0 } : undefined}
       className={`ws-loading-surface ${kind === "overlay" ? "ws-loading-container-overlay" : `ws-loading-${kind}`}`}
       data-loading-scope="container"
     >

@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
 import type { CalendarEvent } from "../../../types";
 import {
   getScheduleCategoryMeta,
@@ -441,7 +441,7 @@ const StudentWeekSchedule: React.FC<Props> = ({
           </div>
           <div className="student-week-events" aria-busy={loading}>
             <div ref={eventListRef} className="student-week-events__list">
-              {loading && <InlineLoading />}
+              {loading && <LoadingOverlay />}
               {!loading && error && (
                 <p className="student-week-events__status" role="alert">
                   일정을 불러오지 못했습니다.{" "}

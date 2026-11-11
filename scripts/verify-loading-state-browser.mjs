@@ -63,6 +63,8 @@ window.nativeLoading = (pending=true) => render(React.createElement('dialog',{id
 window.finishLoading = (error=false) => render(React.createElement('main', null, React.createElement('h1', null, error ? '연결 오류' : '준비 완료'), React.createElement('button', {onClick: error ? window.startLoading : () => { window.clicked = true; }}, error ? '다시 시도' : '계속')));
 window.instantLoading = () => { window.startLoading(); window.finishLoading(); };
 window.unmountLoading = () => root.unmount();
+window.loadingStage = stage => render(<section id="stage-host">{stage === 0 ? <InlineLoading/> : <div id="stage-body"><h2 style={{height:60,margin:0}}>알림장</h2>{stage === 1 ? <InlineLoading/> : <button>준비 완료</button>}</div>}</section>);
+window.stackLoading = () => render(<section id="stack-host"><article>기존 내용</article><LoadingOverlay/></section>);
 if(mode === 'scoped') {
  const pending={a:true,b:true,dialog:true,offscreen:false};
  const click = id => window.scopedClicks[id]=(window.scopedClicks[id]||0)+1;
@@ -401,13 +403,6 @@ async function checkLayout(page, width, label, directory) {
     "",
   );
   assert.equal(await page.locator("[data-loading-letter]").count(), 7);
-  assert.equal(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth,
-    ),
-    true,
-    label + ": no horizontal overflow",
-  );
   const scope = new URL(page.url()).searchParams.get("scope") || "container";
   const mode = new URL(page.url()).searchParams.get("mode") || "page";
   if (scope === "container" && mode === "overlay") {
@@ -425,6 +420,13 @@ async function checkLayout(page, width, label, directory) {
     });
   }
   const box = await page.locator(".ws-loading__logo").boundingBox();
+  assert.equal(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+    label + ": no horizontal overflow",
+  );
   const surface = page.locator(".ws-loading-surface");
   const surfaceBox = await surface.boundingBox();
   assert.ok(
@@ -450,7 +452,10 @@ async function checkLayout(page, width, label, directory) {
     };
   });
   assert.equal(screen.blur, "blur(4px)");
-  assert.equal(screen.background, "rgba(255, 255, 255, 0.6)");
+  assert.equal(
+    screen.background,
+    scope === "screen" ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0)",
+  );
   assert.equal(screen.scope, scope);
   if (scope === "screen")
     assert.deepEqual(
@@ -530,7 +535,12 @@ async function checkExit(page, error = false) {
   assert.equal(exit.ariaHidden, "true");
   assert.equal(exit.pointerEvents, "none");
   assert.equal(exit.surface.blur, "blur(4px)");
-  assert.equal(exit.surface.background, "rgba(255, 255, 255, 0.6)");
+  assert.equal(
+    exit.surface.background,
+    expectedScope === "screen"
+      ? "rgba(255, 255, 255, 0.6)"
+      : "rgba(0, 0, 0, 0)",
+  );
   assert.equal(exit.surface.pointerEvents, "none");
   assert.equal(exit.surface.scope, expectedScope);
   assert.equal(exit.surface.body, expectedScope === "screen");
@@ -589,7 +599,7 @@ async function checkScopedContainers(browser, directory, result) {
       scope: "container",
       position: "absolute",
       blur: "blur(4px)",
-      background: "rgba(255, 255, 255, 0.6)",
+      background: "rgba(0, 0, 0, 0)",
       parentInert: false,
       parent: `scope-${id}`,
     });
@@ -854,6 +864,59 @@ async function runEngine(engine) {
   };
   try {
     await checkScopedContainers(browser, directory, result);
+    const staged = await makePage(browser);
+    await staged.page.goto(url);
+    await staged.page.evaluate(() => window.loadingStage(0));
+    await waitRunning(staged.page);
+    await staged.page.waitForTimeout(150);
+    const stageExits = await staged.page.evaluate(
+      () => window.loadingQA.state().exits.length,
+    );
+    await staged.page.evaluate(() => window.loadingStage(1));
+    await staged.page.locator("#stage-body .ws-loading__logo").waitFor();
+    assert.equal(
+      await staged.page.evaluate(() => window.loadingQA.state().exits.length),
+      stageExits,
+      "a card's next loading stage does not leave a logo at the old height",
+    );
+    assert.equal(
+      await staged.page.locator("#stage-host .ws-loading__logo").count(),
+      1,
+    );
+    await staged.page.waitForTimeout(150);
+    await staged.page.evaluate(() => window.loadingStage(2));
+    await staged.page.waitForFunction(
+      (count) => window.loadingQA.state().exits.length > count,
+      stageExits,
+    );
+    await staged.page
+      .getByRole("button", { name: "준비 완료", exact: true })
+      .click();
+    await staged.page.waitForFunction(
+      () => !document.querySelector(".ws-loading-exit-surface"),
+    );
+    await staged.page.addStyleTag({
+      content:
+        "#stack-host{position:relative;height:160px;overflow:auto}#stack-host>:not([hidden])~:not([hidden]){margin-top:24px}",
+    });
+    await staged.page.evaluate(() => window.stackLoading());
+    await staged.page.locator("#stack-host .ws-loading-surface").waitFor();
+    assert.deepEqual(
+      await staged.page.locator("#stack-host").evaluate((host) => ({
+        margin: getComputedStyle(host.querySelector(".ws-loading-surface"))
+          .marginTop,
+        offset:
+          host.querySelector(".ws-loading-surface").getBoundingClientRect()
+            .top - host.getBoundingClientRect().top,
+        overflow: host.scrollHeight - host.clientHeight,
+      })),
+      { margin: "0px", offset: 0, overflow: 0 },
+      "parent stack gaps cannot shift or expand a loading container",
+    );
+    result.checks.push(
+      "Staged card loading has one logo without old-position exits; stack margins add no offset or scroll overflow",
+    );
+    await staged.page.close();
     const main = await makePage(browser),
       { page } = main;
     await page.goto(url);

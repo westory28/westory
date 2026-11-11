@@ -596,8 +596,21 @@
 
 .teacher-weekly-dashboard .teacher-notice-board__controls {
   flex-shrink: 0;
+  min-height: 38px;
   margin-top: 8px;
   gap: 4px;
+}
+.teacher-weekly-dashboard .teacher-notice-board__pagination {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.teacher-weekly-dashboard .teacher-notice-board__pagination::-webkit-scrollbar {
+  display: none;
+}
+.teacher-weekly-dashboard .teacher-notice-board__pagination button {
+  flex-shrink: 0;
 }
 .teacher-weekly-dashboard .teacher-notice-board__controls > .ml-5 {
   margin-left: 4px;
@@ -673,6 +686,7 @@
   }
   .teacher-week-events {
     flex: none;
+    height: 336px;
     max-height: 336px;
   }
   .teacher-weekly-dashboard__ranking {
@@ -709,6 +723,9 @@
 }
 
 @media (max-width: 767px) {
+  .teacher-weekly-dashboard .teacher-notice-board__controls {
+    min-height: 74px;
+  }
   .teacher-week-schedule__toolbar {
     --week-action-width: clamp(32px, calc(20vw - 32px), 44px);
     display: grid;
