@@ -444,7 +444,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             children
           )}
         </main>
-        {!isStudentHistoryClassroomRunRoute &&
+        {!isStudentQuizRunRoute &&
+          !isStudentHistoryClassroomRunRoute &&
           (!/^\/teacher\/settings\/?$/.test(location.pathname) ||
             isArchiveUnavailableRoute(location.pathname)) && (
             <PortalFallbackFooter

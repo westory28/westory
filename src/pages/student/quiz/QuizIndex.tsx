@@ -361,7 +361,11 @@ const QuizIndex: React.FC = () => {
         </button>
       </header>
 
-      <div className="ws-page-tabs" role="tablist" aria-label="평가 종류">
+      <div
+        className="ws-page-tabs student-quiz-tabs"
+        role="tablist"
+        aria-label="평가 종류"
+      >
         {(
           [
             { id: "units", label: "단원별 평가" },

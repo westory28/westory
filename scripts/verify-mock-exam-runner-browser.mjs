@@ -39,16 +39,24 @@ const denseQuestions = Array.from({ length: 16 }, (_, index) => ({
 }));
 const denseFrozen = learning.captureQuestionSnapshots(denseQuestions.map(question => ({ path: `questions/${question.id}`, data: question })), denseQuestions.map(question => String(question.id)));
 const stubs = `
+import {MENUS} from './src/constants/menus';
 export const watchQuizResultCorrections=()=>()=>{};
 export const saveMyQuizReviewNote=async()=>{throw Error('Fixture note writes disabled')};export const loadMyQuizHistoryDetail=async(semesterId,key)=>({semesterId,key,reviewNotes:{revision:0,items:[],updatedAt:''}});
 const dense=location.search.includes('dense');const snapshots=dense?${JSON.stringify(denseFrozen.questionSnapshots)}:${JSON.stringify(frozen.questionSnapshots)};const presentation=dense?${JSON.stringify(learning.questionPresentation(denseFrozen.questionSnapshots))}:${JSON.stringify(presentation)};
-const config={year:'2026',semester:'2'};const userData={uid:'fixture-student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email}})};
+const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};const userData={uid:'fixture-student',role:'student',name:'가상 학생',grade:3,class:1,number:1,email:'fixture@example.invalid'};const currentUser={uid:userData.uid,email:userData.email,getIdTokenResult:async()=>({claims:{email:userData.email,auth_time:Math.floor(Date.now()/1000)}})};
 const paperHeader={paperTitle:'2026학년도 역사 탐구 평가',paperHeading:'3학년 역사과'};
 const definitionId='quiz:2026-2:exam_prep:exam_prep:round_2';const settings={...paperHeader,active:true,timeLimit:600,questionCount:snapshots.length,hintLimit:0,allowRetake:true};
 let attempt=JSON.parse(sessionStorage.getItem('mock-runner-attempt')||'null');let failSubmit=location.search.includes('submit-error');let failSave=location.search.includes('save-error');
 export const qa=window.mockRunnerQa={starts:[],prepares:[],reads:[],saves:[],submits:[],curriculumReads:0,comparisonReads:0,get attempt(){return attempt},snapshotAnswerLeak:presentation.some(q=>q.answer||q.explanation)};
 const persist=()=>sessionStorage.setItem('mock-runner-attempt',JSON.stringify(attempt));
-export const useAuth=()=>({config,userData,currentUser});
+const authState={config,userData,currentUser,loading:false,authPhase:'ready',authGeneration:1,configReady:true,menuConfig:MENUS,menuConfigReady:true,interfaceConfig:{},interfaceConfigReady:true,settingsLoadedAt:Date.now(),refreshConfig:async()=>{},refreshMenuConfig:async()=>{},refreshInterfaceConfig:async()=>{},logout:async()=>{}};
+export const useAuth=()=>authState;
+export const auth={currentUser},db={};
+export const doc=(_, ...parts)=>({path:parts.join('/')});
+export const getDoc=async()=>({exists:()=>false,data:()=>({})});export const getDocFromServer=getDoc;
+export const loadStudentRankPromotionSnapshot=async()=>({wallet:{balance:0},rank:null,policy:{rankPolicy:null}});
+export const invalidateStudentRankPromotionSnapshotCache=()=>{};
+export const preloadStudentWeplay=()=>{};
 export const getYearSemester=()=>config;
 export const readStudentCurriculumTree=async()=>{qa.curriculumReads++;if(location.search.includes('curriculum-error'))throw Error('Synthetic unavailable optional labels');if(location.search.includes('curriculum-pending'))return new Promise(()=>{});return []};
 export const buildAssessmentDefinitionId=()=>definitionId;
@@ -70,16 +78,16 @@ export const startAssessmentAttempt=async input=>{qa.starts.push(input);if(attem
 export const saveAssessmentProgress=async input=>{qa.saves.push(structuredClone(input));if(location.search.includes('slow-save'))await new Promise(resolve=>{qa.releaseSave=resolve});if(failSave){failSave=false;throw Error('Fixture save failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale fixture revision');attempt={...attempt,status:'IN_PROGRESS',revision:attempt.revision+1,answers:input.answers,currentItemId:input.currentItemId,analytics:input.analytics,lastSavedAtIso:new Date().toISOString()};persist();return {revision:attempt.revision,savedAtIso:attempt.lastSavedAtIso}};
 export const submitAssessmentAttempt=async input=>{qa.submits.push(structuredClone(input));if(location.search.includes('slow-submit'))await new Promise(resolve=>{qa.releaseSubmit=resolve});if(failSubmit){failSubmit=false;throw Error('Fixture submit failure')};if(input.expectedRevision!==attempt.revision)throw Error('Stale submit fixture revision');const checks=snapshots.map(q=>({id:String(q.id),correct:String(input.answers[q.id]||'').trim()===q.answer}));const earnedPoints=snapshots.reduce((sum,q,i)=>sum+(checks[i].correct?q.points:0),0);attempt={...attempt,status:'SUBMITTED',revision:attempt.revision+1,answers:input.answers,submittedAtIso:new Date().toISOString()};persist();return {attemptId:attempt.attemptId,revision:attempt.revision,score:checks.filter(q=>q.correct).length,total:3,percent:earnedPoints,earnedPoints,maxPoints:100,answerChecks:checks,questionSnapshots:snapshots,learningSnapshot:[],resultRef:'semester_assessment_results/'+attempt.attemptId,reward:{status:'DISABLED'},replayedSubmission:false}};
 `;
-const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation();React.useEffect(()=>{window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider><div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/><Route path="/student/quiz" element={<p>평가 목록 경로</p>}/></Routes></div></AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
+const entry = `import React from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter,Routes,Route,useLocation,useNavigate} from 'react-router-dom';import QuizRunner from './src/pages/student/quiz/QuizRunner';import MainLayout from './src/components/layout/MainLayout';import {AppToastProvider} from './src/components/common/AppToastProvider';import {AppDialogProvider} from './src/components/common/AppDialogProvider';import './src/components/layout/studentLayout.css';const Observer=()=>{const value=useLocation(),navigate=useNavigate();React.useEffect(()=>{window.mockRunnerNavigate=navigate;window.mockRunnerLocationState=value.state;if(value.state?.startAssessment===false)sessionStorage.setItem('mock-entry-consumed','1')},[value,navigate]);return null};const initialEntry={pathname:'/student/quiz/run',search:'?unitId=exam_prep&category=exam_prep&round=round_2',state:location.search.includes('auto-entry')&&sessionStorage.getItem('mock-entry-consumed')!=='1'?{startAssessment:true}:null};const routes=<Routes><Route path="/student/quiz/run" element={<QuizRunner/>}/><Route path="/student/mypage" element={<p>저장된 답안 확인 경로</p>}/><Route path="/student/quiz" element={<div style={{minHeight:'140dvh'}}>평가 목록 경로</div>}/></Routes>;createRoot(document.getElementById('root')).render(<React.StrictMode><MemoryRouter initialEntries={[initialEntry]}><Observer/><AppToastProvider><AppDialogProvider>{location.search.includes('real-portal')?<MainLayout>{routes}</MainLayout>:<div className="student-layout">{location.search.includes("portal-header")&&<header style={{height:64,padding:16,boxSizing:"border-box"}}>가상 포털 머리말</header>}{routes}</div>}</AppDialogProvider></AppToastProvider></MemoryRouter></React.StrictMode>);`;
 const built = await build({
   stdin: { contents: `import {recoverAssetLoad} from './src/lib/assetRecovery';window.mockRunnerRecoverAsset=()=>recoverAssetLoad(new Error('Failed to fetch dynamically imported module'));${entry}`, loader: "tsx", resolveDir: root }, bundle: true, write: false, metafile: true,
-  outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl", ".webp": "dataurl" },
+  outdir: "fixture", format: "esm", platform: "browser", jsx: "automatic", loader: { ".woff2": "dataurl", ".woff": "dataurl", ".webp": "dataurl", ".svg": "dataurl" },
   define: { "process.env.NODE_ENV": JSON.stringify(process.env.MOCK_EXAM_QA_DEV || (process.argv.includes('--entry-only')||process.argv.includes('--entry-recovery-only')) ? 'development' : 'production') },
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
-    builder.onResolve({ filter: /\/QuizLessonPopup$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
+    builder.onResolve({ filter: /\/(QuizLessonPopup|StudentHistoryDictionaryController|StudentRankPromotionController|TeacherPatchMemoController|NotificationBell)$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "popup-fixture" }, () => ({ contents: "export default function QuizLessonPopup(){return null}", loader: "js" }));
-    builder.onResolve({ filter: /contexts\/AuthContext$|lib\/(semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
-    builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js" }));
+    builder.onResolve({ filter: /contexts\/AuthContext$|^firebase\/firestore$|lib\/(firebase|weplayPreload|pointRankPromotion|semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
+    builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js", resolveDir: root }));
   } }],
 });
 assert.equal(Object.keys(built.metafile.inputs).some(name => /node_modules[\\/](@firebase|firebase)[\\/]/.test(name)), false, "No live Firebase runtime in browser fixture");
@@ -208,7 +216,65 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
 try {
-  if(process.argv.includes('--asset-recovery-only')) {
+  if(process.argv.includes('--scroll-only')) {
+    for(const width of [390,768,1280,1440]) {
+      const page=await open(width,900,width<1000,'?real-portal');
+      const fit=width<=900?'page':'width';
+      await checkPaperViewport(page,fit,`actual portal ${width}`);
+      const checkOuterScroll=async label=>{
+        const bounds=await page.evaluate(()=>({height:document.documentElement.scrollHeight,clientHeight:document.documentElement.clientHeight,width:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,scrollY:window.scrollY,footerCount:document.querySelectorAll('.teacher-layout-footer').length}));
+        assert(bounds.height<=bounds.clientHeight+1,`${label}: document must not scroll vertically ${JSON.stringify(bounds)}`);
+        assert(bounds.width<=bounds.clientWidth+1,`${label}: document must not scroll horizontally ${JSON.stringify(bounds)}`);
+        assert.equal(bounds.footerCount,0,`${label}: exam actions replace the ordinary portal footer`);
+        viewportReports.push({label,...bounds});
+      };
+      await checkOuterScroll(`actual portal ${width}`);
+      if(width>=1280){
+        const scrolled=await page.locator('.mock-exam-workspace-scroll').evaluate(element=>{element.scrollTop=200;return element.scrollTop});
+        assert(scrolled>0,'The paper retains its internal vertical scrollbar');
+        assert.equal(await page.evaluate(()=>window.scrollY),0);
+      }
+      await page.screenshot({path:path.join(evidence,`real-portal-${width}.png`),fullPage:true});
+      let dialog=await openQuestion(page,1);
+      const checkQuestionWidth=async label=>{
+        const bounds=await dialog.locator('.mock-exam-zoom-scroll').evaluate(element=>({scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,scrollLeft:element.scrollLeft}));
+        assert(bounds.scrollWidth<=bounds.clientWidth+1,`${label}: full question content fits without horizontal scrolling ${JSON.stringify(bounds)}`);
+        viewportReports.push({label,...bounds});
+      };
+      await checkQuestionWidth(`question ${width}`);
+      await dialog.getByRole('radio',{name:/조선/}).focus();
+      await page.keyboard.press('Space');
+      await dialog.getByRole('button',{name:'다음 문제',exact:true}).click();
+      dialog=page.getByRole('dialog',{name:'2번 문제 확대',exact:true});
+      await checkQuestionWidth(`next question ${width}`);
+      await dialog.getByRole('button',{name:'이전 문제',exact:true}).click();
+      dialog=page.getByRole('dialog',{name:'1번 문제 확대',exact:true});
+      assert(await dialog.getByRole('radio',{name:/조선/}).isChecked(),'Question navigation preserves the answer');
+      await page.screenshot({path:path.join(evidence,`real-portal-question-${width}.png`),fullPage:true});
+      await dialog.getByRole('button',{name:'시험지로 돌아가기',exact:true}).focus();
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({state:'hidden'});
+      await checkOuterScroll(`question closed ${width}`);
+      await page.getByRole('button',{name:'전체 화면',exact:true}).click();
+      await checkPaperViewport(page,fit,`actual portal fullscreen ${width}`);
+      dialog=await openQuestion(page,1);
+      await checkQuestionWidth(`fullscreen question ${width}`);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({state:'hidden'});
+      await page.getByRole('button',{name:'전체 화면 닫기',exact:true}).click();
+      await checkOuterScroll(`fullscreen closed ${width}`);
+      // Route changes must release locks even if a question dialog is open.
+      await openQuestion(page,1);
+      await page.evaluate(()=>window.mockRunnerNavigate('/student/quiz'));
+      await page.getByText('평가 목록 경로',{exact:true}).waitFor();
+      await page.locator('.teacher-layout-footer').waitFor();
+      const restored=await page.evaluate(()=>{window.scrollTo(0,200);return {scrollY:window.scrollY,height:document.documentElement.scrollHeight,clientHeight:document.documentElement.clientHeight,htmlOverflow:getComputedStyle(document.documentElement).overflowY,bodyOverflow:getComputedStyle(document.body).overflowY}});
+      assert(restored.height>restored.clientHeight&&restored.scrollY>0,`Leaving the exam restores normal page scrolling ${JSON.stringify(restored)}`);
+      assert(!['hidden','clip'].includes(restored.htmlOverflow)&&!['hidden','clip'].includes(restored.bodyOverflow),'No leaked document scroll lock');
+      assert.equal(await page.evaluate(()=>window.mockRunnerQa.submits.length),0,'Scroll QA never submits an assessment');
+      await page.close();
+    }
+  } else if(process.argv.includes('--asset-recovery-only')) {
     for(const width of [390,1280]) {
       const page = await open(width,844,width===390);
       const dialog = await openQuestion(page,1);
@@ -635,7 +701,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
-  console.log(process.argv.includes('--asset-recovery-only')
+  console.log(process.argv.includes('--scroll-only')
+    ? `Mock exam real-portal scroll regression passed: actual MainLayout/Header/Footer, internal paper scroll only, question width, answer preservation, full screen and route-exit restoration at 390/768/1280/1440px. Evidence: ${evidence}`
+    : process.argv.includes('--asset-recovery-only')
     ? `Exam asset recovery passed: actual keyboard answer changes prevent automatic deployment reload at 390/1280px and preserve normal answer saving. Evidence: ${evidence}`
     : process.argv.includes('--recovery-only')
     ? `Exam recovery passed: closed active attempt and deadline preserved, limited submitted attempt blocked, unavailable counts unknown, and forbidden fresh attempt blocked. Evidence: ${evidence}`

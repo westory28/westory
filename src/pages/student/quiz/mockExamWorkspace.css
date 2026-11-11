@@ -31,6 +31,9 @@
 .mock-exam-toolbar {
   position: relative;
   top: auto;
+  min-height: 0;
+  background: transparent;
+  box-shadow: none;
   flex: none;
   display: flex;
   align-items: center;
@@ -142,6 +145,7 @@
   margin-right: auto;
 }
 .mock-exam-zoom-scroll {
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   min-height: 0;
@@ -152,6 +156,10 @@
   letter-spacing: -0.02em;
   word-break: keep-all;
   overflow-wrap: anywhere;
+}
+.mock-exam-zoom-scroll .mock-exam-question-ink {
+  width: 100%;
+  transform: none;
 }
 .mock-exam-zoom-scroll .mock-exam-image {
   max-height: 440px;

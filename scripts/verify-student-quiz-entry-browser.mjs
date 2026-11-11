@@ -85,6 +85,8 @@ try{
     const requestStart=imageRequests.length;
     await page.setViewportSize({width,height:900});await page.goto(origin);await tab('단원별 평가').waitFor();
     assert.equal(await page.getByRole('heading',{level:1}).textContent(),'문제 풀이');
+    const tabStyles=await page.getByRole('tab').evaluateAll(tabs=>tabs.map(tab=>{const style=getComputedStyle(tab);return{size:parseFloat(style.fontSize),weight:Number(style.fontWeight),height:tab.getBoundingClientRect().height}}));
+    assert(tabStyles.every(tab=>tab.size===18&&tab.weight===800&&tab.height>=56),'Assessment tabs match the score confirmation tab size and weight');
     assert.equal(await page.evaluate(()=>window.entryReads.length),0,'No overview query before mock tab');
     assert.equal(await page.locator('.student-exam-lobby').count(),0);
     assert.equal(imageRequests.length,requestStart,'Hidden mock exam tab does not request illustrations');
@@ -95,6 +97,9 @@ try{
     assert.equal(await tab('모의고사').getAttribute('aria-selected'),'true');
     assert(await enter().isEnabled());
     assert.match(await readyScene(),/chosi-/,'First round displays the local examination scene');
+    const entryLayout=await enter().evaluate(button=>{const rect=button.getBoundingClientRect(),art=button.closest('.student-exam-lobby__art').getBoundingClientRect(),style=getComputedStyle(button);return{width:rect.width,height:rect.height,rightGap:art.right-rect.right,available:art.width-32,size:parseFloat(style.fontSize),weight:Number(style.fontWeight)}});
+    assert(entryLayout.height>=64&&entryLayout.size===20&&entryLayout.weight===800,'Entry action has a larger box and bold text');
+    assert(entryLayout.width>=Math.min(240,entryLayout.available)-1&&Math.abs(entryLayout.rightGap-16)<=1,'Entry action fits the illustration and aligns to its right edge');
     assert.equal(imageRequests.length-requestStart,1,'Opening the mock tab requests only its selected illustration');
     assert.equal(await page.locator('.student-exam-lobby__facts').innerText(),'출제 문항\n20문항\n제한 시간\n30분');
     const second=page.getByRole('button',{name:'복시 (2회) · 1회 제출 후',exact:true});assert(await second.isEnabled());await second.click();
