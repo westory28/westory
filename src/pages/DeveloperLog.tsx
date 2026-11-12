@@ -8,6 +8,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -618,7 +619,7 @@ const DeveloperLog: React.FC = () => {
         if (likeSnap.exists()) {
           transaction.delete(likeRef);
           transaction.update(postRef, {
-            likeCount: Math.max(0, currentLikeCount - 1),
+            likeCount: currentLikeCount > 0 ? increment(-1) : 0,
           });
           return;
         }
@@ -627,7 +628,9 @@ const DeveloperLog: React.FC = () => {
           uid: currentUser.uid,
           createdAt: serverTimestamp(),
         });
-        transaction.update(postRef, { likeCount: currentLikeCount + 1 });
+        // Apply the delta on the server so concurrent likes do not submit a
+        // stale absolute count that fails the exact-delta security rule.
+        transaction.update(postRef, { likeCount: increment(1) });
       });
 
       setLiked((prev) => !prev);

@@ -331,16 +331,34 @@ service cloud.firestore {
       return /databases/$(database)/documents/site_settings/developer_logs/items/$(logId)/likes/$(request.auth.uid);
     }
 
+    function canWriteOwnDeveloperLogLike(likeId) {
+      let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
+      // Equivalent student-only access fence using the existing compact config
+      // validator, so atomic likes stay within budget with all 20 bypass UIDs.
+      return isOwnUser(likeId)
+        && isStudentRole()
+        && (hasActiveApplicationSession() || hasActiveReauthTransition())
+        && passesStudentRegistrationFence()
+        && (maintenance == null || (isValidCompactStudentMaintenanceConfig(maintenance.data)
+          && (maintenance.data.enabled == false
+            || request.auth.token.email == 'westoria28@gmail.com'
+            || request.auth.uid in maintenance.data.bypassUids)));
+    }
+
     function isDeveloperLogViewUpdate() {
-      return canUseWestory()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
-        && request.resource.data.viewCount == resource.data.viewCount + 1;
+      // Skip the full access fence for unrelated mutations. A like transaction
+      // must not spend its rule-expression budget checking the view path first.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
+        && request.resource.data.viewCount == resource.data.viewCount + 1
+        && canUseWestory();
     }
 
     function isDeveloperLogLikeCountUpdate(logId) {
-      return canUseWestory()
+      // The own-like existence transition requires a create/delete in this same
+      // atomic commit. Its rules enforce the full access fence; keep that coupling
+      // instead of evaluating the full access fence twice per like operation.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
         && isStudentRole()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
         && (
           (
             request.resource.data.likeCount == resource.data.likeCount + 1
@@ -356,9 +374,11 @@ service cloud.firestore {
     }
 
     function isSettingsDeveloperLogLikeCountUpdate(logId) {
-      return canUseWestory()
+      // The own-like existence transition requires a create/delete in this same
+      // atomic commit. Its rules enforce the full access fence; keep that coupling
+      // instead of evaluating the full access fence twice per like operation.
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
         && isStudentRole()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
         && (
           (
             request.resource.data.likeCount == resource.data.likeCount + 1
@@ -1031,15 +1051,11 @@ service cloud.firestore {
         match /likes/{likeId} {
           allow read: if canUseWestory();
           allow create: if docId == 'developer_logs'
-            && canUseWestory()
-            && isStudentRole()
-            && likeId == request.auth.uid
+            && canWriteOwnDeveloperLogLike(likeId)
             && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
             && request.resource.data.uid == request.auth.uid;
           allow delete: if docId == 'developer_logs'
-            && canUseWestory()
-            && isStudentRole()
-            && likeId == request.auth.uid;
+            && canWriteOwnDeveloperLogLike(likeId);
           allow update: if false;
         }
       }
@@ -1054,14 +1070,10 @@ service cloud.firestore {
 
       match /likes/{likeId} {
         allow read: if canUseWestory();
-        allow create: if canUseWestory()
-          && isStudentRole()
-          && likeId == request.auth.uid
+        allow create: if canWriteOwnDeveloperLogLike(likeId)
           && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
           && request.resource.data.uid == request.auth.uid;
-        allow delete: if canUseWestory()
-          && isStudentRole()
-          && likeId == request.auth.uid;
+        allow delete: if canWriteOwnDeveloperLogLike(likeId);
         allow update: if false;
       }
     }

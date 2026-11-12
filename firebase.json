@@ -4,7 +4,10 @@
     "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run check"]
   },
   "firestore": {
-    "predeploy": ["npm run test:score-request-rules"],
+    "predeploy": [
+      "npm run test:score-request-rules",
+      "npm run test:developer-log-likes-rules"
+    ],
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },

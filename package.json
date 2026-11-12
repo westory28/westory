@@ -36,6 +36,7 @@
     "verify:page-scroll-lock": "node scripts/verify-page-scroll-lock.mjs",
     "verify:score-requests": "node scripts/verify-score-request-queries.mjs && node scripts/verify-score-objection-client-contracts.mjs && node scripts/verify-performance-score-contracts.mjs",
     "test:score-request-rules": "node scripts/run-score-request-rules.mjs",
+    "test:developer-log-likes-rules": "node scripts/run-developer-log-likes-rules.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
     "verify:teacher-readiness-rules": "node scripts/verify-teacher-readiness-rules.mjs",
