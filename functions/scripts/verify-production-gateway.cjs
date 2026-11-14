@@ -6,7 +6,7 @@ const { spawnSync } = require('node:child_process');
 const gatewayDir = path.resolve(__dirname, '../productionGateway');
 const manifest = require('../productionGateway/source-manifest.json');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-assert.deepEqual(manifest.rootExports, ['executeCommand', 'getCommandStatus', 'executeLessonCorePointCommand', 'executeWisCommandFast', 'getWisCommandStatusFast']);
+assert.deepEqual(manifest.rootExports, ['executeCommand', 'getCommandStatus', 'executeLessonCorePointCommand', 'executeWisCommandFast', 'getWisCommandStatusFast', 'executeThinkCloudResponseFast']);
 assert.deepEqual(manifest.isolatedQueryExports, [
   { name: 'getWisEconomyState', region: 'asia-northeast3', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' },
   { name: 'getWisEconomyState', region: 'us-central1', entry: '../studentWisQuery.js', source: 'wisEconomyQuery.js' },
@@ -45,13 +45,16 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:19192';
 const deployedFunctions = require('../index');
 const canonicalFunctions = require('../productionGateway/productionSource');
 assert.equal(deployedFunctions.getThinkCloudState, require('../thinkCloudQuery').getThinkCloudState);
+assert.equal(deployedFunctions.getThinkCloudStateFast, require('../thinkCloudQuery').getThinkCloudStateFast);
+assert.deepEqual(deployedFunctions.getThinkCloudStateFast.__endpoint?.region, ['us-central1']);
+assert.equal(deployedFunctions.getThinkCloudStateFast.__endpoint?.minInstances, 0);
 assert.deepEqual(deployedFunctions.getThinkCloudState.__endpoint?.region, ['asia-northeast3']);
 assert.ok(Object.hasOwn(deployedFunctions.getThinkCloudState.__endpoint, 'callableTrigger'));
 for (const name of [...manifest.rootExports, 'getAssessmentState', 'saveAssessmentProgress']) {
   assert.equal(typeof deployedFunctions[name], 'function', `${name} must be a deployed callable`);
   assert.equal(deployedFunctions[name], canonicalFunctions[name], `${name} must share the canonical command closure`);
   assert.deepEqual(deployedFunctions[name].__endpoint?.region,
-    [name.endsWith('WisCommandFast') || name === 'getWisCommandStatusFast' ? 'us-central1' : 'asia-northeast3']);
+    [name.endsWith('WisCommandFast') || name === 'getWisCommandStatusFast' || name === 'executeThinkCloudResponseFast' ? 'us-central1' : 'asia-northeast3']);
   assert.equal(deployedFunctions[name].__endpoint?.platform, 'gcfv2');
   assert.ok(Object.hasOwn(deployedFunctions[name].__endpoint, 'callableTrigger'));
 }

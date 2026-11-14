@@ -34,7 +34,13 @@ interface WordFrame {
 // An absolute count scale keeps a word's size independent of other responses.
 const wordSize = (count: number, length: number) => {
   const ceiling = length > 24 ? 40 : length > 12 ? 56 : 80;
-  return Math.min(ceiling, 22 + Math.sqrt(Math.max(0, count - 1)) * 10);
+  // Preserve growth across the complete server-supported 1–200 response range.
+  // A hard clamp after 35 responses would make frequent words stop growing.
+  return (
+    22 +
+    (ceiling - 22) *
+      (Math.log(Math.min(200, Math.max(1, count))) / Math.log(200))
+  );
 };
 
 const wordTone = (text: string) => {

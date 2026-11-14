@@ -9,9 +9,11 @@
     "getCommandStatus",
     "executeLessonCorePointCommand",
     "executeWisCommandFast",
-    "getWisCommandStatusFast"
+    "getWisCommandStatusFast",
+    "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-14: Think Cloud only: preserve live executeCommand/getThinkCloudState archives; overlay reviewed w8Domains/submit queue/wiring/query. Add executeThinkCloudResponseFast and getThinkCloudStateFast beside nam5, with minInstances 0. Keep receipts, authority, other commands and Seoul compatibility.",
     "2026-11-11: Opt-in immutable mock-paper publication and server-time overview. Deploy only executeCommand and getAssessmentState from each captured live archive plus this assessmentLifecycle patch; preserve their existing SAVE implementation and all other runtime files. Scheduled publication keeps opensAt under old-client saves. No runtime sizing, session, rules, prior-round or student-result changes.",
     "2026-11-10: Communication audit captured live saveAssessmentProgress archive SHA-256 7c82238d8ce7ed2cb25ee4129d11950cd6d9131f49e31a8923ece1afb84c9213 (updated 2026-11-09). Its older source is preserved in an isolated release with only the SAVE projection changes applied to assessmentLifecycle.js. Deploy saveAssessmentProgress only from that reviewed archive, plus the new isolated us-central1 getTeacherStudentRoster endpoint. Do not deploy the newer full gateway to existing endpoints. Runtime/session/publication policies remain unchanged.",
     "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store.",
@@ -217,7 +219,7 @@
       "sourceFile": "index.js",
       "file": "productionSource.js",
       "originalSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
-      "sha256": "cb62fb2b6170d27b971390807469bdd410dfafb0aa3f58f87bb98e5b407c858c",
+      "sha256": "c5bc270de0945f446f24bb43c2ff0169b62858a3a555e256ff1247512b7f30c7",
       "changes": [
         "Reuse the root initialized Firebase Admin app.",
         "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom.",
@@ -226,7 +228,8 @@
         "2026-10-21: Reuse stored notification policy/templates for canonical History Classroom synchronization and bounded repair; retired notification writers stay retired.",
         "2026-10-22: Register History Classroom failed-result notifications as teacher events.",
         "2026-11-07: Restrict analysis achievement profile confirmations to teachers and the existing administrator.",
-        "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions."
+        "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions.",
+        "2026-11-14: Think Cloud private dedupe index, atomic response signal, bounded per-instance submit queue and restricted US submit endpoint; verified against each live source archive and deployed without unrelated gateway changes."
       ]
     },
     {
@@ -450,9 +453,11 @@
       "sourceFile": "w8Domains.js",
       "file": "w8Domains.js",
       "originalSha256": "63312120ced4e2cbaba0361bfb24030e0d1999c133c3fb530a208e78369f9b01",
-      "sha256": "2c02c254cca47b98c347d9751e6d61586456a9be59b6bcedb1c7a5f0285a7ac8",
+      "sha256": "5342b644982c5470735b805e9a7d1b6be27e645c183ab7270a6dbcfcbb6f4f29",
       "changes": [
-        "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store."
+        "2026-11-10: Add isolated CURRENT Think Cloud projections for getThinkCloudState: exclude unrelated learning collections, bound topics to permitted classes, roster to selected class, and command preflight to exact topic metadata. Preserve the deployed getW8DomainState and its archived/legacy contract by leaving it unexported. The new Seoul endpoint uses the shared application-session/maintenance checks and read-only Firestore store.",
+        "2026-11-14: Emit an atomic class response watermark without changing operational CAS revisions; authorize selected-session sequence delta queries. Preserve anonymous identity filtering, command receipts and legacy initial reads. Deploy only executeCommand and getThinkCloudState from each function's production source archive plus these reviewed changes; unrelated local gateway differences are excluded.",
+        "2026-11-14: Think Cloud private dedupe index, atomic response signal, bounded per-instance submit queue and restricted US submit endpoint; verified against each live source archive and deployed without unrelated gateway changes."
       ]
     },
     {
@@ -597,6 +602,15 @@
       "sha256": "fdf38bebac3e97d9236790e21d2f625b4af6e1e07f11be6a8dab0db45da772f9",
       "changes": [
         "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions."
+      ]
+    },
+    {
+      "sourceFile": "thinkCloudSubmitQueue.js",
+      "file": "thinkCloudSubmitQueue.js",
+      "originalSha256": "6e6cbebd447b46221710b5f118cae5f19d77ec835db62cb38ec667130dd98069",
+      "sha256": "88c8c6db8e0feb64b28ca077a2f893b86d16d52b8d8f4dedd7762addf330b1e6",
+      "changes": [
+        "2026-11-14: Think Cloud private dedupe index, atomic response signal, bounded per-instance submit queue and restricted US submit endpoint; verified against each live source archive and deployed without unrelated gateway changes."
       ]
     }
   ],

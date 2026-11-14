@@ -15,11 +15,15 @@ const getCore = () => (sharedCore ||= createW8QueryCore({
 // only the current Think Cloud screen and its existing command preconditions.
 const createThinkCloudQueryHandler = (core) => async (request) => {
   const data = request.data;
-  const keys = new Set(["semesterId", "domain", "source", "audience", "projection", "sessionId", "_session"]);
+  const keys = new Set(["semesterId", "domain", "source", "audience", "projection", "sessionId", "afterResponseSequence", "_session"]);
   if (!data || typeof data !== "object" || Array.isArray(data)
       || Object.keys(data).some((key) => !keys.has(key))
       || data.domain !== "LEARNING" || data.source !== "CURRENT"
-      || !["think-cloud", "think-cloud-command"].includes(data.projection)) {
+      || !["think-cloud", "think-cloud-command", "think-cloud-delta"].includes(data.projection)
+      || (data.projection === "think-cloud-delta"
+        ? typeof data.sessionId !== "string" || !data.sessionId
+          || !Number.isSafeInteger(data.afterResponseSequence) || data.afterResponseSequence < 0
+        : data.afterResponseSequence !== undefined)) {
     throw new HttpsError("invalid-argument", "Only current Think Cloud queries are supported.", {
       reason: "THINK_CLOUD_QUERY_SCOPE_INVALID",
     });
@@ -29,3 +33,7 @@ const createThinkCloudQueryHandler = (core) => async (request) => {
 
 exports.createThinkCloudQueryHandler = createThinkCloudQueryHandler;
 exports.getThinkCloudState = onCall({ region: "asia-northeast3" }, createThinkCloudQueryHandler());
+// Current board reads run near the existing nam5 database without reserving
+// idle instances. The Seoul endpoint keeps the same contract for older tabs.
+exports.getThinkCloudStateFast = onCall({ region: "us-central1", memory: "256MiB",
+  concurrency: 8, maxInstances: 20, minInstances: 0, timeoutSeconds: 60 }, createThinkCloudQueryHandler());

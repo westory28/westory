@@ -1,6 +1,7 @@
 // Synthetic transport for the real page components and thinkCloudLifecycle.
 // No Firebase, school account, real response or external request is used.
 import { MENUS } from "../../src/constants/menus";
+import { useEffect, useState } from "react";
 const params = new URLSearchParams(location.search);
 const teacher = params.get("role") !== "student";
 const readOnly = params.get("readonly") === "1";
@@ -11,25 +12,33 @@ export const auth = {
     email: "qa@example.invalid",
   },
 };
-export const useAuth = () => ({
-  config,
-  currentUser: auth.currentUser,
-  userData: {
-    uid: auth.currentUser.uid,
-    role: teacher ? (readOnly ? "staff" : "teacher") : "student",
-    name: teacher ? "검증 교사" : "검증 학생",
-    grade: "3",
-    class: "1",
-    number: "1",
-    teacherPortalEnabled: readOnly,
-    staffPermissions: readOnly ? ["lesson_read"] : [],
-  },
-  menuConfig: MENUS,
-  interfaceConfig: {},
-});
+export const useAuth = () => {
+  const [, render] = useState(0);
+  useEffect(() => {
+    const changed = () => render((value) => value + 1);
+    window.addEventListener("think-qa-scope", changed);
+    return () => window.removeEventListener("think-qa-scope", changed);
+  }, []);
+  return {
+    config,
+    currentUser: auth.currentUser,
+    userData: {
+      uid: auth.currentUser.uid,
+      role: teacher ? (readOnly ? "staff" : "teacher") : "student",
+      name: teacher ? "검증 교사" : "검증 학생",
+      grade: "3",
+      class: "1",
+      number: "1",
+      teacherPortalEnabled: readOnly,
+      staffPermissions: readOnly ? ["lesson_read"] : [],
+    },
+    menuConfig: MENUS,
+    interfaceConfig: {},
+  };
+};
 const options = {
   allowDuplicateWord: true,
-  allowDuplicateByStudent: true,
+  allowDuplicateByStudent: params.get("once") !== "1",
   inputMode: "word",
   anonymous: true,
   maxLength: 20,
@@ -75,6 +84,21 @@ const words = [
   "배움",
 ];
 const responses: Record<string, any[]> = { active: [], paused: [], closed: [] };
+const classState = {
+  revision: 1,
+  activeSessionId: sessions[0]?.id || "",
+  responseRevision: 0,
+  responseSessionId: "active",
+};
+const listeners = new Set<(snapshot: any) => void>();
+const signal = () => {
+  const snapshot = {
+    exists: () => true,
+    data: () => ({ ...classState }),
+    metadata: { fromCache: false, hasPendingWrites: false },
+  };
+  listeners.forEach((receive) => receive(snapshot));
+};
 words.forEach((text, index) => {
   const count = index === 0 ? 9 : index === 1 ? 5 : index < 5 ? 3 : 1;
   for (let n = 0; n < count; n++)
@@ -85,6 +109,7 @@ words.forEach((text, index) => {
       textRaw: text,
       textNormalized: text,
       createdAt: { seconds: 1 },
+      sequence: ++classState.responseRevision,
     });
 });
 responses.paused.push({
@@ -109,6 +134,13 @@ const qa = ((window as any).thinkQa = {
   toasts: [] as any[],
   sessions,
   responses,
+  classState,
+  listeners,
+  signal,
+  switchScope() {
+    config.semester = config.semester === "2" ? "1" : "2";
+    window.dispatchEvent(new Event("think-qa-scope"));
+  },
   failRead: params.get("error") === "1",
   failWrite: false,
   delayWrite: 0,
@@ -122,7 +154,10 @@ const qa = ((window as any).thinkQa = {
         displayName: "비공개 이름 새학생",
         textRaw: text,
         textNormalized: text,
+        sequence: ++classState.responseRevision,
       });
+    classState.responseSessionId = "active";
+    signal();
   },
 });
 const nativeAnimate = Element.prototype.animate;
@@ -143,6 +178,19 @@ export const db = {};
 export const doc = (_db: any, ...parts: string[]) => ({
   path: parts.join("/"),
 });
+export const onSnapshot = (
+  _ref: any,
+  _options: any,
+  receive: any,
+  _error: any,
+) => {
+  const next = typeof _options === "function" ? _options : receive;
+  listeners.add(next);
+  queueMicrotask(() => {
+    if (listeners.has(next)) signal();
+  });
+  return () => listeners.delete(next);
+};
 export const getDoc = async (ref: any) => {
   qa.schoolReads++;
   return {
@@ -167,15 +215,18 @@ export const getHistoryDictionaryCallable =
       sessions.find((item) => item.id === payload.sessionId) ||
       sessions.find((item) => item.status === "active") ||
       sessions[0];
-    const rows = selected ? responses[selected.id] || [] : [];
+    const delta = payload.projection === "think-cloud-delta";
+    const rows = (selected ? responses[selected.id] || [] : []).filter(
+      (row) => !delta || (row.sequence || 0) > payload.afterResponseSequence,
+    );
     const active = sessions.find((item) => item.status === "active")?.id || "";
     const metadata = payload.projection === "think-cloud-command";
     return {
       data: {
-        semesterId: "2026-2",
+        semesterId: `${config.year}-${config.semester}`,
         manifestRevision: 1,
         readOnly,
-        thinkCloudSessions: structuredClone(sessions),
+        thinkCloudSessions: structuredClone(delta ? [selected] : sessions),
         thinkCloudSelectedSessionId: selected?.id || "",
         thinkCloudResponses: metadata
           ? []
@@ -187,21 +238,23 @@ export const getHistoryDictionaryCallable =
                     textRaw: row.textRaw,
                     textNormalized: row.textNormalized,
                     isOwn: row.uid === auth.currentUser.uid,
+                    sequence: row.sequence || 0,
                     ...(selected?.options.anonymous
                       ? {}
                       : { displayName: row.displayName }),
                   },
             ),
-        thinkCloudRoster: metadata
-          ? []
-          : [
-              { uid: "qa-student", name: "검증 학생", number: "1" },
-              {
-                uid: "pending-student",
-                name: "발표에서 숨길 이름",
-                number: "2",
-              },
-            ],
+        thinkCloudRoster:
+          metadata || delta
+            ? []
+            : [
+                { uid: "qa-student", name: "검증 학생", number: "1" },
+                {
+                  uid: "pending-student",
+                  name: "발표에서 숨길 이름",
+                  number: "2",
+                },
+              ],
         thinkCloudManagedClasses: [
           {
             classId: "qa-class",
@@ -209,12 +262,16 @@ export const getHistoryDictionaryCallable =
             classNumber: "1",
             activeSessionId: active,
             stateExists: true,
-            stateRevision: 1,
+            stateRevision: classState.revision,
+            responseRevision: classState.responseRevision,
+            responseSessionId: classState.responseSessionId,
           },
         ],
         thinkCloudState: {
           activeSessionId: active,
           activeSessionIds: active ? [active] : [],
+          responseRevision: classState.responseRevision,
+          responseSessionId: classState.responseSessionId,
         },
       },
     };
@@ -235,7 +292,10 @@ export const runWisOperation = async (_key: any, _sensitive: any, run: any) =>
         displayName: "검증 학생",
         textRaw: payload.textRaw,
         textNormalized: payload.textNormalized,
+        sequence: ++classState.responseRevision,
       });
+      classState.responseSessionId = payload.sessionId;
+      signal();
       return { responseId };
     }
     if (commandType === "createThinkCloudSession") {
@@ -249,6 +309,9 @@ export const runWisOperation = async (_key: any, _sensitive: any, run: any) =>
         id,
       });
       responses[id] = [];
+      classState.revision++;
+      classState.activeSessionId = id;
+      signal();
       return { sessionId: id };
     }
     const session = sessions.find((item) => item.id === payload.sessionId);
@@ -258,6 +321,10 @@ export const runWisOperation = async (_key: any, _sensitive: any, run: any) =>
     }
     if (commandType === "deleteThinkCloudSession" && session)
       sessions.splice(sessions.indexOf(session), 1);
+    classState.revision++;
+    classState.activeSessionId =
+      sessions.find((item) => item.status === "active")?.id || "";
+    signal();
     return {};
   });
 export const buildThinkCloudRewardSourceId = (...args: any[]) => args.join(":");

@@ -53,6 +53,7 @@ const ThinkCloud: React.FC = () => {
   );
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [responseSessionId, setResponseSessionId] = useState("");
+  const responseSessionRef = useRef("");
   const [view, setView] = useState<"list" | "detail">("list");
   const subscriptionRef = useRef<ReturnType<
     typeof subscribeThinkCloudState
@@ -122,6 +123,7 @@ const ThinkCloud: React.FC = () => {
       setLastSubmission(null);
       setSelectedSessionId("");
       setResponseSessionId("");
+      responseSessionRef.current = "";
       setSessions([]);
       setResponses([]);
       setView("list");
@@ -144,6 +146,7 @@ const ThinkCloud: React.FC = () => {
             ?.id ??
           state.thinkCloudSessions[0]?.id ??
           "";
+        responseSessionRef.current = responseId;
         setResponseSessionId(responseId);
         setActiveSessionId(activeId);
         setSelectedSessionId(responseId);
@@ -153,6 +156,7 @@ const ThinkCloud: React.FC = () => {
         setSessions([]);
         setResponses([]);
         setResponseSessionId("");
+        responseSessionRef.current = "";
         setActiveSessionId("");
       },
     );
@@ -226,6 +230,7 @@ const ThinkCloud: React.FC = () => {
       setDraftInput("");
       setSubmitError("");
       setResponseSessionId("");
+      responseSessionRef.current = "";
     }
     lastOpenedRef.current = sessionId;
     setSelectedSessionId(sessionId);
@@ -295,7 +300,26 @@ const ThinkCloud: React.FC = () => {
         text: rawText,
         id: responseRef.responseId,
       });
-      setRefreshKey((key) => key + 1);
+      setResponses((previous) => {
+        if (
+          !isCurrent() ||
+          responseSessionRef.current !== selectedSessionId ||
+          previous.some((response) => response.id === responseRef.responseId)
+        )
+          return previous;
+        // The receipt confirms storage. The live delta supplies canonical
+        // metadata later; keep an earlier delta's copy if it arrived first.
+        return [
+          ...previous,
+          {
+            id: responseRef.responseId,
+            uid: currentUser.uid,
+            displayName: "",
+            textRaw: rawText,
+            textNormalized: normalizedText,
+          },
+        ];
+      });
       setDraftInput("");
       try {
         const pointResult = await claimPointActivityReward({

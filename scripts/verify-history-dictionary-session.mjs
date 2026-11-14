@@ -77,3 +77,15 @@ for (const change of ['identity','same-uid-identity','epoch']) {
  assert.equal(f.calls.filter(c=>c.name==='executeCommand').length,1,'Discard stale response without replaying the command');
 }
 console.log('PASS: session handshake, single flight, proof injection, identity/auth epoch isolation before and after responses, invalid/closed-session rejection, failed-flight recovery; no command replay.');
+
+for (const name of ['executeThinkCloudResponseFast','getThinkCloudStateFast']) {
+ const f=fixture();const call=await f.api.getHistoryDictionaryCallable(name,{reuseSessionProof:true});
+ await call({commandId:'fast-route',_session:{revision:'untrusted'}});
+ assert.equal(f.calls.at(-1).name,name);assert.equal(f.calls.at(-1).data._session.revision,'a'.repeat(64));
+ f.state.commandFail=Object.assign(new Error('revoked'),{code:'functions/unauthenticated',details:{reason:'SESSION_REAUTH_REQUIRED'}});
+ await assert.rejects(call({commandId:'denied'}));
+ assert.equal(f.calls.filter(c=>c.name===name).length,2,'Denied fast requests are never replayed');
+ f.state.commandFail=null;await call({commandId:'manual-retry'});
+ assert.equal(f.calls.filter(c=>c.name==='openApplicationSession').length,2,'Fast routes preserve session invalidation and explicit recovery');
+}
+console.log('PASS: both ThinkCloud fast transports retain proof injection, revocation and no automatic replay.');

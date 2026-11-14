@@ -1209,8 +1209,31 @@ const thinkCloudSessionPath = (scope, sessionId) =>
   `${thinkCloudRoot(scope)}/think_cloud_sessions/${sessionId}`;
 const thinkCloudResponsesPath = (scope, sessionId) =>
   `${thinkCloudSessionPath(scope, sessionId)}/responses`;
+const thinkCloudResponseIndexPath = (scope, sessionId) =>
+  `${thinkCloudSessionPath(scope, sessionId)}/private/index`;
+const thinkCloudResponseIndex = (responses) => ({
+  responseCount: responses.length,
+  studentHashes: [...new Set(responses.map((row) => sha256(String(row.data?.uid || ""))))],
+  wordHashes: [...new Set(responses.map((row) => sha256(String(row.data?.textNormalized || ""))))],
+});
+const assertThinkCloudResponseIndex = (index) => {
+  if (Number.isSafeInteger(index?.responseCount) && index.responseCount > THINK_CLOUD_RESPONSE_LIMIT)
+    fail("resource-exhausted", "Think Cloud response limit has been reached.", "W8_THINK_CLOUD_RESPONSE_LIMIT",
+      { responseCount: index.responseCount, maximum: THINK_CLOUD_RESPONSE_LIMIT });
+  if (!Number.isSafeInteger(index?.responseCount) || index.responseCount < 0
+    || ![index.studentHashes, index.wordHashes].every((hashes) => Array.isArray(hashes)
+      && hashes.length <= THINK_CLOUD_RESPONSE_LIMIT && hashes.every((hash) => /^[a-f0-9]{64}$/.test(hash))))
+    fail("failed-precondition", "Think Cloud response index is invalid.", "W8_THINK_CLOUD_RESPONSE_COUNT_INVALID");
+  return index;
+};
 const thinkCloudEnrollmentSlotPath = (scope, uid) =>
   `${archiveEnrollment.ENROLLMENT_SLOT_COLLECTION}/${archiveEnrollment.buildEnrollmentSlotId(scope, uid)}`;
+const thinkCloudResponseRevision = (state) => {
+  const revision = state?.responseRevision ?? 0;
+  if (!Number.isSafeInteger(revision) || revision < 0)
+    fail("failed-precondition", "Think Cloud response cursor is invalid.", "W8_THINK_CLOUD_RESPONSE_CURSOR_INVALID");
+  return revision;
+};
 
 const assertThinkCloudStateRevision = (snapshot, expected) => {
   const currentRevision = Number(snapshot.data?.revision || 0);
@@ -1289,7 +1312,6 @@ const assertThinkCloudTeacherTarget = async (
 const assertThinkCloudStudentTarget = async (
   transaction,
   actor,
-  session,
   scope,
 ) => {
   const [profile, slot] = await transaction.getAll([
@@ -1337,9 +1359,7 @@ const assertThinkCloudStudentTarget = async (
   if (
     !semesterClass.exists ||
     semesterClass.data?.status !== "ACTIVE" ||
-    semesterClass.data?.semesterId !== scope ||
-    grade !== session.targetGrade ||
-    classNumber !== session.targetClass
+    semesterClass.data?.semesterId !== scope
   ) {
     fail(
       "permission-denied",
@@ -1351,6 +1371,8 @@ const assertThinkCloudStudentTarget = async (
     enrollment,
     profile,
     semesterClass,
+    grade,
+    classNumber,
     classId: String(
       semesterClass.data?.classId ||
         enrollment.data?.classId ||
@@ -1668,6 +1690,8 @@ const createW8CommandAdapter = ({
         activatedAt: timestamp,
         updatedAt: timestamp,
       });
+      const responseIndexPath = thinkCloudResponseIndexPath(payload.semesterId, sessionId);
+      transaction.create(responseIndexPath, thinkCloudResponseIndex([]));
       transaction.set(
         statePath,
         {
@@ -1679,7 +1703,7 @@ const createW8CommandAdapter = ({
         },
         { merge: true },
       );
-      refs.push(sessionPath);
+      refs.push(sessionPath, responseIndexPath);
       return {
         target: { kind: "think-cloud-session", id: sessionId, refs },
         sourceHash: sha256(canonicalJson(payload)),
@@ -1732,6 +1756,15 @@ const createW8CommandAdapter = ({
           "W8_THINK_CLOUD_STATE_INVALID",
         );
       const refs = [sessionPath, statePath];
+      const responseIndexPath = thinkCloudResponseIndexPath(payload.semesterId, payload.sessionId);
+      let activationIndex = null;
+      if (payload.targetStatus === "active") {
+        const responseIndex = await transaction.get(responseIndexPath);
+        if (responseIndex.exists) assertThinkCloudResponseIndex(responseIndex.data);
+        else activationIndex = assertThinkCloudResponseIndex(thinkCloudResponseIndex(
+          await transaction.query(thinkCloudResponsesPath(payload.semesterId, payload.sessionId)),
+        ));
+      }
       if (payload.targetStatus === "active" && !activeSessionId) {
         const scopedSessions = await transaction.query(
           thinkCloudSessionsPath(payload.semesterId),
@@ -1786,6 +1819,10 @@ const createW8CommandAdapter = ({
       }
       const nextSessionRevision = payload.expectedSessionRevision + 1;
       const nextStateRevision = stateRevision + 1;
+      if (activationIndex) {
+        transaction.create(responseIndexPath, activationIndex);
+        refs.push(responseIndexPath);
+      }
       transaction.set(
         sessionPath,
         {
@@ -1866,6 +1903,8 @@ const createW8CommandAdapter = ({
           },
         );
       responses.forEach((response) => transaction.delete(response.path));
+      const responseIndexPath = thinkCloudResponseIndexPath(payload.semesterId, payload.sessionId);
+      transaction.delete(responseIndexPath);
       transaction.delete(sessionPath);
       const nextStateRevision = stateRevision + 1;
       transaction.set(
@@ -1890,6 +1929,7 @@ const createW8CommandAdapter = ({
           id: payload.sessionId,
           refs: [
             sessionPath,
+            responseIndexPath,
             ...responses.map((response) => response.path),
             statePath,
           ],
@@ -1907,24 +1947,19 @@ const createW8CommandAdapter = ({
         payload.semesterId,
         payload.sessionId,
       );
-      const session = await transaction.get(sessionPath);
-      assertThinkCloudSessionRevision(session, payload.expectedSessionRevision);
-      const { profile, classId } = await assertThinkCloudStudentTarget(
+      // Resolve the private enrollment before locking the shared topic/counter.
+      // This keeps unrelated per-student reads out of the hot document window.
+      const { profile, classId, grade, classNumber } = await assertThinkCloudStudentTarget(
         transaction,
         actor,
-        session.data || {},
         payload.semesterId,
       );
-      const state = await transaction.get(
-        thinkCloudStatePath(payload.semesterId, classId),
-      );
-      const stateActiveSessionId = String(
-        state.data?.activeSessionId || "",
-      ).trim();
-      if (
-        session.data?.status !== "active" ||
-        (state.exists && stateActiveSessionId !== payload.sessionId)
-      )
+      const statePath = thinkCloudStatePath(payload.semesterId, classId);
+      const session = await transaction.get(sessionPath);
+      assertThinkCloudSessionRevision(session, payload.expectedSessionRevision);
+      if (grade !== session.data?.targetGrade || classNumber !== session.data?.targetClass)
+        fail("permission-denied", "Think Cloud session is outside the active class.", "W8_THINK_CLOUD_TARGET_FORBIDDEN");
+      if (session.data?.status !== "active")
         fail(
           "failed-precondition",
           "Think Cloud session is not active.",
@@ -1962,22 +1997,21 @@ const createW8CommandAdapter = ({
           "Think Cloud response contains a blocked term.",
           "W8_THINK_CLOUD_RESPONSE_BLOCKED",
         );
-      const responses = await transaction.query(
-        thinkCloudResponsesPath(payload.semesterId, payload.sessionId),
-      );
-      if (responses.length >= THINK_CLOUD_RESPONSE_LIMIT)
-        fail(
-          "resource-exhausted",
-          "Think Cloud response limit has been reached.",
-          "W8_THINK_CLOUD_RESPONSE_LIMIT",
-          {
-            responseCount: responses.length,
-            maximum: THINK_CLOUD_RESPONSE_LIMIT,
-          },
-        );
+      const responsesPath = thinkCloudResponsesPath(payload.semesterId, payload.sessionId);
+      const responseIndexPath = thinkCloudResponseIndexPath(payload.semesterId, payload.sessionId);
+      const [state, indexSnapshot] = await transaction.getAll([statePath, responseIndexPath]);
+      if (state.exists && String(state.data?.activeSessionId || "").trim() !== payload.sessionId)
+        fail("failed-precondition", "Think Cloud session is not active.", "W8_THINK_CLOUD_SESSION_STATE_INVALID");
+      // A server-only bounded hash index avoids response collection queries on
+      // every submit. The first successful legacy submission initializes it
+      // from the complete old board within this same atomic transaction.
+      const index = assertThinkCloudResponseIndex(indexSnapshot.exists
+        ? indexSnapshot.data : thinkCloudResponseIndex(await transaction.query(responsesPath)));
+      const studentHash = sha256(actor.actorUid);
+      const wordHash = sha256(normalized);
       if (
         !options.allowDuplicateByStudent &&
-        responses.some((response) => response.data?.uid === actor.actorUid)
+        index.studentHashes.includes(studentHash)
       )
         fail(
           "already-exists",
@@ -1986,15 +2020,17 @@ const createW8CommandAdapter = ({
         );
       if (
         !options.allowDuplicateWord &&
-        responses.some(
-          (response) => response.data?.textNormalized === normalized,
-        )
+        index.wordHashes.includes(wordHash)
       )
         fail(
           "already-exists",
           "Think Cloud response is duplicated.",
           "W8_THINK_CLOUD_WORD_DUPLICATE",
         );
+      const responseCount = index.responseCount;
+      if (responseCount >= THINK_CLOUD_RESPONSE_LIMIT)
+        fail("resource-exhausted", "Think Cloud response limit has been reached.",
+          "W8_THINK_CLOUD_RESPONSE_LIMIT", { responseCount, maximum: THINK_CLOUD_RESPONSE_LIMIT });
       const responseId = hashId(
         "thinkresp",
         payload.semesterId,
@@ -2003,6 +2039,9 @@ const createW8CommandAdapter = ({
         commandId,
       );
       const responsePath = `${thinkCloudResponsesPath(payload.semesterId, payload.sessionId)}/${responseId}`;
+      const responseSequence = thinkCloudResponseRevision(state.data) + 1;
+      if (!Number.isSafeInteger(responseSequence))
+        fail("resource-exhausted", "Think Cloud response cursor is exhausted.", "W8_THINK_CLOUD_RESPONSE_CURSOR_INVALID");
       transaction.create(responsePath, {
         uid: actor.actorUid,
         displayName:
@@ -2011,14 +2050,33 @@ const createW8CommandAdapter = ({
             .slice(0, 20) || "학생",
         textRaw: payload.textRaw,
         textNormalized: normalized,
+        sequence: responseSequence,
         revision: 1,
         createdAt: timestamp,
       });
+      transaction.set(responseIndexPath, {
+        responseCount: responseCount + 1,
+        studentHashes: [...new Set([...index.studentHashes, studentHash])],
+        wordHashes: [...new Set([...index.wordHashes, wordHash])],
+      });
+      // This public class document contains only a change signal. Names, UIDs
+      // and response text stay behind the authorized response query. Keep the
+      // operational revisions stable so simultaneous students share no CAS.
+      transaction.set(statePath, {
+        ...(!state.exists ? {
+          ...baseDocument(payload.semesterId),
+          classId,
+          activeSessionId: payload.sessionId,
+          revision: 0,
+        } : {}),
+        responseRevision: responseSequence,
+        responseSessionId: payload.sessionId,
+      }, { merge: true });
       return {
         target: {
           kind: "think-cloud-response",
           id: responseId,
-          refs: [responsePath, sessionPath],
+          refs: [responsePath, sessionPath, statePath, responseIndexPath],
         },
         sourceHash: sha256(
           `${payload.sessionId}\n${actor.actorUid}\n${normalized}`,
@@ -2028,6 +2086,7 @@ const createW8CommandAdapter = ({
           sessionRevision: payload.expectedSessionRevision,
           responseId,
           responseRevision: 1,
+          responseSequence,
         },
       };
     }
@@ -3524,18 +3583,25 @@ const normalizeQuery = (raw) => {
       "studentUid",
       "classId",
       "projection",
+      "afterResponseSequence",
       "_session",
     ],
     "getW8DomainState payload",
   );
   const source = value.provenance || value.source;
   const projection = value.projection
-    ? enumValue(value.projection, ["think-cloud", "think-cloud-command"], "projection")
+    ? enumValue(value.projection, ["think-cloud", "think-cloud-command", "think-cloud-delta"], "projection")
     : "";
   if (projection && value.domain !== "LEARNING")
     fail("invalid-argument", "Think Cloud projection requires LEARNING.", "W8_QUERY_PROJECTION_INVALID");
+  const delta = projection === "think-cloud-delta";
+  if ((delta && (!value.sessionId || source !== "CURRENT"))
+    || (!delta && value.afterResponseSequence !== undefined))
+    fail("invalid-argument", "Think Cloud delta requires a current selected session.", "W8_QUERY_PROJECTION_INVALID");
   return {
     projection,
+    afterResponseSequence: delta
+      ? integer(value.afterResponseSequence, "afterResponseSequence") : 0,
     domain: enumValue(
       value.domain,
       ["LEARNING", "SCHEDULE", "ATTENDANCE", "COMMUNICATION", "DASHBOARD"],
@@ -3587,6 +3653,7 @@ const createW8QueryCore = ({
     const query = normalizeQuery(request.data || {});
     const thinkCloudOnly = query.projection.startsWith("think-cloud");
     const thinkCloudMetadataOnly = query.projection === "think-cloud-command";
+    const thinkCloudDeltaOnly = query.projection === "think-cloud-delta";
     if (
       query.audience === "student" &&
       query.studentUid &&
@@ -3647,6 +3714,8 @@ const createW8QueryCore = ({
         activeSessionIds: [],
         revision: 0,
         exists: false,
+        responseRevision: 0,
+        responseSessionId: "",
       },
       thinkCloudSessions: [],
       thinkCloudResponses: [],
@@ -3792,6 +3861,8 @@ const createW8QueryCore = ({
         activeSessionIds: [],
         revision: 0,
         exists: false,
+        responseRevision: 0,
+        responseSessionId: "",
       };
       let thinkCloudSessions = [];
       let thinkCloudResponses = [];
@@ -3844,11 +3915,18 @@ const createW8QueryCore = ({
       };
       const loadThinkCloud = async () => {
         if (suppressArchiveStudentState) return;
+        const deltaSession = thinkCloudDeltaOnly
+          ? await transaction.get(thinkCloudSessionPath(query.semesterId, query.sessionId)) : null;
+        if (thinkCloudDeltaOnly && !deltaSession.exists)
+          fail("permission-denied", "Think Cloud session is outside the assigned class.", "W8_THINK_CLOUD_TARGET_FORBIDDEN");
         const classRows = thinkCloudOnly && query.audience === "student"
           ? enrollment?.classId
             ? [await transaction.get(classPath(enrollment.classId))].filter((row) =>
                 row.exists && row.data?.semesterId === query.semesterId)
             : []
+          : thinkCloudDeltaOnly && deltaSession.data?.targetClassId
+            ? [await transaction.get(classPath(deltaSession.data.targetClassId))].filter((row) =>
+                row.exists && row.data?.semesterId === query.semesterId)
           : await getSemesterClassRows();
         const activeClasses = classRows.filter(
           (row) => row.data?.status === "ACTIVE",
@@ -3878,6 +3956,13 @@ const createW8QueryCore = ({
               "W8_THINK_CLOUD_TARGET_FORBIDDEN",
             );
         }
+        if (thinkCloudDeltaOnly) {
+          allowedClasses = allowedClasses.filter((row) =>
+            String(row.data?.grade || "").trim() === String(deltaSession.data?.targetGrade || "").trim()
+            && String(row.data?.classNumber || "").trim() === String(deltaSession.data?.targetClass || "").trim());
+          if (!allowedClasses.length)
+            fail("permission-denied", "Think Cloud session is outside the assigned class.", "W8_THINK_CLOUD_TARGET_FORBIDDEN");
+        }
         thinkCloudManagedClasses = allowedClasses
           .map((row) => ({
             classId: String(
@@ -3899,6 +3984,7 @@ const createW8QueryCore = ({
         }))];
         const readSessions = async () => {
           if (!thinkCloudOnly) return transaction.query(thinkCloudSessionsPath(query.semesterId));
+          if (thinkCloudDeltaOnly) return [deltaSession];
           if (thinkCloudMetadataOnly) return query.sessionId
             ? [await transaction.get(thinkCloudSessionPath(query.semesterId, query.sessionId))].filter((row) => row.exists)
             : [];
@@ -3932,6 +4018,8 @@ const createW8QueryCore = ({
               ...row,
               stateExists: state.exists,
               stateRevision: Number(state.data?.revision || 0),
+              responseRevision: thinkCloudResponseRevision(state.data),
+              responseSessionId: String(state.data?.responseSessionId || ""),
               activeSessionId: String(
                 state.data?.activeSessionId ||
                   legacyActive?.data?.sessionId ||
@@ -3974,7 +4062,7 @@ const createW8QueryCore = ({
         const activeSessionIds = thinkCloudManagedClasses
           .map((row) => row.activeSessionId)
           .filter((id) =>
-            thinkCloudSessions.some((session) => session.id === id),
+            Boolean(id) && (thinkCloudDeltaOnly || thinkCloudSessions.some((session) => session.id === id)),
           );
         // A first visit returns the same default topic the UI selects, together
         // with its responses, so selecting it does not immediately read again.
@@ -4001,6 +4089,8 @@ const createW8QueryCore = ({
           activeSessionIds,
           revision: Number(selectedManagedClass?.stateRevision || 0),
           exists: selectedManagedClass?.stateExists === true,
+          responseRevision: selectedManagedClass?.responseRevision || 0,
+          responseSessionId: selectedManagedClass?.responseSessionId || "",
         };
         if (!thinkCloudSelectedSessionId) return;
         const selectedSession = thinkCloudSessions.find(
@@ -4013,15 +4103,21 @@ const createW8QueryCore = ({
             "W8_THINK_CLOUD_TARGET_FORBIDDEN",
           );
         if (thinkCloudMetadataOnly) return;
+        if (thinkCloudDeltaOnly && query.afterResponseSequence > thinkCloudState.responseRevision)
+          fail("aborted", "Think Cloud response cursor is ahead of the server.",
+            "W8_THINK_CLOUD_RESPONSE_CURSOR_INVALID", { currentResponseSequence: thinkCloudState.responseRevision });
         const responseRows = await transaction.query(
           thinkCloudResponsesPath(query.semesterId, thinkCloudSelectedSessionId),
+          thinkCloudDeltaOnly ? {
+            field: "sequence", operator: ">", value: query.afterResponseSequence,
+          } : null,
         );
         const anonymousStudent =
           query.audience === "student" &&
           selectedSession.options?.anonymous === true;
         thinkCloudResponses = responseRows.map((row) => {
           const id = row.path.split("/").at(-1);
-          if (query.audience !== "student") return { ...row.data, id };
+          if (query.audience !== "student") return { ...row.data, id, sequence: Number(row.data?.sequence || 0) };
           return {
             id,
             ...(!anonymousStudent
@@ -4031,10 +4127,11 @@ const createW8QueryCore = ({
             textNormalized: String(row.data?.textNormalized || ""),
             createdAt: row.data?.createdAt || null,
             revision: Number(row.data?.revision || 0),
+            sequence: Number(row.data?.sequence || 0),
             isOwn: row.data?.uid === uid,
           };
         });
-        if (query.audience === "teacher") {
+        if (query.audience === "teacher" && !thinkCloudDeltaOnly) {
           const selectedClass = thinkCloudManagedClasses.find(
             (row) =>
               row.grade === String(selectedSession.targetGrade || "").trim() &&

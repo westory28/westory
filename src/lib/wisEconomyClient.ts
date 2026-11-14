@@ -93,14 +93,17 @@ export const callWisService = async <T>(
   if (auth.currentUser !== user || !Number.isFinite(epoch))
     throw ownerChanged();
   const serviceName =
-    name === "getWisEconomyState"
-      ? "getWisEconomyStateFast"
-      : fastWisCommands.has(payload.commandType) && name === "executeCommand"
-        ? "executeWisCommandFast"
-        : fastWisCommands.has(payload.commandType) &&
-            name === "getCommandStatus"
-          ? "getWisCommandStatusFast"
-          : name;
+    name === "executeCommand" &&
+    payload.commandType === "submitThinkCloudResponse"
+      ? "executeThinkCloudResponseFast"
+      : name === "getWisEconomyState"
+        ? "getWisEconomyStateFast"
+        : fastWisCommands.has(payload.commandType) && name === "executeCommand"
+          ? "executeWisCommandFast"
+          : fastWisCommands.has(payload.commandType) &&
+              name === "getCommandStatus"
+            ? "getWisCommandStatusFast"
+            : name;
   const call = await getHistoryDictionaryCallable<WisRow, T>(serviceName, {
     // Read calls still validate the proof on the server on every request.
     reuseSessionProof: name === "getWisEconomyState",

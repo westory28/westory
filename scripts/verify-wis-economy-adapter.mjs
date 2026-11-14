@@ -119,6 +119,7 @@ function harness(service = async () => state(), sharedStorage = new Map()) {
     sensitive = [];
   const deps = {
     "./firebase": { auth },
+    "../features/avatar/events": { getAvatarRevision: () => 0 },
     "./historyDictionarySession": {
       getHistoryDictionaryCallable:
         async (transportName) => async (payload) => {

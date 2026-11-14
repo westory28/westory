@@ -146,6 +146,9 @@ async function stats(page) {
     metadata: window.thinkQa.calls.filter(
       (row) => row.payload.projection === "think-cloud-command",
     ).length,
+    deltas: window.thinkQa.calls.filter(
+      (row) => row.payload.projection === "think-cloud-delta",
+    ).length,
     writes: window.thinkQa.writes.length,
     rewards: window.thinkQa.rewards,
     animations: window.thinkQa.animations.length,
@@ -222,6 +225,78 @@ try {
       checks.push({ role, width, initial, detail: await stats(page) });
       await context.close();
     }
+  {
+    const { context, page } = await pageFor("student");
+    await openActive(page);
+    const initial = await stats(page);
+    const began = Date.now();
+    await page.evaluate(() => {
+      for (let n = 0; n < 20; n++) window.thinkQa.add("실시간");
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.think-word[data-word="실시간"]')?.dataset
+          .count === "20",
+    );
+    const latencyMs = Date.now() - began;
+    const burst = await stats(page);
+    assert.equal(
+      burst.reads,
+      initial.reads,
+      "burst never reloads all responses",
+    );
+    assert.equal(
+      burst.deltas - initial.deltas,
+      1,
+      "20 response signals coalesce into one delta",
+    );
+    assert(
+      latencyMs < 2000,
+      "synthetic commit to visible response under two seconds",
+    );
+    await page.clock.install();
+    await page.clock.runFor(30000);
+    assert.equal((await stats(page)).reads, burst.reads, "idle does not poll");
+    assert.equal(
+      (await stats(page)).deltas,
+      burst.deltas,
+      "idle has no delta call",
+    );
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    assert.equal(
+      await page.evaluate(() => window.thinkQa.listeners.size),
+      0,
+      "hidden tab releases live listener",
+    );
+    await page.evaluate(() => window.thinkQa.add("복귀", 3));
+    await page.clock.runFor(1000);
+    assert.equal(
+      (await stats(page)).deltas,
+      burst.deltas,
+      "hidden response does not read",
+    );
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.clock.runFor(1000);
+    await page.waitForSelector('.think-word[data-word="복귀"]');
+    checks.push({
+      scenario: "live burst, idle and reconnect",
+      latencyMs,
+      counts: await stats(page),
+    });
+    await context.close();
+  }
   {
     const { context, page } = await pageFor("student");
     await openActive(page);
@@ -336,8 +411,8 @@ try {
     assert.equal(submitted.metadata, 1, "one command preflight");
     assert.equal(
       submitted.reads,
-      local.reads + 1,
-      "one refresh after successful submit",
+      local.reads,
+      "server-confirmed own response needs no full reload",
     );
     assert.equal(submitted.rewards, 1, "one reward request");
     assert.equal(await page.locator("#think-response-input").inputValue(), "");
@@ -435,6 +510,7 @@ try {
       .locator("#think-topic-title")
       .fill("우리 반이 함께 지킬 약속은?");
     await fit(page, "teacher create");
+    await settle(page);
     await page.screenshot({
       path: path.join(out, "teacher-create.png"),
       fullPage: true,
@@ -487,6 +563,7 @@ try {
         "dialog traps focus",
       );
     }
+    await settle(page);
     await page.screenshot({
       path: path.join(out, "teacher-presentation.png"),
       fullPage: true,
@@ -541,6 +618,74 @@ try {
     await page.getByRole("button", { name: /조선 하면 떠오르는/ }).waitFor();
     assert.equal((await stats(page)).reads, 2, "manual recovery one read");
     checks.push({ role, scenario: "read error recovery" });
+    await context.close();
+  }
+  {
+    const { context, page } = await pageFor("student", 390, "&once=1");
+    await openActive(page);
+    await page.locator("#think-response-input").fill("예술");
+    await page.getByRole("button", { name: "생각 보내기" }).click();
+    await page.waitForSelector(".student-think-sent");
+    assert(
+      await page
+        .locator(".student-think-sent")
+        .evaluate((el) => el === document.activeElement),
+      "single-response completion receives focus",
+    );
+    checks.push({
+      scenario: "single response focus",
+      counts: await stats(page),
+    });
+    await context.close();
+  }
+  {
+    const { context, page } = await pageFor("teacher");
+    await openActive(page);
+    await page.getByRole("button", { name: "크게 보기", exact: true }).click();
+    await page.getByRole("dialog").waitFor();
+    await page.evaluate(() => {
+      window.thinkQa.sessions.splice(0, 1);
+      window.thinkQa.classState.revision++;
+      window.thinkQa.classState.activeSessionId = "";
+      window.thinkQa.signal();
+    });
+    await page.getByRole("dialog").waitFor({ state: "detached" });
+    assert.notEqual(
+      await page.evaluate(() => getComputedStyle(document.body).overflow),
+      "hidden",
+      "deleted presentation restores scroll",
+    );
+    checks.push({ scenario: "presentation deletion recovery" });
+    await context.close();
+  }
+  {
+    const { context, page } = await pageFor("student");
+    await openActive(page);
+    await page.evaluate(() => window.thinkQa.add("집중", 100));
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.think-word[data-word="집중"]')?.dataset
+          .count === "100",
+    );
+    const label = page.locator(
+      '.think-word[data-word="집중"] .think-word__text',
+    );
+    const first = await label.evaluate((el) =>
+      parseFloat(getComputedStyle(el).fontSize),
+    );
+    await page.evaluate(() => window.thinkQa.add("집중"));
+    await page.waitForFunction(
+      () =>
+        document.querySelector('.think-word[data-word="집중"]')?.dataset
+          .count === "101",
+    );
+    assert(
+      (await label.evaluate((el) =>
+        parseFloat(getComputedStyle(el).fontSize),
+      )) > first,
+      "high-frequency words continue to grow",
+    );
+    checks.push({ scenario: "100 to 101 responses still grow" });
     await context.close();
   }
   assert.deepEqual(errors, [], "no browser runtime errors");

@@ -16,6 +16,7 @@ const studentMaintenance = require("./studentMaintenance");
 const { onCallWithStudentMaintenance: onCall } = studentMaintenance;
 const sessionAuthority = require("./sessionAuthority");
 const commandGateway = require("./commandGateway");
+const { createThinkCloudSubmitQueue, createThinkCloudFastHandler } = require("./thinkCloudSubmitQueue");
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
@@ -12369,10 +12370,15 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
       readinessAdapters,
     }),
 });
-Object.assign(
-  exports,
-  commandGateway.createCallableExports({ core: commandGatewayCore }),
-);
+const thinkCloudQueuedGatewayCore = {
+  ...commandGatewayCore, execute: createThinkCloudSubmitQueue(commandGatewayCore.execute, {
+    dequeuedExecute: studentMaintenance.withStudentMaintenanceGuard(commandGatewayCore.execute),
+  }),
+};
+Object.assign(exports, commandGateway.createCallableExports({ core: thinkCloudQueuedGatewayCore }));
+exports.executeThinkCloudResponseFast = onCall({ region: "us-central1", memory: "256MiB",
+  concurrency: 8, maxInstances: 20, minInstances: 0, timeoutSeconds: 60 },
+createThinkCloudFastHandler(thinkCloudQueuedGatewayCore.execute));
 exports.getStudentEnrollmentProfileState = onCall({ region: REGION, timeoutSeconds: 120 }, async (request) => {
   const manager = await assertStudentDataManager(request);
   return commandGatewayStore.runTransaction((transaction) => studentEnrollmentProfile.queryStudentProfiles({

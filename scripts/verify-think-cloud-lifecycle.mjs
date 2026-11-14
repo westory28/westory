@@ -4,6 +4,40 @@ import vm from "node:vm";
 import { createHash, webcrypto } from "node:crypto";
 import ts from "typescript";
 
+// Execute the real Firebase router with SDK calls stubbed, including emulator
+// routing. This verifies selected regions without credentials or network I/O.
+for (const emulator of [false, true]) {
+  const exports = {}, routes = [], connected = [];
+  const modules = {
+    "./semesterArchive": { isSemesterArchive: false, assertArchiveWritable() {} },
+    "./loginPerf": { markLoginPerf() {} },
+    "firebase/app": { initializeApp: () => ({}) },
+    "firebase/auth": { getAuth: () => ({}), setPersistence: async () => {} },
+    "firebase/firestore": { getFirestore: () => ({}), connectFirestoreEmulator() {} },
+    "firebase/functions": {
+      getFunctions: (_app, region) => ({ region }),
+      connectFunctionsEmulator: (functions, host, port) => connected.push({ region: functions.region, host, port }),
+      httpsCallable: (functions, name, options) => async (payload) => { routes.push({ region: functions.region, name, options, payload }); return { data: { ok: true } }; },
+    },
+  };
+  const source = fs.readFileSync("src/lib/firebase.ts", "utf8").replaceAll("import.meta.env", `(${JSON.stringify(emulator ? { DEV: true, VITE_USE_FIREBASE_EMULATORS: "true" } : {})})`);
+  vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+    exports, console: { info() {}, warn() {} }, require: (name) => { assert.ok(name in modules, name); return modules[name]; },
+  });
+  for (const [name, region] of [
+    ["executeThinkCloudResponseFast", "us-central1"], ["getThinkCloudStateFast", "us-central1"],
+    ["executeCommand", "asia-northeast3"], ["getCommandStatus", "asia-northeast3"],
+    ["getThinkCloudState", "asia-northeast3"], ["openApplicationSession", "asia-northeast3"],
+    ["executeWisCommandFast", "us-central1"], ["getWisCommandStatusFast", "us-central1"], ["getWisEconomyStateFast", "us-central1"],
+  ]) {
+    const callable = await exports.getHttpsCallable(name, { timeout: 1234 }); await callable({ marker: name });
+    assert.deepEqual(JSON.parse(JSON.stringify(routes.at(-1))), { region, name, options: { timeout: 1234 }, payload: { marker: name } });
+  }
+  assert.equal(connected.length, emulator ? 2 : 0, "only one Functions instance per region");
+  if (emulator) assert.deepEqual(connected.map((entry) => entry.region).sort(), ["asia-northeast3", "us-central1"]);
+}
+console.log("PASS real Firebase region routing for ThinkCloud fast calls, unchanged commands/receipts/Wis and both emulator regions");
+
 const serverModule = { exports: {} };
 const serverPath = "functions/productionGateway/w8Domains.js";
 const semesterCore = { SEMESTER_MANIFEST_COLLECTION: "semester_manifests", ACTIVE_SEMESTER_POINTER_PATH: "system/active", normalizeSemesterId: (value) => value };
@@ -34,11 +68,13 @@ function harness() {
     ["semester_enrollment_slots/2026-2:student", { studentUid: "student", semesterId: "2026-2", status: "ACTIVE", activeEnrollmentId: "enroll-1" }],
     ["semester_enrollments/enroll-1", { enrollmentId: "enroll-1", studentUid: "student", semesterId: "2026-2", enrollmentStatus: "ACTIVE", classId: "class-1" }],
   ]), receipts = new Map(), storage = new Map(), modules = {}, calls = [], sensitive = [];
-  const timers = new Map(), windowListeners = new Map(), documentListeners = new Map();
+  const timers = new Map(), windowListeners = new Map(), documentListeners = new Map(), watchers = new Map(), listenerHistory = [];
+  let heldRead, holdRead = false, nextReadError, nextReadHook;
   let nextTimer = 0;
   const browserWindow = {
-    setInterval: (callback) => { const id = ++nextTimer; timers.set(id, callback); return id; },
-    clearInterval: (id) => timers.delete(id),
+    setTimeout: (callback, delay) => { assert.equal(delay, 180); const id = ++nextTimer; timers.set(id, callback); return id; },
+    clearTimeout: (id) => timers.delete(id),
+    setInterval: () => { throw new Error("ThinkCloud must not poll"); },
     addEventListener: (name, callback) => windowListeners.set(name, callback),
     removeEventListener: (name) => windowListeners.delete(name),
   };
@@ -57,7 +93,7 @@ function harness() {
     query: async (path, filter) => {
       const clauses = filter?.filters || (filter?.field ? [filter] : []);
       const rows = list(path).filter((item) => clauses.every((clause) =>
-        clause.operator === "in" ? clause.value.includes(item.data[clause.field]) : item.data[clause.field] === clause.value));
+        clause.operator === "in" ? clause.value.includes(item.data[clause.field]) : clause.operator === ">" ? item.data[clause.field] > clause.value : item.data[clause.field] === clause.value));
       reads.push({ path, filter: clone(filter), count: rows.length });
       return rows;
     },
@@ -72,27 +108,23 @@ function harness() {
     auth: { uid: auth.currentUser.uid, token: { email: auth.currentUser.uid === "admin" ? "westoria28@gmail.com" : "" } },
     data: { semesterId: "2026-2", domain: "LEARNING", source: "CURRENT", projection: "think-cloud", audience, ...payload },
   });
-  const state = (payload) => {
-    const managed = list("semester_classes").filter((row) => payload.audience !== "student" || row.data.classId === "class-1").map((row) => {
-      const current = docs.get(`${root}/think_cloud_state/${row.data.classId}`);
-      return { classId: row.data.classId, grade: row.data.grade, classNumber: row.data.classNumber, stateExists: Boolean(current), stateRevision: current?.revision || 0, activeSessionId: current?.activeSessionId || "" };
-    });
-    const sessions = list(`${root}/think_cloud_sessions`).filter((row) => managed.some((item) => item.classId === row.data.targetClassId)).map((row) => {
-      const group = managed.find((item) => item.classId === row.data.targetClassId);
-      return { ...row.data, id: row.data.sessionId, stateExists: group.stateExists, stateRevision: group.stateRevision };
-    });
-    const selectedSessionId = payload.sessionId || (payload.projection === "think-cloud"
-      ? managed[0]?.activeSessionId || sessions[0]?.id || "" : "");
-    return { semesterId: "2026-2", manifestRevision: 1, readOnly: false, thinkCloudSessions: sessions,
-      thinkCloudSelectedSessionId: selectedSessionId,
-      thinkCloudManagedClasses: managed, thinkCloudState: { activeSessionId: managed[0]?.activeSessionId || "", activeSessionIds: managed.map((item) => item.activeSessionId).filter(Boolean) }, thinkCloudRoster: [],
-      thinkCloudResponses: selectedSessionId && payload.projection !== "think-cloud-command" ? list(`${root}/think_cloud_sessions/${selectedSessionId}/responses`).map((row) => payload.audience === "student" ? { id: row.path.split("/").at(-1), textRaw: row.data.textRaw, textNormalized: row.data.textNormalized, isOwn: row.data.uid === auth.currentUser.uid } : { ...row.data, id: row.path.split("/").at(-1) }) : [],
-    };
+  const emit = (classId, overrides = {}) => {
+    const path = `${root}/think_cloud_state/${classId}`;
+    const listener = watchers.get(path);
+    if (listener) listener.next({ exists: () => docs.has(path), data: () => clone(docs.get(path)), metadata: { fromCache: false, hasPendingWrites: false, ...overrides } });
   };
   const unavailable = () => Object.assign(new Error("lost response"), { code: "functions/unavailable" });
-  const service = async (name, payload) => {
-    calls.push({ name, payload: clone(payload) });
-    if (name === "getThinkCloudState") { const result = state(payload); if (changeOwner) auth.currentUser = user("other"); return result; }
+  const service = async (transportName, payload) => {
+    const name = { getThinkCloudStateFast: "getThinkCloudState", executeThinkCloudResponseFast: "executeCommand" }[transportName] || transportName;
+    calls.push({ name, transportName, payload: clone(payload) });
+    if (name === "getThinkCloudState") {
+      if (nextReadError) { const error = nextReadError; nextReadError = undefined; throw error; }
+      if (nextReadHook) { const hook = nextReadHook; nextReadHook = undefined; hook(); }
+      const result = await query(payload.audience, payload);
+      if (holdRead) { holdRead = false; await new Promise((resolve) => { heldRead = resolve; }); }
+      if (changeOwner) auth.currentUser = user("other");
+      return result;
+    }
     if (name === "getCommandStatus") { if (dropReceipt) { dropReceipt = false; throw unavailable(); } return receipts.get(payload.commandId) || { status: "NOT_FOUND" }; }
     if (name === "executeCommand") {
       if (receipts.has(payload.commandId)) return receipts.get(payload.commandId);
@@ -106,11 +138,18 @@ function harness() {
   };
   const deps = {
     "./semesterArchive": { isSemesterArchive: false },
-    "./firebase": { auth }, "./semesterScope": { getYearSemester: (value) => value || config },
+    "./firebase": { auth, db: {} }, "./semesterScope": { getYearSemester: (value) => value || config, getSemesterDocPath: (value, collection, id) => `years/${value.year}/semesters/${value.semester}/${collection}/${id}` },
     "./historyDictionarySession": { getHistoryDictionaryCallable: async (name) => async (payload) => ({ data: await service(name, payload) }) },
     "./sensitiveOperation": { ensureSensitiveOperation: async () => sensitive.push(auth.currentUser.uid) },
     "./safeStorage": { readStorage: (key) => storage.get(key) || null, writeStorage: (key, value) => storage.set(key, value), removeStorage: (key) => storage.delete(key) },
-    "firebase/firestore": { Timestamp: class {} },
+    "firebase/firestore": {
+      Timestamp: class {}, doc: (_db, path) => path,
+      onSnapshot: (path, _options, next, error) => {
+        const listener = { path, next, error }; watchers.set(path, listener); listenerHistory.push(listener);
+        queueMicrotask(() => { if (watchers.get(path) === listener) emit(path.split("/").at(-1)); });
+        return () => { if (watchers.get(path) === listener) watchers.delete(path); };
+      },
+    },
   };
   const load = (name) => {
     if (modules[name]) return modules[name];
@@ -121,7 +160,13 @@ function harness() {
     });
     return module.exports;
   };
-  return { api: load("thinkCloudLifecycle"), docs, calls, receipts, sensitive, auth, user, query, reads, timers, browserDocument, windowListeners, documentListeners, drop: () => { dropExecute = true; dropReceipt = true; }, changeOwner: () => { changeOwner = true; } };
+  return {
+    watchers, listenerHistory, emit,
+    flushTimers: () => { const pending = [...timers.values()]; timers.clear(); pending.forEach((callback) => callback()); },
+    onNextRead: (callback) => { nextReadHook = callback; },
+    holdNextRead: () => { holdRead = true; }, releaseRead: () => { assert.ok(heldRead); heldRead(); heldRead = undefined; },
+    rejectNextRead: (error) => { nextReadError = error; },
+    api: load("thinkCloudLifecycle"), docs, calls, receipts, sensitive, auth, user, query, reads, timers, browserDocument, windowListeners, documentListeners, drop: () => { dropExecute = true; dropReceipt = true; }, changeOwner: () => { changeOwner = true; } };
 }
 {
   const h = harness();
@@ -163,7 +208,26 @@ function harness() {
   console.log("PASS lost create response plus failed receipt lookup retries identical intent/revisions without duplicate session");
 }
 {
-  const h = harness(); h.changeOwner();
+  const h = harness(); const session = await h.api.createThinkCloudSession(config, input);
+  assert.equal(h.calls.find((call) => call.name === "executeCommand").transportName, "executeCommand", "teacher create keeps its original command path");
+  h.auth.currentUser = h.user("student");
+  const state = await h.api.readThinkCloudState(config, "student", session.sessionId);
+  h.calls.length = 0; h.drop();
+  await assert.rejects(h.api.submitThinkCloudResponse(config, state.thinkCloudSessions[0], "백제", "백제"));
+  const retry = await h.api.submitThinkCloudResponse(config, state.thinkCloudSessions[0], "백제", "백제");
+  const commands = h.calls.filter((call) => call.name === "executeCommand");
+  assert.equal(commands.length, 2);
+  assert.ok(commands.every((call) => call.transportName === "executeThinkCloudResponseFast"));
+  assert.equal(commands[0].payload.commandId, commands[1].payload.commandId);
+  assert.deepEqual(commands[0].payload.payload, commands[1].payload.payload);
+  assert.ok(h.calls.filter((call) => call.name === "getThinkCloudState").every((call) => call.transportName === "getThinkCloudStateFast"));
+  assert.ok(h.calls.filter((call) => call.name === "getCommandStatus").every((call) => call.transportName === "getCommandStatus"));
+  assert.equal([...h.docs.keys()].filter((key) => key.startsWith(`${root}/think_cloud_sessions/${session.sessionId}/responses/`)).length, 1);
+  assert.ok(retry.responseId);
+  console.log("PASS submit-only fast command routing and lost-response receipt retry preserve the exact command without duplicate writes");
+}
+{
+  const h = harness(); h.auth.currentUser = h.user("student"); h.changeOwner();
   await assert.rejects(h.api.readThinkCloudState(config, "student"), /계정이 바뀌었습니다/);
   console.log("PASS owner change discards stale query result");
 }
@@ -232,40 +296,252 @@ function harness() {
   await assert.rejects(h.query("student"), (error) => error.details.reason === "W8_STUDENT_CURRENT_SEMESTER_REQUIRED");
   console.log("PASS bounded Think Cloud projections, initial detail read, legacy class values, anonymity, authorization and full-query compatibility");
 }
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const counts = (h) => ({
+  full: h.calls.filter((call) => call.name === "getThinkCloudState" && call.payload.projection === "think-cloud").length,
+  delta: h.calls.filter((call) => call.name === "getThinkCloudState" && call.payload.projection === "think-cloud-delta").length,
+});
+const putResponse = (h, sessionId, sequence, text = `생각${sequence}`, classId = "class-1") => {
+  h.docs.set(`${root}/think_cloud_sessions/${sessionId}/responses/response-${sequence}`, { uid: "student", textRaw: text, textNormalized: text, sequence });
+  const path = `${root}/think_cloud_state/${classId}`;
+  h.docs.set(path, { ...h.docs.get(path), responseRevision: sequence, responseSessionId: sessionId });
+};
 {
   const h = harness();
   const first = await h.api.createThinkCloudSession(config, input);
   const second = await h.api.createThinkCloudSession(config, input);
-  h.auth.currentUser = h.user("student");
+  const other = await h.api.createThinkCloudSession(config, { ...input, targetClass: "2" });
+  h.docs.set(`${root}/think_cloud_sessions/${second.sessionId}/responses/legacy`, { uid: "student", textRaw: "신라", textNormalized: "신라" });
   h.calls.length = 0;
-  const states = [];
-  const stop = h.api.subscribeThinkCloudState(config, "student", "", (state) => {
-    states.push(state);
-    stop.selectSession(state.thinkCloudSelectedSessionId);
-  }, (error) => { throw error; });
-  const settle = () => new Promise((resolve) => setImmediate(resolve));
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "teacher", second.sessionId, (state) => {
+    states.push(state); stop.selectSession(state.thinkCloudSelectedSessionId);
+  }, (error) => errors.push(error));
   await settle();
-  assert.equal(states[0].thinkCloudSelectedSessionId, second.sessionId);
-  assert.equal(h.calls.length, 1, "automatic initial selection must not fetch a second time");
-  stop.selectSession(first.sessionId);
-  h.windowListeners.get("focus")();
-  h.documentListeners.get("visibilitychange")();
-  await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 0 });
+  assert.equal(h.watchers.size, 2, "watch authorized classes including class-wide status changes");
+  assert.equal(h.timers.size, 0, "unchanged first signal does not schedule a fetch");
+  const initial = states.at(-1), roster = initial.thinkCloudRoster;
+  assert.equal(initial.thinkCloudResponses[0].sequence, 0, "legacy responses remain in the full snapshot");
+  for (let index = 0; index < 20; index++) h.emit("class-1");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 0 }, "unchanged signals perform zero calls");
+  for (let sequence = 1; sequence <= 25; sequence++) { putResponse(h, second.sessionId, sequence); h.emit("class-1"); }
+  assert.equal(h.timers.size, 1, "one 180ms batch for a response burst");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 1 }, "25 submitted responses produce exactly one delta callable");
+  assert.equal(states.at(-1).thinkCloudResponses.length, 26);
+  assert.equal(states.at(-1).thinkCloudSessions.length, initial.thinkCloudSessions.length);
+  assert.equal(states.at(-1).thinkCloudManagedClasses.length, 2);
+  assert.equal(states.at(-1).thinkCloudRoster, roster, "delta preserves the existing roster without reading it again");
+  assert.equal(h.calls.at(-1).payload.afterResponseSequence, 0);
+  const lastDeltaRead = h.reads.filter((row) => row.path.endsWith("/responses")).at(-1);
+  assert.deepEqual(lastDeltaRead.filter, { field: "sequence", operator: ">", value: 0 });
+  for (let index = 0; index < 10; index++) h.emit("class-1");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 1 });
+  putResponse(h, other.sessionId, 1, "다른 반", "class-2"); h.emit("class-2");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 1 }, "other class response signals do not read its responses");
+  putResponse(h, second.sessionId, 26);
+  h.emit("class-1", { fromCache: true });
+  h.emit("class-1", { hasPendingWrites: true });
+  assert.equal(h.timers.size, 0, "unconfirmed signals never trigger authorized reads");
+  h.holdNextRead(); h.emit("class-1"); h.flushTimers(); await settle();
+  putResponse(h, second.sessionId, 27); h.emit("class-1"); h.releaseRead(); await settle();
+  assert.equal(h.timers.size, 1, "a later watermark received in flight is retained");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 3 });
+  assert.equal(states.at(-1).thinkCloudResponses.length, 28);
+  assert.equal(new Set(states.at(-1).thinkCloudResponses.map((item) => item.id)).size, 28);
+  assert.equal(h.calls.at(-1).payload.afterResponseSequence, 26);
+  const class2 = `${root}/think_cloud_state/class-2`;
+  h.docs.set(class2, { ...h.docs.get(class2), revision: h.docs.get(class2).revision + 1 }); h.emit("class-2");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 3 }, "another class status change refreshes the topic list");
+  stop.selectSession(first.sessionId); h.windowListeners.get("focus")(); await settle();
+  assert.deepEqual(counts(h), { full: 3, delta: 3 }, "selection and focus share the same full read");
   assert.equal(states.at(-1).thinkCloudSelectedSessionId, first.sessionId);
-  assert.equal(h.calls.length, 2, "selection, focus and visibility events share an in-flight read");
-  h.browserDocument.visibilityState = "hidden";
-  h.timers.values().next().value();
-  await settle();
-  assert.equal(h.calls.length, 2, "background tabs do not poll");
-  h.browserDocument.visibilityState = "visible";
-  h.documentListeners.get("visibilitychange")();
-  await settle();
-  assert.equal(h.calls.length, 3, "foreground refresh retains the currently selected topic");
-  assert.equal(h.calls.at(-1).payload.sessionId, first.sessionId);
+  assert.equal(states.at(-1).thinkCloudResponses.length, 0, "selection never merges old topic responses");
   stop();
-  assert.equal(h.timers.size, 0);
-  assert.equal(h.windowListeners.size, 0);
-  assert.equal(h.documentListeners.size, 0);
-  console.log("PASS single initial read, topic selection, event coalescing, hidden-tab suppression and cleanup");
+  assert.equal(errors.length, 0);
+  assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  assert.equal(h.windowListeners.size, 0); assert.equal(h.documentListeners.size, 0);
+  console.log("PASS no polling, no-change zero calls, 25-response burst one delta, watermark catch-up, roster/topic preservation and scoped signal reads");
 }
+{
+  const h = harness();
+  const session = await h.api.createThinkCloudSession(config, input);
+  h.auth.currentUser = h.user("student"); h.calls.length = 0; h.holdNextRead();
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "student", "", (state) => states.push(state), (error) => errors.push(error));
+  await settle(); putResponse(h, session.sessionId, 1); h.releaseRead(); await settle();
+  assert.equal(h.timers.size, 1, "initial listener catches changes between full snapshot and attachment");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 1, delta: 1 });
+  assert.equal(states.at(-1).thinkCloudResponses[0].uid, "student");
+  const staleListener = h.listenerHistory.at(-1);
+  h.holdNextRead(); putResponse(h, session.sessionId, 2); h.emit("class-1"); h.flushTimers(); await settle();
+  const beforeHidden = states.length;
+  h.browserDocument.visibilityState = "hidden"; h.documentListeners.get("visibilitychange")();
+  assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  h.releaseRead(); await settle();
+  assert.equal(states.length, beforeHidden, "in-flight result is discarded after hiding");
+  staleListener.next({ exists: () => true, data: () => ({ revision: 99, responseRevision: 99, responseSessionId: session.sessionId }), metadata: {} });
+  staleListener.error(new Error("late callback"));
+  assert.equal(errors.length, 0); assert.equal(h.timers.size, 0);
+  putResponse(h, session.sessionId, 3);
+  h.browserDocument.visibilityState = "visible"; h.documentListeners.get("visibilitychange")(); h.windowListeners.get("focus")();
+  assert.equal(h.timers.size, 1); h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 2 }, "foreground does one authorized full refresh");
+  assert.equal(states.at(-1).thinkCloudResponses.length, 3);
+  staleListener.next({ exists: () => true, data: () => ({ revision: 99, responseRevision: 99, responseSessionId: session.sessionId }), metadata: {} });
+  h.flushTimers(); await settle(); assert.deepEqual(counts(h), { full: 2, delta: 2 }, "old listener frames are ignored after reconnect");
+  stop();
+  console.log("PASS initial listener race, hidden-tab detach, in-flight discard, foreground coalescing and old listener rejection");
+}
+{
+  const h = harness(); h.auth.currentUser = h.user("student");
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "student", "", (state) => states.push(state), (error) => errors.push(error));
+  await settle(); assert.equal(h.watchers.size, 1, "an empty class still watches its missing state document");
+  assert.equal(states.at(-1).thinkCloudSessions.length, 0);
+  h.docs.set(`${root}/think_cloud_sessions/new-topic`, { sessionId: "new-topic", targetClassId: "class-1", targetGrade: "3", targetClass: "1", status: "active", options });
+  h.docs.set(`${root}/think_cloud_state/class-1`, { revision: 1, activeSessionId: "new-topic" }); h.emit("class-1");
+  h.flushTimers(); await settle();
+  assert.equal(states.at(-1).thinkCloudSelectedSessionId, "new-topic");
+  h.listenerHistory.at(-1).error(Object.assign(new Error("permission denied"), { code: "permission-denied" }));
+  assert.equal(errors.length, 1); assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  assert.equal(h.windowListeners.size, 0);
+  h.flushTimers(); await settle(); assert.deepEqual(counts(h), { full: 2, delta: 0 }, "permission failure stops all automatic recovery calls");
+  stop();
+  const retry = h.api.subscribeThinkCloudState(config, "student", "", (state) => states.push(state), (error) => errors.push(error));
+  await settle(); assert.equal(h.watchers.size, 1); assert.deepEqual(counts(h), { full: 3, delta: 0 }); retry();
+  console.log("PASS missing class document discovery, permission failure fail-closed and explicit recovery");
+}
+{
+  const h = harness(); const session = await h.api.createThinkCloudSession(config, input);
+  h.auth.currentUser = h.user("student"); h.calls.length = 0;
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "student", session.sessionId, (state) => states.push(state), (error) => errors.push(error));
+  await settle();
+  h.rejectNextRead(Object.assign(new Error("cursor invalid"), { code: "functions/aborted", details: { reason: "W8_THINK_CLOUD_RESPONSE_CURSOR_INVALID" } }));
+  putResponse(h, session.sessionId, 1); h.emit("class-1"); h.flushTimers(); await settle();
+  assert.equal(h.timers.size, 1); h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 1 }); assert.equal(states.at(-1).thinkCloudResponses.length, 1);
+  h.rejectNextRead(Object.assign(new Error("network unavailable"), { code: "functions/unavailable" }));
+  putResponse(h, session.sessionId, 2); h.emit("class-1"); h.flushTimers(); await settle();
+  assert.equal(errors.length, 1); assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  assert.deepEqual(counts(h), { full: 2, delta: 2 }, "transport failure never starts silent polling"); stop();
+  console.log("PASS invalid cursor full reset and transport failure manual recovery boundary");
+}
+{
+  const h = harness(); const first = await h.api.createThinkCloudSession(config, input);
+  h.auth.currentUser = h.user("student"); h.calls.length = 0;
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "student", first.sessionId, (state) => states.push(state), (error) => errors.push(error));
+  await settle();
+  putResponse(h, first.sessionId, 1); h.emit("class-1");
+  h.onNextRead(() => {
+    const classPath = `${root}/think_cloud_state/class-1`, topicPath = `${root}/think_cloud_sessions/${first.sessionId}`;
+    h.docs.set(topicPath, { ...h.docs.get(topicPath), status: "closed" });
+    h.docs.set(`${root}/think_cloud_sessions/new-during-delta`, { sessionId: "new-during-delta", targetClassId: "class-1", targetGrade: "3", targetClass: "1", status: "active", options });
+    h.docs.set(classPath, { ...h.docs.get(classPath), revision: h.docs.get(classPath).revision + 1, activeSessionId: "new-during-delta" });
+    h.emit("class-1");
+  });
+  h.flushTimers(); await settle();
+  assert.equal(states.length, 1, "a delta cannot acknowledge the new class revision with an incomplete topic list");
+  assert.equal(h.timers.size, 1); h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 1 });
+  assert.equal(states.at(-1).thinkCloudSessions.length, 2);
+  assert.equal(states.at(-1).thinkCloudSessions.find((item) => item.id === first.sessionId).status, "closed");
+  h.holdNextRead(); putResponse(h, first.sessionId, 2); h.emit("class-1"); h.flushTimers(); await settle();
+  const beforeSelection = states.length;
+  stop.selectSession("new-during-delta"); h.releaseRead(); await settle();
+  assert.equal(states.length, beforeSelection, "a late delta from the old selection is discarded");
+  h.flushTimers(); await settle();
+  assert.equal(states.at(-1).thinkCloudSelectedSessionId, "new-during-delta");
+  assert.equal(states.at(-1).thinkCloudResponses.length, 0);
+  assert.equal(errors.length, 0); stop();
+  console.log("PASS concurrent topic transition forces a full list refresh and selection rejects the old delta");
+}
+for (const revoke of [false, true]) {
+  const h = harness(); const first = await h.api.createThinkCloudSession(config, input);
+  h.auth.currentUser = h.user("student"); h.calls.length = 0;
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "student", first.sessionId, (state) => states.push(state), (error) => errors.push(error));
+  await settle(); putResponse(h, first.sessionId, 1); h.emit("class-1");
+  h.onNextRead(() => {
+    h.docs.delete(`${root}/think_cloud_sessions/${first.sessionId}`);
+    const classPath = `${root}/think_cloud_state/class-1`;
+    h.docs.set(classPath, { ...h.docs.get(classPath), revision: h.docs.get(classPath).revision + 1, activeSessionId: "" });
+    h.emit("class-1");
+  });
+  h.flushTimers(); await settle();
+  assert.equal(errors.length, 0, "a confirmed operation signal recovers the raced target-forbidden delta");
+  assert.equal(h.timers.size, 1);
+  if (revoke) h.docs.delete("semester_enrollments/enroll-1");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 1 }, "only one authorized full recovery follows the failed delta");
+  assert.equal(h.calls.at(-1).payload.sessionId, undefined, "deleted topic is not reused by the full recovery");
+  if (revoke) {
+    assert.equal(errors.length, 1); assert.equal(states.length, 1);
+    assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  } else {
+    assert.equal(errors.length, 0); assert.equal(states.at(-1).thinkCloudSessions.length, 0);
+    assert.equal(states.at(-1).thinkCloudResponses.length, 0);
+    assert.equal(states.at(-1).thinkCloudSelectedSessionId, "");
+  }
+  stop();
+}
+console.log("PASS concurrent deletion recovers through one authorized full read, with revoked access still failing closed");
+for (const rejectRecovery of [false, true]) {
+  const h = harness(); const first = await h.api.createThinkCloudSession(config, input);
+  const remaining = await h.api.createThinkCloudSession(config, { ...input, targetClass: "2" });
+  h.calls.length = 0;
+  const states = [], errors = [];
+  const stop = h.api.subscribeThinkCloudState(config, "teacher", first.sessionId, (state) => states.push(state), (error) => errors.push(error));
+  await settle();
+  h.docs.delete(`${root}/think_cloud_sessions/${first.sessionId}`);
+  const classPath = `${root}/think_cloud_state/class-1`;
+  h.docs.set(classPath, { ...h.docs.get(classPath), revision: h.docs.get(classPath).revision + 1, activeSessionId: "" }); h.emit("class-1");
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 2, delta: 0 }, "direct deletion signals request a full snapshot, not a delta");
+  assert.equal(h.timers.size, 1); assert.equal(errors.length, 0);
+  if (rejectRecovery) h.rejectNextRead(Object.assign(new Error("access revoked"), { code: "functions/permission-denied", details: { reason: "W8_THINK_CLOUD_TARGET_FORBIDDEN" } }));
+  h.flushTimers(); await settle();
+  assert.deepEqual(counts(h), { full: 3, delta: 0 }, "deleted full selection gets exactly one full recovery");
+  assert.equal(h.calls.at(-1).payload.sessionId, undefined);
+  if (rejectRecovery) {
+    assert.equal(errors.length, 1); assert.equal(states.length, 1);
+    assert.equal(h.timers.size, 0); assert.equal(h.watchers.size, 0);
+    // Teacher onError clears selectedSessionId before its manual retry.
+    const retry = h.api.subscribeThinkCloudState(config, "teacher", "", (state) => states.push(state), (error) => errors.push(error));
+    await settle(); assert.deepEqual(counts(h), { full: 4, delta: 0 });
+    assert.equal(states.at(-1).thinkCloudSelectedSessionId, remaining.sessionId); retry();
+  } else {
+    assert.equal(errors.length, 0); assert.equal(states.at(-1).thinkCloudSessions.length, 1);
+    assert.equal(states.at(-1).thinkCloudSelectedSessionId, remaining.sessionId);
+    assert.equal(states.at(-1).thinkCloudResponses.length, 0); assert.equal(h.timers.size, 0);
+  }
+  stop();
+}
+console.log("PASS direct deletion full-read recovery, bounded failure and teacher manual retry without the removed selection");
+for (const boundary of ["owner", "semester", "unsubscribe"]) {
+  const h = harness(); const session = await h.api.createThinkCloudSession(config, input);
+  h.auth.currentUser = h.user("student"); h.calls.length = 0;
+  const localConfig = { ...config }, states = [], errors = [];
+  h.holdNextRead();
+  const stop = h.api.subscribeThinkCloudState(localConfig, "student", session.sessionId, (state) => states.push(state), (error) => errors.push(error));
+  await settle();
+  if (boundary === "owner") h.auth.currentUser = h.user("other");
+  if (boundary === "semester") localConfig.semester = "1";
+  if (boundary === "unsubscribe") stop();
+  h.releaseRead(); await settle();
+  assert.equal(states.length, 0, `${boundary} prevents old data from being emitted`);
+  assert.equal(h.watchers.size, 0); assert.equal(h.timers.size, 0);
+  assert.equal(errors.length, boundary === "unsubscribe" ? 0 : 1);
+  stop();
+}
+console.log("PASS account, semester and unmount boundaries reject late full results");
 console.log("ThinkCloud lifecycle verification passed.");
