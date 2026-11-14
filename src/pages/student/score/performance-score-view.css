@@ -20,3 +20,9 @@
 .performance-score-workspace h2 {
   overflow-wrap: anywhere;
 }
+
+.performance-score-feedback {
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

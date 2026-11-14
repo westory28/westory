@@ -34,7 +34,7 @@
     "verify:portal-design": "node scripts/verify-portal-design.mjs",
     "verify:interface-controls": "node scripts/verify-interface-controls-browser.mjs && node scripts/verify-interface-visibility-browser.mjs",
     "verify:page-scroll-lock": "node scripts/verify-page-scroll-lock.mjs",
-    "verify:score-requests": "node scripts/verify-score-request-queries.mjs && node scripts/verify-score-objection-client-contracts.mjs && node scripts/verify-performance-score-contracts.mjs",
+    "verify:score-requests": "node scripts/verify-score-request-queries.mjs && node scripts/verify-score-objection-client-contracts.mjs && node scripts/verify-performance-score-contracts.mjs && node scripts/verify-written-exam-essay-score-workbook.mjs && node scripts/verify-score-confirmation-reads.mjs && node scripts/verify-student-score-feedback.mjs",
     "test:score-request-rules": "node scripts/run-score-request-rules.mjs",
     "test:developer-log-likes-rules": "node scripts/run-developer-log-likes-rules.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",

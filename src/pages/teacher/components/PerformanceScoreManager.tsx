@@ -88,7 +88,10 @@ import {
   type ParsedPerformanceScoreRow,
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
-import { parseWrittenExamEssayScoreWorkbook } from "../../../lib/writtenExamEssayScoreWorkbook";
+import {
+  parseWrittenExamEssayScoreWorkbook,
+  parseWrittenExamFeedbackByItemKey,
+} from "../../../lib/writtenExamEssayScoreWorkbook";
 import { getTeacherScoreRequestQuery } from "./teacherScoreRequestQuery";
 import {
   createManagedNotifications,
@@ -98,6 +101,7 @@ import {
   getPerformanceEnrollmentLabel,
   getStudentEnrollmentMovementTiming,
   isActiveRosterStudent,
+  isStudentRegistrationPending,
   isStudentRosterProfile,
 } from "../../../lib/studentRoster";
 
@@ -366,26 +370,6 @@ const toText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
-
-const parseWrittenExamFeedbackByItemKey = (value: string) => {
-  const text = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  const byItemKey = new Map<string, string>();
-  if (!text || text === "-") return byItemKey;
-
-  const pattern = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/g;
-  const matches = Array.from(text.matchAll(pattern));
-  matches.forEach((match, index) => {
-    const key = `${match[1]}-(${match[2]})`;
-    const start = (match.index || 0) + match[0].length;
-    const end =
-      index + 1 < matches.length
-        ? matches[index + 1].index || text.length
-        : text.length;
-    const feedback = text.slice(start, end).trim();
-    if (feedback) byItemKey.set(key, feedback.slice(0, 1000));
-  });
-  return byItemKey;
-};
 
 const buildWrittenExamParsedUpload = (
   rows: unknown[][],
@@ -1095,8 +1079,8 @@ const studentIdentityKey = (
 ) =>
   `${buildStudentLookupKey(grade, classValue, number)}:${normalizeStudentName(name)}`;
 
-// Check all profiles before filtering them for the selected semester. Otherwise
-// an old unlinked score can be attributed to the next holder of the same number.
+// Check all approved/legacy profiles before filtering the selected semester so
+// an old unlinked score cannot move to the next holder of the same number.
 const markStudentIdentityConflicts = (profiles: StudentProfile[]) => {
   const firstByKey = new Map<string, StudentProfile>();
   for (const student of profiles) {
@@ -6194,10 +6178,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     Map<string, Promise<ScoreListRecord[]>>
   >(new Map());
   const confirmationsByRosterCacheRef = useRef<
-    Map<string, Map<string, PerformanceScoreConfirmation>>
+    Map<
+      string,
+      {
+        scopeKey: string;
+        confirmations: Map<string, PerformanceScoreConfirmation>;
+      }
+    >
   >(new Map());
   const confirmationPromisesByRosterRef = useRef<
-    Map<string, Promise<Map<string, PerformanceScoreConfirmation>>>
+    Map<
+      string,
+      {
+        scopeKey: string;
+        promise: Promise<Map<string, PerformanceScoreConfirmation>>;
+      }
+    >
   >(new Map());
   const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
@@ -7959,6 +7955,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       snap.forEach((item) => {
         const data = item.data() as Record<string, unknown>;
         if (!isStudentRosterProfile(data)) return;
+        if (isStudentRegistrationPending(data)) return;
         const profile: StudentProfile = normalizeStudentProfile(item.id, data);
         allProfiles.push(profile);
         const movementLabel = !isWrittenExamMode
@@ -8090,50 +8087,68 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const loadPerformanceScoreConfirmationsForRoster = async (
     rosterId: string,
+    studentUids: string[],
   ) => {
+    const uids = [
+      ...new Set(studentUids.map((uid) => uid.trim()).filter(Boolean)),
+    ].sort();
+    const scopeKey = JSON.stringify(uids);
     const cached = confirmationsByRosterCacheRef.current.get(rosterId);
-    if (cached) return clonePerformanceScoreConfirmationMap(cached);
+    if (cached?.scopeKey === scopeKey) {
+      return clonePerformanceScoreConfirmationMap(cached.confirmations);
+    }
 
     const cachedPromise = confirmationPromisesByRosterRef.current.get(rosterId);
-    if (cachedPromise) {
-      return clonePerformanceScoreConfirmationMap(await cachedPromise);
+    if (cachedPromise?.scopeKey === scopeKey) {
+      return clonePerformanceScoreConfirmationMap(await cachedPromise.promise);
     }
 
     const loadPromise = (async () => {
-      const snap = await getDocs(
-        query(
-          collectionGroup(db, PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION),
-          where("rosterId", "==", rosterId),
-        ),
-      );
       const confirmationsByUid = new Map<
         string,
         PerformanceScoreConfirmation
       >();
-      snap.docs.forEach((item) => {
-        const data = item.data() as PerformanceScoreConfirmation;
-        const uid = String(data.uid || item.id || "").trim();
-        if (!uid) return;
-        confirmationsByUid.set(uid, {
-          id: item.id,
-          ...data,
-          uid,
-          rosterId,
+      // Read only known roster members. A collection-group query requires a
+      // separate rules grant and can prevent an otherwise valid roster opening.
+      for (let index = 0; index < uids.length; index += 20) {
+        const chunk = uids.slice(index, index + 20);
+        const confirmations = await Promise.all(
+          chunk.map((uid) =>
+            loadPerformanceScoreConfirmation(uid, rosterId, {
+              throwOnError: true,
+              fromServer: true,
+            }),
+          ),
+        );
+        confirmations.forEach((confirmation, offset) => {
+          const uid = chunk[offset];
+          if (
+            confirmation &&
+            confirmation.uid === uid &&
+            confirmation.rosterId === rosterId
+          ) {
+            confirmationsByUid.set(uid, confirmation);
+          }
         });
-      });
+      }
       return confirmationsByUid;
     })();
 
-    confirmationPromisesByRosterRef.current.set(rosterId, loadPromise);
+    const pending = { scopeKey, promise: loadPromise };
+    confirmationPromisesByRosterRef.current.set(rosterId, pending);
     try {
       const loaded = await loadPromise;
-      confirmationsByRosterCacheRef.current.set(
-        rosterId,
-        clonePerformanceScoreConfirmationMap(loaded),
-      );
+      if (confirmationPromisesByRosterRef.current.get(rosterId) === pending) {
+        confirmationsByRosterCacheRef.current.set(rosterId, {
+          scopeKey,
+          confirmations: clonePerformanceScoreConfirmationMap(loaded),
+        });
+      }
       return clonePerformanceScoreConfirmationMap(loaded);
     } finally {
-      confirmationPromisesByRosterRef.current.delete(rosterId);
+      if (confirmationPromisesByRosterRef.current.get(rosterId) === pending) {
+        confirmationPromisesByRosterRef.current.delete(rosterId);
+      }
     }
   };
 
@@ -8547,6 +8562,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
     const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
       roster.id,
+      loaded.map((record) => record.uid),
     );
     return sortStudentIdentityRows(
       loaded.map((record) => ({
@@ -9675,34 +9691,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         loaded.push(projectClassSheetScoreDocumentForRosterRow(roster, row));
       });
 
-    let confirmationsByUid = new Map<string, PerformanceScoreConfirmation>();
-    try {
-      confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
-        roster.id,
-      );
-    } catch (error) {
-      console.warn(
-        "Falling back to direct performance score confirmation reads:",
-        error,
-      );
-      const fallbackPairs = await Promise.all(
-        loaded.map(async (record) =>
-          record.uid
-            ? ([
-                record.uid,
-                await loadPerformanceScoreConfirmation(record.uid, roster.id, {
-                  throwOnError: true,
-                }),
-              ] as const)
-            : null,
-        ),
-      );
-      confirmationsByUid = new Map(
-        fallbackPairs.flatMap((pair) =>
-          pair && pair[1] ? [[pair[0], pair[1]]] : [],
-        ),
-      );
-    }
+    const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
+      roster.id,
+      loaded.map((record) => record.uid),
+    );
 
     const withConfirmations = loaded.map((record) =>
       record.uid
@@ -10344,7 +10336,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         );
       }
       const unresolved = freshRows.filter(
-        (row) => !row.uid || row.matchStatus !== "matched",
+        (row) =>
+          (!isWrittenExamMode || row.enteredScoreCount > 0) &&
+          (!row.uid || row.matchStatus !== "matched"),
       );
       setParsed({ ...parsed, rows: freshRows });
       if (unresolved.length) {
@@ -13610,7 +13604,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </span>
                 {parsedSummary.blankScoreCount > 0 && (
                   <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-                    점수 빈칸 {parsedSummary.blankScoreCount}명
+                    {isWrittenExamMode ? "점수 미입력" : "점수 빈칸"}{" "}
+                    {parsedSummary.blankScoreCount}명
+                    {isWrittenExamMode && " · 저장 제외"}
                   </span>
                 )}
                 {parsedSummary.warningCount > 0 && (
@@ -13636,6 +13632,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
+              {isWrittenExamMode && parsedSummary.blankScoreCount > 0 && (
+                <p className="mb-3 text-sm font-semibold leading-5 text-slate-600">
+                  점수가 입력되지 않은 {parsedSummary.blankScoreCount}명은
+                  저장에서 제외됩니다. 0점은 입력된 점수로 저장됩니다.
+                </p>
+              )}
               <div
                 className={`grid gap-3 ${isSinglePerformanceUpload ? "lg:grid-cols-[minmax(0,1fr)_100px_140px]" : "lg:grid-cols-[minmax(0,1fr)_180px]"}`}
               >

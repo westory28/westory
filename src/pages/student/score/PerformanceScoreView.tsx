@@ -267,14 +267,58 @@ const parseRequestItemSelectionKey = (value: string) => {
   return { scoreId, itemKey };
 };
 
+const formatStudentScoreFeedback = (value: string) =>
+  value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n(?:[ \t]*\n)+/g, "\n")
+    .trim();
+
 const getWrittenExamGeneralFeedback = (
   value: string,
-  hasDetailedItems: boolean,
+  items: PerformanceScoreItem[],
 ) => {
   const text = value.trim();
-  if (!text || !hasDetailedItems) return text;
-  const match = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/.exec(text);
-  return match ? text.slice(0, match.index).trim() : text;
+  if (!text) return text;
+  const itemFeedback = items.flatMap((item, index) => {
+    const meta = getWrittenExamItemMeta(item, index);
+    return meta.detailed && item.feedback
+      ? [{ ...meta, feedback: formatStudentScoreFeedback(item.feedback) }]
+      : [];
+  });
+  if (!itemFeedback.length) return text;
+  const essayGroups = new Set(
+    itemFeedback
+      .filter((item) => item.groupKey !== "objective")
+      .map((item) => item.groupKey),
+  );
+  const sections = Array.from(
+    text.matchAll(
+      /(\d+)[ \t]*-[ \t]*[\(\[（]?[ \t]*(\d+)[ \t]*[\)\]）]?[ \t]*[:：][ \t]*|(?:^|\n)[ \t]*[\(\[（]([0-9]+)[\)\]）][ \t]*[:：]?[ \t]*/g,
+    ),
+  );
+  if (!sections.length) return text;
+  const retained = [text.slice(0, sections[0].index).trim()];
+  let removedDuplicate = false;
+  sections.forEach((section, index) => {
+    const start = section.index!;
+    const end = sections[index + 1]?.index ?? text.length;
+    const group =
+      section[1] || (essayGroups.size === 1 ? [...essayGroups][0] : "");
+    const key = `${group}-(${section[2] || section[3]})`;
+    const body = formatStudentScoreFeedback(
+      text.slice(start + section[0].length, end),
+    );
+    // Remove only text already displayed on its matching question card.
+    // Keep unmatched notes and unsplit legacy feedback available to students.
+    if (
+      !itemFeedback.some((item) => item.key === key && item.feedback === body)
+    ) {
+      retained.push(text.slice(start, end).trim());
+    } else {
+      removedDuplicate = true;
+    }
+  });
+  return removedDuplicate ? retained.filter(Boolean).join("\n\n") : text;
 };
 
 const SIGNATURE_CANVAS_MIN_WIDTH = 420;
@@ -851,7 +895,7 @@ const ScopedScoreConfirmationView: React.FC<
       : (selectedRecord?.totalMaxScore ?? 0);
   const writtenExamGeneralFeedback = getWrittenExamGeneralFeedback(
     evidenceText,
-    hasDetailedWrittenExamItems,
+    hasDetailedWrittenExamItems ? selectedItems : [],
   );
   const evidenceBlockText = hasDetailedWrittenExamItems
     ? writtenExamGeneralFeedback
@@ -1712,7 +1756,7 @@ const ScopedScoreConfirmationView: React.FC<
     if (detailVisitRequired || signatureDetailScope !== currentDetailScope) {
       setSignatureError(
         detailVisitMessage ||
-          "점수가 변경되었습니다. 수행평가 탭을 다시 확인해 주세요.",
+          "점수가 변경되었습니다. 점수의 세부 내용을 다시 확인해 주세요.",
       );
       return;
     }
@@ -1894,7 +1938,7 @@ const ScopedScoreConfirmationView: React.FC<
     if (detailVisitRequired || signatureDetailScope !== currentDetailScope) {
       setSignatureError(
         detailVisitMessage ||
-          "점수가 변경되었습니다. 수행평가 탭을 다시 확인해 주세요.",
+          "점수가 변경되었습니다. 점수의 세부 내용을 다시 확인해 주세요.",
       );
       return;
     }
@@ -1917,7 +1961,11 @@ const ScopedScoreConfirmationView: React.FC<
       setSignatureError(identityError);
       return;
     }
-    if (!signatureConsent || signatureReviewStep !== "review") {
+    if (
+      !signatureConsent ||
+      !signatureDrawn ||
+      signatureReviewStep !== "review"
+    ) {
       setSignatureError("최종 확인 내용을 다시 확인해 주세요.");
       return;
     }
@@ -1971,16 +2019,13 @@ const ScopedScoreConfirmationView: React.FC<
       setRecords(latest);
       showToast({
         tone: "warning",
-        title: "수행평가 점수가 변경되었습니다.",
+        title: `${resolvedCopy.scoreLabel} 점수가 변경되었습니다.`,
         message: "현재 등록된 점수의 세부 내용을 다시 확인한 뒤 서명해 주세요.",
       });
     };
     let checkedFullSet = false;
     try {
-      const latestRecords =
-        scoreKind === PERFORMANCE_SCORE_KIND
-          ? await refreshPerformanceScores()
-          : null;
+      const latestRecords = await refreshPerformanceScores();
       if (!signatureScopeActive.current) return;
       const latestById =
         latestRecords &&
@@ -2143,22 +2188,20 @@ const ScopedScoreConfirmationView: React.FC<
           ? applyPerformanceScoreConfirmation(record, confirmation)
           : record;
       });
-      if (scoreKind === PERFORMANCE_SCORE_KIND) {
-        try {
-          // A teacher may publish another assessment while the student signs.
-          // Refresh the full set, without signing any newly discovered score.
-          refreshedRecords = await refreshPerformanceScores();
-        } catch (error) {
-          if (!signatureScopeActive.current) return;
-          console.error("Failed to refresh scores after signing:", error);
-          setRecords([]);
-          setSignatureModalOpen(false);
-          setSignatureImageDraft("");
-          setLoadError(
-            "서명은 저장되었지만 최신 점수를 확인하지 못했습니다. 다시 시도해 주세요.",
-          );
-          return;
-        }
+      try {
+        // A teacher may publish another assessment while the student signs.
+        // Refresh the full set, without signing any newly discovered score.
+        refreshedRecords = await refreshPerformanceScores();
+      } catch (error) {
+        if (!signatureScopeActive.current) return;
+        console.error("Failed to refresh scores after signing:", error);
+        setRecords([]);
+        setSignatureModalOpen(false);
+        setSignatureImageDraft("");
+        setLoadError(
+          "서명은 저장되었지만 최신 점수를 확인하지 못했습니다. 다시 시도해 주세요.",
+        );
+        return;
       }
       if (!signatureScopeActive.current) return;
       setRecords(refreshedRecords);
@@ -2973,8 +3016,8 @@ const ScopedScoreConfirmationView: React.FC<
                     </span>
                     <div className="min-w-0">
                       {item.feedback && (
-                        <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
-                          {item.feedback}
+                        <p className="performance-score-feedback whitespace-pre-wrap break-keep font-bold text-slate-600">
+                          {formatStudentScoreFeedback(item.feedback)}
                         </p>
                       )}
                     </div>
@@ -3003,8 +3046,10 @@ const ScopedScoreConfirmationView: React.FC<
                 ? "전체 피드백"
                 : resolvedCopy.evidenceTitle}
             </h3>
-            <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
-              {evidenceBlockText || resolvedCopy.evidenceEmptyText}
+            <p className="performance-score-feedback mt-2 whitespace-pre-wrap break-keep font-bold text-slate-700">
+              {formatStudentScoreFeedback(
+                evidenceBlockText || resolvedCopy.evidenceEmptyText,
+              )}
             </p>
           </div>
         )}
@@ -3748,25 +3793,27 @@ const ScopedScoreConfirmationView: React.FC<
                   서명 수정
                 </button>
               )}
-              {signatureReviewStep === "sign" ? (
-                <button
-                  type="button"
-                  onClick={moveToSignatureReview}
-                  disabled={signatureReviewDisabled}
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
-                >
-                  확인 내용 검토
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void submitSignatureConfirmation()}
-                  disabled={signatureReviewDisabled || !signatureImageDraft}
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
-                >
-                  {confirming ? "제출 중..." : "제출하기"}
-                </button>
-              )}
+              {signatureConsent &&
+                signatureDrawn &&
+                (signatureReviewStep === "sign" ? (
+                  <button
+                    type="button"
+                    onClick={moveToSignatureReview}
+                    disabled={signatureReviewDisabled}
+                    className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
+                  >
+                    확인 내용 검토
+                  </button>
+                ) : signatureImageDraft ? (
+                  <button
+                    type="button"
+                    onClick={() => void submitSignatureConfirmation()}
+                    disabled={signatureReviewDisabled || !signatureImageDraft}
+                    className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none disabled:hover:bg-slate-300"
+                  >
+                    {confirming ? "제출 중..." : "제출하기"}
+                  </button>
+                ) : null)}
             </div>
           </section>
         </div>
