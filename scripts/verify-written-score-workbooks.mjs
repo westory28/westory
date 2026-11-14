@@ -28,6 +28,7 @@ const score = await load("src/lib/performanceScores.ts", {
 });
 const parser = await load("src/lib/writtenExamEssayScoreWorkbook.ts", {
   "./performanceScores": score,
+  "./writtenExamFeedback": await load("src/lib/writtenExamFeedback.ts", {}),
 });
 const { mergeWrittenExamScoreSheets: merge } = await load(
   "src/lib/writtenExamScoreWorkbooks.ts",

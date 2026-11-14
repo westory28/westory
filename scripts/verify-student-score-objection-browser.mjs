@@ -60,7 +60,10 @@ if (process.env.SCORE_QA_WORKBOOK) {
   });
   const { parseWrittenExamEssayScoreWorkbook } = await loadParserModule(
     "src/lib/writtenExamEssayScoreWorkbook.ts",
-    { "./performanceScores": scoreHelpers },
+    {
+      "./performanceScores": scoreHelpers,
+      "./writtenExamFeedback": await loadParserModule("src/lib/writtenExamFeedback.ts", {}),
+    },
   );
   const workbookPath = path.resolve(process.env.SCORE_QA_WORKBOOK);
   const workbook = await readXlsxFile(await fs.readFile(workbookPath));

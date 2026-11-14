@@ -73,6 +73,7 @@ type LoadedExam = {
   scoreItems: PerformanceScoreRoster["items"];
   mock: QuizClassAchievement | null;
   mockReady: boolean;
+  loadKind: "objective" | "essay";
   classId: string;
   identity: string;
 };
@@ -136,11 +137,10 @@ export default function WrittenExamAnalysis({
         if (!target) return;
         const result =
           reuse ||
-          (await loadWrittenExamScoreAnalysis(
-            config,
-            target,
-            room ? { classId: room } : {},
-          ));
+          (await loadWrittenExamScoreAnalysis(config, target, {
+            ...(room ? { classId: room } : {}),
+            analysisKind: kind,
+          }));
         if (run !== request.current || identityRef.current !== current) return;
         let mock: QuizClassAchievement | null = null;
         if (kind === "objective" && result.students.length > 0) {
@@ -175,6 +175,7 @@ export default function WrittenExamAnalysis({
           ...result,
           mock,
           mockReady: kind === "objective",
+          loadKind: kind,
           classId: room,
           identity: current,
         });
@@ -268,6 +269,7 @@ export default function WrittenExamAnalysis({
               aria-controls="written-exam-analysis-panel"
               tabIndex={analysisKind === kind ? 0 : -1}
               onKeyDown={(event) => {
+                if (loading) return;
                 if (
                   !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
                     event.key,
@@ -291,17 +293,26 @@ export default function WrittenExamAnalysis({
               }}
               aria-selected={analysisKind === kind}
               className={analysisKind === kind ? "is-active" : ""}
-              disabled={loading}
+              aria-disabled={loading}
               onClick={() => {
+                if (loading) return;
                 setAnalysisKind(kind);
                 setInspect(null);
                 if (
+                  current &&
+                  loaded &&
+                  kind === "objective" &&
+                  loaded.loadKind === "essay"
+                ) {
+                  void load(examId, classId, false, undefined, kind);
+                } else if (
                   kind === "objective" &&
                   current &&
                   loaded &&
                   !loaded.mockReady
-                )
+                ) {
                   void load(examId, classId, false, loaded, "objective");
+                }
               }}
             >
               {label}
@@ -407,6 +418,7 @@ export default function WrittenExamAnalysis({
         )}
         {analysisKind === "essay" && current && loaded && (
           <WrittenExamEssayAnalysis
+            key={`${identity}:${examId}:${classId}`}
             rows={loaded.scoreRows || []}
             items={loaded.scoreItems || []}
             view={essayView}

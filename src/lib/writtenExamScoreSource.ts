@@ -383,22 +383,51 @@ export async function loadWrittenExamMaterials(config: Config, id: string) {
 export async function loadWrittenExamScoreAnalysis(
   config: Config,
   id: string,
-  options: { classId?: string } = {},
+  options: { classId?: string; analysisKind?: "objective" | "essay" } = {},
 ) {
-  const [roster, materials] = await Promise.all([
-    loadWrittenExamScoreRoster(config, id),
-    loadWrittenExamMaterials(config, id),
-  ]);
-  const questions = mergeScoreSourceQuestions(
-    questionsFromScoreSource(roster),
-    materials?.questions || [],
-  );
-  if (options.classId && !scoreSourceClasses(roster).includes(options.classId))
+  const roster = await loadWrittenExamScoreRoster(config, id);
+  const classIds = scoreSourceClasses(roster);
+  if (options.classId && !classIds.includes(options.classId))
     throw new Error("선택한 학급의 점수표가 없습니다.");
   const rows = roster.rows.filter(
     (row) =>
       !options.classId ||
       `${school(row.grade)}-${school(row.class)}` === options.classId,
+  );
+  const { year, semester } = getYearSemester(config);
+  const baseMetadata: WrittenExamAnalysisMetadata = {
+    id,
+    schemaVersion: 1,
+    year,
+    semester,
+    title: roster.title,
+    grade: school(roster.targetGrade),
+    examDate: "",
+    revision: "scores",
+    classIds,
+    studentCount: rows.length,
+    questions: [],
+    crops: [],
+    files: [],
+    updatedBy: "",
+    updatedAt: roster.updatedAt,
+  };
+  const hasObjectiveScores = roster.items.some(objective);
+  // Essay items and teacher feedback remain in this one ledger document.
+  // Uploads and edits commit them atomically with the individual score records.
+  // Whole-group statistics require all ledger rows, but no individual detail reads.
+  if (options.analysisKind === "essay" || !hasObjectiveScores)
+    return {
+      metadata: baseMetadata,
+      students: [] as WrittenExamImportedStudent[],
+      hasObjectiveScores,
+      scoreRows: rows,
+      scoreItems: roster.items,
+    };
+  const materials = await loadWrittenExamMaterials(config, id);
+  const questions = mergeScoreSourceQuestions(
+    questionsFromScoreSource(roster),
+    materials?.questions || [],
   );
   const hydrated: PerformanceScoreRoster["rows"] = [];
   // Objective items are intentionally omitted from roster rows to fit Firestore.
@@ -513,30 +542,22 @@ export async function loadWrittenExamScoreAnalysis(
     { ...roster, rows: participants },
     questions,
   );
-  const { year, semester } = getYearSemester(config);
   const metadata: WrittenExamAnalysisMetadata = {
     ...materials,
-    id,
-    schemaVersion: 1,
-    year,
-    semester,
-    title: roster.title,
-    grade: school(roster.targetGrade),
+    ...baseMetadata,
     examDate: materials?.examDate || "",
     revision: materials?.revision || "scores",
-    classIds: scoreSourceClasses(roster),
     studentCount: students.length,
     questions,
     crops: materials?.crops || [],
     files: materials?.files || [],
     updatedBy: materials?.updatedBy || "",
-    updatedAt: roster.updatedAt,
   };
   return {
     metadata,
     students,
-    hasObjectiveScores: roster.items.some(objective),
-    scoreRows: hydrated,
+    hasObjectiveScores,
+    scoreRows: rows,
     scoreItems: roster.items,
   };
 }

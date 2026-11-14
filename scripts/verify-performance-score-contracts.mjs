@@ -78,6 +78,7 @@ assert.equal(matches([reviewed], [{ ...canonical, rosterId: "old-embedded-id" }]
 console.log("PASS student and teacher detail projections use the actual score document and confirmation path");
 const workbook = load(read("src/lib/writtenExamEssayScoreWorkbook.ts"), {
   "./performanceScores": scores,
+  "./writtenExamFeedback": load(read("src/lib/writtenExamFeedback.ts"), {}),
 });
 const managerSource = read(
   "src/pages/teacher/components/PerformanceScoreManager.tsx",

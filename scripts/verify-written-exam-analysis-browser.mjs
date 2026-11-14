@@ -73,12 +73,14 @@ const metadata = {
   updatedAt: null,
 };
 const state = `
-export const qa = window.examQa = {calls:[],failLoad:false,failMock:false,failAsset:false,pause:false,releases:[],metadata:${JSON.stringify(metadata)},students:${JSON.stringify(students)},assets:new Map(),saved:null};
-export async function begin(op,data={}){qa.calls.push({op,...data});if(qa.pause)await new Promise(resolve=>qa.releases.push(resolve));}
+export const qa = window.examQa = {calls:[],failLoad:false,failMock:false,failAsset:false,pause:false,pauseOps:[],releases:[],metadata:${JSON.stringify(metadata)},students:${JSON.stringify(students)},assets:new Map(),saved:null,auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-teacher'},authGeneration:1,userData:{role:'teacher'}}};
+export const authListeners=new Set();
+qa.setAuth=values=>{qa.auth={...qa.auth,...values,authGeneration:qa.auth.authGeneration+1};authListeners.forEach(listener=>listener())};
+export async function begin(op,data={}){qa.calls.push({op,owner:qa.auth.currentUser.uid,...data});if(qa.pause||qa.pauseOps.includes(op))await new Promise(resolve=>qa.releases.push(resolve));}
 `;
 const mocks = {
   "qa-state": state,
-  "qa-auth": `const config={year:'2026',semester:'2'};export const useAuth=()=>({config,currentUser:{uid:'qa-teacher'},authGeneration:1,userData:{role:'teacher'}});`,
+  "qa-auth": `import{useSyncExternalStore}from'react';import{qa,authListeners}from'qa-state';const subscribe=listener=>{authListeners.add(listener);return()=>authListeners.delete(listener)};export const useAuth=()=>useSyncExternalStore(subscribe,()=>qa.auth);`,
   "qa-toast": `export const useAppToast=()=>({showToast:value=>window.examQa.calls.push({op:'toast',...value})});`,
   "qa-archive": `export const isSemesterArchive=false;`,
   "qa-assessment-release": `export const getAssessmentSemesterId=config=>config.year+'-'+config.semester;`,
@@ -86,10 +88,10 @@ const mocks = {
   "qa-score-manager": `import React,{useState} from 'react';export default function Manager({navigation,writtenExamMaterials}){const[open,setOpen]=useState(false);return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2></div>{navigation}<button>이의제기</button><button onClick={()=>setOpen(true)}>업로드</button><button>서명 현황</button>{open&&<section role="dialog" aria-label="정기시험 점수표 업로드"><button onClick={()=>setOpen(false)}>업로드 창 닫기</button>{writtenExamMaterials}</section>}</section>}`,
   "qa-source": `import{qa,begin}from'qa-state';
 const essayItems=[{itemKey:'essay-1',name:'논술형 1',shortName:'1-(1)',examSection:'essay',maxScore:2},{itemKey:'essay-2',name:'논술형 2',shortName:'1-(2)',examSection:'essay',maxScore:3}];
-const scoreRows=()=>qa.students.map((student,index)=>{const scores=[[0,0],[2,3],[1,null],[null,null]][index%4];return{uid:'qa-uid-'+student.key,rowKey:student.key,grade:student.grade,class:student.class,number:student.number,studentName:student.name,items:essayItems.map((item,i)=>({...item,score:scores[i],scoreEntered:scores[i]!==null,feedback:i===0?'문항 근거를 다시 확인하세요.':''})),feedback:'교사가 확인한 기존 피드백 '+student.key,evidence:'기존 채점 근거',totalScore:scores.reduce((sum,score)=>sum+(score||0),0),enteredScoreCount:scores.filter(score=>score!==null).length,totalMaxScore:5}});
+const scoreRows=()=>qa.students.map((student,index)=>{const scores=[[0,0],[2,3],[1,null],[null,null]][index%4];return{uid:'qa-uid-'+student.key,rowKey:student.key,grade:student.grade,class:student.class,number:student.number,studentName:student.name,items:essayItems.map((item,i)=>({...item,score:scores[i],scoreEntered:scores[i]!==null,feedback:i===0?(index%2===0?'백지':'문항 근거를\\n  다시 확인하세요.'):(index%4===3?'백지':'')})),feedback:'교사가 확인한 기존 피드백 '+student.key+'\\n  역사적 근거를 연결하세요.\\r\\n   다음 학습에서 확인합니다.',evidence:'기존 채점 근거',totalScore:scores.reduce((sum,score)=>sum+(score||0),0),enteredScoreCount:scores.filter(score=>score!==null).length,totalMaxScore:5}});
 const source=()=>({id:qa.metadata.id,title:qa.metadata.title,targetGrade:'3',classes:['1','2'],scoreKind:'written_exam_essay',scoreContentKind:'mixed',academicYear:'2026',semester:'2',items:[...qa.metadata.questions.map(q=>({...q,examSection:'objective',questionNumber:q.number,correctAnswer:q.answer,maxScore:q.points,answerChoices:q.options})),...essayItems],rows:scoreRows()});
-export async function listWrittenExamScoreSources(){await begin('list',{from:'score-ledger'});return[source(),{...source(),id:'qa-other',title:'다른 정기시험'}]}
-export async function loadWrittenExamScoreAnalysis(config,id,options={}){await begin('load',{id,...options,from:'score-ledger'});if(qa.failLoad)throw new Error('합성 서버 읽기 실패');return{metadata:qa.metadata,hasObjectiveScores:true,students:qa.students.filter(s=>!options.classId||('3-'+s.class)===options.classId),scoreRows:scoreRows().filter(s=>!options.classId||('3-'+s.class)===options.classId),scoreItems:source().items}}
+export async function listWrittenExamScoreSources(config){await begin('list',{from:'score-ledger',year:config.year,semester:config.semester});return[source(),{...source(),id:'qa-other',title:'다른 정기시험'}]}
+export async function loadWrittenExamScoreAnalysis(config,id,options={}){const essay=options.analysisKind==='essay';const selected=qa.students.filter(s=>!options.classId||('3-'+s.class)===options.classId);const rows=scoreRows().filter(s=>!options.classId||('3-'+s.class)===options.classId);const result={metadata:essay?{...qa.metadata,questions:[],crops:[],files:[],examDate:'',revision:'scores',studentCount:rows.length}:qa.metadata,hasObjectiveScores:true,students:essay?[]:selected,scoreRows:rows,scoreItems:source().items};await begin('load',{id,...options,analysisKind:options.analysisKind||'objective',from:'score-ledger',readContract:{roster:1,materials:essay?0:1,userDocuments:essay?0:selected.length}});if(qa.failLoad)throw new Error('합성 서버 읽기 실패');return result}
 export async function loadWrittenExamScoreRoster(config,id){await begin('roster',{id});return {...source(),id}}
 export async function loadWrittenExamMaterials(config,id){await begin('materials',{id});return id==='qa-other'?null:qa.metadata}
 export function scoreSourceClasses(s){return s.classes.map(c=>s.targetGrade+'-'+c)}
@@ -302,14 +304,20 @@ await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const browser = await chromium.launch({ headless: true });
 const errors = [];
 const evidence = [];
+const essayChecks = [];
+const boundaryChecks = [];
 let page;
 try {
   page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  await page.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
   page.on("pageerror", (error) => {
     errors.push(error.message);
     console.log("PAGE ERROR:", error.message);
   });
-  await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.goto(origin);
   await page.getByRole("button", { name: "평가 분석", exact: true }).waitFor();
   assert.equal(
     await page
@@ -411,7 +419,7 @@ try {
       .every((call) => call.from === "score-ledger"),
     "Analysis reads the registered score ledger",
   );
-  for (const width of [390, 768, 1440]) {
+  for (const width of [390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     const css = await page
       .locator(".written-exam-analysis > .ws-page-header")
@@ -555,37 +563,50 @@ try {
   await page.evaluate(() => (window.examQa.failMock = false));
   const objectiveTab = page.getByRole("tab", { name: "선택형", exact: true });
   const essayTab = page.getByRole("tab", { name: "논술형", exact: true });
-  const failedSwitchCalls = await page.evaluate(
-    () => window.examQa.calls.length,
-  );
+  const ready = () =>
+    page.waitForFunction(
+      () =>
+        document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
+          .disabled === false,
+    );
+  const callsSince = (start) =>
+    page.evaluate((offset) => window.examQa.calls.slice(offset), start);
+  const callCount = () => page.evaluate(() => window.examQa.calls.length);
+  const failedSwitchCalls = await callCount();
   await essayTab.click();
+  await ready();
   assert.equal(
     await page
       .getByRole("alert")
       .filter({ hasText: "모의고사 자료를 불러오지 못해" })
       .count(),
     0,
-    "Mock warning stays hidden in essay reports",
+  );
+  const firstEssayLoad = await callsSince(failedSwitchCalls);
+  assert.deepEqual(
+    firstEssayLoad.map((call) => call.op),
+    [],
+    "The loaded objective snapshot already contains atomic essay roster rows",
   );
   await essayTab.press("Home");
-  await page
-    .getByRole("alert")
-    .filter({ hasText: "모의고사 자료를 불러오지 못해" })
-    .waitFor();
+  await ready();
+  assert.deepEqual(
+    (await callsSince(failedSwitchCalls)).map((call) => call.op),
+    [],
+  );
   assert.equal(
-    await page.evaluate(() => window.examQa.calls.length),
-    failedSwitchCalls,
-    "Returning to cached choice data preserves its warning without reads",
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "모의고사 자료를 불러오지 못해" })
+      .count(),
+    1,
+    "Returning to the cached choice snapshot preserves its mock error until an explicit reload",
   );
   await page.locator(".written-exam-filters select").nth(1).selectOption("");
-  await page.waitForFunction(
-    () =>
-      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
-        .disabled === false,
-  );
-  const beforeEssay = await page.evaluate(() => window.examQa.calls.length);
+  await ready();
   await objectiveTab.focus();
   await objectiveTab.press("End");
+  await ready();
   assert.equal(await essayTab.getAttribute("aria-selected"), "true");
   assert.equal(await essayTab.getAttribute("tabindex"), "0");
   assert.equal(await objectiveTab.getAttribute("tabindex"), "-1");
@@ -594,19 +615,42 @@ try {
     await page.getByRole("tabpanel").getAttribute("aria-labelledby"),
     "written-exam-kind-essay",
   );
-  await essayTab.press("ArrowLeft");
-  assert.equal(await objectiveTab.getAttribute("aria-selected"), "true");
-  await objectiveTab.press("ArrowRight");
-  assert.equal(await essayTab.getAttribute("aria-selected"), "true");
-  await essayTab.press("Home");
-  assert.equal(await objectiveTab.getAttribute("aria-selected"), "true");
-  await objectiveTab.press("End");
+  for (const [trigger, key, selected] of [
+    [essayTab, "ArrowLeft", objectiveTab],
+    [objectiveTab, "ArrowRight", essayTab],
+    [essayTab, "Home", objectiveTab],
+    [objectiveTab, "End", essayTab],
+  ]) {
+    const start = await callCount();
+    await trigger.press(key);
+    await ready();
+    assert.equal(await selected.getAttribute("aria-selected"), "true");
+    assert.deepEqual(
+      (await callsSince(start)).map((call) => call.op),
+      [],
+      "Keyboard tab switching reuses the same complete assessment snapshot",
+    );
+  }
+  const beforeEssay = await callCount();
   const essayTitles = [
     "전체 결과",
     "문항별 점수",
     "학급별 비교",
     "학생별 결과",
   ];
+  const chartTitles = [
+    "논술형 총점 분포",
+    "논술형 문항 평균",
+    "논술형 학급 평균",
+  ];
+  const pagination = page.getByRole("navigation", {
+    name: "논술형 학생 결과 페이지",
+    exact: true,
+  });
+  const studentTable = page.getByRole("region", {
+    name: "논술형 학생별 점수와 교사 피드백",
+    exact: true,
+  });
   assert.equal(
     await page
       .locator(".written-exam-filters select")
@@ -615,7 +659,7 @@ try {
       .count(),
     4,
   );
-  for (const width of [390, 768, 1440]) {
+  for (const width of [390, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     for (let view = 0; view < 4; view++) {
       await page
@@ -635,12 +679,63 @@ try {
         false,
         `Essay overflow at ${width}px / ${view}`,
       );
+      assert.equal(
+        await page
+          .locator(".wea-analysis")
+          .getByText(/입력 완료/)
+          .count(),
+        0,
+        "Input completion status is removed from essay UI",
+      );
       assert.deepEqual(
         await page.locator(".wea-counts dd").allTextContents(),
-        ["24명", "12명", "6명", "6명"],
-        "Entered zero, partial and missing remain distinct",
+        ["24명", "18개", "18명"],
+        "Blank feedback is counted separately from earned zero and missing scores",
       );
-      if (view === 0)
+      if (view < 3) {
+        const figure = page.getByRole("figure", {
+          name: chartTitles[view],
+          exact: true,
+        });
+        await figure.waitFor();
+        const chart = await figure
+          .locator(".wea-chart-column")
+          .evaluateAll((bars) =>
+            bars.map((bar) => ({
+              value: Number(bar.dataset.value),
+              count: Number(bar.dataset.count),
+              label: bar.getAttribute("aria-label"),
+            })),
+          );
+        assert.deepEqual(
+          chart.map(({ value }) => value),
+          [
+            [6, 6],
+            [1, 1.5],
+            [2.5, 2.5],
+          ][view],
+        );
+        assert.deepEqual(
+          chart.map(({ count }) => count),
+          [
+            [6, 6],
+            [18, 12],
+            [6, 6],
+          ][view],
+        );
+        assert.ok(chart.every((bar) => bar.label.includes("명")));
+        const region = figure.getByRole("region", {
+          name: `${chartTitles[view]} 그래프`,
+          exact: true,
+        });
+        await region.focus();
+        assert.equal(
+          await region.evaluate((el) => document.activeElement === el),
+          true,
+        );
+        essayChecks.push({ width, view, chart });
+      } else assert.equal(await page.locator(".wea-chart").count(), 0);
+      if (view === 0) {
         assert.deepEqual(
           await page
             .getByRole("region", {
@@ -650,48 +745,153 @@ try {
             .locator("tbody td")
             .allTextContents(),
           ["12명", "2.5", "2.5", "0", "5"],
-          "Actual score mean/population SD include zeros and exclude incomplete totals",
         );
-      if (view === 1)
+      }
+      if (view === 1) {
+        const rows = page
+          .getByRole("region", { name: "논술형 문항별 원점수", exact: true })
+          .locator("tbody tr");
         assert.deepEqual(
-          await page
-            .getByRole("region", { name: "논술형 문항별 원점수", exact: true })
-            .locator("tbody tr")
-            .first()
-            .locator("td")
-            .allTextContents()
-            .then((cells) => cells.slice(0, 4)),
-          ["18명", "6명", "1", "0.82"],
+          (await rows.nth(0).locator("td").allTextContents()).slice(0, 4),
+          ["18명", "12명", "1", "0.82"],
         );
-      if (view === 2)
-        assert.equal(
-          await page
-            .getByRole("region", {
-              name: "논술형 학급별 원점수 비교",
-              exact: true,
-            })
-            .locator("tbody tr")
-            .count(),
-          2,
+        assert.deepEqual(
+          (await rows.nth(1).locator("td").allTextContents()).slice(0, 4),
+          ["12명", "6명", "1.5", "1.5"],
         );
+      }
+      if (view === 2) {
+        const rows = page
+          .getByRole("region", {
+            name: "논술형 학급별 원점수 비교",
+            exact: true,
+          })
+          .locator("tbody tr");
+        assert.equal(await rows.count(), 2);
+        assert.deepEqual(
+          (await rows.first().locator("td").allTextContents()).slice(0, 5),
+          ["12명", "9개", "9명", "2.5", "2.5"],
+        );
+      }
       if (view === 3) {
-        const table = page.getByRole("region", {
-          name: "논술형 학생별 점수와 교사 피드백",
+        await pagination
+          .getByRole("button", { name: "1페이지, 3학년 1반", exact: true })
+          .click();
+        assert.equal(await studentTable.locator("tbody tr").count(), 12);
+        assert.deepEqual(
+          await pagination.getByRole("button").allTextContents(),
+          ["1", "2"],
+        );
+        assert.equal(
+          await pagination
+            .getByRole("button", { name: "1페이지, 3학년 1반", exact: true })
+            .getAttribute("aria-current"),
+          "page",
+        );
+        assert.equal(
+          await studentTable.getByText(/교사가 확인한 기존 피드백/).count(),
+          0,
+          "Feedback remains inside its on-demand dialog",
+        );
+        assert.equal(
+          await studentTable
+            .getByRole("button", { name: /교사 피드백 보기$/ })
+            .count(),
+          12,
+        );
+        const feedbackButton = studentTable.getByRole("button", {
+          name: "동명이름(30101) 교사 피드백 보기",
           exact: true,
         });
-        assert.equal(await table.locator("tbody tr").count(), 24);
+        await feedbackButton.click();
+        const feedbackDialog = page.getByRole("dialog", {
+          name: "동명이름(30101) 교사 피드백",
+          exact: true,
+        });
+        await feedbackDialog.waitFor();
+        const feedbackLayout = await feedbackDialog
+          .locator(".wea-feedback-text")
+          .evaluate((el) => ({
+            text: el.textContent,
+            whiteSpace: getComputedStyle(el).whiteSpace,
+            textAlign: getComputedStyle(el).textAlign,
+          }));
+        assert.equal(feedbackLayout.whiteSpace, "normal");
+        assert.equal(feedbackLayout.textAlign, "left");
+        assert.doesNotMatch(feedbackLayout.text, /[\r\n]/);
+        assert.match(
+          feedbackLayout.text,
+          /3-1-1 역사적 근거를 연결하세요\. 다음 학습에서 확인합니다\./,
+        );
+        assert.match(feedbackLayout.text, /1-\(1\): 백지/);
         assert.equal(
-          await table
-            .getByText("교사가 확인한 기존 피드백 3-1-1", { exact: true })
-            .count(),
-          1,
+          await feedbackDialog
+            .getByRole("button", { name: "교사 피드백 닫기", exact: true })
+            .evaluate((el) => document.activeElement === el),
+          true,
         );
         assert.equal(
-          await table
-            .getByText("문항 근거를 다시 확인하세요.", { exact: false })
-            .count(),
-          24,
+          await feedbackDialog.evaluate((el) => {
+            const box = el.getBoundingClientRect();
+            return (
+              box.left >= 0 &&
+              box.right <= innerWidth &&
+              box.top >= 0 &&
+              box.bottom <= innerHeight
+            );
+          }),
+          true,
         );
+        await page.screenshot({
+          path: path.join(out, `essay-feedback-${width}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+        await page.keyboard.press("Escape");
+        await feedbackDialog.waitFor({ state: "detached" });
+        assert.equal(
+          await feedbackButton.evaluate((el) => document.activeElement === el),
+          true,
+          "Dialog close restores its feedback button focus",
+        );
+        await pagination
+          .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+          .click();
+        assert.equal(await studentTable.locator("tbody tr").count(), 12);
+        assert.ok(
+          (await studentTable.locator("tbody th").allTextContents()).every(
+            (value) => /\(302\d{2}\)/.test(value),
+          ),
+        );
+        assert.equal(
+          await pagination
+            .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+            .getAttribute("aria-current"),
+          "page",
+        );
+        const paginationLayout = await pagination.evaluate((el) => {
+          const button = el.querySelector('[aria-current="page"]');
+          const style = getComputedStyle(button);
+          const box = el.getBoundingClientRect();
+          return {
+            className: el.className,
+            bottom: box.bottom,
+            background: style.backgroundColor,
+            minHeight: style.minHeight,
+          };
+        });
+        assert.ok(
+          paginationLayout.className.includes("student-list-pagination"),
+        );
+        assert.notEqual(paginationLayout.background, "rgba(0, 0, 0, 0)");
+        essayChecks.push({
+          width,
+          view,
+          pageRows: 12,
+          pageClass: "3-2",
+          feedbackLayout,
+          paginationLayout,
+        });
       }
       await page.screenshot({
         path: path.join(out, `essay-report-${view}-${width}.png`),
@@ -699,57 +899,150 @@ try {
         animations: "disabled",
       });
     }
-    evidence.push({ width, essayReports: 4, actualScoreRows: 24 });
+    evidence.push({
+      width,
+      essayReports: 4,
+      actualScoreRows: 24,
+      pageRows: 12,
+    });
   }
   assert.equal(
-    await page.evaluate(() => window.examQa.calls.length),
+    await callCount(),
     beforeEssay,
-    "Choice/essay tabs and essay reports require no additional queries",
+    "Changing an essay report, page, or feedback dialog issues no server requests",
   );
-  const essayRefreshStart = await page.evaluate(
-    () => window.examQa.calls.length,
-  );
-  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
-  await page.waitForFunction(
-    () =>
-      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
-        .disabled === false,
-  );
+  await page.locator(".written-exam-filters select").nth(2).selectOption("0");
   assert.deepEqual(
-    await page.evaluate(
-      (start) => window.examQa.calls.slice(start).map((call) => call.op),
-      essayRefreshStart,
-    ),
+    await page
+      .locator(".wea-chart-column")
+      .evaluateAll((bars) => bars.map((bar) => Number(bar.dataset.count))),
+    [6, 6],
+    "The second class page never changes full-group chart denominators",
+  );
+  await page.locator(".written-exam-filters select").nth(2).selectOption("3");
+  assert.equal(
+    await pagination
+      .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+      .getAttribute("aria-current"),
+    "page",
+    "Report switching preserves the class page",
+  );
+  const essayRefreshStart = await callCount();
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await ready();
+  const essayRefresh = await callsSince(essayRefreshStart);
+  assert.deepEqual(
+    essayRefresh.map((call) => call.op),
     ["list", "load"],
-    "Essay refresh never reads mock attempts",
+  );
+  assert.equal(essayRefresh[1].analysisKind, "essay");
+  assert.deepEqual(essayRefresh[1].readContract, {
+    roster: 1,
+    materials: 0,
+    userDocuments: 0,
+  });
+  assert.equal(
+    await pagination
+      .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+      .getAttribute("aria-current"),
+    "page",
+    "Refresh preserves the second class page",
   );
   assert.equal(
     await page.locator(".written-exam-filters select").nth(2).inputValue(),
     "3",
-    "Essay refresh preserves report selection",
   );
-  const choiceReturnStart = await page.evaluate(
-    () => window.examQa.calls.length,
+  await page.evaluate(() => (window.examQa.failLoad = true));
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "합성 서버 읽기 실패" })
+    .waitFor();
+  assert.equal(
+    await pagination
+      .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+      .getAttribute("aria-current"),
+    "page",
   );
-  await objectiveTab.click();
-  await page.waitForFunction(
-    () =>
-      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
-        .disabled === false,
+  assert.equal(
+    await studentTable.locator("tbody tr").count(),
+    12,
+    "A failed refresh retains the existing class page",
   );
+  await page.evaluate(() => (window.examQa.failLoad = false));
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await ready();
+  assert.equal(await page.getByRole("alert").count(), 0);
+  assert.equal(
+    await pagination
+      .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+      .getAttribute("aria-current"),
+    "page",
+  );
+  const essayClassStart = await callCount();
+  await page.locator(".written-exam-filters select").nth(1).selectOption("3-1");
+  await ready();
+  const essayClassCalls = await callsSince(essayClassStart);
   assert.deepEqual(
-    await page.evaluate(
-      (start) => window.examQa.calls.slice(start).map((call) => call.op),
-      choiceReturnStart,
-    ),
-    ["mock"],
-    "Choice after essay refresh reuses score data and fetches only mock attempts",
+    essayClassCalls.map((call) => call.op),
+    ["load"],
   );
+  assert.equal(essayClassCalls[0].classId, "3-1");
+  assert.deepEqual(essayClassCalls[0].readContract, {
+    roster: 1,
+    materials: 0,
+    userDocuments: 0,
+  });
+  assert.deepEqual(await page.locator(".wea-counts dd").allTextContents(), [
+    "12명",
+    "9개",
+    "9명",
+  ]);
+  assert.equal(await pagination.getByRole("button").count(), 1);
+  assert.equal(await studentTable.locator("tbody tr").count(), 12);
+  assert.ok(
+    (await studentTable.locator("tbody th").allTextContents()).every((value) =>
+      /\(301\d{2}\)/.test(value),
+    ),
+  );
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await ready();
+  assert.equal(
+    await page.locator(".written-exam-filters select").nth(1).inputValue(),
+    "3-1",
+  );
+  assert.equal(
+    await page.locator(".written-exam-filters select").nth(2).inputValue(),
+    "3",
+  );
+  await page.locator(".written-exam-filters select").nth(1).selectOption("");
+  await ready();
+  const choiceReturnStart = await callCount();
+  await objectiveTab.click();
+  await ready();
+  assert.equal(
+    await objectiveTab.evaluate((el) => document.activeElement === el),
+    true,
+    "A tab that needs fresh objective details retains focus through loading",
+  );
+  const choiceReturn = await callsSince(choiceReturnStart);
+  assert.deepEqual(
+    choiceReturn.map((call) => call.op),
+    ["load", "mock"],
+    "Returning from an atomic essay snapshot fetches objective responses again",
+  );
+  assert.equal(choiceReturn[0].analysisKind, "objective");
+  assert.deepEqual(choiceReturn[0].readContract, {
+    roster: 1,
+    materials: 1,
+    userDocuments: 24,
+  });
   assert.equal(
     await page.locator(".written-exam-filters select").nth(2).inputValue(),
     "3",
     "Choice report selection is preserved independently",
   );
+  boundaryChecks.push({ essayRefresh, essayClassCalls, choiceReturn });
   await page
     .getByRole("button", { name: "점수 등록 및 확인", exact: true })
     .click();
@@ -973,12 +1266,106 @@ try {
     await questionButton.evaluate((el) => document.activeElement === el),
     "Escape restores focus to question trigger",
   );
+  // An old account's delayed essay refresh may finish after a new auth render.
+  // The old rows and their feedback must remain hidden and may not start a mock read.
+  await essayTab.click();
+  await ready();
+  await page.locator(".written-exam-filters select").nth(2).selectOption("3");
+  await pagination
+    .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+    .click();
+  const accountStart = await callCount();
+  await page.evaluate(() => {
+    window.examQa.pauseOps = ["load"];
+  });
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await page.waitForFunction(() => window.examQa.releases.length === 1);
+  await page.evaluate(() => {
+    window.examQa.pauseOps = [];
+    window.examQa.setAuth({ currentUser: { uid: "qa-teacher-second" } });
+  });
+  await page.waitForFunction(
+    () => document.querySelector(".written-exam-filters select").value === "",
+  );
+  assert.equal(
+    await page.locator(".wea-analysis").count(),
+    0,
+    "Account changes hide the prior student's table immediately",
+  );
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  await page.evaluate(async () => {
+    window.examQa.releases.splice(0).forEach((resolve) => resolve());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  await ready();
+  assert.equal(
+    await page.locator(".wea-analysis").count(),
+    0,
+    "An old refresh cannot republish the prior account's result",
+  );
+  const accountCalls = await callsSince(accountStart);
+  assert.deepEqual(
+    accountCalls.map(({ op }) => op),
+    ["list", "load", "list"],
+  );
+  assert.equal(accountCalls[2].owner, "qa-teacher-second");
+  await page.evaluate(() => {
+    window.examQa.failLoad = true;
+  });
+  await page
+    .locator(".written-exam-filters select")
+    .nth(0)
+    .selectOption("qa-exam");
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "합성 서버 읽기 실패" })
+    .waitFor();
+  assert.equal(
+    await page.locator(".wea-analysis").count(),
+    0,
+    "New-account errors cannot revive an old account cache",
+  );
+  await page.evaluate(() => {
+    window.examQa.failLoad = false;
+  });
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await ready();
+  assert.equal(await studentTable.locator("tbody tr").count(), 12);
+  assert.equal(
+    await pagination
+      .getByRole("button", { name: "1페이지, 3학년 1반", exact: true })
+      .getAttribute("aria-current"),
+    "page",
+  );
+  const semesterStart = await callCount();
+  await page.evaluate(() =>
+    window.examQa.setAuth({ config: { year: "2027", semester: "1" } }),
+  );
+  await page.waitForFunction(
+    () => document.querySelector(".written-exam-filters select").value === "",
+  );
+  await ready();
+  assert.equal(
+    await page.locator(".wea-analysis").count(),
+    0,
+    "Semester changes clear the prior semester's visible analysis",
+  );
+  const semesterCalls = await callsSince(semesterStart);
+  assert.deepEqual(
+    semesterCalls.map(({ op }) => op),
+    ["list"],
+  );
+  assert.equal(semesterCalls[0].year, "2027");
+  assert.equal(semesterCalls[0].semester, "1");
+  boundaryChecks.push({ accountCalls, semesterCalls, staleResultHidden: true });
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(out, "result.json"),
     JSON.stringify(
       {
         evidence,
+        essayChecks,
+        boundaryChecks,
         workbookChecks,
         refresh,
         saved,
@@ -990,7 +1377,7 @@ try {
     ),
   );
   console.log(
-    `PASS written exam UI: choice 7 + essay 4 reports at 390/768/1440; actual score statistics/feedback; accessible tabs and query-free view switching; essay refresh without mock reads; scoped refresh/retry; materials-only XLSX+PDF save and byte preservation; question image/focus. Evidence: ${out}`,
+    `PASS written exam UI: choice 7 + essay 4 reports at 390/768/1280/1440; full-group charts, blank-feedback counts, class pagination, feedback dialogs; typed source calls, refresh/filter/page preservation, account/semester/late-response recovery; materials-only XLSX+PDF save and byte preservation; question image/focus. Source read counts here are facade contracts; real source requests are verified by verify-written-exam-score-source.mjs. Evidence: ${out}`,
   );
 } catch (error) {
   await page?.screenshot({
@@ -998,7 +1385,12 @@ try {
     fullPage: true,
   });
   await fs.writeFile(path.join(out, "failure.html"), await page.content());
-  console.log("FINAL QA CALLS", await page.evaluate(() => window.examQa.calls));
+  const failureCalls = await page.evaluate(() => window.examQa.calls);
+  await fs.writeFile(
+    path.join(out, "failure-calls.json"),
+    JSON.stringify(failureCalls, null, 2),
+  );
+  console.log("LAST QA CALLS", failureCalls.slice(-8));
   throw error;
 } finally {
   await browser.close();
