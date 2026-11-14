@@ -68,7 +68,7 @@ import PointsOverviewTab from "./components/points/PointsOverviewTab";
 import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab";
 import TeacherWisStocks from "./components/points/TeacherWisStocks";
 import TeacherAvatarShopPage from "./components/points/TeacherAvatarShopPage";
-import WisShopNavigation from "../../components/common/WisShopNavigation";
+import TeacherWisVillage from "./components/points/TeacherWisVillage";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import { isTeacherAvatarShop } from "../../lib/avatarRoutes";
 
@@ -2187,13 +2187,15 @@ const ManagePoints: React.FC = () => {
           </div>
         )}
 
-        <div className="min-w-0">
-          {["products", "requests", "stocks"].includes(activeTab) && (
-            <WisShopNavigation
-              portal="teacher"
-              active={activeTab === "stocks" ? "stocks" : "products"}
-            />
-          )}
+        <TeacherWisVillage
+          active={
+            activeTab === "stocks"
+              ? "stocks"
+              : activeTab === "products" || activeTab === "requests"
+                ? "products"
+                : undefined
+          }
+        >
           {(activeTab === "products" || activeTab === "requests") && (
             <PortalSubNavigation
               title="위스 상점"
@@ -2488,7 +2490,7 @@ const ManagePoints: React.FC = () => {
               onRefresh={refreshOrders}
             />
           )}
-        </div>
+        </TeacherWisVillage>
       </main>
     </div>
   );

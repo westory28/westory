@@ -699,7 +699,7 @@ try {
     assert.equal(await village.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"), "page");
     // The synthetic teacher lacks avatar settings privileges; the common nav
     // still exposes the released shop and teacher-only WsPI.
-    assert.deepEqual(await village.getByRole("link").allTextContents(), ["위스 상점", "위스피(WsPI)"]);
+    assert.deepEqual(await village.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("aria-label") || link.textContent)), ["위스 상점", "위스피(WsPI)"]);
     await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).press("Enter");
     await shop.waitForFunction(() => window.wisWalletQa.calls.some(call => call.kind === "orders"));
     assert.equal(await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).getAttribute("aria-current"), "page");

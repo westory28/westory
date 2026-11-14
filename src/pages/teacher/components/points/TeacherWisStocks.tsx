@@ -11,6 +11,7 @@ import InfoHelp from "../../../../components/common/InfoHelp";
 import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
 import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
+import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import {
   wisStockCatalog,
@@ -280,6 +281,7 @@ export default function TeacherWisStocks({
             stocks: "종목 관리",
             rules: "시장 규칙",
             preview: "주식 차트 관리",
+            investments: "학생 투자 현황",
           }[tab] || "종목 관리"
         }
         variant="tabs"
@@ -302,6 +304,7 @@ export default function TeacherWisStocks({
           { key: "stocks", label: "종목 관리" },
           { key: "rules", label: "시장 규칙" },
           { key: "preview", label: "주식 차트 관리" },
+          { key: "investments", label: "학생 투자 현황" },
         ].map((item) => (
           <button
             key={item.key}
@@ -777,6 +780,13 @@ export default function TeacherWisStocks({
           rules={market.rules}
           revision={market.revision}
           semesterId={market.semesterId}
+        />
+      )}
+      {market && tab === "investments" && (
+        <WisStockInvestmentBoard
+          key={ownerKey}
+          year={year}
+          semester={semester}
         />
       )}
     </section>

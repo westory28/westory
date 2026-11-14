@@ -3,7 +3,7 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import { canManageSettings } from "../../../../lib/permissions";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import WisShopNavigation from "../../../../components/common/WisShopNavigation";
+import TeacherWisVillage from "./TeacherWisVillage";
 
 const SettingsAvatarPricing = lazyWithRetry(
   () => import("../SettingsAvatarPricing"),
@@ -16,14 +16,15 @@ export default function TeacherAvatarShopPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main className="ws-page flex-1">
-        <WisShopNavigation portal="teacher" active="avatar" />
-        {allowed ? (
-          <React.Suspense fallback={<InlineLoading />}>
-            <SettingsAvatarPricing />
-          </React.Suspense>
-        ) : (
-          <p role="alert">관리자 계정에서 사용할 수 있습니다.</p>
-        )}
+        <TeacherWisVillage active="avatar">
+          {allowed ? (
+            <React.Suspense fallback={<InlineLoading />}>
+              <SettingsAvatarPricing />
+            </React.Suspense>
+          ) : (
+            <p role="alert">관리자 계정에서 사용할 수 있습니다.</p>
+          )}
+        </TeacherWisVillage>
       </main>
     </div>
   );

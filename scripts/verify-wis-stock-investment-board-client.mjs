@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { buildWisStockInvestmentBoard } from '../functions/wisStockInvestmentBoard.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const output = path.join(root, 'output/wispi-board-20261115/client');
+await fs.mkdir(output, { recursive: true });
+const stub = `
+export const qa=globalThis.boardClientQa={listeners:new Map(),history:[],authCallbacks:new Set(),reads:0};
+export const auth={currentUser:{uid:'synthetic_teacher',getIdTokenResult:async()=>({claims:{auth_time:123}})}};
+export const db={};
+export const doc=(_,path)=>path;
+export const onSnapshot=(path,options,next,error)=>{const listener={path,next,error};qa.reads++;qa.listeners.set(path,listener);qa.history.push(listener);return()=>{if(qa.listeners.get(path)===listener)qa.listeners.delete(path)}};
+export const onIdTokenChanged=(_,next)=>{qa.authCallbacks.add(next);queueMicrotask(()=>{if(qa.authCallbacks.has(next))next(auth.currentUser)});return()=>qa.authCallbacks.delete(next)};
+qa.auth=auth;qa.emitAuth=()=>qa.authCallbacks.forEach(next=>next(auth.currentUser));
+`;
+await build({ entryPoints:[path.join(root,'src/lib/wisStockInvestmentBoardClient.ts')], bundle:true, platform:'node', format:'esm', outfile:path.join(output,'client.mjs'), plugins:[{name:'services',setup(plugin){plugin.onResolve({filter:/^firebase\/auth$|^firebase\/firestore$|^\.\/firebase$/},()=>({path:'stub',namespace:'qa'}));plugin.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:stub}));}}] });
+const documentMock = new EventTarget(); documentMock.visibilityState='visible';
+globalThis.document=documentMock;globalThis.window=new EventTarget();
+Object.defineProperty(globalThis,'navigator',{value:{onLine:true},configurable:true});
+const { watchWisStockInvestmentBoard } = await import(pathToFileURL(path.join(output,'client.mjs')));
+const qa=globalThis.boardClientQa, scope={year:'2026',semester:'2'}, board='years/2026/semesters/2/wis_stock_investment_boards/all', session='application_sessions/synthetic_teacher/sessions/123';
+const originalNow=Date.now, originalTimeout=globalThis.setTimeout,originalClear=globalThis.clearTimeout;
+let now=1794700800000,id=0;const timers=new Map();
+Date.now=()=>now;globalThis.setTimeout=(fn,ms)=>{const next=++id;timers.set(next,{fn,at:now+ms});return next};globalThis.clearTimeout=key=>timers.delete(key);
+const advance=ms=>{now+=ms;for(const [key,value] of [...timers])if(value.at<=now){timers.delete(key);value.fn()}};
+const tick=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve()};
+const sessionDoc=()=>({uid:'synthetic_teacher',authTime:123,status:'active',schemaVersion:2,authorityGeneration:'w1r2-2026-08-09',protocolVersion:2,sessionRevision:'a'.repeat(64),authorityModeAtOpen:'ENFORCE',generalExpiresAt:{toMillis:()=>now+60000}});
+const emit=(target,raw,fromCache=false,hasPendingWrites=false)=>{assert(qa.listeners.has(target),'listener '+target);qa.listeners.get(target).next({metadata:{fromCache,hasPendingWrites},exists:()=>raw!==null,data:()=>raw})};
+const feed=revision=>buildWisStockInvestmentBoard({scope,revision,asOfMs:now,sourceRevision:revision,priceRevision:1,classes:[{grade:'3',classNumber:'1'}],rows:[{studentKey:'student_'+'1'.padStart(24,'0'),grade:'3',classNumber:'1',studentNumber:'1',displayName:'합성학생',stockCash:1000,reservedCash:100,holdingCount:1,holdingValue:400,holdingCostBasis:500,realizedPnl:50}]});
+let stop;const checks=[];
+async function start(input=scope){stop?.();assert.equal(qa.listeners.size,0);assert.equal(timers.size,0);const data=[],connections=[],errors=[];stop=watchWisStockInvestmentBoard(input,value=>data.push(value),value=>connections.push(value),error=>errors.push(error));await tick();return {data,connections,errors};}
+try {
+  const first=await start();assert.deepEqual([...qa.listeners.keys()],[session]);
+  emit(session,sessionDoc(),true);assert.equal(qa.listeners.size,1);assert.equal(first.data.length,0);
+  emit(session,sessionDoc());assert.equal(qa.listeners.size,2);emit(board,null);
+  assert.equal(first.data.at(-1).status,'NOT_READY');assert.equal(first.data.at(-1).totals,null);
+  const reads=qa.reads;advance(20000);assert.equal(qa.reads,reads);assert.equal(first.errors.length,0);
+  emit(board,feed(1));assert.equal(first.data.at(-1).totals.totalAssets,1400);assert.equal(first.data.at(-1).totals.unrealizedPnl,-100);
+  emit(board,feed(1),true);assert.equal(first.connections.at(-1),'CONNECTING');emit(board,feed(1));assert.equal(first.connections.at(-1),'CONNECTED');assert.equal(first.data.length,3);
+  emit(board,feed(2));assert.equal(first.data.at(-1).revision,2);assert.equal(qa.reads,reads);
+  checks.push('Own server-confirmed session precedes board; missing feed has null totals; push updates require no new reads; cache fallback clears live status and server recovery re-emits same revision.');
+  const oldBoard=qa.listeners.get(board);emit(session,sessionDoc(),true);assert(!qa.listeners.has(board));assert.equal(first.connections.at(-1),'CONNECTING');
+  emit(session,sessionDoc());emit(board,feed(2));const afterGuard=first.data.length;oldBoard.next({metadata:{},exists:()=>true,data:()=>feed(99)});assert.equal(first.data.length,afterGuard);oldBoard.error({code:'permission-denied'});assert.equal(first.errors.length,0);
+  checks.push('Session cache downgrade removes the board; callbacks from the previous board generation cannot change the revalidated view.');
+  const stale=qa.listeners.get(board);documentMock.visibilityState='hidden';documentMock.dispatchEvent(new Event('visibilitychange'));assert.equal(qa.listeners.size,0);assert.equal(first.connections.at(-1),'PAUSED');assert.equal(timers.size,0);const count=first.data.length;stale.next({metadata:{},exists:()=>true,data:()=>feed(3)});assert.equal(first.data.length,count);
+  documentMock.visibilityState='visible';documentMock.dispatchEvent(new Event('visibilitychange'));emit(session,sessionDoc());emit(board,feed(3));assert.equal(qa.listeners.size,2);
+  navigator.onLine=false;window.dispatchEvent(new Event('offline'));assert.equal(qa.listeners.size,0);assert.equal(first.connections.at(-1),'OFFLINE');navigator.onLine=true;window.dispatchEvent(new Event('online'));emit(session,sessionDoc());emit(board,feed(3));
+  checks.push('Hidden/offline unsubscribes both documents and timers; stale callbacks ignored; visible/online reconnects exactly two documents.');
+  const cache=await start();emit(session,sessionDoc());emit(board,feed(1));emit(board,feed(1),true);advance(15000);assert.equal(cache.errors.length,1);assert.equal(qa.listeners.size,0);
+  const revoked=await start();emit(session,sessionDoc());emit(board,feed(1));emit(session,{...sessionDoc(),status:'revoked'});assert.equal(revoked.errors.length,1);assert.equal(qa.listeners.size,0);
+  const expires=await start();emit(session,{...sessionDoc(),generalExpiresAt:{toMillis:()=>now+1000}});emit(board,feed(1));advance(1001);assert.equal(expires.errors.length,1);assert.equal(qa.listeners.size,0);
+  const forbidden=await start();qa.listeners.get(session).error({code:'permission-denied'});assert.match(forbidden.errors[0].message,/권한/);assert.equal(qa.listeners.size,0);
+  checks.push('Service disconnection timeout, session revocation/expiry, and permission failure clear subscriptions without polling/retry loops.');
+  const invalid=await start();emit(session,sessionDoc());emit(board,{...feed(1),totals:{}});assert.equal(invalid.errors.length,1);assert.equal(invalid.data.length,0);
+  const regressed=await start();emit(session,sessionDoc());emit(board,feed(3));emit(board,feed(2));assert.equal(regressed.errors.length,1);
+  const reauth=await start();emit(session,sessionDoc());emit(board,feed(1));qa.auth.currentUser.getIdTokenResult=async()=>({claims:{auth_time:124}});qa.emitAuth();await tick();assert.equal(reauth.errors.length,1);assert.equal(qa.listeners.size,0);qa.auth.currentUser.getIdTokenResult=async()=>({claims:{auth_time:123}});
+  const change=await start();emit(session,sessionDoc());const originalUser=qa.auth.currentUser;qa.auth.currentUser={...originalUser,uid:'other_teacher'};qa.emitAuth();await tick();assert.equal(change.errors.length,1);assert.equal(qa.listeners.size,0);qa.auth.currentUser=originalUser;
+  checks.push('Malformed/incomplete totals and regressed revisions fail closed; same-user reauthentication and different account revoke old listeners.');
+  const selected=await start({...scope,grade:'3',classNumber:'2'});emit(session,sessionDoc());assert(qa.listeners.has('years/2026/semesters/2/wis_stock_investment_boards/class_3_2'));assert(!qa.listeners.has(board));stop();assert.equal(qa.authCallbacks.size,0);assert.equal(timers.size,0);
+  assert.throws(()=>watchWisStockInvestmentBoard({...scope,grade:'3'},()=>{},()=>{},()=>{}));
+  checks.push('Class selection subscribes only its exact document; dispose clears auth, listeners and timers; invalid scopes read nothing.');
+  await fs.writeFile(path.join(output,'summary.json'),JSON.stringify({status:'PASS',checks,reads:qa.reads,writes:0},null,2));console.log(JSON.stringify({status:'PASS',checks,reads:qa.reads,writes:0},null,2));
+} finally {stop?.();Date.now=originalNow;globalThis.setTimeout=originalTimeout;globalThis.clearTimeout=originalClear;}
