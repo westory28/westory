@@ -225,6 +225,62 @@ async function radialGeometry(page, label) {
 }
 try {
   {
+    const {context,page}=await pageFor('student',390);
+    await openActive(page);
+    await page.mouse.move(0,0);
+    const before=await stats(page);
+    const target=page.locator('.think-word__button').first();
+    const initial=await target.evaluate(el=>({matrix:getComputedStyle(el).transform,name:getComputedStyle(el).animationName,iterations:getComputedStyle(el).animationIterationCount,state:getComputedStyle(el).animationPlayState,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches}));
+    assert(initial.reduced && initial.name==='think-word-float' && initial.iterations==='infinite' && initial.state==='running','float runs continuously under reduced motion');
+    await page.waitForTimeout(800);
+    assert.notEqual(await target.evaluate(el=>getComputedStyle(el).transform),initial.matrix,'word actually moves over time');
+    const drift=await page.evaluate(()=>{
+      const nodes=[...document.querySelectorAll('.think-word__button')];
+      const animations=document.getAnimations().filter(a=>a.animationName==='think-word-float');
+      const durations=new Set(animations.map(a=>a.effect.getTiming().duration));
+      const collisions=[];
+      let maxX=0,maxY=0;
+      for(let phase=0;phase<16;phase++) {
+        animations.forEach((a,index)=>{a.pause();a.currentTime=phase*390+index*137;});
+        const boxes=nodes.map(n=>{const m=new DOMMatrixReadOnly(getComputedStyle(n).transform);maxX=Math.max(maxX,Math.abs(m.m41));maxY=Math.max(maxY,Math.abs(m.m42));return n.getBoundingClientRect();});
+        for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++) {
+          const a=boxes[i],b=boxes[j];
+          if(a.right>b.left+.5&&b.right>a.left+.5&&a.bottom>b.top+.5&&b.bottom>a.top+.5)collisions.push([phase,i,j]);
+        }
+      }
+      animations.forEach(a=>a.play());
+      return {maxX,maxY,collisions,durations:[...durations]};
+    });
+    assert.deepEqual(drift.collisions,[],'floating buttons never collide across sampled phases');
+    assert(drift.maxX<=2.01 && drift.maxY<=3.01 && drift.durations.length>3,'bounded movement with independent rhythms');
+    assert.equal((await stats(page)).reads,before.reads,'floating adds no whole-state reads');
+    assert.equal((await stats(page)).deltas,before.deltas,'floating adds no delta reads');
+    const hoverBox=await target.boundingBox();
+    await page.mouse.move(hoverBox.x+hoverBox.width/2,hoverBox.y+hoverBox.height/2);
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationPlayState),'paused','pointer interaction stays still');
+    await page.mouse.move(0,0);
+    await target.focus();
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationPlayState),'paused','keyboard interaction stays still');
+    await page.locator('h1').click();
+    await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));});
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationPlayState),'paused','hidden tab pauses float');
+    await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.think-word__button')).animationPlayState==='running');
+    await page.evaluate(()=>{const spacer=document.createElement('div');spacer.id='qa-float-spacer';spacer.style.height='1500px';document.body.appendChild(spacer);window.scrollTo(0,document.body.scrollHeight);});
+    await page.waitForFunction(()=>document.querySelector('.think-word-board').dataset.floating==='off');
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationPlayState),'paused','offscreen board pauses float');
+    await page.evaluate(()=>{document.querySelector('#qa-float-spacer').remove();document.querySelector('.think-word-board').scrollIntoView();});
+    await page.waitForFunction(()=>document.querySelector('.think-word-board').dataset.floating==='on');
+    await page.getByRole('button',{name:'움직임 끄기'}).click();
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationName),'none','manual off removes loop');
+    await page.getByRole('button',{name:'움직임 켜기'}).click();
+    await page.emulateMedia({media:'print'});
+    assert.equal(await target.evaluate(el=>getComputedStyle(el).animationName),'none','print removes loop');
+    await page.emulateMedia({media:'screen'});
+    checks.push({scenario:'continuous reduced-motion float, collision bounds, interaction/visibility/offscreen/manual/print pause',drift});
+    await context.close();
+  }
+  {
     const {context, page} = await pageFor('student');
     await openActive(page);
     await page.evaluate(() => {

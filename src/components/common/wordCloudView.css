@@ -69,6 +69,40 @@
   outline-offset: 4px;
 }
 
+/* The user explicitly enables this gentle loop under reduced motion too.
+   Float the inner button so measuring/reserving the outer box stays stable.
+   Opposite phases consume at most 6px of the layout's minimum 9px gap. */
+.think-word-board[data-motion="on"] .think-word__button {
+  animation: think-word-float var(--think-float-duration, 5600ms) ease-in-out
+    var(--think-float-delay, 0ms) infinite;
+  animation-play-state: paused;
+}
+
+.think-word-board[data-motion="on"][data-floating="on"] .think-word__button {
+  animation-play-state: running;
+}
+
+.think-word-board[data-motion="on"][data-floating="on"]
+  .think-word__button:is(:hover, :focus, [aria-expanded="true"]) {
+  animation-play-state: paused;
+}
+
+@keyframes think-word-float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(2px, -3px);
+  }
+  50% {
+    transform: translate(0, -1px);
+  }
+  75% {
+    transform: translate(-2px, 3px);
+  }
+}
+
 .think-word__text {
   display: block;
   min-width: 0;
@@ -220,6 +254,8 @@
   }
 
   .think-word__button {
+    animation: none !important;
+    transform: none !important;
     border-color: transparent;
     background: transparent;
   }

@@ -153,8 +153,16 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
       measuredMinHeight = minHeight;
       refreshLayout();
     };
+    const updateFloating = () => {
+      if (root)
+        root.dataset.floating =
+          inViewRef.current && document.visibilityState !== "hidden"
+            ? "on"
+            : "off";
+    };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") stopAnimations();
+      updateFloating();
     };
     const onOutsidePointer = (event: PointerEvent) => {
       if (root && !root.contains(event.target as Node)) {
@@ -168,9 +176,11 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
         ? new IntersectionObserver(([entry]) => {
             inViewRef.current = entry.isIntersecting;
             if (!entry.isIntersecting) stopAnimations();
+            updateFloating();
           })
         : null;
     if (root) observer?.observe(root);
+    updateFloating();
     const resizeObserver =
       root && typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(refreshDimensions)
@@ -321,7 +331,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
         const scale = Math.min(0.96, previous.fontSize / next.fontSize);
         play(textNode, [
           { transform: `scale(${scale})`, opacity: 0.65 },
-          { transform: "scale(1.035)", opacity: 1, offset: 0.7 },
+          { transform: "scale(1)", opacity: 1, offset: 0.7 },
           { transform: "scale(1)", opacity: 1 },
         ]);
         const counter = node.querySelector<HTMLElement>(".think-word__count");
@@ -376,6 +386,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
             style={
               {
                 "--think-word-color": wordTone(word.text),
+                "--think-float-duration": `${4800 + (wordHash(word.text) % 2001)}ms`,
+                "--think-float-delay": `${-(wordHash(word.text) % 6800)}ms`,
                 "--think-word-size": wordSize(
                   word.count,
                   [...word.text].length,
