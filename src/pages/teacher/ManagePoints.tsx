@@ -9,7 +9,7 @@ import {
   getCanonicalPointWalletPage,
   getCanonicalPointWallet,
 } from "../../lib/pointEconomyAdapter";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
@@ -69,6 +69,7 @@ import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab
 import TeacherWisStocks from "./components/points/TeacherWisStocks";
 import TeacherAvatarShopPage from "./components/points/TeacherAvatarShopPage";
 import WisShopNavigation from "../../components/common/WisShopNavigation";
+import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import { isTeacherAvatarShop } from "../../lib/avatarRoutes";
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
@@ -2187,8 +2188,29 @@ const ManagePoints: React.FC = () => {
         )}
 
         <div className="min-w-0">
-          {activeTab === "products" && (
-            <WisShopNavigation portal="teacher" active="products" />
+          {["products", "requests", "stocks"].includes(activeTab) && (
+            <WisShopNavigation
+              portal="teacher"
+              active={activeTab === "stocks" ? "stocks" : "products"}
+            />
+          )}
+          {(activeTab === "products" || activeTab === "requests") && (
+            <PortalSubNavigation
+              title="위스 상점"
+              activeLabel={TEACHER_POINT_TAB_LABELS[activeTab]}
+              variant="tabs"
+            >
+              {(["products", "requests"] as const).map((tab) => (
+                <Link
+                  key={tab}
+                  to={`/teacher/points?tab=${tab}`}
+                  className={`teacher-settings-menu-item ${activeTab === tab ? "is-active" : ""}`}
+                  aria-current={activeTab === tab ? "page" : undefined}
+                >
+                  {TEACHER_POINT_TAB_LABELS[tab]}
+                </Link>
+              ))}
+            </PortalSubNavigation>
           )}
           {loading && (
             <InlineLoading

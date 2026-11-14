@@ -113,6 +113,15 @@ export async function saveWisStockMarketRules(
     WisStockManagement & { changed: boolean; duplicate: boolean }
   >("saveWisStockMarketRules", config, expectedRevision, { rules });
 }
+export async function setWisStockMarketHalted(
+  config: WisStockConfig,
+  expectedRevision: number,
+  halted: boolean,
+) {
+  return saveManagement<
+    WisStockManagement & { changed: boolean; duplicate: boolean }
+  >("setWisStockMarketHalted", config, expectedRevision, { halted });
+}
 async function saveManagement<T>(
   name: string,
   config: WisStockConfig,
@@ -185,6 +194,6 @@ export function wisStockErrorMessage(error: unknown): string {
   )
     return "로그인 상태를 확인한 뒤 다시 시도해 주세요.";
   if (/permission-denied/.test(failure?.code || ""))
-    return "위스 주식 관리 권한을 확인해 주세요.";
+    return "위스피(WsPI) 관리 권한을 확인해 주세요.";
   return "주식 자료를 처리하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
 }

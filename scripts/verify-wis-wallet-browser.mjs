@@ -689,6 +689,33 @@ try {
   checks.push(
     "Teacher policy/ranks read only policy; products only catalog; requests only orders; grant only school/policy before choosing pupils; stocks performs zero wallet reads.",
   );
+  for (const width of [320, 390, 768, 1440]) {
+    const shop = await open(width, true, "products");
+    const tabs = shop.getByRole("navigation", { name: "위스 상점 메뉴", exact: true });
+    await tabs.waitFor();
+    assert.deepEqual(await tabs.getByRole("link").allTextContents(), ["상품 관리", "구매 요청 관리"]);
+    assert.equal(await tabs.getByRole("link", { name: "상품 관리", exact: true }).getAttribute("aria-current"), "page");
+    const village = shop.getByRole("navigation", { name: "위스 마을", exact: true });
+    assert.equal(await village.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"), "page");
+    // The synthetic teacher lacks avatar settings privileges; the common nav
+    // still exposes the released shop and teacher-only WsPI.
+    assert.deepEqual(await village.getByRole("link").allTextContents(), ["위스 상점", "위스피(WsPI)"]);
+    await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).press("Enter");
+    await shop.waitForFunction(() => window.wisWalletQa.calls.some(call => call.kind === "orders"));
+    assert.equal(await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).getAttribute("aria-current"), "page");
+    assert.deepEqual(await shop.evaluate(() => window.wisWalletQa.calls.map(call => call.kind).sort()), ["orders", "products"]);
+    const layout = await shop.evaluate(() => {
+      const header = document.querySelector('.teacher-sub-navigation--tabs');
+      const style = getComputedStyle(header);
+      return { scrollWidth: document.documentElement.scrollWidth, background: style.backgroundColor, shadow: style.boxShadow };
+    });
+    assert(layout.scrollWidth <= width, `Shop tabs overflow at ${width}`);
+    assert.equal(layout.background, "rgba(0, 0, 0, 0)");
+    assert.equal(layout.shadow, "none");
+    await shop.screenshot({ path: path.join(evidence, `teacher-shop-tabs-${width}.png`), fullPage: true });
+    await shop.close();
+  }
+  checks.push("Village and actual ManagePoints shop tabs at 320/390/768/1440: two internal destinations, keyboard navigation, unchanged catalog/order reads, transparent header, no overflow.");
   const paging = await open(1280, true);
   await paging.getByText("충무공 도전 비용", { exact: true }).waitFor();
   await paging.evaluate(() => {

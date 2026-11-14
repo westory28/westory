@@ -59,16 +59,26 @@ await check("in-flight owner or auth epoch change rejects stale responses", asyn
     qa.handler = async () => ({ revision: 2 }); await client.getWisStockManagement(scope); assert.equal(qa.calls.length, 2);
   }
 });
-await check("lost stock/rules save responses reuse one request ID; success clears pending receipt key", async () => {
-  for (const kind of ["stock", "rules"]) {
+await check("lost stock/rules/emergency responses reuse one request ID; success clears pending receipt key", async () => {
+  for (const kind of ["stock", "rules", "emergency"]) {
     const { qa, client, storage } = await setup(); let lost = true;
     qa.handler = async () => { if (lost) { lost = false; throw Error("response lost after server commit"); } return { revision: 2 }; };
-    const save = () => kind === "stock" ? client.saveWisStock(scope, 1, "", settings) : client.saveWisStockMarketRules(scope, 1, DEFAULT_WIS_STOCK_MARKET_RULES);
+    const save = () => kind === "stock" ? client.saveWisStock(scope, 1, "", settings) : kind === "rules" ? client.saveWisStockMarketRules(scope, 1, DEFAULT_WIS_STOCK_MARKET_RULES) : client.setWisStockMarketHalted(scope, 1, true);
     await assert.rejects(save()); assert.equal(storage.size, 1);
     assert.equal([...storage.keys()].some(key => key.includes(settings.name) || key.includes("teacher-a")), false);
     await save(); assert.equal(qa.calls[0].payload.requestId, qa.calls[1].payload.requestId); assert.equal(storage.size, 0);
     assert.equal(qa.sensitive, 2);
   }
+});
+await check("emergency stop has a separate minimal payload and cannot submit a rule draft", async () => {
+  const { qa, client } = await setup();
+  await client.setWisStockMarketHalted(scope, 3, true);
+  assert.equal(qa.calls[0].name, "setWisStockMarketHalted");
+  assert.deepEqual(Object.keys(qa.calls[0].payload).sort(), ["year", "semester", "expectedRevision", "halted", "requestId"].sort());
+  assert.equal(qa.calls[0].payload.halted, true);
+  await client.setWisStockMarketHalted(scope, 4, false);
+  assert.notEqual(qa.calls[0].payload.requestId, qa.calls[1].payload.requestId);
+  assert.equal(qa.calls[1].payload.halted, false);
 });
 await check("changing the revision or draft creates an independent idempotent request", async () => {
   const { qa, client } = await setup(); qa.handler = async () => { throw Error("synthetic retry"); };

@@ -14,7 +14,7 @@ export const TEACHER_POINT_TAB_LABELS = {
   "hall-of-fame": "명예의 전당 관리",
   products: "상품 관리",
   requests: "구매 요청 관리",
-  stocks: "위스 주식",
+  stocks: "위스피(WsPI)",
 } as const;
 
 export const POINT_RANK_THEME_LABELS: Record<PointRankThemeId, string> = {

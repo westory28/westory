@@ -34,7 +34,7 @@ const longNames = Object.fromEntries(
 );
 const output = path.resolve(
   process.env.AVATAR_SETTINGS_EVIDENCE ||
-    path.join(root, "output/avatar-polish-20261114/admin"),
+    path.join(root, "output/wispi-village-20261114/avatar"),
 );
 await fs.mkdir(output, { recursive: true });
 const entry = `
@@ -140,7 +140,7 @@ const result = await build({
           namespace: "permission",
         }));
         plugin.onLoad({ filter: /.*/, namespace: "permission" }, () => ({
-          contents: `export const isAdminUser=()=>true,canManageSettings=()=>true,canAccessTeacherPortal=()=>true,canAccessTeacherPath=()=>true,getDefaultTeacherRoute=()=>'/teacher/dashboard';`,
+          contents: `export const isAdminUser=()=>true,canManageSettings=()=>true,canReadPoints=()=>true,canAccessTeacherPortal=()=>true,canAccessTeacherPath=()=>true,getDefaultTeacherRoute=()=>'/teacher/dashboard';`,
           loader: "js",
         }));
         plugin.onResolve({ filter: /^\.\/Footer$/ }, (args) => ({
@@ -262,8 +262,8 @@ try {
     await page.goto(origin);
     await page.locator(".avatar-pricing-item").first().waitFor();
     await page
-      .getByRole("navigation", { name: "위스 상점 상품 종류" })
-      .getByRole("link", { name: "아바타 아이템 관리", exact: true })
+      .getByRole("navigation", { name: "위스 마을" })
+      .getByRole("link", { name: "아바타 상점", exact: true })
       .waitFor();
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
     const itemCard = (id) => page.locator(`[data-item-id="${id}"]`);
@@ -281,14 +281,14 @@ try {
     };
     assert.equal(
       await page
-        .getByRole("button", { name: "학생 미리보기", exact: true })
+        .getByRole("button", { name: "학생 상점 미리보기", exact: true })
         .count(),
       1,
       "One page-level shop preview",
     );
     assert.equal(
       await knit
-        .getByRole("button", { name: "학생 미리보기", exact: true })
+        .getByRole("button", { name: "학생 상점 미리보기", exact: true })
         .count(),
       0,
     );
@@ -385,7 +385,7 @@ try {
       badgeTargets.every((bounds) => bounds.width >= 44 && bounds.height >= 44),
       "Badge hit targets are at least 44px",
     );
-    await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("all");
+    await page.getByRole("group", { name: "꾸미기 종류", exact: true }).getByRole("button", {name:"전체 종류",exact:true}).click();
     const allKindsBounds = await page
       .locator(".avatar-pricing-item")
       .evaluateAll((elements) =>
@@ -402,7 +402,7 @@ try {
           1,
         `Every catalog category keeps the same card ${dimension}`,
       );
-    await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("top");
+    await page.getByRole("group", { name: "꾸미기 종류", exact: true }).getByRole("button", {name:"상의",exact:true}).click();
     assert.equal(
       await page.evaluate(() => window.avatarPricingQa.reads),
       before,
@@ -490,14 +490,11 @@ try {
       "Editing and filtering do not fetch",
     );
     const previewButton = page.getByRole("button", {
-      name: "학생 미리보기",
+      name: "학생 상점 미리보기",
       exact: true,
     });
     await previewButton.click();
-    const dialog = page.getByRole("dialog", {
-      name: "학생 미리보기",
-      exact: true,
-    });
+    const dialog = page.locator(".avatar-pricing-student-preview");
     await dialog
       .getByRole("heading", { name: "아바타 상점", exact: true })
       .waitFor();
@@ -559,14 +556,12 @@ try {
       "Preview has no horizontal overflow",
     );
     await page.screenshot({ path: path.join(output, `preview-${width}.png`) });
-    await dialog
-      .getByRole("button", { name: "학생 미리보기 닫기", exact: true })
-      .click();
+    await page.getByRole("button", {name: "아바타 아이템 관리", exact: true}).click();
     await dialog.waitFor({ state: "hidden" });
     assert.equal(
-      await previewButton.evaluate((el) => el === document.activeElement),
+      await page.getByRole("button", {name:"아바타 아이템 관리",exact:true}).evaluate((el) => el === document.activeElement),
       true,
-      "Preview restores focus",
+      "Management tab retains focus",
     );
     assert.equal(
       await page.locator("canvas").count(),
@@ -732,7 +727,7 @@ try {
         }),
       ),
       headerBackground: getComputedStyle(
-        document.querySelector(".avatar-pricing .ws-page-header"),
+        document.querySelector(".avatar-pricing .teacher-settings-heading"),
       ).backgroundColor,
       previews: [
         ...document.querySelectorAll(".avatar-pricing-preview img"),

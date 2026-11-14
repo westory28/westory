@@ -23,6 +23,8 @@ const minutes = (value: string) => {
 type NumericKey = {
   [K in keyof MarketRules]: MarketRules[K] extends number ? K : never;
 }[keyof MarketRules];
+const editableRules = (rules: MarketRules) =>
+  JSON.stringify({ ...rules, halted: false });
 export default function WisStockMarketRules({
   market,
   config,
@@ -37,7 +39,7 @@ export default function WisStockMarketRules({
   canManage: boolean;
   busy: boolean;
   onBusyChange: (busy: boolean) => void;
-  onSaved: (market: WisStockManagement) => void;
+  onSaved: (market: WisStockManagement) => WisStockManagement | null;
   onReload: () => Promise<WisStockManagement | undefined>;
 }) {
   const [draft, setDraft] = useState<MarketRules>(() =>
@@ -57,13 +59,13 @@ export default function WisStockMarketRules({
   useEffect(() => {
     const previous = baseline.current;
     setDraft((current) =>
-      JSON.stringify(current) === JSON.stringify(previous)
+      editableRules(current) === editableRules(previous)
         ? structuredClone(market.rules)
-        : current,
+        : { ...current, halted: market.rules.halted },
     );
     baseline.current = market.rules;
   }, [market.rules]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(market.rules);
+  const dirty = editableRules(draft) !== editableRules(market.rules);
   const set = <K extends keyof MarketRules>(key: K, value: MarketRules[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const input = (
@@ -113,9 +115,10 @@ export default function WisStockMarketRules({
         draft,
       );
       if (!active.current) return;
-      onSaved(result);
-      setDraft(structuredClone(result.rules));
-      baseline.current = result.rules;
+      const accepted = onSaved(result);
+      if (!accepted) return;
+      setDraft(structuredClone(accepted.rules));
+      baseline.current = accepted.rules;
       showToast({ title: "시장 규칙을 저장했습니다.", tone: "success" });
     } catch (failure) {
       if (active.current) {
@@ -221,14 +224,6 @@ export default function WisStockMarketRules({
               종료 시각은 시작 시각보다 늦어야 합니다.
             </p>
           )}
-          <label className="wis-stock-rules__toggle">
-            <input
-              type="checkbox"
-              checked={draft.halted}
-              onChange={(event) => set("halted", event.target.checked)}
-            />
-            시장 전체 거래 정지
-          </label>
         </section>
         <section className="wis-stock-rules__section">
           <h2>주문 한도</h2>

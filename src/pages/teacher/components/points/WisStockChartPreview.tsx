@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import type {
@@ -6,6 +6,7 @@ import type {
   WisStockMarketRules,
 } from "../../../../lib/wisStocksClient";
 import WisStockOrderPreview from "./WisStockOrderPreview";
+import "./WisStockChart.css";
 
 const DAY = 86_400_000;
 const periods = [
@@ -15,14 +16,6 @@ const periods = [
   { key: "all", label: "전체", days: Infinity },
 ] as const;
 const money = (value: number) => value.toLocaleString("ko-KR");
-const stamp = (value: number) =>
-  new Intl.DateTimeFormat("ko-KR", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Seoul",
-  }).format(value);
 const exampleStocks: WisStock[] = [
   {
     name: "조선 상업",
@@ -87,41 +80,147 @@ export function stockObservations(stock: WisStock) {
       point.price > 0
     )
       points.set(point.atMs, point.price);
-  if (!points.size && Number.isSafeInteger(stock.price) && stock.price > 0)
-    points.set(
-      Number.isSafeInteger(stock.updatedAtMs) &&
-        stock.updatedAtMs >= 0 &&
-        stock.updatedAtMs <= 8_640_000_000_000_000
-        ? stock.updatedAtMs
-        : 0,
-      stock.price,
-    );
   return [...points]
     .sort((a, b) => a[0] - b[0])
     .map(([atMs, price]) => ({ atMs, price }));
 }
+const shortDate = new Intl.DateTimeFormat("ko-KR", {
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "Asia/Seoul",
+});
+const shortTime = new Intl.DateTimeFormat("ko-KR", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Asia/Seoul",
+});
+const exactDate = new Intl.DateTimeFormat("ko-KR", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Asia/Seoul",
+});
+const axisPrice = (value: number) =>
+  value > 1_000_000
+    ? new Intl.NumberFormat("ko-KR", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(value)
+    : money(value);
+function priceAxis(low: number, high: number) {
+  const pad = high === low ? Math.max(1, Math.round(high * 0.05)) : 0;
+  const minimum = Math.max(0, low - pad),
+    maximum = Math.min(Number.MAX_SAFE_INTEGER, high + pad);
+  const rough = Math.max(1, (maximum - minimum) / 4);
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step =
+    ([1, 2, 5, 10].find((value) => value * magnitude >= rough) || 10) *
+    magnitude;
+  const start = Math.max(0, Math.floor(minimum / step) * step);
+  const end = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    Math.max(start + 1, Math.ceil(maximum / step) * step),
+  );
+  const ticks: number[] = [];
+  for (let i = 0; i < 8 && start + i * step <= end; i++)
+    ticks.push(start + i * step);
+  if (ticks.at(-1) !== end) ticks.push(end);
+  return { start, end, ticks };
+}
 function StockChart({ stock, days }: { stock: WisStock; days: number }) {
   const root = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const id = useId().replace(/:/g, "");
+  const [width, setWidth] = useState(600);
+  const [selection, setSelection] = useState<{
+    key: string;
+    index: number;
+  } | null>(null);
   const observations = useMemo(() => stockObservations(stock), [stock]);
-  const end = observations.at(-1)?.atMs || 0;
-  const cutoff = end - days * DAY;
-  const visible = observations.filter((point) => point.atMs >= cutoff);
+  const visible = useMemo(() => {
+    const end = observations.at(-1)?.atMs || 0;
+    return observations.filter((point) => point.atMs >= end - days * DAY);
+  }, [observations, days]);
+  const key = JSON.stringify([stock.id, days, visible]);
   const prices = visible.map((point) => point.price);
-  const low = prices.length ? Math.min(...prices) : 0;
-  const high = prices.length ? Math.max(...prices) : 0;
-  const start = visible[0]?.atMs || 0;
+  const low = prices.length
+    ? Math.min(...prices)
+    : Number.isSafeInteger(stock.price) && stock.price >= 0
+      ? stock.price
+      : 0;
+  const high = prices.length ? Math.max(...prices) : low;
+  const domain = priceAxis(low, high);
+  const start = visible[0]?.atMs || 0,
+    end = visible.at(-1)?.atMs || start;
   const span = end - start;
+  const height = 304,
+    left = 76,
+    right = Math.max(left + 1, width - 16),
+    top = 40,
+    bottom = 238;
+  const plotWidth = right - left,
+    plotHeight = bottom - top;
+  const x = (atMs: number) =>
+    left + (span > 0 ? (atMs - start) / span : 0.5) * plotWidth;
+  const y = (price: number) =>
+    bottom -
+    ((price - domain.start) / (domain.end - domain.start)) * plotHeight;
   const points = visible.map((point) => ({
-    x: 20 + (span > 0 ? (point.atMs - start) / span : 0.5) * 560,
-    y: high === low ? 132 : 232 - ((point.price - low) / (high - low)) * 200,
+    ...point,
+    x: x(point.atMs),
+    y: y(point.price),
   }));
+  const tickCount = width < 500 ? 3 : 5;
+  const timeTicks = !visible.length
+    ? []
+    : span === 0
+      ? [start]
+      : Array.from({ length: tickCount }, (_, i) =>
+          Math.round(start + (span * i) / (tickCount - 1)),
+        );
+  const active = selection?.key === key ? points[selection.index] : null;
+  const tooltipWidth = Math.max(120, Math.min(244, width - 24));
+  const select = (index: number) =>
+    setSelection((current) =>
+      current?.key === key && current.index === index
+        ? current
+        : { key, index },
+    );
+  const inspect = (clientX: number) => {
+    if (!points.length || !canvas.current) return;
+    const localX = clientX - canvas.current.getBoundingClientRect().left;
+    let nearest = 0;
+    for (let index = 1; index < points.length; index++)
+      if (
+        Math.abs(points[index].x - localX) <
+        Math.abs(points[nearest].x - localX)
+      )
+        nearest = index;
+    select(nearest);
+  };
+  useEffect(() => {
+    if (!canvas.current) return;
+    const measure = () =>
+      setWidth(Math.max(200, canvas.current?.clientWidth || 600));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas.current);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     const scope = createScope({
       root,
       mediaQueries: { reduceMotion: "(prefers-reduced-motion: reduce)" },
     }).add((context) => {
       if (!context || context.matches.reduceMotion) return;
-      const line = root.current?.querySelector<SVGPolylineElement>("polyline");
+      const line = root.current?.querySelector<SVGPolylineElement>(
+        ".wis-stock-chart__plot polyline",
+      );
       if (line && line.getTotalLength() > 0) {
         const length = line.getTotalLength();
         animate(line, {
@@ -138,41 +237,237 @@ function StockChart({ stock, days }: { stock: WisStock; days: number }) {
       });
     });
     return () => scope.revert();
-  }, [stock.id, stock.updatedAtMs, days]);
+  }, [stock.id, stock.updatedAtMs, days, width]);
   return (
-    <div ref={root} className="wis-stock-chart">
-      <div className="wis-stock-chart__values">
-        <span>최고 {money(high)} 위스</span>
-        <span>최저 {money(low)} 위스</span>
-      </div>
-      <svg
-        viewBox="0 0 600 264"
-        role="img"
-        aria-label={`${stock.settings.name} 가격 변동, 관측 ${visible.length}건, 최고 ${money(high)} 위스, 최저 ${money(low)} 위스`}
+    <div ref={root} className="wis-stock-chart wispi-price-chart">
+      <p id={`${id}-help`} className="wispi-price-chart__instructions">
+        차트에 마우스를 올리거나 터치하면 기록된 가격을 확인합니다. 키보드 좌우
+        방향키로 기록을 이동하고 Home과 End로 처음과 마지막 기록을 확인합니다.
+        Escape로 가격 말풍선을 닫습니다.
+      </p>
+      <div
+        ref={canvas}
+        className="wispi-price-chart__canvas"
+        tabIndex={visible.length ? 0 : -1}
+        role="group"
+        aria-label={`${stock.settings.name} 가격 차트`}
+        aria-describedby={`${id}-help${active ? ` ${id}-value` : ""}`}
+        onFocus={() => {
+          if (points.length) select(points.length - 1);
+        }}
+        onBlur={() => setSelection(null)}
+        onPointerMove={(event) => {
+          if (event.pointerType === "mouse") inspect(event.clientX);
+        }}
+        onPointerDown={(event) => {
+          event.currentTarget.focus({ preventScroll: true });
+          inspect(event.clientX);
+        }}
+        onPointerLeave={(event) => {
+          if (
+            event.pointerType === "mouse" &&
+            document.activeElement !== canvas.current
+          )
+            setSelection(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setSelection(null);
+            return;
+          }
+          if (
+            !points.length ||
+            ![
+              "ArrowLeft",
+              "ArrowRight",
+              "ArrowUp",
+              "ArrowDown",
+              "Home",
+              "End",
+            ].includes(event.key)
+          )
+            return;
+          event.preventDefault();
+          const index =
+            selection?.key === key ? selection.index : points.length - 1;
+          select(
+            event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? points.length - 1
+                : Math.max(
+                    0,
+                    Math.min(
+                      points.length - 1,
+                      index +
+                        (["ArrowLeft", "ArrowDown"].includes(event.key)
+                          ? -1
+                          : 1),
+                    ),
+                  ),
+          );
+        }}
       >
-        {[32, 132, 232].map((y) => (
-          <line
-            key={y}
-            x1="20"
-            y1={y}
-            x2="580"
-            y2={y}
-            className="wis-stock-chart__axis"
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
+          role="img"
+          aria-label={`${stock.settings.name} 가격 변동, 기록 ${visible.length}건${visible.length ? `, 최고 ${money(high)} 위스, 최저 ${money(low)} 위스` : ""}`}
+        >
+          <defs>
+            <pattern
+              id={`${id}-minor`}
+              x={left}
+              y={top}
+              width="20"
+              height="20"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 20 0 L 0 0 0 20"
+                className="wispi-price-chart__minor"
+                fill="none"
+              />
+            </pattern>
+            <pattern
+              id={`${id}-major`}
+              x={left}
+              y={top}
+              width="100"
+              height="100"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 100 0 L 0 0 0 100"
+                className="wispi-price-chart__major"
+                fill="none"
+              />
+            </pattern>
+            <clipPath id={`${id}-clip`}>
+              <rect
+                x={left - 4}
+                y={top - 4}
+                width={plotWidth + 8}
+                height={plotHeight + 8}
+              />
+            </clipPath>
+          </defs>
+          <rect
+            x={left}
+            y={top}
+            width={plotWidth}
+            height={plotHeight}
+            fill={`url(#${id}-minor)`}
           />
-        ))}
-        <g className="wis-stock-chart__plot">
-          <polyline
-            points={points.map((point) => `${point.x},${point.y}`).join(" ")}
-            fill="none"
+          <rect
+            x={left}
+            y={top}
+            width={plotWidth}
+            height={plotHeight}
+            fill={`url(#${id}-major)`}
+            className="wispi-price-chart__paper"
           />
-          {points.length > 0 && (
-            <circle cx={points.at(-1)!.x} cy={points.at(-1)!.y} r="4" />
+          <g className="wispi-price-chart__axes">
+            <text x="12" y="22" className="wispi-price-chart__caption">
+              가격 (위스)
+            </text>
+            <line x1={left} y1={top} x2={left} y2={bottom} />
+            <line x1={left} y1={bottom} x2={right} y2={bottom} />
+            {domain.ticks.map((price) => (
+              <g key={price}>
+                <line x1={left - 4} y1={y(price)} x2={left} y2={y(price)} />
+                <text x={left - 9} y={y(price)} dy=".35em" textAnchor="end">
+                  {axisPrice(price)}
+                </text>
+              </g>
+            ))}
+            {timeTicks.map((atMs, index) => (
+              <g key={`${atMs}-${index}`}>
+                <line x1={x(atMs)} y1={bottom} x2={x(atMs)} y2={bottom + 5} />
+                <text
+                  x={x(atMs)}
+                  y={bottom + 20}
+                  textAnchor={
+                    timeTicks.length === 1
+                      ? "middle"
+                      : index === 0
+                        ? "start"
+                        : index === timeTicks.length - 1
+                          ? "end"
+                          : "middle"
+                  }
+                >
+                  <tspan x={x(atMs)}>{shortDate.format(atMs)}</tspan>
+                  <tspan x={x(atMs)} dy="14">
+                    {shortTime.format(atMs)}
+                  </tspan>
+                </text>
+              </g>
+            ))}
+            <text
+              x={right}
+              y={height - 8}
+              textAnchor="end"
+              className="wispi-price-chart__caption"
+            >
+              날짜·시간 (한국)
+            </text>
+          </g>
+          <g className="wis-stock-chart__plot" clipPath={`url(#${id}-clip)`}>
+            <polyline
+              points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+              fill="none"
+            />
+            {points.length > 0 && (
+              <circle cx={points.at(-1)!.x} cy={points.at(-1)!.y} r="3.5" />
+            )}
+          </g>
+          {active && (
+            <g className="wispi-price-chart__selection">
+              <line x1={active.x} y1={top} x2={active.x} y2={bottom} />
+              <circle cx={active.x} cy={active.y} r="5" />
+            </g>
           )}
-        </g>
-      </svg>
-      <div className="wis-stock-chart__values">
-        <span>{stamp(start)}</span>
-        <span>{stamp(end)}</span>
+        </svg>
+        {!visible.length && (
+          <p className="wispi-price-chart__empty">아직 가격 기록이 없습니다.</p>
+        )}
+        {active && (
+          <div
+            id={`${id}-value`}
+            role="tooltip"
+            aria-live="polite"
+            className="wispi-price-chart__tooltip"
+            data-at-ms={active.atMs}
+            data-price={active.price}
+            style={{
+              width: tooltipWidth,
+              left: Math.max(
+                12,
+                Math.min(
+                  width - tooltipWidth - 12,
+                  active.x - tooltipWidth / 2,
+                ),
+              ),
+              top: Math.max(
+                36,
+                Math.min(
+                  height - 100,
+                  active.y >= 136 ? active.y - 88 : active.y + 20,
+                ),
+              ),
+            }}
+          >
+            <time dateTime={new Date(active.atMs).toISOString()}>
+              {exactDate.format(active.atMs)}
+              {active.atMs % 1000
+                ? `.${String(active.atMs % 1000).padStart(3, "0")}`
+                : ""}
+            </time>
+            <strong>{money(active.price)} 위스</strong>
+          </div>
+        )}
       </div>
     </div>
   );

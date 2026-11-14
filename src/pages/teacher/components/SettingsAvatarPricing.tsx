@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import WisIcon from "../../../components/common/WisIcon";
@@ -305,11 +306,9 @@ function ItemEditor({
 function StudentShopPreview({
   pricing,
   unsaved,
-  onClose,
 }: {
   pricing: AvatarCatalogPricingState;
   unsaved: boolean;
-  onClose: () => void;
 }) {
   const previewAdapter = useMemo<AvatarStudioAdapter>(
     () => ({
@@ -336,16 +335,12 @@ function StudentShopPreview({
     [pricing],
   );
   return (
-    <CatalogDialog
-      title="학생 미리보기"
-      className="avatar-pricing-student-dialog"
-      onClose={onClose}
-    >
+    <div className="avatar-pricing-student-preview">
       {unsaved && (
         <p className="avatar-pricing-draft-status">저장 전 변경 사항 포함</p>
       )}
       <AvatarStudio adapter={previewAdapter} mode="shop" preview />
-    </CatalogDialog>
+    </div>
   );
 }
 
@@ -549,49 +544,87 @@ export function AvatarPricingManager({
   );
 
   return (
-    <section className="ws-page avatar-pricing" aria-label="아바타 아이템 관리">
-      <div className="ws-page-header">
-        <div className="avatar-pricing-page-actions">
-          <button
-            type="button"
-            onClick={() => setShowPreview(true)}
-            disabled={loading || Boolean(savingId) || !state || invalidDraft}
-          >
-            학생 미리보기
-          </button>
-          <button
-            type="button"
-            className="avatar-pricing-reload"
-            onClick={() => void load()}
-            disabled={loading || Boolean(savingId)}
-            title="저장된 아이템 다시 불러오기"
-            aria-label="저장된 아이템 다시 불러오기"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+    <section className="ws-page avatar-pricing" aria-label="아바타 상점">
+      <PortalSubNavigation
+        title="아바타 상점"
+        activeLabel={showPreview ? "학생 상점 미리보기" : "아바타 아이템 관리"}
+        variant="tabs"
+        actions={
+          <>
+            <button
+              type="button"
+              className="avatar-pricing-reload"
+              onClick={() => void load()}
+              disabled={loading || Boolean(savingId)}
+              title="저장된 아이템 다시 불러오기"
+              aria-label="저장된 아이템 다시 불러오기"
             >
-              <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65M20 7l-2.35-2.65" />
-            </svg>
-          </button>
-        </div>
-      </div>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65M20 7l-2.35-2.65" />
+              </svg>
+            </button>
+          </>
+        }
+      >
+        <button
+          type="button"
+          className={`teacher-settings-section${!showPreview ? " is-active" : ""}`}
+          aria-current={!showPreview ? "page" : undefined}
+          onClick={() => setShowPreview(false)}
+        >
+          아바타 아이템 관리
+        </button>
+        <button
+          type="button"
+          className={`teacher-settings-section${showPreview ? " is-active" : ""}`}
+          aria-current={showPreview ? "page" : undefined}
+          onClick={() => setShowPreview(true)}
+        >
+          학생 상점 미리보기
+        </button>
+      </PortalSubNavigation>
       {error && (
         <p className="avatar-pricing-error" role="alert">
           {error}
         </p>
       )}
       {loading && <InlineLoading />}
-      {state && (
+      {state && !showPreview && (
         <>
           <div className="ws-filter-bar avatar-pricing-filters">
+            <div
+              className="avatar-pricing-categories"
+              role="group"
+              aria-label="꾸미기 종류"
+            >
+              {[
+                { key: "all", label: "전체 종류", icon: "fa-layer-group" },
+                ...AVATAR_SLOTS,
+              ].map((entry) => (
+                <button
+                  key={entry.key}
+                  type="button"
+                  aria-pressed={slot === entry.key}
+                  onClick={() => {
+                    setSlot(entry.key);
+                    setGroup("all");
+                  }}
+                >
+                  <i className={`fas ${entry.icon}`} aria-hidden="true" />
+                  <span>{entry.label}</span>
+                </button>
+              ))}
+            </div>
             <label className="avatar-pricing-search">
               <span>아이템 검색</span>
               <input
@@ -601,45 +634,25 @@ export function AvatarPricingManager({
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <label>
-              <span>꾸미기 종류</span>
-              <select
-                aria-label="꾸미기 종류"
-                value={slot}
-                onChange={(event) => {
-                  setSlot(event.target.value);
-                  setGroup("all");
-                }}
-              >
-                <option value="all">전체 종류</option>
-                {AVATAR_SLOTS.map((entry) => (
-                  <option key={entry.key} value={entry.key}>
-                    {entry.label} (
-                    {
-                      AVATAR_ITEMS.filter((item) => item.slot === entry.key)
-                        .length
-                    }
-                    )
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>유형</span>
-              <select
-                aria-label="유형"
-                value={group}
-                onChange={(event) => setGroup(event.target.value)}
-              >
-                <option value="all">전체 유형</option>
-                {groups.map((label) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
+          {groups.length > 1 && (
+            <div
+              className="avatar-pricing-filter avatar-pricing-types"
+              role="group"
+              aria-label="유형"
+            >
+              {["all", ...groups].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={group === value}
+                  onClick={() => setGroup(value)}
+                >
+                  <span>{value === "all" ? "전체 유형" : value}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="avatar-pricing-browse">
             <div
               className="avatar-pricing-filter"
@@ -789,11 +802,15 @@ export function AvatarPricingManager({
           onClose={() => setEditingId(null)}
         />
       )}
-      {showPreview && previewPricing && (
+      {showPreview && invalidDraft && (
+        <p className="avatar-pricing-error" role="alert">
+          아이템 이름과 가격을 확인한 뒤 미리보기를 열어 주세요.
+        </p>
+      )}
+      {showPreview && previewPricing && !invalidDraft && (
         <StudentShopPreview
           pricing={previewPricing}
           unsaved={changed.size > 0}
-          onClose={() => setShowPreview(false)}
         />
       )}
     </section>

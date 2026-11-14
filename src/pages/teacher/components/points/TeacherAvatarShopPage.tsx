@@ -16,9 +16,6 @@ export default function TeacherAvatarShopPage() {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main className="ws-page flex-1">
-        <header className="ws-page-header mb-4">
-          <h1>위스 상점</h1>
-        </header>
         <WisShopNavigation portal="teacher" active="avatar" />
         {allowed ? (
           <React.Suspense fallback={<InlineLoading />}>

@@ -143,10 +143,10 @@ export const MENUS: MenuConfig = {
         { name: "지급 및 환수", url: "/teacher/points?tab=grant" },
         { name: "운영 정책", url: "/teacher/points?tab=policy" },
         { name: "명예의 전당 관리", url: "/teacher/points?tab=hall-of-fame" },
-        { name: "상품 관리", url: "/teacher/points?tab=products" },
-        { name: "아바타 아이템 관리", url: TEACHER_AVATAR_SHOP_URL },
+        { name: "위스 상점", url: "/teacher/points?tab=products" },
+        { name: "아바타 상점", url: TEACHER_AVATAR_SHOP_URL },
         { name: "구매 요청 관리", url: "/teacher/points?tab=requests" },
-        { name: "위스 주식", url: "/teacher/points?tab=stocks" },
+        { name: "위스피(WsPI)", url: "/teacher/points?tab=stocks" },
       ],
     },
     {
@@ -253,6 +253,20 @@ const normalizeMenuName = (
   if (url === "/student/mypage?menu=avatar" && name === "아바타 꾸미기")
     return "아바타 옷장";
   const [path, query = ""] = url.split("?");
+  if (path === "/teacher/points") {
+    const params = new URLSearchParams(query);
+    if (params.get("tab") === "products") {
+      if (params.get("shop") === "avatar" && name === "아바타 아이템 관리")
+        return "아바타 상점";
+      if (!params.has("shop") && name === "상품 관리") return "위스 상점";
+    }
+  }
+  if (
+    path === "/teacher/points" &&
+    new URLSearchParams(query).get("tab") === "stocks" &&
+    name === "위스 주식"
+  )
+    return "위스피(WsPI)";
   // Older settings overwrote both the score group and its first child.
   if (path === "/student/score" && name === "점수 계산기") return "점수";
   if (

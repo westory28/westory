@@ -204,7 +204,8 @@ try {
     assert.equal(qa.studioReads, 1);
     assert.equal(qa.pricingReads, 0);
     const shop = page.locator('[data-group="shop"]');
-    assert.equal(await shop.locator("a").count(), 3);
+    assert.equal(await shop.locator("a").count(), 2);
+    assert.equal(await shop.locator('a[href*="tab=stocks"]').count(), 0);
     assert.equal(await shop.locator('a[aria-current="page"]').count(), 1);
     assert.match(
       await shop.locator('a[aria-current="page"]').getAttribute("href"),
@@ -221,7 +222,7 @@ try {
       );
       assert.equal(
         await page
-          .getByRole("navigation", { name: "위스 상점 상품 종류" })
+          .getByRole("navigation", { name: "위스 마을" })
           .getByRole("link", { name: "우리 반 패션" })
           .count(),
         1,
@@ -284,6 +285,12 @@ try {
     assert.deepEqual(qa.legacyMounts, []);
     assert.equal(qa.pricingReads, 1);
     const shop = page.locator('[data-group="shop"]');
+    assert.equal(await shop.locator("a").count(), 3);
+    assert.equal(await shop.locator('a[href*="tab=requests"]').count(), 0);
+    assert.equal(
+      await page.getByRole("navigation", { name: "위스 마을" }).getByRole("link").count(),
+      3,
+    );
     assert.equal(await shop.locator('a[aria-current="page"]').count(), 1);
     assert.equal(
       await shop
@@ -291,7 +298,7 @@ try {
           name:
             scenario === "custom-teacher"
               ? "상품 꾸미기"
-              : "아바타 아이템 관리",
+              : "아바타 상점",
         })
         .count(),
       1,

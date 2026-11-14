@@ -15,6 +15,7 @@ import { getYearSemester } from "../../../../lib/semesterScope";
 import {
   getWisStockManagement,
   saveWisStock,
+  setWisStockMarketHalted,
   wisStockErrorMessage,
   isWisStockRevisionConflict,
   type WisStock,
@@ -23,6 +24,7 @@ import {
   type WisStockSettings,
 } from "../../../../lib/wisStocksClient";
 import "./TeacherWisStocks.css";
+import "./WisStockEmergencyControl.css";
 
 const emptySettings = (): WisStockSettings => ({
   name: "",
@@ -66,6 +68,30 @@ export default function TeacherWisStocks({
   const [storedMarket, setMarket] = useState<WisStockManagement | null>(null);
   const [marketOwner, setMarketOwner] = useState("");
   const market = marketOwner === ownerKey ? storedMarket : null;
+  const latestMarket = useRef<{
+    owner: string;
+    value: WisStockManagement | null;
+  }>({ owner: ownerKey, value: null });
+  if (latestMarket.current.owner !== ownerKey)
+    latestMarket.current = { owner: ownerKey, value: null };
+  const applyMarket = useCallback(
+    (result: WisStockManagement) => {
+      if (owner.current !== ownerKey) return null;
+      const current = latestMarket.current.value;
+      if (current && current.revision > result.revision) return current;
+      latestMarket.current.value = result;
+      setMarket(result);
+      setMarketOwner(ownerKey);
+      return result;
+    },
+    [ownerKey],
+  );
+  const [halting, setHalting] = useState(false);
+  const haltFlight = useRef(false);
+  const [haltError, setHaltError] = useState("");
+  const [haltConflict, setHaltConflict] = useState(false);
+  const [confirmResume, setConfirmResume] = useState(false);
+  const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<WisStockSettings>(emptySettings);
   const [loading, setLoading] = useState(false),
@@ -86,17 +112,17 @@ export default function TeacherWisStocks({
     try {
       const result = await getWisStockManagement({ year, semester });
       if (sequence !== generation.current || owner.current !== ownerKey) return;
+      const accepted = applyMarket(result);
+      if (!accepted) return;
       const currentSelection = editor.current;
       if (currentSelection.selectedId && !currentSelection.dirty) {
-        const updated = result.stocks.find(
+        const updated = accepted.stocks.find(
           (stock) => stock.id === currentSelection.selectedId,
         );
         if (updated) setDraft({ ...updated.settings });
       }
-      setMarket(result);
-      setMarketOwner(ownerKey);
       setConflict(false);
-      return result;
+      return accepted;
     } catch (failure) {
       if (sequence === generation.current && owner.current === ownerKey)
         setError(wisStockErrorMessage(failure));
@@ -104,7 +130,7 @@ export default function TeacherWisStocks({
       if (sequence === generation.current && owner.current === ownerKey)
         setLoading(false);
     }
-  }, [ownerKey, year, semester]);
+  }, [ownerKey, year, semester, applyMarket]);
   useEffect(() => {
     setMarket(null);
     setSelectedId(null);
@@ -112,6 +138,11 @@ export default function TeacherWisStocks({
     setError("");
     setSaving(false);
     setConflict(false);
+    setHalting(false);
+    haltFlight.current = false;
+    setHaltError("");
+    setHaltConflict(false);
+    setConfirmResume(false);
     setTab("stocks");
     let started = false;
     const start = () => {
@@ -165,10 +196,11 @@ export default function TeacherWisStocks({
       );
       if (sequence !== generation.current || owner.current !== expectedOwner)
         return;
-      setMarket(result);
+      const accepted = applyMarket(result);
+      if (!accepted) return;
       setSelectedId(result.savedStockId);
       setDraft({
-        ...result.stocks.find((stock) => stock.id === result.savedStockId)!
+        ...accepted.stocks.find((stock) => stock.id === result.savedStockId)!
           .settings,
       });
       showToast({
@@ -183,8 +215,43 @@ export default function TeacherWisStocks({
         setConflict(isWisStockRevisionConflict(failure));
       }
     } finally {
-      if (sequence === generation.current && owner.current === expectedOwner)
-        setSaving(false);
+      if (owner.current === expectedOwner) setSaving(false);
+    }
+  };
+  const changeHalted = async (halted: boolean) => {
+    if (!canManage || haltFlight.current) return;
+    const expectedOwner = ownerKey;
+    haltFlight.current = true;
+    haltIntent.current = halted;
+    setHalting(true);
+    setHaltError("");
+    setHaltConflict(false);
+    setConfirmResume(false);
+    try {
+      const result = await setWisStockMarketHalted(
+        { year, semester },
+        latestMarket.current.value?.revision ?? 0,
+        halted,
+      );
+      if (owner.current !== expectedOwner) return;
+      const accepted = applyMarket(result);
+      if (!accepted) return;
+      showToast({
+        title: accepted.rules.halted
+          ? "시장 거래를 정지했습니다."
+          : "시장 거래를 재개했습니다.",
+        tone: "success",
+      });
+    } catch (failure) {
+      if (owner.current === expectedOwner) {
+        setHaltError(wisStockErrorMessage(failure));
+        setHaltConflict(isWisStockRevisionConflict(failure));
+      }
+    } finally {
+      if (owner.current === expectedOwner) {
+        haltFlight.current = false;
+        setHalting(false);
+      }
     }
   };
   const stats = useMemo(
@@ -196,9 +263,9 @@ export default function TeacherWisStocks({
     [market],
   );
   return (
-    <section className="wis-stocks" aria-label="위스 주식 관리">
+    <section className="wis-stocks" aria-label="위스피(WsPI) 관리">
       <PortalSubNavigation
-        title="위스 주식"
+        title="위스피(WsPI)"
         activeLabel={
           {
             stocks: "종목 관리",
@@ -238,7 +305,56 @@ export default function TeacherWisStocks({
             {item.label}
           </button>
         ))}
+        <div className="wis-stock-emergency" aria-label="시장 거래 제어">
+          {market?.rules.halted && <span role="status">거래 정지 중</span>}
+          <button
+            type="button"
+            className="wis-stock-emergency__button"
+            disabled={!canManage || halting}
+            onClick={() => {
+              if (!market?.rules.halted) void changeHalted(true);
+              else if (confirmResume) void changeHalted(false);
+              else setConfirmResume(true);
+            }}
+          >
+            {halting
+              ? "처리 중…"
+              : market?.rules.halted
+                ? confirmResume
+                  ? "거래 재개 확인"
+                  : "시장 거래 재개"
+                : "시장 거래 정지"}
+          </button>
+          {confirmResume && !halting && (
+            <button type="button" onClick={() => setConfirmResume(false)}>
+              재개 취소
+            </button>
+          )}
+        </div>
       </PortalSubNavigation>
+      {haltError && (
+        <div className="wis-stocks__error" role="alert">
+          <p>{haltError}</p>
+          <button
+            type="button"
+            disabled={
+              halting || !canManage || (haltConflict && (saving || loading))
+            }
+            onClick={() => {
+              if (haltConflict)
+                void load().then((result) => {
+                  if (result) {
+                    setHaltError("");
+                    setHaltConflict(false);
+                  }
+                });
+              else void changeHalted(haltIntent.current);
+            }}
+          >
+            {haltConflict ? "최신 거래 상태 확인" : "거래 제어 다시 시도"}
+          </button>
+        </div>
+      )}
       {market && tab === "stocks" && (
         <div className="wis-stocks__summary">
           <span>
@@ -275,23 +391,6 @@ export default function TeacherWisStocks({
           hidden={tab !== "stocks"}
         >
           <div className="wis-stocks__list">
-            {canManage && (
-              <button
-                type="button"
-                className={`wis-stocks__row wis-stocks__new${selectedId === "" ? " is-selected" : ""}`}
-                aria-pressed={selectedId === ""}
-                disabled={saving || loading || stats.count >= market.maxStocks}
-                onClick={() => choose()}
-              >
-                <span aria-hidden="true">＋</span>
-                <strong>새 종목</strong>
-                <small>
-                  {stats.count >= market.maxStocks
-                    ? "등록 한도 도달"
-                    : "종목 정보 입력"}
-                </small>
-              </button>
-            )}
             {market.stocks.length === 0 ? (
               <p className="wis-stocks__empty">등록된 종목이 없습니다.</p>
             ) : (
@@ -545,6 +644,20 @@ export default function TeacherWisStocks({
               )}
             </form>
           )}
+          {canManage && (
+            <div className="wis-stocks__add-action">
+              <button
+                type="button"
+                className="wis-stocks__primary"
+                disabled={saving || loading || stats.count >= market.maxStocks}
+                onClick={() => choose()}
+              >
+                {stats.count >= market.maxStocks
+                  ? "등록 한도 도달"
+                  : "새 종목 추가"}
+              </button>
+            </div>
+          )}
         </div>
       )}
       {market && (
@@ -556,7 +669,7 @@ export default function TeacherWisStocks({
             canManage={canManage}
             busy={saving || loading}
             onBusyChange={setSaving}
-            onSaved={setMarket}
+            onSaved={applyMarket}
             onReload={load}
           />
         </div>
