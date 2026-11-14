@@ -9,6 +9,7 @@ import { animate, createScope } from "animejs";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import InfoHelp from "../../../../components/common/InfoHelp";
+import RefreshButton from "../../../../components/common/RefreshButton";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import {
   getWisStockManagement,
@@ -128,6 +129,8 @@ export default function TeacherWisStocks({
     selectedId !== null &&
     JSON.stringify(draft) !==
       JSON.stringify(selected?.settings || emptySettings());
+  const editor = useRef({ selectedId, dirty });
+  editor.current = { selectedId, dirty };
   const load = useCallback(async () => {
     const sequence = ++generation.current;
     setLoading(true);
@@ -135,9 +138,14 @@ export default function TeacherWisStocks({
     try {
       const result = await getWisStockManagement({ year, semester });
       if (sequence !== generation.current || owner.current !== ownerKey) return;
+      const currentSelection = editor.current;
+      if (currentSelection.selectedId && !currentSelection.dirty) {
+        const updated = result.stocks.find(
+          (stock) => stock.id === currentSelection.selectedId,
+        );
+        if (updated) setDraft({ ...updated.settings });
+      }
       setMarket(result);
-      setSelectedId(null);
-      setDraft(emptySettings());
     } catch (failure) {
       if (sequence === generation.current && owner.current === ownerKey)
         setError(wisStockErrorMessage(failure));
@@ -238,13 +246,7 @@ export default function TeacherWisStocks({
           </InfoHelp>
         </div>
         <div className="wis-stocks__actions">
-          <button
-            type="button"
-            disabled={loading || saving}
-            onClick={() => void load()}
-          >
-            새로고침
-          </button>
+          <RefreshButton onClick={load} loading={loading} disabled={saving} />
           {canManage && (
             <button
               type="button"

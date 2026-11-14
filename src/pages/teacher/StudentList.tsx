@@ -1,3 +1,4 @@
+import RefreshButton from "../../components/common/RefreshButton";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { loadTeacherStudentRoster } from "../../lib/teacherStudentRoster";
@@ -656,13 +657,8 @@ const StudentList: React.FC = () => {
   };
 
   const handleRefreshList = async () => {
-    setGradeFilter("all");
-    setClassFilter("all");
-    setEnrollmentFilter("active");
-    setSearchQuery("");
-    setCurrentPage(1);
-    setSelectedIds(new Set());
-    await fetchStudents();
+    if (loading) return;
+    await fetchStudents({ fresh: true });
   };
 
   return (
@@ -760,18 +756,11 @@ const StudentList: React.FC = () => {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => void handleRefreshList()}
-                className="student-list-toolbar__action min-h-11 min-w-11 rounded-lg border border-gray-300 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
-                title="명단 새로고침 및 필터 초기화"
-                aria-label="명단 새로고침 및 필터 초기화"
-              >
-                <i
-                  className={`fas fa-sync-alt ${loading ? "animate-spin" : ""}`}
-                  aria-hidden="true"
-                ></i>
-              </button>
+              <RefreshButton
+                onClick={handleRefreshList}
+                loading={loading}
+                label="명단 새로고침"
+              />
               {searchOpen && (
                 <form
                   id="student-list-search"

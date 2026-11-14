@@ -751,6 +751,44 @@ const ManagePoints: React.FC = () => {
     return true;
   };
 
+  const refreshOrders = async () => {
+    if (
+      !canRead ||
+      !scopeReady ||
+      !isCurrentScope() ||
+      activeTab !== "requests" ||
+      currentViewRef.current !== "requests"
+    )
+      return;
+    if (
+      loadInFlightRef.current?.scope === requestScope &&
+      loadInFlightRef.current.view === "requests"
+    )
+      return;
+    const loadRequest = { scope: requestScope, view: "requests" };
+    loadInFlightRef.current = loadRequest;
+    const current = () =>
+      isCurrentScope() &&
+      currentViewRef.current === "requests" &&
+      loadInFlightRef.current === loadRequest;
+    setShopLoadError("");
+    try {
+      const nextOrders = isSemesterArchive
+        ? await readArchivedShopOrders()
+        : await listPointOrders(config, { limitCount: 200 });
+      if (current()) setOrders(nextOrders);
+    } catch (error: any) {
+      if (current())
+        setShopLoadError(
+          error?.message ||
+            "주문 내역을 불러오지 못했습니다. 다시 시도해 주세요.",
+        );
+    } finally {
+      if (loadInFlightRef.current === loadRequest)
+        loadInFlightRef.current = null;
+    }
+  };
+
   const loadAll = async (force = true) => {
     if (!isCurrentScope()) return;
     if (
@@ -2213,7 +2251,7 @@ const ManagePoints: React.FC = () => {
                 void loadTransactionsForWallet(selectedUid, true)
               }
               onReloadTransactions={() =>
-                void loadTransactionsForWallet(selectedUid)
+                loadTransactionsForWallet(selectedUid)
               }
               canManage={canManage}
               selectedEditableTransactionId={selectedEditableTransactionId}
@@ -2425,7 +2463,7 @@ const ManagePoints: React.FC = () => {
               onSelectOrder={setSelectedOrderId}
               onOrderMemoChange={setOrderMemo}
               onSaveOrder={(status) => void handleSaveOrder(status)}
-              onRefresh={() => void loadAll()}
+              onRefresh={refreshOrders}
             />
           )}
         </div>

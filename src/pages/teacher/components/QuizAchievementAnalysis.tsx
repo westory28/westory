@@ -85,6 +85,11 @@ export default function QuizAchievementAnalysis({
   refreshVersion = 0,
   onLoadingChange,
   reportView,
+  suppliedData,
+  onInspectQuestion,
+  renderEstimates,
+  reportLabels,
+  suppliedHelp,
 }: {
   scope: QuizClassScope;
   identityKey: string;
@@ -93,6 +98,12 @@ export default function QuizAchievementAnalysis({
   refreshVersion?: number;
   onLoadingChange?: (loading: boolean) => void;
   reportView?: number;
+  /** Imported teacher-only data; never starts a mock-exam request or listener. */
+  suppliedData?: QuizClassAchievement;
+  onInspectQuestion?: (id: string) => void;
+  renderEstimates?: (analysis: AchievementAnalysis) => React.ReactNode;
+  reportLabels?: string[];
+  suppliedHelp?: React.ReactNode;
 }) {
   const [data, setData] = useState<QuizClassAchievement | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +129,7 @@ export default function QuizAchievementAnalysis({
   const currentIdentity = useRef(identityKey);
   currentIdentity.current = identityKey;
   const questionContext = useRef("");
+  const loadedRequestKey = useRef("");
   const requestKey = JSON.stringify([
     identityKey,
     scope.semesterId,
@@ -133,8 +145,17 @@ export default function QuizAchievementAnalysis({
     setLoading(true);
     setError("");
     setData(null);
-    setQuestionId("");
-    setProfileId("");
+    if (loadedRequestKey.current !== requestKey) {
+      setQuestionId("");
+      setProfileId("");
+    }
+    loadedRequestKey.current = requestKey;
+    if (suppliedData) {
+      setData(suppliedData);
+      setLoading(false);
+      onLoadingChange?.(false);
+      return;
+    }
     if (!enabled) {
       setLoading(false);
       onLoadingChange?.(false);
@@ -178,13 +199,20 @@ export default function QuizAchievementAnalysis({
       active = false;
       onLoadingChange?.(false);
     };
-  }, [requestKey, reload, enabled, refreshVersion, onLoadingChange]);
+  }, [
+    requestKey,
+    reload,
+    enabled,
+    refreshVersion,
+    onLoadingChange,
+    suppliedData,
+  ]);
   useQuizClassUpdates({
     scope,
     identityKey,
     mode: "achievement",
     data,
-    enabled,
+    enabled: enabled && !suppliedData,
     onChanges: (changes) =>
       setData((current) =>
         current ? applyQuizClassChanges(current, changes) : current,
@@ -387,7 +415,7 @@ export default function QuizAchievementAnalysis({
     setQuestionId("");
     setProfileId("");
   }, [view, standardCode, formKey]);
-  const analysisHelp = (
+  const analysisHelp = suppliedHelp ?? (
     <InfoHelp
       label="성취 분석 집계 기준"
       sections={[
@@ -423,7 +451,7 @@ export default function QuizAchievementAnalysis({
     <div className={`qaa-toolbar${inlineReport ? " qaa-report-heading" : ""}`}>
       {inlineReport && (
         <div className="qaa-report-title">
-          <h2>{labels[view]}</h2>
+          <h2>{(reportLabels || labels)[view]}</h2>
           {analysisHelp}
         </div>
       )}
@@ -502,6 +530,10 @@ export default function QuizAchievementAnalysis({
     );
 
   const inspect = (id: string) => {
+    if (onInspectQuestion) {
+      onInspectQuestion(id);
+      return;
+    }
     questionContext.current = requestKey;
     setQuestionId(id);
   };
@@ -509,9 +541,22 @@ export default function QuizAchievementAnalysis({
     <section className={sectionClass} aria-label="성취기준 분석">
       {toolbar}
       <div className="qaa-scope">
-        {data.grade && <span>{data.grade}학년 전체</span>}
-        <span>첫 제출 {analysis.attempts.length}명</span>
-        <span>1~{scope.examRound.replace("round_", "")}회 누적 수준</span>
+        {data.grade && (
+          <span>
+            {data.grade}학년
+            {scope.classIds.length === 1
+              ? ` ${scope.classIds[0].split("-").at(-1)}반`
+              : " 전체"}
+          </span>
+        )}
+        <span>
+          {suppliedData ? "분석" : "첫 제출"} {analysis.attempts.length}명
+        </span>
+        <span>
+          {suppliedData
+            ? "모의고사·정기시험 추정 수준"
+            : `1~${scope.examRound.replace("round_", "")}회 누적 수준`}
+        </span>
         {analysis.unclassifiedItemCount > 0 && (
           <span>미연결 응답 {analysis.unclassifiedItemCount}건</span>
         )}
@@ -942,15 +987,18 @@ export default function QuizAchievementAnalysis({
           </Table>
         </>
       )}
-      {(view === 3 || view === 5) && (
-        <QuizAchievementEstimates
-          data={data}
-          analysis={analysis}
-          examRound={scope.examRound}
-          showPaper={view === 5}
-          resetKey={`${requestKey}:${standardCode}:${view}`}
-        />
-      )}
+      {(view === 3 || view === 5) &&
+        (renderEstimates ? (
+          renderEstimates(analysis)
+        ) : (
+          <QuizAchievementEstimates
+            data={data}
+            analysis={analysis}
+            examRound={scope.examRound}
+            showPaper={view === 5}
+            resetKey={`${requestKey}:${standardCode}:${view}`}
+          />
+        ))}
       {view === 4 && (
         <>
           <FormChoice

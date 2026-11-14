@@ -71,7 +71,7 @@ export const useAuth=()=>{useSyncExternalStore(cb=>{authListeners.add(cb);return
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const doc=(_db,...segments)=>({path:segments.join('/')});
 export const getDoc=async()=>{throw Error('Unexpected Firestore get in offline fixture')};
-export const onSnapshot=(ref,success)=>{qa.listenerCount++;gates.add(success);queueMicrotask(()=>success({data:()=>({enabled:settings.enabled,revision:settings.revision})}));return()=>{qa.listenerStopped++;gates.delete(success)};};
+export const onSnapshot=(ref,success,error)=>{qa.listenerCount++;gates.add(success);queueMicrotask(()=>params.has('gate-error')&&!qa.gateRecovered?error(new Error('Synthetic listener failure')):success({data:()=>({enabled:settings.enabled,revision:settings.revision})}));return()=>{qa.listenerStopped++;gates.delete(success)};};
 const waitRead=async mode=>{if(qa.holdRead===mode){qa.holdRead='';await new Promise(resolve=>qa.releaseRead=resolve)}};
 export const getHttpsCallable=async name=>async input=>{
  if(name==='getGongsinmoongo'){
@@ -168,7 +168,7 @@ const css = bundle.outputFiles
   .filter((file) => file.path.endsWith(".css"))
   .map((file) => file.text)
   .join("\n")
-  .replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g, "");
+  .replace(/^@import[^\r\n]*;/gm, "");
 const tailwind = await fs.readFile(
   process.env.PORTAL_DESIGN_TAILWIND_PATH ||
     path.join(os.tmpdir(), "westory-qa-tailwind.js"),
@@ -641,6 +641,18 @@ try {
   await failed.locator(".gsm-thread").first().waitFor();
   await failed.close();
   checks.push("restriction disables composer; initial read error recovers");
+  const gateFailed = await pageAt("?role=student&ack&gate-error");
+  const gateRefresh = gateFailed.getByRole("button", {name:"질문함 새로고침", exact:true});
+  await gateFailed.getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {exact:true}).waitFor();
+  assert.equal(await gateFailed.evaluate(()=>window.gongsinLiveQa.reads.length),0,"failed public gate blocks personal reads");
+  await gateFailed.evaluate(()=>{window.gongsinLiveQa.gateRecovered=true; window.refreshMarker=true;});
+  await gateRefresh.click();
+  await gateFailed.locator(".gsm-thread").first().waitFor();
+  assert.equal(await gateFailed.evaluate(()=>window.refreshMarker),true,"gate retry does not reload the document");
+  assert.deepEqual(await gateFailed.evaluate(()=>window.gongsinLiveQa.reads.map(row=>row.mode)),["state","questions"]);
+  assert.equal(await gateFailed.evaluate(()=>window.gongsinLiveQa.listenerCount-window.gongsinLiveQa.listenerStopped),1,"retry restores one shared listener");
+  await gateFailed.close();
+  checks.push("failed public listener retries in place, one shared listener, then only current student state/questions reads");
   const paged = await pageAt("?role=teacher&many");
   await paged.locator(".gsm-thread").first().waitFor();
   const initialReads = await paged.evaluate(
@@ -681,6 +693,15 @@ try {
     phase: "pagination/filter",
     ...pagedReads,
   });
+  await paged.locator("#gongsin-reply").fill("유지할 답변 초안");
+  const refreshStart=await paged.evaluate(()=>window.gongsinLiveQa.reads.length);
+  await paged.getByRole("button", {name:"질문함 새로고침", exact:true}).click();
+  await paged.waitForFunction(start=>window.gongsinLiveQa.reads.length===start+3,refreshStart);
+  await paged.getByRole("button", {name:"질문함 새로고침", exact:true}).waitFor();
+  assert.equal(await paged.locator(".gsm-filter select").inputValue(),"waiting");
+  assert.equal(await paged.locator("#gongsin-reply").inputValue(),"유지할 답변 초안");
+  assert.deepEqual(await paged.evaluate(start=>window.gongsinLiveQa.reads.slice(start).map(row=>row.mode),refreshStart),["state","questions","questions"]);
+  checks.push("teacher refresh preserves question filter and unsent reply, reads state/current page/current conversation only");
   await paged.close();
   checks.push(
     "20-row cursor reads, four local page changes add zero reads/writes, filters do not reread settings",

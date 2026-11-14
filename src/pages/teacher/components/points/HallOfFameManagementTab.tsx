@@ -1,3 +1,4 @@
+import RefreshButton from "../../../../components/common/RefreshButton";
 import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import NumericInput from "../../../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -1006,14 +1007,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             ></i>
             <p className="break-keep">{snapshotError}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void refreshSnapshot()}
-            disabled={!canManage || refreshing}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-amber-300 bg-white px-4 text-sm font-black text-slate-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {refreshing ? "조회 중..." : "새로고침"}
-          </button>
+          <RefreshButton
+            onClick={refreshSnapshot}
+            loading={refreshing}
+            disabled={!canManage}
+            label="위스 현황 새로고침"
+          />
         </div>
       )}
 
@@ -1301,14 +1300,12 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
                       {snapshotUpdatedAtLabel}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void refreshSnapshot()}
-                    disabled={!canManage || refreshing}
-                    className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-lg bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {refreshing ? "조회 중..." : "새로고침"}
-                  </button>
+                  <RefreshButton
+                    onClick={refreshSnapshot}
+                    loading={refreshing}
+                    disabled={!canManage}
+                    label="위스 현황 새로고침"
+                  />
                 </div>
               </section>
 

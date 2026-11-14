@@ -285,6 +285,40 @@ service firebase.storage {
       allow write: if false;
     }
 
+    match /years/{year}/semesters/{semester}/written_exam_analyses/{examId}/{revision}/{fileName} {
+      function analysisRevision() {
+        return firestore.get(/databases/(default)/documents/years/$(year)/semesters/$(semester)/written_exam_analyses/$(examId)/revisions/$(revision)).data;
+      }
+      function analysisScope() {
+        return year.matches('^[0-9]{4}$') && semester in ['1', '2'];
+      }
+      function canManageAnalysis() {
+        // Same role/session fence as score management, evaluated only once.
+        return canUseWestory()
+          && (request.auth.token.email == 'westoria28@gmail.com' || userProfile().role == 'teacher');
+      }
+      function writableAnalysis() {
+        return analysisScope() && canManageAnalysis()
+          && firestore.get(/databases/(default)/documents/site_settings/semester_active).data.semesterId == year + '-' + semester
+          && analysisRevision().state == 'staging' && analysisRevision().uploadedBy == request.auth.uid;
+      }
+      allow read: if analysisScope() && canManageAnalysis()
+        && analysisRevision().state == 'ready';
+      allow create, update: if writableAnalysis()
+        && request.resource.size > 0
+        && request.resource.metadata.ownerUid == request.auth.uid
+        && request.resource.metadata.year == year && request.resource.metadata.semester == semester
+        && request.resource.metadata.examId == examId && request.resource.metadata.revision == revision
+        && request.resource.metadata.keys().hasOnly(['ownerUid', 'year', 'semester', 'examId', 'revision'])
+        && ((fileName.matches('^[A-Za-z0-9_-]{1,80}\\.pdf$')
+            && request.resource.contentType == 'application/pdf' && request.resource.size <= 30 * 1024 * 1024)
+          || (fileName.matches('^[A-Za-z0-9_-]{1,80}\\.png$')
+            && request.resource.contentType == 'image/png' && request.resource.size <= 12 * 1024 * 1024)
+          || (fileName.matches('^[A-Za-z0-9_-]{1,80}\\.webp$')
+            && request.resource.contentType == 'image/webp' && request.resource.size <= 12 * 1024 * 1024));
+      allow delete: if writableAnalysis();
+    }
+
     match /years/{year}/semesters/{semester}/lesson_pdfs/{unitId}/{allPaths=**} {
       allow read: if canUseWestory();
       allow write: if false;

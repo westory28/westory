@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import { exceedsShortAnswerLimit } from "../../../lib/assessmentAnswerLimits";
 import { getAcceptedQuizAnswers } from "../../../lib/quizAnswerMatching";
 import React, {
@@ -2350,19 +2351,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             {filteredQuestions.length}문항
           </span>
         )}
-        <button
-          type="button"
+        <RefreshButton
           onClick={fetchQuestions}
-          disabled={loading || savingQuestion}
-          className={
-            type === "special"
-              ? "quiz-authoring-button"
-              : "quiz-question-list-refresh"
-          }
-          aria-label="문항 목록 새로고침"
-        >
-          새로고침
-        </button>
+          loading={loading}
+          disabled={savingQuestion}
+          label="문항 목록 새로고침"
+        />
       </div>
       {loadError && (
         <div role="alert" className="p-4 text-sm text-red-700">
@@ -2457,7 +2451,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               title="필터 초기화"
               aria-label="필터 초기화"
             >
-              <i className="fas fa-sync-alt" aria-hidden="true"></i>
+              <i className="fas fa-filter-circle-xmark" aria-hidden="true"></i>
             </button>
           </div>
         </div>

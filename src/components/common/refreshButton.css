@@ -1,0 +1,48 @@
+.ws-refresh-button.ws-refresh-button {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text-muted, #6b7280);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.ws-refresh-button.ws-refresh-button:hover:not(:disabled) {
+  border-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+}
+
+.ws-refresh-button.ws-refresh-button:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.ws-refresh-button.ws-refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ws-refresh-button[aria-busy="true"] svg {
+  animation: ws-refresh-spin 1s linear infinite;
+}
+
+@keyframes ws-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-refresh-button[aria-busy="true"] svg {
+    animation: none;
+  }
+}

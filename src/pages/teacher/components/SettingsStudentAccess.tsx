@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import React, { useEffect, useState } from "react";
 import { auth } from "../../../lib/firebase";
 import { ADMIN_EMAIL } from "../../../lib/permissions";
@@ -172,14 +173,11 @@ const SettingsStudentAccess: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold disabled:opacity-50"
-            onClick={() => void refresh()}
-            disabled={busy}
-          >
-            상태 새로고침
-          </button>
+          <RefreshButton
+            onClick={refresh}
+            loading={busy}
+            label="접속 상태 새로고침"
+          />
           <button
             type="button"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"

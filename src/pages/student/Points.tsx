@@ -857,7 +857,7 @@ const Points: React.FC = () => {
                 cancellingOrderId={cancellingOrderId}
                 feedback=""
                 onOpenShop={() => handleTabChange("shop")}
-                onRefresh={() => void loadOrdersData({ force: true })}
+                onRefresh={() => loadOrdersData({ force: true })}
               />
             )}
         </div>

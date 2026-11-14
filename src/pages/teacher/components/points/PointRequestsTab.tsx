@@ -1,3 +1,4 @@
+import RefreshButton from "../../../../components/common/RefreshButton";
 import React, { useMemo, useState } from "react";
 import { useAppDialog } from "../../../../components/common/AppDialogProvider";
 import InfoHelp from "../../../../components/common/InfoHelp";
@@ -335,14 +336,11 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
           </h2>
         </div>
         {onRefresh && (
-          <button
-            type="button"
-            className="teacher-wis-shop__button"
+          <RefreshButton
             onClick={onRefresh}
             disabled={Boolean(orderSavingStatus)}
-          >
-            새로고침
-          </button>
+            label="주문 내역 새로고침"
+          />
         )}
         {!canManage && (
           <span className="teacher-wis-shop__badge">조회 전용</span>

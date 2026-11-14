@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import {
   useEffect,
   useId,
@@ -352,7 +353,7 @@ export default function QuizClassAnalysis({
     setSearchOpen(false);
     setKeyword("");
   }, [unitScoped, initialUnitId, initialCategory, catalog]);
-  const queryResults = () => {
+  const queryResults = (forceRefresh = false) => {
     if (!canQuery) return;
     if (showAchievement && assessment) {
       setAchievementLoading(true);
@@ -364,8 +365,10 @@ export default function QuizClassAnalysis({
         classIds: selectedGrade ? [] : [classId],
         ...(selectedGrade ? { grade: selectedGrade } : {}),
       });
-      setAchievementVersion((value) => value + 1);
-    } else void loadSummary(!!summary);
+      setAchievementVersion((value) =>
+        forceRefresh ? Math.max(2, value + 1) : value + 1,
+      );
+    } else void loadSummary(forceRefresh || !!summary);
   };
   const closeSearch = () => {
     clearResult(false);
@@ -379,20 +382,6 @@ export default function QuizClassAnalysis({
     requestAnimationFrame(() =>
       searchButton.current?.focus({ preventScroll: true }),
     );
-  };
-  const resetQuery = () => {
-    clearResult();
-    if (!unitScoped) {
-      setUnitId("");
-      setAssessmentId("");
-    }
-    setClassId("");
-    setCompareIds([]);
-    setComparisonGrade("");
-    setComparisonOpen(false);
-    setSearchOpen(false);
-    setKeyword("");
-    detailFilter.current = undefined;
   };
   const loadSummary = async (forceRefresh = false, reuseScope = false) => {
     if (!reuseScope && (!classId || (searchOpen ? !queryKeyword : !assessment)))
@@ -912,27 +901,17 @@ export default function QuizClassAnalysis({
                   </svg>
                 </button>
               </div>
-              <button
-                type="button"
-                className="qca-icon-button qca-reset"
-                aria-label="조회 전체 초기화"
-                title="조회 전체 초기화"
-                onClick={resetQuery}
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
-                </svg>
-              </button>
+              <RefreshButton
+                className="qca-refresh"
+                label="평가 분석 새로고침"
+                loading={
+                  showAchievement
+                    ? achievementLoading
+                    : loading || Boolean(detailLoading)
+                }
+                disabled={!canQuery}
+                onClick={() => queryResults(true)}
+              />
               <button
                 type="submit"
                 className="qca-primary"

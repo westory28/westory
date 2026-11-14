@@ -428,7 +428,7 @@ try {
   await overview.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await overview.getByRole("button", { name: "새로고침", exact: true }).click();
+  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await overview.getByText("수정할 지급", { exact: true }).click();
   await overview.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;
@@ -443,7 +443,7 @@ try {
     window.wisWalletQa.balance = 180;
     window.wisWalletQa.revision = 6;
   });
-  await overview.getByRole("button", { name: "새로고침", exact: true }).click();
+  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await overview.getByText("최신 지급 내역", { exact: true }).waitFor();
   await overview.evaluate(() => {
     window.wisWalletQa.holdNext = true;
@@ -466,7 +466,7 @@ try {
   await scope.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await scope.getByRole("button", { name: "새로고침", exact: true }).click();
+  await scope.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await scope.getByText("수정할 지급", { exact: true }).click();
   await scope.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;

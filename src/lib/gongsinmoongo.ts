@@ -182,6 +182,7 @@ const availability = new Map<
     value: Availability;
     listeners: Set<(v: Availability) => void>;
     stop: () => void;
+    restart: () => void;
   }
 >();
 export function useGongsinAvailability(active = true) {
@@ -197,29 +198,40 @@ export function useGongsinAvailability(active = true) {
     if (!key) return;
     let entry = availability.get(key);
     if (!entry) {
-      entry = { value: CLOSED, listeners: new Set(), stop: () => undefined };
+      entry = {
+        value: CLOSED,
+        listeners: new Set(),
+        stop: () => undefined,
+        restart: () => undefined,
+      };
       availability.set(key, entry);
       const current = entry;
-      current.stop = onSnapshot(
-        doc(
-          db,
-          `years/${year}/semesters/${semester}/gongsinmoongo_config/public`,
-        ),
-        (snapshot) => {
-          current.value = {
-            enabled: snapshot.data()?.enabled === true,
-            revision: Number(snapshot.data()?.revision || 0),
-            contentRevision: Number(snapshot.data()?.contentRevision || 0),
-            loaded: true,
-            error: false,
-          };
-          current.listeners.forEach((listener) => listener(current.value));
-        },
-        () => {
-          current.value = { ...CLOSED, loaded: true, error: true };
-          current.listeners.forEach((listener) => listener(current.value));
-        },
-      );
+      current.restart = () => {
+        current.stop();
+        current.value = CLOSED;
+        current.listeners.forEach((listener) => listener(current.value));
+        current.stop = onSnapshot(
+          doc(
+            db,
+            `years/${year}/semesters/${semester}/gongsinmoongo_config/public`,
+          ),
+          (snapshot) => {
+            current.value = {
+              enabled: snapshot.data()?.enabled === true,
+              revision: Number(snapshot.data()?.revision || 0),
+              contentRevision: Number(snapshot.data()?.contentRevision || 0),
+              loaded: true,
+              error: false,
+            };
+            current.listeners.forEach((listener) => listener(current.value));
+          },
+          () => {
+            current.value = { ...CLOSED, loaded: true, error: true };
+            current.listeners.forEach((listener) => listener(current.value));
+          },
+        );
+      };
+      current.restart();
     }
     const current = entry;
     const listener = (value: Availability) => setState({ key, value });
@@ -236,5 +248,6 @@ export function useGongsinAvailability(active = true) {
   return {
     ...(state.key === key ? state.value : CLOSED),
     semesterId: `${year}-${semester}`,
+    retry: () => availability.get(key)?.restart(),
   };
 }

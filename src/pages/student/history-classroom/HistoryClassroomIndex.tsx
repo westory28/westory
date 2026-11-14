@@ -1,9 +1,11 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import { getStudentMenuLabel } from "../../../constants/menus";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   doc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   where,
@@ -354,19 +356,22 @@ const HistoryClassroomIndex: React.FC = () => {
       setLoading(
         loadedScope.current !== requestScope || explicitRefresh.current,
       );
+      const readDocuments = explicitRefresh.current
+        ? getDocsFromServer
+        : getDocs;
       explicitRefresh.current = false;
       setLoadError("");
       try {
         const loadAssignedSnapshots = async (collectionPath: string) => {
           const accessFieldPath = `targetStudentAccessMap.${studentUid}`;
           const [singleTargetSnap, multiTargetSnap] = await Promise.all([
-            getDocs(
+            readDocuments(
               query(
                 collection(db, collectionPath),
                 where("targetStudentUid", "==", studentUid),
               ),
             ),
-            getDocs(
+            readDocuments(
               query(
                 collection(db, collectionPath),
                 where(accessFieldPath, "==", true),
@@ -475,7 +480,7 @@ const HistoryClassroomIndex: React.FC = () => {
           try {
             const snapshots = await Promise.all(
               chunk(assignmentIds, 10).map((ids) =>
-                getDocs(
+                readDocuments(
                   query(
                     collection(db, path),
                     where("uid", "==", studentUid),
@@ -490,7 +495,7 @@ const HistoryClassroomIndex: React.FC = () => {
               "Falling back to broad history classroom result query:",
               error,
             );
-            const snapshot = await getDocs(
+            const snapshot = await readDocuments(
               query(collection(db, path), where("uid", "==", studentUid)),
             );
             return snapshot.docs.filter((docSnap) =>
@@ -502,7 +507,7 @@ const HistoryClassroomIndex: React.FC = () => {
         const loadOwnSemesterDocs = async (collectionName: string) => {
           const path = getSemesterCollectionPath(config, collectionName);
           // The rules and the server ticket contract both authorize by uid.
-          const snapshot = await getDocs(
+          const snapshot = await readDocuments(
             query(collection(db, path), where("uid", "==", studentUid)),
           );
           return snapshot.docs;
@@ -918,13 +923,11 @@ const HistoryClassroomIndex: React.FC = () => {
         <p role="alert" className="mb-4 text-sm text-red-700">
           {loadError}
         </p>
-        <button
-          type="button"
+        <RefreshButton
           onClick={refreshWithLoading}
-          className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
-        >
-          다시 불러오기
-        </button>
+          loading={loading}
+          label="역사교실 새로고침"
+        />
       </div>
     );
   }
@@ -972,13 +975,11 @@ const HistoryClassroomIndex: React.FC = () => {
       </section>
 
       <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="button"
+        <RefreshButton
           onClick={refreshWithLoading}
-          className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700"
-        >
-          새로고침
-        </button>
+          loading={loading}
+          label="역사교실 새로고침"
+        />
       </div>
 
       {groupedItems.length > 0 ? (

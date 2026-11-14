@@ -2031,7 +2031,7 @@ try {
     fx.store[ticketPath].status="requested";
     fx.store[`${scope}/history_classroom_exemption_requests/synthetic-review`].status="pending";
   },{scope,ticketPath});
-  await reviewPage.getByRole("dialog").getByRole("button",{name:"새로고침",exact:true}).click();
+  await reviewPage.getByRole("dialog").getByRole("button",{name:"면제권 내역 새로고침",exact:true}).click();
   await reviewPage.getByRole("button",{name:"승인",exact:true}).click();
   await reviewPage.getByRole("button",{name:"승인",exact:true}).waitFor({state:"hidden"});
   await reviewPage.evaluate(()=>window.__fixture.releaseReviewRead());

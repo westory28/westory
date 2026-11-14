@@ -1,3 +1,4 @@
+import RefreshButton from "../../components/common/RefreshButton";
 import { exceedsShortAnswerLimit } from "../../lib/assessmentAnswerLimits";
 import NumericInput from "../../components/common/NumericInput";
 import "./ManageHistoryClassroom.css";
@@ -14,6 +15,7 @@ import {
   getDoc,
   getDocFromServer,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   orderBy,
   query,
@@ -1630,6 +1632,7 @@ const ManageHistoryClassroom: React.FC = () => {
     useState<DashboardSortOrder>("latest");
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [refreshingDashboard, setRefreshingDashboard] = useState(false);
+  const [dashboardLoadError, setDashboardLoadError] = useState("");
   const [expandedAssignmentId, setExpandedAssignmentId] = useState("");
   const preserveBlankResetRef = React.useRef(false);
   const blankEditorComposingRef = React.useRef(false);
@@ -1677,8 +1680,8 @@ const ManageHistoryClassroom: React.FC = () => {
         "history_classroom_exemption_requests",
       );
       const [exemptionSnap, requestSnap] = await Promise.all([
-        getDocs(collection(db, exemptionPath)),
-        getDocs(collection(db, requestPath)),
+        getDocsFromServer(collection(db, exemptionPath)),
+        getDocsFromServer(collection(db, requestPath)),
       ]);
       if (!isCurrent()) return;
       setExemptions(
@@ -1724,9 +1727,10 @@ const ManageHistoryClassroom: React.FC = () => {
     let cancelled = false;
     const loadData = async () => {
       setRefreshingDashboard(true);
+      setDashboardLoadError("");
       void loadExemptionData();
       try {
-        const studentSnap = await getDocs(collection(db, "users"));
+        const studentSnap = await getDocsFromServer(collection(db, "users"));
         const loadedStudents = studentSnap.docs
           .map((docSnap) => {
             const data = docSnap.data() as Record<string, unknown>;
@@ -1755,12 +1759,12 @@ const ManageHistoryClassroom: React.FC = () => {
           config,
           "history_classrooms",
         );
-        let assignmentSnap = await getDocs(
+        let assignmentSnap = await getDocsFromServer(
           query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
         );
         if (assignmentSnap.empty) {
           assignmentPath = "history_classrooms";
-          assignmentSnap = await getDocs(
+          assignmentSnap = await getDocsFromServer(
             query(
               collection(db, "history_classrooms"),
               orderBy("updatedAt", "desc"),
@@ -1782,6 +1786,10 @@ const ManageHistoryClassroom: React.FC = () => {
             .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
         );
       } catch (error) {
+        if (!cancelled)
+          setDashboardLoadError(
+            "역사교실 현황을 불러오지 못했습니다. 새로고침해 다시 시도해 주세요.",
+          );
         console.error(
           "Failed to load history classroom dashboard data:",
           error,
@@ -1996,13 +2004,7 @@ const ManageHistoryClassroom: React.FC = () => {
       cancelled = true;
       unsubscribe.forEach((stop) => stop());
     };
-  }, [
-    assignments,
-    assignmentReadScope,
-    config,
-    dashboardRefreshKey,
-    userData?.uid,
-  ]);
+  }, [assignments, assignmentReadScope, config, userData?.uid]);
 
   useEffect(() => {
     if (searchParams.get("panel") !== "exemption-requests") return;
@@ -2040,7 +2042,7 @@ const ManageHistoryClassroom: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config, dashboardRefreshKey]);
+  }, [config]);
 
   const selectedWorksheetSource = useMemo(
     () =>
@@ -4630,6 +4632,11 @@ const ManageHistoryClassroom: React.FC = () => {
         (exemptionPanelOpen && loadingExemptions) ||
         ((isCreateModalOpen || Boolean(editingAssignment)) &&
           loadingLessonSources)) && <LoadingOverlay />}
+      {dashboardLoadError && (
+        <p role="alert" className="mb-4 text-sm text-red-600">
+          {dashboardLoadError}
+        </p>
+      )}
       {resultLoadError && (
         <p role="alert" className="mb-4 text-sm text-red-600">
           {resultLoadError}
@@ -4762,21 +4769,13 @@ const ManageHistoryClassroom: React.FC = () => {
                   }`}
                 ></HistoryActionButton>
                 {value === "all" && (
-                  <button
-                    type="button"
+                  <RefreshButton
                     onClick={() =>
                       setDashboardRefreshKey((current) => current + 1)
                     }
-                    disabled={refreshingDashboard}
-                    aria-label="새로고침"
-                    title="새로고침"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <DashboardIcon
-                      name="refresh"
-                      className={`h-4 w-4 ${refreshingDashboard ? "animate-spin" : ""}`}
-                    />
-                  </button>
+                    loading={refreshingDashboard}
+                    label="역사교실 새로고침"
+                  />
                 )}
               </React.Fragment>
             ))}
@@ -4823,14 +4822,11 @@ const ManageHistoryClassroom: React.FC = () => {
             <span className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
               부여 기록 {activeExemptionCount}건
             </span>
-            <HistoryActionButton
-              icon="refresh"
-              label={loadingExemptions ? "새로고침 중" : "새로고침"}
-              type="button"
-              onClick={() => void loadExemptionData()}
-              disabled={loadingExemptions}
-              className="h-10 rounded-2xl border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            ></HistoryActionButton>
+            <RefreshButton
+              onClick={loadExemptionData}
+              loading={loadingExemptions}
+              label="면제권 내역 새로고침"
+            />
             <HistoryActionButton
               icon="ticket"
               label={exemptionPanelOpen ? "패널 닫기" : "면제권 관리 열기"}
@@ -5491,14 +5487,11 @@ const ManageHistoryClassroom: React.FC = () => {
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
-                  <HistoryActionButton
-                    icon="refresh"
-                    label={loadingExemptions ? "새로고침 중" : "새로고침"}
-                    type="button"
-                    onClick={() => void loadExemptionData()}
-                    disabled={loadingExemptions}
-                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  ></HistoryActionButton>
+                  <RefreshButton
+                    onClick={loadExemptionData}
+                    loading={loadingExemptions}
+                    label="면제권 내역 새로고침"
+                  />
                   <HistoryActionButton
                     icon="close"
                     label="닫기"

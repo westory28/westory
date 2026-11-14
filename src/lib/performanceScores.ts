@@ -401,8 +401,11 @@ export const normalizePerformanceScoreSettings = (
   };
 };
 
-export const loadPerformanceScoreSettings = async (config: ConfigLike) => {
-  const snap = await getDoc(
+export const loadPerformanceScoreSettings = async (
+  config: ConfigLike,
+  options: { fromServer?: boolean } = {},
+) => {
+  const snap = await (options.fromServer ? getDocFromServer : getDoc)(
     doc(
       db,
       getSemesterDocPath(

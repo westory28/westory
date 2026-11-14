@@ -127,12 +127,13 @@ const css = (
       "assets/css/style.css",
       "src/assets/index.css",
       "src/components/common/loadingState.css",
+      "src/components/common/refreshButton.css",
       "src/pages/teacher/components/teacher-list-controls.css",
     ].map((name) => fs.readFile(root + "/" + name, "utf8")),
   )
 )
   .join("\n")
-  .replace(/@import[^;]+;/g, "")
+  .replace(/^@import[^\r\n]*;/gm, "")
   .replace(/@tailwind[^;]+;/g, "");
 const html = `<!doctype html><html lang="ko"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const tailwind = await fs.readFile(
@@ -762,12 +763,12 @@ try {
     window.rosterQa.data.splice(0);
   });
   await page
-    .getByRole("button", { name: "명단 새로고침 및 필터 초기화", exact: true })
+    .getByRole("button", { name: "명단 새로고침", exact: true })
     .click();
   await page.getByText("학생 데이터가 없습니다.", { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.rosterQa.listReads), 3);
   await page
-    .getByRole("button", { name: "명단 새로고침 및 필터 초기화", exact: true })
+    .getByRole("button", { name: "명단 새로고침", exact: true })
     .click();
   await page.getByText("학생 데이터가 없습니다.", { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.rosterQa.listReads), 4);
@@ -775,6 +776,15 @@ try {
   report.checks.push(
     "Real LoadingProvider with delayed reads: load error → retry → roster → empty roster → empty refresh stays mounted; one list read per attempt, no writes.",
   );
+  await page.goto(origin);
+  await page.getByRole("button", { name: "가나다", exact: true }).waitFor();
+  await page.getByLabel("학적 상태 필터").selectOption("pending");
+  const readsBeforeRefresh = await page.evaluate(() => window.rosterQa.listReads);
+  await page.getByRole("button", { name: "명단 새로고침", exact: true }).click();
+  await page.waitForFunction((count) => window.rosterQa.listReads === count + 1, readsBeforeRefresh);
+  await page.getByRole("button", { name: "명단 새로고침", exact: true }).waitFor();
+  assert.equal(await page.getByLabel("학적 상태 필터").inputValue(), "pending");
+  report.checks.push("Refresh preserves enrollment filter and performs exactly one roster read.");
   await page.goto(origin + "?legacy321");
   await page.getByText("(321명)", { exact: true }).waitFor();
   await page
